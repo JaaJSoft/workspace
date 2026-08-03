@@ -1,8 +1,12 @@
+from types import SimpleNamespace
+
 from django.test import SimpleTestCase
 
 from workspace.common.services.mentions import (
     extract_mentions,
     mention_badge,
+    mentioned_users,
+    newly_mentioned_users,
     render_comment_body,
 )
 
@@ -22,6 +26,41 @@ class ExtractMentionsTests(SimpleTestCase):
         usernames, has_everyone = extract_mentions("plain text")
         self.assertEqual(usernames, set())
         self.assertFalse(has_everyone)
+
+    def test_mid_word_at_sign_is_not_extracted(self):
+        """Emails must not mention: extraction uses the same anchoring as rendering."""
+        usernames, has_everyone = extract_mentions("mail foo@alice or bar@everyone")
+        self.assertEqual(usernames, set())
+        self.assertFalse(has_everyone)
+
+    def test_mention_at_line_start_is_extracted(self):
+        usernames, _ = extract_mentions("first line\n@alice hello")
+        self.assertEqual(usernames, {"alice"})
+
+
+class MentionedUsersTests(SimpleTestCase):
+    def setUp(self):
+        self.alice = SimpleNamespace(username="alice")
+        self.bob = SimpleNamespace(username="bob")
+        self.audience = [self.alice, self.bob]
+
+    def test_selects_mentioned_audience_members_excluding_actor(self):
+        result = mentioned_users(self.audience, "hi @alice and @bob", self.bob)
+        self.assertEqual(result, [self.alice])
+
+    def test_no_mentions_returns_empty(self):
+        self.assertEqual(mentioned_users(self.audience, "plain text", self.bob), [])
+
+    def test_newly_mentioned_excludes_already_mentioned(self):
+        actor = SimpleNamespace(username="actor")
+        result = newly_mentioned_users(
+            self.audience, actor, "ping @bob", "ping @bob and @alice"
+        )
+        self.assertEqual(result, [self.alice])
+
+    def test_newly_mentioned_excludes_actor(self):
+        result = newly_mentioned_users(self.audience, self.bob, "draft", "draft @bob")
+        self.assertEqual(result, [])
 
 
 class MentionBadgeTests(SimpleTestCase):

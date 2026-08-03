@@ -2,7 +2,7 @@
 
 from django.contrib.auth import get_user_model
 
-from workspace.common.services.mentions import extract_mentions
+from workspace.common.services.mentions import mentioned_users, newly_mentioned_users
 from workspace.notifications.services.notifications import notify_many
 
 from ..models import FileComment
@@ -16,24 +16,21 @@ def mentionable_users(file_obj):
     Mirrors the access branches of ``FileService`` (owned / group / shared);
     keep the two in sync. Sorted by username for stable autocomplete lists.
     """
-    users = {file_obj.owner_id: file_obj.owner}
+    users = {}
+    if file_obj.owner.is_active:
+        users[file_obj.owner_id] = file_obj.owner
     if file_obj.group_id:
         for user in User.objects.filter(groups=file_obj.group_id, is_active=True):
             users.setdefault(user.pk, user)
-    for share in file_obj.shares.select_related("shared_with"):
+    for share in file_obj.shares.filter(shared_with__is_active=True).select_related(
+        "shared_with"
+    ):
         users.setdefault(share.shared_with_id, share.shared_with)
     return sorted(users.values(), key=lambda u: u.username.lower())
 
 
 def _file_url(file_obj):
     return f"/files/{file_obj.parent_id}" if file_obj.parent_id else "/files"
-
-
-def _mentioned_users(audience, body, actor):
-    usernames, _ = extract_mentions(body)
-    if not usernames:
-        return []
-    return [u for u in audience if u.username in usernames and u != actor]
 
 
 def _notify_mentioned(file_obj, actor, mentioned):
@@ -55,7 +52,7 @@ def notify_comment_added(file_obj, actor, body, *, audience=None):
     """
     if audience is None:
         audience = mentionable_users(file_obj)
-    mentioned = _mentioned_users(audience, body, actor)
+    mentioned = mentioned_users(audience, body, actor)
     if mentioned:
         _notify_mentioned(file_obj, actor, mentioned)
     mentioned_ids = {u.pk for u in mentioned}
@@ -85,11 +82,6 @@ def notify_comment_edited(file_obj, actor, old_body, new_body, *, audience=None)
     """Notify only audience members newly mentioned by the edit."""
     if audience is None:
         audience = mentionable_users(file_obj)
-    old_usernames, _ = extract_mentions(old_body)
-    newly_mentioned = [
-        u
-        for u in _mentioned_users(audience, new_body, actor)
-        if u.username not in old_usernames
-    ]
+    newly_mentioned = newly_mentioned_users(audience, actor, old_body, new_body)
     if newly_mentioned:
         _notify_mentioned(file_obj, actor, newly_mentioned)

@@ -61,6 +61,15 @@ class MentionableUsersTests(FileCommentMentionTestBase):
         users = mentionable_users(group_file)
         self.assertIn(member.pk, {u.pk for u in users})
 
+    def test_inactive_users_are_not_mentionable(self):
+        self.shared.is_active = False
+        self.shared.save(update_fields=["is_active"])
+        self.assertEqual({u.pk for u in mentionable_users(self.file)}, {self.owner.pk})
+        self.owner.is_active = False
+        self.owner.save(update_fields=["is_active"])
+        self.file.refresh_from_db()
+        self.assertEqual(mentionable_users(self.file), [])
+
     def test_sorted_by_username(self):
         users = mentionable_users(self.file)
         self.assertEqual(

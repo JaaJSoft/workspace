@@ -2,7 +2,7 @@
 
 from django.contrib.auth import get_user_model
 
-from workspace.common.services.mentions import extract_mentions
+from workspace.common.services.mentions import mentioned_users, newly_mentioned_users
 from workspace.notifications.services.notifications import notify_many
 
 from ..queries import project_users
@@ -12,14 +12,6 @@ User = get_user_model()
 
 def _task_url(task):
     return f"/projects/{task.project_id}/board?task={task.uuid}"
-
-
-def _mentioned_users(task, body, actor, audience=None):
-    usernames, _ = extract_mentions(body)
-    if not usernames:
-        return []
-    audience = audience if audience is not None else project_users(task.project)
-    return [u for u in audience if u.username in usernames and u != actor]
 
 
 def _notify_mentioned(task, actor, mentioned):
@@ -40,7 +32,7 @@ def notify_comment_added(task, actor, body):
     notification; the task creator, assignees, and prior commenters get the
     regular one.
     """
-    mentioned = _mentioned_users(task, body, actor)
+    mentioned = mentioned_users(project_users(task.project), body, actor)
     if mentioned:
         _notify_mentioned(task, actor, mentioned)
     mentioned_ids = {u.pk for u in mentioned}
@@ -69,11 +61,8 @@ def notify_comment_added(task, actor, body):
 
 def notify_comment_edited(task, actor, old_body, new_body):
     """Notify only project members newly mentioned by the edit."""
-    old_usernames, _ = extract_mentions(old_body)
-    newly_mentioned = [
-        u
-        for u in _mentioned_users(task, new_body, actor)
-        if u.username not in old_usernames
-    ]
+    newly_mentioned = newly_mentioned_users(
+        project_users(task.project), actor, old_body, new_body
+    )
     if newly_mentioned:
         _notify_mentioned(task, actor, newly_mentioned)

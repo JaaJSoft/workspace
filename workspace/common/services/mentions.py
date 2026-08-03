@@ -13,12 +13,30 @@ def extract_mentions(body):
     """Extract @username tokens from body text.
 
     Returns a set of usernames (excluding 'everyone') and whether @everyone
-    was used.
+    was used. Anchored like rendering, so emails never count as mentions.
     """
-    tokens = set(re.findall(r"@(\w+)", body))
+    tokens = set(_MENTION_RE.findall(body))
     has_everyone = "everyone" in tokens
     tokens.discard("everyone")
     return tokens, has_everyone
+
+
+def mentioned_users(audience, body, actor):
+    """Audience members mentioned in *body*, excluding the actor."""
+    usernames, _ = extract_mentions(body)
+    if not usernames:
+        return []
+    return [u for u in audience if u.username in usernames and u != actor]
+
+
+def newly_mentioned_users(audience, actor, old_body, new_body):
+    """Audience members mentioned in *new_body* but not already in *old_body*."""
+    old_usernames, _ = extract_mentions(old_body)
+    return [
+        u
+        for u in mentioned_users(audience, new_body, actor)
+        if u.username not in old_usernames
+    ]
 
 
 def mention_badge(username, user_id=None):

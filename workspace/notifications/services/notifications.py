@@ -172,6 +172,7 @@ def notify_stream(
         if notif:
             notif.title = title
             notif.body = body
+            notif.url = url
             notif.actor = actor
             if _PRIORITY_RANK[priority] > _PRIORITY_RANK[notif.priority]:
                 notif.priority = priority
@@ -197,7 +198,7 @@ def notify_stream(
 
     if to_update:
         Notification.objects.bulk_update(
-            to_update, ["title", "body", "actor", "priority", "created_at"]
+            to_update, ["title", "body", "url", "actor", "priority", "created_at"]
         )
     if to_create:
         # uuid_v7_or_v4 runs at __init__, so pks exist before bulk_create.

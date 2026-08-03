@@ -81,6 +81,12 @@ class NotifyStreamTests(TestCase):
         self.assertEqual(result, [])
         self.assertEqual(Notification.objects.count(), 0)
 
+    def test_merge_refreshes_url(self, mock_sse, mock_push):
+        self._send(url="/a")
+        self._send(title="second", url="/b")
+        notif = Notification.objects.get(recipient=self.alice)
+        self.assertEqual(notif.url, "/b")
+
     def test_merge_bumps_created_at(self, mock_sse, mock_push):
         self._send()
         first = Notification.objects.get(recipient=self.alice).created_at

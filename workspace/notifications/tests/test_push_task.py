@@ -168,3 +168,11 @@ class PushSkipAndCooldownTests(TestCase):
         mock_webpush.assert_not_called()
         send_push_notification(str(self._notif().uuid))
         self.assertEqual(mock_webpush.call_count, 1)
+
+    def test_push_resumes_after_cooldown_expires(self, mock_webpush, _):
+        from workspace.notifications.tasks import send_push_notification
+
+        send_push_notification(str(self._notif().uuid))
+        cache.clear()
+        send_push_notification(str(self._notif().uuid))
+        self.assertEqual(mock_webpush.call_count, 2)

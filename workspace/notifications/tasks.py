@@ -58,8 +58,9 @@ def send_push_notification(notification_uuid: str):
     if notif.priority != "urgent":
         cooldown_key = _source_cooldown_key(notif)
         # cache.add is an atomic SET NX on Redis; if the key is already there
-        # a push for this (user, source) went out within the window. Fail-open:
-        # Redis trouble means pushes send rather than drop.
+        # a push for this (user, source) went out within the window. A Redis
+        # outage fails the task, which is acceptable: Redis is also the
+        # Celery broker, so the task would not be running anyway.
         if cooldown_key and not cache.add(cooldown_key, 1, PUSH_COOLDOWN_SECONDS):
             logger.debug("Push cooldown hit for %s", notif.recipient_id)
             return

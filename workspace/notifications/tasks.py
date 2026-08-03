@@ -12,6 +12,7 @@ from workspace.users.services.presence import is_active
 logger = logging.getLogger(__name__)
 
 PUSH_COOLDOWN_SECONDS = 60
+RETENTION_DAYS = 90
 _SOURCE_ID_ATTRS = (
     "conversation_id",
     "file_id",
@@ -112,3 +113,20 @@ def send_push_notification(notification_uuid: str):
             logger.exception(
                 "Unexpected error sending push to %s", scrub(sub.endpoint[:60])
             )
+
+
+@shared_task(name="notifications.prune_read", ignore_result=True)
+def prune_read_notifications():
+    """Delete read notifications older than RETENTION_DAYS. Unread rows are
+    kept forever: pruning something the user never saw is data loss."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from workspace.notifications.models import Notification
+
+    cutoff = timezone.now() - timedelta(days=RETENTION_DAYS)
+    deleted, _ = Notification.objects.filter(read_at__lt=cutoff).delete()
+    if deleted:
+        logger.info("Pruned %d read notifications", deleted)
+    return deleted

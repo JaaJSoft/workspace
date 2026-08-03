@@ -783,6 +783,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "chat.purge_orphan_attachments",
         "schedule": crontab(hour=4, minute=0),  # Every day at 4:00 AM
     },
+    "prune-read-notifications": {
+        "task": "notifications.prune_read",
+        "schedule": crontab(hour=4, minute=30),  # Every day at 4:30 AM
+    },
     "end-stale-calls": {
         "task": "chat.end_stale_calls",
         "schedule": 60.0,  # Every minute: reap calls whose tabs all vanished

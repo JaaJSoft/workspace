@@ -4,6 +4,8 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from workspace.common.services.mentions import render_comment_body
+
 from .models import Label, Project, ProjectMember, Task, TaskComment, TaskStatus
 from .queries import get_project_role
 from .services.references import KEY_RE
@@ -277,11 +279,24 @@ class TaskCommentAuthorSerializer(serializers.Serializer):
 
 class TaskCommentSerializer(serializers.ModelSerializer):
     author = TaskCommentAuthorSerializer(read_only=True)
+    body_html = serializers.SerializerMethodField()
 
     class Meta:
         model = TaskComment
-        fields = ["uuid", "task", "author", "body", "edited_at", "created_at"]
+        fields = [
+            "uuid",
+            "task",
+            "author",
+            "body",
+            "body_html",
+            "edited_at",
+            "created_at",
+        ]
         read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_body_html(self, obj):
+        return render_comment_body(obj.body, self.context.get("mention_map") or {})
 
 
 class TaskCommentBodySerializer(serializers.Serializer):

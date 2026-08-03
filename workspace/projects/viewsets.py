@@ -20,7 +20,7 @@ from .models import (
     TaskEvent,
     TaskStatus,
 )
-from .queries import get_project_role, user_project_ids
+from .queries import get_project_role, project_users, user_project_ids
 from .serializers import (
     LabelSerializer,
     MemberRoleSerializer,
@@ -35,7 +35,7 @@ from .serializers import (
     TaskSerializer,
     TaskStatusSerializer,
 )
-from .services.comments import notify_comment_added
+from .services.comments import notify_comment_added, notify_comment_edited
 from .services.events import record_task_event
 from .services.members import (
     ProjectRuleError,
@@ -510,9 +510,34 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
             .order_by("created_at")
         )
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if getattr(self, "swagger_fake_view", False):
+            return context
+        context["mention_map"] = {u.username: u.pk for u in self._audience()}
+        return context
+
+    def _audience(self):
+        if not hasattr(self, "_audience_cache"):
+            self._audience_cache = project_users(self.project)
+        return self._audience_cache
+
     def list(self, request, *args, **kwargs):
         serializer = self.get_serializer(self.get_queryset(), many=True)
-        return Response(serializer.data)
+        return Response(
+            {
+                "comments": serializer.data,
+                "mention_users": [
+                    {
+                        "id": u.pk,
+                        "username": u.username,
+                        "first_name": u.first_name,
+                        "last_name": u.last_name,
+                    }
+                    for u in self._audience()
+                ],
+            }
+        )
 
     def create(self, request, *args, **kwargs):
         self._require_writable()
@@ -523,7 +548,8 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
             author=request.user,
             body=body_ser.validated_data["body"],
         )
-        notify_comment_added(self.task, request.user)
+        record_task_event(self.task, type=TaskEvent.Type.COMMENTED, actor=request.user)
+        notify_comment_added(self.task, request.user, comment.body)
         return Response(
             self.get_serializer(comment).data, status=status.HTTP_201_CREATED
         )
@@ -533,9 +559,11 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         comment = self._get_own_comment(request)
         body_ser = TaskCommentBodySerializer(data=request.data)
         body_ser.is_valid(raise_exception=True)
+        old_body = comment.body
         comment.body = body_ser.validated_data["body"]
         comment.edited_at = timezone.now()
         comment.save(update_fields=["body", "edited_at"])
+        notify_comment_edited(self.task, request.user, old_body, comment.body)
         return Response(self.get_serializer(comment).data)
 
     def destroy(self, request, *args, **kwargs):

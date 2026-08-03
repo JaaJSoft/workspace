@@ -5,7 +5,8 @@ from django.test import TestCase
 
 from workspace.chat.models import Conversation, ConversationMember
 from workspace.chat.services.notifications import notify_new_message
-from workspace.chat.services.rendering import extract_mentions, render_message_body
+from workspace.chat.services.rendering import render_message_body
+from workspace.common.services.mentions import extract_mentions
 from workspace.notifications.models import Notification
 
 User = get_user_model()

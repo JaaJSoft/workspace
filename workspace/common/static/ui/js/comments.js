@@ -9,12 +9,20 @@ window.commentsComponent = function commentsComponent(listUrl, currentUserId, ca
     currentUserId,
     canComment,
     comments: [],
+    mentionUsers: [],
     loading: true,
     newBody: '',
     sending: false,
     editingId: null,
     editBody: '',
     composerFocused: false,
+    mentionActive: false,
+    mentionQuery: '',
+    mentionResults: [],
+    mentionHighlight: -1,
+    mentionStartPos: -1,
+    mentionField: 'new',
+    mentionEl: null,
 
     async init() {
       await this.loadComments();
@@ -29,7 +37,9 @@ window.commentsComponent = function commentsComponent(listUrl, currentUserId, ca
       try {
         const resp = await fetch(this._url(), { credentials: 'same-origin' });
         if (resp.ok) {
-          this.comments = await resp.json();
+          const data = await resp.json();
+          this.comments = data.comments;
+          this.mentionUsers = data.mention_users || [];
         }
       } catch (e) { /* ignore */ }
       this.loading = false;
@@ -102,6 +112,89 @@ window.commentsComponent = function commentsComponent(listUrl, currentUserId, ca
           await this.loadComments();
         }
       } catch (e) { /* ignore */ }
+    },
+
+    // ── Mention autocomplete (composer + edit textareas) ─────
+    handleMentionInput(el, field) {
+      const pos = el.selectionStart;
+      const text = el.value.substring(0, pos);
+      // A mention starts at the beginning of the text or after whitespace.
+      const match = text.match(/(?:^|\s)@(\w*)$/);
+      if (match) {
+        this.mentionActive = true;
+        this.mentionField = field;
+        this.mentionEl = el;
+        this.mentionQuery = match[1].toLowerCase();
+        this.mentionStartPos = pos - match[1].length - 1;
+        this.filterMentionResults();
+      } else {
+        this.closeMentionDropdown();
+      }
+    },
+
+    filterMentionResults() {
+      const q = this.mentionQuery;
+      const results = [];
+      for (const u of this.mentionUsers) {
+        if (u.id === this.currentUserId) continue;
+        const searchStr = `${u.username} ${u.first_name || ''} ${u.last_name || ''}`.toLowerCase();
+        if (!q || searchStr.includes(q)) results.push(u);
+      }
+      this.mentionResults = results.slice(0, 8);
+      this.mentionHighlight = this.mentionResults.length > 0 ? 0 : -1;
+    },
+
+    handleMentionKeydown(e) {
+      if (!this.mentionActive || this.mentionResults.length === 0) return;
+      // Ctrl/meta+enter keeps its submit meaning even with the dropdown open.
+      if (e.ctrlKey || e.metaKey) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.mentionHighlight = (this.mentionHighlight + 1) % this.mentionResults.length;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.mentionHighlight = this.mentionHighlight <= 0
+          ? this.mentionResults.length - 1
+          : this.mentionHighlight - 1;
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        if (this.mentionHighlight >= 0) {
+          this.insertMention(this.mentionResults[this.mentionHighlight]);
+        }
+      }
+    },
+
+    insertMention(user) {
+      const el = this.mentionEl;
+      const field = this.mentionField;
+      const value = field === 'edit' ? this.editBody : this.newBody;
+      const caret = el ? el.selectionStart : value.length;
+      const before = value.substring(0, this.mentionStartPos);
+      const after = value.substring(caret);
+      const mention = `@${user.username} `;
+      const next = before + mention + after;
+      if (field === 'edit') {
+        this.editBody = next;
+      } else {
+        this.newBody = next;
+      }
+      this.closeMentionDropdown();
+      if (el && typeof this.$nextTick === 'function') {
+        this.$nextTick(() => {
+          const newPos = before.length + mention.length;
+          el.setSelectionRange(newPos, newPos);
+          el.focus();
+        });
+      }
+    },
+
+    closeMentionDropdown() {
+      this.mentionActive = false;
+      this.mentionQuery = '';
+      this.mentionResults = [];
+      this.mentionHighlight = -1;
+      this.mentionStartPos = -1;
+      this.mentionEl = null;
     },
 
     formatDate(iso) {

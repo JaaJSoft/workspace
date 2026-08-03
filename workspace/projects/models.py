@@ -257,6 +257,7 @@ class TaskEvent(models.Model):
         MOVED = "moved", "Moved"
         COMPLETED = "completed", "Completed"
         DELETED = "deleted", "Deleted"
+        COMMENTED = "commented", "Commented"
 
     _ICONS = {
         Type.CREATED: "plus",
@@ -264,6 +265,7 @@ class TaskEvent(models.Model):
         Type.MOVED: "move-right",
         Type.COMPLETED: "circle-check",
         Type.DELETED: "trash-2",
+        Type.COMMENTED: "message-square",
     }
     _LABELS = {
         Type.CREATED: "Task created",
@@ -271,6 +273,7 @@ class TaskEvent(models.Model):
         Type.MOVED: "Task moved",
         Type.COMPLETED: "Task completed",
         Type.DELETED: "Task deleted",
+        Type.COMMENTED: "Comment added",
     }
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)

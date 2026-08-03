@@ -3,12 +3,30 @@ import logging
 import orjson
 from celery import shared_task
 from django.conf import settings
+from django.core.cache import cache
 from pywebpush import WebPushException, webpush
 
 from workspace.common.logging import scrub
 from workspace.users.services.presence import is_active
 
 logger = logging.getLogger(__name__)
+
+PUSH_COOLDOWN_SECONDS = 60
+_SOURCE_ID_ATTRS = (
+    "conversation_id",
+    "file_id",
+    "task_id",
+    "event_id",
+    "poll_id",
+)
+
+
+def _source_cooldown_key(notif):
+    for attr in _SOURCE_ID_ATTRS:
+        value = getattr(notif, attr)
+        if value:
+            return f"push:cd:{notif.recipient_id}:{attr}:{value}"
+    return None
 
 
 @shared_task(name="notifications.send_push", ignore_result=True, soft_time_limit=30)
@@ -28,9 +46,22 @@ def send_push_notification(notification_uuid: str):
     except Notification.DoesNotExist:
         return
 
+    if notif.read_at is not None:
+        # The user saw it before the worker got here.
+        return
+
     if is_active(notif.recipient_id):
         logger.debug("Skipping push for %s: user is active", notif.recipient_id)
         return
+
+    if notif.priority != "urgent":
+        cooldown_key = _source_cooldown_key(notif)
+        # cache.add is an atomic SET NX on Redis; if the key is already there
+        # a push for this (user, source) went out within the window. Fail-open:
+        # Redis trouble means pushes send rather than drop.
+        if cooldown_key and not cache.add(cooldown_key, 1, PUSH_COOLDOWN_SECONDS):
+            logger.debug("Push cooldown hit for %s", notif.recipient_id)
+            return
 
     subscriptions = PushSubscription.objects.filter(user=notif.recipient)
     if not subscriptions.exists():

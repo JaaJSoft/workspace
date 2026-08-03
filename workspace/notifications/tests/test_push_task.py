@@ -2,7 +2,9 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from workspace.notifications.models import Notification, PushSubscription
 
@@ -97,3 +99,72 @@ class SendPushNotificationTests(TestCase):
 
         send_push_notification(str(self.notif.uuid))
         mock_webpush.assert_not_called()
+
+
+@override_settings(**FAKE_VAPID_SETTINGS)
+@patch("workspace.notifications.tasks.is_active", return_value=False)
+@patch("workspace.notifications.tasks.webpush")
+class PushSkipAndCooldownTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="cduser", password="pass")
+        PushSubscription.objects.create(
+            user=self.user,
+            endpoint="https://push.example.com/cd/1",
+            p256dh="p256dh-key",
+            auth="auth-key",
+        )
+        from workspace.chat.models import Conversation
+
+        self.conv = Conversation.objects.create(created_by=self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _notif(self, **kwargs):
+        defaults = {
+            "recipient": self.user,
+            "origin": "chat",
+            "icon": "",
+            "title": "t",
+            "conversation": self.conv,
+        }
+        defaults.update(kwargs)
+        return Notification.objects.create(**defaults)
+
+    def test_skips_when_already_read(self, mock_webpush, _):
+        from workspace.notifications.tasks import send_push_notification
+
+        notif = self._notif(read_at=timezone.now())
+        send_push_notification(str(notif.uuid))
+        mock_webpush.assert_not_called()
+
+    def test_second_push_same_source_within_cooldown_is_skipped(self, mock_webpush, _):
+        from workspace.notifications.tasks import send_push_notification
+
+        send_push_notification(str(self._notif().uuid))
+        send_push_notification(str(self._notif().uuid))
+        self.assertEqual(mock_webpush.call_count, 1)
+
+    def test_urgent_bypasses_cooldown(self, mock_webpush, _):
+        from workspace.notifications.tasks import send_push_notification
+
+        send_push_notification(str(self._notif().uuid))
+        send_push_notification(str(self._notif(priority="urgent").uuid))
+        self.assertEqual(mock_webpush.call_count, 2)
+
+    def test_sourceless_notifications_bypass_cooldown(self, mock_webpush, _):
+        from workspace.notifications.tasks import send_push_notification
+
+        send_push_notification(str(self._notif(conversation=None).uuid))
+        send_push_notification(str(self._notif(conversation=None).uuid))
+        self.assertEqual(mock_webpush.call_count, 2)
+
+    def test_active_user_skip_does_not_consume_cooldown(self, mock_webpush, _):
+        from workspace.notifications.tasks import send_push_notification
+
+        with patch("workspace.notifications.tasks.is_active", return_value=True):
+            send_push_notification(str(self._notif().uuid))
+        mock_webpush.assert_not_called()
+        send_push_notification(str(self._notif().uuid))
+        self.assertEqual(mock_webpush.call_count, 1)

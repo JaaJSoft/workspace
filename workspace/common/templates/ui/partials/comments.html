@@ -34,7 +34,7 @@ Params:
 
           <template x-if="editingId !== comment.uuid">
             <div>
-              <p class="text-sm mt-0.5 whitespace-pre-wrap break-words" x-text="comment.body"></p>
+              <p class="text-sm mt-0.5 whitespace-pre-wrap break-words" x-html="comment.body_html"></p>
               <template x-if="canComment && comment.author.id === currentUserId">
                 <div class="flex gap-1 mt-1">
                   <button type="button" class="btn btn-ghost btn-xs gap-1 text-base-content/50" @click="startEdit(comment)">
@@ -52,16 +52,21 @@ Params:
 
           <template x-if="editingId === comment.uuid">
             <div class="mt-1 space-y-2">
-              <textarea
-                class="textarea textarea-bordered textarea-sm w-full leading-snug"
-                rows="2"
-                x-model="editBody"
-                x-init="$nextTick(() => autoGrow($el))"
-                @input="autoGrow($el)"
-                @keydown.ctrl.enter="saveEdit(comment.uuid)"
-                @keydown.meta.enter="saveEdit(comment.uuid)"
-                @keydown.escape="cancelEdit()"
-              ></textarea>
+              <div class="relative">
+                {% include "ui/partials/mention_dropdown.html" with field="edit" %}
+                <textarea
+                  class="textarea textarea-bordered textarea-sm w-full leading-snug"
+                  rows="2"
+                  x-model="editBody"
+                  x-init="$nextTick(() => autoGrow($el))"
+                  @input="autoGrow($el); handleMentionInput($el, 'edit')"
+                  @keydown="handleMentionKeydown($event)"
+                  @keydown.ctrl.enter="saveEdit(comment.uuid)"
+                  @keydown.meta.enter="saveEdit(comment.uuid)"
+                  @keydown.escape="mentionActive ? closeMentionDropdown() : cancelEdit()"
+                  @blur="closeMentionDropdown()"
+                ></textarea>
+              </div>
               <div class="flex gap-1">
                 <button type="button" class="btn btn-primary btn-xs" @click="saveEdit(comment.uuid)">Save</button>
                 <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">Cancel</button>
@@ -77,19 +82,24 @@ Params:
   <div class="pt-2 mt-2 border-t border-base-300 space-y-2">
     {# Collapsed single line at rest; opens on focus and stays open while #}
     {# it has content so the Send button doesn't shift under the cursor. #}
-    <textarea
-      class="textarea textarea-bordered textarea-sm w-full leading-snug transition-[min-height] duration-150"
-      :class="composerFocused || newBody.trim() ? 'min-h-20' : 'min-h-0'"
-      rows="1"
-      placeholder="Add a comment..."
-      x-ref="composer"
-      x-model="newBody"
-      @focus="composerFocused = true"
-      @blur="composerFocused = false; if (!newBody.trim()) $el.style.height = ''"
-      @input="autoGrow($el)"
-      @keydown.ctrl.enter="addComment()"
-      @keydown.meta.enter="addComment()"
-    ></textarea>
+    <div class="relative">
+      {% include "ui/partials/mention_dropdown.html" with field="new" %}
+      <textarea
+        class="textarea textarea-bordered textarea-sm w-full leading-snug transition-[min-height] duration-150"
+        :class="composerFocused || newBody.trim() ? 'min-h-20' : 'min-h-0'"
+        rows="1"
+        placeholder="Add a comment..."
+        x-ref="composer"
+        x-model="newBody"
+        @focus="composerFocused = true"
+        @blur="composerFocused = false; closeMentionDropdown(); if (!newBody.trim()) $el.style.height = ''"
+        @input="autoGrow($el); handleMentionInput($el, 'new')"
+        @keydown="handleMentionKeydown($event)"
+        @keydown.ctrl.enter="addComment()"
+        @keydown.meta.enter="addComment()"
+        @keydown.escape="closeMentionDropdown()"
+      ></textarea>
+    </div>
     <div class="flex justify-end">
       <button
         type="button"

@@ -3,7 +3,7 @@ from workspace.core.sse_registry import SSEProvider
 
 
 class AIStreamSSEProvider(SSEProvider):
-    """Streams ephemeral bot progress steps. No DB queries - cache only.
+    """Streams ephemeral bot progress steps. Polls the cache only, no DB.
 
     Events carry no SSE id on purpose: Last-Event-Id is shared by all
     providers on the stream and the chat provider resolves it as a message
@@ -19,8 +19,52 @@ class AIStreamSSEProvider(SSEProvider):
         # a page load. Start from the tail and only stream what comes next.
         self._cursor = latest_step_id(user.id)
 
+    def _conversations_generating(self):
+        """Ids of the user's conversations with a bot response under way.
+
+        The chat AITask is owned by the bot, not by the human reading this
+        stream, so ownership cannot be the filter here - membership is.
+        """
+        from workspace.chat.services.conversations import user_conversation_ids
+
+        candidates = set()
+        for data in AITask.objects.filter(
+            task_type=AITask.TaskType.CHAT,
+            status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
+        ).values_list("input_data", flat=True):
+            conversation_id = (data or {}).get("conversation_id")
+            if conversation_id:
+                candidates.add(str(conversation_id))
+        if not candidates:
+            return set()
+
+        mine = user_conversation_ids(self.user).filter(conversation_id__in=candidates)
+        return {str(uuid) for uuid in mine}
+
     def get_initial_events(self):
-        return []
+        """Hand a fresh connection the generations already under way.
+
+        A page load lands with no memory of what came before it, so without
+        this the bubble stays down until the next tool starts - a minute away
+        on an image. Announcing the running conversations is also what makes
+        replaying their queued steps safe: steps left over from a generation
+        that has since finished are skipped, so a reload never resurrects a
+        bubble for work that is already done.
+        """
+        from workspace.ai.services.stream_steps import read_steps
+
+        running = self._conversations_generating()
+        if not running:
+            return []
+
+        events = [("bot_generating", {"conversation_ids": sorted(running)}, None)]
+        envelopes, self._cursor = read_steps(self.user.id, None)
+        events.extend(
+            ("bot_step", envelope["data"], None)
+            for envelope in envelopes
+            if envelope["data"].get("conversation_id") in running
+        )
+        return events
 
     def poll(self, cache_value):
         from workspace.ai.services.stream_steps import read_steps

@@ -202,9 +202,14 @@ window.chatConversationsMixin = function chatConversationsMixin() {
 
       await this.loadMessages(conv.uuid);
 
-      // Restore bot typing indicator if there's an active AI task
+      // Restore bot typing indicator if there's an active AI task. The
+      // server-rendered flag covers a fresh load; the set covers the stream
+      // announcing a generation before this conversation was selected.
       const msgList = document.getElementById('message-list');
-      if (msgList?.dataset.botProcessing === 'true') {
+      if (
+        msgList?.dataset.botProcessing === 'true'
+        || this.generatingConversations?.has(conv.uuid)
+      ) {
         this.botTyping = true;
       }
 

@@ -60,23 +60,10 @@ def generate_chat_response(
     )
     human_user = trigger_message.author if trigger_message else None
 
-    history, summary_text = build_conversation_history(
-        conversation_id,
-        bot_profile,
-        human_user,
-    )
-
-    bot_name = bot_user.get_full_name() or bot_user.username
-
-    messages = build_chat_messages(
-        bot_profile.system_prompt,
-        history,
-        bot_name=bot_name,
-        user=human_user,
-        bot=bot_user,
-        summary=summary_text,
-    )
-
+    # Created before the history is assembled, not after: that step reads
+    # every attachment in the conversation and takes minutes on an
+    # image-heavy one. This row is what tells the UI a response is under
+    # way, so recording it late leaves a reload with nothing to show.
     ai_task = AITask.objects.create(
         owner=bot_user,
         task_type=AITask.TaskType.CHAT,
@@ -85,6 +72,23 @@ def generate_chat_response(
     )
 
     try:
+        history, summary_text = build_conversation_history(
+            conversation_id,
+            bot_profile,
+            human_user,
+        )
+
+        bot_name = bot_user.get_full_name() or bot_user.username
+
+        messages = build_chat_messages(
+            bot_profile.system_prompt,
+            history,
+            bot_name=bot_name,
+            user=human_user,
+            bot=bot_user,
+            summary=summary_text,
+        )
+
         initial_messages = sanitize_messages_for_storage(list(messages))
 
         def cancelled_by_user():

@@ -98,3 +98,31 @@ test('clearBotStep cancels the timer and drops the steps', () => {
   assert.equal(app._botStepTimer, null);
   assert.equal(timers.cleared, 1);
 });
+
+test('bot_generating raises the indicator for the conversation on screen', () => {
+  const { app } = buildApp();
+
+  app.handleSSEBotGenerating({ conversation_ids: ['conv-1', 'conv-9'] });
+
+  assert.equal(app.botTyping, true);
+});
+
+test('bot_generating leaves other conversations alone', () => {
+  const { app } = buildApp();
+
+  app.handleSSEBotGenerating({ conversation_ids: ['conv-9'] });
+
+  assert.equal(app.botTyping, false);
+});
+
+test('bot_generating announced before a conversation is picked is not lost', () => {
+  // The stream connects while the page is still booting, so the announcement
+  // can land before activeConversation exists.
+  const { app } = buildApp();
+  app.activeConversation = null;
+
+  app.handleSSEBotGenerating({ conversation_ids: ['conv-1'] });
+
+  assert.equal(app.botTyping, false);
+  assert.ok(app.generatingConversations.has('conv-1'));
+});

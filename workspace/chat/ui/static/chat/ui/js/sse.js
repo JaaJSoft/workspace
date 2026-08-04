@@ -1,8 +1,15 @@
 // SSE event handlers + conversation list helpers triggered by server events.
 window.chatSseMixin = function chatSseMixin() {
   return {
+    // Conversations the server reported as generating when this connection
+    // opened. Kept because a page load races the stream: the announcement
+    // can land before a conversation is selected, and selectConversation
+    // reads this back once it has one.
+    generatingConversations: new Set(),
+
     async handleSSEMessage(detail) {
       const isViewing = this.activeConversation && detail.conversation_id === this.activeConversation.uuid;
+      this.generatingConversations.delete(detail.conversation_id);
 
       if (isViewing) {
         // Hide bot typing indicator if the incoming message is from a bot
@@ -136,6 +143,18 @@ window.chatSseMixin = function chatSseMixin() {
         this.titleRegeneratingUuid = null;
       }
       this.refreshConversationItems([detail.conversation_id], { bump: false });
+    },
+
+    // A generation was already under way when this connection opened, so a
+    // reload knows to raise the indicator without waiting for the next tool.
+    handleSSEBotGenerating(detail) {
+      this.generatingConversations = new Set(detail?.conversation_ids || []);
+      if (
+        this.activeConversation
+        && this.generatingConversations.has(this.activeConversation.uuid)
+      ) {
+        this.botTyping = true;
+      }
     },
 
     // A bot generation progress step (tool execution) arrived. Steps also

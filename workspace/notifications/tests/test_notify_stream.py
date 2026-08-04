@@ -76,6 +76,16 @@ class NotifyStreamTests(TestCase):
         self._send_committed(title="second")
         mock_push.delay.assert_not_called()
 
+    def test_one_failing_dispatch_does_not_block_the_others(self, mock_sse, mock_push):
+        # Each push dispatch runs in its own robust on_commit callback: a
+        # broker hiccup on one must not swallow the remaining dispatches.
+        mock_push.delay.side_effect = [Exception("broker down"), None]
+        # captureOnCommitCallbacks reports robust-callback failures on the
+        # django.test logger (the runtime path uses django.db.backends.base).
+        with self.assertLogs("django.test", level="ERROR"):
+            self._send_committed()
+        self.assertEqual(mock_push.delay.call_count, 2)
+
     def test_push_dispatch_waits_for_commit(self, mock_sse, mock_push):
         # Dispatching inside an open transaction would let the worker run
         # before the notification row is committed and drop the push.

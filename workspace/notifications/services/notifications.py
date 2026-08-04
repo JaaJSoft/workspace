@@ -211,12 +211,16 @@ def notify_stream(
     for uid in recipient_ids:
         invalidate_tags(_user_tag(uid))
         notify_sse("notifications", uid)
-    to_push = [n for n in to_create if n.priority != "low"] + merged_to_push
-    if to_push:
-        # Dispatch after commit: inside an open transaction the worker could
-        # run before the rows are visible and silently drop the push.
+    # Dispatch after commit: inside an open transaction the worker could run
+    # before the rows are visible and silently drop the push. One robust
+    # callback per notification, so a broker error on one dispatch neither
+    # swallows the others nor blocks unrelated on_commit callbacks.
+    # A lambda rather than functools.partial: Django's robust-callback error
+    # logging reads callback.__qualname__, which partial objects lack.
+    for notif in [n for n in to_create if n.priority != "low"] + merged_to_push:
         transaction.on_commit(
-            lambda: [send_push_notification.delay(str(n.uuid)) for n in to_push]
+            lambda uuid=str(notif.uuid): send_push_notification.delay(uuid),
+            robust=True,
         )
     return to_update + to_create
 

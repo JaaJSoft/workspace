@@ -102,7 +102,7 @@ class ExtractMentionsTests(TestCase):
 # ── notify_new_message ──────────────────────────────────────────
 
 
-@patch("workspace.core.sse_registry.notify_sse")
+@patch("workspace.notifications.services.notifications.notify_sse")
 @patch("workspace.notifications.tasks.send_push_notification.delay")
 class NotifyNewMessageTests(TestCase):
     """Lock in the batched merge-vs-create semantics of notify_new_message.
@@ -123,6 +123,11 @@ class NotifyNewMessageTests(TestCase):
         )
         for u in (self.author, self.alice, self.bob):
             ConversationMember.objects.create(conversation=self.conv, user=u)
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
 
     def test_creates_notification_per_member_excluding_author(
         self, mock_push, mock_sse
@@ -250,3 +255,15 @@ class NotifyNewMessageTests(TestCase):
         ConversationMember.objects.create(conversation=self.conv, user=dave)
         with self.assertNumQueries(4):
             notify_new_message(self.conv, self.author, "with more members")
+
+    def test_unread_count_reflects_new_message_immediately(self, mock_push, mock_sse):
+        """notify_stream invalidates the unread-count cache tag per recipient,
+        so a fresh message is visible right away instead of waiting out the
+        5-minute TTL."""
+        from workspace.notifications.services.notifications import get_unread_count
+
+        self.assertEqual(get_unread_count(self.alice), 0)  # warms the cache
+
+        notify_new_message(self.conv, self.author, "hello")
+
+        self.assertEqual(get_unread_count(self.alice), 1)

@@ -240,20 +240,11 @@ class UnreadCountModelTests(ChatTestMixin, APITestCase):
         """POST /read marks the matching chat notification as read."""
         from workspace.notifications.models import Notification
 
-        # Creator sends a message -> creates a notification for member
+        # Creator sends a message -> notify_new_message creates a notification for member
         self.client.force_authenticate(self.creator)
         self.client.post(self._msg_url(self.group.uuid), {"body": "hey"}, format="json")
 
-        # Simulate the notification that notify_new_message would create
-        notif = Notification.objects.create(
-            recipient=self.member,
-            origin="chat",
-            icon="message-square",
-            title="creator in Test Group",
-            body="hey",
-            url=f"/chat/{self.group.uuid}",
-            actor=self.creator,
-        )
+        notif = Notification.objects.get(recipient=self.member, conversation=self.group)
         self.assertIsNone(notif.read_at)
 
         # Member marks conversation as read
@@ -269,25 +260,15 @@ class UnreadCountModelTests(ChatTestMixin, APITestCase):
         """POST /read only clears notifications for that specific conversation."""
         from workspace.notifications.models import Notification
 
-        # Create notifications for two different conversations
-        notif_group = Notification.objects.create(
-            recipient=self.member,
-            origin="chat",
-            icon="message-square",
-            title="creator in Test Group",
-            body="hey",
-            url=f"/chat/{self.group.uuid}",
-            actor=self.creator,
+        # Notify member in both conversations via the real message-send path
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {"body": "hey"}, format="json")
+        self.client.post(self._msg_url(self.dm.uuid), {"body": "dm msg"}, format="json")
+
+        notif_group = Notification.objects.get(
+            recipient=self.member, conversation=self.group
         )
-        notif_dm = Notification.objects.create(
-            recipient=self.member,
-            origin="chat",
-            icon="message-square",
-            title="creator",
-            body="dm msg",
-            url=f"/chat/{self.dm.uuid}",
-            actor=self.creator,
-        )
+        notif_dm = Notification.objects.get(recipient=self.member, conversation=self.dm)
 
         # Member marks only the group as read
         self.client.force_authenticate(self.member)

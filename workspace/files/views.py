@@ -648,6 +648,7 @@ class FileViewSet(
                 title=f'{request.user.username} edited "{file_obj.name}"',
                 url=f"/files/{file_obj.parent_id}" if file_obj.parent_id else "/files",
                 actor=request.user,
+                source=file_obj,
             )
             return Response(serializer.data)
 

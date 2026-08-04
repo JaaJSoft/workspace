@@ -214,3 +214,49 @@ class SendPushNotificationTests(TestCase):
 
         # Subscription is untouched on unknown errors.
         self.assertTrue(PushSubscription.objects.filter(pk=sub.pk).exists())
+
+
+class PruneReadNotificationsTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="pass")
+
+    def _notif(self, *, read_days_ago=None):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        notif = Notification.objects.create(
+            recipient=self.alice, origin="chat", icon="", title="t"
+        )
+        if read_days_ago is not None:
+            notif.read_at = timezone.now() - timedelta(days=read_days_ago)
+            notif.save(update_fields=["read_at"])
+        return notif
+
+    def test_old_read_rows_are_pruned(self):
+        from workspace.notifications.tasks import prune_read_notifications
+
+        self._notif(read_days_ago=91)
+        deleted = prune_read_notifications()
+        self.assertEqual(deleted, 1)
+        self.assertEqual(Notification.objects.count(), 0)
+
+    def test_recent_read_rows_are_kept(self):
+        from workspace.notifications.tasks import prune_read_notifications
+
+        self._notif(read_days_ago=89)
+        self.assertEqual(prune_read_notifications(), 0)
+        self.assertEqual(Notification.objects.count(), 1)
+
+    def test_unread_rows_are_never_pruned(self):
+        from workspace.notifications.tasks import prune_read_notifications
+
+        self._notif()  # unread, created now; age is irrelevant for unread
+        self.assertEqual(prune_read_notifications(), 0)
+        self.assertEqual(Notification.objects.count(), 1)
+
+    def test_beat_schedule_registered(self):
+        from django.conf import settings
+
+        entry = settings.CELERY_BEAT_SCHEDULE["prune-read-notifications"]
+        self.assertEqual(entry["task"], "notifications.prune_read")

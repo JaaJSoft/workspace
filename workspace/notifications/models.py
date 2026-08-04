@@ -33,6 +33,44 @@ class Notification(models.Model):
         blank=True,
         related_name="+",
     )
+    # Source object refs: the container the user opens (conversation, not
+    # message). At most one may be set (see constraint); all-null means a
+    # sourceless announcement. CASCADE: notifications die with their source.
+    conversation = models.ForeignKey(
+        "chat.Conversation",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    file = models.ForeignKey(
+        "files.File",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    task = models.ForeignKey(
+        "projects.Task",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    event = models.ForeignKey(
+        "calendar.Event",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    poll = models.ForeignKey(
+        "calendar.Poll",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -52,6 +90,55 @@ class Notification(models.Model):
             ),
             models.Index(
                 fields=["recipient", "origin", "read_at"], name="notif_rcpt_origin_read"
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                name="notif_at_most_one_source",
+                condition=(
+                    models.Q(
+                        conversation__isnull=True,
+                        file__isnull=True,
+                        task__isnull=True,
+                        event__isnull=True,
+                        poll__isnull=True,
+                    )
+                    | models.Q(
+                        conversation__isnull=False,
+                        file__isnull=True,
+                        task__isnull=True,
+                        event__isnull=True,
+                        poll__isnull=True,
+                    )
+                    | models.Q(
+                        conversation__isnull=True,
+                        file__isnull=False,
+                        task__isnull=True,
+                        event__isnull=True,
+                        poll__isnull=True,
+                    )
+                    | models.Q(
+                        conversation__isnull=True,
+                        file__isnull=True,
+                        task__isnull=False,
+                        event__isnull=True,
+                        poll__isnull=True,
+                    )
+                    | models.Q(
+                        conversation__isnull=True,
+                        file__isnull=True,
+                        task__isnull=True,
+                        event__isnull=False,
+                        poll__isnull=True,
+                    )
+                    | models.Q(
+                        conversation__isnull=True,
+                        file__isnull=True,
+                        task__isnull=True,
+                        event__isnull=True,
+                        poll__isnull=False,
+                    )
+                ),
             ),
         ]
 

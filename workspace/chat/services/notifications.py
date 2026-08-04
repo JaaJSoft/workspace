@@ -49,7 +49,7 @@ def notify_new_message(
         title = author_name
 
     if mention_everyone:
-        priority_map = {uid: "high" for uid in member_ids}
+        priority_map = dict.fromkeys(member_ids, "high")
     else:
         priority_map = {uid: "high" for uid in member_ids if uid in mentioned_user_ids}
 

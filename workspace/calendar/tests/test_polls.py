@@ -609,6 +609,28 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         notif = Notification.objects.get(recipient=self.voter)
         self.assertEqual(notif.event_id, event.pk)
 
+    def test_finalize_notifies_non_attendees_via_poll(self):
+        """Invitees who did not become event members cannot open the event;
+        their notification is keyed on the poll and clears when they open it."""
+        no_voter = User.objects.create_user(username="novote", password="pass")
+        PollInvitee.objects.create(poll=self.poll, user=no_voter)
+        PollVote.objects.create(slot=self.slot, user=no_voter, choice="no")
+        self.client.force_authenticate(user=self.owner)
+        self.client.post(
+            f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
+            {"slot_id": str(self.slot.uuid)},
+            format="json",
+        )
+        notif = Notification.objects.get(recipient=no_voter)
+        self.assertEqual(notif.poll_id, self.poll.pk)
+        self.assertIsNone(notif.event_id)
+        self.assertIn(f"poll={self.poll.pk}", notif.url)
+        self.client.force_authenticate(user=no_voter)
+        resp = self.client.get(f"/api/v1/calendar/polls/{self.poll.uuid}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
+
     def test_finalize_sets_chosen_slot(self):
         self.client.force_authenticate(user=self.owner)
         self.client.post(

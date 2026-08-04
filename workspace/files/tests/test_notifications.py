@@ -92,6 +92,7 @@ class ShareNotificationTests(FileNotificationTestBase):
         notifs = self._notifs_for(self.recipient)
         self.assertEqual(notifs.count(), 1)
         self.assertIn("read & write", notifs.first().title)
+        self.assertEqual(notifs.first().file_id, self.file.pk)
 
     def test_permission_update_ro_label(self):
         FileShare.objects.create(

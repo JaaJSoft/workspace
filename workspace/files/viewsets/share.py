@@ -139,6 +139,7 @@ class ShareMixin:
                     if file_obj.parent_id
                     else "/files",
                     actor=request.user,
+                    source=file_obj,
                 )
             return Response(
                 {"shared": True, "permission": share.permission},

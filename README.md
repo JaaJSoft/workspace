@@ -35,7 +35,7 @@ Markdown editor with journal mode, folders, tags, favorites, and full-text searc
 
 ![Notes](docs/images/notes_1.png)
 
-### Projects
+### [Projects](docs/projects/)
 Kanban boards for tracking tasks, solo or as a team. Drag & drop cards between columns, prioritize with labels, priorities, due dates, and assignees, and park future work in a dedicated backlog view. Every user gets a personal board out of the box, and group projects support member roles and archiving.
 
 ![Projects](docs/images/projects_1.png)

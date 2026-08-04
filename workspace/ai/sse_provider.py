@@ -23,11 +23,9 @@ class AIStreamSSEProvider(SSEProvider):
         return []
 
     def poll(self, cache_value):
-        from workspace.ai.services.stream_steps import steps_after
+        from workspace.ai.services.stream_steps import read_steps
 
-        envelopes = steps_after(self.user.id, self._cursor)
-        if envelopes:
-            self._cursor = envelopes[-1]["id"]
+        envelopes, self._cursor = read_steps(self.user.id, self._cursor)
         return [("bot_step", envelope["data"], None) for envelope in envelopes]
 
 

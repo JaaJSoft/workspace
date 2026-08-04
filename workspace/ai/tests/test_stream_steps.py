@@ -30,29 +30,47 @@ class MailboxTests(TestCase):
 
     def test_enqueue_then_read_returns_envelope(self):
         stream_steps._enqueue(1, {"label": "Search"})
-        out = stream_steps.steps_after(1, None)
+        out, cursor = stream_steps.read_steps(1, None)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["data"], {"label": "Search"})
-        self.assertIn("id", out[0])
+        self.assertEqual(cursor, out[0]["id"])
 
     def test_reading_does_not_consume_the_mailbox(self):
         stream_steps._enqueue(1, {})
-        stream_steps.steps_after(1, None)
-        self.assertEqual(len(stream_steps.steps_after(1, None)), 1)
+        stream_steps.read_steps(1, None)
+        self.assertEqual(len(stream_steps.read_steps(1, None)[0]), 1)
 
     def test_cursor_returns_only_newer_steps(self):
         stream_steps._enqueue(1, {"label": "a"})
         first = stream_steps.latest_step_id(1)
         stream_steps._enqueue(1, {"label": "b"})
+        out, _ = stream_steps.read_steps(1, first)
+        self.assertEqual([e["data"]["label"] for e in out], ["b"])
+
+    def test_reading_twice_with_the_returned_cursor_yields_nothing(self):
+        stream_steps._enqueue(1, {"label": "a"})
+        _, cursor = stream_steps.read_steps(1, None)
+        out, again = stream_steps.read_steps(1, cursor)
+        self.assertEqual(out, [])
+        self.assertEqual(again, cursor)
+
+    def test_evicted_cursor_skips_to_the_tail_instead_of_replaying(self):
+        # A cursor the capped window no longer holds must not replay entries
+        # the connection already rendered: that shows duplicated step lines.
+        stream_steps._enqueue(1, {"label": "a"})
+        stream_steps._enqueue(1, {"label": "b"})
+
+        out, cursor = stream_steps.read_steps(1, "evicted")
+
+        self.assertEqual(out, [])
+        self.assertEqual(cursor, stream_steps.latest_step_id(1))
+        stream_steps._enqueue(1, {"label": "c"})
         self.assertEqual(
-            [e["data"]["label"] for e in stream_steps.steps_after(1, first)], ["b"]
+            [e["data"]["label"] for e in stream_steps.read_steps(1, cursor)[0]], ["c"]
         )
 
-    def test_unknown_cursor_resyncs_on_the_whole_window(self):
-        stream_steps._enqueue(1, {"label": "a"})
-        self.assertEqual(
-            [e["data"]["label"] for e in stream_steps.steps_after(1, "gone")], ["a"]
-        )
+    def test_empty_mailbox_keeps_the_cursor(self):
+        self.assertEqual(stream_steps.read_steps(1, "kept"), ([], "kept"))
 
     def test_latest_step_id_is_none_when_empty(self):
         self.assertIsNone(stream_steps.latest_step_id(1))
@@ -61,16 +79,16 @@ class MailboxTests(TestCase):
         stream_steps._enqueue(1, {"label": "a"})
         stream_steps._enqueue(2, {"label": "b"})
         self.assertEqual(
-            [e["data"]["label"] for e in stream_steps.steps_after(1, None)], ["a"]
+            [e["data"]["label"] for e in stream_steps.read_steps(1, None)[0]], ["a"]
         )
         self.assertEqual(
-            [e["data"]["label"] for e in stream_steps.steps_after(2, None)], ["b"]
+            [e["data"]["label"] for e in stream_steps.read_steps(2, None)[0]], ["b"]
         )
 
     def test_queue_is_capped(self):
         for i in range(stream_steps.MAX_QUEUE + 20):
             stream_steps._enqueue(1, {"i": i})
-        out = stream_steps.steps_after(1, None)
+        out, _ = stream_steps.read_steps(1, None)
         self.assertEqual(len(out), stream_steps.MAX_QUEUE)
         self.assertEqual(out[-1]["data"]["i"], stream_steps.MAX_QUEUE + 19)
 
@@ -120,7 +138,7 @@ class NotifyToolStepTests(TestCase):
         stream_steps.notify_tool_step([1, 2], "conv-1", make_tool_call())
 
         for user_id in (1, 2):
-            out = stream_steps.steps_after(user_id, None)
+            out, _ = stream_steps.read_steps(user_id, None)
             self.assertEqual(len(out), 1)
             step = out[0]["data"]
             self.assertEqual(step["conversation_id"], "conv-1")
@@ -145,7 +163,7 @@ class NotifyToolStepTests(TestCase):
             ),
         ):
             stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
-        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
+        html = stream_steps.read_steps(1, None)[0][0]["data"]["html"]
         self.assertIn("🔍", html)
         self.assertIn("Web Search", html)
         self.assertIn("meteo paris", html)
@@ -159,7 +177,7 @@ class NotifyToolStepTests(TestCase):
             return_value='<script>alert("x")</script>',
         ):
             stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
-        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
+        html = stream_steps.read_steps(1, None)[0][0]["data"]["html"]
         self.assertNotIn("<script>", html)
         self.assertIn("&lt;script&gt;", html)
 
@@ -170,7 +188,7 @@ class NotifyToolStepTests(TestCase):
             return_value="x" * 500,
         ):
             stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
-        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
+        html = stream_steps.read_steps(1, None)[0][0]["data"]["html"]
         self.assertIn("x" * stream_steps.MAX_DETAIL_LEN, html)
         self.assertNotIn("x" * (stream_steps.MAX_DETAIL_LEN + 1), html)
 
@@ -179,7 +197,7 @@ class NotifyToolStepTests(TestCase):
         stream_steps.notify_tool_step(
             [1], "conv-1", make_tool_call(arguments="not json{")
         )
-        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
+        html = stream_steps.read_steps(1, None)[0][0]["data"]["html"]
         self.assertIn("search_web", html)
         self.assertIn("not json{", html)
 
@@ -188,7 +206,7 @@ class NotifyToolStepTests(TestCase):
         stream_steps.notify_tool_step(
             [1], "conv-1", make_tool_call(arguments='{"query": "meteo paris"}')
         )
-        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
+        html = stream_steps.read_steps(1, None)[0][0]["data"]["html"]
         self.assertIn("<details", html)
         self.assertIn("query", html)
         self.assertIn("meteo paris", html)

@@ -30,7 +30,6 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     from workspace.ai.tool_registry import tool_registry
 
     tools = tool_registry.get_definitions()
-    step_targets = step_recipients(conversation_id, bot_user) if conversation_id else []
     result = call_llm(messages, model=model, tools=tools)
 
     tool_context = {}
@@ -101,7 +100,13 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
         }
 
         for tc in result["tool_calls"]:
-            notify_tool_step(step_targets, conversation_id, tc)
+            # Membership is re-read per tool, not snapshotted for the whole
+            # generation: a member who leaves mid-run must stop receiving
+            # progress from a conversation they are no longer in.
+            if conversation_id:
+                notify_tool_step(
+                    step_recipients(conversation_id, bot_user), conversation_id, tc
+                )
             tool_result = tool_registry.execute(
                 tc,
                 user=human_user,

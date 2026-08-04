@@ -70,23 +70,31 @@ def latest_step_id(user_id):
     return queue[-1]["id"] if queue else None
 
 
-def steps_after(user_id, last_id):
-    """Return the step envelopes queued after *last_id*.
+def read_steps(user_id, cursor):
+    """Return ``(envelopes, cursor)``: the steps queued after *cursor*.
 
     Reads without consuming: a user can hold several SSE connections (two
     tabs, or an EventSource reconnect overlapping the connection it
     replaces) and every one of them must see every step. Each connection
     tracks its own cursor instead; entries fall out on their own via
     STEP_EVENT_TTL and MAX_QUEUE.
+
+    Reading and advancing are one operation so a caller cannot hold a
+    cursor the mailbox no longer knows about.
     """
     queue = _queue(user_id)
-    if last_id is None:
-        return queue
+    if not queue:
+        return [], cursor
+    if cursor is None:
+        return queue, queue[-1]["id"]
     for index in range(len(queue) - 1, -1, -1):
-        if queue[index]["id"] == last_id:
-            return queue[index + 1 :]
-    # Cursor aged out of the capped window: resync on what is still there.
-    return queue
+        if queue[index]["id"] == cursor:
+            fresh = queue[index + 1 :]
+            return fresh, (fresh[-1]["id"] if fresh else cursor)
+    # Cursor evicted by the queue cap. Jump to the tail rather than replay
+    # entries this connection already rendered: a skipped step only lags the
+    # label, a duplicated one shows the same line twice.
+    return [], queue[-1]["id"]
 
 
 def notify_tool_step(recipient_ids, conversation_id, tool_call):

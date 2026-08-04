@@ -14,7 +14,9 @@ function buildApp() {
   };
   const sseCtx = loadScript('workspace/chat/ui/static/chat/ui/js/sse.js', stubs);
   const botCtx = loadScript('workspace/chat/ui/static/chat/ui/js/bot.js', stubs);
-  const app = Object.assign({}, botCtx.chatBotMixin(), sseCtx.chatSseMixin(), {
+  // Same order as chatApp(): sse first, bot last, so an overlapping key
+  // resolves here the way it does in production.
+  const app = Object.assign({}, sseCtx.chatSseMixin(), botCtx.chatBotMixin(), {
     activeConversation: { uuid: 'conv-1' },
   });
   return { app, timers };
@@ -48,6 +50,7 @@ test('bot_step with no active conversation is ignored', () => {
   app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
 
   assert.equal(app.botTyping, false);
+  assert.equal(app.botSteps.length, 0);
 });
 
 test('later steps accumulate in order and re-arm the failsafe', () => {

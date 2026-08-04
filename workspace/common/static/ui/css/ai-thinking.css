@@ -37,10 +37,10 @@
 .ai-thinking-dot:nth-child(2) { animation-delay: .18s; }
 .ai-thinking-dot:nth-child(3) { animation-delay: .36s; }
 
+/* Sized to sit inside the row's fixed marker slot, alongside the done check. */
 .ai-step-marker {
   width: 10px;
   height: 10px;
-  margin-top: 3px;
   flex-shrink: 0;
   border-radius: 50%;
   border: 1.5px solid oklch(var(--bc) / .2);

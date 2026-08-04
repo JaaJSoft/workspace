@@ -14,7 +14,9 @@ from workspace.ai.services.stream_steps import notify_tool_step, step_recipients
 logger = logging.getLogger(__name__)
 
 
-def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
+def run_tool_loop(
+    messages, model, human_user, bot_user, conversation_id, is_cancelled=None
+):
     """Run the tool call loop and return (result, tool_context, rounds, tool_data).
 
     Calls the AI model, executes any tool calls it returns, and re-calls
@@ -26,6 +28,11 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     *tool_data* is a compact list of rounds suitable for persisting on
     ``Message.tool_data`` so that future history rebuilds can reconstruct
     the correct ``assistant(tool_calls) -> tool(result)`` message sequence.
+
+    *is_cancelled* is an optional predicate read before every tool
+    execution. When it returns True the loop stops and reports it through
+    ``tool_context["cancelled"]``, so a caller can tell an abandoned run
+    from a finished one.
     """
     from workspace.ai.tool_registry import tool_registry
 
@@ -100,6 +107,12 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
         }
 
         for tc in result["tool_calls"]:
+            # Read before executing, not after the loop: past this point the
+            # tool writes memories, schedules messages or bills an image, and
+            # none of that should happen once the user has cancelled.
+            if is_cancelled and is_cancelled():
+                tool_context["cancelled"] = True
+                break
             # Membership is re-read per tool, not snapshotted for the whole
             # generation: a member who leaves mid-run must stop receiving
             # progress from a conversation they are no longer in.
@@ -151,6 +164,12 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
 
         tool_data.append(td_round)
         rounds.append(round_data)
+        # Re-read at the round boundary too, so a cancellation that lands
+        # during the tools does not buy one more model call.
+        if tool_context.get("cancelled") or (is_cancelled and is_cancelled()):
+            tool_context["cancelled"] = True
+            rounds[-1]["cancelled"] = True
+            break
         if tool_context.get("stop_after_round"):
             # A tool requested that we halt and wait for an external input
             # (e.g. a user click on an ask_user_question prompt). Don't

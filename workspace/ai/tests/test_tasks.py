@@ -1,5 +1,6 @@
 import base64
 import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -286,6 +287,73 @@ class GenerateChatResponseWithToolsTests(TestCase):
 
         # Two API calls were made
         self.assertEqual(mock_client.chat.completions.create.call_count, 2)
+
+    @patch("workspace.ai.tool_registry.tool_registry.execute")
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_cancelling_stops_the_run_instead_of_only_dropping_its_answer(
+        self, mock_call_llm, mock_execute
+    ):
+        """A cancelled generation must stop working, not finish and be discarded.
+
+        Tools keep writing memories, scheduling messages and billing images
+        until the loop ends, so cancellation has to be read inside it.
+        """
+
+        def tool_round(call_id):
+            tool_call = SimpleNamespace(
+                id=call_id,
+                type="function",
+                function=SimpleNamespace(name="save_memory", arguments="{}"),
+            )
+            return {
+                "tool_calls": [tool_call],
+                "content": "",
+                "message": SimpleNamespace(
+                    role="assistant", content="", tool_calls=[tool_call]
+                ),
+                "model": "x",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+            }
+
+        # A third response is available on purpose: without the fix the loop
+        # runs to the end and consumes it, which is what the counts below pin.
+        mock_call_llm.side_effect = [
+            tool_round("call_1"),
+            tool_round("call_2"),
+            {
+                "tool_calls": None,
+                "content": "All done",
+                "message": SimpleNamespace(
+                    role="assistant", content="All done", tool_calls=None
+                ),
+                "model": "x",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+            },
+        ]
+
+        def cancel_while_running(*args, **kwargs):
+            # What BotCancelView does when the user hits cancel.
+            AITask.objects.filter(task_type=AITask.TaskType.CHAT).update(
+                status=AITask.Status.FAILED, error="Cancelled by user"
+            )
+            return "ok"
+
+        mock_execute.side_effect = cancel_while_running
+
+        from workspace.ai.tasks.chat import generate_chat_response
+
+        result = generate_chat_response(
+            str(self.conversation.uuid),
+            str(self.message.uuid),
+            self.bot_user.id,
+        )
+
+        self.assertEqual(result["status"], "cancelled")
+        self.assertEqual(mock_execute.call_count, 1)
+        self.assertEqual(mock_call_llm.call_count, 1)
+        self.assertFalse(Message.objects.filter(author=self.bot_user).exists())
 
     @patch("workspace.ai.tool_registry.tool_registry.execute")
     @patch("workspace.ai.client.get_ai_client")

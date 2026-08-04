@@ -14,6 +14,7 @@
 <div class="h-screen flex flex-col"
      x-data="chatRoomApp({{ current_user_id }}, '{{ conversation_uuid }}')"
      @chat-message.window="handleSSEMessage($event.detail)"
+     @ai-stream-bot_step.window="handleSSEBotStep($event.detail)"
      @chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
      @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
      @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"

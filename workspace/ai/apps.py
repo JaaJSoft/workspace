@@ -6,13 +6,19 @@ class AIConfig(AppConfig):
     name = "workspace.ai"
 
     def ready(self):
-        from workspace.ai.sse_provider import AISSEProvider
+        from workspace.ai.sse_provider import AISSEProvider, AIStreamSSEProvider
         from workspace.core.sse_registry import SSEProviderInfo, sse_registry
 
         sse_registry.register(
             SSEProviderInfo(
                 slug="ai",
                 provider_cls=AISSEProvider,
+            )
+        )
+        sse_registry.register(
+            SSEProviderInfo(
+                slug="ai_stream",
+                provider_cls=AIStreamSSEProvider,
             )
         )
 

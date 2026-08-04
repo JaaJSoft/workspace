@@ -150,18 +150,37 @@
               <!-- Bot avatar -->
               <div class="flex-shrink-0 w-8" x-html="botTypingAvatar()"></div>
               <!-- Content column + cancel -->
-              <div class="group flex items-center gap-2 min-w-0">
-                <div class="flex flex-col items-start gap-1 min-w-0">
-                  {% include "ui/partials/ai_thinking_bubble.html" %}
-                  <!-- Progress step: which tool the bot is currently running.
-                       The content is the server-rendered _tool_step_summary
-                       partial — the same one the final tool timeline uses. -->
-                  <div x-show="botStep" x-cloak
-                       x-transition:enter="transition ease-out duration-200"
-                       x-transition:enter-start="opacity-0"
-                       x-transition:enter-end="opacity-100"
-                       class="flex items-center gap-1 pl-2 text-xs text-base-content/40 min-w-0 max-w-full"
-                       x-html="botStep?.html || ''"></div>
+              <!-- max-w-[75%] on the row (not the bubble): the percentage
+                   resolves against the message column, matching how message
+                   bubbles are capped, so long tool details truncate. -->
+              <div class="group flex items-center gap-2 min-w-0 max-w-[75%]">
+                <!-- Thinking bubble, chat-message shaped. Tool steps stack
+                     inside as they stream in (same server-rendered rows as
+                     the final tool timeline, see _tool_step_summary.html)
+                     with the animated dots below. Content sits in a
+                     `relative` wrapper so it paints above the absolutely
+                     positioned shimmer/glow overlays. -->
+                <div class="ai-thinking-bubble rounded-2xl min-w-0 max-w-full"
+                     :class="botSteps.length ? 'px-4 py-2.5' : 'px-8 py-3.5 min-w-[9rem]'">
+                  <div class="ai-thinking-shimmer"></div>
+                  <div class="ai-thinking-glow"></div>
+                  <div class="relative flex flex-col gap-2 min-w-0">
+                    <div x-show="botSteps.length" x-cloak
+                         class="flex flex-col gap-0.5 text-xs text-base-content/40 min-w-0">
+                      <template x-for="(step, index) in botSteps" :key="index">
+                        <div class="flex items-center gap-1 min-w-0"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0"
+                             x-transition:enter-end="opacity-100"
+                             x-html="step.html"></div>
+                      </template>
+                    </div>
+                    <div class="ai-thinking-dots" :class="botSteps.length ? 'self-start' : 'self-center'">
+                      <span class="ai-thinking-dot"></span>
+                      <span class="ai-thinking-dot"></span>
+                      <span class="ai-thinking-dot"></span>
+                    </div>
+                  </div>
                 </div>
                 <button class="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-error opacity-0 group-hover:opacity-100 transition-opacity"
                         @click="cancelBotResponse()" title="Cancel">

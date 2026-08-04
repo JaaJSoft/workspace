@@ -5,10 +5,10 @@ window.chatBotMixin = function chatBotMixin() {
     availableBots: [],
     botFilter: '',
     botTyping: false,
-    // Last progress step received for the active conversation's running
-    // generation: { icon, label, detail } or null. Only rendered while
-    // botTyping is up.
-    botStep: null,
+    // Progress steps received for the active conversation's running
+    // generation, in arrival order: [{ html }]. Each html is the
+    // server-rendered tool summary row. Only rendered while botTyping is up.
+    botSteps: [],
     _botStepTimer: null,
 
     botMemories: [],
@@ -74,7 +74,7 @@ window.chatBotMixin = function chatBotMixin() {
     clearBotStep() {
       clearTimeout(this._botStepTimer);
       this._botStepTimer = null;
-      this.botStep = null;
+      this.botSteps = [];
     },
 
     botTypingName() {

@@ -26,7 +26,10 @@ test('bot_step raises the typing indicator and stores the step', () => {
   app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
 
   assert.equal(app.botTyping, true);
-  assert.deepStrictEqual({ ...app.botStep }, { html: '<span>Web Search</span>' });
+  assert.deepStrictEqual(
+    Array.from(app.botSteps, s => ({ ...s })),
+    [{ html: '<span>Web Search</span>' }],
+  );
 });
 
 test('bot_step for another conversation is ignored', () => {
@@ -35,7 +38,7 @@ test('bot_step for another conversation is ignored', () => {
   app.handleSSEBotStep({ conversation_id: 'conv-2', html: '<span>Web Search</span>' });
 
   assert.equal(app.botTyping, false);
-  assert.equal(app.botStep, null);
+  assert.equal(app.botSteps.length, 0);
 });
 
 test('bot_step with no active conversation is ignored', () => {
@@ -47,34 +50,48 @@ test('bot_step with no active conversation is ignored', () => {
   assert.equal(app.botTyping, false);
 });
 
-test('a later step replaces the previous one and re-arms the failsafe', () => {
+test('later steps accumulate in order and re-arm the failsafe', () => {
   const { app, timers } = buildApp();
 
   app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
   app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Calendar</span>' });
 
-  assert.equal(app.botStep.html, '<span>Calendar</span>');
+  assert.deepStrictEqual(
+    Array.from(app.botSteps, s => s.html),
+    ['<span>Web Search</span>', '<span>Calendar</span>'],
+  );
   assert.equal(timers.fns.length, 2, 'each step arms a fresh failsafe timer');
   assert.equal(timers.cleared, 1, 'the previous timer is cancelled');
 });
 
-test('the failsafe timer hides both the step and the typing indicator', () => {
+test('the step list is capped', () => {
+  const { app } = buildApp();
+
+  for (let i = 0; i < 40; i++) {
+    app.handleSSEBotStep({ conversation_id: 'conv-1', html: `<span>${i}</span>` });
+  }
+
+  assert.equal(app.botSteps.length, 30);
+  assert.equal(app.botSteps[app.botSteps.length - 1].html, '<span>39</span>');
+});
+
+test('the failsafe timer hides both the steps and the typing indicator', () => {
   const { app, timers } = buildApp();
 
   app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
   timers.fns[timers.fns.length - 1]();
 
   assert.equal(app.botTyping, false);
-  assert.equal(app.botStep, null);
+  assert.equal(app.botSteps.length, 0);
 });
 
-test('clearBotStep cancels the timer and drops the step', () => {
+test('clearBotStep cancels the timer and drops the steps', () => {
   const { app, timers } = buildApp();
 
   app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
   app.clearBotStep();
 
-  assert.equal(app.botStep, null);
+  assert.equal(app.botSteps.length, 0);
   assert.equal(app._botStepTimer, null);
   assert.equal(timers.cleared, 1);
 });

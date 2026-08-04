@@ -146,11 +146,13 @@ window.chatSseMixin = function chatSseMixin() {
     handleSSEBotStep(detail) {
       if (!this.activeConversation || detail.conversation_id !== this.activeConversation.uuid) return;
       this.botTyping = true;
-      // Server-rendered summary line (same partial as the final timeline row).
-      this.botStep = { html: detail.html };
+      // Server-rendered summary line (same partial as the final timeline
+      // row); steps accumulate so the bubble builds up the timeline live.
+      this.botSteps.push({ html: detail.html });
+      if (this.botSteps.length > 30) this.botSteps.shift();
       clearTimeout(this._botStepTimer);
       this._botStepTimer = setTimeout(() => {
-        this.botStep = null;
+        this.botSteps = [];
         this.botTyping = false;
       }, 180000);
     },

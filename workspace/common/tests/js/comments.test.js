@@ -198,6 +198,45 @@ test('insertMention targets the edit body when editing', async () => {
   assert.equal(comp.newBody, '');
 });
 
+// Django usernames allow [.@+-]; the dropdown must keep filtering across them.
+
+test('handleMentionInput keeps filtering past a dot', async () => {
+  const { comp } = makeWithUsers();
+  await comp.loadComments();
+  const el = { value: 'hello @jean.du', selectionStart: 14 };
+  comp.handleMentionInput(el, 'new');
+  assert.equal(comp.mentionActive, true);
+  assert.equal(comp.mentionQuery, 'jean.du');
+  assert.equal(comp.mentionStartPos, 6);
+});
+
+test('handleMentionInput keeps filtering past a hyphen', async () => {
+  const { comp } = makeWithUsers();
+  await comp.loadComments();
+  const el = { value: 'hi @marie-cl', selectionStart: 12 };
+  comp.handleMentionInput(el, 'new');
+  assert.equal(comp.mentionActive, true);
+  assert.equal(comp.mentionQuery, 'marie-cl');
+});
+
+test('an email typed after whitespace never opens the dropdown', async () => {
+  const { comp } = makeWithUsers();
+  await comp.loadComments();
+  const el = { value: 'write to alice@exa', selectionStart: 18 };
+  comp.handleMentionInput(el, 'new');
+  assert.equal(comp.mentionActive, false);
+});
+
+test('insertMention splices a dotted username', async () => {
+  const { comp } = makeWithUsers();
+  await comp.loadComments();
+  const el = { value: 'hello @jean.du there', selectionStart: 14 };
+  comp.newBody = el.value;
+  comp.handleMentionInput(el, 'new');
+  comp.insertMention({ username: 'jean.dupont' });
+  assert.equal(comp.newBody, 'hello @jean.dupont  there');
+});
+
 test('handleMentionKeydown cycles and inserts with Enter', async () => {
   const { comp } = makeWithUsers();
   await comp.loadComments();

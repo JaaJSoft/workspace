@@ -150,6 +150,63 @@ class CommentMentionNotificationTests(FileCommentMentionTestBase):
         self.assertEqual(self._notifs_for(self.shared).count(), 1)
 
 
+class DottedUsernameMentionTests(FileCommentMentionTestBase):
+    """Usernames like 'jean.dupont' are the common shape; they must mention."""
+
+    def setUp(self):
+        super().setUp()
+        self.dotted = User.objects.create_user(
+            username="jean.dupont", email="jd@example.com", password="pass123"
+        )
+        FileShare.objects.create(
+            file=self.file, shared_by=self.owner, shared_with=self.dotted
+        )
+
+    def test_dotted_username_gets_notified(self):
+        resp = self._post_comment("ping @jean.dupont please review")
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        notifs = self._notifs_for(self.dotted)
+        self.assertEqual(notifs.count(), 1)
+        self.assertIn("mentioned", notifs.first().title)
+        self.assertEqual(notifs.first().priority, "high")
+
+    def test_dotted_username_renders_as_badge(self):
+        resp = self._post_comment("ping @jean.dupont")
+        body_html = resp.json()["body_html"]
+        self.assertIn(f'data-user-id="{self.dotted.pk}"', body_html)
+        self.assertIn(">@jean.dupont</span>", body_html)
+
+    def test_edit_notifies_newly_mentioned_dotted_username(self):
+        resp = self._post_comment("draft note")
+        comment_uuid = resp.json()["uuid"]
+        self.client.patch(
+            f"/api/v1/files/{self.file.uuid}/comments/{comment_uuid}",
+            {"body": "draft note, ping @jean.dupont"},
+            format="json",
+        )
+        self.assertEqual(self._notifs_for(self.dotted).count(), 1)
+
+    def test_edit_does_not_renotify_existing_dotted_mention(self):
+        resp = self._post_comment("ping @jean.dupont")
+        comment_uuid = resp.json()["uuid"]
+        self.client.patch(
+            f"/api/v1/files/{self.file.uuid}/comments/{comment_uuid}",
+            {"body": "ping @jean.dupont again"},
+            format="json",
+        )
+        self.assertEqual(self._notifs_for(self.dotted).count(), 1)
+
+    def test_shorter_prefix_user_is_not_notified(self):
+        """@jean.dupont must not also ping a user named 'jean'."""
+        jean = User.objects.create_user(
+            username="jean", email="jean@example.com", password="pass123"
+        )
+        FileShare.objects.create(file=self.file, shared_by=self.owner, shared_with=jean)
+        self._post_comment("ping @jean.dupont")
+        self.assertEqual(self._notifs_for(jean).count(), 0)
+        self.assertEqual(self._notifs_for(self.dotted).count(), 1)
+
+
 class CommentListShapeTests(FileCommentMentionTestBase):
     def test_list_returns_comments_and_mention_users(self):
         FileComment.objects.create(file=self.file, author=self.owner, body="hi")

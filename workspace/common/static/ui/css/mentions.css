@@ -1,13 +1,29 @@
 /* ── @mention badges (chat messages, file/task comments) ── */
+/* Trimming the line box to the ink centers the label optically, the way the
+   project label chips do. Browsers without text-box fall back to a whole-pixel
+   nudge that compensates the font's low baseline (fractional offsets shimmer
+   across zoom levels, so keep it integer). */
 .mention-badge {
+  display: inline-block;
   background-color: oklch(var(--in) / 0.15);
   color: oklch(var(--in));
-  padding: 0.125em 0.45em;
+  padding: 0.28em 0.45em;
   border-radius: 9999px;
   font-weight: 600;
   font-size: 0.92em;
   line-height: 1;
   white-space: nowrap;
+  text-box: trim-both cap alphabetic;
+}
+
+/* inline-block is what makes the trim apply: text-box needs a block container,
+   and a plain inline box silently ignores it. */
+@supports not (text-box: trim-both cap alphabetic) {
+  .mention-badge {
+    padding: 0.125em 0.45em;
+    position: relative;
+    top: -1px;
+  }
 }
 
 .mention-badge[data-user-id] {

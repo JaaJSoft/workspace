@@ -254,6 +254,29 @@ class TaskCommentMentionTests(ProjectTestMixin, APITestCase):
         self.assertIsNotNone(event)
         self.assertEqual(event.actor, self.member)
 
+    def test_dotted_username_gets_notified(self):
+        dotted = User.objects.create_user(
+            username="jean.dupont", email="jd@test.com", password="pass123"
+        )
+        add_member(self.project, dotted)
+        self.client.force_authenticate(self.admin)
+        self.client.post(self.base_url, {"body": "ping @jean.dupont"}, format="json")
+        notifs = self._notifs_for(dotted)
+        self.assertEqual(notifs.count(), 1)
+        self.assertIn("mentioned", notifs.first().title)
+
+    def test_dotted_username_renders_as_badge(self):
+        dotted = User.objects.create_user(
+            username="jean.dupont", email="jd@test.com", password="pass123"
+        )
+        add_member(self.project, dotted)
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            self.base_url, {"body": "ping @jean.dupont"}, format="json"
+        )
+        self.assertIn(f'data-user-id="{dotted.pk}"', response.data["body_html"])
+        self.assertIn(">@jean.dupont</span>", response.data["body_html"])
+
     def test_edit_notifies_newly_mentioned_only(self):
         self.client.force_authenticate(self.admin)
         response = self.client.post(self.base_url, {"body": "draft"}, format="json")

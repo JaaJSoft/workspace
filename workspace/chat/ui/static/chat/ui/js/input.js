@@ -263,8 +263,9 @@ window.chatInputMixin = function chatInputMixin() {
       const pos = ta.selectionStart;
       const text = ta.value.substring(0, pos);
 
-      // Find the last '@' that starts a mention (preceded by start-of-string or whitespace)
-      const match = text.match(/(?:^|\s)@(\w*)$/);
+      // Find the last '@' that starts a mention (preceded by start-of-string or
+      // whitespace), spanning Django's username charset so a dotted name keeps filtering.
+      const match = text.match(/(?:^|\s)@([\w.@+-]*)$/);
       if (match) {
         this.mentionActive = true;
         this.mentionQuery = match[1].toLowerCase();

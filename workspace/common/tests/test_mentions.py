@@ -38,6 +38,28 @@ class ExtractMentionsTests(SimpleTestCase):
         self.assertEqual(usernames, {"alice"})
 
 
+class ExtractMentionsCandidateTests(SimpleTestCase):
+    """Django usernames allow [.@+-], so a token can hold several candidates."""
+
+    def test_dotted_token_yields_the_full_username(self):
+        usernames, _ = extract_mentions("hi @jean.dupont")
+        self.assertIn("jean.dupont", usernames)
+
+    def test_dotted_token_also_yields_shorter_prefixes(self):
+        """The caller resolves against real users, so every prefix is offered."""
+        usernames, _ = extract_mentions("hi @jean.dupont")
+        self.assertIn("jean", usernames)
+
+    def test_hyphenated_token_yields_the_full_username(self):
+        usernames, _ = extract_mentions("hi @marie-claire")
+        self.assertIn("marie-claire", usernames)
+
+    def test_email_after_whitespace_is_still_not_a_mention(self):
+        usernames, has_everyone = extract_mentions("write to alice@example.com now")
+        self.assertEqual(usernames, set())
+        self.assertFalse(has_everyone)
+
+
 class MentionedUsersTests(SimpleTestCase):
     def setUp(self):
         self.alice = SimpleNamespace(username="alice")
@@ -60,6 +82,46 @@ class MentionedUsersTests(SimpleTestCase):
 
     def test_newly_mentioned_excludes_actor(self):
         result = newly_mentioned_users(self.audience, self.bob, "draft", "draft @bob")
+        self.assertEqual(result, [])
+
+
+class DottedUsernameNotificationTests(SimpleTestCase):
+    """A user whose username holds a dot or hyphen must still be notified."""
+
+    def setUp(self):
+        self.actor = SimpleNamespace(username="actor")
+        self.dotted = SimpleNamespace(username="jean.dupont")
+        self.hyphenated = SimpleNamespace(username="marie-claire")
+
+    def test_dotted_username_is_mentioned(self):
+        result = mentioned_users([self.dotted], "hi @jean.dupont", self.actor)
+        self.assertEqual(result, [self.dotted])
+
+    def test_hyphenated_username_is_mentioned(self):
+        result = mentioned_users([self.hyphenated], "hi @marie-claire", self.actor)
+        self.assertEqual(result, [self.hyphenated])
+
+    def test_trailing_period_is_not_part_of_the_username(self):
+        alice = SimpleNamespace(username="alice")
+        self.assertEqual(mentioned_users([alice], "hi @alice.", self.actor), [alice])
+
+    def test_only_the_longest_matching_user_is_notified(self):
+        """@alice.bob mentions alice.bob, never alice - rendering agrees."""
+        alice = SimpleNamespace(username="alice")
+        alice_bob = SimpleNamespace(username="alice.bob")
+        result = mentioned_users([alice, alice_bob], "hi @alice.bob", self.actor)
+        self.assertEqual(result, [alice_bob])
+
+    def test_newly_mentioned_handles_dotted_usernames(self):
+        result = newly_mentioned_users(
+            [self.dotted], self.actor, "draft", "draft @jean.dupont"
+        )
+        self.assertEqual(result, [self.dotted])
+
+    def test_already_mentioned_dotted_username_is_not_renotified(self):
+        result = newly_mentioned_users(
+            [self.dotted], self.actor, "ping @jean.dupont", "ping @jean.dupont again"
+        )
         self.assertEqual(result, [])
 
 
@@ -112,3 +174,40 @@ class RenderCommentBodyTests(SimpleTestCase):
     def test_newlines_preserved(self):
         html = render_comment_body("line1\nline2", {})
         self.assertIn("line1\nline2", html)
+
+
+class RenderDottedUsernameTests(SimpleTestCase):
+    """Badges must cover the whole Django username charset, not just \\w."""
+
+    def test_dotted_username_becomes_badge(self):
+        html = render_comment_body("ping @jean.dupont", {"jean.dupont": 7})
+        self.assertIn('data-user-id="7"', html)
+        self.assertIn(">@jean.dupont</span>", html)
+
+    def test_hyphenated_username_becomes_badge(self):
+        html = render_comment_body("ping @marie-claire", {"marie-claire": 8})
+        self.assertIn('data-user-id="8"', html)
+        self.assertIn(">@marie-claire</span>", html)
+
+    def test_trailing_period_stays_outside_the_badge(self):
+        html = render_comment_body("ping @alice.", {"alice": 42})
+        self.assertIn(">@alice</span>.", html)
+
+    def test_longest_known_username_wins(self):
+        html = render_comment_body("ping @alice.bob", {"alice": 1, "alice.bob": 2})
+        self.assertIn('data-user-id="2"', html)
+        self.assertNotIn('data-user-id="1"', html)
+
+    def test_unknown_suffix_after_a_known_username_stays_literal(self):
+        html = render_comment_body("ping @alice.smith", {"alice": 1})
+        self.assertIn('data-user-id="1"', html)
+        self.assertIn("</span>.smith", html)
+
+    def test_dotted_username_with_digits(self):
+        html = render_comment_body("ping @lucia.bonet.4771", {"lucia.bonet.4771": 9})
+        self.assertIn(">@lucia.bonet.4771</span>", html)
+
+    def test_unknown_dotted_username_stays_literal(self):
+        html = render_comment_body("ping @jean.dupont", {"alice": 1})
+        self.assertNotIn("mention-badge", html)
+        self.assertIn("@jean.dupont", html)

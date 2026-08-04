@@ -67,3 +67,35 @@ class RenderMessageBodyTest(TestCase):
         html = render_message_body("hello @alice", mention_map={"alice": 42})
         self.assertIn('class="mention-badge"', html)
         self.assertIn("@alice", html)
+
+    def test_dotted_username_mention(self):
+        html = render_message_body(
+            "hello @jean.dupont", mention_map={"jean.dupont": 42}
+        )
+        self.assertIn('data-user-id="42"', html)
+        self.assertIn(">@jean.dupont</span>", html)
+
+    def test_hyphenated_username_mention(self):
+        html = render_message_body(
+            "hello @marie-claire", mention_map={"marie-claire": 7}
+        )
+        self.assertIn(">@marie-claire</span>", html)
+
+    def test_dotted_mention_survives_markdown(self):
+        """The placeholder must not be eaten by emphasis or autolinking."""
+        html = render_message_body(
+            "**bold** and @lucia.bonet.4771 here", mention_map={"lucia.bonet.4771": 3}
+        )
+        self.assertIn("<strong>bold</strong>", html)
+        self.assertIn(">@lucia.bonet.4771</span>", html)
+
+    def test_longest_known_username_wins(self):
+        html = render_message_body(
+            "hello @alice.bob", mention_map={"alice": 1, "alice.bob": 2}
+        )
+        self.assertIn('data-user-id="2"', html)
+        self.assertNotIn('data-user-id="1"', html)
+
+    def test_everyone_still_renders(self):
+        html = render_message_body("hello @everyone", mention_map={"everyone": None})
+        self.assertIn("mention-everyone", html)

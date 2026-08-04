@@ -12,9 +12,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.chat.services.mentions import build_mention_map
 from workspace.chat.services.reactions import invalidate_quick_reactions
 from workspace.common.mixins import CacheControlMixin
-from workspace.common.services.mentions import extract_mentions
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..common.logging import scrub
@@ -200,15 +200,8 @@ class MessageListView(CacheControlMixin, APIView):
         mentioned_user_ids = set()
         has_everyone = False
         if body:
-            raw_mentions, has_everyone = extract_mentions(body)
-            if raw_mentions:
-                mentioned_users = User.objects.filter(
-                    username__in=raw_mentions
-                ).values_list("id", "username")
-                mention_map = {uname: uid for uid, uname in mentioned_users}
-                mentioned_user_ids = set(mention_map.values())
-            if has_everyone:
-                mention_map["everyone"] = None
+            mention_map, has_everyone = build_mention_map(body)
+            mentioned_user_ids = {uid for uid in mention_map.values() if uid}
 
         body_html = (
             render_message_body(body, mention_map=mention_map or None) if body else ""
@@ -404,15 +397,7 @@ class MessageDetailView(APIView):
 
         # Extract mentions for rendering
         body = message.body
-        raw_mentions, has_everyone = extract_mentions(body)
-        mention_map = {}
-        if raw_mentions:
-            mentioned_users = User.objects.filter(
-                username__in=raw_mentions
-            ).values_list("id", "username")
-            mention_map = {uname: uid for uid, uname in mentioned_users}
-        if has_everyone:
-            mention_map["everyone"] = None
+        mention_map, _ = build_mention_map(body)
         message.body_html = render_message_body(body, mention_map=mention_map or None)
 
         message.edited_at = timezone.now()

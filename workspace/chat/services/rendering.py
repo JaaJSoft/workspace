@@ -1,12 +1,10 @@
-import re
-
 import mistune
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import TextLexer, get_lexer_by_name, guess_lexer
 from pygments.util import ClassNotFound
 
-from workspace.common.services.mentions import mention_badge
+from workspace.common.services.mentions import mention_badge, substitute_mentions
 
 
 class _ChatRenderer(mistune.HTMLRenderer):
@@ -59,19 +57,15 @@ def render_message_body(body, mention_map=None):
     """
     if mention_map:
         placeholders = {}
+        known = dict(mention_map)
+        known.setdefault("everyone", None)
 
-        def _placeholder(match):
-            username = match.group(1)
-            if username in mention_map or username == "everyone":
-                key = f"{_MENTION_PREFIX}{username}{_MENTION_SUFFIX}"
-                user_id = mention_map.get(username)
-                placeholders[key] = mention_badge(username, user_id)
-                return key
-            return match.group(0)
+        def _placeholder(username, user_id):
+            key = f"{_MENTION_PREFIX}{username}{_MENTION_SUFFIX}"
+            placeholders[key] = mention_badge(username, user_id)
+            return key
 
-        body = re.sub(
-            r"(?:(?<=\s)|(?<=^))@(\w+)", _placeholder, body, flags=re.MULTILINE
-        )
+        body = substitute_mentions(body, known, _placeholder)
         html = _markdown(body)
         for key, badge in placeholders.items():
             html = html.replace(key, badge)

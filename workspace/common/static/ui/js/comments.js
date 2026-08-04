@@ -118,8 +118,9 @@ window.commentsComponent = function commentsComponent(listUrl, currentUserId, ca
     handleMentionInput(el, field) {
       const pos = el.selectionStart;
       const text = el.value.substring(0, pos);
-      // A mention starts at the beginning of the text or after whitespace.
-      const match = text.match(/(?:^|\s)@(\w*)$/);
+      // A mention starts at the beginning of the text or after whitespace, and
+      // spans Django's username charset so typing a dotted name keeps filtering.
+      const match = text.match(/(?:^|\s)@([\w.@+-]*)$/);
       if (match) {
         this.mentionActive = true;
         this.mentionField = field;

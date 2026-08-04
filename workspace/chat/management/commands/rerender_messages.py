@@ -1,8 +1,8 @@
 from django.core.management.base import BaseCommand
 
 from workspace.chat.models import Message
+from workspace.chat.services.mentions import build_mention_map
 from workspace.chat.services.rendering import render_message_body
-from workspace.common.services.mentions import extract_mentions
 
 
 class Command(BaseCommand):
@@ -28,19 +28,10 @@ class Command(BaseCommand):
         if dry_run:
             return
 
+        active_users = User.objects.filter(is_active=True)
         updated = 0
         for msg in qs.iterator():
-            usernames, has_everyone = extract_mentions(msg.body)
-            mention_map = {}
-            if usernames or has_everyone:
-                users = User.objects.filter(
-                    username__in=usernames,
-                    is_active=True,
-                ).values_list("username", "id")
-                mention_map = dict(users)
-                if has_everyone:
-                    mention_map["everyone"] = None
-
+            mention_map, _ = build_mention_map(msg.body, users=active_users)
             new_html = render_message_body(msg.body, mention_map or None)
             if new_html != msg.body_html:
                 Message.objects.filter(pk=msg.pk).update(body_html=new_html)

@@ -153,15 +153,17 @@
               <div class="group flex items-center gap-2 min-w-0">
                 <div class="flex flex-col items-start gap-1 min-w-0">
                   {% include "ui/partials/ai_thinking_bubble.html" %}
-                  <!-- Progress step: which tool the bot is currently running -->
+                  <!-- Progress step: which tool the bot is currently running.
+                       Mirrors the summary line of _tool_call_row.html so the
+                       live step and the final timeline read as one style. -->
                   <div x-show="botStep" x-cloak
                        x-transition:enter="transition ease-out duration-200"
                        x-transition:enter-start="opacity-0"
                        x-transition:enter-end="opacity-100"
-                       class="flex items-center gap-1.5 pl-2 text-xs text-base-content/60 min-w-0 max-w-full">
-                    <span x-text="botStep?.icon"></span>
-                    <span class="font-medium whitespace-nowrap" x-text="botStep?.label"></span>
-                    <span class="italic truncate" x-show="botStep?.detail" x-text="botStep?.detail"></span>
+                       class="flex items-center gap-1 pl-2 text-xs text-base-content/40 min-w-0 max-w-full">
+                    <span class="flex-shrink-0" x-text="botStep?.icon"></span>
+                    <span class="flex-shrink-0" x-text="botStep?.label"></span>
+                    <span class="truncate min-w-0 opacity-80" x-show="botStep?.detail" x-text="botStep?.detail"></span>
                   </div>
                 </div>
                 <button class="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-error opacity-0 group-hover:opacity-100 transition-opacity"

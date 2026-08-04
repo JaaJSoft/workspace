@@ -141,11 +141,14 @@ class NotifyNewMessageTests(TestCase):
         self.assertNotIn(self.author.id, recipients)
 
     def test_push_dispatched_only_for_new_notifications(self, mock_push, mock_sse):
-        notify_new_message(self.conv, self.author, "first")
+        # Push dispatch is deferred to transaction.on_commit; execute it.
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(self.conv, self.author, "first")
         self.assertEqual(mock_push.call_count, 2)  # alice + bob, both new
 
         mock_push.reset_mock()
-        notify_new_message(self.conv, self.author, "second")
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(self.conv, self.author, "second")
         # Both recipients already have unread chat notifs → merge, no push.
         self.assertEqual(mock_push.call_count, 0)
 

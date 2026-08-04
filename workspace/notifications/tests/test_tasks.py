@@ -74,6 +74,8 @@ class SendPushNotificationTests(TestCase):
         with (
             mock.patch("workspace.notifications.tasks.webpush") as webpush_mock,
             mock.patch("workspace.notifications.tasks.is_active", return_value=True),
+            # Keep the deferred retry from running inline under eager Celery.
+            mock.patch.object(notif_tasks.send_push_notification, "apply_async"),
         ):
             notif_tasks.send_push_notification.run(str(notif.uuid))
         webpush_mock.assert_not_called()

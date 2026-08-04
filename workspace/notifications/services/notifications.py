@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.utils import timezone
 
 from workspace.common.cache import cached, invalidate_tags
@@ -144,9 +145,10 @@ def notify_stream(
 
     For each recipient with an existing unread notification for *source*,
     the row is updated in place (title/body/actor, priority upgraded only,
-    created_at bumped so it rises in the list) and no push is sent. Everyone
-    else gets a fresh row plus a push. This is the generic form of chat's
-    per-conversation merge.
+    created_at bumped so it rises in the list) and no push is sent - unless
+    the incoming priority is high/urgent (a mention must not be swallowed by
+    the merge). Everyone else gets a fresh row plus a push. This is the
+    generic form of chat's per-conversation merge.
     """
     recipient_ids = list(recipient_ids)
     if not recipient_ids:
@@ -165,7 +167,7 @@ def notify_stream(
     }
 
     now = timezone.now()
-    to_update, to_create = [], []
+    to_update, to_create, merged_to_push = [], [], []
     for uid in recipient_ids:
         priority = priority_map.get(uid, default_priority)
         notif = existing.get(uid)
@@ -174,6 +176,8 @@ def notify_stream(
             notif.body = body
             notif.url = url
             notif.actor = actor
+            if _PRIORITY_RANK[priority] >= _PRIORITY_RANK["high"]:
+                merged_to_push.append(notif)
             if _PRIORITY_RANK[priority] > _PRIORITY_RANK[notif.priority]:
                 notif.priority = priority
             # auto_now_add only fires on INSERT, so setting created_at on the
@@ -207,9 +211,17 @@ def notify_stream(
     for uid in recipient_ids:
         invalidate_tags(_user_tag(uid))
         notify_sse("notifications", uid)
-    for notif in to_create:
-        if notif.priority != "low":
-            send_push_notification.delay(str(notif.uuid))
+    # Dispatch after commit: inside an open transaction the worker could run
+    # before the rows are visible and silently drop the push. One robust
+    # callback per notification, so a broker error on one dispatch neither
+    # swallows the others nor blocks unrelated on_commit callbacks.
+    # A lambda rather than functools.partial: Django's robust-callback error
+    # logging reads callback.__qualname__, which partial objects lack.
+    for notif in [n for n in to_create if n.priority != "low"] + merged_to_push:
+        transaction.on_commit(
+            lambda uuid=str(notif.uuid): send_push_notification.delay(uuid),
+            robust=True,
+        )
     return to_update + to_create
 
 

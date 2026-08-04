@@ -146,7 +146,8 @@ window.chatSseMixin = function chatSseMixin() {
     handleSSEBotStep(detail) {
       if (!this.activeConversation || detail.conversation_id !== this.activeConversation.uuid) return;
       this.botTyping = true;
-      this.botStep = { icon: detail.icon, label: detail.label, detail: detail.detail };
+      // Server-rendered summary line (same partial as the final timeline row).
+      this.botStep = { html: detail.html };
       clearTimeout(this._botStepTimer);
       this._botStepTimer = setTimeout(() => {
         this.botStep = null;

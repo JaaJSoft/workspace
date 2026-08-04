@@ -108,9 +108,8 @@ class NotifyToolStepTests(TestCase):
             step = out[0]["data"]
             self.assertEqual(step["conversation_id"], "conv-1")
             # Unregistered tool -> default badge, no detail
-            self.assertEqual(step["icon"], "⚡")
-            self.assertEqual(step["label"], "search_web")
-            self.assertEqual(step["detail"], "")
+            self.assertIn("⚡", step["html"])
+            self.assertIn("search_web", step["html"])
         self.assertEqual(mock_notify.call_count, 2)
         mock_notify.assert_any_call("ai_stream", 1)
         mock_notify.assert_any_call("ai_stream", 2)
@@ -129,10 +128,23 @@ class NotifyToolStepTests(TestCase):
             ),
         ):
             stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
-        step = stream_steps.drain_steps(1)[0]["data"]
-        self.assertEqual(step["icon"], "🔍")
-        self.assertEqual(step["label"], "Web Search")
-        self.assertEqual(step["detail"], "meteo paris")
+        html = stream_steps.drain_steps(1)[0]["data"]["html"]
+        self.assertIn("🔍", html)
+        self.assertIn("Web Search", html)
+        self.assertIn("meteo paris", html)
+
+    @patch("workspace.ai.services.stream_steps.notify_sse")
+    def test_detail_is_escaped(self, mock_notify):
+        # The step HTML is injected client-side via x-html and the detail
+        # comes from LLM-generated tool arguments: markup must not survive.
+        with patch(
+            "workspace.ai.tool_registry.tool_registry.get_detail",
+            return_value='<script>alert("x")</script>',
+        ):
+            stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
+        html = stream_steps.drain_steps(1)[0]["data"]["html"]
+        self.assertNotIn("<script>", html)
+        self.assertIn("&lt;script&gt;", html)
 
     @patch("workspace.ai.services.stream_steps.notify_sse")
     def test_detail_is_truncated(self, mock_notify):
@@ -141,16 +153,19 @@ class NotifyToolStepTests(TestCase):
             return_value="x" * 500,
         ):
             stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
-        step = stream_steps.drain_steps(1)[0]["data"]
-        self.assertEqual(len(step["detail"]), stream_steps.MAX_DETAIL_LEN)
+        html = stream_steps.drain_steps(1)[0]["data"]["html"]
+        self.assertIn("x" * stream_steps.MAX_DETAIL_LEN, html)
+        self.assertNotIn("x" * (stream_steps.MAX_DETAIL_LEN + 1), html)
 
     @patch("workspace.ai.services.stream_steps.notify_sse")
-    def test_invalid_arguments_json_yields_empty_detail(self, mock_notify):
+    def test_invalid_arguments_json_yields_no_detail(self, mock_notify):
         stream_steps.notify_tool_step(
             [1], "conv-1", make_tool_call(arguments="not json{")
         )
-        step = stream_steps.drain_steps(1)[0]["data"]
-        self.assertEqual(step["detail"], "")
+        html = stream_steps.drain_steps(1)[0]["data"]["html"]
+        # Icon + label only: the detail span is omitted entirely.
+        self.assertIn("search_web", html)
+        self.assertNotIn("opacity-80", html)
 
     def test_no_recipients_is_a_noop(self):
         with patch("workspace.ai.services.stream_steps.notify_sse") as mock_notify:
@@ -182,12 +197,7 @@ class AIStreamSSEProviderTests(TestCase):
     def test_poll_drains_steps_without_event_ids(self):
         stream_steps._enqueue(
             self.user.id,
-            {
-                "conversation_id": "conv-1",
-                "icon": "🔍",
-                "label": "Web Search",
-                "detail": "",
-            },
+            {"conversation_id": "conv-1", "html": "<span>Web Search</span>"},
         )
         provider = AIStreamSSEProvider(self.user, None)
 
@@ -196,7 +206,7 @@ class AIStreamSSEProviderTests(TestCase):
         self.assertEqual(len(events), 1)
         name, data, event_id = events[0]
         self.assertEqual(name, "bot_step")
-        self.assertEqual(data["label"], "Web Search")
+        self.assertEqual(data["html"], "<span>Web Search</span>")
         self.assertIsNone(event_id)
         # Drained: the next poll is empty.
         self.assertEqual(provider.poll(None), [])

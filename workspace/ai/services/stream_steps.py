@@ -78,6 +78,8 @@ def notify_tool_step(recipient_ids, conversation_id, tool_call):
     if not recipient_ids:
         return
     try:
+        from django.template.loader import render_to_string
+
         from workspace.ai.tool_registry import tool_registry
 
         name = tool_call.function.name
@@ -87,11 +89,22 @@ def notify_tool_step(recipient_ids, conversation_id, tool_call):
         except json.JSONDecodeError, TypeError:
             args = {}
         detail = tool_registry.get_detail(name, args) if isinstance(args, dict) else ""
+        # Render the same partial as the final message's tool timeline row
+        # (auto-escaped there and here), so the live step and the finished
+        # timeline share one source of truth for a tool's presentation.
+        html = render_to_string(
+            "chat/ui/partials/_tool_step_summary.html",
+            {
+                "call": {
+                    "icon": badge["icon"],
+                    "label": badge["label"],
+                    "detail": str(detail)[:MAX_DETAIL_LEN],
+                }
+            },
+        )
         step = {
             "conversation_id": str(conversation_id),
-            "icon": badge["icon"],
-            "label": badge["label"],
-            "detail": str(detail)[:MAX_DETAIL_LEN],
+            "html": html,
         }
         for user_id in recipient_ids:
             _enqueue(user_id, step)

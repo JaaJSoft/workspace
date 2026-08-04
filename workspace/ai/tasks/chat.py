@@ -87,13 +87,26 @@ def generate_chat_response(
     try:
         initial_messages = sanitize_messages_for_storage(list(messages))
 
+        def cancelled_by_user():
+            ai_task.refresh_from_db(fields=["status"])
+            return ai_task.status == AITask.Status.FAILED
+
         result, tool_context, rounds, tool_data = run_tool_loop(
             messages,
             bot_profile.get_model(),
             human_user,
             bot_user,
             conversation_id,
+            is_cancelled=cancelled_by_user,
         )
+
+        # Checked before the retry below: a cancelled run must not spend one
+        # more model call on an answer nobody will read.
+        if tool_context.get("cancelled") or cancelled_by_user():
+            logger.info(
+                "Bot response cancelled: conversation=%s", scrub(conversation_id)
+            )
+            return {"status": "cancelled"}
 
         # Auto-retry once if the model returned an empty response.
         # Only the final completion is retried (no tools): rerunning
@@ -114,9 +127,8 @@ def generate_chat_response(
 
         raw_messages = {"messages": initial_messages, "rounds": rounds}
 
-        # Guard: check if the task was cancelled while we were waiting for OpenAI.
-        ai_task.refresh_from_db(fields=["status"])
-        if ai_task.status == AITask.Status.FAILED:
+        # Re-checked: the retry above can take as long as a model call.
+        if cancelled_by_user():
             logger.info(
                 "Bot response cancelled: conversation=%s", scrub(conversation_id)
             )

@@ -3,6 +3,8 @@ import json
 from django import template
 from django.utils import timezone
 
+from workspace.chat.services.tool_calls import display_args
+
 register = template.Library()
 
 
@@ -106,19 +108,6 @@ def render_reactions(message, current_user):
     }
 
 
-def _display_args(parsed):
-    """Stringify parsed tool arguments as (key, value) pairs for display."""
-    if not isinstance(parsed, dict):
-        return []
-    pairs = []
-    for key, value in parsed.items():
-        if isinstance(value, str):
-            pairs.append((key, value))
-        else:
-            pairs.append((key, json.dumps(value, ensure_ascii=False)))
-    return pairs
-
-
 def _pretty_result(content):
     """Pretty-print JSON tool results; leave plain text (incl. truncated JSON) as-is."""
     if not content:
@@ -198,7 +187,7 @@ def render_ai_steps(message):
                     "icon": badge["icon"],
                     "label": badge["label"],
                     "detail": detail,
-                    "args": _display_args(parsed),
+                    "args": display_args(parsed),
                     "args_raw": raw_args if parsed is None else "",
                     "result": _pretty_result(result),
                     "is_error": result.startswith(("Error:", "Unknown tool:")),

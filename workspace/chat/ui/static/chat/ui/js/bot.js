@@ -5,6 +5,11 @@ window.chatBotMixin = function chatBotMixin() {
     availableBots: [],
     botFilter: '',
     botTyping: false,
+    // Progress steps received for the active conversation's running
+    // generation, in arrival order: [{ html }]. Each html is the
+    // server-rendered tool summary row. Only rendered while botTyping is up.
+    botSteps: [],
+    _botStepTimer: null,
 
     botMemories: [],
     loadingBotMemories: false,
@@ -66,6 +71,12 @@ window.chatBotMixin = function chatBotMixin() {
       );
     },
 
+    clearBotStep() {
+      clearTimeout(this._botStepTimer);
+      this._botStepTimer = null;
+      this.botSteps = [];
+    },
+
     botTypingName() {
       const m = this._getBotMember();
       return m ? this.memberDisplayName(m) : 'AI';
@@ -81,6 +92,7 @@ window.chatBotMixin = function chatBotMixin() {
       if (group) group.remove();
 
       this.botTyping = true;
+      this.clearBotStep();
       try {
         const res = await fetch(`/api/v1/chat/conversations/${convId}/messages/${errorMsgUuid}/retry`, {
           method: 'POST',
@@ -98,6 +110,7 @@ window.chatBotMixin = function chatBotMixin() {
       if (!this.activeConversation) return;
       const convId = this.activeConversation.uuid;
       this.botTyping = false;
+      this.clearBotStep();
       try {
         await fetch(`/api/v1/chat/conversations/${convId}/bot-cancel`, {
           method: 'POST',

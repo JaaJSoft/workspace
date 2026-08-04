@@ -9,6 +9,7 @@ from workspace.ai.services.llm import (
     serialize_response,
     truncate_tool_result,
 )
+from workspace.ai.services.stream_steps import notify_tool_step, step_recipients
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,13 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
         }
 
         for tc in result["tool_calls"]:
+            # Membership is re-read per tool, not snapshotted for the whole
+            # generation: a member who leaves mid-run must stop receiving
+            # progress from a conversation they are no longer in.
+            if conversation_id:
+                notify_tool_step(
+                    step_recipients(conversation_id, bot_user), conversation_id, tc
+                )
             tool_result = tool_registry.execute(
                 tc,
                 user=human_user,

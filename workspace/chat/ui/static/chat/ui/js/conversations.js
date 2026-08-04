@@ -171,6 +171,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       this.pendingFiles = [];
       this.pinnedMessages = [];
       this.botTyping = false;
+      this.clearBotStep?.();
       this.showInfoPanel = false;
       this.conversationStats = null;
       this.conversationMedia = [];

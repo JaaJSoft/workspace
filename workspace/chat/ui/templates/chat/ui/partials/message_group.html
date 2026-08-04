@@ -58,7 +58,8 @@
               </a>
             {% endif %}
             {% if msg.body_html %}
-              <div class="msg-body prose prose-sm max-w-none break-words">{{ msg.body_html|safe }}</div>
+              {# Capped here, not on the bubble: attachments sit in it too #}
+              <div class="msg-body prose prose-sm max-w-[36rem] break-words">{{ msg.body_html|safe }}</div>
             {% endif %}
             {% if msg.tool_data %}
               {% render_ai_steps msg %}

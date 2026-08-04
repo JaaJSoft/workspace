@@ -8,6 +8,7 @@ window.chatSseMixin = function chatSseMixin() {
         // Hide bot typing indicator if the incoming message is from a bot
         if (this.botTyping && this.isBotMessage(detail.message)) {
           this.botTyping = false;
+          this.clearBotStep();
         }
         // Check if message already exists in the DOM
         if (!document.getElementById(`msg-${detail.message.uuid}`)) {
@@ -135,6 +136,25 @@ window.chatSseMixin = function chatSseMixin() {
         this.titleRegeneratingUuid = null;
       }
       this.refreshConversationItems([detail.conversation_id], { bump: false });
+    },
+
+    // A bot generation progress step (tool execution) arrived. Steps also
+    // reach members who didn't send the triggering message (group
+    // conversations), so raise the typing indicator for them too. The
+    // failsafe timer hides everything again if the generation is cancelled
+    // server-side and no completion message ever lands.
+    handleSSEBotStep(detail) {
+      if (!this.activeConversation || detail.conversation_id !== this.activeConversation.uuid) return;
+      this.botTyping = true;
+      // Server-rendered summary line (same partial as the final timeline
+      // row); steps accumulate so the bubble builds up the timeline live.
+      this.botSteps.push({ html: detail.html });
+      if (this.botSteps.length > 30) this.botSteps.shift();
+      clearTimeout(this._botStepTimer);
+      this._botStepTimer = setTimeout(() => {
+        this.botSteps = [];
+        this.botTyping = false;
+      }, 180000);
     },
 
     handleSSETyping(detail) {

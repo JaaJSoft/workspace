@@ -163,6 +163,7 @@ function chatApp(currentUserId) {
           this._injectOptimisticMessage(detail.tempId, detail.body, null, null);
           if (this.isBotConversation?.(this.activeConversation)) {
             this.botTyping = true;
+            this.clearBotStep?.();
           }
           this.$nextTick(() => this.scrollToBottom?.());
         }
@@ -174,6 +175,7 @@ function chatApp(currentUserId) {
           this._removeOptimisticMessage(detail.tempId);
         }
         this.botTyping = false;
+        this.clearBotStep?.();
       });
 
       window.addEventListener('chat-message_interaction_updated', (e) => {

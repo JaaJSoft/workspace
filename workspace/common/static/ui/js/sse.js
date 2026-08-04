@@ -6,8 +6,10 @@
 // reference it by slug.
 //
 // Re-dispatches each SSE payload as a window CustomEvent named "sse:<event>",
-// plus a chat-specific alias "chat-<event>" for events whose name starts
-// with "chat.".
+// plus dash-separated aliases ("chat-<event>", "ai-stream-<event>") for
+// events whose name starts with "chat." or "ai_stream." — Alpine's
+// @event.window syntax parses dots as modifiers, so templates need a
+// dot-free event name to bind to.
 (function () {
   // Module registry (slug -> {name, icon, color})
   window.__modules = {};
@@ -36,6 +38,9 @@
     window.dispatchEvent(new CustomEvent('sse:' + payload.event, { detail: payload.data }));
     if (payload.event.startsWith('chat.')) {
       window.dispatchEvent(new CustomEvent('chat-' + payload.event.substring(5), { detail: payload.data }));
+    }
+    if (payload.event.startsWith('ai_stream.')) {
+      window.dispatchEvent(new CustomEvent('ai-stream-' + payload.event.substring(10), { detail: payload.data }));
     }
   }
 

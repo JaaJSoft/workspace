@@ -187,7 +187,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       const hasFiles = files.length > 0 || wsFiles.length > 0;
       const isBotConv = this.isBotConversation(this.activeConversation);
       this._injectOptimisticMessage(tempId, body, replyInfo, hasFiles ? files : null);
-      if (isBotConv) this.botTyping = true;
+      if (isBotConv) {
+        this.botTyping = true;
+        this.clearBotStep?.();
+      }
       this.$nextTick(() => this.scrollToBottom());
 
       // Revoke object URLs after optimistic bubble is injected
@@ -248,6 +251,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
             const lastGroup = document.getElementById('messages-container')?.querySelector('.msg-group:last-child');
             if (lastGroup && lastGroup.classList.contains('msg-group-start')) {
               this.botTyping = false;
+              this.clearBotStep?.();
             }
           }
           this.$nextTick(() => this.scrollToBottom());
@@ -258,6 +262,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this.pendingFiles = files;
           this.pendingPickedFiles = wsFiles;
           this.botTyping = false;
+          this.clearBotStep?.();
         }
       } catch (e) {
         console.error('Failed to send message', e);
@@ -266,6 +271,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         this.pendingFiles = files;
         this.pendingPickedFiles = wsFiles;
         this.botTyping = false;
+        this.clearBotStep?.();
       }
     },
 

@@ -9,7 +9,11 @@ window.chatSseMixin = function chatSseMixin() {
 
     async handleSSEMessage(detail) {
       const isViewing = this.activeConversation && detail.conversation_id === this.activeConversation.uuid;
-      this.generatingConversations.delete(detail.conversation_id);
+      // Only the bot's own message ends a generation; a human writing while
+      // the bot works must not clear the announcement.
+      if (this.isBotMessage(detail.message)) {
+        this.generatingConversations.delete(detail.conversation_id);
+      }
 
       if (isViewing) {
         // Hide bot typing indicator if the incoming message is from a bot
@@ -147,6 +151,8 @@ window.chatSseMixin = function chatSseMixin() {
 
     // A generation was already under way when this connection opened, so a
     // reload knows to raise the indicator without waiting for the next tool.
+    // Arms the same failsafe as a step: a cancelled generation ends without
+    // posting anything, so nothing else would ever lower the bubble.
     handleSSEBotGenerating(detail) {
       this.generatingConversations = new Set(detail?.conversation_ids || []);
       if (
@@ -154,7 +160,16 @@ window.chatSseMixin = function chatSseMixin() {
         && this.generatingConversations.has(this.activeConversation.uuid)
       ) {
         this.botTyping = true;
+        this._armBotStepFailsafe();
       }
+    },
+
+    _armBotStepFailsafe() {
+      clearTimeout(this._botStepTimer);
+      this._botStepTimer = setTimeout(() => {
+        this.botSteps = [];
+        this.botTyping = false;
+      }, 180000);
     },
 
     // A bot generation progress step (tool execution) arrived. Steps also
@@ -169,11 +184,7 @@ window.chatSseMixin = function chatSseMixin() {
       // row); steps accumulate so the bubble builds up the timeline live.
       this.botSteps.push({ html: detail.html });
       if (this.botSteps.length > 30) this.botSteps.shift();
-      clearTimeout(this._botStepTimer);
-      this._botStepTimer = setTimeout(() => {
-        this.botSteps = [];
-        this.botTyping = false;
-      }, 180000);
+      this._armBotStepFailsafe();
     },
 
     handleSSETyping(detail) {

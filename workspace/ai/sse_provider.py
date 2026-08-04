@@ -3,7 +3,12 @@ from workspace.core.sse_registry import SSEProvider
 
 
 class AIStreamSSEProvider(SSEProvider):
-    """Streams ephemeral bot progress steps. Polls the cache only, no DB.
+    """Streams ephemeral bot progress steps.
+
+    ``poll`` reads the cache and never touches the database, so waking this
+    provider on every tool execution stays cheap. ``get_initial_events``
+    does query, once per connection, to hand a fresh page the state it
+    could not have witnessed.
 
     Events carry no SSE id on purpose: Last-Event-Id is shared by all
     providers on the stream and the chat provider resolves it as a message

@@ -288,6 +288,48 @@ class GenerateChatResponseWithToolsTests(TestCase):
         # Two API calls were made
         self.assertEqual(mock_client.chat.completions.create.call_count, 2)
 
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.tasks.chat.build_conversation_history")
+    def test_the_task_row_exists_before_the_history_is_assembled(
+        self, mock_history, mock_call_llm
+    ):
+        """This row is how the UI knows a response is under way.
+
+        Assembling the history reads every attachment in the conversation and
+        takes minutes on an image-heavy one. Recorded after that, a reload
+        during the window finds nothing and shows no indicator.
+        """
+        seen = {}
+
+        def record_whether_the_task_is_visible(*args, **kwargs):
+            seen["in_flight"] = AITask.objects.filter(
+                task_type=AITask.TaskType.CHAT,
+                status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
+            ).exists()
+            return [], ""
+
+        mock_history.side_effect = record_whether_the_task_is_visible
+        mock_call_llm.return_value = {
+            "tool_calls": None,
+            "content": "Hello",
+            "message": SimpleNamespace(
+                role="assistant", content="Hello", tool_calls=None
+            ),
+            "model": "x",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+        }
+
+        from workspace.ai.tasks.chat import generate_chat_response
+
+        generate_chat_response(
+            str(self.conversation.uuid),
+            str(self.message.uuid),
+            self.bot_user.id,
+        )
+
+        self.assertTrue(seen["in_flight"])
+
     @patch("workspace.ai.tool_registry.tool_registry.execute")
     @patch("workspace.ai.services.tool_loop.call_llm")
     def test_cancelling_stops_the_run_instead_of_only_dropping_its_answer(

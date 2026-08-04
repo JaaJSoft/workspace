@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.ai.models import AITask
 from workspace.ai.services import stream_steps
 from workspace.ai.sse_provider import AIStreamSSEProvider
 from workspace.chat.models import Conversation, ConversationMember
@@ -232,13 +233,88 @@ class AIStreamSSEProviderTests(TestCase):
         self.user = User.objects.create_user(
             username="carol", email="c@test.com", password="pw"
         )
+        self.bot = User.objects.create_user(
+            username="bot5", email="b5@test.com", password="pw"
+        )
 
     def tearDown(self):
         cache.clear()
 
-    def test_initial_events_are_empty(self):
+    def test_initial_events_are_empty_without_a_running_generation(self):
         provider = AIStreamSSEProvider(self.user, None)
         self.assertEqual(provider.get_initial_events(), [])
+
+    def _start_generation(self, conversation, member=True):
+        """A conversation with a bot response under way, as the task leaves it."""
+        if member:
+            ConversationMember.objects.create(conversation=conversation, user=self.user)
+        return AITask.objects.create(
+            owner=self.bot,
+            task_type=AITask.TaskType.CHAT,
+            status=AITask.Status.PROCESSING,
+            input_data={"conversation_id": str(conversation.pk)},
+        )
+
+    def test_a_fresh_connection_learns_which_conversations_are_generating(self):
+        # A reload lands with no state: without this the bubble stays down
+        # until the next tool, which is a minute away on an image.
+        conversation = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        self._start_generation(conversation)
+
+        events = AIStreamSSEProvider(self.user, None).get_initial_events()
+
+        self.assertEqual(events[0][0], "bot_generating")
+        self.assertEqual(events[0][1]["conversation_ids"], [str(conversation.pk)])
+
+    def test_generations_in_other_peoples_conversations_are_not_announced(self):
+        stranger = User.objects.create_user(
+            username="mallory", email="m@test.com", password="pw"
+        )
+        conversation = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=stranger
+        )
+        self._start_generation(conversation, member=False)
+
+        self.assertEqual(AIStreamSSEProvider(self.user, None).get_initial_events(), [])
+
+    def test_queued_steps_are_replayed_for_a_running_generation(self):
+        conversation = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        self._start_generation(conversation)
+        stream_steps._enqueue(
+            self.user.id,
+            {"conversation_id": str(conversation.pk), "html": "<b>Web Search</b>"},
+        )
+
+        provider = AIStreamSSEProvider(self.user, None)
+        events = provider.get_initial_events()
+
+        self.assertEqual([e[0] for e in events], ["bot_generating", "bot_step"])
+        self.assertEqual(events[1][1]["html"], "<b>Web Search</b>")
+        # The cursor moved past them: the first poll does not send them twice.
+        self.assertEqual(provider.poll(None), [])
+
+    def test_steps_of_a_finished_generation_are_not_replayed(self):
+        # The mailbox outlives a generation by its TTL. Replaying those would
+        # resurrect a bubble for work that is already done.
+        running = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        done = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=done, user=self.user)
+        self._start_generation(running)
+        stream_steps._enqueue(
+            self.user.id, {"conversation_id": str(done.pk), "html": "<b>stale</b>"}
+        )
+
+        events = AIStreamSSEProvider(self.user, None).get_initial_events()
+
+        self.assertEqual([e[0] for e in events], ["bot_generating"])
 
     def test_every_connection_of_a_user_receives_each_step(self):
         """Two tabs open two SSE connections sharing one per-user mailbox.

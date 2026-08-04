@@ -57,15 +57,34 @@ def _enqueue(user_id, step):
     cache.set(key, queue, STEP_EVENT_TTL)
 
 
-def drain_steps(user_id):
-    """Return and clear all queued step envelopes for *user_id*."""
+def _queue(user_id):
     from django.core.cache import cache
 
-    key = _events_key(user_id)
-    queue = cache.get(key)
-    if not queue:
-        return []
-    cache.delete(key)
+    return cache.get(_events_key(user_id)) or []
+
+
+def latest_step_id(user_id):
+    """Id of the last queued step, or None when the mailbox is empty."""
+    queue = _queue(user_id)
+    return queue[-1]["id"] if queue else None
+
+
+def steps_after(user_id, last_id):
+    """Return the step envelopes queued after *last_id*.
+
+    Reads without consuming: a user can hold several SSE connections (two
+    tabs, or an EventSource reconnect overlapping the connection it
+    replaces) and every one of them must see every step. Each connection
+    tracks its own cursor instead; entries fall out on their own via
+    STEP_EVENT_TTL and MAX_QUEUE.
+    """
+    queue = _queue(user_id)
+    if last_id is None:
+        return queue
+    for index in range(len(queue) - 1, -1, -1):
+        if queue[index]["id"] == last_id:
+            return queue[index + 1 :]
+    # Cursor aged out of the capped window: resync on what is still there.
     return queue
 
 

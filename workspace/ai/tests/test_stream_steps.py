@@ -28,32 +28,49 @@ class MailboxTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def test_enqueue_then_drain_returns_envelope(self):
+    def test_enqueue_then_read_returns_envelope(self):
         stream_steps._enqueue(1, {"label": "Search"})
-        out = stream_steps.drain_steps(1)
+        out = stream_steps.steps_after(1, None)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["data"], {"label": "Search"})
         self.assertIn("id", out[0])
 
-    def test_drain_clears_the_mailbox(self):
+    def test_reading_does_not_consume_the_mailbox(self):
         stream_steps._enqueue(1, {})
-        stream_steps.drain_steps(1)
-        self.assertEqual(stream_steps.drain_steps(1), [])
+        stream_steps.steps_after(1, None)
+        self.assertEqual(len(stream_steps.steps_after(1, None)), 1)
 
-    def test_drain_is_isolated_per_user(self):
+    def test_cursor_returns_only_newer_steps(self):
+        stream_steps._enqueue(1, {"label": "a"})
+        first = stream_steps.latest_step_id(1)
+        stream_steps._enqueue(1, {"label": "b"})
+        self.assertEqual(
+            [e["data"]["label"] for e in stream_steps.steps_after(1, first)], ["b"]
+        )
+
+    def test_unknown_cursor_resyncs_on_the_whole_window(self):
+        stream_steps._enqueue(1, {"label": "a"})
+        self.assertEqual(
+            [e["data"]["label"] for e in stream_steps.steps_after(1, "gone")], ["a"]
+        )
+
+    def test_latest_step_id_is_none_when_empty(self):
+        self.assertIsNone(stream_steps.latest_step_id(1))
+
+    def test_mailbox_is_isolated_per_user(self):
         stream_steps._enqueue(1, {"label": "a"})
         stream_steps._enqueue(2, {"label": "b"})
         self.assertEqual(
-            [e["data"]["label"] for e in stream_steps.drain_steps(1)], ["a"]
+            [e["data"]["label"] for e in stream_steps.steps_after(1, None)], ["a"]
         )
         self.assertEqual(
-            [e["data"]["label"] for e in stream_steps.drain_steps(2)], ["b"]
+            [e["data"]["label"] for e in stream_steps.steps_after(2, None)], ["b"]
         )
 
     def test_queue_is_capped(self):
         for i in range(stream_steps.MAX_QUEUE + 20):
             stream_steps._enqueue(1, {"i": i})
-        out = stream_steps.drain_steps(1)
+        out = stream_steps.steps_after(1, None)
         self.assertEqual(len(out), stream_steps.MAX_QUEUE)
         self.assertEqual(out[-1]["data"]["i"], stream_steps.MAX_QUEUE + 19)
 
@@ -103,7 +120,7 @@ class NotifyToolStepTests(TestCase):
         stream_steps.notify_tool_step([1, 2], "conv-1", make_tool_call())
 
         for user_id in (1, 2):
-            out = stream_steps.drain_steps(user_id)
+            out = stream_steps.steps_after(user_id, None)
             self.assertEqual(len(out), 1)
             step = out[0]["data"]
             self.assertEqual(step["conversation_id"], "conv-1")
@@ -128,7 +145,7 @@ class NotifyToolStepTests(TestCase):
             ),
         ):
             stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
-        html = stream_steps.drain_steps(1)[0]["data"]["html"]
+        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
         self.assertIn("🔍", html)
         self.assertIn("Web Search", html)
         self.assertIn("meteo paris", html)
@@ -142,7 +159,7 @@ class NotifyToolStepTests(TestCase):
             return_value='<script>alert("x")</script>',
         ):
             stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
-        html = stream_steps.drain_steps(1)[0]["data"]["html"]
+        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
         self.assertNotIn("<script>", html)
         self.assertIn("&lt;script&gt;", html)
 
@@ -153,7 +170,7 @@ class NotifyToolStepTests(TestCase):
             return_value="x" * 500,
         ):
             stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
-        html = stream_steps.drain_steps(1)[0]["data"]["html"]
+        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
         self.assertIn("x" * stream_steps.MAX_DETAIL_LEN, html)
         self.assertNotIn("x" * (stream_steps.MAX_DETAIL_LEN + 1), html)
 
@@ -162,7 +179,7 @@ class NotifyToolStepTests(TestCase):
         stream_steps.notify_tool_step(
             [1], "conv-1", make_tool_call(arguments="not json{")
         )
-        html = stream_steps.drain_steps(1)[0]["data"]["html"]
+        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
         # Icon + label only: the detail span is omitted entirely.
         self.assertIn("search_web", html)
         self.assertNotIn("opacity-80", html)
@@ -194,12 +211,30 @@ class AIStreamSSEProviderTests(TestCase):
         provider = AIStreamSSEProvider(self.user, None)
         self.assertEqual(provider.get_initial_events(), [])
 
-    def test_poll_drains_steps_without_event_ids(self):
+    def test_every_connection_of_a_user_receives_each_step(self):
+        """Two tabs open two SSE connections sharing one per-user mailbox.
+
+        A step is a broadcast, not a work item: reading it on one connection
+        must not hide it from the others.
+        """
+        tab_a = AIStreamSSEProvider(self.user, None)
+        tab_b = AIStreamSSEProvider(self.user, None)
+        stream_steps._enqueue(
+            self.user.id, {"conversation_id": "c", "html": "<b>1</b>"}
+        )
+
+        events_a = tab_a.poll(None)
+        events_b = tab_b.poll(None)
+
+        self.assertEqual([e[1]["html"] for e in events_a], ["<b>1</b>"])
+        self.assertEqual([e[1]["html"] for e in events_b], ["<b>1</b>"])
+
+    def test_poll_streams_steps_without_event_ids(self):
+        provider = AIStreamSSEProvider(self.user, None)
         stream_steps._enqueue(
             self.user.id,
             {"conversation_id": "conv-1", "html": "<span>Web Search</span>"},
         )
-        provider = AIStreamSSEProvider(self.user, None)
 
         events = provider.poll(None)
 
@@ -208,5 +243,12 @@ class AIStreamSSEProviderTests(TestCase):
         self.assertEqual(name, "bot_step")
         self.assertEqual(data["html"], "<span>Web Search</span>")
         self.assertIsNone(event_id)
-        # Drained: the next poll is empty.
+        # Cursor advanced: the same step is not re-sent.
+        self.assertEqual(provider.poll(None), [])
+
+    def test_steps_queued_before_the_connection_are_not_replayed(self):
+        stream_steps._enqueue(self.user.id, {"conversation_id": "c", "html": "old"})
+
+        provider = AIStreamSSEProvider(self.user, None)
+
         self.assertEqual(provider.poll(None), [])

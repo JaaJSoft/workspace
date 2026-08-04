@@ -150,10 +150,12 @@
               <!-- Bot avatar -->
               <div class="flex-shrink-0 w-8" x-html="botTypingAvatar()"></div>
               <!-- Content column + cancel -->
-              <!-- max-w-[75%] on the row (not the bubble): the percentage
-                   resolves against the message column, matching how message
-                   bubbles are capped, so long tool details truncate. -->
-              <div class="group flex items-center gap-2 min-w-0 max-w-[75%]">
+              <!-- Cap on the row, not the bubble: the percentage resolves
+                   against the message column, matching how message bubbles are
+                   capped, so long tool details truncate. The absolute bound
+                   keeps a wide screen from stretching the card across the pane
+                   on a single long argument. -->
+              <div class="group flex items-center gap-2 min-w-0 max-w-[min(75%,26rem)]">
                 <!-- Thinking bubble, chat-message shaped. Tool steps stack
                      inside as they stream in: each row is the server-rendered
                      timeline row (_tool_call_row.html), expandable on its own

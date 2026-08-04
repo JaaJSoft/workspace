@@ -70,6 +70,19 @@ class NotifyStreamTests(TestCase):
         self._send(title="second")
         mock_push.delay.assert_not_called()
 
+    def test_mention_merge_pushes_updated_row(self, mock_sse, mock_push):
+        self._send()
+        mock_push.delay.reset_mock()
+        self._send(title="second", priority_map={self.alice.pk: "high"})
+        notif = Notification.objects.get(recipient=self.alice)
+        mock_push.delay.assert_called_once_with(str(notif.uuid))
+
+    def test_normal_merge_into_high_row_does_not_push(self, mock_sse, mock_push):
+        self._send(priority_map={self.alice.pk: "high"})
+        mock_push.delay.reset_mock()
+        self._send(title="second")
+        mock_push.delay.assert_not_called()
+
     def test_low_priority_creates_do_not_push(self, mock_sse, mock_push):
         self._send(default_priority="low")
         mock_push.delay.assert_not_called()

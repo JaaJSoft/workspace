@@ -59,7 +59,10 @@ class SendPushNotificationTests(TestCase):
     def test_skips_push_when_user_is_active(self, mock_webpush, mock_is_active):
         from workspace.notifications.tasks import send_push_notification
 
-        send_push_notification(str(self.notif.uuid))
+        # Patch apply_async so the deferred retry is not executed inline when
+        # Celery runs in eager mode (dev settings).
+        with patch.object(send_push_notification, "apply_async"):
+            send_push_notification(str(self.notif.uuid))
         mock_is_active.assert_called_once_with(self.user.id)
         mock_webpush.assert_not_called()
 
@@ -163,7 +166,10 @@ class PushSkipAndCooldownTests(TestCase):
     def test_active_user_skip_does_not_consume_cooldown(self, mock_webpush, _):
         from workspace.notifications.tasks import send_push_notification
 
-        with patch("workspace.notifications.tasks.is_active", return_value=True):
+        with (
+            patch("workspace.notifications.tasks.is_active", return_value=True),
+            patch.object(send_push_notification, "apply_async"),
+        ):
             send_push_notification(str(self._notif().uuid))
         mock_webpush.assert_not_called()
         send_push_notification(str(self._notif().uuid))
@@ -176,3 +182,93 @@ class PushSkipAndCooldownTests(TestCase):
         cache.clear()
         send_push_notification(str(self._notif().uuid))
         self.assertEqual(mock_webpush.call_count, 2)
+
+    def test_failed_delivery_releases_cooldown(self, mock_webpush, _):
+        from pywebpush import WebPushException
+
+        from workspace.notifications.tasks import send_push_notification
+
+        mock_webpush.side_effect = WebPushException(
+            "boom", response=MagicMock(status_code=500)
+        )
+        send_push_notification(str(self._notif().uuid))
+        mock_webpush.side_effect = None
+        mock_webpush.reset_mock()
+        send_push_notification(str(self._notif().uuid))
+        self.assertEqual(mock_webpush.call_count, 1)
+
+    def test_partial_delivery_keeps_cooldown(self, mock_webpush, _):
+        from pywebpush import WebPushException
+
+        from workspace.notifications.tasks import send_push_notification
+
+        PushSubscription.objects.create(
+            user=self.user,
+            endpoint="https://push.example.com/cd/2",
+            p256dh="p256dh-key-2",
+            auth="auth-key-2",
+        )
+        mock_webpush.side_effect = [
+            WebPushException("boom", response=MagicMock(status_code=500)),
+            None,
+        ]
+        send_push_notification(str(self._notif().uuid))
+        mock_webpush.side_effect = None
+        mock_webpush.reset_mock()
+        send_push_notification(str(self._notif().uuid))
+        mock_webpush.assert_not_called()
+
+
+@override_settings(**FAKE_VAPID_SETTINGS)
+class ActiveUserRetryTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="retryuser", password="pass")
+        PushSubscription.objects.create(
+            user=self.user,
+            endpoint="https://push.example.com/retry/1",
+            p256dh="p256dh-key",
+            auth="auth-key",
+        )
+        self.notif = Notification.objects.create(
+            recipient=self.user, origin="chat", title="t"
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch("workspace.notifications.tasks.is_active", return_value=True)
+    @patch("workspace.notifications.tasks.webpush")
+    def test_active_skip_schedules_one_delayed_retry(self, mock_webpush, _):
+        from workspace.notifications import tasks
+
+        with patch.object(tasks.send_push_notification, "apply_async") as mock_apply:
+            tasks.send_push_notification(str(self.notif.uuid))
+        mock_webpush.assert_not_called()
+        mock_apply.assert_called_once()
+        self.assertEqual(
+            mock_apply.call_args.kwargs["countdown"],
+            tasks.ACTIVE_RETRY_DELAY_SECONDS,
+        )
+
+    @patch("workspace.notifications.tasks.is_active", return_value=True)
+    @patch("workspace.notifications.tasks.webpush")
+    def test_retry_pushes_despite_active_user(self, mock_webpush, _):
+        from workspace.notifications import tasks
+
+        with patch.object(tasks.send_push_notification, "apply_async") as mock_apply:
+            tasks.send_push_notification(str(self.notif.uuid), is_retry=True)
+        self.assertEqual(mock_webpush.call_count, 1)
+        mock_apply.assert_not_called()
+
+    @patch("workspace.notifications.tasks.is_active", return_value=True)
+    @patch("workspace.notifications.tasks.webpush")
+    def test_retry_skips_when_read_meanwhile(self, mock_webpush, _):
+        from workspace.notifications import tasks
+
+        self.notif.read_at = timezone.now()
+        self.notif.save(update_fields=["read_at"])
+        with patch.object(tasks.send_push_notification, "apply_async") as mock_apply:
+            tasks.send_push_notification(str(self.notif.uuid), is_retry=True)
+        mock_webpush.assert_not_called()
+        mock_apply.assert_not_called()

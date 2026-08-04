@@ -144,9 +144,10 @@ def notify_stream(
 
     For each recipient with an existing unread notification for *source*,
     the row is updated in place (title/body/actor, priority upgraded only,
-    created_at bumped so it rises in the list) and no push is sent. Everyone
-    else gets a fresh row plus a push. This is the generic form of chat's
-    per-conversation merge.
+    created_at bumped so it rises in the list) and no push is sent - unless
+    the incoming priority is high/urgent (a mention must not be swallowed by
+    the merge). Everyone else gets a fresh row plus a push. This is the
+    generic form of chat's per-conversation merge.
     """
     recipient_ids = list(recipient_ids)
     if not recipient_ids:
@@ -165,7 +166,7 @@ def notify_stream(
     }
 
     now = timezone.now()
-    to_update, to_create = [], []
+    to_update, to_create, merged_to_push = [], [], []
     for uid in recipient_ids:
         priority = priority_map.get(uid, default_priority)
         notif = existing.get(uid)
@@ -174,6 +175,8 @@ def notify_stream(
             notif.body = body
             notif.url = url
             notif.actor = actor
+            if _PRIORITY_RANK[priority] >= _PRIORITY_RANK["high"]:
+                merged_to_push.append(notif)
             if _PRIORITY_RANK[priority] > _PRIORITY_RANK[notif.priority]:
                 notif.priority = priority
             # auto_now_add only fires on INSERT, so setting created_at on the
@@ -210,6 +213,8 @@ def notify_stream(
     for notif in to_create:
         if notif.priority != "low":
             send_push_notification.delay(str(notif.uuid))
+    for notif in merged_to_push:
+        send_push_notification.delay(str(notif.uuid))
     return to_update + to_create
 
 

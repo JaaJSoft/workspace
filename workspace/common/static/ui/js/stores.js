@@ -202,6 +202,11 @@ document.addEventListener('alpine:init', function () {
         const swUrl = appVersion ? '/sw.js?v=' + encodeURIComponent(appVersion) : '/sw.js';
         const reg = await navigator.serviceWorker.register(swUrl);
         this.subscription = await reg.pushManager.getSubscription();
+        // The backend prunes subscriptions the push service reports dead
+        // (404/410). Re-register the browser's copy so a pruned row does not
+        // leave this device silently unreachable while the toggle still
+        // shows enabled. The endpoint upserts, so this is idempotent.
+        if (this.subscription) await this._saveSubscription(this.subscription);
       } catch (e) {
         console.warn('SW registration failed:', e);
       }
@@ -233,13 +238,7 @@ document.addEventListener('alpine:init', function () {
         userVisibleOnly: true,
         applicationServerKey: this._b64toArray(data.public_key),
       });
-      const json = sub.toJSON();
-      const csrfToken = getCSRFToken();
-      const saveResp = await fetch('/api/v1/notifications/push/subscribe', {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
-      });
+      const saveResp = await this._saveSubscription(sub);
       // Only commit local state once the backend has the subscription. Otherwise
       // a network error leaves the UI thinking we're enabled while the server
       // has nothing to push to.
@@ -248,6 +247,15 @@ document.addEventListener('alpine:init', function () {
         return;
       }
       this.subscription = sub;
+    },
+
+    async _saveSubscription(sub) {
+      const json = sub.toJSON();
+      return fetch('/api/v1/notifications/push/subscribe', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+      });
     },
 
     async _unsubscribe() {

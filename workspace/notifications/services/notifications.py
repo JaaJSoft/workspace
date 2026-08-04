@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.utils import timezone
 
 from workspace.common.cache import cached, invalidate_tags
@@ -210,11 +211,13 @@ def notify_stream(
     for uid in recipient_ids:
         invalidate_tags(_user_tag(uid))
         notify_sse("notifications", uid)
-    for notif in to_create:
-        if notif.priority != "low":
-            send_push_notification.delay(str(notif.uuid))
-    for notif in merged_to_push:
-        send_push_notification.delay(str(notif.uuid))
+    to_push = [n for n in to_create if n.priority != "low"] + merged_to_push
+    if to_push:
+        # Dispatch after commit: inside an open transaction the worker could
+        # run before the rows are visible and silently drop the push.
+        transaction.on_commit(
+            lambda: [send_push_notification.delay(str(n.uuid)) for n in to_push]
+        )
     return to_update + to_create
 
 

@@ -206,7 +206,10 @@ document.addEventListener('alpine:init', function () {
         // (404/410). Re-register the browser's copy so a pruned row does not
         // leave this device silently unreachable while the toggle still
         // shows enabled. The endpoint upserts, so this is idempotent.
-        if (this.subscription) await this._saveSubscription(this.subscription);
+        if (this.subscription) {
+          const resp = await this._saveSubscription(this.subscription);
+          if (!resp.ok) console.warn('Push subscription resync failed:', resp.status);
+        }
       } catch (e) {
         console.warn('SW registration failed:', e);
       }

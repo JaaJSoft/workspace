@@ -13,9 +13,10 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-function loadPushStore({ subscription = null } = {}) {
+function loadPushStore({ subscription = null, fetchOk = true } = {}) {
   const stores = {};
   const fetchCalls = [];
+  const warnings = [];
   const Alpine = {
     store(name, obj) {
       if (obj === undefined) return stores[name];
@@ -48,14 +49,15 @@ function loadPushStore({ subscription = null } = {}) {
     PushManager: function PushManager() {},
     addEventListener() {},
     getCSRFToken: () => 'csrf',
+    console: { ...console, warn: (...args) => warnings.push(args) },
     fetch: async (url, opts) => {
       fetchCalls.push({ url, opts: opts || {} });
-      return { ok: true, json: async () => ({}) };
+      return { ok: fetchOk, status: fetchOk ? 201 : 500, json: async () => ({}) };
     },
   });
   // Fire alpine:init: registers the stores and kicks off push.init().
   document._alpineInit();
-  return { stores, fetchCalls };
+  return { stores, fetchCalls, warnings };
 }
 
 // init() awaits register() then getSubscription() then the sync fetch; give
@@ -84,6 +86,20 @@ test('init re-registers an existing browser subscription with the backend', asyn
   const body = JSON.parse(sync.opts.body);
   assert.equal(body.endpoint, 'https://push.example.com/sub/1');
   assert.deepStrictEqual({ ...body.keys }, { p256dh: 'p', auth: 'a' });
+});
+
+test('a failed resync is surfaced as a warning, not swallowed', async () => {
+  const sub = {
+    endpoint: 'https://push.example.com/sub/1',
+    toJSON() {
+      return { endpoint: this.endpoint, keys: { p256dh: 'p', auth: 'a' } };
+    },
+  };
+  const { warnings } = loadPushStore({ subscription: sub, fetchOk: false });
+  await flush();
+
+  const surfaced = warnings.find((args) => args.join(' ').includes('resync'));
+  assert.ok(surfaced, 'expected a console.warn mentioning the failed resync');
 });
 
 test('init without an existing subscription does not call the backend', async () => {

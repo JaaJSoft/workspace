@@ -11,6 +11,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 | [Calendar](calendar/) | Multiple views, recurring events, RSVP, scheduling polls, iCalendar |
 | [Mail](mail/) | IMAP/SMTP client with OAuth2, AI summaries, folders and labels |
 | [Notes](notes/) | Markdown notes with journal mode, folders, tags, full-text search |
+| [Projects](projects/) | Kanban boards with backlog, task references, labels, comments, activity |
 | [AI Assistants](ai/) | Configurable bots with tools, vision, memory, and scheduled messages |
 | [Notifications](notifications/) | In-app and Web Push notifications with priority and read tracking |
 

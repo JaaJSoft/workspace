@@ -203,9 +203,7 @@ class StepEmissionTests(TestCase):
         return first, final
 
     @patch("workspace.ai.services.tool_loop.notify_tool_step")
-    @patch(
-        "workspace.ai.services.tool_loop.step_recipients", return_value=[1, 2]
-    )
+    @patch("workspace.ai.services.tool_loop.step_recipients", return_value=[1, 2])
     @patch("workspace.ai.services.tool_loop.call_llm")
     @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
     def test_each_tool_execution_emits_a_step(

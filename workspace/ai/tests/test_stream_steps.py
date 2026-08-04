@@ -175,14 +175,25 @@ class NotifyToolStepTests(TestCase):
         self.assertNotIn("x" * (stream_steps.MAX_DETAIL_LEN + 1), html)
 
     @patch("workspace.ai.services.stream_steps.notify_sse")
-    def test_invalid_arguments_json_yields_no_detail(self, mock_notify):
+    def test_invalid_arguments_json_falls_back_to_the_raw_string(self, mock_notify):
         stream_steps.notify_tool_step(
             [1], "conv-1", make_tool_call(arguments="not json{")
         )
         html = stream_steps.steps_after(1, None)[0]["data"]["html"]
-        # Icon + label only: the detail span is omitted entirely.
         self.assertIn("search_web", html)
-        self.assertNotIn("opacity-80", html)
+        self.assertIn("not json{", html)
+
+    @patch("workspace.ai.services.stream_steps.notify_sse")
+    def test_row_is_expandable_on_its_arguments_and_has_no_result(self, mock_notify):
+        stream_steps.notify_tool_step(
+            [1], "conv-1", make_tool_call(arguments='{"query": "meteo paris"}')
+        )
+        html = stream_steps.steps_after(1, None)[0]["data"]["html"]
+        self.assertIn("<details", html)
+        self.assertIn("query", html)
+        self.assertIn("meteo paris", html)
+        # The step is pushed before the tool runs, so there is no result block.
+        self.assertNotIn("<pre", html)
 
     def test_no_recipients_is_a_noop(self):
         with patch("workspace.ai.services.stream_steps.notify_sse") as mock_notify:

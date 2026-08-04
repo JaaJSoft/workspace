@@ -12,6 +12,7 @@ the generation they report on.
 import json
 import logging
 
+from workspace.chat.services.tool_calls import display_args
 from workspace.common.uuids import uuid_v7_or_v4
 from workspace.core.sse_registry import notify_sse
 
@@ -103,21 +104,27 @@ def notify_tool_step(recipient_ids, conversation_id, tool_call):
 
         name = tool_call.function.name
         badge = tool_registry.get_badge(name)
+        raw_args = tool_call.function.arguments or ""
         try:
-            args = json.loads(tool_call.function.arguments)
+            parsed = json.loads(raw_args) if raw_args else {}
         except json.JSONDecodeError, TypeError:
-            args = {}
-        detail = tool_registry.get_detail(name, args) if isinstance(args, dict) else ""
-        # Render the same partial as the final message's tool timeline row
-        # (auto-escaped there and here), so the live step and the finished
-        # timeline share one source of truth for a tool's presentation.
+            parsed = None
+        detail = (
+            tool_registry.get_detail(name, parsed) if isinstance(parsed, dict) else ""
+        )
+        # Render the final message's tool timeline row itself (auto-escaped
+        # there and here), so a live step is that row minus the result the
+        # tool has not produced yet, and a tool's presentation has one source
+        # of truth.
         html = render_to_string(
-            "chat/ui/partials/_tool_step_summary.html",
+            "chat/ui/partials/_tool_call_row.html",
             {
                 "call": {
                     "icon": badge["icon"],
                     "label": badge["label"],
                     "detail": str(detail)[:MAX_DETAIL_LEN],
+                    "args": display_args(parsed),
+                    "args_raw": raw_args if parsed is None else "",
                 }
             },
         )

@@ -210,6 +210,23 @@ def get_viewer_slug(label: str, name: str = "") -> str:
     return getattr(viewer, "slug", "") if viewer is not None else ""
 
 
+def get_viewer_by_slug(slug: str):
+    """Viewer class for a pinned slug, or None when the slug is unknown.
+
+    Returning None rather than raising lets callers fall back to content-based
+    resolution, so a pin left behind by a viewer that no longer exists degrades
+    instead of breaking the page.
+    """
+    if not slug:
+        return None
+    from workspace.files.ui.viewers import BaseViewer
+
+    for viewer_cls in BaseViewer.__subclasses__():
+        if viewer_cls.slug == slug:
+            return viewer_cls
+    return None
+
+
 # Containers whose byte-level label cannot distinguish an audio-only payload
 # from a video one. The declared media type is the only signal that can, and
 # acting on it is a presentation decision - hence a pinned viewer rather than a

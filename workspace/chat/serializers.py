@@ -295,6 +295,7 @@ class MessageCreateSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    duration = serializers.FloatField(required=False, allow_null=True)
 
 
 class MessageEditSerializer(serializers.Serializer):

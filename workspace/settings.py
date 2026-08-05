@@ -621,6 +621,10 @@ MEDIA_URL = "/media/"
 FILE_UPLOAD_PERMISSIONS = 0o600
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 
+# Hard ceiling for a recorded voice message, enforced both by the browser
+# (auto-stop) and by the message endpoint.
+CHAT_VOICE_MAX_SECONDS = 300
+
 # Storage backends (Django 5 style)
 STORAGES = {
     "default": {

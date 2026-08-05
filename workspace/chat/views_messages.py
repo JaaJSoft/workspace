@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import F, Prefetch, Q
@@ -177,6 +178,38 @@ class MessageListView(CacheControlMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # Detection runs before the transaction opens: Magika inference is CPU
+        # work with no business holding a DB transaction open.
+        from workspace.files.services.detection import detect_from_stream
+        from workspace.files.services.filetype import pin_viewer_for_upload
+
+        detections = [detect_from_stream(f) for f in files]
+        pinned_viewers = [
+            pin_viewer_for_upload(d.label, f.content_type)
+            for d, f in zip(detections, files, strict=True)
+        ]
+
+        duration = serializer.validated_data.get("duration")
+        if duration is not None:
+            if len(files) != 1 or file_uuids:
+                return Response(
+                    {"detail": '"duration" requires exactly one uploaded file.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not 0 < duration <= settings.CHAT_VOICE_MAX_SECONDS:
+                return Response(
+                    {
+                        "detail": "Voice messages must last between 0 and "
+                        f"{settings.CHAT_VOICE_MAX_SECONDS} seconds."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if pinned_viewers[0] != "audio":
+                return Response(
+                    {"detail": '"duration" is only valid for an audio file.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         picked_files = []
         if file_uuids:
             file_uuids = list(dict.fromkeys(file_uuids))
@@ -233,10 +266,9 @@ class MessageListView(CacheControlMixin, APIView):
                     reply_to=reply_to,
                 )
 
-                for f in files:
-                    from workspace.files.services.detection import detect_from_stream
-
-                    detection = detect_from_stream(f)
+                for f, detection, viewer in zip(
+                    files, detections, pinned_viewers, strict=True
+                ):
                     created_attachments.append(
                         MessageAttachment.objects.create(
                             message=message,
@@ -245,7 +277,9 @@ class MessageListView(CacheControlMixin, APIView):
                             mime_type=detection.mime_type,
                             type=detection.label,
                             category=detection.group or "unknown",
+                            viewer=viewer,
                             size=f.size,
+                            duration_seconds=duration,
                         )
                     )
 
@@ -258,6 +292,7 @@ class MessageListView(CacheControlMixin, APIView):
                         mime_type=ws_file.mime_type or "application/octet-stream",
                         type=ws_file.type or "unknown",
                         category=ws_file.category or "unknown",
+                        viewer=ws_file.viewer,
                         size=ws_file.size or 0,
                     )
                     with ws_file.content.open("rb") as f:

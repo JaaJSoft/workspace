@@ -537,7 +537,13 @@ def view_attachment(request, attachment_uuid):
 
         raise Http404
 
-    ViewerClass = ViewerRegistry.get_viewer(attachment.type, attachment.original_name)
+    from workspace.files.services.filetype import get_viewer_by_slug
+
+    # A pinned viewer wins; an unknown pin degrades to content-based
+    # resolution rather than breaking the modal.
+    ViewerClass = get_viewer_by_slug(attachment.viewer) or ViewerRegistry.get_viewer(
+        attachment.type, attachment.original_name
+    )
     if not ViewerClass:
         return HttpResponse(
             f'<div class="p-8 text-center text-error">No viewer available for {attachment.type}</div>',

@@ -1,0 +1,64 @@
+{% load l10n %}
+{# Inline audio player for one attachment.
+   Context: att (MessageAttachment), is_own (bool).
+   duration_seconds is emitted inside {% localize off %}: a French locale would
+   otherwise render 12.5 as "12,5" and break the JS expression. #}
+<div class="flex flex-col gap-1 rounded-lg px-2.5 py-2 w-64 sm:w-80 max-w-full min-w-0
+            {% if is_own %}bg-info/15{% else %}bg-base-300/50{% endif %}"
+     data-attachment-uuid="{{ att.uuid }}"
+     x-data="chatAudioPlayer('{{ att.uuid }}', {% localize off %}{{ att.duration_seconds|default_if_none:'null' }}{% endlocalize %})">
+
+  <audio x-ref="audio"
+         src="/api/v1/chat/attachments/{{ att.uuid }}"
+         preload="metadata"
+         @loadedmetadata="onMetadata()"
+         @timeupdate="currentTime = $refs.audio.currentTime"
+         @ended="onEnded()"></audio>
+
+  <div class="flex items-center gap-1.5 min-w-0">
+    <button class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
+            @click="toggle()"
+            :title="playing ? 'Pause' : 'Play'"
+            :aria-label="playing ? 'Pause' : 'Play'">
+      <i data-lucide="play" class="w-4 h-4" x-show="!playing"></i>
+      <i data-lucide="pause" class="w-4 h-4" x-show="playing" x-cloak></i>
+    </button>
+
+    <input type="range" min="0" max="100" step="0.1"
+           class="range range-xs flex-1 min-w-0"
+           :value="progressPercent()"
+           @input="seekToPercent($event.target.value)"
+           aria-label="Seek" />
+
+    <span class="text-[0.65rem] opacity-70 tabular-nums flex-shrink-0"
+          x-text="elapsedLabel() + ' / ' + durationLabel()"></span>
+
+    <button class="btn btn-ghost btn-xs px-1 tabular-nums flex-shrink-0"
+            @click="cycleSpeed()"
+            x-text="speedLabel()"
+            title="Playback speed"></button>
+
+    <button class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+            @click="detailsOpen = !detailsOpen"
+            title="File details"
+            :aria-expanded="detailsOpen">
+      <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform"
+         :class="detailsOpen && 'rotate-180'"></i>
+    </button>
+  </div>
+
+  <div x-show="detailsOpen" x-cloak class="flex items-center gap-1.5 min-w-0 pl-1">
+    <i data-lucide="music" class="w-3.5 h-3.5 flex-shrink-0 opacity-60"></i>
+    <span class="truncate text-xs font-medium flex-1 min-w-0">{{ att.original_name }}</span>
+    <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesizeformat }}</span>
+    <a href="/api/v1/chat/attachments/{{ att.uuid }}"
+       download="{{ att.original_name }}"
+       class="btn btn-ghost btn-xs btn-square flex-shrink-0" title="Download">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+    </a>
+    <button class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+            @click="saveAttachmentToFiles('{{ att.uuid }}')" title="Save to Files">
+      <i data-lucide="folder-down" class="w-3.5 h-3.5"></i>
+    </button>
+  </div>
+</div>

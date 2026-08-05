@@ -393,6 +393,32 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       return classes.join(' ');
     },
 
+    // --- All-day day labels ---
+    // Storage, the API, FullCalendar and RFC 5545 all treat an all-day `end`
+    // as the day AFTER the last covered day; the modal's date input names
+    // that last day. Convert at the form boundary with pure label arithmetic:
+    // routing a day label through instant conversions shifts it by the zone
+    // delta.
+    _shiftDayLabel(label, days) {
+      if (!label) return '';
+      const [y, m, d] = label.slice(0, 10).split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+    },
+
+    // Exclusive end -> the last day the user sees in the input. Degenerate
+    // ends (end <= start, e.g. an import with DTEND == DTSTART) collapse to
+    // the start day rather than a range that runs backwards.
+    _allDayFormEnd(startLabel, exclusiveEnd) {
+      if (!exclusiveEnd) return '';
+      const inclusive = this._shiftDayLabel(exclusiveEnd, -1);
+      return startLabel && inclusive < startLabel ? startLabel : inclusive;
+    },
+
+    // Last covered day -> the exclusive end the API expects.
+    _allDayPayloadEnd(inclusiveEnd) {
+      return this._shiftDayLabel(inclusiveEnd, 1);
+    },
+
     // --- All-day toggle ---
     toggleAllDay() {
       const newAllDay = !this.form.all_day;
@@ -434,7 +460,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       let startVal, endVal;
       if (useAllDay) {
         startVal = this.toLocalDate(start);
-        endVal = end ? this.toLocalDate(end) : '';
+        endVal = end ? this._allDayFormEnd(startVal, this.toLocalDate(end)) : '';
       } else if (start.length === 10) {
         // A date-only grid click already names the intended day in the
         // display zone: attach the default times verbatim - converting the
@@ -484,13 +510,16 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
       const allDay = !!event.all_day;
       const fmt = allDay ? (s => this.toLocalDate(s)) : (s => this.toLocalDatetime(s));
+      const startVal = fmt(event.start);
       this.form = {
         uuid: event.uuid,
         calendar_id: String(event.calendar_id),
         title: event.title,
         description: event.description || '',
-        start: fmt(event.start),
-        end: event.end ? fmt(event.end) : '',
+        start: startVal,
+        end: event.end
+          ? (allDay ? this._allDayFormEnd(startVal, fmt(event.end)) : fmt(event.end))
+          : '',
         all_day: allDay,
         location: event.location || '',
         recurrence_frequency: event.recurrence_frequency || null,
@@ -572,7 +601,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.saving = true;
 
       // Timed inputs are wall-clock values in the user's configured zone;
-      // all-day inputs are date-only day labels sent verbatim. The
+      // all-day inputs are date-only day labels, with the end input naming
+      // the last covered day (the API wants the exclusive next day). The
       // recurrence end (a date input) covers its whole final day.
       const tz = this._tz();
       const payload = {
@@ -581,7 +611,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         description: this.form.description,
         start: this.form.all_day ? this.form.start : window.wallClockToIso(this.form.start, tz),
         end: this.form.end
-          ? (this.form.all_day ? this.form.end : window.wallClockToIso(this.form.end, tz))
+          ? (this.form.all_day
+            ? this._allDayPayloadEnd(this.form.end)
+            : window.wallClockToIso(this.form.end, tz))
           : null,
         all_day: this.form.all_day,
         location: this.form.location,
@@ -632,13 +664,18 @@ window.calendarEventsMixin = function calendarEventsMixin() {
             // Match openViewPanel(): all-day events keep date-only values to
             // avoid timezone-shifted datetimes leaking back into panel state.
             const fmtStart = saved.all_day ? this.toLocalDate.bind(this) : this.toLocalDatetime.bind(this);
+            const savedStart = fmtStart(saved.start);
             this.form = {
               uuid: saved.uuid,
               calendar_id: saved.calendar_id,
               title: saved.title,
               description: saved.description || '',
-              start: fmtStart(saved.start),
-              end: saved.end ? fmtStart(saved.end) : '',
+              start: savedStart,
+              end: saved.end
+                ? (saved.all_day
+                  ? this._allDayFormEnd(savedStart, fmtStart(saved.end))
+                  : fmtStart(saved.end))
+                : '',
               all_day: saved.all_day,
               location: saved.location || '',
               recurrence_frequency: saved.recurrence_frequency || null,
@@ -750,16 +787,16 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       if (!this.form.start || !this.form.end) return null;
       const startMs = new Date(this.form.start).getTime();
       const endMs = new Date(this.form.end).getTime();
-      return Math.round((endMs - startMs) / 60000);
+      const minutes = Math.round((endMs - startMs) / 60000);
+      // The all-day end input names the last covered day, so a one-day event
+      // carries identical labels.
+      return this.form.all_day ? minutes + 1440 : minutes;
     },
 
     applyDuration(minutes) {
       if (!this.form.start) return;
       if (this.form.all_day) {
-        // Pure day-label arithmetic: routing the date through Date/instant
-        // conversions would shift it by the browser/user zone delta.
-        const [y, m, d] = this.form.start.split('-').map(Number);
-        this.form.end = new Date(Date.UTC(y, m - 1, d + minutes / 1440)).toISOString().slice(0, 10);
+        this.form.end = this._shiftDayLabel(this.form.start, minutes / 1440 - 1);
         return;
       }
       // form.start is a user-zone wall clock: resolve it to an instant in

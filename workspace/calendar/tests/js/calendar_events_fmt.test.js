@@ -163,8 +163,14 @@ test('applyDuration on all-day events does pure day-label arithmetic', () => {
     form: { start: '2026-08-05', end: '', all_day: true },
     prefs: { timeFormat: '24h' },
   });
+  // The end input names the last covered day: 1 day stays on the start day,
+  // 3 days runs through the 7th.
   merged.applyDuration(1440);
-  assert.equal(merged.form.end, '2026-08-06');
+  assert.equal(merged.form.end, '2026-08-05');
+  assert.equal(merged.activeDuration(), 1440);
+  merged.applyDuration(3 * 1440);
+  assert.equal(merged.form.end, '2026-08-07');
+  assert.equal(merged.activeDuration(), 3 * 1440);
 });
 
 test('openCreateModal keeps the last covered day of a multi-day date-only drag', () => {
@@ -182,4 +188,75 @@ test('openCreateModal keeps the last covered day of a multi-day date-only drag',
   merged.openCreateModal('2026-08-05', '2026-08-08', false);
   assert.equal(merged.form.start, '2026-08-05T09:00');
   assert.equal(merged.form.end, '2026-08-07T10:00');
+});
+
+function makeModalHarness(tz, extra) {
+  const { ctx, mixin } = makeEventsMixin(tz);
+  // openViewPanel reads the signed-in user off the body dataset.
+  ctx.document.body = { dataset: { userId: '1' } };
+  const app = makeCalendarApp(tz);
+  return Object.assign({}, app, mixin, {
+    showModal: false,
+    showPanel: false,
+    modalMode: '',
+    ownedCalendars: [],
+    selectedMembers: [],
+    eventMembers: [],
+    loadingEvent: false,
+    prefs: { defaultAllDay: true, timeFormat: '24h' },
+  }, extra || {});
+}
+
+test('an all-day drag prefills the last covered day, not the exclusive end', () => {
+  const merged = makeModalHarness('Asia/Vladivostok');
+  // FullCalendar select() over Aug 5-7 hands over Aug 8 as the exclusive end.
+  merged.openCreateModal('2026-08-05', '2026-08-08', true);
+  assert.equal(merged.form.start, '2026-08-05');
+  assert.equal(merged.form.end, '2026-08-07');
+});
+
+test('editing an all-day event shows the last covered day in the end input', () => {
+  const merged = makeModalHarness('America/Los_Angeles');
+  // Stored exclusive end: Aug 5 -> Aug 7 covers three days.
+  merged.openViewPanel({
+    uuid: 'e1',
+    calendar_id: 'c1',
+    title: 'Trip',
+    start: '2026-08-05',
+    end: '2026-08-08',
+    all_day: true,
+    owner: { id: 1 },
+    members: [],
+  });
+  assert.equal(merged.form.start, '2026-08-05');
+  assert.equal(merged.form.end, '2026-08-07');
+});
+
+test('a degenerate all-day end never renders a backwards range', () => {
+  const merged = makeModalHarness('America/Los_Angeles');
+  // An import with DTEND == DTSTART would otherwise show Aug 4 -> Aug 5.
+  merged.openViewPanel({
+    uuid: 'e2',
+    calendar_id: 'c1',
+    title: 'Legacy',
+    start: '2026-08-05',
+    end: '2026-08-05',
+    all_day: true,
+    owner: { id: 1 },
+    members: [],
+  });
+  assert.equal(merged.form.end, '2026-08-05');
+});
+
+test('all-day form boundaries round-trip the exclusive API end', () => {
+  const merged = makeModalHarness('Asia/Vladivostok');
+  // A two-day event (Aug 5 through Aug 6) must reach the API as Aug 7 so the
+  // grid paints both days instead of one.
+  assert.equal(merged._allDayPayloadEnd('2026-08-06'), '2026-08-07');
+  assert.equal(merged._allDayFormEnd('2026-08-05', '2026-08-07'), '2026-08-06');
+  // Single-day: start and end labels match, the API gets the next day.
+  assert.equal(merged._allDayPayloadEnd('2026-08-05'), '2026-08-06');
+  // Month rollover stays on pure day labels.
+  assert.equal(merged._allDayPayloadEnd('2026-08-31'), '2026-09-01');
+  assert.equal(merged._allDayFormEnd('2026-08-30', '2026-09-01'), '2026-08-31');
 });

@@ -114,13 +114,15 @@ class MessageAttachmentSplitTests(TestCase):
             conversation=self.conv, author=self.user, body="media"
         )
 
-    def _attach(self, name, mime, category="unknown"):
+    def _attach(self, name, mime, category="unknown", viewer="", type=""):
         return MessageAttachment.objects.create(
             message=self.message,
             file=SimpleUploadedFile(name, b"x", content_type=mime),
             original_name=name,
             mime_type=mime,
+            type=type,
             category=category,
+            viewer=viewer,
             size=1,
         )
 
@@ -145,6 +147,59 @@ class MessageAttachmentSplitTests(TestCase):
         with self.assertNumQueries(0):
             self.assertEqual(len(msg.media_attachments), 1)
             self.assertEqual(msg.file_attachments, [])
+
+    def test_pinned_audio_leaves_the_media_bucket(self):
+        """A recorded voice message is category=video and viewer=audio. Without
+        the exclusion it would render twice in the same bubble."""
+        voice = self._attach(
+            "voice.webm", "video/webm", category="video", viewer="audio", type="webm"
+        )
+        self.assertEqual([a.uuid for a in self.message.audio_attachments], [voice.uuid])
+        self.assertEqual(self.message.media_attachments, [])
+        self.assertEqual(self.message.file_attachments, [])
+
+    def test_audio_bucket_also_accepts_a_derived_viewer(self):
+        """A shared .mp3 carries no pin; the viewer comes from its content type."""
+        song = self._attach("song.mp3", "audio/mpeg", category="audio", type="mp3")
+        self.assertEqual(song.viewer, "")
+        self.assertEqual(song.effective_viewer, "audio")
+        self.assertEqual([a.uuid for a in self.message.audio_attachments], [song.uuid])
+
+    def test_attachment_buckets_form_a_strict_partition(self):
+        image = self._attach("photo.png", "image/png", category="image", type="png")
+        video = self._attach("clip.mp4", "video/mp4", category="video", type="mp4")
+        voice = self._attach(
+            "voice.webm", "video/webm", category="video", viewer="audio", type="webm"
+        )
+        doc = self._attach(
+            "doc.pdf", "application/pdf", category="document", type="pdf"
+        )
+
+        media = {a.uuid for a in self.message.media_attachments}
+        audios = {a.uuid for a in self.message.audio_attachments}
+        files = {a.uuid for a in self.message.file_attachments}
+
+        self.assertEqual(media, {image.uuid, video.uuid})
+        self.assertEqual(audios, {voice.uuid})
+        self.assertEqual(files, {doc.uuid})
+        self.assertEqual(
+            media | audios | files, {image.uuid, video.uuid, voice.uuid, doc.uuid}
+        )
+        self.assertEqual(media & audios, set())
+        self.assertEqual(media & files, set())
+        self.assertEqual(audios & files, set())
+
+    def test_duration_seconds_defaults_to_null(self):
+        att = self._attach("song.mp3", "audio/mpeg", category="audio", type="mp3")
+        att.refresh_from_db()
+        self.assertIsNone(att.duration_seconds)
+
+    def test_duration_seconds_round_trips(self):
+        att = self._attach("voice.webm", "video/webm", viewer="audio", type="webm")
+        att.duration_seconds = 12.5
+        att.save(update_fields=["duration_seconds"])
+        att.refresh_from_db()
+        self.assertAlmostEqual(att.duration_seconds, 12.5)
 
 
 class CallModelTests(TestCase):

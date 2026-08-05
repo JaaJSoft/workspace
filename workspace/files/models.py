@@ -76,6 +76,10 @@ class File(models.Model):
     mime_type = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     type = models.CharField(max_length=50, default="unknown", db_index=True)
     category = models.CharField(max_length=20, default="unknown", db_index=True)
+    # Pinned viewer slug. Empty means "derive from the content type", which is
+    # the common case. Set when the content type alone cannot tell which
+    # renderer applies, e.g. an audio-only MP4 container.
+    viewer = models.CharField(max_length=32, blank=True, default="")
 
     has_thumbnail = models.BooleanField(default=False)
 

@@ -688,11 +688,43 @@
         No bots match your filter.
       </div>
     </div>
+    <!-- Agent mode (advanced): give the bot a long-term goal at creation -->
+    <div class="px-5 pb-1 border-t border-base-200">
+      <button type="button" class="w-full flex items-center gap-2 py-2 text-xs text-base-content/60 hover:text-base-content transition-colors"
+              @click="botGoalDraft.enabled = !botGoalDraft.enabled">
+        <i data-lucide="target" class="w-3.5 h-3.5 text-warning"></i>
+        Agent mode — give a long-term goal
+        <i :data-lucide="botGoalDraft.enabled ? 'chevron-up' : 'chevron-down'" class="w-3.5 h-3.5 ml-auto"></i>
+      </button>
+      <div x-show="botGoalDraft.enabled" x-collapse class="space-y-2 pb-2">
+        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="3"
+                  placeholder="Objective: what should the bot pursue autonomously? (e.g. follow apartment listings in Lyon and alert me about good ones)"
+                  x-model="botGoalDraft.goal"></textarea>
+        <input type="text" class="input input-bordered input-sm w-full"
+               placeholder="Title (optional)"
+               x-model="botGoalDraft.title">
+        <div class="grid grid-cols-2 gap-2">
+          <label class="form-control">
+            <span class="label-text text-xs text-base-content/60 pb-0.5">First check-in (optional)</span>
+            <input type="datetime-local" class="input input-bordered input-sm w-full"
+                   x-model="botGoalDraft.first_check_at">
+          </label>
+          <label class="form-control">
+            <span class="label-text text-xs text-base-content/60 pb-0.5">Deadline (optional)</span>
+            <input type="datetime-local" class="input input-bordered input-sm w-full"
+                   x-model="botGoalDraft.deadline">
+          </label>
+        </div>
+        <p class="text-[0.65rem] text-base-content/40">
+          The bot will work on this goal on its own schedule and only message you when it has something worth saying. Pick a bot above to start.
+        </p>
+      </div>
+    </div>
     <div class="flex justify-end px-5 pb-5 pt-1">
-      <button class="btn btn-ghost btn-sm" @click="showBotPicker = false">Cancel</button>
+      <button class="btn btn-ghost btn-sm" @click="showBotPicker = false; resetBotGoalDraft()">Cancel</button>
     </div>
   </div>
-  <form method="dialog" class="modal-backdrop"><button @click="showBotPicker = false">close</button></form>
+  <form method="dialog" class="modal-backdrop"><button @click="showBotPicker = false; resetBotGoalDraft()">close</button></form>
 </dialog>
 {% endif %}
 

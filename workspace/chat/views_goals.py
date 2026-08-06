@@ -6,10 +6,26 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import AgentGoalSerializer
+from .serializers import AgentGoalCreateSerializer, AgentGoalSerializer
 from .services.conversations import get_active_membership
 
 logger = logging.getLogger(__name__)
+
+
+def _get_bot_member(conversation_id):
+    """Return the first bot User active in the conversation, or None."""
+    from .models import ConversationMember
+
+    member = (
+        ConversationMember.objects.filter(
+            conversation_id=conversation_id,
+            left_at__isnull=True,
+            user__bot_profile__isnull=False,
+        )
+        .select_related("user")
+        .first()
+    )
+    return member.user if member else None
 
 
 @extend_schema(tags=["Chat"])
@@ -37,6 +53,66 @@ class AgentGoalListView(APIView):
         )
         serializer = AgentGoalSerializer(goals, many=True)
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Create an agent goal for the conversation's bot",
+        request=AgentGoalCreateSerializer,
+        responses=AgentGoalSerializer,
+    )
+    def post(self, request, conversation_id):
+        from django.utils import timezone
+
+        from workspace.ai.models import AgentGoal
+
+        membership = get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {"detail": "Not a member of this conversation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        bot_user = _get_bot_member(conversation_id)
+        if bot_user is None:
+            return Response(
+                {"detail": "This conversation has no AI bot."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = AgentGoalCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        active_count = AgentGoal.objects.filter(
+            conversation_id=conversation_id,
+            bot=bot_user,
+            status=AgentGoal.Status.ACTIVE,
+        ).count()
+        if active_count >= AgentGoal.MAX_ACTIVE_PER_CONVERSATION:
+            return Response(
+                {"detail": "Too many active goals in this conversation."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        goal_text = data["goal"].strip()
+        if not goal_text:
+            return Response(
+                {"detail": "Goal is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        title = (data.get("title") or "").strip() or goal_text[:200]
+
+        first_check = data.get("first_check_at") or (
+            timezone.now() + AgentGoal.MIN_CHECK_INTERVAL
+        )
+        goal = AgentGoal.objects.create(
+            conversation_id=conversation_id,
+            bot=bot_user,
+            created_by=request.user,
+            title=title[:200],
+            goal=goal_text,
+            deadline=data.get("deadline"),
+            next_check_at=AgentGoal.clamp_next_check(first_check),
+        )
+        return Response(AgentGoalSerializer(goal).data, status=status.HTTP_201_CREATED)
 
 
 @extend_schema(tags=["Chat"])

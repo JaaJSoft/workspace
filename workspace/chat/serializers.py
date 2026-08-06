@@ -350,6 +350,13 @@ class AgentGoalSerializer(serializers.ModelSerializer):
         return value
 
 
+class AgentGoalCreateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    goal = serializers.CharField()
+    first_check_at = serializers.DateTimeField(required=False, allow_null=True)
+    deadline = serializers.DateTimeField(required=False, allow_null=True)
+
+
 class ScheduledMessageSerializer(serializers.ModelSerializer):
     bot_username = serializers.CharField(source="bot.username", read_only=True)
     bot_display_name = serializers.SerializerMethodField()

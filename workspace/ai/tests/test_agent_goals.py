@@ -432,6 +432,97 @@ class AgentGoalAPITests(APITestCase):
         resp = self.client.delete(self._detail_url(goal_id=uuid.uuid4()))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    # -- create --------------------------------------------------------------
+
+    def test_create_goal(self):
+        self.client.force_authenticate(self.user)
+        first_check = timezone.now() + timedelta(hours=2)
+        resp = self.client.post(
+            self._list_url(),
+            data={
+                "title": "Watch releases",
+                "goal": "Watch upstream releases and summarize them.",
+                "first_check_at": first_check.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        goal = AgentGoal.objects.get(uuid=resp.data["uuid"])
+        self.assertEqual(goal.bot, self.bot_user)
+        self.assertEqual(goal.created_by, self.user)
+        self.assertEqual(goal.status, AgentGoal.Status.ACTIVE)
+        self.assertAlmostEqual(
+            goal.next_check_at.timestamp(), first_check.timestamp(), delta=1
+        )
+
+    def test_create_goal_defaults(self):
+        # No title, no first_check_at: title falls back to the goal text and
+        # the first check-in lands at the minimum interval from now.
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            self._list_url(),
+            data={"goal": "Keep an eye on the weather."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        goal = AgentGoal.objects.get(uuid=resp.data["uuid"])
+        self.assertEqual(goal.title, "Keep an eye on the weather.")
+        self.assertGreater(goal.next_check_at, timezone.now())
+
+    def test_create_goal_clamps_past_first_check(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            self._list_url(),
+            data={
+                "goal": "Past check-in.",
+                "first_check_at": (timezone.now() - timedelta(hours=1)).isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        goal = AgentGoal.objects.get(uuid=resp.data["uuid"])
+        self.assertGreater(goal.next_check_at, timezone.now())
+
+    def test_create_goal_blank_goal_rejected(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(self._list_url(), data={"goal": "   "}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_goal_non_member(self):
+        other = User.objects.create_user(username="other", password="pass123")
+        self.client.force_authenticate(other)
+        resp = self.client.post(self._list_url(), data={"goal": "Nope."}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_goal_requires_bot_in_conversation(self):
+        human_only = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=human_only, user=self.user)
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            f"/api/v1/chat/conversations/{human_only.uuid}/goals",
+            data={"goal": "No bot here."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_goal_respects_active_limit(self):
+        for i in range(AgentGoal.MAX_ACTIVE_PER_CONVERSATION - 1):
+            AgentGoal.objects.create(
+                conversation=self.conversation,
+                bot=self.bot_user,
+                created_by=self.user,
+                title=f"Goal {i}",
+                goal="Filler.",
+                next_check_at=timezone.now() + timedelta(hours=1),
+            )
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            self._list_url(), data={"goal": "One too many."}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 # ---------------------------------------------------------------------------
 # 5. Tool Tests

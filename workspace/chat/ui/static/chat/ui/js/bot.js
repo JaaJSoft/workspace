@@ -21,6 +21,9 @@ window.chatBotMixin = function chatBotMixin() {
     agentGoals: [],
     loadingAgentGoals: false,
 
+    // Draft for the optional "Agent mode" section of the bot picker.
+    botGoalDraft: { enabled: false, goal: '', title: '', first_check_at: '', deadline: '' },
+
     async fetchBots() {
       try {
         const resp = await fetch('/api/v1/ai/bots', { credentials: 'same-origin' });
@@ -50,10 +53,48 @@ window.chatBotMixin = function chatBotMixin() {
           this.conversations.unshift(conv);
           this.refreshConversationList();
         }
+        await this._createDraftGoal(conv);
         await this.selectConversation(conv);
       } catch (e) {
         console.error('Failed to start bot conversation', e);
       }
+    },
+
+    // The datetime-local inputs produce naive local strings; convert to ISO
+    // with offset so the backend doesn't have to guess the user's timezone.
+    _goalDraftPayload() {
+      const draft = this.botGoalDraft;
+      const payload = { goal: draft.goal.trim() };
+      if (draft.title.trim()) payload.title = draft.title.trim();
+      if (draft.first_check_at) payload.first_check_at = new Date(draft.first_check_at).toISOString();
+      if (draft.deadline) payload.deadline = new Date(draft.deadline).toISOString();
+      return payload;
+    },
+
+    async _createDraftGoal(conv) {
+      if (!this.botGoalDraft.enabled || !this.botGoalDraft.goal.trim()) {
+        this.resetBotGoalDraft();
+        return;
+      }
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${conv.uuid}/goals`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(this._goalDraftPayload()),
+        });
+        if (!resp.ok) throw new Error(`Goal creation failed (${resp.status})`);
+      } catch (e) {
+        console.error('Failed to create agent goal', e);
+      }
+      this.resetBotGoalDraft();
+    },
+
+    resetBotGoalDraft() {
+      this.botGoalDraft = { enabled: false, goal: '', title: '', first_check_at: '', deadline: '' };
     },
 
     isBotConversation(conv) {

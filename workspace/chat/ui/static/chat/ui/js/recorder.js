@@ -66,28 +66,33 @@ window.chatRecorderMixin = function chatRecorderMixin() {
       this._startingRecording = true;
       try {
         this._recorderStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this._recorderChunks = [];
+        this._recorder = new MediaRecorder(this._recorderStream, {
+          mimeType: this._recorderType.mime,
+        });
+        this._recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) this._recorderChunks.push(e.data);
+        };
+        this._recorder.onstop = () => this._finalizeRecording();
+        this._recorder.start();
+        this.recorderState = 'recording';
+        this.recordSeconds = 0;
+        const max = this.voiceMaxSeconds();
+        this._recordTimer = setInterval(() => {
+          this.recordSeconds += 1;
+          if (this.recordSeconds >= max) this.stopRecording();
+        }, 1000);
       } catch (e) {
+        // getUserMedia denied, or MediaRecorder construction/start failed
+        this._releaseMic();
+        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+          this.showAlert?.('error', 'Microphone access was denied.');
+        } else {
+          this.showAlert?.('error', 'Recording could not start.');
+        }
+      } finally {
         this._startingRecording = false;
-        this.showAlert?.('error', 'Microphone access was denied.');
-        return;
       }
-      this._recorderChunks = [];
-      this._recorder = new MediaRecorder(this._recorderStream, {
-        mimeType: this._recorderType.mime,
-      });
-      this._recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) this._recorderChunks.push(e.data);
-      };
-      this._recorder.onstop = () => this._finalizeRecording();
-      this._recorder.start();
-      this.recorderState = 'recording';
-      this._startingRecording = false;
-      this.recordSeconds = 0;
-      const max = this.voiceMaxSeconds();
-      this._recordTimer = setInterval(() => {
-        this.recordSeconds += 1;
-        if (this.recordSeconds >= max) this.stopRecording();
-      }, 1000);
     },
 
     stopRecording() {

@@ -18,6 +18,9 @@ window.chatBotMixin = function chatBotMixin() {
     scheduledMessages: [],
     loadingSchedules: false,
 
+    agentGoals: [],
+    loadingAgentGoals: false,
+
     async fetchBots() {
       try {
         const resp = await fetch('/api/v1/ai/bots', { credentials: 'same-origin' });
@@ -201,6 +204,93 @@ window.chatBotMixin = function chatBotMixin() {
       });
       if (resp.ok) {
         this.botMemories = this.botMemories.filter(m => m.id !== mem.id);
+      }
+    },
+
+    // ── Agent goals ─────────────────────────────────────────
+    async loadAgentGoals(conversationId) {
+      if (!this.activeConversation || !this.isBotConversation(this.activeConversation)) return;
+      this.loadingAgentGoals = true;
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${conversationId}/goals`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.agentGoals = await resp.json();
+        }
+      } catch (e) {
+        console.error('Failed to load agent goals', e);
+      }
+      this.loadingAgentGoals = false;
+    },
+
+    async editGoal(goal) {
+      const text = await AppDialog.prompt({
+        title: 'Edit goal',
+        message: goal.title,
+        value: goal.goal,
+        placeholder: 'Objective...',
+        okLabel: 'Save',
+        inputSize: 'textarea',
+        icon: 'target',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+      if (text === null || text.trim() === goal.goal) return;
+      await this._patchGoal(goal, { goal: text.trim() });
+    },
+
+    async toggleGoalPause(goal) {
+      await this._patchGoal(goal, {
+        status: goal.status === 'paused' ? 'active' : 'paused',
+      });
+    },
+
+    async _patchGoal(goal, payload) {
+      try {
+        const resp = await fetch(
+          `/api/v1/chat/conversations/${this.activeConversation.uuid}/goals/${goal.uuid}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCSRFToken(),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          },
+        );
+        if (resp.ok) {
+          const updated = await resp.json();
+          const idx = this.agentGoals.findIndex(g => g.uuid === goal.uuid);
+          if (idx !== -1) this.agentGoals[idx] = updated;
+        }
+      } catch (e) {
+        console.error('Failed to update agent goal', e);
+      }
+    },
+
+    async stopGoal(goal) {
+      const ok = await AppDialog.confirm({
+        title: 'Stop goal',
+        message: `Stop the goal "${goal.title}"? The bot will no longer work on it.`,
+        okLabel: 'Stop',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
+      try {
+        const resp = await fetch(
+          `/api/v1/chat/conversations/${this.activeConversation.uuid}/goals/${goal.uuid}`,
+          {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            credentials: 'same-origin',
+          },
+        );
+        if (resp.ok) {
+          this.agentGoals = this.agentGoals.filter(g => g.uuid !== goal.uuid);
+        }
+      } catch (e) {
+        console.error('Failed to stop agent goal', e);
       }
     },
 

@@ -39,6 +39,7 @@ window.chatPanelsMixin = function chatPanelsMixin() {
         this.loadConversationMedia(conversationId);
         if (this.isBotConversation(this.activeConversation)) {
           this.loadBotMemories();
+          this.loadAgentGoals(conversationId);
           this.loadScheduledMessages(conversationId);
         }
       }

@@ -4,7 +4,8 @@ import base64
 import binascii
 import json
 import logging
-from datetime import UTC
+import uuid as uuid_lib
+from datetime import UTC, datetime
 
 from django.conf import settings
 from pydantic import BaseModel, Field
@@ -85,6 +86,56 @@ class ScheduleMessageParams(BaseModel):
 
 class CancelScheduleParams(BaseModel):
     schedule_id: str = Field(description="UUID of the schedule to cancel.")
+
+
+class CreateAgentGoalParams(BaseModel):
+    title: str = Field(description="Short label for the goal (a few words).")
+    goal: str = Field(
+        description="The full objective: what to accomplish or track, what success "
+        "looks like, and any context needed to work on it autonomously."
+    )
+    first_check_at: str = Field(
+        description="ISO datetime of the first autonomous check-in "
+        "(e.g. 2026-03-10T09:00), in the user's local timezone."
+    )
+    deadline: str = Field(
+        default="",
+        description="Optional ISO datetime by which the goal should be wrapped up.",
+    )
+
+
+class UpdateAgentGoalParams(BaseModel):
+    goal_id: uuid_lib.UUID = Field(description="UUID of the goal to update.")
+    notes: str = Field(
+        default="",
+        description="Replace your private working notes (plan, progress, findings). "
+        "They are your only memory between check-ins — always rewrite them in full "
+        "with everything you still need.",
+    )
+    next_check_at: str = Field(
+        default="",
+        description="ISO datetime of your next autonomous check-in, in the user's "
+        "local timezone.",
+    )
+    deadline: str = Field(
+        default="", description="New ISO datetime deadline for the goal."
+    )
+    status: str = Field(
+        default="",
+        description='Set to "paused" to pause the goal or "active" to resume it.',
+    )
+
+
+class CompleteAgentGoalParams(BaseModel):
+    goal_id: uuid_lib.UUID = Field(description="UUID of the goal to close.")
+    outcome: str = Field(
+        description="Final summary of what was accomplished, or why the goal "
+        "is being dropped."
+    )
+    abandoned: bool = Field(
+        default=False,
+        description="True if the goal is dropped without being achieved.",
+    )
 
 
 def _bot_supports_vision(bot):
@@ -447,6 +498,249 @@ Do NOT use this to create an image from scratch — use generate_image instead."
         if _bot_supports_vision(bot):
             return _image_tool_payload(image_data, confirmation)
         return confirmation
+
+
+def _parse_local_datetime(value: str, user_tz):
+    """Parse an ISO datetime string, interpreting naive values in *user_tz*.
+
+    Returns ``None`` when the string cannot be parsed.
+    """
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=user_tz)
+    return dt
+
+
+class AgentGoalToolProvider(ToolProvider):
+    """Long-horizon autonomous goal tools for bots."""
+
+    @tool(
+        badge_icon="\U0001f3af",
+        badge_label="Created goal",
+        detail_key="title",
+        params=CreateAgentGoalParams,
+    )
+    def create_agent_goal(self, args, user, bot, conversation_id, context):
+        """Create a long-term autonomous goal that you will pursue across days, weeks or months. \
+Call this when the user gives you a lasting mission: track something over time, coach them toward \
+an objective, research a topic in depth, follow up until something is done. You will wake up at \
+each check-in without user interaction, work on the goal with your tools, and decide yourself \
+when to check in next and whether to message the user. \
+IMPORTANT: Always call list_agent_goals first — update the existing goal instead of creating a duplicate."""
+        from workspace.users.services.settings import get_user_timezone
+
+        from .models import AgentGoal
+
+        title = args.title.strip()[:200]
+        goal = args.goal.strip()
+        if not title or not goal:
+            return "Error: title and goal are required"
+        if not conversation_id:
+            return "Error: no conversation context"
+
+        active_count = AgentGoal.objects.filter(
+            conversation_id=conversation_id,
+            bot=bot,
+            status=AgentGoal.Status.ACTIVE,
+        ).count()
+        if active_count >= AgentGoal.MAX_ACTIVE_PER_CONVERSATION:
+            return (
+                f"Error: this conversation already has {active_count} active goals "
+                f"(max {AgentGoal.MAX_ACTIVE_PER_CONVERSATION}). Complete or abandon "
+                f"one before creating a new goal."
+            )
+
+        user_tz = get_user_timezone(user)
+        first_check = _parse_local_datetime(args.first_check_at.strip(), user_tz)
+        if first_check is None:
+            return (
+                f'Error: could not parse datetime "{args.first_check_at}". '
+                f"Use ISO format like 2026-03-10T09:00"
+            )
+        first_check = AgentGoal.clamp_next_check(first_check)
+
+        deadline = None
+        if args.deadline.strip():
+            deadline = _parse_local_datetime(args.deadline.strip(), user_tz)
+            if deadline is None:
+                return (
+                    f'Error: could not parse deadline "{args.deadline}". '
+                    f"Use ISO format like 2026-06-01T18:00"
+                )
+
+        agent_goal = AgentGoal.objects.create(
+            conversation_id=conversation_id,
+            bot=bot,
+            created_by=user,
+            title=title,
+            goal=goal,
+            deadline=deadline,
+            next_check_at=first_check,
+        )
+        logger.info(
+            "Agent goal created: %s bot=%s conversation=%s",
+            agent_goal.uuid,
+            scrub(bot.username),
+            scrub(conversation_id),
+        )
+        first_local = first_check.astimezone(user_tz)
+        return (
+            f'Created goal "{title}" (id: {agent_goal.uuid}). First check-in: '
+            f"{first_local.strftime('%Y-%m-%d %H:%M')} ({user_tz})."
+        )
+
+    @tool(badge_icon="\U0001f3af", badge_label="Listed goals")
+    def list_agent_goals(self, args, user, bot, conversation_id, context):
+        """List your active and paused long-term goals in this conversation, including \
+their private notes, next check-in and deadline. Call this before creating a goal (to avoid \
+duplicates) and whenever the user asks what you are working on autonomously."""
+        from workspace.users.services.settings import get_user_timezone
+
+        from .models import AgentGoal
+
+        goals = AgentGoal.objects.filter(
+            conversation_id=conversation_id,
+            bot=bot,
+            status__in=[AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED],
+        )
+        if not goals.exists():
+            return "No active goals in this conversation."
+
+        user_tz = get_user_timezone(user)
+        lines = []
+        for g in goals:
+            next_local = g.next_check_at.astimezone(user_tz)
+            line = (
+                f'- {g.uuid}: "{g.title}" [{g.status}] — '
+                f"next check-in {next_local.strftime('%Y-%m-%d %H:%M')} ({user_tz}), "
+                f"{g.check_count} check-in(s) so far"
+            )
+            if g.deadline:
+                line += f", deadline {g.deadline.astimezone(user_tz).strftime('%Y-%m-%d %H:%M')}"
+            line += f"\n  Objective: {g.goal[:200]}"
+            if g.notes:
+                line += f"\n  Notes: {g.notes[:300]}"
+            lines.append(line)
+
+        return f"Goals ({len(lines)}):\n" + "\n".join(lines)
+
+    @tool(
+        badge_icon="\U0001f4dd",
+        badge_label="Updated goal",
+        detail_key="notes",
+        params=UpdateAgentGoalParams,
+    )
+    def update_agent_goal(self, args, user, bot, conversation_id, context):
+        """Update one of your long-term goals: rewrite your private working notes, set your \
+next check-in time, change the deadline, or pause/resume it. During an autonomous check-in, \
+ALWAYS call this to save your updated notes and choose your next check-in time."""
+        from workspace.users.services.settings import get_user_timezone
+
+        from .models import AgentGoal
+
+        goal = AgentGoal.objects.filter(
+            uuid=args.goal_id,
+            conversation_id=conversation_id,
+            bot=bot,
+            status__in=[AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED],
+        ).first()
+        if goal is None:
+            return f"Error: no open goal found with id {args.goal_id}"
+
+        user_tz = get_user_timezone(user)
+        update_fields = ["updated_at"]
+        changes = []
+
+        if args.notes.strip():
+            goal.notes = args.notes.strip()
+            update_fields.append("notes")
+            changes.append("notes saved")
+
+        if args.next_check_at.strip():
+            next_check = _parse_local_datetime(args.next_check_at.strip(), user_tz)
+            if next_check is None:
+                return (
+                    f'Error: could not parse datetime "{args.next_check_at}". '
+                    f"Use ISO format like 2026-03-10T09:00"
+                )
+            goal.next_check_at = AgentGoal.clamp_next_check(next_check)
+            update_fields.append("next_check_at")
+            next_local = goal.next_check_at.astimezone(user_tz)
+            changes.append(
+                f"next check-in {next_local.strftime('%Y-%m-%d %H:%M')} ({user_tz})"
+            )
+
+        if args.deadline.strip():
+            deadline = _parse_local_datetime(args.deadline.strip(), user_tz)
+            if deadline is None:
+                return (
+                    f'Error: could not parse deadline "{args.deadline}". '
+                    f"Use ISO format like 2026-06-01T18:00"
+                )
+            goal.deadline = deadline
+            update_fields.append("deadline")
+            changes.append("deadline updated")
+
+        if args.status.strip():
+            status_value = args.status.strip().lower()
+            if status_value not in (
+                AgentGoal.Status.ACTIVE,
+                AgentGoal.Status.PAUSED,
+            ):
+                return (
+                    'Error: status can only be set to "active" or "paused". '
+                    "Use complete_agent_goal to close a goal."
+                )
+            goal.status = status_value
+            update_fields.append("status")
+            changes.append(f"status → {status_value}")
+
+        if not changes:
+            return "Error: nothing to update — provide notes, next_check_at, deadline or status"
+
+        goal.save(update_fields=update_fields)
+        return f'Updated goal "{goal.title}": ' + ", ".join(changes) + "."
+
+    @tool(
+        badge_icon="\U0001f3c1",
+        badge_label="Closed goal",
+        detail_key="outcome",
+        params=CompleteAgentGoalParams,
+    )
+    def complete_agent_goal(self, args, user, bot, conversation_id, context):
+        """Close a long-term goal, either achieved or abandoned, with a final outcome summary. \
+Call this when the goal is reached, has become irrelevant, or the user asks you to stop pursuing it."""
+        from .models import AgentGoal
+
+        goal = AgentGoal.objects.filter(
+            uuid=args.goal_id,
+            conversation_id=conversation_id,
+            bot=bot,
+            status__in=[AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED],
+        ).first()
+        if goal is None:
+            return f"Error: no open goal found with id {args.goal_id}"
+
+        outcome = args.outcome.strip()
+        if not outcome:
+            return "Error: outcome is required"
+
+        goal.status = (
+            AgentGoal.Status.ABANDONED if args.abandoned else AgentGoal.Status.COMPLETED
+        )
+        goal.outcome = outcome
+        goal.save(update_fields=["status", "outcome", "updated_at"])
+        logger.info(
+            "Agent goal closed (%s): %s bot=%s",
+            goal.status,
+            goal.uuid,
+            scrub(bot.username),
+        )
+        verb = "abandoned" if args.abandoned else "completed"
+        return f'Goal "{goal.title}" marked as {verb}.'
 
 
 class ScheduleToolProvider(ToolProvider):

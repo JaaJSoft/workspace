@@ -447,6 +447,61 @@
     </div>
   </template>
 
+  <!-- Agent Goals (bot conversations only) -->
+  <template x-if="isBotConversation(activeConversation)">
+    <div class="space-y-5">
+      <div class="divider my-0 text-xs text-base-content/40">
+        Agent Goals
+        <span x-show="agentGoals.length > 0" class="badge badge-ghost badge-xs" x-text="agentGoals.length"></span>
+      </div>
+
+      <!-- Loading -->
+      <div x-show="loadingAgentGoals" class="flex justify-center py-4">
+        <span class="loading loading-spinner loading-sm"></span>
+      </div>
+
+      <!-- Empty state -->
+      <template x-if="!loadingAgentGoals && agentGoals.length === 0">
+        <p class="text-xs text-base-content/40 text-center py-2">No agent goals</p>
+      </template>
+
+      <!-- Goal list -->
+      <template x-if="!loadingAgentGoals && agentGoals.length > 0">
+        <ul class="space-y-1">
+          <template x-for="goal in agentGoals" :key="goal.uuid">
+            <li class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors">
+              <i data-lucide="target" class="w-3.5 h-3.5 text-warning flex-shrink-0 mt-0.5"></i>
+              <div class="flex-1 min-w-0">
+                <div class="text-xs font-semibold truncate" x-text="goal.title"></div>
+                <p class="text-xs text-base-content/70 break-words line-clamp-2" x-text="goal.goal"></p>
+                <p x-show="goal.notes" class="text-[0.65rem] text-base-content/50 break-words line-clamp-2 mt-0.5 italic" x-text="goal.notes"></p>
+                <div class="flex items-center gap-1 mt-0.5">
+                  <span class="badge badge-xs" :class="goal.status === 'paused' ? 'badge-ghost' : 'badge-warning badge-outline'" x-text="goal.status === 'paused' ? 'Paused' : 'Active'"></span>
+                  <span x-show="goal.check_count > 0" class="text-[0.65rem] text-base-content/40" x-text="`${goal.check_count} check-in${goal.check_count > 1 ? 's' : ''}`"></span>
+                </div>
+                <p class="text-[0.65rem] text-base-content/40 mt-0.5">
+                  Next: <span x-text="formatDateTime(goal.next_check_at)"></span>
+                </p>
+              </div>
+              <!-- Actions -->
+              <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <button class="btn btn-ghost btn-xs btn-square" @click="toggleGoalPause(goal)" :title="goal.status === 'paused' ? 'Resume' : 'Pause'">
+                  <i :data-lucide="goal.status === 'paused' ? 'play' : 'pause'" class="w-3 h-3"></i>
+                </button>
+                <button class="btn btn-ghost btn-xs btn-square" @click="editGoal(goal)" title="Edit">
+                  <i data-lucide="pencil" class="w-3 h-3"></i>
+                </button>
+                <button class="btn btn-ghost btn-xs btn-square text-error" @click="stopGoal(goal)" title="Stop">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </li>
+          </template>
+        </ul>
+      </template>
+    </div>
+  </template>
+
   <!-- Scheduled Messages (bot conversations only) -->
   <template x-if="isBotConversation(activeConversation)">
     <div class="space-y-5">

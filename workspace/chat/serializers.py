@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from workspace.ai.models import ScheduledMessage
+from workspace.ai.models import AgentGoal, ScheduledMessage
 
 from .models import (
     Conversation,
@@ -300,6 +300,54 @@ class MessageEditSerializer(serializers.Serializer):
 
 class ReactionToggleSerializer(serializers.Serializer):
     emoji = serializers.CharField(max_length=32)
+
+
+class AgentGoalSerializer(serializers.ModelSerializer):
+    bot_username = serializers.CharField(source="bot.username", read_only=True)
+    bot_display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AgentGoal
+        fields = [
+            "uuid",
+            "title",
+            "goal",
+            "notes",
+            "outcome",
+            "status",
+            "deadline",
+            "next_check_at",
+            "last_checked_at",
+            "check_count",
+            "bot_username",
+            "bot_display_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "uuid",
+            "notes",
+            "outcome",
+            "next_check_at",
+            "last_checked_at",
+            "check_count",
+            "bot_username",
+            "bot_display_name",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_bot_display_name(self, obj):
+        return obj.bot.get_full_name() or obj.bot.username
+
+    def validate_status(self, value):
+        # Users can pause/resume a goal from the UI; closing one goes through
+        # the DELETE endpoint (abandoned) or the bot's complete_agent_goal.
+        if value not in (AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED):
+            raise serializers.ValidationError(
+                "Status can only be set to 'active' or 'paused'."
+            )
+        return value
 
 
 class ScheduledMessageSerializer(serializers.ModelSerializer):

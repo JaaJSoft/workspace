@@ -39,7 +39,7 @@ class ConversationMediaViewTests(APITestCase):
             return f"{base}?{qs}"
         return base
 
-    def _attach(self, name, mime, category):
+    def _attach(self, name, mime, category, viewer=""):
         return MessageAttachment.objects.create(
             message=self.message,
             file=SimpleUploadedFile(name, b"x", content_type=mime),
@@ -47,6 +47,7 @@ class ConversationMediaViewTests(APITestCase):
             mime_type=mime,
             type="unknown",
             category=category,
+            viewer=viewer,
             size=1,
         )
 
@@ -81,6 +82,21 @@ class ConversationMediaViewTests(APITestCase):
         self.assertEqual(self._names(images), {"old-pic.png", "old-clip.mp4"})
         files = self.client.get(self.url(type="files"))
         self.assertEqual(self._names(files), {"old-doc.pdf"})
+
+    def test_a_voice_message_lands_in_the_files_tab(self):
+        """A voice message is a WebM container, so detection calls it video and
+        only the pin says otherwise. The media grid would render it as a black
+        video tile with a play overlay."""
+        self._attach("pic.png", "image/png", "image")
+        self._attach("clip.webm", "video/webm", "video")
+        self._attach("voice.webm", "video/webm", "video", viewer="audio")
+
+        images = self.client.get(self.url(type="images"))
+        self.assertEqual(self._names(images), {"pic.png", "clip.webm"})
+        self.assertEqual(images.json()["total"], 2)
+
+        files = self.client.get(self.url(type="files"))
+        self.assertEqual(self._names(files), {"voice.webm"})
 
     def test_all_returns_everything(self):
         self._attach("pic.png", "image/png", "image")

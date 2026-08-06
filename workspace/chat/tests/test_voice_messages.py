@@ -5,6 +5,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from workspace.chat.models import Conversation, ConversationMember, MessageAttachment
+from workspace.files.models import File
 
 User = get_user_model()
 
@@ -110,6 +111,7 @@ class VoiceMessageIngestTests(APITestCase):
             format="multipart",
         )
         self.assertEqual(resp.status_code, 400)
+        self.assertEqual(MessageAttachment.objects.count(), 0)
 
     def test_audio_without_duration_is_accepted(self):
         """A shared file carries no client-measured duration; the browser reads
@@ -179,3 +181,58 @@ class VoiceMessageViewerTests(APITestCase):
             reverse("chat_ui:view_attachment", kwargs={"attachment_uuid": att.uuid})
         )
         self.assertEqual(resp.status_code, 200)
+
+
+class VoiceMessageSaveToFilesTests(APITestCase):
+    """Saving a voice message to Files must keep its audio identity.
+
+    The stored mime type is the detected container (video/webm), so the pin
+    cannot be re-derived on the way in - it has to travel with the row.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="carol", email="carol@test.com", password="pw"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+        self.client.force_authenticate(self.user)
+
+    def _send(self, content_type, duration=None):
+        payload = {
+            "files": SimpleUploadedFile(
+                "voice.webm", WEBM_HEADER, content_type=content_type
+            )
+        }
+        if duration is not None:
+            payload["duration"] = duration
+        self.client.post(
+            f"/api/v1/chat/conversations/{self.conv.pk}/messages",
+            payload,
+            format="multipart",
+        )
+        return MessageAttachment.objects.get()
+
+    def _save_to_files(self, att):
+        resp = self.client.post(
+            f"/api/v1/chat/attachments/{att.uuid}/save-to-files", {}, format="json"
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        return File.objects.get(uuid=resp.data["file_uuid"])
+
+    def test_saving_a_voice_message_keeps_the_audio_pin(self):
+        att = self._send("audio/webm", duration="6")
+        self.assertEqual(att.viewer, "audio")
+
+        saved = self._save_to_files(att)
+
+        self.assertEqual(saved.viewer, "audio")
+        # The pin is a display decision: detection stays what it was.
+        self.assertEqual(saved.category, "video")
+
+    def test_saving_a_video_attachment_pins_nothing(self):
+        att = self._send("video/webm")
+        saved = self._save_to_files(att)
+        self.assertEqual(saved.viewer, "")

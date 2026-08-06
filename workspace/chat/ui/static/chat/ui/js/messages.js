@@ -277,9 +277,11 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
     // A voice recording is sent on its own: the API pairs `duration` with a
     // single uploaded file, and the recorder replaces the composer while
-    // active so there is nothing else pending.
+    // active so there is nothing else pending. Returns whether the message
+    // reached the server: the recorder keeps the blob when it did not, so the
+    // user can retry.
     async sendVoiceMessage(file, duration) {
-      if (!this.activeConversation) return;
+      if (!this.activeConversation) return false;
       const convUuid = this.activeConversation.uuid;
       const replyToUuid = this.replyingTo?.uuid || null;
       const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
@@ -318,17 +320,19 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this.refreshConversationItems([convUuid]);
           await this._refreshCurrentMessages();
           this.$nextTick(() => this.scrollToBottom());
-        } else {
-          this._removeOptimisticMessage(tempId);
-          this.botTyping = false;
-          this.clearBotStep?.();
-          this.showAlert?.('error', 'Failed to send the voice message.');
+          return true;
         }
+        this._removeOptimisticMessage(tempId);
+        this.botTyping = false;
+        this.clearBotStep?.();
+        this.showAlert?.('error', 'Failed to send the voice message.');
+        return false;
       } catch (e) {
         this._removeOptimisticMessage(tempId);
         this.botTyping = false;
         this.clearBotStep?.();
         this.showAlert?.('error', 'Failed to send the voice message.');
+        return false;
       }
     },
 

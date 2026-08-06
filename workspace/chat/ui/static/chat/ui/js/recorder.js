@@ -25,6 +25,29 @@ window.voiceFileName = function voiceFileName(ext, stamp) {
   return 'voice-' + String(stamp).replace(/[:.]/g, '-') + '.' + ext;
 };
 
+// Floor for a measured recording: the endpoint rejects duration <= 0, and a
+// clip short enough to read as zero still holds audio worth sending.
+window.CHAT_VOICE_MIN_SECONDS = 0.1;
+
+window.recordedDurationSeconds = function recordedDurationSeconds(
+  startedAt,
+  endedAt,
+  maxSeconds
+) {
+  const elapsed = (endedAt - startedAt) / 1000;
+  if (!Number.isFinite(elapsed) || elapsed <= 0) return window.CHAT_VOICE_MIN_SECONDS;
+  if (Number.isFinite(maxSeconds) && maxSeconds > 0) return Math.min(elapsed, maxSeconds);
+  return elapsed;
+};
+
+// performance.now() is monotonic: a system clock adjustment mid-recording
+// cannot make the measured length negative or absurd the way Date.now() can.
+window.monotonicNow = function monotonicNow() {
+  return typeof performance !== 'undefined' && performance.now
+    ? performance.now()
+    : Date.now();
+};
+
 window.chatRecorderMixin = function chatRecorderMixin() {
   return {
     recorderState: 'idle', // 'idle' | 'recording' | 'preview'
@@ -33,11 +56,13 @@ window.chatRecorderMixin = function chatRecorderMixin() {
     recordedFile: null,
     recordedUrl: null,
     recordedDuration: 0,
+    sendingRecording: false,
     _recorder: null,
     _recorderStream: null,
     _recorderChunks: [],
     _recorderType: null,
     _recordTimer: null,
+    _recordStartedAt: 0,
     _startingRecording: false,
 
     initRecorder() {
@@ -77,6 +102,10 @@ window.chatRecorderMixin = function chatRecorderMixin() {
         this._recorder.start();
         this.recorderState = 'recording';
         this.recordSeconds = 0;
+        // recordSeconds only drives the displayed timer. The duration that
+        // reaches the server is measured from this stamp, so a clip stopped
+        // before the first tick is not reported as zero seconds.
+        this._recordStartedAt = window.monotonicNow();
         const max = this.voiceMaxSeconds();
         this._recordTimer = setInterval(() => {
           this.recordSeconds += 1;
@@ -98,7 +127,11 @@ window.chatRecorderMixin = function chatRecorderMixin() {
     stopRecording() {
       if (this.recorderState !== 'recording') return;
       this._clearRecordTimer();
-      this._recorder.stop(); // triggers _finalizeRecording via onstop
+      // A second click before onstop lands would otherwise throw
+      // InvalidStateError out of the Alpine handler.
+      if (this._recorder && this._recorder.state !== 'inactive') {
+        this._recorder.stop(); // triggers _finalizeRecording via onstop
+      }
     },
 
     cancelRecording() {
@@ -112,22 +145,40 @@ window.chatRecorderMixin = function chatRecorderMixin() {
       this._discardRecordedFile();
       this.recorderState = 'idle';
       this.recordSeconds = 0;
+      this._recordStartedAt = 0;
     },
 
     async sendRecording() {
-      if (this.recorderState !== 'preview' || !this.recordedFile) return;
+      if (this.recorderState !== 'preview' || !this.recordedFile || this.sendingRecording) {
+        return;
+      }
       const file = this.recordedFile;
       const duration = this.recordedDuration;
+      this.sendingRecording = true;
+      let sent = false;
+      try {
+        sent = await this.sendVoiceMessage(file, duration);
+      } finally {
+        this.sendingRecording = false;
+      }
+      // A failed send keeps the blob and its object URL alive so the user can
+      // retry; sendVoiceMessage has already surfaced the error.
+      if (!sent) return;
       this._discardRecordedFile();
       this.recorderState = 'idle';
       this.recordSeconds = 0;
-      await this.sendVoiceMessage(file, duration);
+      this._recordStartedAt = 0;
     },
 
     _finalizeRecording() {
+      // A cancelled recorder's queued stop event can land after a new
+      // recording has started; that stale handler must not release the new
+      // stream or overwrite the new state.
+      if (this.recorderState !== 'recording') return;
       this._releaseMic();
       if (this._recorderChunks.length === 0) {
         this.recorderState = 'idle';
+        this._recordStartedAt = 0;
         return;
       }
       const blob = new Blob(this._recorderChunks, { type: this._recorderType.mime });
@@ -135,7 +186,12 @@ window.chatRecorderMixin = function chatRecorderMixin() {
       const name = window.voiceFileName(this._recorderType.ext, new Date().toISOString());
       this.recordedFile = new File([blob], name, { type: this._recorderType.mime });
       this.recordedUrl = URL.createObjectURL(blob);
-      this.recordedDuration = this.recordSeconds;
+      this.recordedDuration = window.recordedDurationSeconds(
+        this._recordStartedAt,
+        window.monotonicNow(),
+        this.voiceMaxSeconds()
+      );
+      this._recordStartedAt = 0;
       this.recorderState = 'preview';
     },
 

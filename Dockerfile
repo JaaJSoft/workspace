@@ -63,6 +63,12 @@ RUN echo "apt refresh: ${APT_REFRESH}" \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+# The runtime never installs packages (the app runs from the prebuilt venv), so
+# drop the base image's pip. Its vendored copies of setuptools/msgpack/requests
+# (pip/_vendor) otherwise trip image scanners on CVEs in code nothing executes.
+# python -m ensurepip can restore pip in a live container if ever needed.
+RUN python -m pip uninstall -y pip
+
 # Create a non-root user
 RUN useradd -m appuser
 

@@ -160,7 +160,11 @@ def _image_tool_payload(image_data, text):
 
 
 class CoreToolProvider(ToolProvider):
-    @tool(badge_icon="👤", badge_label="Looked up profile")
+    @tool(
+        badge_icon="👤",
+        badge_label="Looked up profile",
+        badge_running_label="Looking up profile",
+    )
     def get_current_user_info(self, args, user, bot, conversation_id, context):
         """Get the profile of the user you are chatting with: username, full name, email, and join date. \
 Call this when you need to address the user by name, check their email, or answer questions about their account."""
@@ -181,6 +185,7 @@ Call this when you need to address the user by name, check their email, or answe
     @tool(
         badge_icon="🧠",
         badge_label="Retained",
+        badge_running_label="Retaining",
         detail_key="key",
         params=SaveMemoryParams,
     )
@@ -209,6 +214,7 @@ If the key already exists it will be updated."""
     @tool(
         badge_icon="🧠",
         badge_label="Forgot",
+        badge_running_label="Forgetting",
         detail_key="key",
         params=DeleteMemoryParams,
     )
@@ -227,7 +233,11 @@ Call this when the user explicitly asks you to forget something or when a stored
             return f'Deleted memory "{key}".'
         return f'Memory "{key}" not found.'
 
-    @tool(badge_icon="🖼️", badge_label="Viewed own avatar")
+    @tool(
+        badge_icon="🖼️",
+        badge_label="Viewed own avatar",
+        badge_running_label="Viewing own avatar",
+    )
     def get_my_avatar(self, args, user, bot, conversation_id, context):
         """Retrieve your own avatar image so you can see or describe it. \
 Call this when the user asks what you look like, wants to see your avatar, or mentions your appearance."""
@@ -261,6 +271,7 @@ class WebToolProvider(ToolProvider):
     @tool(
         badge_icon="🔍",
         badge_label="Searched the web",
+        badge_running_label="Searching the web",
         detail_key="query",
         params=WebSearchParams,
     )
@@ -283,6 +294,7 @@ or anything that requires up-to-date information you don't have."""
     @tool(
         badge_icon="🌐",
         badge_label="Read webpage",
+        badge_running_label="Reading webpage",
         detail_key="url",
         params=ReadWebpageParams,
     )
@@ -312,6 +324,7 @@ class WeatherToolProvider(ToolProvider):
     @tool(
         badge_icon="🌤️",
         badge_label="Checked the weather",
+        badge_running_label="Checking the weather",
         detail_key="location",
         params=GetWeatherParams,
     )
@@ -339,6 +352,7 @@ class ImageToolProvider(ToolProvider):
     @tool(
         badge_icon="🎨",
         badge_label="Generated image",
+        badge_running_label="Generating image",
         detail_key="prompt",
         params=GenerateImageParams,
     )
@@ -433,6 +447,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
     @tool(
         badge_icon="✏️",
         badge_label="Edited image",
+        badge_running_label="Editing image",
         detail_key="prompt",
         params=EditImageParams,
     )
@@ -532,6 +547,7 @@ class AgentGoalToolProvider(ToolProvider):
     @tool(
         badge_icon="\U0001f3af",
         badge_label="Created goal",
+        badge_running_label="Creating goal",
         detail_key="title",
         params=CreateAgentGoalParams,
     )
@@ -604,7 +620,11 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
             f"{first_local.strftime('%Y-%m-%d %H:%M')} ({user_tz})."
         )
 
-    @tool(badge_icon="\U0001f3af", badge_label="Listed goals")
+    @tool(
+        badge_icon="\U0001f3af",
+        badge_label="Listed goals",
+        badge_running_label="Listing goals",
+    )
     def list_agent_goals(self, args, user, bot, conversation_id, context):
         """List your active and paused long-term goals in this conversation, including \
 their private notes, next check-in and deadline. Call this before creating a goal (to avoid \
@@ -642,6 +662,7 @@ duplicates) and whenever the user asks what you are working on autonomously."""
     @tool(
         badge_icon="\U0001f4dd",
         badge_label="Updated goal",
+        badge_running_label="Updating goal",
         detail_key="notes",
         params=UpdateAgentGoalParams,
     )
@@ -717,6 +738,7 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
     @tool(
         badge_icon="\U0001f3c1",
         badge_label="Closed goal",
+        badge_running_label="Closing goal",
         detail_key="outcome",
         params=CompleteAgentGoalParams,
     )
@@ -755,6 +777,7 @@ class ScheduleToolProvider(ToolProvider):
     @tool(
         badge_icon="\u23f0",
         badge_label="Scheduled message",
+        badge_running_label="Scheduling message",
         detail_key="prompt",
         params=ScheduleMessageParams,
     )
@@ -920,6 +943,7 @@ schedules with a similar prompt — update or cancel the old one instead of crea
     @tool(
         badge_icon="\u274c",
         badge_label="Cancelled schedule",
+        badge_running_label="Cancelling schedule",
         detail_key="schedule_id",
         params=CancelScheduleParams,
     )
@@ -946,7 +970,11 @@ Call this when the user wants to stop or remove a previously scheduled message."
         schedule.save(update_fields=["is_active", "updated_at"])
         return f"Cancelled schedule {schedule_id}."
 
-    @tool(badge_icon="\U0001f4cb", badge_label="Listed schedules")
+    @tool(
+        badge_icon="\U0001f4cb",
+        badge_label="Listed schedules",
+        badge_running_label="Listing schedules",
+    )
     def list_schedules(self, args, user, bot, conversation_id, context):
         """List all active scheduled messages in this conversation. \
 Call this when the user wants to see what messages are scheduled or pending."""

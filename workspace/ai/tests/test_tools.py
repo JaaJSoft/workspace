@@ -1,5 +1,7 @@
+import inspect
 import json
 from datetime import UTC, datetime
+from importlib import import_module
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -9,7 +11,7 @@ from django.db import connection
 from django.test import TestCase, override_settings
 
 from workspace.ai.models import BotProfile, UserMemory
-from workspace.ai.tool_registry import tool_registry
+from workspace.ai.tool_registry import ToolProvider, ToolRegistry, tool, tool_registry
 from workspace.ai.tools import GenerateImageParams, ImageToolProvider
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.common.search import fts5_available
@@ -27,6 +29,57 @@ class ChatToolDefinitionTests(TestCase):
         self.assertIn("search_messages", names)
         self.assertIn("get_current_user_info", names)
         self.assertIn("get_weather", names)
+
+
+TOOL_MODULES = [
+    "workspace.ai.tools",
+    "workspace.calendar.ai_tools",
+    "workspace.chat.ai_tools",
+    "workspace.files.ai_tools",
+    "workspace.mail.ai_tools",
+    "workspace.users.ai_tools",
+]
+
+
+class BadgeLabelTests(TestCase):
+    def test_running_label_is_returned_alongside_the_past_tense_one(self):
+        badge = tool_registry.get_badge("get_current_user_info")
+        self.assertEqual(badge["label"], "Looked up profile")
+        self.assertEqual(badge["running_label"], "Looking up profile")
+
+    def test_every_tool_declares_a_running_label(self):
+        # A tool that forgets badge_running_label falls back to the past
+        # tense, and then reads "Generated image" while it is still running.
+        # Walks the declarations rather than the registry: the image and web
+        # providers only register when their settings are configured.
+        missing = []
+        for module_name in TOOL_MODULES:
+            module = import_module(module_name)
+            for _, cls in inspect.getmembers(module, inspect.isclass):
+                if not issubclass(cls, ToolProvider) or cls is ToolProvider:
+                    continue
+                for name, member in vars(cls).items():
+                    meta = getattr(member, "_tool_meta", None)
+                    if meta and not meta["badge_running_label"]:
+                        missing.append(f"{cls.__name__}.{name}")
+        self.assertEqual(missing, [])
+
+    def test_unknown_tool_falls_back_to_its_name_for_both_tenses(self):
+        badge = tool_registry.get_badge("nope_tool")
+        self.assertEqual(badge["label"], "nope_tool")
+        self.assertEqual(badge["running_label"], "nope_tool")
+
+    def test_running_label_defaults_to_the_declared_label(self):
+        registry = ToolRegistry()
+
+        class Provider(ToolProvider):
+            @tool(badge_label="Waited")
+            def wait(self, args, user, bot, conversation_id, context):
+                """Wait."""
+
+        registry.register_provider(Provider())
+
+        self.assertEqual(registry.get_badge("wait")["running_label"], "Waited")
 
 
 class ExecuteToolCallTests(TestCase):

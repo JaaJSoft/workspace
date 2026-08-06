@@ -169,7 +169,7 @@
                          class="flex flex-col gap-1 text-xs text-base-content/50 min-w-0">
                       <template x-for="(step, index) in botSteps" :key="index">
                         <div class="flex items-start gap-1.5 min-w-0"
-                             :class="index === botSteps.length - 1 ? 'text-base-content/70' : ''"
+                             :class="index === botSteps.length - 1 ? 'ai-step-running text-base-content/70' : ''"
                              x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0"
                              x-transition:enter-end="opacity-100">

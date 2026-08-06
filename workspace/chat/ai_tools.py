@@ -46,6 +46,7 @@ class ChatToolProvider(ToolProvider):
     @tool(
         badge_icon="🔍",
         badge_label="Searched messages",
+        badge_running_label="Searching messages",
         detail_key="query",
         params=SearchMessagesParams,
     )
@@ -125,6 +126,7 @@ or references a past discussion."""
     @tool(
         badge_icon="💬",
         badge_label="Asked the user",
+        badge_running_label="Asking the user",
         detail_key="question",
         params=AskUserQuestionParams,
     )

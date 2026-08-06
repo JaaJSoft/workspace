@@ -152,7 +152,11 @@ class NotifyToolStepTests(TestCase):
 
     @patch("workspace.ai.services.stream_steps.notify_sse")
     def test_uses_registry_badge_and_detail(self, mock_notify):
-        badge = {"icon": "🔍", "label": "Web Search"}
+        badge = {
+            "icon": "🔍",
+            "label": "Web Search",
+            "running_label": "Searching the web",
+        }
         with (
             patch(
                 "workspace.ai.tool_registry.tool_registry.get_badge",
@@ -168,6 +172,24 @@ class NotifyToolStepTests(TestCase):
         self.assertIn("🔍", html)
         self.assertIn("Web Search", html)
         self.assertIn("meteo paris", html)
+
+    @patch("workspace.ai.services.stream_steps.notify_sse")
+    def test_step_carries_both_tenses(self, mock_notify):
+        # The step is pushed before the tool runs, so the row must read
+        # "Looking up profile"; it stays on screen once the next step starts,
+        # where the same row has to read "Looked up profile" instead. Which
+        # one shows is CSS, so both labels ship in the HTML.
+        stream_steps.notify_tool_step(
+            [1], "conv-1", make_tool_call(name="get_current_user_info", arguments="{}")
+        )
+
+        html = stream_steps.read_steps(1, None)[0][0]["data"]["html"]
+        self.assertIn(
+            'class="ai-step-label-running flex-shrink-0">Looking up profile', html
+        )
+        self.assertIn(
+            'class="ai-step-label-done flex-shrink-0">Looked up profile', html
+        )
 
     @patch("workspace.ai.services.stream_steps.notify_sse")
     def test_detail_is_escaped(self, mock_notify):

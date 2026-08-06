@@ -26,6 +26,7 @@ class FilesToolProvider(ToolProvider):
     @tool(
         badge_icon="📄",
         badge_label="Read file",
+        badge_running_label="Reading file",
         detail_key="uuid",
         params=ReadFileParams,
     )
@@ -64,6 +65,7 @@ or when the user asks to read, open, view, or see a specific file."""
     @tool(
         badge_icon="🔍",
         badge_label="Searched files",
+        badge_running_label="Searching files",
         detail_key="query",
         params=SearchFilesParams,
     )

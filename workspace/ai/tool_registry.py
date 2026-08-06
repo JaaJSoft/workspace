@@ -18,6 +18,7 @@ def tool(
     *,
     badge_icon: str = "⚡",
     badge_label: str | None = None,
+    badge_running_label: str | None = None,
     detail_key: str | None = None,
     params: type[BaseModel] | None = None,
 ):
@@ -26,12 +27,17 @@ def tool(
     The tool **name** is the method name and the **description** is its
     docstring.  Parameters are defined via *params* using a Pydantic
     ``BaseModel`` subclass.
+
+    *badge_label* is past tense ("Generated image"): it labels a call that
+    has already run. *badge_running_label* is the present participle
+    ("Generating image") shown while the call is still in flight.
     """
 
     def decorator(fn):
         fn._tool_meta = {
             "badge_icon": badge_icon,
             "badge_label": badge_label,
+            "badge_running_label": badge_running_label,
             "detail_key": detail_key,
             "params": params,
         }
@@ -74,6 +80,7 @@ class _ToolInfo:
     handler: object  # callable(args, user, bot, conversation_id, context) -> str
     badge_icon: str
     badge_label: str
+    badge_running_label: str
     detail_key: str | None = None
     params_class: type[BaseModel] | None = None
 
@@ -116,13 +123,15 @@ class ToolRegistry:
                     f"must have a docstring (used as the tool description)"
                 )
             params_cls = meta["params"]
+            label = meta["badge_label"] or name.replace("_", " ").title()
             info = _ToolInfo(
                 name=name,
                 description=docstring,
                 parameters=_build_parameters(params_cls),
                 handler=method,
                 badge_icon=meta["badge_icon"],
-                badge_label=meta["badge_label"] or name.replace("_", " ").title(),
+                badge_label=label,
+                badge_running_label=meta["badge_running_label"] or label,
                 detail_key=meta["detail_key"],
                 params_class=params_cls,
             )
@@ -176,11 +185,19 @@ class ToolRegistry:
     # -- display ------------------------------------------------------------
 
     def get_badge(self, name: str) -> dict:
-        """Return ``{'icon': ..., 'label': ...}`` for a tool name."""
+        """Return ``{'icon', 'label', 'running_label'}`` for a tool name.
+
+        ``label`` is past tense (the call is over), ``running_label`` the
+        present participle shown while it is still in flight.
+        """
         info = self._tools.get(name)
         if not info:
-            return {"icon": "⚡", "label": name}
-        return {"icon": info.badge_icon, "label": info.badge_label}
+            return {"icon": "⚡", "label": name, "running_label": name}
+        return {
+            "icon": info.badge_icon,
+            "label": info.badge_label,
+            "running_label": info.badge_running_label,
+        }
 
     def get_detail(self, name: str, args: dict) -> str:
         """Extract the detail string shown next to the badge label."""

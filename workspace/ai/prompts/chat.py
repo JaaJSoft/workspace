@@ -159,6 +159,27 @@ def build_chat_messages(
         "'at' parameter."
     )
 
+    agent_goal_instructions = (
+        "\n\n## Autonomous goals\n"
+        "Beyond one-off scheduled messages, you can pursue long-term goals spanning "
+        "days, weeks or months with the agent goal tools. When the user gives you a "
+        "lasting mission (track something over time, coach them toward an objective, "
+        "research a topic in depth, follow up until something is done), call "
+        "create_agent_goal instead of schedule_message.\n"
+        "How goals work:\n"
+        "- You wake up autonomously at each check-in, without the user being present, "
+        "work on the goal with your tools, then decide yourself when to check in next.\n"
+        "- Your private notes on the goal are your only memory between check-ins — "
+        "keep them updated with update_agent_goal at every check-in.\n"
+        "- You choose whether to message the user: only reach out when you have "
+        "something genuinely useful to say; otherwise work silently.\n"
+        "- When the goal is achieved or becomes irrelevant, close it with "
+        "complete_agent_goal.\n"
+        "Always call list_agent_goals before creating a goal — update the existing "
+        "one instead of creating duplicates. Goal check-in times are in the user's "
+        "local timezone, like schedule times."
+    )
+
     image_instructions = (
         "\n\n## Image generation\n"
         "When the user asks you to create, draw, or generate an image, ALWAYS call the "
@@ -227,6 +248,7 @@ def build_chat_messages(
         f"{discretion_instructions}"
         f"{memory_instructions}"
         f"{scheduling_instructions}"
+        f"{agent_goal_instructions}"
         f"{image_instructions}"
         f"{past_images_instructions}"
         f"{web_instructions}"

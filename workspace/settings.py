@@ -775,6 +775,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "ai.dispatch_scheduled_messages",
         "schedule": 60.0,  # Every minute
     },
+    "dispatch-agent-goals": {
+        "task": "ai.dispatch_agent_goals",
+        "schedule": 60.0,  # Every minute
+    },
     "purge-ai-tasks": {
         "task": "ai.purge_ai_tasks",
         "schedule": crontab(hour=3, minute=30),  # Every day at 3:30 AM

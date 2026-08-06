@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.db import models
@@ -97,6 +99,7 @@ class AITask(models.Model):
         EDITOR = "editor"
         CLASSIFY = "classify"
         EXTRACT = "extract"
+        AGENT = "agent"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     owner = models.ForeignKey(
@@ -188,6 +191,87 @@ class UserMemory(models.Model):
 
     def __str__(self):
         return f"Memory: {self.user.username}/{self.bot.username} — {self.key}"
+
+
+class AgentGoal(models.Model):
+    """Long-horizon autonomous goal a bot pursues across days or months.
+
+    Unlike :class:`ScheduledMessage` (fires at a fixed time or recurrence),
+    the bot decides at each check-in when to wake up next, keeps private
+    working notes as its memory between check-ins, and only messages the
+    user when it judges it has something worth saying.
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "active"
+        PAUSED = "paused"
+        COMPLETED = "completed"
+        ABANDONED = "abandoned"
+
+    # Floor between two autonomous check-ins of the same goal: every wake-up
+    # is a full LLM tool-loop run, so an agent must not be able to schedule
+    # itself into a tight loop.
+    MIN_CHECK_INTERVAL = timedelta(minutes=5)
+    # Applied by the worker before the run; the agent overrides it by setting
+    # its own next check-in. A crashed or forgetful run resumes in a day
+    # instead of going quiet forever (or re-firing immediately).
+    FALLBACK_CHECK_INTERVAL = timedelta(hours=24)
+    MAX_ACTIVE_PER_CONVERSATION = 20
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    conversation = models.ForeignKey(
+        "chat.Conversation",
+        on_delete=models.CASCADE,
+        related_name="agent_goals",
+    )
+    bot = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="bot_agent_goals",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="created_agent_goals",
+    )
+
+    title = models.CharField(max_length=200)
+    goal = models.TextField()
+    notes = models.TextField(blank=True, default="")
+    outcome = models.TextField(blank=True, default="")
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.ACTIVE
+    )
+    deadline = models.DateTimeField(null=True, blank=True)
+
+    next_check_at = models.DateTimeField()
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    check_count = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["next_check_at"]
+        indexes = [
+            # Partial index for the dispatch worker, which only ever queries
+            # active goals with `next_check_at <= now` — mirrors
+            # scheduled_active_next_run on ScheduledMessage.
+            models.Index(
+                fields=["next_check_at"],
+                name="agentgoal_active_next_check",
+                condition=models.Q(status="active"),
+            ),
+        ]
+
+    def __str__(self):
+        return f"AgentGoal {self.uuid} ({self.status} — {self.title[:40]})"
+
+    @classmethod
+    def clamp_next_check(cls, dt):
+        """Enforce the minimum spacing between autonomous check-ins."""
+        floor = timezone.now() + cls.MIN_CHECK_INTERVAL
+        return max(dt, floor)
 
 
 class ScheduledMessage(models.Model):

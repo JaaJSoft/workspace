@@ -31,6 +31,10 @@ class AIConfig(AppConfig):
 
         tool_registry.register_provider(ScheduleToolProvider())
 
+        from workspace.ai.tools import AgentGoalToolProvider
+
+        tool_registry.register_provider(AgentGoalToolProvider())
+
         from workspace.ai.tools import WeatherToolProvider
 
         tool_registry.register_provider(WeatherToolProvider())
@@ -50,6 +54,7 @@ class AIConfig(AppConfig):
         # Import task submodules so Celery's autodiscover_tasks() sees them
         # via the @shared_task decorators evaluated at import time.
         from workspace.ai.tasks import (  # noqa: F401
+            agent_goals,
             calendar,
             captions,
             chat,

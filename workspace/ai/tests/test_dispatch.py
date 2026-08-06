@@ -99,11 +99,12 @@ class DispatchTests(TestCase):
 
     def test_every_task_type_has_a_worker(self):
         # Catches the case where a new TaskType is added to the model
-        # enum but the dispatch mapping is not updated. ``CHAT`` is
-        # intentionally not routed through this service: chat responses
-        # have their own dispatch path (see scheduled.py /
-        # generate_chat_response).
-        non_dispatched = {AITask.TaskType.CHAT}
+        # enum but the dispatch mapping is not updated. ``CHAT`` and
+        # ``AGENT`` are intentionally not routed through this service:
+        # chat responses and agent goal check-ins have their own
+        # dispatch paths (see scheduled.py / generate_chat_response and
+        # agent_goals.py / run_agent_goal_check).
+        non_dispatched = {AITask.TaskType.CHAT, AITask.TaskType.AGENT}
         with (
             patch("workspace.ai.tasks.mail.summarize.delay"),
             patch("workspace.ai.tasks.mail.compose_email.delay"),

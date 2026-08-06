@@ -19,7 +19,7 @@ function buildApp({ isBot = true } = {}) {
     },
   });
 
-  const calls = { stats: [], pinned: [], media: [], memories: 0, schedules: [] };
+  const calls = { stats: [], pinned: [], media: [], memories: 0, goals: [], schedules: [] };
   const app = Object.assign(ctx.chatPanelsMixin(), {
     activeConversation: { uuid: CONV_UUID, is_bot_conversation: isBot },
     isBotConversation(conv) { return !!conv?.is_bot_conversation; },
@@ -27,6 +27,7 @@ function buildApp({ isBot = true } = {}) {
     loadPinnedMessages(id) { calls.pinned.push(id); },
     loadConversationMedia(id) { calls.media.push(id); },
     loadBotMemories() { calls.memories++; },
+    loadAgentGoals(id) { calls.goals.push(id); },
     loadScheduledMessages(id) { calls.schedules.push(id); },
     $nextTick(fn) { fn(); },
   });
@@ -43,6 +44,7 @@ test('openInfoPanel loads every section of the panel', () => {
   assert.deepStrictEqual(Array.from(calls.pinned), [CONV_UUID]);
   assert.deepStrictEqual(Array.from(calls.media), [CONV_UUID]);
   assert.equal(calls.memories, 1, 'AI memories must load for a bot conversation');
+  assert.deepStrictEqual(Array.from(calls.goals), [CONV_UUID]);
   assert.deepStrictEqual(Array.from(calls.schedules), [CONV_UUID]);
 });
 
@@ -52,6 +54,7 @@ test('openInfoPanel skips the bot-only sections outside a bot conversation', () 
   app.openInfoPanel();
 
   assert.equal(calls.memories, 0);
+  assert.deepStrictEqual(Array.from(calls.goals), []);
   assert.deepStrictEqual(Array.from(calls.schedules), []);
   assert.deepStrictEqual(Array.from(calls.stats), [CONV_UUID]);
 });
@@ -102,6 +105,7 @@ test('the sidebar context-menu Info action loads every section too', async () =>
 
   assert.equal(app.showInfoPanel, true);
   assert.equal(calls.memories, 1, 'AI memories must load when the panel opens from the context menu');
+  assert.deepStrictEqual(Array.from(calls.goals), [CONV_UUID]);
   assert.deepStrictEqual(Array.from(calls.schedules), [CONV_UUID]);
   assert.deepStrictEqual(Array.from(calls.pinned), [CONV_UUID]);
   assert.deepStrictEqual(Array.from(calls.stats), [CONV_UUID]);

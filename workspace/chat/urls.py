@@ -6,6 +6,7 @@ from . import (
     views_avatar,
     views_bots,
     views_calls,
+    views_goals,
     views_interactions,
     views_messages,
     views_pins,
@@ -180,6 +181,17 @@ urlpatterns = [
         "api/v1/chat/conversations/<uuid:conversation_id>/schedules/<uuid:schedule_id>",
         views_scheduled.ScheduledMessageDetailView.as_view(),
         name="chat-scheduled-message-detail",
+    ),
+    # Agent goals
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/goals",
+        views_goals.AgentGoalListView.as_view(),
+        name="chat-agent-goals",
+    ),
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/goals/<uuid:goal_id>",
+        views_goals.AgentGoalDetailView.as_view(),
+        name="chat-agent-goal-detail",
     ),
     # Bot retry
     path(

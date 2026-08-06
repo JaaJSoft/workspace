@@ -32,6 +32,9 @@ class BaseViewer(ABC):
     # Used by fragile viewers (e.g. the Milkdown WYSIWYG editor) that should
     # not run on files merely detected by content without the user's intent.
     requires_extension: bool = False
+    # Stable identifier persisted by the `viewer` override columns. Survives a
+    # class rename, unlike __name__.
+    slug: str = ""
 
     def __init__(self, file_obj):
         """
@@ -82,6 +85,7 @@ class TextViewer(BaseViewer):
 
     handles_groups = frozenset({"code", "text"})
     weight = 100
+    slug = "text"
 
     def render(self, request) -> str:
         """Render Monaco Editor for text files."""
@@ -151,6 +155,7 @@ class ImageViewer(BaseViewer):
 
     handles_groups = frozenset({"image"})
     weight = 100
+    slug = "image"
 
     def get_context(self, request) -> dict:
         from django.conf import settings
@@ -192,6 +197,7 @@ class MarkdownViewer(BaseViewer):
     # markdown (no extension) falls back to the robust TextViewer.
     requires_extension = True
     weight = 50
+    slug = "markdown"
 
     def render(self, request) -> str:
         """Render Milkdown Crepe WYSIWYG editor for Markdown files."""
@@ -223,6 +229,7 @@ class PDFViewer(BaseViewer):
 
     handles_labels = frozenset({"pdf"})
     weight = 50
+    slug = "pdf"
 
     def render(self, request) -> str:
         """Render PDF viewer."""
@@ -235,19 +242,41 @@ class PDFViewer(BaseViewer):
         )
 
 
-class MediaViewer(BaseViewer):
-    """Viewer for video and audio files."""
+def _render_media(viewer, request, *, is_audio: bool) -> str:
+    """Shared body for the audio and video viewers.
 
-    handles_groups = frozenset({"video", "audio"})
+    A module function rather than a shared base class on purpose: viewer
+    resolution walks BaseViewer.__subclasses__(), which only yields direct
+    subclasses, so an intermediate class would drop both viewers from the
+    registry without any error.
+    """
+    from django.template.loader import render_to_string
+
+    context = viewer.get_context(request)
+    context["is_audio"] = is_audio
+    context["is_video"] = not is_audio
+    return render_to_string(
+        "files/ui/viewers/media_viewer.html", context, request=request
+    )
+
+
+class AudioViewer(BaseViewer):
+    """Viewer for audio files."""
+
+    handles_groups = frozenset({"audio"})
     weight = 100
+    slug = "audio"
 
     def render(self, request) -> str:
-        from django.template.loader import render_to_string
+        return _render_media(self, request, is_audio=True)
 
-        context = self.get_context(request)
-        context["is_video"] = self.file.category == "video"
-        context["is_audio"] = self.file.category == "audio"
 
-        return render_to_string(
-            "files/ui/viewers/media_viewer.html", context, request=request
-        )
+class VideoViewer(BaseViewer):
+    """Viewer for video files."""
+
+    handles_groups = frozenset({"video"})
+    weight = 100
+    slug = "video"
+
+    def render(self, request) -> str:
+        return _render_media(self, request, is_audio=False)

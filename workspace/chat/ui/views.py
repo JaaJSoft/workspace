@@ -184,6 +184,7 @@ def chat_view(request, conversation_uuid=None):
                 request.user, "chat", "call_sounds", default=True
             ),
             "chat_groups": _user_chat_groups(request.user),
+            "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
     )
 
@@ -244,6 +245,7 @@ def chat_room_view(request, conversation_uuid):
             ),
             "current_user_id": request.user.id,
             "chat_groups": _user_chat_groups(request.user),
+            "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
     )
 
@@ -537,7 +539,13 @@ def view_attachment(request, attachment_uuid):
 
         raise Http404
 
-    ViewerClass = ViewerRegistry.get_viewer(attachment.type, attachment.original_name)
+    from workspace.files.services.filetype import get_viewer_by_slug
+
+    # A pinned viewer wins; an unknown pin degrades to content-based
+    # resolution rather than breaking the modal.
+    ViewerClass = get_viewer_by_slug(attachment.viewer) or ViewerRegistry.get_viewer(
+        attachment.type, attachment.original_name
+    )
     if not ViewerClass:
         return HttpResponse(
             f'<div class="p-8 text-center text-error">No viewer available for {attachment.type}</div>',

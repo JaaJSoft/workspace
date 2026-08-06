@@ -169,6 +169,11 @@ window.chatConversationsMixin = function chatConversationsMixin() {
         if (f._preview) URL.revokeObjectURL(f._preview);
       }
       this.pendingFiles = [];
+      // A recording belongs to the conversation it was made in: sendRecording
+      // would otherwise post it to the newly selected one, and an in-progress
+      // recording would keep the microphone hot across the switch. Optional
+      // call: this mixin is also spread into components without the recorder.
+      this.cancelRecording?.();
       this.pinnedMessages = [];
       this.botTyping = false;
       this.clearBotStep?.();

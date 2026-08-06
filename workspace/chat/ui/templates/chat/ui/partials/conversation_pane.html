@@ -338,7 +338,7 @@
         <input type="file" multiple x-ref="fileInput" class="hidden" @change="handleFileSelect($event)" />
 
         <!-- Mobile input (< sm) -->
-        <div class="flex sm:hidden items-center gap-1.5">
+        <div class="flex sm:hidden items-center gap-1.5" x-show="recorderState === 'idle'">
           <div class="dropdown dropdown-top flex-shrink-0 self-end">
             <button tabindex="0" class="btn btn-ghost btn-square w-9 h-9 min-h-0" title="Attach file">
               <i data-lucide="paperclip" class="w-4 h-4"></i>
@@ -362,6 +362,14 @@
             ></textarea>
           </div>
           <button
+            class="btn btn-ghost btn-square flex-shrink-0 self-end w-9 h-9 min-h-0"
+            x-show="recorderSupported && !messageBody.trim() && pendingFiles.length === 0 && pendingPickedFiles.length === 0"
+            @click="startRecording()"
+            title="Record a voice message"
+          >
+            <i data-lucide="mic" class="w-4 h-4"></i>
+          </button>
+          <button
             class="btn btn-info btn-square flex-shrink-0 self-end w-9 h-9 min-h-0"
             @click="sendOrEdit()"
             :disabled="(!messageBody.trim() && pendingFiles.length === 0 && pendingPickedFiles.length === 0) || (botTyping && isBotConversation(activeConversation))"
@@ -370,8 +378,54 @@
           </button>
         </div>
 
+        <!-- Recording banner -->
+        <div x-show="recorderState === 'recording'" x-cloak
+             class="flex items-center gap-2 border border-error/40 rounded-xl px-3 py-2">
+          <span class="inline-block w-2.5 h-2.5 rounded-full bg-error animate-pulse flex-shrink-0"></span>
+          <span class="text-sm tabular-nums flex-1" x-text="recordLabel()"></span>
+          <button class="btn btn-ghost btn-sm btn-square" @click="cancelRecording()" title="Discard">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+          <button class="btn btn-error btn-sm btn-square" @click="stopRecording()" title="Stop">
+            <i data-lucide="square" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Recording preview. x-if, not x-show: chatAudioPlayer bakes the
+             measured duration in at construction, so the component has to be
+             built after the recording finished, not once at composer mount. -->
+        <template x-if="recorderState === 'preview'">
+          <div class="flex items-center gap-2 border border-base-300 rounded-xl px-3 py-2">
+            <div class="flex-1 min-w-0" x-data="chatAudioPlayer('preview', recordedDuration)" x-ref="previewPlayer">
+              <audio x-ref="audio" :src="recordedUrl" preload="metadata"
+                     @loadedmetadata="onMetadata()"
+                     @timeupdate="currentTime = $refs.audio.currentTime"
+                     @ended="onEnded()"></audio>
+              <div class="flex items-center gap-1.5">
+                <button class="btn btn-ghost btn-xs btn-circle flex-shrink-0" @click="toggle()">
+                  <i data-lucide="play" class="w-4 h-4" x-show="!playing"></i>
+                  <i data-lucide="pause" class="w-4 h-4" x-show="playing" x-cloak></i>
+                </button>
+                <input type="range" min="0" max="100" step="0.1" class="range range-xs flex-1 min-w-0"
+                       :value="progressPercent()" @input="seekToPercent($event.target.value)"
+                       aria-label="Seek" />
+                <span class="text-[0.65rem] opacity-70 tabular-nums flex-shrink-0"
+                      x-text="elapsedLabel() + ' / ' + durationLabel()"></span>
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-sm btn-square" @click="cancelRecording()"
+                    :disabled="sendingRecording" title="Discard">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+            <button class="btn btn-info btn-sm btn-square" @click="sendRecording()"
+                    :disabled="sendingRecording" title="Send">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </template>
+
         <!-- Desktop input (>= sm) -->
-        <div class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50">
+        <div class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50" x-show="recorderState === 'idle'">
           <!-- Toolbar + Send -->
           <div class="flex items-center gap-0.5 pl-2 pr-1 py-1">
             <!-- Formatting buttons (left) -->
@@ -437,6 +491,15 @@
             </div>
 
             <div class="w-px self-stretch my-1 bg-base-300"></div>
+
+            <button
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="recorderSupported && !messageBody.trim() && pendingFiles.length === 0 && pendingPickedFiles.length === 0"
+              @click="startRecording()"
+              title="Record a voice message"
+            >
+              <i data-lucide="mic" class="w-3.5 h-3.5"></i>
+            </button>
 
             <!-- Send button -->
             <button
@@ -736,4 +799,5 @@
 {{ ice_servers|json_script:"call-ice-servers-data" }}
 {{ call_sounds_enabled|json_script:"call-sounds-enabled-data" }}
 {{ chat_groups|json_script:"chat-groups-data" }}
+{{ voice_max_seconds|json_script:"voice-max-seconds-data" }}
 {% if initial_conversation_uuid %}{{ initial_conversation_uuid|json_script:"initial-conversation" }}{% endif %}

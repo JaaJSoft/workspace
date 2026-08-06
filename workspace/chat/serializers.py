@@ -65,6 +65,7 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
     is_image = serializers.BooleanField(read_only=True)
     is_video = serializers.BooleanField(read_only=True)
+    is_audio = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = MessageAttachment
@@ -76,6 +77,8 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
             "size",
             "is_image",
             "is_video",
+            "is_audio",
+            "duration_seconds",
             "url",
             "created_at",
         ]
@@ -292,6 +295,7 @@ class MessageCreateSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    duration = serializers.FloatField(required=False, allow_null=True)
 
 
 class MessageEditSerializer(serializers.Serializer):

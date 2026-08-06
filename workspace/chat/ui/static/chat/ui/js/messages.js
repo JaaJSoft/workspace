@@ -275,6 +275,67 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       }
     },
 
+    // A voice recording is sent on its own: the API pairs `duration` with a
+    // single uploaded file, and the recorder replaces the composer while
+    // active so there is nothing else pending. Returns whether the message
+    // reached the server: the recorder keeps the blob when it did not, so the
+    // user can retry.
+    async sendVoiceMessage(file, duration) {
+      if (!this.activeConversation) return false;
+      const convUuid = this.activeConversation.uuid;
+      const replyToUuid = this.replyingTo?.uuid || null;
+      const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
+      const isBotConv = this.isBotConversation(this.activeConversation);
+      this.cancelReply();
+
+      const tempId = '_optimistic_' + Date.now();
+      this._injectOptimisticMessage(tempId, '', replyInfo, [file]);
+      if (isBotConv) {
+        this.botTyping = true;
+        this.clearBotStep?.();
+      }
+      this.$nextTick(() => this.scrollToBottom());
+
+      const formData = new FormData();
+      formData.append('body', '');
+      formData.append('files', file);
+      formData.append('duration', String(duration));
+      if (replyToUuid) formData.append('reply_to_uuid', replyToUuid);
+
+      try {
+        const resp = await fetch(
+          `/api/v1/chat/conversations/${convUuid}/messages`,
+          {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            credentials: 'same-origin',
+            body: formData,
+          }
+        );
+        if (resp.ok) {
+          const msg = await resp.json();
+          this._updateConversationLastMessage(convUuid, msg);
+          // The sender is excluded from the SSE broadcast, so the send path
+          // refreshes its own sidebar row.
+          this.refreshConversationItems([convUuid]);
+          await this._refreshCurrentMessages();
+          this.$nextTick(() => this.scrollToBottom());
+          return true;
+        }
+        this._removeOptimisticMessage(tempId);
+        this.botTyping = false;
+        this.clearBotStep?.();
+        this.showAlert?.('error', 'Failed to send the voice message.');
+        return false;
+      } catch (e) {
+        this._removeOptimisticMessage(tempId);
+        this.botTyping = false;
+        this.clearBotStep?.();
+        this.showAlert?.('error', 'Failed to send the voice message.');
+        return false;
+      }
+    },
+
     _getCurrentUser() {
       if (!this.activeConversation?.members) return null;
       return this.activeConversation.members.find(m => m.user.id === this.currentUserId)?.user;

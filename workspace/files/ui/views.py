@@ -8,6 +8,7 @@ from django.utils.html import escape
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.filetype import get_viewer_by_slug
 from workspace.users.services.settings import get_module_settings
 
 from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
@@ -670,8 +671,11 @@ def view_file(request, uuid):
             status=400,
         )
 
-    # Get appropriate viewer
-    ViewerClass = ViewerRegistry.get_viewer(file_obj.type, file_obj.name)
+    # A pinned viewer wins; an unknown pin degrades to content-based
+    # resolution rather than breaking the page.
+    ViewerClass = get_viewer_by_slug(file_obj.viewer) or ViewerRegistry.get_viewer(
+        file_obj.type, file_obj.name
+    )
 
     if not ViewerClass:
         return HttpResponse(
@@ -764,7 +768,7 @@ def shared_file_view(request, token):
     if not link.has_password or password_verified:
         from workspace.files.ui.viewers import ViewerRegistry
 
-        ViewerClass = (
+        ViewerClass = get_viewer_by_slug(link.file.viewer) or (
             ViewerRegistry.get_viewer(link.file.type, link.file.name)
             if link.file.type
             else None

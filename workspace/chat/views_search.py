@@ -204,11 +204,14 @@ class ConversationMediaView(CacheControlMixin, APIView):
         # legacy rows that predate category detection. Every OR branch
         # constrains the indexed column, unlike a bare mime-prefix filter
         # which forced a scan of all the conversation's attachments.
+        # A voice message is a video container by detection and only the pin
+        # says otherwise, so it is excluded here: the media grid would render
+        # it as a black video tile with a play overlay.
         media_q = (
             Q(category__in=("image", "video"))
             | Q(category="unknown", mime_type__startswith="image/")
             | Q(category="unknown", mime_type__startswith="video/")
-        )
+        ) & ~Q(viewer="audio")
 
         media_type = request.query_params.get("type", "images")
         if media_type == "images":
@@ -244,6 +247,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
                     "size": att.size,
                     "is_image": att.is_image,
                     "is_video": att.is_video,
+                    "is_audio": att.is_audio,
                     "url": f"/api/v1/chat/attachments/{att.uuid}",
                     "created_at": att.created_at.isoformat(),
                     "message_uuid": att.message_id,

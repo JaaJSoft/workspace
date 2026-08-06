@@ -116,11 +116,26 @@ class Message(models.Model):
     @property
     def media_attachments(self):
         # Iterates attachments.all() so a prefetch cache is reused as-is.
-        return [a for a in self.attachments.all() if a.is_image or a.is_video]
+        # The is_audio exclusion is load-bearing: a recorded voice message is
+        # category=video (the container really is a WebM) and pinned to the
+        # audio viewer, so it satisfies both predicates.
+        return [
+            a
+            for a in self.attachments.all()
+            if (a.is_image or a.is_video) and not a.is_audio
+        ]
+
+    @property
+    def audio_attachments(self):
+        return [a for a in self.attachments.all() if a.is_audio]
 
     @property
     def file_attachments(self):
-        return [a for a in self.attachments.all() if not (a.is_image or a.is_video)]
+        return [
+            a
+            for a in self.attachments.all()
+            if not (a.is_image or a.is_video or a.is_audio)
+        ]
 
 
 class Reaction(models.Model):
@@ -232,6 +247,8 @@ class MessageAttachment(models.Model):
     type = models.CharField(max_length=50, default="unknown", db_index=True)
     category = models.CharField(max_length=20, default="unknown", db_index=True)
     size = models.PositiveBigIntegerField()
+    viewer = models.CharField(max_length=32, blank=True, default="")
+    duration_seconds = models.FloatField(null=True, blank=True)
     ai_description = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -255,6 +272,19 @@ class MessageAttachment(models.Model):
         return self.category == "video" or (
             self.category == "unknown" and self.mime_type.startswith("video/")
         )
+
+    @property
+    def effective_viewer(self):
+        """Pinned viewer slug, else the one derived from the content type."""
+        if self.viewer:
+            return self.viewer
+        from workspace.files.services.filetype import get_viewer_slug
+
+        return get_viewer_slug(self.type, self.original_name)
+
+    @property
+    def is_audio(self):
+        return self.effective_viewer == "audio"
 
 
 class LinkPreview(models.Model):

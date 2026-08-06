@@ -8,14 +8,18 @@ from workspace.files.services.filetype import (
     get_info,
     get_mime_type,
     get_viewer,
+    get_viewer_slug,
+    get_viewers,
     is_viewable,
+    pin_viewer_for_upload,
 )
 from workspace.files.ui.viewers import (
+    AudioViewer,
     ImageViewer,
     MarkdownViewer,
-    MediaViewer,
     PDFViewer,
     TextViewer,
+    VideoViewer,
 )
 
 
@@ -183,11 +187,11 @@ class ViewerResolutionTest(TestCase):
     def test_pdf_gets_pdf_viewer(self):
         self.assertEqual(get_viewer("pdf"), PDFViewer)
 
-    def test_video_gets_media_viewer(self):
-        self.assertEqual(get_viewer("mp4"), MediaViewer)
+    def test_mp4_uses_video_viewer(self):
+        self.assertEqual(get_viewer("mp4"), VideoViewer)
 
-    def test_audio_gets_media_viewer(self):
-        self.assertEqual(get_viewer("mp3"), MediaViewer)
+    def test_mp3_uses_audio_viewer(self):
+        self.assertEqual(get_viewer("mp3"), AudioViewer)
 
     def test_markdown_gets_markdown_viewer_not_text(self):
         """Label-specific match should beat group-level match."""
@@ -345,3 +349,70 @@ class GetMimeTypeTest(TestCase):
 
     def test_pdf_mime(self):
         self.assertEqual(get_mime_type("pdf"), "application/pdf")
+
+
+class ViewerSlugAndPinningTest(TestCase):
+    def test_every_viewer_declares_a_slug(self):
+        """The slug is persisted in the `viewer` override columns, so a viewer
+        without one could never be pinned."""
+        from workspace.files.ui.viewers import BaseViewer
+
+        for viewer_cls in BaseViewer.__subclasses__():
+            self.assertTrue(viewer_cls.slug, f"{viewer_cls.__name__} has no slug")
+
+    def test_slugs_are_unique(self):
+        from workspace.files.ui.viewers import BaseViewer
+
+        slugs = [v.slug for v in BaseViewer.__subclasses__()]
+        self.assertEqual(len(slugs), len(set(slugs)))
+
+    def test_audio_and_video_viewers_are_direct_subclasses(self):
+        """Viewer resolution only walks direct subclasses of BaseViewer, so an
+        intermediate shared base would drop both from the registry."""
+        from workspace.files.ui.viewers import BaseViewer
+
+        subclasses = BaseViewer.__subclasses__()
+        self.assertIn(AudioViewer, subclasses)
+        self.assertIn(VideoViewer, subclasses)
+
+    def test_get_viewer_slug_derives_from_the_content_label(self):
+        self.assertEqual(get_viewer_slug("mp3"), "audio")
+        self.assertEqual(get_viewer_slug("mp4"), "video")
+
+    def test_get_viewer_slug_is_empty_when_nothing_handles_the_label(self):
+        self.assertEqual(get_viewer_slug("unknown"), "")
+
+    def test_get_viewers_returns_the_winner_first(self):
+        viewers = get_viewers("mp3")
+        self.assertEqual(viewers[0], get_viewer("mp3"))
+
+    def test_get_viewers_is_empty_when_nothing_handles_the_label(self):
+        self.assertEqual(get_viewers("unknown"), [])
+
+    def test_pin_audio_only_webm(self):
+        """MediaRecorder emits audio/webm; Magika sees only the container."""
+        self.assertEqual(
+            pin_viewer_for_upload("webm", "audio/webm;codecs=opus"), "audio"
+        )
+
+    def test_pin_audio_only_mp4(self):
+        """Safari's MediaRecorder path."""
+        self.assertEqual(pin_viewer_for_upload("mp4", "audio/mp4"), "audio")
+
+    def test_no_pin_when_the_declared_type_is_video(self):
+        self.assertEqual(pin_viewer_for_upload("webm", "video/webm"), "")
+
+    def test_no_pin_for_a_non_container_label(self):
+        """The guard: lying about Content-Type cannot pin a viewer on arbitrary
+        content. Only labels Magika confidently read as media containers are
+        eligible."""
+        self.assertEqual(pin_viewer_for_upload("html", "audio/webm"), "")
+        self.assertEqual(pin_viewer_for_upload("png", "audio/webm"), "")
+
+    def test_no_pin_without_a_declared_type(self):
+        self.assertEqual(pin_viewer_for_upload("webm", None), "")
+        self.assertEqual(pin_viewer_for_upload("webm", ""), "")
+
+    def test_no_pin_for_ogg(self):
+        """The KB already groups ogg as audio, so it needs no pin."""
+        self.assertEqual(pin_viewer_for_upload("ogg", "audio/ogg"), "")

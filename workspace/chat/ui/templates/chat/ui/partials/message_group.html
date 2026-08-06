@@ -113,8 +113,8 @@
             {% endwith %}
 
             {# Attachments: media in a mosaic grid, other files as a list #}
-            {% with media=msg.media_attachments files=msg.file_attachments %}
-              {% if media or files %}
+            {% with media=msg.media_attachments files=msg.file_attachments audios=msg.audio_attachments %}
+              {% if media or files or audios %}
                 {% if msg.body_html %}<div class="border-t {% if is_own %}border-info/30{% else %}border-base-300{% endif %} my-1.5"></div>{% endif %}
                 <div class="flex flex-col gap-1.5 mb-1.5 {% if not msg.body_html %}mt-1.5{% endif %}">
                   {% with media_count=media|length %}
@@ -200,6 +200,9 @@
                       </div>
                     {% endif %}
                   {% endwith %}
+                  {% for att in audios %}
+                    {% include "chat/ui/partials/_audio_player.html" with att=att is_own=is_own %}
+                  {% endfor %}
                   {% for att in files %}
                     <div class="flex items-center gap-0.5 group/att min-w-0"
                          data-attachment-uuid="{{ att.uuid }}"

@@ -71,14 +71,14 @@ def _normalize_group(label: str) -> str:
     return "unknown"
 
 
-def _resolve_viewer(
+def _resolve_viewers(
     label: str,
     group: str,
     ext_label: str = "",
     ext_group: str = "",
     file_has_extension: bool = True,
 ):
-    """Pick the best viewer from the content type and the extension hint.
+    """Rank every viewer that can handle the content type and extension hint.
 
     Content detection stays primary; the extension only acts as a tiebreaker
     that can upgrade a generic content label (e.g. ``txt``) to a more specific
@@ -89,7 +89,8 @@ def _resolve_viewer(
       3. content group match    (viewer.handles_groups contains the content group)
       4. extension group match  (handles_groups contains the extension group)
 
-    Within a tier, the lowest weight wins.
+    Within a tier, the lowest weight wins. Returns candidates from best to
+    least good; the first entry is the winner.
 
     Viewers declaring ``requires_extension`` are skipped entirely when the file
     has no extension, so content-only detection never routes to them.
@@ -111,10 +112,12 @@ def _resolve_viewer(
         elif ext_group and ext_group in viewer_cls.handles_groups:
             tiers[3].append((viewer_cls.weight, viewer_cls))
 
+    ordered = []
     for candidates in tiers:
-        if candidates:
-            return min(candidates, key=lambda x: x[0])[1]
-    return None
+        # Sort on the weight alone: a plain sorted() over the (weight, cls)
+        # tuples would compare classes on a tie and raise TypeError.
+        ordered.extend(cls for _, cls in sorted(candidates, key=lambda x: x[0]))
+    return ordered
 
 
 def _resolve_label(label_or_mime: str) -> str:
@@ -124,6 +127,23 @@ def _resolve_label(label_or_mime: str) -> str:
     if "/" in label_or_mime:
         return _MIME_TO_LABEL.get(label_or_mime, label_or_mime)
     return label_or_mime
+
+
+def _extension_hints(label: str, name: str) -> tuple[str, str, bool]:
+    """Extension-derived label, group, and has-extension flag for viewer resolution.
+
+    No name supplied means a label-only caller; don't suppress extension-gated
+    viewers in that case. Only an explicit, extensionless filename does.
+    """
+    ext_label = ""
+    ext_group = ""
+    file_has_extension = has_extension(name) if name else True
+    if name:
+        candidate = label_from_name(name)
+        if candidate and candidate != "unknown" and candidate != label:
+            ext_label = candidate
+            ext_group = _normalize_group(candidate)
+    return ext_label, ext_group, file_has_extension
 
 
 def get_info(label: str, name: str = "") -> FileTypeInfo:
@@ -150,18 +170,10 @@ def get_info(label: str, name: str = "") -> FileTypeInfo:
     icon = overrides.get("icon", icon)
     color = overrides.get("color", color)
 
-    ext_label = ""
-    ext_group = ""
-    # No name supplied means a label-only caller; don't suppress extension-gated
-    # viewers in that case. Only an explicit, extensionless filename does.
-    file_has_extension = has_extension(name) if name else True
-    if name:
-        candidate = label_from_name(name)
-        if candidate and candidate != "unknown" and candidate != label:
-            ext_label = candidate
-            ext_group = _normalize_group(candidate)
+    ext_label, ext_group, file_has_extension = _extension_hints(label, name)
 
-    viewer = _resolve_viewer(label, group, ext_label, ext_group, file_has_extension)
+    viewers = _resolve_viewers(label, group, ext_label, ext_group, file_has_extension)
+    viewer = viewers[0] if viewers else None
 
     return FileTypeInfo(
         icon=icon, color=color, group=group, viewer=viewer, mime_type=mime_type
@@ -182,6 +194,62 @@ def get_group(label: str) -> str:
 
 def get_viewer(label: str, name: str = ""):
     return get_info(label, name).viewer
+
+
+def get_viewers(label: str, name: str = "") -> list:
+    """Every applicable viewer, best first. get_viewer() returns the first."""
+    label = _resolve_label(label)
+    group = _normalize_group(label)
+    ext_label, ext_group, file_has_extension = _extension_hints(label, name)
+    return _resolve_viewers(label, group, ext_label, ext_group, file_has_extension)
+
+
+def get_viewer_slug(label: str, name: str = "") -> str:
+    """Slug of the viewer that would handle this content, or '' if none does."""
+    viewer = get_viewer(label, name)
+    return getattr(viewer, "slug", "") if viewer is not None else ""
+
+
+def get_viewer_by_slug(slug: str):
+    """Viewer class for a pinned slug, or None when the slug is unknown.
+
+    Returning None rather than raising lets callers fall back to content-based
+    resolution, so a pin left behind by a viewer that no longer exists degrades
+    instead of breaking the page.
+    """
+    if not slug:
+        return None
+    from workspace.files.ui.viewers import BaseViewer
+
+    for viewer_cls in BaseViewer.__subclasses__():
+        if viewer_cls.slug == slug:
+            return viewer_cls
+    return None
+
+
+# Containers whose byte-level label cannot distinguish an audio-only payload
+# from a video one. The declared media type is the only signal that can, and
+# acting on it is a presentation decision - hence a pinned viewer rather than a
+# rewritten content type. `ogg` is absent: the KB already groups it as audio.
+_AUDIO_CAPABLE_CONTAINERS = frozenset({"webm", "mp4", "mkv", "3gp", "qt"})
+
+
+def pin_viewer_for_upload(label: str, declared_mime: str | None) -> str:
+    """Viewer slug to pin for an upload, or '' to derive it from the content.
+
+    Magika identifies a container, not the tracks inside it: an audio-only WebM
+    - what MediaRecorder produces - is reported as video. The client-declared
+    media type is the only available signal, and it is consulted only for
+    labels Magika already read as media containers, so declaring ``audio/webm``
+    on arbitrary content pins nothing. The declared string is never stored.
+    """
+    from workspace.files.ui.viewers import AudioViewer
+
+    if label in _AUDIO_CAPABLE_CONTAINERS and (declared_mime or "").startswith(
+        "audio/"
+    ):
+        return AudioViewer.slug
+    return ""
 
 
 def get_mime_type(label: str) -> str:

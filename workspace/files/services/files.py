@@ -170,14 +170,22 @@ class FileService:
         content=None,
         mime_type=None,
         group=None,
+        viewer=None,
         acting_user=None,
     ):
-        """Create a new file record, optionally with uploaded content."""
+        """Create a new file record, optionally with uploaded content.
+
+        ``viewer`` pins a viewer slug explicitly; None derives it from the
+        declared media type. Callers copying an existing row pass the source's
+        pin, which the declared type can no longer reconstruct (a voice message
+        is stored as ``video/webm``).
+        """
         from workspace.files.services.detection import (
             detect_from_name,
             detect_from_stream,
             refine_with_name,
         )
+        from workspace.files.services.filetype import pin_viewer_for_upload
 
         if group is None and parent and parent.group_id:
             group = parent.group
@@ -192,6 +200,13 @@ class FileService:
         # [[ search both filter on type=markdown).
         label = refine_with_name(detection.label, name)
 
+        # The declared media type is the only signal that can tell an
+        # audio-only container from a video one; acting on it is a display
+        # decision, so it pins a viewer instead of rewriting the detection.
+        if viewer is None:
+            declared_mime = mime_type or getattr(content, "content_type", None)
+            viewer = pin_viewer_for_upload(label, declared_mime)
+
         if not mime_type:
             mime_type = detection.mime_type
 
@@ -205,6 +220,7 @@ class FileService:
             mime_type=mime_type or "application/octet-stream",
             type=label,
             category=detection.group or "unknown",
+            viewer=viewer,
             size=size,
             group=group,
         )
@@ -366,6 +382,7 @@ class FileService:
             detect_from_stream,
             refine_with_name,
         )
+        from workspace.files.services.filetype import pin_viewer_for_upload
 
         detection = detect_from_stream(content)
         file_obj.size = content.size
@@ -374,6 +391,9 @@ class FileService:
         # ".md" reads as txt) so an edited note keeps type=markdown.
         file_obj.type = refine_with_name(detection.label, name or file_obj.name)
         file_obj.category = detection.group or "unknown"
+        file_obj.viewer = pin_viewer_for_upload(
+            file_obj.type, mime_type or getattr(content, "content_type", None)
+        )
         file_obj.has_thumbnail = False
         file_obj.content = content
         file_obj.save()

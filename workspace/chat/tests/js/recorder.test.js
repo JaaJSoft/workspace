@@ -62,6 +62,11 @@ test('chatRecorderMixin starts idle', () => {
   assert.equal(m.recordedFile, null);
 });
 
+test('chatRecorderMixin re-entry guard starts clear', () => {
+  const m = ctx.chatRecorderMixin();
+  assert.equal(m._startingRecording, false);
+});
+
 test('chatRecorderMixin exposes no getter', () => {
   // A `get` accessor would be flattened to a frozen value by the spread that
   // builds chatApp(), and would never recompute.

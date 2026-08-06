@@ -38,6 +38,7 @@ window.chatRecorderMixin = function chatRecorderMixin() {
     _recorderChunks: [],
     _recorderType: null,
     _recordTimer: null,
+    _startingRecording: false,
 
     initRecorder() {
       const hasApi =
@@ -59,10 +60,14 @@ window.chatRecorderMixin = function chatRecorderMixin() {
     },
 
     async startRecording() {
-      if (!this.recorderSupported || this.recorderState !== 'idle') return;
+      if (!this.recorderSupported || this.recorderState !== 'idle' || this._startingRecording) return;
+      // _startingRecording prevents double-click re-entry: recorderState cannot serve as a
+      // guard while getUserMedia is pending (several seconds during the permission prompt).
+      this._startingRecording = true;
       try {
         this._recorderStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (e) {
+        this._startingRecording = false;
         this.showAlert?.('error', 'Microphone access was denied.');
         return;
       }
@@ -76,6 +81,7 @@ window.chatRecorderMixin = function chatRecorderMixin() {
       this._recorder.onstop = () => this._finalizeRecording();
       this._recorder.start();
       this.recorderState = 'recording';
+      this._startingRecording = false;
       this.recordSeconds = 0;
       const max = this.voiceMaxSeconds();
       this._recordTimer = setInterval(() => {

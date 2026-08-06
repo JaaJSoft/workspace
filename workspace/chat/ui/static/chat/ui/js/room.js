@@ -46,9 +46,14 @@ function chatRoomApp(currentUserId, conversationId) {
     ...chatBotMixin(),
     ...chatCallMixin(),
     ...chatCallDiagnosticMixin(),
+    ...chatRecorderMixin(),
 
     async init() {
       this._initCallSounds?.();
+
+      // Probes MediaRecorder support once so the mic button can hide itself
+      // on browsers that cannot record.
+      this.initRecorder();
 
       // Seed the active conversation from server-serialized data so the reused
       // conversation pane (header, info panel) shows the real name and members,

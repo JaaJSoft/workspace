@@ -17,6 +17,7 @@ const stubs = {
   chatBotMixin: () => ({ _bot: true }),
   chatCallMixin: () => ({ startOrJoinCall: async () => {}, _start: true }),
   chatCallDiagnosticMixin: () => ({ _diag: true }),
+  chatRecorderMixin: () => ({ initRecorder: () => {} }),
   chatCallShouldOwnMedia: (r) => r !== 'observer',
 };
 

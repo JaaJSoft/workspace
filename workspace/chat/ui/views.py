@@ -184,6 +184,7 @@ def chat_view(request, conversation_uuid=None):
                 request.user, "chat", "call_sounds", default=True
             ),
             "chat_groups": _user_chat_groups(request.user),
+            "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
     )
 
@@ -244,6 +245,7 @@ def chat_room_view(request, conversation_uuid):
             ),
             "current_user_id": request.user.id,
             "chat_groups": _user_chat_groups(request.user),
+            "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
     )
 

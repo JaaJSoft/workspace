@@ -391,33 +391,38 @@
           </button>
         </div>
 
-        <!-- Recording preview -->
-        <div x-show="recorderState === 'preview'" x-cloak
-             class="flex items-center gap-2 border border-base-300 rounded-xl px-3 py-2">
-          <div class="flex-1 min-w-0" x-data="chatAudioPlayer('preview', recordedDuration)" x-ref="previewPlayer">
-            <audio x-ref="audio" :src="$root.recordedUrl" preload="metadata"
-                   @loadedmetadata="onMetadata()"
-                   @timeupdate="currentTime = $refs.audio.currentTime"
-                   @ended="onEnded()"></audio>
-            <div class="flex items-center gap-1.5">
-              <button class="btn btn-ghost btn-xs btn-circle flex-shrink-0" @click="toggle()">
-                <i data-lucide="play" class="w-4 h-4" x-show="!playing"></i>
-                <i data-lucide="pause" class="w-4 h-4" x-show="playing" x-cloak></i>
-              </button>
-              <input type="range" min="0" max="100" step="0.1" class="range range-xs flex-1 min-w-0"
-                     :value="progressPercent()" @input="seekToPercent($event.target.value)"
-                     aria-label="Seek" />
-              <span class="text-[0.65rem] opacity-70 tabular-nums flex-shrink-0"
-                    x-text="elapsedLabel() + ' / ' + durationLabel()"></span>
+        <!-- Recording preview. x-if, not x-show: chatAudioPlayer bakes the
+             measured duration in at construction, so the component has to be
+             built after the recording finished, not once at composer mount. -->
+        <template x-if="recorderState === 'preview'">
+          <div class="flex items-center gap-2 border border-base-300 rounded-xl px-3 py-2">
+            <div class="flex-1 min-w-0" x-data="chatAudioPlayer('preview', recordedDuration)" x-ref="previewPlayer">
+              <audio x-ref="audio" :src="recordedUrl" preload="metadata"
+                     @loadedmetadata="onMetadata()"
+                     @timeupdate="currentTime = $refs.audio.currentTime"
+                     @ended="onEnded()"></audio>
+              <div class="flex items-center gap-1.5">
+                <button class="btn btn-ghost btn-xs btn-circle flex-shrink-0" @click="toggle()">
+                  <i data-lucide="play" class="w-4 h-4" x-show="!playing"></i>
+                  <i data-lucide="pause" class="w-4 h-4" x-show="playing" x-cloak></i>
+                </button>
+                <input type="range" min="0" max="100" step="0.1" class="range range-xs flex-1 min-w-0"
+                       :value="progressPercent()" @input="seekToPercent($event.target.value)"
+                       aria-label="Seek" />
+                <span class="text-[0.65rem] opacity-70 tabular-nums flex-shrink-0"
+                      x-text="elapsedLabel() + ' / ' + durationLabel()"></span>
+              </div>
             </div>
+            <button class="btn btn-ghost btn-sm btn-square" @click="cancelRecording()"
+                    :disabled="sendingRecording" title="Discard">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+            <button class="btn btn-info btn-sm btn-square" @click="sendRecording()"
+                    :disabled="sendingRecording" title="Send">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            </button>
           </div>
-          <button class="btn btn-ghost btn-sm btn-square" @click="cancelRecording()" title="Discard">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
-          <button class="btn btn-info btn-sm btn-square" @click="sendRecording()" title="Send">
-            <i data-lucide="send" class="w-3.5 h-3.5"></i>
-          </button>
-        </div>
+        </template>
 
         <!-- Desktop input (>= sm) -->
         <div class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50" x-show="recorderState === 'idle'">

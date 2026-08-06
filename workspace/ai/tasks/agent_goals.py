@@ -146,7 +146,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         return {"status": "error", "error": "Not found"}
 
     human_user = User.objects.filter(pk=goal.created_by_id).first()
-    user_tz = get_user_timezone(goal.created_by)
+    user_tz = get_user_timezone(human_user or goal.created_by)
 
     history, summary_text = build_conversation_history(
         str(conversation.pk),
@@ -217,7 +217,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         raw_messages = {"messages": initial_messages, "rounds": rounds}
 
         # The agent chose to work without contacting the user.
-        body = clean_llm_content(result["content"])
+        body = clean_llm_content(result.get("content") or "")
         if body == "[SILENT]":
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SILENT]"
@@ -229,6 +229,35 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             ai_task.save()
             logger.info("Agent check-in done silently: goal=%s", scrub(goal_id))
             return {"status": "ok", "reason": "silent"}
+
+        # The user may have paused or stopped the goal while the LLM run was
+        # in flight - in that case they asked not to be contacted, so drop
+        # the message. When the *agent* closed the goal itself during this
+        # run (its tools set the flag below), the final wrap-up message is
+        # legitimate and still goes out.
+        current_status = (
+            AgentGoal.objects.filter(pk=goal_id)
+            .values_list("status", flat=True)
+            .first()
+        )
+        if current_status != AgentGoal.Status.ACTIVE and not tool_context.get(
+            "agent_goal_changed"
+        ):
+            ai_task.status = ai_task.Status.COMPLETED
+            ai_task.result = "[SUPPRESSED]"
+            ai_task.model_used = result["model"]
+            ai_task.prompt_tokens = result["prompt_tokens"]
+            ai_task.completion_tokens = result["completion_tokens"]
+            ai_task.raw_messages = raw_messages
+            ai_task.completed_at = timezone.now()
+            ai_task.save()
+            logger.info(
+                "Agent check-in message suppressed (goal closed by user mid-run): "
+                "goal=%s status=%s",
+                scrub(goal_id),
+                current_status,
+            )
+            return {"status": "skipped", "reason": "goal_closed_by_user"}
 
         body, bot_message = post_bot_message(
             conversation,

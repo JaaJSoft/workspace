@@ -256,13 +256,18 @@ window.chatBotMixin = function chatBotMixin() {
         const resp = await fetch(`/api/v1/chat/conversations/${conversationId}/goals`, {
           credentials: 'same-origin',
         });
-        if (resp.ok) {
-          this.agentGoals = await resp.json();
-        }
+        const goals = resp.ok ? await resp.json() : null;
+        // A slow response must not clobber the goals of a conversation the
+        // user switched to while this request was in flight.
+        if (this.activeConversation?.uuid !== conversationId) return;
+        if (goals) this.agentGoals = goals;
       } catch (e) {
         console.error('Failed to load agent goals', e);
+      } finally {
+        if (this.activeConversation?.uuid === conversationId) {
+          this.loadingAgentGoals = false;
+        }
       }
-      this.loadingAgentGoals = false;
     },
 
     async editGoal(goal) {

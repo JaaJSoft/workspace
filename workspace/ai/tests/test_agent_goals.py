@@ -3,6 +3,7 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
@@ -180,6 +181,13 @@ class RunAgentGoalCheckTests(TestCase):
         )
         self.conversation = _make_conversation(self.user, self.bot_user)
 
+    def tearDown(self):
+        # The worker resolves the creator's timezone through the cached
+        # settings service; LocMemCache survives across TestCase rollbacks
+        # while user primary keys repeat, so leaked entries would leak
+        # between tests.
+        cache.clear()
+
     def _goal(self, **kwargs):
         defaults = {
             "conversation": self.conversation,
@@ -302,6 +310,64 @@ class RunAgentGoalCheckTests(TestCase):
                 conversation=self.conversation, author=self.bot_user
             ).exists()
         )
+
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_user_pausing_goal_mid_run_suppresses_message(self, mock_llm):
+        goal = self._goal()
+
+        def pause_then_reply(*call_args, **call_kwargs):
+            # Simulates the user pausing the goal from the UI while the LLM
+            # run is in flight.
+            AgentGoal.objects.filter(pk=goal.pk).update(status=AgentGoal.Status.PAUSED)
+            return self._llm_result("You should really see this update!")
+
+        mock_llm.side_effect = pause_then_reply
+
+        from workspace.ai.tasks.agent_goals import run_agent_goal_check
+
+        result = run_agent_goal_check(str(goal.uuid))
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "goal_closed_by_user")
+        self.assertFalse(
+            Message.objects.filter(
+                conversation=self.conversation, author=self.bot_user
+            ).exists()
+        )
+        task = AITask.objects.get(owner=self.bot_user)
+        self.assertEqual(task.result, "[SUPPRESSED]")
+
+    @patch("workspace.ai.tasks.agent_goals.run_tool_loop")
+    def test_agent_closing_goal_itself_still_posts_message(self, mock_loop):
+        goal = self._goal()
+
+        def close_and_reply(*call_args, **call_kwargs):
+            # Simulates the agent calling complete_agent_goal during its own
+            # run: the tool closes the goal and flags the context.
+            AgentGoal.objects.filter(pk=goal.pk).update(
+                status=AgentGoal.Status.COMPLETED, outcome="Done."
+            )
+            result = {
+                "content": "Mission accomplished — here is the wrap-up.",
+                "tool_calls": None,
+                "model": "gpt-4o-mini",
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+            }
+            return result, {"agent_goal_changed": True}, [], None
+
+        mock_loop.side_effect = close_and_reply
+
+        from workspace.ai.tasks.agent_goals import run_agent_goal_check
+
+        result = run_agent_goal_check(str(goal.uuid))
+
+        self.assertEqual(result["status"], "ok")
+        bot_msg = Message.objects.filter(
+            conversation=self.conversation, author=self.bot_user
+        ).first()
+        self.assertIsNotNone(bot_msg)
+        self.assertIn("Mission accomplished", bot_msg.body)
 
     @patch("workspace.ai.services.tool_loop.call_llm")
     def test_goal_instruction_injected_in_system_prompt(self, mock_llm):
@@ -543,6 +609,12 @@ class AgentGoalToolTests(TestCase):
         self.provider = AgentGoalToolProvider()
         self.conv_id = str(self.conversation.uuid)
         self.context = {}
+
+    def tearDown(self):
+        # Tool calls resolve the user's timezone through the cached settings
+        # service; clear the process-global LocMemCache so entries keyed on
+        # reused primary keys cannot leak between tests.
+        cache.clear()
 
     def _call(self, method_name, args=None):
         method = getattr(self.provider, method_name)

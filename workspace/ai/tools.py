@@ -517,6 +517,18 @@ def _parse_local_datetime(value: str, user_tz):
 class AgentGoalToolProvider(ToolProvider):
     """Long-horizon autonomous goal tools for bots."""
 
+    @staticmethod
+    def _open_goal(goal_id, conversation_id, bot):
+        """Fetch an open (active or paused) goal scoped to this conversation+bot."""
+        from .models import AgentGoal
+
+        return AgentGoal.objects.filter(
+            uuid=goal_id,
+            conversation_id=conversation_id,
+            bot=bot,
+            status__in=[AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED],
+        ).first()
+
     @tool(
         badge_icon="\U0001f3af",
         badge_label="Created goal",
@@ -641,12 +653,7 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
 
         from .models import AgentGoal
 
-        goal = AgentGoal.objects.filter(
-            uuid=args.goal_id,
-            conversation_id=conversation_id,
-            bot=bot,
-            status__in=[AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED],
-        ).first()
+        goal = self._open_goal(args.goal_id, conversation_id, bot)
         if goal is None:
             return f"Error: no open goal found with id {args.goal_id}"
 
@@ -697,6 +704,9 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
             goal.status = status_value
             update_fields.append("status")
             changes.append(f"status → {status_value}")
+            # Lets the check-in worker distinguish a status change made by
+            # the agent during its own run from one made by the user.
+            context["agent_goal_changed"] = True
 
         if not changes:
             return "Error: nothing to update — provide notes, next_check_at, deadline or status"
@@ -715,12 +725,7 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
 Call this when the goal is reached, has become irrelevant, or the user asks you to stop pursuing it."""
         from .models import AgentGoal
 
-        goal = AgentGoal.objects.filter(
-            uuid=args.goal_id,
-            conversation_id=conversation_id,
-            bot=bot,
-            status__in=[AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED],
-        ).first()
+        goal = self._open_goal(args.goal_id, conversation_id, bot)
         if goal is None:
             return f"Error: no open goal found with id {args.goal_id}"
 
@@ -733,6 +738,7 @@ Call this when the goal is reached, has become irrelevant, or the user asks you 
         )
         goal.outcome = outcome
         goal.save(update_fields=["status", "outcome", "updated_at"])
+        context["agent_goal_changed"] = True
         logger.info(
             "Agent goal closed (%s): %s bot=%s",
             goal.status,

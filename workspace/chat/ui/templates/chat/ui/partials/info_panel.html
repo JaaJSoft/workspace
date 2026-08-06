@@ -246,7 +246,7 @@
   <template x-if="!loadingMedia && conversationMedia.length > 0 && mediaFilter !== 'files'">
     <div>
       <div class="grid grid-cols-3 gap-1">
-        <template x-for="item in conversationMedia.filter(m => m.is_image || m.is_video)" :key="item.uuid">
+        <template x-for="item in conversationMedia.filter(m => (m.is_image || m.is_video) && !m.is_audio)" :key="item.uuid">
           <div class="group/media relative aspect-square rounded overflow-hidden cursor-pointer bg-base-300"
                @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })"
                :title="item.original_name">
@@ -270,10 +270,13 @@
           </div>
         </template>
       </div>
+      {# A voice message is a video container by detection, so it needs the #}
+      {# is_audio exclusion above to stay out of the grid and the same test #}
+      {# here to still be listed. #}
       <!-- Non-image/video items when filter is 'all' -->
       <template x-if="mediaFilter === 'all'">
         <ul class="mt-2 space-y-1">
-          <template x-for="item in conversationMedia.filter(m => !m.is_image && !m.is_video)" :key="item.uuid">
+          <template x-for="item in conversationMedia.filter(m => m.is_audio || (!m.is_image && !m.is_video))" :key="item.uuid">
             <li class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
                 @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })">
               <i data-lucide="file" class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"></i>

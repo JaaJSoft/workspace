@@ -247,6 +247,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
                     "size": att.size,
                     "is_image": att.is_image,
                     "is_video": att.is_video,
+                    "is_audio": att.is_audio,
                     "url": f"/api/v1/chat/attachments/{att.uuid}",
                     "created_at": att.created_at.isoformat(),
                     "message_uuid": att.message_id,

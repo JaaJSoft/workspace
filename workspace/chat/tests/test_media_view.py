@@ -98,6 +98,20 @@ class ConversationMediaViewTests(APITestCase):
         files = self.client.get(self.url(type="files"))
         self.assertEqual(self._names(files), {"voice.webm"})
 
+    def test_the_all_tab_flags_a_voice_message_as_audio(self):
+        """The 'all' tab re-partitions client-side, so it needs the flag: a
+        voice message reads is_video=True and would land in the grid."""
+        self._attach("voice.webm", "video/webm", "video", viewer="audio")
+        self._attach("clip.webm", "video/webm", "video")
+
+        items = {
+            i["original_name"]: i
+            for i in self.client.get(self.url(type="all")).json()["results"]
+        }
+
+        self.assertTrue(items["voice.webm"]["is_audio"])
+        self.assertFalse(items["clip.webm"]["is_audio"])
+
     def test_all_returns_everything(self):
         self._attach("pic.png", "image/png", "image")
         self._attach("doc.pdf", "application/pdf", "document")

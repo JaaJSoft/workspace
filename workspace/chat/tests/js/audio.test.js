@@ -65,6 +65,38 @@ test('chatAudioPlayer tolerates a missing server duration', () => {
   assert.equal(ctx.chatAudioPlayer('u1', 0).duration, 0);
 });
 
+function playerWithAudio(audioStub) {
+  ctx.CustomEvent = function CustomEvent(name, opts) {
+    return { type: name, detail: opts && opts.detail };
+  };
+  ctx.dispatchEvent = () => {};
+  const p = ctx.chatAudioPlayer('u1', 10);
+  p.$refs = { audio: audioStub };
+  return p;
+}
+
+test('play releases the button when playback is rejected', async () => {
+  // A missing or undecodable source must not leave the toggle stuck on Pause.
+  const p = playerWithAudio({
+    playbackRate: 1,
+    play: async () => {
+      throw new Error('no supported source');
+    },
+  });
+
+  await p.play();
+
+  assert.equal(p.playing, false);
+});
+
+test('play marks the player as playing when it starts', async () => {
+  const p = playerWithAudio({ playbackRate: 1, play: async () => {} });
+
+  await p.play();
+
+  assert.equal(p.playing, true);
+});
+
 test('chatAudioPlayer starts idle at x1 with details collapsed', () => {
   const p = ctx.chatAudioPlayer('u1', 10);
   assert.equal(p.playing, false);

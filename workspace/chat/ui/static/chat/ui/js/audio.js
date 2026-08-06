@@ -59,13 +59,19 @@ window.chatAudioPlayer = function chatAudioPlayer(uuid, knownDuration) {
       else this.play();
     },
 
-    play() {
+    async play() {
       window.dispatchEvent(
         new CustomEvent('chat-audio-play', { detail: { uuid: this.uuid } })
       );
       this.$refs.audio.playbackRate = this.speed;
-      this.$refs.audio.play();
       this.playing = true;
+      try {
+        await this.$refs.audio.play();
+      } catch (e) {
+        // Missing source, autoplay policy, decode error: without this the
+        // button would stay stuck on Pause with nothing playing.
+        this.playing = false;
+      }
     },
 
     pause() {

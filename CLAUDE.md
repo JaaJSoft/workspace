@@ -21,8 +21,6 @@ uv run celery -A workspace beat -l info
 cd scripts/editor && npm run build:editor
 ```
 
-**CI coverage floors** (`.github/workflows/tests.yml`): each module pins a `min_coverage` (45-95%). Lowering a threshold is forbidden by the workflow's own comment - raise it after adding coverage, never lower it.
-
 ## Module Map
 
 Each Django app under `workspace/` follows the same shape (`models.py`, `views.py`, `services/`, `tests/`, `ui/`, `urls.py`):
@@ -135,6 +133,8 @@ workspace/<module>/tests/
 ### CI
 
 Tests run in parallel in CI with one job per module (see `.github/workflows/tests.yml`). When creating a new Django app module, add it to the `matrix.module` list in the workflow file.
+
+**CI coverage floors** (`.github/workflows/tests.yml`): each module pins a `min_coverage` (45-95%). Lowering a threshold is forbidden by the workflow's own comment - raise it after adding coverage, never lower it.
 
 ### JS unit tests
 

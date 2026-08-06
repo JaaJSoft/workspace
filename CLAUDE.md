@@ -425,7 +425,7 @@ with source.content.open('rb') as f:
 
 We target Python 3.14, so reach for a stdlib primitive before writing manual loops over lists/sets: `itertools.batched` (chunking), `itertools.pairwise` (adjacent pairs), `itertools.chain.from_iterable` (flattening), `collections.Counter` (counting), `collections.defaultdict` (grouping), `dict.fromkeys` (order-preserving dedup), plus `math.prod` / `itertools.accumulate` / `statistics`.
 
-Favour clarity, not cleverness: leave a loop explicit when it carries per-iteration side effects, and mind the [Refactoring & Optimization](#refactoring--optimization) rule (a test must cover the code first; the swap must preserve behavior). Two `batched` gotchas: it yields **tuples** (not slices), and ruff (`B911`) requires an explicit `strict=` — use `strict=False` for the usual short-final-batch case.
+Favour clarity, not cleverness: leave a loop explicit when it carries per-iteration side effects, and mind the [Refactoring & Optimization](#refactoring--optimization) rule (a test must cover the code first; the swap must preserve behavior). Two `batched` gotchas: it yields **tuples** (not slices), and ruff (`B911`) requires an explicit `strict=` - use `strict=False` for the usual short-final-batch case.
 
 ### Multi-type except clauses - unparenthesized is the house style (PEP 758)
 
@@ -508,6 +508,50 @@ The failure mode is silent and easy to misread: no console error, and sibling bi
 - A getter is fine **only** on the component's own root object literal - the one that isn't spread into anything. `filteredHiddenFolders` in `mail/ui/static/mail/ui/js/mail.js` is declared there for exactly this reason; keep the comment that says why.
 - Reviewing a mixin: `grep -n "get [a-zA-Z_]*()" workspace/*/ui/static/*/ui/js/*.js` and check each hit is on a root literal.
 - Getters on Alpine **stores** (`Alpine.store(...)`) are safe - stores are registered as objects, not spread.
+
+### `$root` is a DOM element, not the parent component's data
+
+`$root` resolves to `closestRoot(el)`: the nearest ancestor carrying `x-data`, **including the element's own component root**. Reading a data property off it therefore yields `undefined` whenever the expression sits inside a nested `x-data`, because you are asking a DOM node for a property it doesn't have.
+
+```html
+<!-- ❌ WRONG - $root is the inner chatAudioPlayer div, which has no recordedUrl -->
+<div x-data="chatRecorderMixin()">
+  <div x-data="chatAudioPlayer('preview', recordedDuration)">
+    <audio :src="$root.recordedUrl"></audio>
+  </div>
+</div>
+
+<!-- ✅ Correct - nested scopes inherit prototypally, so the bare name resolves -->
+<audio :src="recordedUrl"></audio>
+```
+
+Alpine binds `:attr="undefined"` by **removing the attribute**, so the failure is completely silent: no console error, no broken layout, just an element quietly missing its `src`. We shipped this in the chat voice-message preview, where it produced a player with no audio source.
+
+**Rules:**
+- To read a property from an enclosing component, use the bare name. Nested `x-data` scopes inherit through the prototype chain; no qualifier is needed or correct.
+- `$root` is for DOM work only - `this.$root.close()`, `this.$root.querySelector(...)`. Every legitimate use in this codebase is of that shape.
+- When an `:attr` binding produces nothing at runtime, suspect an `undefined` expression before suspecting the attribute.
+
+### `x-show` hides, `x-if` instantiates - it matters for `x-data` arguments
+
+A component's `x-data` expression is evaluated **once**, when the element is first bound. `x-show` only toggles CSS, so a block that starts hidden is still constructed at page load, with whatever the surrounding state happened to be at that instant - usually empty.
+
+```html
+<!-- ❌ WRONG - evaluated at mount, when recordedDuration is still 0, and never again -->
+<div x-show="recorderState === 'preview'" x-data="chatAudioPlayer('preview', recordedDuration)">
+
+<!-- ✅ Correct - the component is constructed fresh each time the condition turns true -->
+<template x-if="recorderState === 'preview'">
+  <div x-data="chatAudioPlayer('preview', recordedDuration)">
+```
+
+The symptom is a component permanently stuck on its initial values while sibling bindings that read the state directly stay correct - the same misleading shape as the spread-getter bug above. In the voice-message preview it produced `0:03 / 0:00`, a progress bar frozen at zero and a dead seek bar.
+
+**Rules:**
+- If an `x-data` expression takes arguments that are not known at page load, gate the element with `x-if`, not `x-show`.
+- `x-show` stays correct for a component whose constructor arguments are static, and it is cheaper - it does not tear down and rebuild the subtree.
+- Never put both on the same element. `x-if` already controls presence; a leftover `x-show` is dead weight that hides the intent.
+- `x-if` teardown runs the component's `destroy()`, so anything registered in `init()` must be released there or it accumulates across cycles.
 
 ### Embedding view data into JS - use `|json_script`, never `orjson.dumps + |safe`
 

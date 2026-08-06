@@ -162,6 +162,21 @@ class VoiceMessageViewerTests(APITestCase):
         )
         return MessageAttachment.objects.get()
 
+    def test_the_message_list_renders_the_inline_player(self):
+        """The whole thread renders through this partial: a template error in
+        the audio player takes the conversation down, not just the bubble."""
+        self._send_voice()
+        resp = self.client.get(
+            reverse(
+                "chat_ui:conversation_messages",
+                kwargs={"conversation_uuid": self.conv.uuid},
+            )
+        )
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn("chatAudioPlayer", html)
+        self.assertIn("<audio", html)
+
     def test_modal_renders_an_audio_element(self):
         att = self._send_voice()
         resp = self.client.get(

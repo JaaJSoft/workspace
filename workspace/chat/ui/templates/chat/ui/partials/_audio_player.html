@@ -1,11 +1,13 @@
 {% load l10n %}
-{# Inline audio player for one attachment.
+{% comment %}
+   Inline audio player for one attachment.
    Context: att (MessageAttachment), is_own (bool).
-   duration_seconds is emitted inside {% localize off %}: a French locale would
+   The duration is emitted with localization off: a French locale would
    otherwise render 12.5 as "12,5" and break the JS expression.
    No data-attachment-uuid here: unlike the media/file buckets, this bubble is
    self-contained (play, seek, download, save all inline) and must stay out of
-   the attachment_viewer_modal gallery, which has no name/type for it. #}
+   the attachment_viewer_modal gallery, which has no name/type for it.
+{% endcomment %}
 <div class="flex flex-col gap-1 rounded-lg px-2.5 py-2 w-64 sm:w-80 max-w-full min-w-0
             {% if is_own %}bg-info/15{% else %}bg-base-300/50{% endif %}"
      x-data="chatAudioPlayer('{{ att.uuid }}', {% localize off %}{{ att.duration_seconds|default_if_none:'null' }}{% endlocalize %})">

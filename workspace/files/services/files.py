@@ -170,9 +170,16 @@ class FileService:
         content=None,
         mime_type=None,
         group=None,
+        viewer=None,
         acting_user=None,
     ):
-        """Create a new file record, optionally with uploaded content."""
+        """Create a new file record, optionally with uploaded content.
+
+        ``viewer`` pins a viewer slug explicitly; None derives it from the
+        declared media type. Callers copying an existing row pass the source's
+        pin, which the declared type can no longer reconstruct (a voice message
+        is stored as ``video/webm``).
+        """
         from workspace.files.services.detection import (
             detect_from_name,
             detect_from_stream,
@@ -196,8 +203,9 @@ class FileService:
         # The declared media type is the only signal that can tell an
         # audio-only container from a video one; acting on it is a display
         # decision, so it pins a viewer instead of rewriting the detection.
-        declared_mime = mime_type or getattr(content, "content_type", None)
-        viewer = pin_viewer_for_upload(label, declared_mime)
+        if viewer is None:
+            declared_mime = mime_type or getattr(content, "content_type", None)
+            viewer = pin_viewer_for_upload(label, declared_mime)
 
         if not mime_type:
             mime_type = detection.mime_type

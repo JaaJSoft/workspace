@@ -184,6 +184,10 @@ class AttachmentSaveToFilesView(APIView):
                 parent=parent,
                 content=DjangoFile(f, name=attachment.original_name),
                 mime_type=attachment.mime_type,
+                # The stored mime type is the detected container
+                # (video/webm for a voice message), so the pin cannot be
+                # re-derived here - carry the source's over.
+                viewer=attachment.viewer,
                 acting_user=request.user,
             )
 

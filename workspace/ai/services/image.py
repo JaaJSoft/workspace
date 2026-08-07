@@ -227,19 +227,7 @@ def _run_with_retry(operation, op: str, prompt: str) -> bytes:
 
         rejected = not _is_retryable(failure)
         if attempt >= attempts or rejected:
-            logger.error(
-                "Image %s failed after %d attempt(s): model=%s rejected=%s "
-                "error=%s prompt=%.80s",
-                op,
-                attempt,
-                settings.AI_IMAGE_MODEL,
-                rejected,
-                failure,
-                scrub(prompt),
-            )
-            raise ImageGenerationError(
-                str(failure), attempts=attempt, rejected=rejected
-            ) from failure
+            break
 
         logger.warning(
             "Image %s attempt %d/%d failed (%s), retrying in %.1fs: prompt=%.80s",
@@ -253,6 +241,20 @@ def _run_with_retry(operation, op: str, prompt: str) -> bytes:
         if delay:
             time.sleep(delay)
         delay *= 2
+
+    logger.error(
+        "Image %s failed after %d attempt(s): model=%s rejected=%s "
+        "error=%s prompt=%.80s",
+        op,
+        attempt,
+        settings.AI_IMAGE_MODEL,
+        rejected,
+        failure,
+        scrub(prompt),
+    )
+    raise ImageGenerationError(
+        str(failure), attempts=attempt, rejected=rejected
+    ) from failure
 
 
 def _edit_via_openai(client, image_file, prompt, size):

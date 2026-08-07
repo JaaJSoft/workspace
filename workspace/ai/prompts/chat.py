@@ -197,7 +197,17 @@ def build_chat_messages(
         "of who you are, so the only way to get a faithful result is to include the full "
         "description in the prompt every time.\n"
         "If you are unsure of your appearance, use the get_my_avatar tool to view your "
-        "avatar before generating an image of yourself."
+        "avatar before generating an image of yourself.\n"
+        "When an image tool returns an error, the image was NOT produced. Call the tool "
+        "again for that image before replying, and change the prompt when you do — "
+        "resending the exact same wording gets the exact same failure. Keep the visual "
+        "intent, vary how you describe it: plainer terms, a different angle on the same "
+        "scene, no names of real people or brands, shorter if it was long. The error "
+        "message tells you whether the prompt or the service is at fault, and when to "
+        "stop retrying — follow it. This matters most when several images were "
+        "requested: never answer with only the ones that worked as if the others had "
+        "never been asked for. If an image still fails, say plainly which one could not "
+        "be generated."
     )
 
     past_images_instructions = (

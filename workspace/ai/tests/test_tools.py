@@ -363,7 +363,7 @@ class GenerateImageVisionTests(TestCase):
         provider = ImageToolProvider()
         args = GenerateImageParams(prompt="a cat")
         with patch(
-            "workspace.ai.tools.get_image_client",
+            "workspace.ai.services.image.get_image_client",
             return_value=_fake_image_client(self.PNG_B64),
         ):
             return provider.generate_image(

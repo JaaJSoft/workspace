@@ -1,7 +1,6 @@
 """Core AI chat tools (memory, workspace search, avatar, image generation)."""
 
 import base64
-import binascii
 import json
 import logging
 import uuid as uuid_lib
@@ -12,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from workspace.common.logging import scrub
 
-from .client import get_image_client
 from .models import UserMemory
 from .tool_registry import ToolProvider, tool
 
@@ -160,6 +158,55 @@ def _image_tool_payload(image_data, text):
             "data": base64.b64encode(image_data).decode(),
             "text": text,
         }
+    )
+
+
+def _image_failure_message(tool_name, prompt, exc, context):
+    """Tool result for an image the backend refused to produce.
+
+    The service already retried what a retry alone can fix, so what is left
+    is the part only the model can do: come back with different wording.
+    Two things have to be in the text for that to happen — why the call
+    failed (a refused prompt is rewritten, a dead backend is not) and when
+    to stop, since nothing else caps how many times a model can call a tool
+    within a reply.
+    """
+    tried = context.setdefault("failed_image_prompts", [])
+    repeated = any(p.strip().lower() == prompt.strip().lower() for p in tried)
+    tried.append(prompt)
+    exhausted = len(tried) >= settings.AI_IMAGE_FAILURE_BUDGET
+
+    head = f"Error: image failed after {exc.attempts} attempt(s) — {exc}."
+    tail = (
+        "Never answer as if this image had not been asked for: whatever "
+        "happens, say plainly in your reply which image is missing."
+    )
+
+    if exhausted:
+        return (
+            f"{head} Too many image failures in this reply — stop calling "
+            f"{tool_name} and answer the user now, naming the images you "
+            f"could not produce. {tail}"
+        )
+    if repeated:
+        return (
+            f"{head} You already sent this exact prompt in this reply and it "
+            f"failed. Do not send it again: call {tool_name} with a "
+            "substantially different wording — same subject, described "
+            f"another way. {tail}"
+        )
+    if exc.rejected:
+        return (
+            f"{head} The service rejected the request itself, so the same "
+            f"wording will fail again. Call {tool_name} once more with a "
+            "rewritten prompt: keep the visual intent, describe it in plain "
+            "neutral terms, and drop names of real people, brands or "
+            f"copyrighted characters. {tail}"
+        )
+    return (
+        f"{head} The image service failed, not your prompt. Call "
+        f"{tool_name} again for this image, varying the wording a little — "
+        f"a backend that chokes on one phrasing often answers another. {tail}"
     )
 
 
@@ -364,76 +411,25 @@ class ImageToolProvider(ToolProvider):
         """Generate a brand-new image from a text description. \
 Call this when the user asks you to create, draw, generate, make an image from scratch, send a picture or a photo of itself, or any other image-related request. \
 Do NOT use this to modify an existing image — use edit_image instead."""
+        from .services.image import (
+            ImageGenerationError,
+            ai_generate_image,
+            normalize_size,
+        )
+
         prompt = args.prompt.strip()
         if not prompt:
             return "Error: prompt is required"
         if not conversation_id:
             return "Error: no conversation context"
 
-        client = get_image_client()
-        if not client:
-            return "Error: AI is not configured"
-
-        size = args.size
-        if size not in ("1024x1024", "1792x1024", "1024x1792"):
-            size = "1024x1024"
-        logger.info(
-            "Starting image generation: model=%s size=%s prompt=%.80s",
-            settings.AI_IMAGE_MODEL,
-            size,
-            scrub(prompt),
-        )
-        from workspace.ai.metrics import AI_IMAGE_REQUESTS
-
+        size = normalize_size(args.size)
         try:
-            response = client.images.generate(
-                model=settings.AI_IMAGE_MODEL,
-                prompt=prompt,
-                size=size,
-                n=1,
-                response_format="b64_json",
-            )
-        except Exception as e:
-            AI_IMAGE_REQUESTS.labels(
-                model=settings.AI_IMAGE_MODEL,
-                op="generate",
-                status="error",
-            ).inc()
-            logger.exception("Image generation failed")
-            return f"Error: image generation failed — {e}"
-        data = getattr(response, "data", None) or []
-        b64 = data[0].b64_json if data else None
-        try:
-            image_data = base64.b64decode(b64) if b64 else b""
-        except binascii.Error, ValueError:
-            image_data = b""
-        if not image_data:
-            AI_IMAGE_REQUESTS.labels(
-                model=settings.AI_IMAGE_MODEL,
-                op="generate",
-                status="error",
-            ).inc()
-            logger.error(
-                "Image generation returned no image: model=%s size=%s prompt=%.80s",
-                settings.AI_IMAGE_MODEL,
-                size,
-                scrub(prompt),
-            )
-            return "Error: the image model returned no image — generation failed"
-
-        AI_IMAGE_REQUESTS.labels(
-            model=settings.AI_IMAGE_MODEL,
-            op="generate",
-            status="ok",
-        ).inc()
-
-        logger.info(
-            "Image generated: model=%s size=%s bytes=%d prompt=%.80s",
-            settings.AI_IMAGE_MODEL,
-            size,
-            len(image_data),
-            scrub(prompt),
-        )
+            image_data = ai_generate_image(prompt, size)
+        except ValueError as exc:
+            return f"Error: {exc}"
+        except ImageGenerationError as exc:
+            return _image_failure_message("generate_image", prompt, exc, context)
 
         context.setdefault("images", []).append(
             {
@@ -461,7 +457,11 @@ Automatically uses the most recent image in the conversation as the source. \
 Call this when the user asks you to modify, change, update, transform, or edit a picture — \
 for example "make it darker", "remove the background", "add a hat". \
 Do NOT use this to create an image from scratch — use generate_image instead."""
-        from .services.image import ai_edit_image
+        from .services.image import (
+            ImageGenerationError,
+            ai_edit_image,
+            normalize_size,
+        )
 
         prompt = args.prompt.strip()
         if not prompt:
@@ -498,10 +498,12 @@ Do NOT use this to create an image from scratch — use generate_image instead."
                 )
                 return "Error: could not read the source image"
 
-        size = args.size
+        size = normalize_size(args.size)
 
         try:
             image_data = ai_edit_image(source_data, prompt, size)
+        except ImageGenerationError as exc:
+            return _image_failure_message("edit_image", prompt, exc, context)
         except (ValueError, RuntimeError) as exc:
             return f"Error: {exc}"
 

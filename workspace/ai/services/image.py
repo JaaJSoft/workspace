@@ -1,10 +1,13 @@
-"""Standalone AI image editing service used by chat tools and REST endpoints."""
+"""Standalone AI image generation/editing service used by chat tools and REST endpoints."""
 
 import base64
+import binascii
 import io
 import logging
+import time
 
 from django.conf import settings
+from openai import APIStatusError
 
 from workspace.common.logging import scrub
 
@@ -13,9 +16,86 @@ from ..client import get_image_client
 logger = logging.getLogger(__name__)
 
 VALID_SIZES = ("1024x1024", "1792x1024", "1024x1792")
+DEFAULT_SIZE = "1024x1024"
+
+# Sub-500 statuses a later call can still clear: request timeout, conflict,
+# too early, rate limit. Anything else below 500 is a rejection that would
+# repeat identically (bad prompt, bad key, unknown model).
+RETRYABLE_STATUSES = frozenset({408, 409, 425, 429})
 
 
-def ai_edit_image(source_data: bytes, prompt: str, size: str = "1024x1024") -> bytes:
+class ImageGenerationError(RuntimeError):
+    """The image backend did not return an image.
+
+    *attempts* is how many calls were made before giving up: a rejected
+    prompt stops at one, a flaky backend burns the whole budget.
+
+    *rejected* says the backend passed a verdict on the request itself
+    rather than falling over. It is the difference between the two pieces
+    of advice worth giving a model: rewrite the prompt, or stop trying and
+    tell the user the service is down.
+    """
+
+    def __init__(self, message, attempts=1, rejected=False):
+        super().__init__(message)
+        self.attempts = attempts
+        self.rejected = rejected
+
+
+def ai_generate_image(prompt: str, size: str = DEFAULT_SIZE) -> bytes:
+    """Generate an image from a text description.
+
+    Args:
+        prompt: Text description of the image to create.
+        size: Output size. Must be one of VALID_SIZES; defaults to
+              '1024x1024' if an invalid value is given.
+
+    Returns:
+        Raw bytes of the generated image.
+
+    Raises:
+        ValueError: If *prompt* is empty or AI is not configured.
+        ImageGenerationError: If every attempt failed.
+    """
+    if not prompt or not prompt.strip():
+        raise ValueError("prompt is required")
+
+    client = get_image_client()
+    if not client:
+        raise ValueError("AI is not configured")
+
+    size = normalize_size(size)
+
+    logger.info(
+        "Starting image generation: model=%s size=%s prompt=%.80s",
+        settings.AI_IMAGE_MODEL,
+        size,
+        scrub(prompt),
+    )
+
+    def attempt():
+        response = client.images.generate(
+            model=settings.AI_IMAGE_MODEL,
+            prompt=prompt,
+            size=size,
+            n=1,
+            response_format="b64_json",
+        )
+        return _decode_first_image(response)
+
+    image_data = _run_with_retry(attempt, "generate", prompt)
+
+    logger.info(
+        "Image generated: model=%s size=%s bytes=%d prompt=%.80s",
+        settings.AI_IMAGE_MODEL,
+        size,
+        len(image_data),
+        scrub(prompt),
+    )
+    return image_data
+
+
+def ai_edit_image(source_data: bytes, prompt: str, size: str = DEFAULT_SIZE) -> bytes:
     """Edit an image using the configured AI backend.
 
     Args:
@@ -29,7 +109,8 @@ def ai_edit_image(source_data: bytes, prompt: str, size: str = "1024x1024") -> b
 
     Raises:
         ValueError: If *prompt* is empty or AI is not configured.
-        RuntimeError: If both the OpenAI and Ollama backends fail.
+        ImageGenerationError: If every attempt failed on both the OpenAI
+            and Ollama backends.
     """
     if not prompt or not prompt.strip():
         raise ValueError("prompt is required")
@@ -38,8 +119,7 @@ def ai_edit_image(source_data: bytes, prompt: str, size: str = "1024x1024") -> b
     if not client:
         raise ValueError("AI is not configured")
 
-    if size not in VALID_SIZES:
-        size = "1024x1024"
+    size = normalize_size(size)
 
     logger.info(
         "Starting image edit: model=%s size=%s prompt=%.80s",
@@ -48,58 +128,133 @@ def ai_edit_image(source_data: bytes, prompt: str, size: str = "1024x1024") -> b
         scrub(prompt),
     )
 
-    from ..metrics import AI_IMAGE_REQUESTS
-
-    # Try OpenAI-compatible endpoint first, fall back to Ollama native API
-    try:
-        image_file = io.BytesIO(source_data)
-        image_file.name = "image.png"
-        image_data = _edit_via_openai(client, image_file, prompt, size)
-        logger.info(
-            "Image edited via OpenAI endpoint: model=%s bytes=%d",
-            settings.AI_IMAGE_MODEL,
-            len(image_data),
-        )
-    except Exception as openai_err:
-        logger.info(
-            "OpenAI images.edit failed (%s), falling back to Ollama native API",
-            openai_err,
-        )
+    def attempt():
+        # Try OpenAI-compatible endpoint first, fall back to Ollama native API
         try:
+            image_file = io.BytesIO(source_data)
+            image_file.name = "image.png"
+            image_data = _edit_via_openai(client, image_file, prompt, size)
+            logger.info(
+                "Image edited via OpenAI endpoint: model=%s bytes=%d",
+                settings.AI_IMAGE_MODEL,
+                len(image_data),
+            )
+        except Exception as openai_err:
+            logger.info(
+                "OpenAI images.edit failed (%s), falling back to Ollama native API",
+                openai_err,
+            )
             image_data = _edit_via_ollama(source_data, prompt)
             logger.info(
                 "Image edited via Ollama native API: model=%s bytes=%d",
                 settings.AI_IMAGE_MODEL,
                 len(image_data),
             )
-        except Exception as ollama_err:
-            AI_IMAGE_REQUESTS.labels(
-                model=settings.AI_IMAGE_MODEL,
-                op="edit",
-                status="error",
-            ).inc()
-            logger.exception("Image edit failed on both OpenAI and Ollama backends")
-            raise RuntimeError(f"image edit failed — {ollama_err}") from ollama_err
+        return image_data
 
-    if not image_data:
+    return _run_with_retry(attempt, "edit", prompt)
+
+
+def normalize_size(size):
+    return size if size in VALID_SIZES else DEFAULT_SIZE
+
+
+def _decode_first_image(response) -> bytes:
+    """Extract the first image of an OpenAI-shaped response, or b'' if unusable."""
+    data = getattr(response, "data", None) or []
+    b64 = data[0].b64_json if data else None
+    if not b64:
+        return b""
+    try:
+        return base64.b64decode(b64)
+    except binascii.Error, ValueError:
+        return b""
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Whether an identical call still has a chance of succeeding.
+
+    The cause/context chain is walked because the edit path reports a
+    backend rejection wrapped in the error of its fallback backend.
+    """
+    for _ in range(5):
+        if exc is None:
+            break
+        if isinstance(exc, APIStatusError):
+            status = getattr(exc, "status_code", None) or 0
+            return status in RETRYABLE_STATUSES or status >= 500
+        exc = exc.__cause__ or exc.__context__
+    return True
+
+
+def _run_with_retry(operation, op: str, prompt: str) -> bytes:
+    """Call *operation* until it returns image bytes, retrying transient failures.
+
+    Image backends fail shallowly and often: a rate limit, an upstream 5xx,
+    or a 200 carrying an empty payload. A single hiccup used to reach the
+    model as a tool error, and a model asked for several images answers with
+    the ones that worked instead of calling the tool again — so the retry
+    happens here, before the failure is ever visible to it.
+
+    Raises:
+        ImageGenerationError: carrying the number of attempts made.
+    """
+    from ..metrics import AI_IMAGE_REQUESTS
+
+    attempts = max(1, settings.AI_IMAGE_MAX_ATTEMPTS)
+    delay = max(0.0, settings.AI_IMAGE_RETRY_DELAY)
+
+    for attempt in range(1, attempts + 1):
+        try:
+            image_data = operation()
+        except Exception as exc:
+            failure = exc
+        else:
+            if image_data:
+                AI_IMAGE_REQUESTS.labels(
+                    model=settings.AI_IMAGE_MODEL,
+                    op=op,
+                    status="ok",
+                ).inc()
+                return image_data
+            failure = ImageGenerationError("the image model returned no image")
+
         AI_IMAGE_REQUESTS.labels(
             model=settings.AI_IMAGE_MODEL,
-            op="edit",
+            op=op,
             status="error",
         ).inc()
-        logger.error(
-            "Image edit produced no image: model=%s size=%s",
-            settings.AI_IMAGE_MODEL,
-            size,
-        )
-        raise RuntimeError("image edit produced no image")
 
-    AI_IMAGE_REQUESTS.labels(
-        model=settings.AI_IMAGE_MODEL,
-        op="edit",
-        status="ok",
-    ).inc()
-    return image_data
+        rejected = not _is_retryable(failure)
+        if attempt >= attempts or rejected:
+            break
+
+        logger.warning(
+            "Image %s attempt %d/%d failed (%s), retrying in %.1fs: prompt=%.80s",
+            op,
+            attempt,
+            attempts,
+            failure,
+            delay,
+            scrub(prompt),
+        )
+        if delay:
+            time.sleep(delay)
+        delay *= 2
+
+    logger.error(
+        "Image %s failed after %d attempt(s): model=%s rejected=%s "
+        "error=%s prompt=%.80s",
+        op,
+        attempt,
+        settings.AI_IMAGE_MODEL,
+        rejected,
+        failure,
+        scrub(prompt),
+    )
+    raise ImageGenerationError(
+        str(failure), attempts=attempt, rejected=rejected
+    ) from failure
 
 
 def _edit_via_openai(client, image_file, prompt, size):
@@ -112,9 +267,7 @@ def _edit_via_openai(client, image_file, prompt, size):
         n=1,
         response_format="b64_json",
     )
-    data = getattr(response, "data", None) or []
-    b64 = data[0].b64_json if data else None
-    image_data = base64.b64decode(b64) if b64 else b""
+    image_data = _decode_first_image(response)
     if not image_data:
         raise RuntimeError("OpenAI images.edit returned no image")
     return image_data

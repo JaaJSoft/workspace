@@ -480,6 +480,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         self.assertEqual(mock_execute.call_count, 1)
 
 
+@override_settings(AI_IMAGE_RETRY_DELAY=0)
 class GenerateImageToolTest(TestCase):
     """Unit tests for the generate_image tool."""
 
@@ -490,7 +491,7 @@ class GenerateImageToolTest(TestCase):
         self.conv_id = "test-conv-img"
         self.context = {}
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_success(self, mock_get_client):
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -534,7 +535,7 @@ class GenerateImageToolTest(TestCase):
         )
         self.assertIn("Error", result)
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_invalid_size_defaults(self, mock_get_client):
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -554,7 +555,7 @@ class GenerateImageToolTest(TestCase):
         call_kwargs = mock_client.images.generate.call_args[1]
         self.assertEqual(call_kwargs["size"], "1024x1024")
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_api_error(self, mock_get_client):
         mock_client = MagicMock()
         mock_client.images.generate.side_effect = Exception("API timeout")
@@ -570,7 +571,7 @@ class GenerateImageToolTest(TestCase):
         self.assertIn("Error", result)
         self.assertNotIn("images", self.context)
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_empty_data_reports_error(self, mock_get_client):
         """A successful API call that returns no image must not report success."""
         mock_client = MagicMock()
@@ -590,7 +591,7 @@ class GenerateImageToolTest(TestCase):
         self.assertNotIn("successfully", result)
         self.assertNotIn("images", self.context)
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_malformed_b64_reports_error(self, mock_get_client):
         """A malformed base64 payload must surface as an error, not crash."""
         mock_client = MagicMock()
@@ -610,7 +611,7 @@ class GenerateImageToolTest(TestCase):
         self.assertNotIn("successfully", result)
         self.assertNotIn("images", self.context)
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_empty_b64_reports_error(self, mock_get_client):
         """An empty b64_json payload must surface as an error, not success."""
         mock_client = MagicMock()
@@ -631,6 +632,99 @@ class GenerateImageToolTest(TestCase):
         self.assertNotIn("images", self.context)
 
 
+@override_settings(AI_IMAGE_RETRY_DELAY=0, AI_IMAGE_FAILURE_BUDGET=4)
+class ImageFailureGuidanceTests(TestCase):
+    """What the bot is told once the service has spent its own attempts.
+
+    Retrying is then up to the model, and it only does it if the tool
+    result says so — with wording it can act on.
+    """
+
+    def setUp(self):
+        from workspace.ai.tools import ImageToolProvider
+
+        self.provider = ImageToolProvider()
+        self.context = {}
+
+    def _fail_with(self, error, prompt="a cat"):
+        client = MagicMock()
+        client.images.generate.side_effect = error
+        with patch("workspace.ai.services.image.get_image_client", return_value=client):
+            return self.provider.generate_image(
+                GenerateImageParams(prompt=prompt),
+                user=None,
+                bot=None,
+                conversation_id="conv-1",
+                context=self.context,
+            )
+
+    def _rejection(self):
+        import httpx
+        from openai import BadRequestError
+
+        request = httpx.Request("POST", "http://image-backend/v1/images/generations")
+        return BadRequestError(
+            "prompt rejected", response=httpx.Response(400, request=request), body=None
+        )
+
+    def test_a_rejected_prompt_is_sent_back_for_a_rewrite(self):
+        result = self._fail_with(self._rejection())
+
+        self.assertIn("rejected the request itself", result)
+        self.assertIn("rewritten prompt", result)
+        self.assertIn("generate_image", result)
+
+    def test_a_broken_backend_does_not_blame_the_prompt(self):
+        # Telling the model to rewrite a prompt the service never read
+        # sends it chasing a problem that isn't there.
+        result = self._fail_with(RuntimeError("upstream down"))
+
+        self.assertIn("image service failed, not your prompt", result)
+        self.assertNotIn("rejected the request itself", result)
+
+    def test_resending_the_same_prompt_is_called_out(self):
+        self._fail_with(self._rejection())
+        result = self._fail_with(self._rejection())
+
+        self.assertIn("already sent this exact prompt", result)
+        self.assertIn("substantially different wording", result)
+
+    def test_a_varied_prompt_is_not_treated_as_a_repeat(self):
+        self._fail_with(self._rejection(), prompt="a cat")
+        result = self._fail_with(self._rejection(), prompt="a small tabby kitten")
+
+        self.assertNotIn("already sent this exact prompt", result)
+
+    def test_the_reply_is_told_to_stop_once_the_budget_is_spent(self):
+        # Without a cap, a model that keeps rewriting can burn the whole
+        # tool-round budget on one image and hang the reply.
+        for _ in range(3):
+            result = self._fail_with(RuntimeError("upstream down"))
+            self.assertNotIn("stop calling", result)
+
+        result = self._fail_with(RuntimeError("upstream down"))
+
+        self.assertIn("stop calling generate_image", result)
+        self.assertIn("answer the user now", result)
+
+    def test_the_budget_is_shared_with_edit_image(self):
+        from workspace.ai.services.image import ImageGenerationError
+        from workspace.ai.tools import _image_failure_message
+
+        for _ in range(3):
+            self._fail_with(RuntimeError("upstream down"))
+
+        result = _image_failure_message(
+            "edit_image",
+            "make it blue",
+            ImageGenerationError("upstream down", attempts=3),
+            self.context,
+        )
+
+        self.assertIn("stop calling edit_image", result)
+
+
+@override_settings(AI_IMAGE_RETRY_DELAY=0)
 class EditImageToolTest(TestCase):
     """Unit tests for the edit_image tool."""
 
@@ -758,6 +852,27 @@ class EditImageToolTest(TestCase):
 
         self.assertIn("Error", result)
         self.assertNotIn("images", self.context)
+
+    @patch("workspace.ai.services.image.get_image_client")
+    def test_edit_image_error_tells_the_model_to_call_again(self, mock_get_client):
+        self._attach_image()
+        mock_client = MagicMock()
+        mock_client.images.edit.side_effect = Exception("OpenAI failed")
+        mock_get_client.return_value = mock_client
+
+        with patch(
+            "workspace.ai.services.image._edit_via_ollama",
+            side_effect=Exception("Ollama failed"),
+        ):
+            result = self.provider.edit_image(
+                EditImageParams(prompt="make it blue"),
+                user=self.user,
+                bot=None,
+                conversation_id=str(self.conv.uuid),
+                context=self.context,
+            )
+
+        self.assertIn("edit_image again", result)
 
     def test_edit_image_no_conversation(self):
         result = self.provider.edit_image(

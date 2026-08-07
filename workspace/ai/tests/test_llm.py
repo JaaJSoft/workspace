@@ -135,6 +135,21 @@ class ExtractThinkingTests(SimpleTestCase):
         self.assertEqual(thinking, "loud")
         self.assertEqual(cleaned, "hi")
 
+    def test_tag_spelling_variants_are_captured(self):
+        for tag in ("thought", "thoughts", "thinking", "reasoning"):
+            with self.subTest(tag=tag):
+                thinking, cleaned = _extract_thinking(
+                    f"<{tag}>weighing options</{tag}>Hello there"
+                )
+                self.assertEqual(thinking, "weighing options")
+                self.assertEqual(cleaned, "Hello there")
+
+    def test_mismatched_open_and_close_tags_are_left_alone(self):
+        content = "<think>oops</thought>Hello"
+        thinking, cleaned = _extract_thinking(content)
+        self.assertEqual(thinking, "")
+        self.assertEqual(cleaned, content)
+
 
 def _fake_client(message):
     response = SimpleNamespace(

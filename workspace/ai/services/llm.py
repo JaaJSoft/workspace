@@ -7,7 +7,12 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-_THINK_RE = re.compile(r"<think>([\s\S]*?)</think>\s*", re.IGNORECASE)
+# Backends spell their inline reasoning tag differently; the backreference keeps
+# an opening tag from being closed by a different one.
+_THINK_RE = re.compile(
+    r"<(think|thinking|thought|thoughts|reasoning)>([\s\S]*?)</\1>\s*",
+    re.IGNORECASE,
+)
 _RAW_TOOL_CALL_RE = re.compile(r"</?tool_call>", re.IGNORECASE)
 # Matches timestamp prefixes leaked by the LLM, with or without brackets:
 # "[2026-04-10 20:07] ..." or "2026-04-10 20:07 ..."
@@ -102,13 +107,13 @@ def build_tool_content(tool_result: str):
 
 
 def _extract_thinking(content: str) -> tuple[str, str]:
-    """Split <think>...</think> blocks out of model output.
+    """Split inline reasoning blocks (<think>, <thought>, ...) out of model output.
 
     Returns (thinking, cleaned). Multiple blocks join with a blank line.
-    An unclosed <think> tag matches nothing: it stays in the content and
-    captures no thinking.
+    An unclosed tag matches nothing: it stays in the content and captures no
+    thinking.
     """
-    blocks = [m.group(1).strip() for m in _THINK_RE.finditer(content)]
+    blocks = [m.group(2).strip() for m in _THINK_RE.finditer(content)]
     thinking = "\n\n".join(b for b in blocks if b)
     cleaned = _THINK_RE.sub("", content).strip()
     return thinking, cleaned

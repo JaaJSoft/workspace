@@ -9,7 +9,7 @@ from workspace.ai.metrics import AI_AGENT_CHECKINS
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import build_conversation_history
 from workspace.ai.services.llm import sanitize_messages_for_storage
-from workspace.ai.services.responses import handle_generation_error, post_bot_message
+from workspace.ai.services.responses import post_bot_message
 from workspace.ai.services.tool_loop import run_tool_loop
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
@@ -269,6 +269,13 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
 
     except Exception as e:
         AI_AGENT_CHECKINS.labels(outcome="error").inc()
+        # Unlike chat and scheduled generation, a failed check-in must not
+        # post an error message: the user never asked for this run, and the
+        # silent-default contract holds on failure too. The fallback
+        # next_check_at written at claim time already schedules the retry.
+        ai_task.status = ai_task.Status.FAILED
+        ai_task.error = str(e)
+        ai_task.completed_at = timezone.now()
+        ai_task.save()
         logger.exception("Agent goal check-in failed: goal=%s", scrub(goal_id))
-        handle_generation_error(conversation, bot_user, ai_task, e)
         return {"status": "error", "error": str(e)}

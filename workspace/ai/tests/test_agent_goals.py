@@ -427,6 +427,27 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertIsNotNone(bot_msg)
         self.assertIn("Mission accomplished", bot_msg.body)
 
+    @patch("workspace.ai.tasks.agent_goals.run_tool_loop")
+    def test_failed_checkin_posts_no_error_message(self, mock_loop):
+        # The silent-default contract holds on failure too: the user never
+        # asked for this run, so a crash must not surface as a chat message.
+        mock_loop.side_effect = RuntimeError("LLM unavailable")
+        goal = self._goal()
+
+        from workspace.ai.tasks.agent_goals import run_agent_goal_check
+
+        result = run_agent_goal_check(str(goal.uuid))
+
+        self.assertEqual(result["status"], "error")
+        self.assertFalse(
+            Message.objects.filter(
+                conversation=self.conversation, author=self.bot_user
+            ).exists()
+        )
+        task = AITask.objects.get(owner=self.bot_user)
+        self.assertEqual(task.status, AITask.Status.FAILED)
+        self.assertIn("LLM unavailable", task.error)
+
     @patch("workspace.ai.services.tool_loop.call_llm")
     def test_goal_instruction_injected_in_system_prompt(self, mock_llm):
         mock_llm.return_value = self._llm_result("[SILENT]")

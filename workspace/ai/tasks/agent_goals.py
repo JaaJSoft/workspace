@@ -5,14 +5,12 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from workspace.ai.metrics import AI_AGENT_CHECKINS
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import build_conversation_history
-from workspace.ai.services.llm import (
-    clean_llm_content,
-    sanitize_messages_for_storage,
-)
+from workspace.ai.services.llm import sanitize_messages_for_storage
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
-from workspace.ai.services.tool_loop import retry_final_completion, run_tool_loop
+from workspace.ai.services.tool_loop import run_tool_loop
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
 
@@ -66,6 +64,9 @@ def _build_goal_instruction(goal, user_tz):
         f"- Started {elapsed_days} day(s) ago; this is check-in #{goal.check_count + 1}.\n"
         f"{deadline_line}"
         f"- Your private notes from previous check-ins:\n{notes_block}\n\n"
+        f"This check-in is SILENT BY DEFAULT. The user sees nothing of what "
+        f"happens here: any plain text you write is discarded, never delivered. "
+        f"The ONLY way to reach the user is the send_user_message tool.\n\n"
         f"Do the following now:\n"
         f"1. Work on the goal, using your tools when helpful.\n"
         f"2. Save your updated private notes with update_agent_goal (goal_id above) — "
@@ -73,10 +74,12 @@ def _build_goal_instruction(goal, user_tz):
         f"3. Choose when to check in next and set it with update_agent_goal's "
         f"next_check_at. If you don't, the next check-in defaults to 24 hours from now.\n"
         f"4. If the goal is achieved or no longer relevant, call complete_agent_goal.\n"
-        f"5. Finally, decide whether to contact the user: if you have something "
-        f"genuinely useful or important to tell them, write that message naturally — "
-        f"do not mention check-ins or that you are an automated process. If not, "
-        f'reply with exactly "[SILENT]" and nothing else; no message will be sent.'
+        f"5. Only if you found something genuinely worth telling the user — a "
+        f"result, an important change, a deadline at risk, or what the goal says "
+        f"to report — call send_user_message with that message, written naturally "
+        f"(do not mention check-ins or that you are an automated process). Do NOT "
+        f"message just to say you checked and found nothing: staying silent is "
+        f"the normal outcome of most check-ins."
     )
 
 
@@ -92,8 +95,9 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
     the run, and a crashed or forgetful run resumes in a day instead of
     re-firing immediately or going quiet forever.
 
-    The agent may reply ``[SILENT]`` to work without contacting the
-    user; no message is posted in that case.
+    Check-ins are silent by default: the model's final text is discarded
+    and only messages explicitly queued through the send_user_message
+    tool are posted to the conversation.
     """
     from django.contrib.auth import get_user_model
 
@@ -178,63 +182,41 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
     try:
         initial_messages = sanitize_messages_for_storage(list(messages))
 
+        # agent_checkin marks the run for send_user_message, which refuses to
+        # queue outside a check-in (in normal chat the reply IS the message).
         result, tool_context, rounds, tool_data = run_tool_loop(
             messages,
             bot_profile.get_model(),
             human_user,
             bot_user,
             str(conversation.pk),
+            context={"agent_checkin": True},
         )
-
-        # Auto-retry once if the model returned an empty response. Only the
-        # final completion is retried (no tools): rerunning the whole loop
-        # would re-execute side-effectful tools (notes already saved, next
-        # check-in already set) and discard the first pass's context.
-        body_preview = clean_llm_content(result.get("content") or "")
-        if not body_preview and not tool_context.get("images"):
-            logger.warning(
-                "Empty agent check-in response, retrying once: goal=%s",
-                scrub(goal_id),
-            )
-            result, retry_rounds = retry_final_completion(
-                messages, bot_profile.get_model()
-            )
-            rounds.extend(retry_rounds)
-            body_preview = clean_llm_content(result.get("content") or "")
-            if not body_preview and not tool_context.get("images"):
-                ai_task.status = ai_task.Status.COMPLETED
-                ai_task.result = "[EMPTY]"
-                ai_task.model_used = result.get("model", "")
-                ai_task.prompt_tokens = result.get("prompt_tokens")
-                ai_task.completion_tokens = result.get("completion_tokens")
-                ai_task.completed_at = timezone.now()
-                ai_task.save()
-                logger.warning(
-                    "Agent check-in empty after retry: goal=%s", scrub(goal_id)
-                )
-                return {"status": "skipped", "reason": "empty_response"}
 
         raw_messages = {"messages": initial_messages, "rounds": rounds}
 
-        # The agent chose to work without contacting the user.
-        body = clean_llm_content(result.get("content") or "")
-        if body == "[SILENT]":
+        # Check-ins are silent by default: the model's final plain text is
+        # never shown to the user. Only messages the agent explicitly queued
+        # through send_user_message get delivered.
+        queued = [m for m in tool_context.get("agent_messages", []) if m.strip()]
+        if not queued:
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SILENT]"
-            ai_task.model_used = result["model"]
-            ai_task.prompt_tokens = result["prompt_tokens"]
-            ai_task.completion_tokens = result["completion_tokens"]
+            ai_task.model_used = result.get("model", "")
+            ai_task.prompt_tokens = result.get("prompt_tokens")
+            ai_task.completion_tokens = result.get("completion_tokens")
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()
+            AI_AGENT_CHECKINS.labels(outcome="silent").inc()
             logger.info("Agent check-in done silently: goal=%s", scrub(goal_id))
             return {"status": "ok", "reason": "silent"}
 
         # The user may have paused or stopped the goal while the LLM run was
         # in flight - in that case they asked not to be contacted, so drop
-        # the message. When the *agent* closed the goal itself during this
-        # run (its tools set the flag below), the final wrap-up message is
-        # legitimate and still goes out.
+        # the queued messages. When the *agent* closed the goal itself during
+        # this run (its tools set the flag below), the final wrap-up message
+        # is legitimate and still goes out.
         current_status = (
             AgentGoal.objects.filter(pk=goal_id)
             .values_list("status", flat=True)
@@ -245,12 +227,13 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         ):
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SUPPRESSED]"
-            ai_task.model_used = result["model"]
-            ai_task.prompt_tokens = result["prompt_tokens"]
-            ai_task.completion_tokens = result["completion_tokens"]
+            ai_task.model_used = result.get("model", "")
+            ai_task.prompt_tokens = result.get("prompt_tokens")
+            ai_task.completion_tokens = result.get("completion_tokens")
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()
+            AI_AGENT_CHECKINS.labels(outcome="suppressed").inc()
             logger.info(
                 "Agent check-in message suppressed (goal closed by user mid-run): "
                 "goal=%s status=%s",
@@ -259,10 +242,11 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             )
             return {"status": "skipped", "reason": "goal_closed_by_user"}
 
+        result_to_post = {**result, "content": "\n\n".join(queued)}
         body, bot_message = post_bot_message(
             conversation,
             bot_user,
-            result,
+            result_to_post,
             tool_context,
             ai_task,
             raw_messages,
@@ -273,16 +257,18 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
 
         maybe_dispatch_summary_update(str(conversation.pk), summary_text)
 
+        AI_AGENT_CHECKINS.labels(outcome="message").inc()
         logger.info(
             "Agent check-in posted a message: goal=%s conversation=%s tokens=%s+%s",
             scrub(goal_id),
             scrub(conversation.pk),
-            result["prompt_tokens"],
-            result["completion_tokens"],
+            result.get("prompt_tokens"),
+            result.get("completion_tokens"),
         )
         return {"status": "ok", "message_id": str(bot_message.uuid)}
 
     except Exception as e:
+        AI_AGENT_CHECKINS.labels(outcome="error").inc()
         logger.exception("Agent goal check-in failed: goal=%s", scrub(goal_id))
         handle_generation_error(conversation, bot_user, ai_task, e)
         return {"status": "error", "error": str(e)}

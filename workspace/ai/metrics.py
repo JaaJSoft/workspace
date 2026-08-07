@@ -24,3 +24,10 @@ AI_IMAGE_REQUESTS = safe_counter(
     "Image requests issued, by model, op (generate/edit) and status (ok/error)",
     ["model", "op", "status"],
 )
+
+AI_AGENT_CHECKINS = safe_counter(
+    f"{_P}_agent_checkins_total",
+    "Agent goal check-ins run, by outcome "
+    "(message/silent/suppressed/error) — watches the talkativeness ratio",
+    ["outcome"],
+)

@@ -15,7 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 def run_tool_loop(
-    messages, model, human_user, bot_user, conversation_id, is_cancelled=None
+    messages,
+    model,
+    human_user,
+    bot_user,
+    conversation_id,
+    is_cancelled=None,
+    context=None,
 ):
     """Run the tool call loop and return (result, tool_context, rounds, tool_data).
 
@@ -33,13 +39,18 @@ def run_tool_loop(
     execution. When it returns True the loop stops and reports it through
     ``tool_context["cancelled"]``, so a caller can tell an abandoned run
     from a finished one.
+
+    *context* optionally seeds the tool context, letting the caller mark
+    the kind of run for tools whose behavior depends on it (e.g. agent
+    goal check-ins, where send_user_message is only valid because the
+    final text is discarded). The same dict is returned as *tool_context*.
     """
     from workspace.ai.tool_registry import tool_registry
 
     tools = tool_registry.get_definitions()
     result = call_llm(messages, model=model, tools=tools)
 
-    tool_context = {}
+    tool_context = context if context is not None else {}
     rounds = []
     tool_data = []  # compact history for Message.tool_data
     max_tool_rounds = settings.AI_MAX_TOOL_ROUNDS

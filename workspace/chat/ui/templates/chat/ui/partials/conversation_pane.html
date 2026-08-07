@@ -338,17 +338,17 @@
         <input type="file" multiple x-ref="fileInput" class="hidden" @change="handleFileSelect($event)" />
 
         <!-- Mobile input (< sm) -->
-        <div class="flex sm:hidden items-center gap-1.5" x-show="recorderState === 'idle'">
-          <div class="dropdown dropdown-top flex-shrink-0 self-end">
-            <button tabindex="0" class="btn btn-ghost btn-square w-9 h-9 min-h-0" title="Attach file">
-              <i data-lucide="paperclip" class="w-4 h-4"></i>
+        <div class="flex sm:hidden items-end gap-1.5" x-show="recorderState === 'idle'">
+          <div class="dropdown dropdown-top flex-shrink-0">
+            <button tabindex="0" class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" title="Attach file">
+              <i data-lucide="paperclip" class="w-5 h-5"></i>
             </button>
             <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
               <li><a @click="document.activeElement.blur(); openFileDialog()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
               <li><a @click="document.activeElement.blur(); attachFromWorkspace()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
             </ul>
           </div>
-          <div class="flex-1 flex items-center border border-base-300 rounded-2xl transition-colors focus-within:border-info/50 min-h-[38px]">
+          <div class="flex-1 flex items-center border border-base-300 rounded-2xl transition-colors focus-within:border-info/50 min-h-[2.375rem]">
             <textarea
               x-ref="messageInputMobile"
               x-model="messageBody"
@@ -362,25 +362,26 @@
             ></textarea>
           </div>
           <button
-            class="btn btn-ghost btn-square flex-shrink-0 self-end w-9 h-9 min-h-0"
-            x-show="recorderSupported && !messageBody.trim() && pendingFiles.length === 0 && pendingPickedFiles.length === 0"
+            class="btn btn-ghost btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
+            x-show="recorderSupported && !hasComposerContent()" x-cloak
             @click="startRecording()"
             title="Record a voice message"
           >
-            <i data-lucide="mic" class="w-4 h-4"></i>
+            <i data-lucide="mic" class="w-5 h-5"></i>
           </button>
           <button
-            class="btn btn-info btn-square flex-shrink-0 self-end w-9 h-9 min-h-0"
+            class="btn btn-info btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
+            x-show="!recorderSupported || hasComposerContent()"
             @click="sendOrEdit()"
-            :disabled="(!messageBody.trim() && pendingFiles.length === 0 && pendingPickedFiles.length === 0) || (botTyping && isBotConversation(activeConversation))"
+            :disabled="!hasComposerContent() || (botTyping && isBotConversation(activeConversation))"
           >
-            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            <i data-lucide="send" class="w-[1.125rem] h-[1.125rem]"></i>
           </button>
         </div>
 
         <!-- Recording banner -->
         <div x-show="recorderState === 'recording'" x-cloak
-             class="flex items-center gap-2 border border-error/40 rounded-xl px-3 py-2">
+             class="flex items-center gap-2 h-[2.375rem] sm:h-auto sm:py-2 border border-error/40 rounded-2xl px-2 pl-3">
           <span class="inline-block w-2.5 h-2.5 rounded-full bg-error animate-pulse flex-shrink-0"></span>
           <span class="text-sm tabular-nums flex-1" x-text="recordLabel()"></span>
           <button class="btn btn-ghost btn-sm btn-square" @click="cancelRecording()" title="Discard">
@@ -395,7 +396,7 @@
              measured duration in at construction, so the component has to be
              built after the recording finished, not once at composer mount. -->
         <template x-if="recorderState === 'preview'">
-          <div class="flex items-center gap-2 border border-base-300 rounded-xl px-3 py-2">
+          <div class="flex items-center gap-2 h-[2.375rem] sm:h-auto sm:py-2 border border-base-300 rounded-2xl px-2 pl-3">
             <div class="flex-1 min-w-0" x-data="chatAudioPlayer('preview', recordedDuration)" x-ref="previewPlayer">
               <audio x-ref="audio" :src="recordedUrl" preload="metadata"
                      @loadedmetadata="onMetadata()"
@@ -494,7 +495,7 @@
 
             <button
               class="btn btn-ghost btn-xs btn-square"
-              x-show="recorderSupported && !messageBody.trim() && pendingFiles.length === 0 && pendingPickedFiles.length === 0"
+              x-show="recorderSupported && !hasComposerContent()" x-cloak
               @click="startRecording()"
               title="Record a voice message"
             >
@@ -505,7 +506,7 @@
             <button
               class="btn btn-info btn-sm btn-square"
               @click="sendOrEdit()"
-              :disabled="(!messageBody.trim() && pendingFiles.length === 0 && pendingPickedFiles.length === 0) || (botTyping && isBotConversation(activeConversation))"
+              :disabled="!hasComposerContent() || (botTyping && isBotConversation(activeConversation))"
             >
               <i data-lucide="send" class="w-3.5 h-3.5"></i>
             </button>

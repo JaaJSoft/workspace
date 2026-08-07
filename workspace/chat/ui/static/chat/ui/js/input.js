@@ -28,6 +28,15 @@ window.chatInputMixin = function chatInputMixin() {
     mentionHighlight: -1,
     mentionStartPos: -1,
 
+    // Anything the composer could send right now. A method, not a getter:
+    // this object is spread into chatApp(), and spread copies a getter's
+    // one-time value instead of the accessor.
+    hasComposerContent() {
+      return Boolean((this.messageBody || '').trim())
+        || this.pendingFiles.length > 0
+        || this.pendingPickedFiles.length > 0;
+    },
+
     // ── Autoresize + emoji insert ────────────────────────────
     insertEmoji(emoji) {
       const ta = this.getMessageInput();

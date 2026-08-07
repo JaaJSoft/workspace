@@ -150,6 +150,13 @@ class ExtractThinkingTests(SimpleTestCase):
         self.assertEqual(thinking, "")
         self.assertEqual(cleaned, content)
 
+    def test_mismatched_block_does_not_swallow_the_next_one(self):
+        thinking, cleaned = _extract_thinking(
+            "<think>bad</thought><think>real</think>Answer"
+        )
+        self.assertEqual(thinking, "real")
+        self.assertEqual(cleaned, "<think>bad</thought>Answer")
+
 
 def _fake_client(message):
     response = SimpleNamespace(

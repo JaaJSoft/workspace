@@ -7,10 +7,13 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# Backends spell their inline reasoning tag differently; the backreference keeps
-# an opening tag from being closed by a different one.
+# Backends spell their inline reasoning tag differently. The backreference keeps
+# an opening tag from being closed by a different one, and the body refuses to
+# cross a further opening tag so a mismatched closer cannot merge two blocks -
+# and with them the answer in between - into a single one.
+_THINK_TAGS = "think|thinking|thought|thoughts|reasoning"
 _THINK_RE = re.compile(
-    r"<(think|thinking|thought|thoughts|reasoning)>([\s\S]*?)</\1>\s*",
+    rf"<({_THINK_TAGS})>((?:(?!<(?:{_THINK_TAGS})>)[\s\S])*?)</\1>\s*",
     re.IGNORECASE,
 )
 _RAW_TOOL_CALL_RE = re.compile(r"</?tool_call>", re.IGNORECASE)

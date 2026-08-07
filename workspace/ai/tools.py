@@ -138,6 +138,10 @@ class CompleteAgentGoalParams(BaseModel):
     )
 
 
+class SendUserMessageParams(BaseModel):
+    message: str = Field(description="The message to deliver to the user.")
+
+
 def _bot_supports_vision(bot):
     profile = getattr(bot, "bot_profile", None)
     return bool(profile and profile.supports_vision)
@@ -769,6 +773,33 @@ Call this when the goal is reached, has become irrelevant, or the user asks you 
         )
         verb = "abandoned" if args.abandoned else "completed"
         return f'Goal "{goal.title}" marked as {verb}.'
+
+    @tool(
+        badge_icon="\U0001f4ac",
+        badge_label="Messaged the user",
+        badge_running_label="Messaging the user",
+        detail_key="message",
+        params=SendUserMessageParams,
+    )
+    def send_user_message(self, args, user, bot, conversation_id, context):
+        """Deliver a message to the user at the end of an autonomous goal check-in. \
+During a check-in your plain replies are DISCARDED — this tool is the only way to reach the user. \
+Call it only when you have something genuinely worth telling them (a result, an important change, \
+a deadline at risk), never for routine progress reports. \
+Outside a check-in, do not use this tool: you are already talking to the user, just write your reply."""
+        if not context.get("agent_checkin"):
+            return (
+                "Error: you are chatting with the user right now — "
+                "just write your reply as normal text."
+            )
+        message = args.message.strip()
+        if not message:
+            return "Error: message is required"
+        context.setdefault("agent_messages", []).append(message)
+        return (
+            "Message queued — it will be delivered to the user at the end "
+            "of this check-in."
+        )
 
 
 class ScheduleToolProvider(ToolProvider):

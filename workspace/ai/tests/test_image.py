@@ -113,7 +113,19 @@ class GenerateImageRetryTests(SimpleTestCase):
             self._generate(client)
 
         self.assertEqual(ctx.exception.attempts, 1)
+        self.assertTrue(ctx.exception.rejected)
         self.assertEqual(client.images.generate.call_count, 1)
+
+    def test_an_unreachable_backend_is_not_reported_as_a_rejection(self):
+        # The flag decides whether the caller asks the model to rewrite its
+        # prompt: a prompt the service never read must not take the blame.
+        client = MagicMock()
+        client.images.generate.side_effect = _api_error(InternalServerError, 503)
+
+        with self.assertRaises(ImageGenerationError) as ctx:
+            self._generate(client)
+
+        self.assertFalse(ctx.exception.rejected)
 
     @override_settings(AI_IMAGE_RETRY_DELAY=2)
     def test_backoff_doubles_between_attempts(self):
@@ -189,4 +201,5 @@ class EditImageRetryTests(SimpleTestCase):
                 self._edit(client)
 
         self.assertEqual(ctx.exception.attempts, 1)
+        self.assertTrue(ctx.exception.rejected)
         self.assertEqual(client.images.edit.call_count, 1)

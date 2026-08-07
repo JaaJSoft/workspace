@@ -885,6 +885,9 @@ AI_IMAGE_MAX_ATTEMPTS = int(
 AI_IMAGE_RETRY_DELAY = float(
     os.getenv("AI_IMAGE_RETRY_DELAY", "2")
 )  # seconds before the first image retry, doubled after each attempt
+AI_IMAGE_FAILURE_BUDGET = int(
+    os.getenv("AI_IMAGE_FAILURE_BUDGET", "4")
+)  # failed image tool calls a bot reply may burn before it must stop retrying
 SEARXNG_URL = os.getenv("SEARXNG_URL", "")  # e.g. http://searxng:8080
 SEARXNG_BLOCKED_DOMAINS = os.getenv(
     "SEARXNG_BLOCKED_DOMAINS", ""

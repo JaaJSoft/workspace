@@ -28,14 +28,18 @@ class ImageGenerationError(RuntimeError):
     """The image backend did not return an image.
 
     *attempts* is how many calls were made before giving up: a rejected
-    prompt stops at one, a flaky backend burns the whole budget. Callers
-    surface it so the model can tell "the service is down" from "this
-    prompt will never work".
+    prompt stops at one, a flaky backend burns the whole budget.
+
+    *rejected* says the backend passed a verdict on the request itself
+    rather than falling over. It is the difference between the two pieces
+    of advice worth giving a model: rewrite the prompt, or stop trying and
+    tell the user the service is down.
     """
 
-    def __init__(self, message, attempts=1):
+    def __init__(self, message, attempts=1, rejected=False):
         super().__init__(message)
         self.attempts = attempts
+        self.rejected = rejected
 
 
 def ai_generate_image(prompt: str, size: str = DEFAULT_SIZE) -> bytes:
@@ -221,16 +225,21 @@ def _run_with_retry(operation, op: str, prompt: str) -> bytes:
             status="error",
         ).inc()
 
-        if attempt >= attempts or not _is_retryable(failure):
+        rejected = not _is_retryable(failure)
+        if attempt >= attempts or rejected:
             logger.error(
-                "Image %s failed after %d attempt(s): model=%s error=%s prompt=%.80s",
+                "Image %s failed after %d attempt(s): model=%s rejected=%s "
+                "error=%s prompt=%.80s",
                 op,
                 attempt,
                 settings.AI_IMAGE_MODEL,
+                rejected,
                 failure,
                 scrub(prompt),
             )
-            raise ImageGenerationError(str(failure), attempts=attempt) from failure
+            raise ImageGenerationError(
+                str(failure), attempts=attempt, rejected=rejected
+            ) from failure
 
         logger.warning(
             "Image %s attempt %d/%d failed (%s), retrying in %.1fs: prompt=%.80s",

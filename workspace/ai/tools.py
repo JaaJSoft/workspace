@@ -6,6 +6,7 @@ import logging
 import uuid as uuid_lib
 from datetime import UTC, datetime
 
+from django.conf import settings
 from pydantic import BaseModel, Field
 
 from workspace.common.logging import scrub
@@ -160,19 +161,52 @@ def _image_tool_payload(image_data, text):
     )
 
 
-def _image_failure_message(tool_name, exc):
+def _image_failure_message(tool_name, prompt, exc, context):
     """Tool result for an image the backend refused to produce.
 
-    The service already retried what was worth retrying, so the point of
-    this text is the instruction: a model that asked for several images
-    otherwise answers with the subset that worked and never mentions the
-    rest.
+    The service already retried what a retry alone can fix, so what is left
+    is the part only the model can do: come back with different wording.
+    Two things have to be in the text for that to happen — why the call
+    failed (a refused prompt is rewritten, a dead backend is not) and when
+    to stop, since nothing else caps how many times a model can call a tool
+    within a reply.
     """
+    tried = context.setdefault("failed_image_prompts", [])
+    repeated = any(p.strip().lower() == prompt.strip().lower() for p in tried)
+    tried.append(prompt)
+    exhausted = len(tried) >= settings.AI_IMAGE_FAILURE_BUDGET
+
+    head = f"Error: image failed after {exc.attempts} attempt(s) — {exc}."
+    tail = (
+        "Never answer as if this image had not been asked for: whatever "
+        "happens, say plainly in your reply which image is missing."
+    )
+
+    if exhausted:
+        return (
+            f"{head} Too many image failures in this reply — stop calling "
+            f"{tool_name} and answer the user now, naming the images you "
+            f"could not produce. {tail}"
+        )
+    if repeated:
+        return (
+            f"{head} You already sent this exact prompt in this reply and it "
+            f"failed. Do not send it again: call {tool_name} with a "
+            "substantially different wording — same subject, described "
+            f"another way. {tail}"
+        )
+    if exc.rejected:
+        return (
+            f"{head} The service rejected the request itself, so the same "
+            f"wording will fail again. Call {tool_name} once more with a "
+            "rewritten prompt: keep the visual intent, describe it in plain "
+            "neutral terms, and drop names of real people, brands or "
+            f"copyrighted characters. {tail}"
+        )
     return (
-        f"Error: image failed after {exc.attempts} attempt(s) — {exc}. "
-        f"Do not drop this image silently: call {tool_name} again for it "
-        "(rephrase the prompt if it looks like it was rejected), and if it "
-        "still fails, tell the user which image could not be produced."
+        f"{head} The image service failed, not your prompt. Call "
+        f"{tool_name} again for this image, varying the wording a little — "
+        f"a backend that chokes on one phrasing often answers another. {tail}"
     )
 
 
@@ -395,7 +429,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
         except ValueError as exc:
             return f"Error: {exc}"
         except ImageGenerationError as exc:
-            return _image_failure_message("generate_image", exc)
+            return _image_failure_message("generate_image", prompt, exc, context)
 
         context.setdefault("images", []).append(
             {
@@ -469,7 +503,7 @@ Do NOT use this to create an image from scratch — use generate_image instead."
         try:
             image_data = ai_edit_image(source_data, prompt, size)
         except ImageGenerationError as exc:
-            return _image_failure_message("edit_image", exc)
+            return _image_failure_message("edit_image", prompt, exc, context)
         except (ValueError, RuntimeError) as exc:
             return f"Error: {exc}"
 

@@ -48,7 +48,7 @@ AI is disabled until `AI_API_KEY` is set. All variables are optional beyond that
 | `AI_TIMEOUT` | Seconds per AI request. |
 | `AI_IMAGE_MODEL` / `AI_IMAGE_BASE_URL` | Image generation model and optional separate endpoint. |
 | `AI_IMAGE_MAX_ATTEMPTS` / `AI_IMAGE_RETRY_DELAY` | Calls per image before giving up (default 3, `1` disables retries) and the delay before the first retry in seconds (default 2, doubled after each attempt). Rejections that would repeat identically - a refused prompt, a bad key, an unknown model - are not retried. |
-| `AI_IMAGE_FAILURE_BUDGET` | How many failed image calls a single bot reply may burn (default 4). Once the service has spent its own attempts, the tool result asks the bot to call again with a reworded prompt; this caps how long it may keep trying before it has to answer and name the images it could not produce. |
+| `AI_IMAGE_FAILURE_BUDGET` | How many failed image calls a single bot reply may burn (default 10). Once the service has spent its own attempts, the tool result asks the bot to call again with a reworded prompt; this caps how long it may keep trying before it has to answer and name the images it could not produce. |
 | `SEARXNG_URL` | SearXNG instance used by the web search tool. |
 
 Scheduled messages and conversation summaries run as background work, so **Celery worker and beat should be running in production**.

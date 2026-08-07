@@ -480,6 +480,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         self.assertEqual(mock_execute.call_count, 1)
 
 
+@override_settings(AI_IMAGE_RETRY_DELAY=0)
 class GenerateImageToolTest(TestCase):
     """Unit tests for the generate_image tool."""
 
@@ -490,7 +491,7 @@ class GenerateImageToolTest(TestCase):
         self.conv_id = "test-conv-img"
         self.context = {}
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_success(self, mock_get_client):
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -534,7 +535,7 @@ class GenerateImageToolTest(TestCase):
         )
         self.assertIn("Error", result)
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_invalid_size_defaults(self, mock_get_client):
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -554,7 +555,7 @@ class GenerateImageToolTest(TestCase):
         call_kwargs = mock_client.images.generate.call_args[1]
         self.assertEqual(call_kwargs["size"], "1024x1024")
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_api_error(self, mock_get_client):
         mock_client = MagicMock()
         mock_client.images.generate.side_effect = Exception("API timeout")
@@ -570,7 +571,25 @@ class GenerateImageToolTest(TestCase):
         self.assertIn("Error", result)
         self.assertNotIn("images", self.context)
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
+    def test_generate_image_error_tells_the_model_to_call_again(self, mock_get_client):
+        """A model asked for several images drops the failed ones unless told not to."""
+        mock_client = MagicMock()
+        mock_client.images.generate.side_effect = Exception("API timeout")
+        mock_get_client.return_value = mock_client
+
+        result = self.provider.generate_image(
+            GenerateImageParams(prompt="a cat"),
+            user=None,
+            bot=None,
+            conversation_id=self.conv_id,
+            context=self.context,
+        )
+
+        self.assertIn("call generate_image again", result)
+        self.assertIn("3 attempt(s)", result)
+
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_empty_data_reports_error(self, mock_get_client):
         """A successful API call that returns no image must not report success."""
         mock_client = MagicMock()
@@ -590,7 +609,7 @@ class GenerateImageToolTest(TestCase):
         self.assertNotIn("successfully", result)
         self.assertNotIn("images", self.context)
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_malformed_b64_reports_error(self, mock_get_client):
         """A malformed base64 payload must surface as an error, not crash."""
         mock_client = MagicMock()
@@ -610,7 +629,7 @@ class GenerateImageToolTest(TestCase):
         self.assertNotIn("successfully", result)
         self.assertNotIn("images", self.context)
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_empty_b64_reports_error(self, mock_get_client):
         """An empty b64_json payload must surface as an error, not success."""
         mock_client = MagicMock()
@@ -631,6 +650,7 @@ class GenerateImageToolTest(TestCase):
         self.assertNotIn("images", self.context)
 
 
+@override_settings(AI_IMAGE_RETRY_DELAY=0)
 class EditImageToolTest(TestCase):
     """Unit tests for the edit_image tool."""
 
@@ -758,6 +778,27 @@ class EditImageToolTest(TestCase):
 
         self.assertIn("Error", result)
         self.assertNotIn("images", self.context)
+
+    @patch("workspace.ai.services.image.get_image_client")
+    def test_edit_image_error_tells_the_model_to_call_again(self, mock_get_client):
+        self._attach_image()
+        mock_client = MagicMock()
+        mock_client.images.edit.side_effect = Exception("OpenAI failed")
+        mock_get_client.return_value = mock_client
+
+        with patch(
+            "workspace.ai.services.image._edit_via_ollama",
+            side_effect=Exception("Ollama failed"),
+        ):
+            result = self.provider.edit_image(
+                EditImageParams(prompt="make it blue"),
+                user=self.user,
+                bot=None,
+                conversation_id=str(self.conv.uuid),
+                context=self.context,
+            )
+
+        self.assertIn("call edit_image again", result)
 
     def test_edit_image_no_conversation(self):
         result = self.provider.edit_image(

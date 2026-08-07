@@ -197,7 +197,13 @@ def build_chat_messages(
         "of who you are, so the only way to get a faithful result is to include the full "
         "description in the prompt every time.\n"
         "If you are unsure of your appearance, use the get_my_avatar tool to view your "
-        "avatar before generating an image of yourself."
+        "avatar before generating an image of yourself.\n"
+        "When an image tool returns an error, the image was NOT produced. Call the tool "
+        "again for that image before replying — rephrase the prompt if it looks like it "
+        "was rejected. This matters most when several images were requested: never "
+        "answer with only the ones that worked as if the others had never been asked "
+        "for. If an image still fails after retrying, say plainly which one could not "
+        "be generated."
     )
 
     past_images_instructions = (

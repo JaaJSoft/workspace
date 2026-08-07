@@ -125,9 +125,11 @@ class CallLlmMetricsTests(TestCase):
 @override_settings(
     AI_API_KEY="test-key",
     AI_IMAGE_MODEL="dall-e-3",
+    AI_IMAGE_MAX_ATTEMPTS=3,
+    AI_IMAGE_RETRY_DELAY=0,
 )
 class ImageRequestMetricsTests(TestCase):
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_successful_generate_increments_ok_counter(self, mock_get_client):
         import base64
 
@@ -152,7 +154,7 @@ class ImageRequestMetricsTests(TestCase):
 
         self.assertEqual(_sample("ai_image_requests_total", labels) - before, 1)
 
-    @patch("workspace.ai.tools.get_image_client")
+    @patch("workspace.ai.services.image.get_image_client")
     def test_generate_error_increments_error_counter(self, mock_get_client):
         from workspace.ai.tools import GenerateImageParams, ImageToolProvider
 
@@ -172,7 +174,9 @@ class ImageRequestMetricsTests(TestCase):
         )
 
         self.assertTrue(result.startswith("Error"))
-        self.assertEqual(_sample("ai_image_requests_total", labels) - before, 1)
+        # One sample per attempt: the counter tracks calls to the backend,
+        # and the retries are real calls.
+        self.assertEqual(_sample("ai_image_requests_total", labels) - before, 3)
 
     @patch("workspace.ai.services.image.get_image_client")
     def test_successful_edit_increments_ok_counter(self, mock_get_client):
@@ -216,4 +220,4 @@ class ImageRequestMetricsTests(TestCase):
         with self.assertRaises(RuntimeError):
             ai_edit_image(b"source-bytes", "make it red")
 
-        self.assertEqual(_sample("ai_image_requests_total", labels) - before, 1)
+        self.assertEqual(_sample("ai_image_requests_total", labels) - before, 3)

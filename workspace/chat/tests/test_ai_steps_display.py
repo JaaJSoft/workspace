@@ -259,6 +259,13 @@ class AiStepsPartialTests(SimpleTestCase):
         html = render_partial([make_round(result_content="Error: boom")])
         self.assertIn("text-error", html)
 
+    def test_finished_timeline_renders_the_past_tense_alone(self):
+        # Every call in a stored message has already run: the present-tense
+        # span belongs to the live steps only.
+        html = render_partial([make_round()])
+        self.assertIn("ai-step-label-done", html)
+        self.assertNotIn("ai-step-label-running", html)
+
     def test_args_and_result_shown_in_expanded_content(self):
         html = render_partial([make_round()])
         self.assertIn("query", html)

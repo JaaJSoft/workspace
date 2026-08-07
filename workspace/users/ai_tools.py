@@ -21,6 +21,7 @@ class UsersToolProvider(ToolProvider):
     @tool(
         badge_icon="👤",
         badge_label="Checked status",
+        badge_running_label="Checking status",
         detail_key="username",
         params=CheckUserStatusParams,
     )
@@ -56,7 +57,10 @@ Call this when the user asks if someone is available, reachable, or what their s
         return json.dumps(info)
 
     @tool(
-        badge_icon="👥", badge_label="Listed online users", params=ListOnlineUsersParams
+        badge_icon="👥",
+        badge_label="Listed online users",
+        badge_running_label="Listing online users",
+        params=ListOnlineUsersParams,
     )
     def list_online_users(self, args, user, bot, conversation_id, context):
         """List all users who are currently online, away, or busy (excludes offline users and bots). \

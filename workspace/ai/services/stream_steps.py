@@ -123,13 +123,16 @@ def notify_tool_step(recipient_ids, conversation_id, tool_call):
         # Render the final message's tool timeline row itself (auto-escaped
         # there and here), so a live step is that row minus the result the
         # tool has not produced yet, and a tool's presentation has one source
-        # of truth.
+        # of truth. Both tenses ship in the row: the step outlives the call it
+        # announces — once the next one starts it becomes a done row — and the
+        # cached HTML cannot be re-rendered at that point.
         html = render_to_string(
             "chat/ui/partials/_tool_call_row.html",
             {
                 "call": {
                     "icon": badge["icon"],
                     "label": badge["label"],
+                    "running_label": badge["running_label"],
                     "detail": str(detail)[:MAX_DETAIL_LEN],
                     "args": display_args(parsed),
                     "args_raw": raw_args if parsed is None else "",

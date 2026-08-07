@@ -3,9 +3,17 @@ Summary line of one tool call (icon + label + optional detail). Shared by
 the final timeline row (_tool_call_row.html) and the live progress step
 rendered server-side and pushed over SSE while a bot response generates —
 keep it free of layout assumptions beyond a flex row context.
+
+A live step carries both tenses: which one shows is decided in CSS from an
+`ai-step-running` ancestor, because the step HTML reaches the page through
+x-html, where Alpine directives are never initialised. The finished timeline
+passes no running label and renders the past tense alone.
 {% endcomment %}
 <span class="flex-shrink-0">{{ call.icon }}</span>
-<span class="flex-shrink-0">{{ call.label }}</span>
+{% if call.running_label %}
+  <span class="ai-step-label-running flex-shrink-0">{{ call.running_label }}</span>
+{% endif %}
+<span class="ai-step-label-done flex-shrink-0">{{ call.label }}</span>
 {% if call.detail %}
   <span class="truncate min-w-0 opacity-80">{{ call.detail }}</span>
 {% endif %}

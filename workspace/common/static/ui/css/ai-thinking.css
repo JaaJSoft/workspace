@@ -48,6 +48,14 @@
   animation: ai-step-spin .7s linear infinite;
 }
 
+/* Tense of a live step's label: present participle while the call runs,
+   past tense once the next step pushes it up the stack. Both spans are in
+   the row HTML, which arrives through x-html and so carries no Alpine
+   directives — the row's `ai-step-running` class is what picks one. */
+.ai-step-label-running { display: none; }
+.ai-step-running .ai-step-label-running { display: block; }
+.ai-step-running .ai-step-label-done { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .ai-thinking-dot,
   .ai-step-marker {

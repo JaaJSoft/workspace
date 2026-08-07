@@ -60,6 +60,7 @@ class CalendarToolProvider(ToolProvider):
     @tool(
         badge_icon="🔍",
         badge_label="Searched events",
+        badge_running_label="Searching events",
         detail_key="query",
         params=SearchEventsParams,
     )
@@ -117,6 +118,7 @@ scheduling polls."""
     @tool(
         badge_icon="\U0001f4c5",
         badge_label="Checked availability",
+        badge_running_label="Checking availability",
         params=CheckAvailabilityParams,
     )
     def check_availability(self, args, user, bot, conversation_id, context):
@@ -268,7 +270,11 @@ Call this when the user asks if they are free, available, or have any events dur
             ensure_ascii=False,
         )
 
-    @tool(badge_icon="📅", badge_label="Listed calendars")
+    @tool(
+        badge_icon="📅",
+        badge_label="Listed calendars",
+        badge_running_label="Listing calendars",
+    )
     def list_calendars(self, args, user, bot, conversation_id, context):
         """List the user's own calendars (the ones you can add events to). \
 Call this before create_event when the user names a specific calendar, \
@@ -284,6 +290,7 @@ or when the user asks which calendars they have."""
     @tool(
         badge_icon="📅",
         badge_label="Checked agenda",
+        badge_running_label="Checking agenda",
         params=ListUpcomingEventsParams,
     )
     def list_upcoming_events(self, args, user, bot, conversation_id, context):
@@ -336,6 +343,7 @@ whether a specific time range is free use check_availability."""
     @tool(
         badge_icon="➕",
         badge_label="Added to calendar",
+        badge_running_label="Adding to calendar",
         detail_key="title",
         params=CreateEventParams,
     )

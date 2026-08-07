@@ -34,6 +34,7 @@ class MailToolProvider(ToolProvider):
     @tool(
         badge_icon="📧",
         badge_label="Read email",
+        badge_running_label="Reading email",
         detail_key="uuid",
         params=ReadEmailParams,
     )
@@ -86,6 +87,7 @@ or when the user asks to read, open, or see the details of a specific email."""
     @tool(
         badge_icon="🔍",
         badge_label="Searched emails",
+        badge_running_label="Searching emails",
         detail_key="query",
         params=SearchEmailsParams,
     )

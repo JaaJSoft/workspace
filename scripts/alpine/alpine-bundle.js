@@ -1,9 +1,5 @@
 // Point d'entrée du bundle Alpine vendorisé.
 //
-// Reproduit ce que faisaient les trois builds `cdn.min.js` chargés en séquence
-// depuis jsdelivr : chaque build de plugin s'enregistrait lui-même, puis le
-// build du coeur démarrait Alpine.
-//
 // L'ordre est contraignant. `Alpine.plugin()` doit s'exécuter avant
 // `Alpine.start()`, et c'est `Alpine.start()` qui émet `alpine:init` — soit
 // l'événement que `workspace/common/static/ui/js/stores.js` attend pour

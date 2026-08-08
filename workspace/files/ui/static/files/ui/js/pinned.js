@@ -49,7 +49,11 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
 
     onDragOver(event) {
       if (!event.dataTransfer.types.includes('application/x-pin-folder')) return;
-      event.dataTransfer.dropEffect = 'link';
+      // Must be a member of the source's effectAllowed or the browser
+      // resets this to 'none' and refuses the drop. 'copy' belongs to
+      // every default set; 'link' does not, and Chrome on Linux clamps
+      // an explicit effectAllowed='link' down to 'copy' anyway.
+      event.dataTransfer.dropEffect = 'copy';
     },
 
     onDragEnter(event) {

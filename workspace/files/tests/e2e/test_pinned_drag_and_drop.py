@@ -57,6 +57,31 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
             node_type=File.NodeType.FOLDER,
         )
 
+    def record_dragstart(self):
+        """Capture the element the browser picked as the drag source.
+
+        Returns a zero-arg callable yielding ``{"source": <tagName>,
+        "types": [...]}`` for the last ``dragstart``. The drag source is
+        *not* whatever element the pointer went down on: the browser
+        walks up to the nearest ``draggable`` ancestor, and an anchor is
+        draggable by default.
+        """
+        self.page.evaluate(
+            """() => {
+                window.__dragstart = null;
+                // Bubble phase, so the row's own @dragstart has already
+                // populated the DataTransfer by the time we read it.
+                window.addEventListener('dragstart', (e) => {
+                    window.__dragstart = {
+                        source: e.target.tagName,
+                        types: [...e.dataTransfer.types],
+                        effectAllowed: e.dataTransfer.effectAllowed,
+                    };
+                }, false);
+            }"""
+        )
+        return lambda: self.page.evaluate("window.__dragstart")
+
     def drag(self, source, target, *, mid_drag=None):
         """Perform a real HTML5 drag from ``source`` onto ``target``.
 
@@ -98,6 +123,67 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
             mid_drag()
         self.page.mouse.up()
 
+    def test_drag_source_declares_the_effect_the_drop_zone_asks_for(self):
+        """Per the HTML spec the browser silently resets ``dropEffect``
+        to ``none`` — and refuses the drop — unless the value the target
+        asks for is a member of the source's ``effectAllowed``.
+
+        This zone used to ask for ``link`` while the source declared
+        nothing, so the browser derived a default. Chrome on Linux
+        derives ``copyMove``, which excludes ``link``; the drop was
+        rejected even though ``dragover`` had called
+        ``preventDefault()`` — no ``drop`` event, no request, no error.
+        Forcing ``effectAllowed = 'link'`` did not help either: Chrome
+        clamps it down to ``copy``. ``copy`` is the only effect that
+        belongs to every default set, so both sides now name it.
+
+        Chromium under Playwright reports ``effectAllowed = 'all'``,
+        which contains every effect, so the end-to-end drop succeeds
+        here regardless. Only the negotiated values can be asserted.
+
+        The reorder path never had this bug: ``onPinnedDragStart`` sets
+        ``effectAllowed = 'move'`` to match its own ``dropEffect``.
+        """
+        folder = self.make_folder("Reports")
+        self.login_as(self.user)
+        self.page.goto(f"{self.live_server_url}/files")
+
+        row = self.page.locator(f"tr[data-uuid='{folder.uuid}']")
+        expect(row).to_be_visible()
+
+        dragstart = self.record_dragstart()
+        drop_zone = self.page.locator("#pinned-folders-section > div").last
+
+        effects = {}
+
+        def capture():
+            effects["dropEffect"] = self.page.evaluate(
+                "window.__lastDropEffect || null"
+            )
+
+        self.page.evaluate(
+            """() => {
+                window.__lastDropEffect = null;
+                window.addEventListener('dragover', (e) => {
+                    const zone = document.querySelector('#pinned-folders-section');
+                    if (zone && zone.contains(e.target)) {
+                        window.__lastDropEffect = e.dataTransfer.dropEffect;
+                    }
+                }, false);
+            }"""
+        )
+        self.drag(row, drop_zone, mid_drag=capture)
+
+        started = dragstart()
+        assert started["effectAllowed"] == "copy", (
+            f"drag source must declare effectAllowed='copy' to match the "
+            f"drop zone's dropEffect; got {started['effectAllowed']!r}"
+        )
+        assert effects["dropEffect"] == "copy", (
+            f"drop zone should ask for the 'copy' effect, got "
+            f"{effects['dropEffect']!r} — source and target must agree"
+        )
+
     def test_dragging_a_folder_row_pins_it(self):
         folder = self.make_folder("Reports")
         self.login_as(self.user)
@@ -118,6 +204,49 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
         assert PinnedFolder.objects.filter(owner=self.user, folder=folder).exists(), (
             "drop did not persist a PinnedFolder row"
         )
+
+    def test_grabbing_the_folder_name_drags_the_row_not_the_link(self):
+        """The folder name is an anchor, and anchors are draggable by
+        default — so grabbing the name used to start a *link* drag
+        carrying a ``text/uri-list`` payload. Chrome routes that flavour
+        of drag through the OS rather than the page, so the sidebar
+        never received the drop while Firefox handled it fine.
+
+        Asserting only "did it get pinned?" does not pin this down: the
+        drop still succeeds under Playwright, which synthesizes drag
+        events instead of going through the OS. What actually
+        distinguishes the two cases is which element the browser picked
+        as the drag source, and what ended up in the DataTransfer.
+        """
+        folder = self.make_folder("Reports")
+        self.login_as(self.user)
+        self.page.goto(f"{self.live_server_url}/files")
+
+        name_link = self.page.locator(
+            f"tr[data-uuid='{folder.uuid}'] a[data-folder-link]"
+        )
+        expect(name_link).to_be_visible()
+
+        dragstart = self.record_dragstart()
+        drop_zone = self.page.locator("#pinned-folders-section > div").last
+        self.drag(name_link, drop_zone)
+
+        started = dragstart()
+        assert started is not None, "no dragstart fired when grabbing the folder name"
+        assert started["source"] == "TR", (
+            f"drag should originate from the row, not the name anchor; "
+            f"browser picked <{started['source'].lower()}>"
+        )
+        assert "text/uri-list" not in started["types"], (
+            f"grabbing the name started a link drag — DataTransfer carries "
+            f"{started['types']}"
+        )
+
+        expect(
+            self.page.locator(
+                f"li.pinned-folder-item[data-pinned-uuid='{folder.uuid}']"
+            )
+        ).to_be_visible()
 
     def test_reordering_pinned_folders_shows_feedback_and_persists(self):
         first = self.make_folder("Archive")

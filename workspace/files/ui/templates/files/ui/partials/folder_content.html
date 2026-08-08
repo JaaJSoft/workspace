@@ -257,7 +257,7 @@
             data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
             {% if node.node_type == 'folder' and not is_trash_view %}
             draggable="true"
-            @dragstart="$event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
+            @dragstart="$event.dataTransfer.effectAllowed = 'copy'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
             @click="openFolderFromRow($event)"
             {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
             @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')"
@@ -287,11 +287,18 @@
             </td>
             <td data-col="name">
               {% if node.node_type == 'folder' and not is_trash_view %}
+                {% comment %}
+                  draggable="false" hands the drag back to the row: an anchor
+                  is draggable by default, and a link drag carries a
+                  text/uri-list payload that Chrome routes through the OS
+                  instead of the page, so the sidebar never sees the drop.
+                {% endcomment %}
                 <a
                   href="/files/{{ node.uuid }}"
                   class="font-medium hover:text-primary hover:underline block truncate"
                   x-target.push="folder-browser"
                   data-folder-link
+                  draggable="false"
                   title="{{ node.name }}"
                 >
                   {{ node.name }}
@@ -399,7 +406,7 @@
             @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
             {% if node.node_type == 'folder' and not is_trash_view %}
             draggable="true"
-            @dragstart="$event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
+            @dragstart="$event.dataTransfer.effectAllowed = 'copy'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
             @click="navigateToFolder($event, '/files/{{ node.uuid }}')"
             {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
             @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')"

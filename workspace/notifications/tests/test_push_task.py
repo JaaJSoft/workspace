@@ -7,12 +7,16 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.notifications.models import Notification, PushSubscription
+from workspace.notifications.tests.vapid_fixtures import (
+    TEST_PRIVATE_KEY_RAW,
+    TEST_PUBLIC_KEY,
+)
 
 User = get_user_model()
 
 FAKE_VAPID_SETTINGS = {
-    "WEBPUSH_VAPID_PRIVATE_KEY": "fake-private-key",
-    "WEBPUSH_VAPID_PUBLIC_KEY": "fake-public-key",
+    "WEBPUSH_VAPID_PRIVATE_KEY": TEST_PRIVATE_KEY_RAW,
+    "WEBPUSH_VAPID_PUBLIC_KEY": TEST_PUBLIC_KEY,
     "WEBPUSH_VAPID_CLAIMS": {"sub": "mailto:test@example.com"},
 }
 

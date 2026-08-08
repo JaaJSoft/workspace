@@ -13,7 +13,7 @@ In-app and Web Push notifications with priority levels and read tracking.
 
 ## Web Push setup
 
-Web Push is optional and disabled until VAPID keys are configured. Generate a key pair and set:
+Web Push is optional and disabled until VAPID keys are configured. Generate a key pair with `python manage.py generate_vapid_keys` and set:
 
 | Variable | Purpose |
 |---|---|
@@ -21,7 +21,11 @@ Web Push is optional and disabled until VAPID keys are configured. Generate a ke
 | `WEBPUSH_VAPID_PUBLIC_KEY` | VAPID public key (sent to the browser) |
 | `WEBPUSH_VAPID_MAILTO` | Contact `mailto:` address required by the push protocol |
 
-See [`.env.example`](../../.env.example) for the generation snippet. Push delivery runs as background work, so **Celery worker should be running in production** for reliable delivery.
+The private key is accepted as raw base64url (what the command prints), base64url DER, or a PEM block. The single-line form is the safest choice: `.env` files and container env vars handle multi-line values inconsistently.
+
+The public key is what the browser stores as its `applicationServerKey`, so **regenerating the pair invalidates every existing subscription** and all users must re-subscribe. Rotate only when you mean to.
+
+Push delivery runs as background work, so **Celery worker should be running in production** for reliable delivery. When pushes never arrive, check the worker log first: a key that cannot be parsed, a missing `WEBPUSH_VAPID_MAILTO`, and a push service rejecting the request are each reported there.
 
 ## API
 

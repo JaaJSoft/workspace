@@ -78,7 +78,7 @@ class MailSendView(APIView):
                     )
 
         try:
-            raw_msg = send_email(
+            sent = send_email(
                 account=account,
                 to=d["to"],
                 subject=d["subject"],
@@ -97,7 +97,7 @@ class MailSendView(APIView):
             from .services.imap_sync import sync_folder_messages
 
             try:
-                append_to_sent(account, raw_msg)
+                append_to_sent(account, sent.archived)
             except Exception:
                 logger.warning(
                     "Failed to append sent message to IMAP for %s", scrub(account.email)

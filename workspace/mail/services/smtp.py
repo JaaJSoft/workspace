@@ -7,6 +7,9 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, make_msgid
+from typing import NamedTuple
+
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +48,7 @@ def test_smtp_connection(account):
         return False, str(e)
 
 
-def build_draft_message(
+def _build_mime(
     account,
     to=None,
     subject="",
@@ -59,33 +62,12 @@ def build_draft_message(
     in_reply_to="",
     references="",
 ):
-    """Build a MIME message and return the raw bytes.
+    """Assemble the MIME message object. See build_draft_message for the
+    parameters.
 
-    Parameters
-    ----------
-    account : MailAccount
-    to : list[str] | None
-    subject : str
-    body_html : str
-    body_text : str
-    cc : list[str] | None
-    bcc : list[str] | None
-    reply_to : str | None
-        The Reply-To header (which address should receive answers).
-        Unrelated to threading - see in_reply_to for that.
-    attachments : list[UploadedFile] | None
-    include_bcc : bool
-        Write the Bcc header into the message. Only for drafts: the draft
-        is APPENDed to IMAP and re-parsed on open, so the header is the
-        only place the Bcc list survives. Never set it on the send path,
-        where Bcc must stay in the SMTP envelope to avoid leaking the
-        hidden recipients to everyone else.
-    in_reply_to : str
-        Message-ID of the message being replied to.
-    references : str
-        Space-separated Message-ID chain of the thread, parent included.
-        Both must be derived server-side from a stored message - a client
-        supplied value would let a caller graft a reply onto any thread.
+    Each attachment is read exactly once here, so a caller that needs two
+    serializations of the same message must build it once and re-serialize
+    the returned object rather than calling this twice.
     """
     to = to or []
     cc = cc or []
@@ -124,7 +106,82 @@ def build_draft_message(
         part["Content-Disposition"] = f'attachment; filename="{attachment.name}"'
         msg.attach(part)
 
+    return msg
+
+
+def build_draft_message(
+    account,
+    to=None,
+    subject="",
+    body_html="",
+    body_text="",
+    cc=None,
+    bcc=None,
+    reply_to=None,
+    attachments=None,
+    include_bcc=False,
+    in_reply_to="",
+    references="",
+):
+    """Build a MIME message and return the raw bytes.
+
+    Parameters
+    ----------
+    account : MailAccount
+    to : list[str] | None
+    subject : str
+    body_html : str
+    body_text : str
+    cc : list[str] | None
+    bcc : list[str] | None
+    reply_to : str | None
+        The Reply-To header (which address should receive answers).
+        Unrelated to threading - see in_reply_to for that.
+    attachments : list[UploadedFile] | None
+    include_bcc : bool
+        Write the Bcc header into the message. Only for messages that are
+        APPENDed to IMAP and re-parsed on open (drafts, the Sent copy):
+        the header is the only place the Bcc list survives that round-trip,
+        and both folders are readable by the account owner alone. Never set
+        it on the bytes handed to SMTP, where Bcc must stay in the envelope
+        to avoid leaking the hidden recipients to everyone else.
+    in_reply_to : str
+        Message-ID of the message being replied to.
+    references : str
+        Space-separated Message-ID chain of the thread, parent included.
+        Both must be derived server-side from a stored message - a client
+        supplied value would let a caller graft a reply onto any thread.
+    """
+    msg = _build_mime(
+        account,
+        to=to,
+        subject=subject,
+        body_html=body_html,
+        body_text=body_text,
+        cc=cc,
+        bcc=bcc,
+        reply_to=reply_to,
+        attachments=attachments,
+        include_bcc=include_bcc,
+        in_reply_to=in_reply_to,
+        references=references,
+    )
     return msg.as_string().encode("utf-8")
+
+
+class SentMessage(NamedTuple):
+    """The two byte variants of a message that was just sent.
+
+    They differ by the Bcc header alone and share everything else,
+    Message-ID included, so the archived copy threads with the replies the
+    outgoing one attracts.
+    """
+
+    outgoing: bytes
+    """Handed to sendmail - no Bcc header, the list is in the envelope."""
+
+    archived: bytes
+    """Handed to IMAP APPEND - carries Bcc so Sent records who got a copy."""
 
 
 def send_email(
@@ -140,11 +197,17 @@ def send_email(
     in_reply_to="",
     references="",
 ):
-    """Send an email through the account's SMTP server."""
+    """Send an email through the account's SMTP server.
+
+    Returns a `SentMessage` carrying both serializations: the bytes that
+    went out (no Bcc header) and the ones to archive in Sent (Bcc header
+    included). The message is assembled once because the attachment
+    streams can only be read once.
+    """
     cc = cc or []
     bcc = bcc or []
 
-    raw_msg = build_draft_message(
+    msg = _build_mime(
         account,
         to=to,
         subject=subject,
@@ -157,14 +220,24 @@ def send_email(
         in_reply_to=in_reply_to,
         references=references,
     )
+    outgoing = msg.as_string().encode("utf-8")
+
+    if bcc:
+        msg["Bcc"] = ", ".join(bcc)
+    archived = msg.as_string().encode("utf-8")
 
     all_recipients = to + cc + bcc
 
     server = connect_smtp(account)
     try:
-        server.sendmail(account.email, all_recipients, raw_msg.decode("utf-8"))
+        server.sendmail(account.email, all_recipients, outgoing.decode("utf-8"))
     finally:
         server.quit()
 
-    logger.info("Email sent from %s to %s: %s", account.email, to, subject)
-    return raw_msg
+    logger.info(
+        "Email sent from %s to %s: %s",
+        scrub(account.email),
+        scrub(to),
+        scrub(subject),
+    )
+    return SentMessage(outgoing=outgoing, archived=archived)

@@ -32,12 +32,40 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
  * @returns {object} the contextified sandbox holding the script's globals
  */
 function loadScript(repoRelativePath, extraGlobals = {}) {
-  const code = fs.readFileSync(path.join(REPO_ROOT, repoRelativePath), 'utf8');
+  return loadScripts([repoRelativePath], extraGlobals);
+}
+
+/**
+ * Same, for a script that depends on a global another script defines
+ * (base.html loads both, so they share one global scope). Scripts run in
+ * order in a single context; the last one sees everything before it.
+ *
+ * @param {string[]} repoRelativePaths - scripts to run, in load order
+ * @param {object} extraGlobals - additional globals exposed to the scripts
+ * @returns {object} the contextified sandbox holding their globals
+ */
+function loadScripts(repoRelativePaths, extraGlobals = {}) {
   const sandbox = { console, ...extraGlobals };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(code, sandbox, { filename: repoRelativePath });
+  for (const repoRelativePath of repoRelativePaths) {
+    const code = fs.readFileSync(path.join(REPO_ROOT, repoRelativePath), 'utf8');
+    vm.runInContext(code, sandbox, { filename: repoRelativePath });
+  }
   return sandbox;
 }
 
-module.exports = { loadScript };
+/**
+ * Minimal browser globals for scripts that define a custom element at
+ * load time. Enough for the definition to run; the element's behaviour
+ * belongs in an e2e test with a real DOM.
+ */
+const CUSTOM_ELEMENT_STUBS = {
+  HTMLElement: class {},
+  customElements: { get: () => undefined, define: () => {} },
+  document: {
+    createElement: () => ({ setAttribute() {}, addEventListener() {} }),
+  },
+};
+
+module.exports = { loadScript, loadScripts, CUSTOM_ELEMENT_STUBS };

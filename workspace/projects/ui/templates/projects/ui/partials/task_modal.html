@@ -70,7 +70,7 @@
         <div class="label"><span class="label-text">Labels</span></div>
         <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="form.labels.length" x-cloak>
           <template x-for="id in form.labels" :key="id">
-            {% include "projects/ui/partials/_label_chip.html" with name_expr="labelName(id)" style_expr="labelStyle(id)" remove_expr="removeFormLabel(id)" %}
+            <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeFormLabel(id)"></tag-chip>
           </template>
         </div>
         {% include "projects/ui/partials/_label_selector.html" with on_select_event="modal-label-selected" all_source="labels" selected_source="form.labels" %}

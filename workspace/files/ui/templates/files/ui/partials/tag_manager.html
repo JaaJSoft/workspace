@@ -15,7 +15,7 @@
               :checked="fileHasTag(tag.uuid)"
               @change="toggleFileTag(tag)"
             >
-            <i :data-lucide="tag.icon || 'tag'" class="w-4 h-4 flex-shrink-0" :class="tag.color && tag.color !== 'ghost' ? 'text-' + tag.color : 'text-base-content/50'"></i>
+            <i :data-lucide="tag.icon || 'tag'" class="w-4 h-4 flex-shrink-0" :class="tag.color ? '' : 'text-base-content/50'" :style="tag.color ? 'color: ' + tag.color : ''"></i>
             <span class="truncate" x-text="tag.name"></span>
             <button type="button" class="ml-auto opacity-0 group-hover:opacity-100 hover:!opacity-100 p-0.5"
                     @click.prevent.stop="showTagModal(tag)" title="Edit tag">

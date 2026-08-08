@@ -39,17 +39,17 @@
     <li class="list-none" x-show="notePrefs.showHidden || !isHidden('{{ tag.uuid }}')">
       <div
         class="group flex items-center w-full gap-3 p-2 text-base rounded-lg transition-colors cursor-pointer"
-        {% if tag.color == 'ghost' or tag.color == 'neutral' %}
-        :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-success/10 text-success hover:bg-success/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-success'"
-        {% else %}
-        :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-{{ tag.color }}/10 text-{{ tag.color }} hover:bg-{{ tag.color }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-success'"
-        {% endif %}
+        {% comment %}The tag color tints the icon (inline style, since it is
+        a CSS color and not a theme token); the active row keeps the neutral
+        highlight so every tag reads the same when selected.{% endcomment %}
+        :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-base-content/10 text-base-content' : 'text-base-content/70 hover:bg-base-content/5'"
         data-tag-uuid="{{ tag.uuid }}"
         data-tag-name="{{ tag.name }}"
         @click="setView('tag', '{{ tag.uuid }}', '{{ tag.name }}')"
         @contextmenu="openCtxMenu($event, 'tag', { uuid: '{{ tag.uuid }}', name: '{{ tag.name|escapejs }}', icon: '{{ tag.icon }}', color: '{{ tag.color }}' })"
       >
-        <i data-lucide="{{ tag.icon|default:'tag' }}" class="w-5 h-5 flex-shrink-0 text-{{ tag.color }}"></i>
+        <i data-lucide="{{ tag.icon|default:'tag' }}" class="w-5 h-5 flex-shrink-0"
+           style="{% if tag.color %}color: {{ tag.color }}{% endif %}"></i>
         <span class="truncate flex-1">{{ tag.name }}</span>
         <button type="button" class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity"
                 @click.stop="openCtxMenu($event, 'tag', { uuid: '{{ tag.uuid }}', name: '{{ tag.name|escapejs }}', icon: '{{ tag.icon }}', color: '{{ tag.color }}' })">

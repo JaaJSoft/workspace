@@ -98,7 +98,7 @@
           </h2>
           <div class="flex flex-wrap gap-1.5">
             {% for label in labels_data %}
-              {% include "projects/ui/partials/_label_chip.html" %}
+              <tag-chip name="{{ label.name }}" color="{{ label.color }}"></tag-chip>
             {% endfor %}
           </div>
         </section>

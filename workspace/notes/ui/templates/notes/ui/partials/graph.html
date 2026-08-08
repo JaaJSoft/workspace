@@ -59,7 +59,7 @@
                   <input type="checkbox" class="checkbox checkbox-xs"
                          :checked="graphTags.indexOf(tag.uuid) !== -1"
                          @change="toggleGraphTag(tag.uuid)">
-                  <span class="badge badge-xs" :class="'badge-' + tag.color" x-text="tag.name"></span>
+                  <tag-chip :name="tag.name" :color="tag.color" size="sm"></tag-chip>
                 </label>
               </template>
               <div x-show="filteredGraphTags().length === 0"

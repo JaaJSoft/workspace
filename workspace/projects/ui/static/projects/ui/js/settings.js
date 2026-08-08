@@ -279,7 +279,9 @@ function projectSettingsDanger(config) {
   };
 }
 
-const COLUMN_COLORS = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7'];
+// Columns and labels pick from the shared <tag-chip> palette, so a label
+// and a chip rendered from it can never drift apart.
+const COLUMN_COLORS = window.TAG_CHIP_COLORS.map((c) => c.value);
 
 function projectColumns(config) {
   return {

@@ -133,9 +133,9 @@
       <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="data.labels.length" x-cloak>
         <template x-for="id in data.labels" :key="id">
           {% if "set_labels" in panel_action_ids %}
-            {% include "projects/ui/partials/_label_chip.html" with name_expr="labelName(id)" style_expr="labelStyle(id)" remove_expr="removeLabel(id)" %}
+            <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabel(id)"></tag-chip>
           {% else %}
-            {% include "projects/ui/partials/_label_chip.html" with name_expr="labelName(id)" style_expr="labelStyle(id)" %}
+            <tag-chip :name="labelName(id)" :color="labelColor(id)"></tag-chip>
           {% endif %}
         </template>
       </div>

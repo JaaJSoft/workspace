@@ -1,0 +1,31 @@
+{% comment %}
+Tag / label color picker
+========================
+Swatch row over the shared `window.TAG_CHIP_COLORS` palette — the same
+colors `<tag-chip>` renders. Used by the files/notes tag dialog and by the
+projects label settings.
+
+Params (Alpine expression fragments, evaluated in the caller's scope):
+  - color_expr: the assignable expression holding the color
+                (e.g. "tagModal.color", "addForm.color")
+  - label:      optional heading, defaults to "Color"
+{% endcomment %}
+<div class="mb-4">
+  <label class="text-xs text-base-content/60 mb-1.5 block">{{ label|default:"Color" }}</label>
+  <div class="flex flex-wrap gap-1.5" x-data="{ palette: window.TAG_CHIP_COLORS }">
+    <template x-for="swatch in palette" :key="swatch.name">
+      <button
+        type="button"
+        class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
+        :class="{{ color_expr }} === swatch.value ? 'ring-2 ring-primary ring-offset-1' : ''"
+        :style="swatch.value ? 'background-color: ' + swatch.value + '; border-color: ' + swatch.value : 'border-color: var(--fallback-bc, currentColor)'"
+        :title="swatch.name"
+        :aria-label="swatch.name"
+        @click="{{ color_expr }} = swatch.value"
+      >
+        {# The neutral swatch has no fill, so mark it with a slash instead. #}
+        <span x-show="!swatch.value" class="block w-4 h-px bg-base-content/50 rotate-45"></span>
+      </button>
+    </template>
+  </div>
+</div>

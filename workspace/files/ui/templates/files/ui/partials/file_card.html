@@ -7,10 +7,7 @@
       {% if tags %}
       <div class="flex flex-wrap gap-1 mt-1">
         {% for ft in tags %}
-        <span class="badge badge-xs badge-ghost gap-1">
-          {% if ft.tag.icon %}<i data-lucide="{{ ft.tag.icon }}" class="w-2.5 h-2.5"></i>{% endif %}
-          {{ ft.tag.name }}
-        </span>
+        <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
         {% endfor %}
       </div>
       {% endif %}

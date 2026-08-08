@@ -18,7 +18,7 @@ window.tagsMixin = function tagsMixin() {
             uuid: null,
             name: '',
             icon: '',
-            color: 'ghost',
+            color: '',
             saving: false,
             error: '',
         },
@@ -74,7 +74,7 @@ window.tagsMixin = function tagsMixin() {
                 uuid: tag ? tag.uuid : null,
                 name: tag ? tag.name : '',
                 icon: tag ? (tag.icon || '') : '',
-                color: tag ? (tag.color || 'ghost') : 'ghost',
+                color: tag ? (tag.color || '') : '',
                 saving: false,
                 error: '',
             };

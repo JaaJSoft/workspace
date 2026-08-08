@@ -76,15 +76,9 @@ function emptyTaskForm() {
   };
 }
 
-// Keep in sync with COLUMN_COLORS in settings.js (minus its "no color" entry).
-var LABEL_COLORS = [
-  '#ef4444',
-  '#f97316',
-  '#eab308',
-  '#22c55e',
-  '#3b82f6',
-  '#a855f7',
-];
+// The shared <tag-chip> palette, minus its "no color" entry: a new label
+// always gets a color.
+var LABEL_COLORS = window.TAG_CHIP_COLORS.map((c) => c.value).filter(Boolean);
 
 function pickLabelColor(labels) {
   const counts = new Map(LABEL_COLORS.map((color) => [color, 0]));
@@ -606,11 +600,9 @@ function projectBoard(config) {
       return label ? label.name : 'Unknown label';
     },
 
-    labelStyle(uuid) {
+    labelColor(uuid) {
       const label = this.labelById(uuid);
-      return label && label.color
-        ? 'border-color: ' + label.color + '; color: ' + label.color
-        : '';
+      return label && label.color ? label.color : '';
     },
 
     onLabelCreated(label) {

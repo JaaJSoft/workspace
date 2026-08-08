@@ -57,7 +57,7 @@
                    class="checkbox checkbox-xs"
                    :checked="filters.tags.indexOf(tag.uuid) !== -1"
                    @change="toggleTagFilter(tag.uuid)">
-            <span class="badge badge-xs" :class="'badge-' + tag.color" x-text="tag.name"></span>
+            <tag-chip :name="tag.name" :color="tag.color" size="sm"></tag-chip>
           </label>
         </template>
       </div>
@@ -93,7 +93,7 @@
       <div class="text-xs text-base-content/50 mt-0.5" x-show="!notePrefs.compactList" x-text="formatDate(note.updated_at)"></div>
       <div class="flex gap-1 mt-1" x-show="!notePrefs.compactList && note.tags && note.tags.length">
         <template x-for="t in note.tags" :key="t.uuid">
-          <span class="badge badge-xs" :class="'badge-' + t.color" x-text="t.name"></span>
+          <tag-chip :name="t.name" :color="t.color" size="sm"></tag-chip>
         </template>
       </div>
     </button>

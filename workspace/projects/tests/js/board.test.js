@@ -1,11 +1,20 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 
-const { loadScript } = require('../../../common/tests/js/loader');
+const {
+  loadScripts,
+  CUSTOM_ELEMENT_STUBS,
+} = require('../../../common/tests/js/loader');
 
-const ctx = loadScript('workspace/projects/ui/static/projects/ui/js/board.js', {
-  URL,
-});
+// board.js reads the shared <tag-chip> palette, which base.html loads
+// before it.
+const ctx = loadScripts(
+  [
+    'workspace/common/static/ui/js/tag_chip.js',
+    'workspace/projects/ui/static/projects/ui/js/board.js',
+  ],
+  { ...CUSTOM_ELEMENT_STUBS, URL }
+);
 
 function fakeList(uuids) {
   return {
@@ -771,22 +780,23 @@ test('showCreate stays hidden when the exact match is already selected', () => {
 
 test('pickLabelColor picks the least-used palette color', () => {
   const pick = ctx.projectBoardHelpers.pickLabelColor;
-  assert.equal(pick([]), '#ef4444');
+  // The palette is the shared <tag-chip> one, minus its "no color" entry.
+  const palette = ctx.TAG_CHIP_COLORS.map((c) => c.value).filter(Boolean);
+
+  assert.equal(pick([]), palette[0]);
   assert.equal(
-    pick([{ color: '#ef4444' }, { color: '' }, { color: 'not-in-palette' }]),
-    '#f97316'
+    pick([{ color: palette[0] }, { color: '' }, { color: 'not-in-palette' }]),
+    palette[1]
   );
+  // Every color used once except the last: that one wins.
   assert.equal(
-    pick([
-      { color: '#ef4444' },
-      { color: '#f97316' },
-      { color: '#eab308' },
-      { color: '#22c55e' },
-      { color: '#3b82f6' },
-      { color: '#a855f7' },
-      { color: '#f97316' },
-    ]),
-    '#ef4444'
+    pick(palette.slice(0, -1).map((color) => ({ color }))),
+    palette[palette.length - 1]
+  );
+  // All used once, one used twice: the tie is broken by palette order.
+  assert.equal(
+    pick([...palette.map((color) => ({ color })), { color: palette[0] }]),
+    palette[1]
   );
 });
 
@@ -929,7 +939,7 @@ test('arrow keys wrap across the results plus the create row', () => {
   assert.equal(sel.highlight, 2);
 });
 
-test('projectBoard label helpers resolve names, styles and creations', () => {
+test('projectBoard label helpers resolve names, colors and creations', () => {
   const board = panelBoard();
   board.labels = [
     { uuid: 'l1', name: 'Bug', color: '#ef4444' },
@@ -937,9 +947,10 @@ test('projectBoard label helpers resolve names, styles and creations', () => {
   ];
   assert.equal(board.labelName('l1'), 'Bug');
   assert.equal(board.labelName('missing'), 'Unknown label');
-  assert.equal(board.labelStyle('l1'), 'border-color: #ef4444; color: #ef4444');
-  assert.equal(board.labelStyle('l2'), '');
-  assert.equal(board.labelStyle('missing'), '');
+  // <tag-chip> takes the color itself and turns it into the pill styling.
+  assert.equal(board.labelColor('l1'), '#ef4444');
+  assert.equal(board.labelColor('l2'), '');
+  assert.equal(board.labelColor('missing'), '');
   board.onLabelCreated({ uuid: 'l3', name: 'New', color: '' });
   board.onLabelCreated({ uuid: 'l3', name: 'New', color: '' });
   assert.equal(board.labels.length, 3);

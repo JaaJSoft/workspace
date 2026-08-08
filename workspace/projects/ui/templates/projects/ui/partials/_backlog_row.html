@@ -25,7 +25,7 @@
       {# ml-auto packs the chips against the priority column so they line up across rows. #}
       <span class="ml-auto hidden lg:flex items-center gap-1 shrink-0">
         {% for label in task.labels.all %}
-          {% include "projects/ui/partials/_label_chip.html" with size="sm" class="shrink-0" %}
+          <tag-chip name="{{ label.name }}" color="{{ label.color }}" size="sm" class="shrink-0"></tag-chip>
         {% endfor %}
       </span>
     {% endif %}

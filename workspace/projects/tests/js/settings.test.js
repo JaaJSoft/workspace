@@ -1,11 +1,14 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const {
+  loadScripts,
+  CUSTOM_ELEMENT_STUBS,
+} = require('../../../common/tests/js/loader');
 
+// settings.js reads the shared <tag-chip> palette, which base.html loads
+// before it.
 function ctx() {
-  return loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
-    getCSRFToken: () => 'test-token',
-  });
+  return settingsWith({});
 }
 
 const COLUMNS = [
@@ -58,17 +61,26 @@ test('projectMembers.changeRole refetches members when the server refuses', asyn
   assert.equal(c.error, 'Cannot demote the last admin of a project.');
 });
 
+function settingsWith(extraGlobals) {
+  return loadScripts(
+    [
+      'workspace/common/static/ui/js/tag_chip.js',
+      'workspace/projects/ui/static/projects/ui/js/settings.js',
+    ],
+    { ...CUSTOM_ELEMENT_STUBS, getCSRFToken: () => 'test-token', ...extraGlobals }
+  );
+}
+
 function generalWithFetch(fetchImpl) {
-  return loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
-    getCSRFToken: () => 'test-token',
-    fetch: fetchImpl,
-  }).projectSettingsGeneral({ apiBase: '/api/v1/projects/p1' });
+  return settingsWith({ fetch: fetchImpl }).projectSettingsGeneral({
+    apiBase: '/api/v1/projects/p1',
+  });
 }
 
 function generalWithData(data) {
-  return loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
-    getCSRFToken: () => 'test-token',
+  return settingsWith({
     document: {
+      ...CUSTOM_ELEMENT_STUBS.document,
       getElementById: () => ({ textContent: JSON.stringify(data) }),
     },
   }).projectSettingsGeneral({ apiBase: '/api/v1/projects/p1' });
@@ -173,10 +185,9 @@ test('projectSettingsDanger does not expose a destroy() lifecycle collision', ()
 });
 
 function groupAccess(fetchImpl) {
-  return loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
-    getCSRFToken: () => 'test-token',
-    fetch: fetchImpl,
-  }).projectGroupAccess({ apiBase: '/api/v1/projects/p1' });
+  return settingsWith({ fetch: fetchImpl }).projectGroupAccess({
+    apiBase: '/api/v1/projects/p1',
+  });
 }
 
 test('projectGroupAccess.addGroup PATCHes the extended id list and appends', async () => {

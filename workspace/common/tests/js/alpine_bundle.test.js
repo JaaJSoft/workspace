@@ -39,7 +39,7 @@ test('the bundle was built from the pinned alpine version', () => {
   const pinned = JSON.parse(fs.readFileSync(MANIFEST, 'utf8')).dependencies.alpinejs;
   // Closes the manifest->artifact loop: without this, a stale or hand-edited
   // bundle passes every other check in this file.
-  assert.match(src, new RegExp(`version:"${pinned.replace(/\./g, '\\.')}"`),
+  assert.ok(src.includes(`version:"${pinned}"`),
     `bundle does not carry Alpine ${pinned}`);
 });
 

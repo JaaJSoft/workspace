@@ -20,8 +20,9 @@ uv run celery -A workspace beat -l info
 # keep the @milkdown/crepe CSS pins in files/ui/index.html and notes/ui/notes.html in lockstep)
 cd scripts/editor && npm run build:editor
 
-# Vendored Alpine bundle (rebuild after bumping alpinejs/@alpinejs/* /@imacrayon/*
-# in scripts/alpine/package.json; base.html loads the built artifact, never a CDN)
+# Vendored Alpine bundle (rebuild after bumping any dependency in
+# scripts/alpine/package.json, esbuild included; base.html loads the built
+# artifact, never a CDN)
 cd scripts/alpine && npm run build:alpine
 ```
 

@@ -81,4 +81,6 @@ class BaseTemplateScriptOriginTests(TestCase):
             re.DOTALL,
         )
         self.assertIsNotNone(tag, "alpine bundle script tag not found")
-        self.assertIn("defer", tag.group(0))
+        # Match `defer` as a standalone attribute: a bare `assertIn` also
+        # accepts `data-defer` or the substring inside a filename.
+        self.assertRegex(tag.group(0), r"\sdefer(?=[\s=/>])")

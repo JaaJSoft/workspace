@@ -12,6 +12,10 @@ on:
       - 'scripts/alpine/**'
       - 'workspace/common/static/ui/js/vendor/alpine/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 

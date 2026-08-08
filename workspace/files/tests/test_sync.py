@@ -5,7 +5,7 @@ import shutil
 import tempfile
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from workspace.files.models import File
 from workspace.files.sync import FileSyncService
@@ -13,7 +13,6 @@ from workspace.files.sync import FileSyncService
 User = get_user_model()
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
 class FileSyncServiceStoragePrefixTests(TestCase):
     """Verify the sync service uses the canonical ``files/users/<username>/`` prefix.
 

@@ -40,9 +40,6 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         self._media_override.disable()
         shutil.rmtree(self._tmpdir, ignore_errors=True)
 
-    @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
-    )
     def test_legacy_journal_migration_moves_descendant_content(self):
         """A root-level Journal containing a note must migrate the note's bytes
         when re-parented under Notes.

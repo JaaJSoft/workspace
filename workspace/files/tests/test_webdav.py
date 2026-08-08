@@ -126,7 +126,6 @@ class DomainControllerTests(TestCase):
 # ── Provider ──────────────────────────────────────────────────────────
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class ProviderTests(TestCase):
     """Tests for WorkspaceDAVProvider."""
 
@@ -215,7 +214,6 @@ class ProviderTests(TestCase):
 # ── RootCollection ────────────────────────────────────────────────────
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class RootCollectionTests(TestCase):
     """Tests for the virtual root resource."""
 
@@ -295,7 +293,6 @@ class RootCollectionTests(TestCase):
 # ── FolderResource ────────────────────────────────────────────────────
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class FolderResourceTests(TestCase):
     """Tests for FolderResource."""
 
@@ -872,7 +869,6 @@ class FileResourceTests(TestCase):
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class ResolveParentTests(TestCase):
     """Tests for _resolve_parent helper."""
 
@@ -906,7 +902,6 @@ class ResolveParentTests(TestCase):
         self.assertIsNone(_resolve_parent(self.user, ["Del"]))
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class CopyAsTests(TestCase):
     """Tests for _copy_as helper."""
 

@@ -550,7 +550,6 @@ if TESTING:
     PASSWORD_HASHERS = [
         "django.contrib.auth.hashers.MD5PasswordHasher",
     ]
-    DEFAULT_FILE_STORAGE = "django.core.files.storage.InMemoryStorage"
 
     if DATABASES["default"][
         "ENGINE"

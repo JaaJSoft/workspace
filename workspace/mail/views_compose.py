@@ -39,6 +39,9 @@ class MailSendView(APIView):
             )
 
         from .services.smtp import send_email
+        from .services.threads import reply_headers
+
+        in_reply_to, references = reply_headers(account, d.get("reply_message_id"))
 
         attachments = list(request.FILES.getlist("attachments", []))
 
@@ -85,6 +88,8 @@ class MailSendView(APIView):
                 bcc=d.get("bcc"),
                 reply_to=d.get("reply_to"),
                 attachments=attachments,
+                in_reply_to=in_reply_to,
+                references=references,
             )
 
             # Copy to Sent folder via IMAP APPEND, then sync the Sent folder
@@ -146,6 +151,9 @@ class MailDraftView(APIView):
             )
 
         from .services.smtp import build_draft_message
+        from .services.threads import reply_headers
+
+        in_reply_to, references = reply_headers(account, d.get("reply_message_id"))
 
         raw_msg = build_draft_message(
             account,
@@ -157,6 +165,8 @@ class MailDraftView(APIView):
             bcc=d.get("bcc"),
             reply_to=d.get("reply_to"),
             include_bcc=True,
+            in_reply_to=in_reply_to,
+            references=references,
         )
 
         # If updating an existing draft, find the old IMAP UID

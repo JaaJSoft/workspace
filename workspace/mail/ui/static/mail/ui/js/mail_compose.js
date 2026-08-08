@@ -36,6 +36,7 @@ window.mailComposeMixin = function mailComposeMixin() {
             this.compose.body = saved.body || '';
             this.compose.draft_id = saved.draft_id || null;
             this.compose.is_reply = saved.is_reply || false;
+            this.compose.reply_message_id = saved.reply_message_id || null;
             this.compose._sigBlock = saved._sigBlock || '';
             if (saved.account_id) this.compose.account_id = saved.account_id;
             if (saved.cc?.length || saved.bcc?.length) this.showCcBcc = true;
@@ -289,6 +290,9 @@ window.mailComposeMixin = function mailComposeMixin() {
       formData.append('body_text', this.compose.body);
       const htmlBody = this.compose.body.replace(/\n/g, '<br>');
       formData.append('body_html', htmlBody);
+      if (this.compose.reply_message_id) {
+        formData.append('reply_message_id', this.compose.reply_message_id);
+      }
       for (const addr of this.compose.to) formData.append('to', addr);
       for (const addr of this.compose.cc) formData.append('cc', addr);
       for (const addr of this.compose.bcc) formData.append('bcc', addr);
@@ -352,6 +356,7 @@ window.mailComposeMixin = function mailComposeMixin() {
         body_html: htmlBody,
       };
       if (this.compose.draft_id) payload.draft_id = this.compose.draft_id;
+      if (this.compose.reply_message_id) payload.reply_message_id = this.compose.reply_message_id;
 
       try {
         const res = await this._fetch('/api/v1/mail/drafts', {
@@ -386,6 +391,7 @@ window.mailComposeMixin = function mailComposeMixin() {
           body: this.compose.body,
           draft_id: this.compose.draft_id,
           is_reply: this.compose.is_reply,
+          reply_message_id: this.compose.reply_message_id,
           _sigBlock: this.compose._sigBlock,
           saved_at: Date.now(),
         };

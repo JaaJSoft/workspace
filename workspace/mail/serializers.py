@@ -321,6 +321,12 @@ class SendEmailSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    # UUID of the message being replied to. The In-Reply-To / References
+    # headers are derived from it server-side; `reply_to` above is the
+    # unrelated Reply-To header.
+    reply_message_id = serializers.UUIDField(
+        required=False, allow_null=True, default=None
+    )
 
 
 class DraftSaveSerializer(serializers.Serializer):
@@ -342,6 +348,9 @@ class DraftSaveSerializer(serializers.Serializer):
     body_text = serializers.CharField(required=False, default="", allow_blank=True)
     reply_to = serializers.CharField(
         max_length=255, required=False, default="", allow_blank=True
+    )
+    reply_message_id = serializers.UUIDField(
+        required=False, allow_null=True, default=None
     )
 
 

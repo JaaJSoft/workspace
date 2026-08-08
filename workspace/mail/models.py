@@ -206,6 +206,9 @@ class MailMessage(models.Model):
     )
     message_id = models.CharField(max_length=512, blank=True, default="")
     in_reply_to = models.CharField(max_length=512, blank=True, default="")
+    # Space-separated Message-ID chain of the thread, oldest first. Unbounded
+    # by nature (one id per hop), hence TextField rather than CharField.
+    references = models.TextField(blank=True, default="")
     imap_uid = models.BigIntegerField()
     subject = models.CharField(max_length=1000, blank=True, default="")
 

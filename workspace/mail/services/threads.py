@@ -1,4 +1,5 @@
-"""Reconstruct an email thread by walking In-Reply-To upward.
+"""Email threading: reconstruct a thread from stored messages, and
+compute the headers that keep an outgoing reply attached to one.
 
 Used by the LLM event-extraction worker to feed the model the
 full conversation context. Capped at max_depth so a pathological
@@ -6,6 +7,11 @@ full conversation context. Capped at max_depth so a pathological
 """
 
 from ..models import MailMessage
+
+# RFC 5322 has no hard limit on References, but an unbounded chain grows one
+# id per hop forever. Trimming the middle is what MUAs do: the root anchors
+# the thread for clients that group on it, the tail carries the recent hops.
+MAX_REFERENCES = 20
 
 
 def get_thread(message: MailMessage, max_depth: int = 20) -> list[MailMessage]:
@@ -39,3 +45,29 @@ def get_thread(message: MailMessage, max_depth: int = 20) -> list[MailMessage]:
 
     chain.reverse()
     return chain
+
+
+def reply_headers(account, parent_uuid) -> tuple[str, str]:
+    """Return the (In-Reply-To, References) pair for a reply to `parent_uuid`.
+
+    The parent is resolved against `account` and its stored Message-ID is
+    used - the caller must never pass a header value straight from a client,
+    which would let anyone graft a reply onto an arbitrary thread.
+
+    Returns ("", "") when there is no parent, the parent belongs to another
+    account or is deleted, or it carries no Message-ID: an unthreaded reply
+    beats one anchored to an id we cannot vouch for.
+    """
+    if not parent_uuid:
+        return "", ""
+
+    parent = MailMessage.objects.filter(
+        account=account, uuid=parent_uuid, deleted_at__isnull=True
+    ).first()
+    if parent is None or not parent.message_id:
+        return "", ""
+
+    refs = list(dict.fromkeys(parent.references.split() + [parent.message_id]))
+    if len(refs) > MAX_REFERENCES:
+        refs = refs[:1] + refs[-(MAX_REFERENCES - 1) :]
+    return parent.message_id, " ".join(refs)

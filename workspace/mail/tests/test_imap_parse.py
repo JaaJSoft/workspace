@@ -59,3 +59,29 @@ class ImapParseTests(TestCase):
         )
         msg = _parse_message(raw, self.account, self.folder, uid=43, flags_str="")
         self.assertEqual(msg.in_reply_to, "")
+
+    def test_references_header_is_captured_unfolded(self):
+        """References is routinely folded across lines; the stored chain must
+        be a single space-separated list so a reply can extend it."""
+        raw = (
+            b"From: alice@example.com\r\n"
+            b"Message-ID: <child@example.com>\r\n"
+            b"References: <root@example.com>\r\n"
+            b"\t<parent@example.com>\r\n"
+            b"Date: Thu, 14 May 2026 10:00:00 +0000\r\n"
+            b"\r\n"
+            b"Body\r\n"
+        )
+        msg = _parse_message(raw, self.account, self.folder, uid=44, flags_str="")
+        self.assertEqual(msg.references, "<root@example.com> <parent@example.com>")
+
+    def test_references_absent_defaults_to_empty(self):
+        raw = (
+            b"From: alice@example.com\r\n"
+            b"Message-ID: <solo2@example.com>\r\n"
+            b"Date: Thu, 14 May 2026 10:00:00 +0000\r\n"
+            b"\r\n"
+            b"Body\r\n"
+        )
+        msg = _parse_message(raw, self.account, self.folder, uid=45, flags_str="")
+        self.assertEqual(msg.references, "")

@@ -161,6 +161,8 @@ def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
     reply_to = msg.get("Reply-To", "")
     message_id = msg.get("Message-ID", "")
     in_reply_to = msg.get("In-Reply-To", "")
+    # Folded across lines by most MUAs; collapse to single-space separated ids.
+    references = " ".join(msg.get("References", "").split())
 
     # Date
     date_str = msg.get("Date")
@@ -256,6 +258,7 @@ def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
         message_id=message_id[:512],
         imap_uid=uid,
         in_reply_to=in_reply_to[:512],
+        references=references,
         subject=subject[:1000],
         **sender_columns(from_addr),
         to_addresses=to_addrs,

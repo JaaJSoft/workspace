@@ -118,6 +118,26 @@ class BuildDraftMessageTests(TestCase):
         msg = message_from_string(raw.decode("utf-8"))
         self.assertIsNone(msg["Bcc"])
 
+    def test_threading_headers(self):
+        acct = self._make_account()
+        raw = build_draft_message(
+            acct,
+            to=["bob@example.com"],
+            subject="Re: Hello",
+            in_reply_to="<parent@example.com>",
+            references="<root@example.com> <parent@example.com>",
+        )
+        msg = message_from_string(raw.decode("utf-8"))
+        self.assertEqual(msg["In-Reply-To"], "<parent@example.com>")
+        self.assertEqual(msg["References"], "<root@example.com> <parent@example.com>")
+
+    def test_threading_headers_omitted_on_a_fresh_message(self):
+        acct = self._make_account()
+        raw = build_draft_message(acct, to=["bob@example.com"], subject="Hello")
+        msg = message_from_string(raw.decode("utf-8"))
+        self.assertIsNone(msg["In-Reply-To"])
+        self.assertIsNone(msg["References"])
+
     def test_message_id_uses_domain(self):
         acct = self._make_account()
         raw = build_draft_message(acct, to=["bob@example.com"], subject="Test")
@@ -226,3 +246,24 @@ class SendEmailTests(TestCase):
         self.assertIn("bob@example.com", recipients)
         self.assertIn("carol@example.com", recipients)
         mock_server.quit.assert_called_once()
+
+    @patch("workspace.mail.services.smtp.connect_smtp")
+    def test_threading_headers_reach_the_wire(self, mock_connect):
+        mock_server = MagicMock()
+        mock_connect.return_value = mock_server
+        acct = MagicMock()
+        acct.display_name = "Alice"
+        acct.email = "alice@example.com"
+
+        send_email(
+            acct,
+            to=["bob@example.com"],
+            subject="Re: Test",
+            body_text="Hello",
+            in_reply_to="<parent@example.com>",
+            references="<root@example.com> <parent@example.com>",
+        )
+
+        sent = message_from_string(mock_server.sendmail.call_args[0][2])
+        self.assertEqual(sent["In-Reply-To"], "<parent@example.com>")
+        self.assertEqual(sent["References"], "<root@example.com> <parent@example.com>")

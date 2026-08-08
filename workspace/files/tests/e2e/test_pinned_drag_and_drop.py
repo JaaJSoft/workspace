@@ -57,6 +57,28 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
             node_type=File.NodeType.FOLDER,
         )
 
+    def record_dragstart(self):
+        """Capture the element the browser picked as the drag source.
+
+        Returns a zero-arg callable yielding ``{"source": <tagName>,
+        "types": [...]}`` for the last ``dragstart``. The drag source is
+        *not* whatever element the pointer went down on: the browser
+        walks up to the nearest ``draggable`` ancestor, and an anchor is
+        draggable by default.
+        """
+        self.page.evaluate(
+            """() => {
+                window.__dragstart = null;
+                window.addEventListener('dragstart', (e) => {
+                    window.__dragstart = {
+                        source: e.target.tagName,
+                        types: [...e.dataTransfer.types],
+                    };
+                }, true);
+            }"""
+        )
+        return lambda: self.page.evaluate("window.__dragstart")
+
     def drag(self, source, target, *, mid_drag=None):
         """Perform a real HTML5 drag from ``source`` onto ``target``.
 
@@ -118,6 +140,49 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
         assert PinnedFolder.objects.filter(owner=self.user, folder=folder).exists(), (
             "drop did not persist a PinnedFolder row"
         )
+
+    def test_grabbing_the_folder_name_drags_the_row_not_the_link(self):
+        """The folder name is an anchor, and anchors are draggable by
+        default — so grabbing the name used to start a *link* drag
+        carrying a ``text/uri-list`` payload. Chrome routes that flavour
+        of drag through the OS rather than the page, so the sidebar
+        never received the drop while Firefox handled it fine.
+
+        Asserting only "did it get pinned?" does not pin this down: the
+        drop still succeeds under Playwright, which synthesizes drag
+        events instead of going through the OS. What actually
+        distinguishes the two cases is which element the browser picked
+        as the drag source, and what ended up in the DataTransfer.
+        """
+        folder = self.make_folder("Reports")
+        self.login_as(self.user)
+        self.page.goto(f"{self.live_server_url}/files")
+
+        name_link = self.page.locator(
+            f"tr[data-uuid='{folder.uuid}'] a[data-folder-link]"
+        )
+        expect(name_link).to_be_visible()
+
+        dragstart = self.record_dragstart()
+        drop_zone = self.page.locator("#pinned-folders-section > div").last
+        self.drag(name_link, drop_zone)
+
+        started = dragstart()
+        assert started is not None, "no dragstart fired when grabbing the folder name"
+        assert started["source"] == "TR", (
+            f"drag should originate from the row, not the name anchor; "
+            f"browser picked <{started['source'].lower()}>"
+        )
+        assert "text/uri-list" not in started["types"], (
+            f"grabbing the name started a link drag — DataTransfer carries "
+            f"{started['types']}"
+        )
+
+        expect(
+            self.page.locator(
+                f"li.pinned-folder-item[data-pinned-uuid='{folder.uuid}']"
+            )
+        ).to_be_visible()
 
     def test_reordering_pinned_folders_shows_feedback_and_persists(self):
         first = self.make_folder("Archive")

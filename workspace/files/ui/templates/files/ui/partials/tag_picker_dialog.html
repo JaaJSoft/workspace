@@ -18,7 +18,8 @@
             @change="toggleFileTag(tag)"
           />
           <i :data-lucide="tag.icon || 'tag'" class="w-4 h-4 flex-shrink-0"
-             :class="tag.color && tag.color !== 'ghost' ? 'text-' + tag.color : 'text-base-content/50'"></i>
+             :class="tag.color ? '' : 'text-base-content/50'"
+             :style="tag.color ? 'color: ' + tag.color : ''"></i>
           <span class="truncate" x-text="tag.name"></span>
         </label>
       </template>

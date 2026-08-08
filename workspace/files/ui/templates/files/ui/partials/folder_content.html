@@ -53,7 +53,8 @@
                 <input type="checkbox" class="checkbox checkbox-xs"
                        :checked="hasTagFilter('{{ tag.uuid }}')"
                        @change="toggleTagFilter('{{ tag.uuid }}')" />
-                <i data-lucide="{{ tag.icon|default:'tag' }}" class="w-4 h-4 flex-shrink-0"></i>
+                <i data-lucide="{{ tag.icon|default:'tag' }}" class="w-4 h-4 flex-shrink-0"
+                   style="{% if tag.color %}color: {{ tag.color }}{% endif %}"></i>
                 <span class="truncate text-sm">{{ tag.name }}</span>
               </label>
               {% endfor %}
@@ -329,7 +330,9 @@
             {% endif %}
             <td class="hidden lg:table-cell" data-col="tags">
               <div class="flex flex-wrap items-center gap-1">
-                {% include "files/ui/partials/_tag_chips.html" with node=node %}
+                {% for ft in node.file_tags.all %}
+                <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+                {% endfor %}
               </div>
             </td>
             <td class="hidden sm:table-cell text-sm text-base-content/70" data-col="size">
@@ -488,7 +491,9 @@
                   </p>
                   {% if node.file_tags.all %}
                   <div class="flex flex-wrap items-center gap-1 mt-1" :class="mosaicTileSize <= 1 ? 'hidden' : ''" x-cloak>
-                    {% include "files/ui/partials/_tag_chips.html" with node=node %}
+                    {% for ft in node.file_tags.all %}
+                    <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+                    {% endfor %}
                   </div>
                   {% endif %}
                 </div>

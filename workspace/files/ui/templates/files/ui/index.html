@@ -118,12 +118,6 @@
         </div>
       </div>
 
-      <!-- Tags -->
-      <div x-show="showTags" x-transition
-           @tags-changed.window="$ajax('/files/tags', { target: 'files-tags-section' })">
-        {% include 'files/ui/partials/tags_section.html' %}
-      </div>
-
       <!-- Group Folders -->
       <div x-show="showGroups" x-transition>
         {% include 'files/ui/partials/group_folders_section.html' %}

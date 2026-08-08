@@ -31,7 +31,7 @@ class TagViewTests(TestCase):
         )
         self.client.force_login(self.user)
 
-        self.tag = Tag.objects.create(owner=self.user, name="work", color="primary")
+        self.tag = Tag.objects.create(owner=self.user, name="work", color="#3b82f6")
         self.tagged = _file(self.user, "tagged.txt")
         self.untagged = _file(self.user, "untagged.txt")
         FileTag.objects.create(file=self.tagged, tag=self.tag)
@@ -96,7 +96,7 @@ class ListingTagsTests(TestCase):
             username="lister", email="lister@test.com", password="x"
         )
         self.client.force_login(self.user)
-        self.tag = Tag.objects.create(owner=self.user, name="invoices", color="warning")
+        self.tag = Tag.objects.create(owner=self.user, name="invoices", color="#eab308")
         self.file = _file(self.user, "bill.txt")
         FileTag.objects.create(file=self.file, tag=self.tag)
 
@@ -105,13 +105,13 @@ class ListingTagsTests(TestCase):
 
         self.assertContains(response, f'data-tags="{self.tag.uuid} "')
 
-    def test_tag_name_is_rendered_in_the_listing(self):
+    def test_tag_is_rendered_as_a_chip_in_the_listing(self):
         response = self.client.get(reverse("files_ui:index"))
 
-        self.assertContains(response, "invoices")
+        self.assertContains(response, '<tag-chip name="invoices" color="#eab308"')
 
     def test_listing_tags_offers_only_tags_present_in_the_listing(self):
-        Tag.objects.create(owner=self.user, name="unused", color="info")
+        Tag.objects.create(owner=self.user, name="unused", color="#3b82f6")
 
         response = self.client.get(reverse("files_ui:index"))
 
@@ -139,46 +139,6 @@ class ListingTagsTests(TestCase):
 
         self.assertEqual([n.name for n in response.context["nodes"]], ["shared.txt"])
         self.assertNotContains(response, "confidential")
-
-
-class TagsSidebarTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(
-            username="side", email="side@test.com", password="x"
-        )
-        self.other = User.objects.create_user(
-            username="side2", email="side2@test.com", password="x"
-        )
-        self.client.force_login(self.user)
-
-    def test_lists_only_the_users_own_tags(self):
-        Tag.objects.create(owner=self.user, name="mine")
-        Tag.objects.create(owner=self.other, name="theirs")
-
-        response = self.client.get(reverse("files_ui:tags_sidebar"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual([t.name for t in response.context["tags"]], ["mine"])
-
-    def test_file_count_excludes_trashed_files(self):
-        from django.utils import timezone
-
-        tag = Tag.objects.create(owner=self.user, name="mine")
-        live = _file(self.user, "live.txt")
-        trashed = _file(self.user, "gone.txt", deleted_at=timezone.now())
-        FileTag.objects.create(file=live, tag=tag)
-        FileTag.objects.create(file=trashed, tag=tag)
-
-        response = self.client.get(reverse("files_ui:tags_sidebar"))
-
-        self.assertEqual(response.context["tags"][0].file_count, 1)
-
-    def test_requires_login(self):
-        self.client.logout()
-
-        response = self.client.get(reverse("files_ui:tags_sidebar"))
-
-        self.assertEqual(response.status_code, 302)
 
 
 class ManageTagsActionTests(TestCase):

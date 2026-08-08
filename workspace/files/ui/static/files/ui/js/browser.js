@@ -6,8 +6,8 @@ window.fileBrowser = function fileBrowser() {
     // The mixin reads/writes `selectedFile`, seeded by the properties partial.
     ...tags,
 
-    // Assignments change the sidebar tag counts, so announce them the same
-    // way the mixin announces tag create/edit/delete.
+    // Assignments change the chips rendered in the listing, so announce
+    // them the same way the mixin announces tag create/edit/delete.
     async toggleFileTag(tag) {
       await tags.toggleFileTag.call(this, tag);
       window.dispatchEvent(new CustomEvent('tags-changed'));
@@ -1269,11 +1269,6 @@ window.fileBrowser = function fileBrowser() {
           .then(() => window.dispatchEvent(new CustomEvent('group-folders-changed')))
           .catch((err) => this.showAlert('error', err.message || 'Failed to create group folder'));
       });
-
-      // Sidebar tag section (a different Alpine component) delegates
-      // create/edit to the tag dialog, which lives in this scope.
-      window.addEventListener('files:new-tag', () => this.showTagModal());
-      window.addEventListener('files:edit-tag', (e) => this.showTagModal(e.detail));
 
       // Tag chips are rendered server-side in the listing, so any tag edit
       // or assignment needs a re-render. Debounced: ticking several

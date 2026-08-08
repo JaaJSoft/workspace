@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Exists, OuterRef, Prefetch, Q, Subquery
+from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
@@ -26,15 +26,6 @@ from .viewers import ViewerRegistry
 RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
 INITIAL_EVENTS_LIMIT = 15
 MAX_EVENTS_LIMIT = 200
-
-
-def user_tags(user):
-    """Tags owned by *user*, each annotated with its live (non-trashed) file count."""
-    return Tag.objects.filter(owner=user).annotate(
-        file_count=Count(
-            "file_tags", filter=Q(file_tags__file__deleted_at__isnull=True)
-        )
-    )
 
 
 def build_breadcrumbs(folder, user=None):
@@ -413,7 +404,6 @@ def _build_context(request, folder=None, is_trash_view=False):
         "is_trash_view": is_trash_view,
         "is_shared_view": is_shared_view,
         "is_tag_view": is_tag_view,
-        "tags": user_tags(request.user),
         "listing_tags": list(listing_tags.values()),
         "is_root_view": (
             not current_folder
@@ -670,16 +660,6 @@ def pinned_folders(request):
         {
             "pinned_folders": pinned_qs,
         },
-    )
-
-
-@login_required
-def tags_sidebar(request):
-    """Return the sidebar tags partial, re-fetched after any tag edit."""
-    return render(
-        request,
-        "files/ui/partials/tags_section.html",
-        {"tags": user_tags(request.user)},
     )
 
 

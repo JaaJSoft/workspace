@@ -78,9 +78,13 @@ class BaseTemplateScriptOriginTests(TestCase):
         # donc AVANT que stores.js (fin de <body>, non différé) ait posé son
         # écouteur `alpine:init` — les trois stores ne seraient jamais
         # enregistrés et la navbar lèverait sur $store.notifications.
-        source = _base_template_source()
-        line = next(
-            line for line in source.splitlines()
-            if "ui/js/vendor/alpine/alpine.js" in line
+        # On cherche la balise entière plutôt qu'une ligne : un reformatage
+        # qui répartirait les attributs sur plusieurs lignes ne doit pas
+        # transformer un invariant tenu en faux négatif.
+        tag = re.search(
+            r"<script[^>]*ui/js/vendor/alpine/alpine\.js[^>]*>",
+            _base_template_source(),
+            re.DOTALL,
         )
-        self.assertIn("defer", line)
+        self.assertIsNotNone(tag, "balise du bundle alpine introuvable")
+        self.assertIn("defer", tag.group(0))

@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
-from workspace.mail.services.threads import get_thread
+from workspace.mail.services.threads import MAX_REFERENCES, get_thread, reply_headers
 
 User = get_user_model()
 
@@ -102,3 +102,93 @@ class GetThreadTests(TestCase):
         )
         child = self._make(2, "<b@x>", in_reply_to="<a@x>")
         self.assertEqual(get_thread(child), [child])
+
+
+class ReplyHeadersTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="rh", password="p")
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email="rh@example.com",
+            imap_host="x",
+            imap_port=993,
+            smtp_host="x",
+            smtp_port=587,
+        )
+        self.folder = MailFolder.objects.create(
+            account=self.account,
+            name="INBOX",
+            folder_type="inbox",
+        )
+
+    def _make(self, uid, message_id, references=""):
+        return MailMessage.objects.create(
+            account=self.account,
+            folder=self.folder,
+            imap_uid=uid,
+            message_id=message_id,
+            references=references,
+            date=timezone.now(),
+        )
+
+    def test_no_parent_yields_empty_headers(self):
+        self.assertEqual(reply_headers(self.account, None), ("", ""))
+
+    def test_root_parent_seeds_references_with_its_own_id(self):
+        parent = self._make(1, "<a@x>")
+        self.assertEqual(reply_headers(self.account, parent.uuid), ("<a@x>", "<a@x>"))
+
+    def test_references_extends_the_parent_chain(self):
+        parent = self._make(1, "<c@x>", references="<a@x> <b@x>")
+        self.assertEqual(
+            reply_headers(self.account, parent.uuid),
+            ("<c@x>", "<a@x> <b@x> <c@x>"),
+        )
+
+    def test_parent_already_in_its_own_references_is_not_repeated(self):
+        parent = self._make(1, "<b@x>", references="<a@x> <b@x>")
+        self.assertEqual(
+            reply_headers(self.account, parent.uuid),
+            ("<b@x>", "<a@x> <b@x>"),
+        )
+
+    def test_long_chain_keeps_root_and_most_recent_hops(self):
+        chain = [f"<m{i}@x>" for i in range(50)]
+        parent = self._make(1, "<tip@x>", references=" ".join(chain))
+        _, refs = reply_headers(self.account, parent.uuid)
+        ids = refs.split()
+        self.assertEqual(len(ids), MAX_REFERENCES)
+        self.assertEqual(ids[0], "<m0@x>")
+        self.assertEqual(ids[-1], "<tip@x>")
+
+    def test_parent_without_message_id_yields_empty_headers(self):
+        parent = self._make(1, "")
+        self.assertEqual(reply_headers(self.account, parent.uuid), ("", ""))
+
+    def test_deleted_parent_yields_empty_headers(self):
+        parent = self._make(1, "<a@x>")
+        parent.deleted_at = timezone.now()
+        parent.save()
+        self.assertEqual(reply_headers(self.account, parent.uuid), ("", ""))
+
+    def test_parent_from_another_account_is_ignored(self):
+        other_user = User.objects.create_user(username="rh2", password="p")
+        other_acc = MailAccount.objects.create(
+            owner=other_user,
+            email="rh2@example.com",
+            imap_host="x",
+            imap_port=993,
+            smtp_host="x",
+            smtp_port=587,
+        )
+        other_folder = MailFolder.objects.create(
+            account=other_acc, name="INBOX", folder_type="inbox"
+        )
+        foreign = MailMessage.objects.create(
+            account=other_acc,
+            folder=other_folder,
+            imap_uid=1,
+            message_id="<secret@x>",
+            date=timezone.now(),
+        )
+        self.assertEqual(reply_headers(self.account, foreign.uuid), ("", ""))

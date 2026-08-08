@@ -56,6 +56,8 @@ def build_draft_message(
     reply_to=None,
     attachments=None,
     include_bcc=False,
+    in_reply_to="",
+    references="",
 ):
     """Build a MIME message and return the raw bytes.
 
@@ -69,6 +71,8 @@ def build_draft_message(
     cc : list[str] | None
     bcc : list[str] | None
     reply_to : str | None
+        The Reply-To header (which address should receive answers).
+        Unrelated to threading - see in_reply_to for that.
     attachments : list[UploadedFile] | None
     include_bcc : bool
         Write the Bcc header into the message. Only for drafts: the draft
@@ -76,6 +80,12 @@ def build_draft_message(
         only place the Bcc list survives. Never set it on the send path,
         where Bcc must stay in the SMTP envelope to avoid leaking the
         hidden recipients to everyone else.
+    in_reply_to : str
+        Message-ID of the message being replied to.
+    references : str
+        Space-separated Message-ID chain of the thread, parent included.
+        Both must be derived server-side from a stored message - a client
+        supplied value would let a caller graft a reply onto any thread.
     """
     to = to or []
     cc = cc or []
@@ -94,6 +104,10 @@ def build_draft_message(
         msg["Bcc"] = ", ".join(bcc)
     if reply_to:
         msg["Reply-To"] = reply_to
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+    if references:
+        msg["References"] = references
 
     # Body: multipart/alternative with text + html
     body_part = MIMEMultipart("alternative")
@@ -123,6 +137,8 @@ def send_email(
     bcc=None,
     reply_to=None,
     attachments=None,
+    in_reply_to="",
+    references="",
 ):
     """Send an email through the account's SMTP server."""
     cc = cc or []
@@ -138,6 +154,8 @@ def send_email(
         bcc=bcc,
         reply_to=reply_to,
         attachments=attachments,
+        in_reply_to=in_reply_to,
+        references=references,
     )
 
     all_recipients = to + cc + bcc

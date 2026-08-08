@@ -22,9 +22,16 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.limits import clamp_limit
 from workspace.common.mixins import CacheControlMixin
 from workspace.files.models import File
 from workspace.users.models import APITokenLabel, UserSetting
+from workspace.users.queries import (
+    DEFAULT_SEARCH_LIMIT,
+    MAX_SEARCH_LIMIT,
+    MIN_SEARCH_QUERY_LENGTH,
+    search_people,
+)
 from workspace.users.services import avatar as avatar_service
 from workspace.users.services import presence as presence_service
 from workspace.users.services.settings import (
@@ -79,22 +86,15 @@ class UserSearchView(CacheControlMixin, APIView):
     )
     def get(self, request):
         query = request.query_params.get("q", "").strip()
-        if len(query) < 2:
+        if len(query) < MIN_SEARCH_QUERY_LENGTH:
             return Response({"results": []})
 
-        try:
-            limit = int(request.query_params.get("limit", 10))
-        except TypeError, ValueError:
-            limit = 10
-        limit = min(max(limit, 1), 50)
-
-        users = User.objects.filter(
-            Q(username__icontains=query)
-            | Q(first_name__icontains=query)
-            | Q(last_name__icontains=query),
-            is_active=True,
-            bot_profile__isnull=True,
-        ).exclude(pk=request.user.pk)[:limit]
+        limit = clamp_limit(
+            request.query_params.get("limit"),
+            default=DEFAULT_SEARCH_LIMIT,
+            maximum=MAX_SEARCH_LIMIT,
+        )
+        users = search_people(query, requesting_user=request.user, limit=limit)
 
         results = [
             {

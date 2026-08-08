@@ -11,6 +11,12 @@ class CheckUserStatusParams(BaseModel):
     username: str = Field(description="The username of the person to check.")
 
 
+class SearchUsersParams(BaseModel):
+    query: str = Field(
+        description="Part of a name or username to look for (min 2 characters)."
+    )
+
+
 class ListOnlineUsersParams(BaseModel):
     limit: int = Field(
         default=20, description="Maximum number of users to return (default 20)."
@@ -55,6 +61,39 @@ Call this when the user asks if someone is available, reachable, or what their s
             local_seen = last_seen.astimezone(get_user_timezone(user))
             info["last_seen"] = local_seen.strftime("%Y-%m-%d %H:%M")
         return json.dumps(info)
+
+    @tool(
+        badge_icon="🔎",
+        badge_label="Searched people",
+        badge_running_label="Searching people",
+        detail_key="query",
+        params=SearchUsersParams,
+    )
+    def search_users(self, args, user, bot, conversation_id, context):
+        """Find colleagues by a partial name or username, returning their exact username \
+and display name (up to 10 matches, excluding yourself and other assistants). \
+Call this first whenever the user names a person informally ("is Marie around?", "share it with Tom") \
+and you need the exact username for another tool — check_user_status, event attendees, \
+task assignment, file sharing."""
+        from workspace.users.queries import MIN_SEARCH_QUERY_LENGTH, search_people
+
+        query = args.query.strip()
+        if len(query) < MIN_SEARCH_QUERY_LENGTH:
+            return f"Error: query must be at least {MIN_SEARCH_QUERY_LENGTH} characters"
+
+        matches = search_people(query, requesting_user=user)
+        if not matches:
+            return f'No colleague found matching "{query}".'
+        return json.dumps(
+            [
+                {
+                    "username": u.username,
+                    "display_name": u.get_full_name() or u.username,
+                }
+                for u in matches
+            ],
+            ensure_ascii=False,
+        )
 
     @tool(
         badge_icon="👥",

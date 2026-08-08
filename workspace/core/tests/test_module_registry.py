@@ -113,6 +113,33 @@ class SearchProviderTests(TestCase):
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["name"], "Chat")
 
+    def test_search_tags_each_hit_with_its_provider(self):
+        reg = ModuleRegistry()
+        reg.register(_make_module("chat"))
+        for slug in ("chat", "chat-messages"):
+            reg.register_search_provider(
+                SearchProviderInfo(
+                    slug=slug,
+                    module_slug="chat",
+                    search_fn=lambda q, u, limit, s=slug: [
+                        SearchResult(
+                            uuid="1",
+                            name=s,
+                            url="/chat",
+                            matched_value=s,
+                            match_type="title",
+                            type_icon="msg",
+                            module_slug="chat",
+                            module_color="primary",
+                        )
+                    ],
+                )
+            )
+
+        hits = reg.search("test", user=None)
+
+        self.assertEqual({h["provider_slug"] for h in hits}, {"chat", "chat-messages"})
+
     def test_search_skips_inactive_modules(self):
         reg = ModuleRegistry()
         reg.register(_make_module("chat", active=False))

@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from django.conf import settings
 from pydantic import BaseModel, Field
 
+from workspace.common.limits import clamp_limit
 from workspace.common.logging import scrub
 
 from .models import UserMemory
@@ -26,6 +27,24 @@ class SaveMemoryParams(BaseModel):
 
 class DeleteMemoryParams(BaseModel):
     key: str = Field(description="The key of the memory to delete.")
+
+
+SEARCH_EVERYTHING_DEFAULT_LIMIT = 3
+SEARCH_EVERYTHING_MAX_LIMIT = 5
+
+
+class SearchEverythingParams(BaseModel):
+    query: str = Field(
+        description="What to look for — a name, subject, keyword or person (min 2 characters)."
+    )
+    limit: int = Field(
+        default=SEARCH_EVERYTHING_DEFAULT_LIMIT,
+        description=(
+            f"Maximum hits per source, {SEARCH_EVERYTHING_DEFAULT_LIMIT} by default "
+            f"and {SEARCH_EVERYTHING_MAX_LIMIT} at most. Around ten sources are "
+            "queried, so raise it only for a deliberately broad sweep."
+        ),
+    )
 
 
 class WebSearchParams(BaseModel):
@@ -314,6 +333,57 @@ Call this when the user asks what you look like, wants to see your avatar, or me
         except Exception:
             logger.warning("Could not read avatar for bot %s", bot.id)
             return "Error: could not read avatar file."
+
+
+class SearchToolProvider(ToolProvider):
+    """Cross-module search over everything the user can reach."""
+
+    @tool(
+        badge_icon="🧭",
+        badge_label="Searched the workspace",
+        badge_running_label="Searching the workspace",
+        detail_key="query",
+        params=SearchEverythingParams,
+    )
+    def search_everything(self, args, user, bot, conversation_id, context):
+        """Search the whole workspace at once — files, notes, emails, contacts, \
+conversations, messages, events, polls, projects and tasks — and return where each match lives. \
+Call this when you don't know which module holds the answer ("what do we have on the Alpha migration", \
+"find anything about Marie's contract"). Each hit gives a uuid, a module and a type, \
+so you can then chain into the matching reader (read_file, read_email, read_event, ...). \
+Returns at most 3 hits per source by default (5 max), so prefer the per-module search tools \
+(search_files, search_emails, search_events, search_messages) once you know where to look — \
+they alone support filters like unread-only, attachments or date ranges."""
+        from workspace.core.services.search import MIN_QUERY_LENGTH, search_modules
+
+        query = args.query.strip()
+        if len(query) < MIN_QUERY_LENGTH:
+            return f"Error: query must be at least {MIN_QUERY_LENGTH} characters"
+
+        limit = clamp_limit(
+            args.limit,
+            default=SEARCH_EVERYTHING_DEFAULT_LIMIT,
+            maximum=SEARCH_EVERYTHING_MAX_LIMIT,
+        )
+        hits = search_modules(query, user, limit)
+        if not hits:
+            return f'Nothing found for "{query}".'
+
+        results = []
+        for hit in hits:
+            entry = {
+                "uuid": hit["uuid"],
+                "name": hit["name"],
+                "module": hit["module_slug"],
+                "type": hit["provider_slug"],
+                "url": hit["url"],
+            }
+            if hit["matched_value"] and hit["matched_value"] != hit["name"]:
+                entry["matched_on"] = f"{hit['match_type']}: {hit['matched_value']}"
+            if hit["date"]:
+                entry["date"] = hit["date"]
+            results.append(entry)
+        return json.dumps(results, ensure_ascii=False)
 
 
 class WebToolProvider(ToolProvider):

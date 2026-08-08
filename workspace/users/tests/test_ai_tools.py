@@ -16,6 +16,7 @@ from django.test import TestCase
 from workspace.users.ai_tools import (
     CheckUserStatusParams,
     ListOnlineUsersParams,
+    SearchUsersParams,
     UsersToolProvider,
 )
 
@@ -294,3 +295,52 @@ class CheckUserStatusTimezoneTests(TestCase):
             )
         payload = json.loads(result)
         self.assertEqual(payload["last_seen"], "2026-02-01 00:30")
+
+
+class SearchUsersTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.caller = User.objects.create_user(
+            username="caller", password="pass", first_name="Marc"
+        )
+        cls.marie = User.objects.create_user(
+            username="mdupont",
+            password="pass",
+            first_name="Marie",
+            last_name="Dupont",
+        )
+        cls.handle_only = User.objects.create_user(username="marek", password="pass")
+        cls.bot_user = User.objects.create_user(username="marbot", password="pass")
+
+        from workspace.ai.models import BotProfile
+
+        BotProfile.objects.create(user=cls.bot_user)
+
+    def _call(self, query):
+        return UsersToolProvider().search_users(
+            SearchUsersParams(query=query),
+            user=self.caller,
+            bot=None,
+            conversation_id=None,
+            context={},
+        )
+
+    def test_returns_username_and_display_name(self):
+        payload = json.loads(self._call("marie"))
+        self.assertEqual(
+            payload, [{"username": "mdupont", "display_name": "Marie Dupont"}]
+        )
+
+    def test_display_name_falls_back_to_the_username(self):
+        payload = json.loads(self._call("marek"))
+        self.assertEqual(payload[0]["display_name"], "marek")
+
+    def test_excludes_bots_and_the_caller(self):
+        usernames = [u["username"] for u in json.loads(self._call("mar"))]
+        self.assertEqual(usernames, ["marek", "mdupont"])
+
+    def test_short_query_is_rejected(self):
+        self.assertEqual(self._call("m"), "Error: query must be at least 2 characters")
+
+    def test_no_match_reports_plainly(self):
+        self.assertEqual(self._call("zzz"), 'No colleague found matching "zzz".')

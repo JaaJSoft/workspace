@@ -4,10 +4,25 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from workspace.core.module_registry import ModuleInfo
+
 User = get_user_model()
+
+
+def _module(slug, preview=False, active=True):
+    return ModuleInfo(
+        name=slug.title(),
+        slug=slug,
+        description="",
+        icon="i",
+        color="c",
+        url=f"/{slug}",
+        active=active,
+        preview=preview,
+    )
 
 
 # ── Chat search ─────────────────────────────────────────────────
@@ -359,10 +374,11 @@ class UnifiedSearchVisibilityTests(TestCase):
         # process-global across TestCase runs, so clear it between tests.
         cache.clear()
 
-    @patch("workspace.core.views.is_module_slug_visible")
-    @patch("workspace.core.views.registry")
+    @override_settings(PREVIEW_VISIBILITY="none")
+    @patch("workspace.core.services.module_visibility.registry")
+    @patch("workspace.core.services.search.registry")
     def test_hidden_module_results_and_commands_filtered(
-        self, mock_registry, mock_visible
+        self, mock_registry, mock_visibility_registry
     ):
         mock_registry.search.return_value = [
             {"module_slug": "files", "name": "doc"},
@@ -381,7 +397,9 @@ class UnifiedSearchVisibilityTests(TestCase):
                 module_slug="lab",
             ),
         ]
-        mock_visible.side_effect = lambda user, slug: slug != "lab"
+        mock_visibility_registry.get.side_effect = lambda slug: _module(
+            slug, preview=slug == "lab"
+        )
 
         resp = self.client.get("/api/v1/search?q=do")
         self.assertEqual(resp.status_code, 200)

@@ -124,18 +124,22 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
         self.page.mouse.up()
 
     def test_drag_source_declares_the_effect_the_drop_zone_asks_for(self):
-        """The sidebar's ``dragover`` sets ``dropEffect = 'link'``. Per
-        the HTML spec the browser silently resets that to ``none`` — and
-        refuses the drop — unless ``link`` is a member of the source's
-        ``effectAllowed``.
+        """Per the HTML spec the browser silently resets ``dropEffect``
+        to ``none`` — and refuses the drop — unless the value the target
+        asks for is a member of the source's ``effectAllowed``.
 
-        Leaving ``effectAllowed`` unset does not mean "anything goes":
-        the browser derives a default, and Chrome on Linux derives
-        ``copyMove``, which excludes ``link``. The drop was then rejected
-        even though ``dragover`` had called ``preventDefault()`` — no
-        ``drop`` event, no request, no error. Chromium under Playwright
-        reports ``all`` instead, which is why only the explicit value can
-        be asserted here, not the end-to-end failure.
+        This zone used to ask for ``link`` while the source declared
+        nothing, so the browser derived a default. Chrome on Linux
+        derives ``copyMove``, which excludes ``link``; the drop was
+        rejected even though ``dragover`` had called
+        ``preventDefault()`` — no ``drop`` event, no request, no error.
+        Forcing ``effectAllowed = 'link'`` did not help either: Chrome
+        clamps it down to ``copy``. ``copy`` is the only effect that
+        belongs to every default set, so both sides now name it.
+
+        Chromium under Playwright reports ``effectAllowed = 'all'``,
+        which contains every effect, so the end-to-end drop succeeds
+        here regardless. Only the negotiated values can be asserted.
 
         The reorder path never had this bug: ``onPinnedDragStart`` sets
         ``effectAllowed = 'move'`` to match its own ``dropEffect``.
@@ -171,12 +175,12 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
         self.drag(row, drop_zone, mid_drag=capture)
 
         started = dragstart()
-        assert started["effectAllowed"] == "link", (
-            f"drag source must declare effectAllowed='link' to match the "
+        assert started["effectAllowed"] == "copy", (
+            f"drag source must declare effectAllowed='copy' to match the "
             f"drop zone's dropEffect; got {started['effectAllowed']!r}"
         )
-        assert effects["dropEffect"] == "link", (
-            f"drop zone should ask for the 'link' effect, got "
+        assert effects["dropEffect"] == "copy", (
+            f"drop zone should ask for the 'copy' effect, got "
             f"{effects['dropEffect']!r} — source and target must agree"
         )
 

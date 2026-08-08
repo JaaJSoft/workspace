@@ -3,10 +3,11 @@
 import os
 import shutil
 import tempfile
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService
@@ -14,7 +15,6 @@ from workspace.files.services import FileService
 User = get_user_model()
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class TestCreateFile(TestCase):
     """Tests for FileService.create_file()."""
 
@@ -59,7 +59,6 @@ class TestCreateFile(TestCase):
         self.assertEqual(f.parent, folder)
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class TestCreateFolder(TestCase):
     """Tests for FileService.create_folder()."""
 
@@ -100,9 +99,6 @@ class TestCreateFolderOnStorage(TestCase):
     def tearDown(self):
         shutil.rmtree(self.media_root, ignore_errors=True)
 
-    @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
-    )
     def test_root_folder_created_on_disk(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             FileService.create_folder(self.user, "Photos")
@@ -111,9 +107,6 @@ class TestCreateFolderOnStorage(TestCase):
             )
             self.assertTrue(os.path.isdir(expected))
 
-    @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
-    )
     def test_nested_folder_created_on_disk(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             parent = FileService.create_folder(self.user, "Documents")
@@ -128,9 +121,6 @@ class TestCreateFolderOnStorage(TestCase):
             )
             self.assertTrue(os.path.isdir(expected))
 
-    @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
-    )
     def test_deeply_nested_folder(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             a = FileService.create_folder(self.user, "A")
@@ -141,13 +131,21 @@ class TestCreateFolderOnStorage(TestCase):
             )
             self.assertTrue(os.path.isdir(expected))
 
-    @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
     def test_silently_skipped_for_unsupported_backend(self):
-        folder = FileService.create_folder(self.user, "Ignored")
+        """A backend without local paths (S3-like) must not break folder creation."""
+        with (
+            self.settings(MEDIA_ROOT=self.media_root),
+            patch(
+                "workspace.files.services._storage_ops.default_storage.path",
+                side_effect=NotImplementedError,
+            ),
+        ):
+            folder = FileService.create_folder(self.user, "Ignored")
+
         self.assertEqual(folder.name, "Ignored")
+        self.assertEqual(folder.node_type, File.NodeType.FOLDER)
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class TestRegisterDiskFile(TestCase):
     """Tests for FileService.register_disk_file()."""
 
@@ -179,7 +177,6 @@ class TestRegisterDiskFile(TestCase):
         self.assertIn("image", f.mime_type)
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class TestRename(TestCase):
     """Tests for FileService.rename()."""
 
@@ -241,7 +238,6 @@ class TestRename(TestCase):
         )
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class TestUpdateContent(TestCase):
     """Tests for FileService.update_content()."""
 
@@ -327,7 +323,6 @@ class TestUpdateContent(TestCase):
         self.assertEqual(f.mime_type, "application/x-custom")
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class TestReplaceContentStorage(TestCase):
     """Tests for FileService.replace_content_storage()."""
 
@@ -401,7 +396,6 @@ class TestReplaceContentStorage(TestCase):
         self.assertEqual(f.content.name, "dav/streamed/doc.txt")
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class TestCopy(TestCase):
     """Tests for FileService.copy()."""
 
@@ -462,7 +456,6 @@ class TestCopy(TestCase):
         self.assertEqual(copied.name, "A (Copy 2)")
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class TestCheckNameAvailable(TestCase):
     """Tests for FileService.check_name_available()."""
 
@@ -524,7 +517,6 @@ class TestCheckNameAvailable(TestCase):
         )
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class TestValidateMoveTarget(TestCase):
     """Tests for FileService.validate_move_target()."""
 
@@ -581,9 +573,6 @@ class TestMoveOnStorage(TestCase):
             self.media_root, "files", "users", self.user.username, *parts
         )
 
-    @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
-    )
     def test_move_folder_moves_directory_on_disk(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             src = FileService.create_folder(self.user, "Src")
@@ -597,9 +586,6 @@ class TestMoveOnStorage(TestCase):
             self.assertFalse(os.path.isdir(self._storage_path("Src", "Child")))
             self.assertTrue(os.path.isdir(self._storage_path("Dest", "Child")))
 
-    @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
-    )
     def test_move_folder_to_root(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             parent = FileService.create_folder(self.user, "Parent")
@@ -612,9 +598,6 @@ class TestMoveOnStorage(TestCase):
             self.assertFalse(os.path.isdir(self._storage_path("Parent", "Child")))
             self.assertTrue(os.path.isdir(self._storage_path("Child")))
 
-    @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
-    )
     def test_move_folder_updates_descendant_content_names(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             src = FileService.create_folder(self.user, "Src")
@@ -638,9 +621,6 @@ class TestMoveOnStorage(TestCase):
                 f"Expected path starting with files/users/moveuser/Dest/Src/, got {new_content_name}",
             )
 
-    @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
-    )
     def test_move_file_moves_on_disk(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             src = FileService.create_folder(self.user, "Src")
@@ -661,9 +641,6 @@ class TestMoveOnStorage(TestCase):
             new_full_path = os.path.join(self.media_root, f.content.name)
             self.assertTrue(os.path.isfile(new_full_path))
 
-    @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
-    )
     def test_move_file_to_root(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             folder = FileService.create_folder(self.user, "Folder")
@@ -681,7 +658,6 @@ class TestMoveOnStorage(TestCase):
             new_full_path = os.path.join(self.media_root, f.content.name)
             self.assertTrue(os.path.isfile(new_full_path))
 
-    @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
     def test_move_noop_when_same_parent(self):
         folder = FileService.create_folder(self.user, "Folder")
         f = FileService.create_file(

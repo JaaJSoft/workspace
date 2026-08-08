@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.db import IntegrityError
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -272,7 +272,6 @@ class GroupAccessControlTests(TestCase):
         self.assertNotIn(self.group_file, qs)
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class GroupPropagationOnCreateTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pass")
@@ -308,7 +307,6 @@ class GroupPropagationOnCreateTests(TestCase):
         self.assertEqual(f.group_id, self.group.id)
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class GroupMoveTests(TestCase):
     def setUp(self):
         self.alice = User.objects.create_user(username="alice", password="pass")

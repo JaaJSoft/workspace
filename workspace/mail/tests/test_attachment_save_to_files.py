@@ -7,7 +7,6 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.storage import OverwriteStorage
 from workspace.mail.models import (
     MailAccount,
     MailAttachment,
@@ -131,7 +130,7 @@ class MailAttachmentSaveToFilesTests(APITestCase):
         view = MailAttachmentSaveToFilesView.as_view()
 
         with patch.object(
-            OverwriteStorage,
+            File._meta.get_field("content").storage,
             "_save",
             side_effect=OSError("disk full"),
         ):

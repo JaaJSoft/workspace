@@ -7,7 +7,7 @@ import tempfile
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from workspace.ai.models import BotProfile
 from workspace.chat.models import (
@@ -104,7 +104,6 @@ class PurgeTestMixin:
 # ---------------------------------------------------------------
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
 class AbandonedConversationTests(PurgeTestMixin, TestCase):
     def test_conv_with_active_human_is_kept(self):
         """Conversations with at least one active human are untouched."""
@@ -205,7 +204,6 @@ class AbandonedConversationTests(PurgeTestMixin, TestCase):
 # ---------------------------------------------------------------
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
 class OrphanFileTests(PurgeTestMixin, TestCase):
     def test_orphan_file_deleted(self):
         """A file on disk with no matching DB row is removed."""
@@ -284,7 +282,6 @@ class OrphanFileTests(PurgeTestMixin, TestCase):
 # ---------------------------------------------------------------
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage")
 class CombinedTests(PurgeTestMixin, TestCase):
     def test_abandoned_conv_then_leftover_dir_cleaned(self):
         """Phase 1 deletes the conv; phase 2 cleans up any leftover dir."""

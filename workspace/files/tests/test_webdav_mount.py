@@ -42,7 +42,7 @@ import uuid
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
-from django.test import LiveServerTestCase, override_settings
+from django.test import LiveServerTestCase
 from django.test.testcases import LiveServerThread
 
 from workspace.files.models import File
@@ -195,7 +195,6 @@ class _WorkspaceDavLiveServerThread(LiveServerThread):
 
 
 @unittest.skipIf(_SKIP_REASON is not None, _SKIP_REASON or "")
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class WebDAVDavfs2MountTests(LiveServerTestCase):
     """Boot a live server, mount its ``/dav`` endpoint via davfs2, exercise it.
 

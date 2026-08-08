@@ -2,6 +2,7 @@ import posixpath
 import secrets
 
 from django.contrib.auth import get_user_model
+from django.core.files.storage import FileSystemStorage
 from django.db import models, transaction
 from django.db.models import F, Q, Value
 from django.db.models.functions import Concat, Lower, Substr
@@ -11,8 +12,6 @@ from django.utils import timezone
 
 from workspace.common.logging import scrub
 from workspace.common.uuids import uuid_v7_or_v4
-
-from .storage import OverwriteStorage
 
 User = get_user_model()
 
@@ -67,7 +66,7 @@ class File(models.Model):
     # File-specific fields
     content = models.FileField(
         upload_to=file_upload_path,
-        storage=OverwriteStorage(),
+        storage=FileSystemStorage(allow_overwrite=True),
         null=True,
         blank=True,
         max_length=1024,

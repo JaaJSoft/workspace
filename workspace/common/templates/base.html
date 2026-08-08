@@ -6,7 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{% block title %}Workspace{% endblock %}</title>
 
-  <!-- Warm up TLS + DNS for the JS CDNs we still hit on every page -->
+  <!-- Warm up TLS + DNS for jsDelivr and unpkg: this page only hits unpkg
+       (Lucide, below), but calendar, chat and files pages still load assets
+       from both CDNs via their own script/link tags, and this preconnect is
+       shared with them through base.html. -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
 

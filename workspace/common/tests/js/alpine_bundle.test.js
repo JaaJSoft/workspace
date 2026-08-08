@@ -1,8 +1,8 @@
-// Vérifie l'intégrité de l'artefact Alpine vendorisé. Ce test ne peut pas
-// exécuter Alpine (il exige un vrai DOM, et le runner de tests JS du projet
-// interdit toute dépendance npm) : la vérification comportementale est faite
-// par les suites Playwright. Ici on verrouille ce qui casserait silencieusement
-// le chargement — mauvais format de module, global manquant, version flottante.
+// Verifies the integrity of the vendored Alpine artifact. This test cannot
+// execute Alpine (it needs a real DOM, and the project's JS test runner
+// forbids npm dependencies): behavioral verification is done by the
+// Playwright suites. Here we lock down what would silently break loading -
+// wrong module format, missing global, floating version.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -14,41 +14,52 @@ const BUNDLE = path.join(
 );
 const MANIFEST = path.join(REPO_ROOT, 'scripts', 'alpine', 'package.json');
 
-test('le bundle existe et n\'est pas vide', () => {
-  assert.ok(fs.existsSync(BUNDLE), `artefact absent : ${BUNDLE}`);
-  assert.ok(fs.statSync(BUNDLE).size > 10_000, 'artefact suspicieusement petit');
+test('the bundle exists and is not empty', () => {
+  assert.ok(fs.existsSync(BUNDLE), `missing artifact: ${BUNDLE}`);
+  assert.ok(fs.statSync(BUNDLE).size > 10_000, 'artifact suspiciously small');
 });
 
-test('le bundle est au format IIFE, pas ESM', () => {
+test('the bundle is an IIFE, not ESM', () => {
   const src = fs.readFileSync(BUNDLE, 'utf8');
-  // Une sortie ESM porterait des déclarations import/export en tête de fichier.
-  // Chargée via <script defer> sans type="module", elle lèverait une
-  // SyntaxError et Alpine ne démarrerait jamais.
-  assert.doesNotMatch(src, /^\s*import\s/m, 'déclaration import trouvée : sortie ESM');
-  assert.doesNotMatch(src, /^\s*export\s/m, 'déclaration export trouvée : sortie ESM');
+  // esbuild's IIFE output always opens with the wrapper call. Asserting the
+  // shape we want beats enumerating the shapes we don't: minified ESM emits
+  // `import{a}from"x"` with no whitespace, which a /^\s*import\s/ guard misses.
+  // Loaded through <script defer> without type="module", ESM would raise a
+  // SyntaxError and Alpine would never start.
+  assert.ok(src.trimStart().startsWith('(()=>{'), 'bundle does not open with the esbuild IIFE wrapper');
+  assert.doesNotMatch(src, /^\s*(import|export)[\s{*]/m, 'ESM import/export declaration found');
 });
 
-test('le bundle expose window.Alpine', () => {
+test('the bundle exposes window.Alpine', () => {
   const src = fs.readFileSync(BUNDLE, 'utf8');
-  // stores.js, avatar.js et chat/sse.js lisent tous le global Alpine.
-  assert.match(src, /window\.Alpine\s*=/, 'window.Alpine n\'est jamais assigné');
+  // stores.js, avatar.js and chat/sse.js all read the Alpine global.
+  assert.match(src, /window\.Alpine\s*=/, 'window.Alpine is never assigned');
 });
 
-test('les versions sont épinglées exactement', () => {
+test('the bundle was built from the pinned alpine version', () => {
+  const src = fs.readFileSync(BUNDLE, 'utf8');
+  const pinned = JSON.parse(fs.readFileSync(MANIFEST, 'utf8')).dependencies.alpinejs;
+  // Closes the manifest->artifact loop: without this, a stale or hand-edited
+  // bundle passes every other check in this file.
+  assert.match(src, new RegExp(`version:"${pinned.replace(/\./g, '\\.')}"`),
+    `bundle does not carry Alpine ${pinned}`);
+});
+
+test('versions are pinned exactly', () => {
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
   const deps = { ...manifest.dependencies, ...manifest.devDependencies };
-  assert.ok(Object.keys(deps).length > 0, 'aucune dépendance déclarée');
+  assert.ok(Object.keys(deps).length > 0, 'no dependencies declared');
   for (const [name, range] of Object.entries(deps)) {
     assert.match(
       range, /^\d+\.\d+\.\d+$/,
-      `${name} vaut "${range}" : une version flottante rend le bundle non reproductible`
+      `${name} is "${range}": a floating version makes the bundle non-reproducible`
     );
   }
 });
 
-test('le verrou de dépendances est committé', () => {
+test('the dependency lockfile is committed', () => {
   assert.ok(
     fs.existsSync(path.join(REPO_ROOT, 'scripts', 'alpine', 'package-lock.json')),
-    'package-lock.json manquant : les reconstructions ne seraient pas reproductibles'
+    'package-lock.json missing: rebuilds would not be reproducible'
   );
 });

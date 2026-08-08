@@ -50,16 +50,16 @@ def _base_template_source() -> str:
 
 
 class BaseTemplateScriptOriginTests(TestCase):
-    """Alpine ne doit jamais être servi depuis un CDN tiers.
+    """Alpine must never be served from a third-party CDN.
 
-    Alpine exécute les expressions de tous les composants et son état réactif
-    contient les entrées de coffre déchiffrées sur les pages du module
-    ``passwords``. Un build altéré servi par un tiers exfiltrerait donc le coffre
-    entier. jsDelivr servait de surcroît une plage flottante ``3.x.x``, ce qui
-    rendait tout épinglage impossible.
+    Alpine evaluates every component expression, and its reactive state holds
+    decrypted vault entries on the ``passwords`` module's pages. A tampered
+    build served by a third party would therefore exfiltrate the entire vault.
+    jsDelivr also served a floating ``3.x.x`` range, which made pinning
+    impossible.
 
-    Ce test lit le gabarit sur disque via le chargeur Django plutôt qu'un chemin
-    codé en dur, pour rester valide si l'arborescence des gabarits bouge.
+    This test reads the template from disk through the Django loader rather
+    than a hardcoded path, so it stays valid if the template tree moves.
     """
 
     def test_alpine_core_is_not_loaded_from_a_cdn(self):
@@ -74,17 +74,17 @@ class BaseTemplateScriptOriginTests(TestCase):
         self.assertIn("ui/js/vendor/alpine/alpine.js", _base_template_source())
 
     def test_the_vendored_bundle_is_deferred(self):
-        # Sans `defer`, le bundle s'exécuterait pendant l'analyse du <head>,
-        # donc AVANT que stores.js (fin de <body>, non différé) ait posé son
-        # écouteur `alpine:init` — les trois stores ne seraient jamais
-        # enregistrés et la navbar lèverait sur $store.notifications.
-        # On cherche la balise entière plutôt qu'une ligne : un reformatage
-        # qui répartirait les attributs sur plusieurs lignes ne doit pas
-        # transformer un invariant tenu en faux négatif.
+        # Without `defer`, the bundle would run while the <head> is still
+        # being parsed, BEFORE stores.js (end of <body>, not deferred) has
+        # attached its `alpine:init` listener - the three stores would never
+        # register and the navbar would raise on $store.notifications.
+        # Search for the whole tag rather than a line: a reformat that spreads
+        # attributes across multiple lines must not turn a held invariant into
+        # a false negative.
         tag = re.search(
             r"<script[^>]*ui/js/vendor/alpine/alpine\.js[^>]*>",
             _base_template_source(),
             re.DOTALL,
         )
-        self.assertIsNotNone(tag, "balise du bundle alpine introuvable")
+        self.assertIsNotNone(tag, "alpine bundle script tag not found")
         self.assertIn("defer", tag.group(0))

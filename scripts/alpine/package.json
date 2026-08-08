@@ -1,0 +1,17 @@
+{
+  "name": "workspace-alpine",
+  "version": "1.0.0",
+  "description": "esbuild bundle of Alpine.js and its plugins for the workspace Django project. Replaces the jsdelivr CDN tags in base.html - two of which used a floating 3.x.x range that made any pinning impossible - with a local IIFE bundle committed to statics and served via whitenoise. Alpine holds decrypted vault entries in its reactive state on the passwords pages, so a tampered third-party build would leak them. Rebuild with `npm run build:alpine` after bumping the pinned versions.",
+  "private": true,
+  "scripts": {
+    "build:alpine": "esbuild alpine-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/common/static/ui/js/vendor/alpine/alpine.js"
+  },
+  "dependencies": {
+    "alpinejs": "3.15.12",
+    "@alpinejs/collapse": "3.15.12",
+    "@imacrayon/alpine-ajax": "0.12.6"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  }
+}

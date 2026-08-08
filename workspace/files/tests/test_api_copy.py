@@ -7,7 +7,6 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.storage import OverwriteStorage
 
 User = get_user_model()
 
@@ -109,7 +108,7 @@ class CopyAPITests(APITestCase):
                 "workspace.files.services._storage_ops.logger.warning",
             ) as mock_warn,
             patch.object(
-                OverwriteStorage,
+                File._meta.get_field("content").storage,
                 "_save",
                 side_effect=OSError("disk full"),
             ),

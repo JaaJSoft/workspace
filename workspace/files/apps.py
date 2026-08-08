@@ -1,4 +1,7 @@
+import os
+
 from django.apps import AppConfig
+from django.core.files.base import File as DjangoFile
 
 
 class FilesConfig(AppConfig):
@@ -6,6 +9,14 @@ class FilesConfig(AppConfig):
     name = "workspace.files"
 
     def ready(self):
+        # Django's default chunk size (64 KB) causes hundreds of small writes
+        # for multi-MB files. On replicated storage (e.g. Longhorn) each write
+        # must be confirmed by every replica, so larger chunks dramatically
+        # reduce the number of round-trips (224 -> 7 for a 14 MB file).
+        DjangoFile.DEFAULT_CHUNK_SIZE = int(
+            os.getenv("FILE_UPLOAD_CHUNK_SIZE", 2 * 1024 * 1024)
+        )
+
         from workspace.core.module_registry import (
             CommandInfo,
             ModuleInfo,

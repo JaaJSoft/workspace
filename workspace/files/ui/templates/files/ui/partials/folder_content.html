@@ -287,10 +287,12 @@
             </td>
             <td data-col="name">
               {% if node.node_type == 'folder' and not is_trash_view %}
-                {# ``draggable="false"`` hands the drag back to the row: an
-                   anchor is draggable by default, and a link drag carries a
-                   ``text/uri-list`` payload the browser may route through the
-                   OS instead of the page, so the sidebar never sees the drop. #}
+                {% comment %}
+                  draggable="false" hands the drag back to the row: an anchor
+                  is draggable by default, and a link drag carries a
+                  text/uri-list payload that Chrome routes through the OS
+                  instead of the page, so the sidebar never sees the drop.
+                {% endcomment %}
                 <a
                   href="/files/{{ node.uuid }}"
                   class="font-medium hover:text-primary hover:underline block truncate"

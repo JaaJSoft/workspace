@@ -146,6 +146,12 @@ test_db.sqlite3*
 # for devs who only touch Python)
 /scripts/editor/node_modules/
 
+# Alpine.js build (scripts/alpine/ holds package.json + alpine-bundle.js;
+# the built IIFE bundle at workspace/common/static/ui/js/vendor/alpine/ is
+# committed so a fresh clone runs Alpine immediately - no `npm install` required
+# for devs who only touch Python)
+/scripts/alpine/node_modules/
+
 # Screenshot capture asset cache (scripts/screenshots.py downloads the CDN
 # scripts here so captures are deterministic and work offline)
 /scripts/.screenshot-assets/

@@ -69,12 +69,15 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
         self.page.evaluate(
             """() => {
                 window.__dragstart = null;
+                // Bubble phase, so the row's own @dragstart has already
+                // populated the DataTransfer by the time we read it.
                 window.addEventListener('dragstart', (e) => {
                     window.__dragstart = {
                         source: e.target.tagName,
                         types: [...e.dataTransfer.types],
+                        effectAllowed: e.dataTransfer.effectAllowed,
                     };
-                }, true);
+                }, false);
             }"""
         )
         return lambda: self.page.evaluate("window.__dragstart")
@@ -119,6 +122,63 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
         if mid_drag is not None:
             mid_drag()
         self.page.mouse.up()
+
+    def test_drag_source_declares_the_effect_the_drop_zone_asks_for(self):
+        """The sidebar's ``dragover`` sets ``dropEffect = 'link'``. Per
+        the HTML spec the browser silently resets that to ``none`` — and
+        refuses the drop — unless ``link`` is a member of the source's
+        ``effectAllowed``.
+
+        Leaving ``effectAllowed`` unset does not mean "anything goes":
+        the browser derives a default, and Chrome on Linux derives
+        ``copyMove``, which excludes ``link``. The drop was then rejected
+        even though ``dragover`` had called ``preventDefault()`` — no
+        ``drop`` event, no request, no error. Chromium under Playwright
+        reports ``all`` instead, which is why only the explicit value can
+        be asserted here, not the end-to-end failure.
+
+        The reorder path never had this bug: ``onPinnedDragStart`` sets
+        ``effectAllowed = 'move'`` to match its own ``dropEffect``.
+        """
+        folder = self.make_folder("Reports")
+        self.login_as(self.user)
+        self.page.goto(f"{self.live_server_url}/files")
+
+        row = self.page.locator(f"tr[data-uuid='{folder.uuid}']")
+        expect(row).to_be_visible()
+
+        dragstart = self.record_dragstart()
+        drop_zone = self.page.locator("#pinned-folders-section > div").last
+
+        effects = {}
+
+        def capture():
+            effects["dropEffect"] = self.page.evaluate(
+                "window.__lastDropEffect || null"
+            )
+
+        self.page.evaluate(
+            """() => {
+                window.__lastDropEffect = null;
+                window.addEventListener('dragover', (e) => {
+                    const zone = document.querySelector('#pinned-folders-section');
+                    if (zone && zone.contains(e.target)) {
+                        window.__lastDropEffect = e.dataTransfer.dropEffect;
+                    }
+                }, false);
+            }"""
+        )
+        self.drag(row, drop_zone, mid_drag=capture)
+
+        started = dragstart()
+        assert started["effectAllowed"] == "link", (
+            f"drag source must declare effectAllowed='link' to match the "
+            f"drop zone's dropEffect; got {started['effectAllowed']!r}"
+        )
+        assert effects["dropEffect"] == "link", (
+            f"drop zone should ask for the 'link' effect, got "
+            f"{effects['dropEffect']!r} — source and target must agree"
+        )
 
     def test_dragging_a_folder_row_pins_it(self):
         folder = self.make_folder("Reports")

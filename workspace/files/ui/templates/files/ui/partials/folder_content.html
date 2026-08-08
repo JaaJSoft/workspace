@@ -257,7 +257,7 @@
             data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
             {% if node.node_type == 'folder' and not is_trash_view %}
             draggable="true"
-            @dragstart="$event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
+            @dragstart="$event.dataTransfer.effectAllowed = 'link'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
             @click="openFolderFromRow($event)"
             {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
             @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')"
@@ -406,7 +406,7 @@
             @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
             {% if node.node_type == 'folder' and not is_trash_view %}
             draggable="true"
-            @dragstart="$event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
+            @dragstart="$event.dataTransfer.effectAllowed = 'link'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
             @click="navigateToFolder($event, '/files/{{ node.uuid }}')"
             {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
             @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')"

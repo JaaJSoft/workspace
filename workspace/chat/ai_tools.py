@@ -1,10 +1,19 @@
 """AI tools for the Chat module."""
 
 import json
+import uuid as uuid_lib
 
 from pydantic import BaseModel, Field
 
 from workspace.ai.tool_registry import ToolProvider, tool
+
+# Hard caps for the transcript tools. A conversation grows without bound; a
+# tool result cannot. The character budget is the one that matters — a cap on
+# the message count says nothing about how long each message is.
+READ_MAX_MESSAGES = 50
+READ_DEFAULT_MESSAGES = 30
+READ_MAX_CHARS = 12000
+READ_MAX_BODY_CHARS = 1000
 
 
 class SearchMessagesParams(BaseModel):
@@ -40,6 +49,82 @@ class AskUserQuestionParams(BaseModel):
             "also type a free-form reply."
         ),
     )
+
+
+class ReadConversationParams(BaseModel):
+    conversation_id: uuid_lib.UUID = Field(
+        description="UUID of the conversation to read, as returned by search_messages."
+    )
+    limit: int = Field(
+        default=READ_DEFAULT_MESSAGES,
+        description=(
+            f"How many of the most recent messages to return "
+            f"(1-{READ_MAX_MESSAGES}, default {READ_DEFAULT_MESSAGES})."
+        ),
+    )
+
+
+class SummarizeConversationParams(BaseModel):
+    conversation_id: uuid_lib.UUID = Field(
+        description="UUID of the conversation to summarize, as returned by search_messages."
+    )
+
+
+def _format_message(msg, user_tz):
+    """Render one message as a transcript entry."""
+    name = msg.author.get_full_name() or msg.author.username
+    author = f"[Bot] {name}" if hasattr(msg.author, "bot_profile") else name
+
+    body = msg.body
+    if len(body) > READ_MAX_BODY_CHARS:
+        body = body[:READ_MAX_BODY_CHARS] + "…"
+    markers = [f"[attachment: {a.original_name}]" for a in msg.attachments.all()]
+    if markers:
+        body = "\n".join([body, *markers]) if body else "\n".join(markers)
+
+    return {
+        "timestamp": msg.created_at.astimezone(user_tz).strftime("%Y-%m-%d %H:%M"),
+        "author": author,
+        "body": body,
+    }
+
+
+def _read_transcript(conversation_id, user_tz, limit):
+    """Return ``(entries, older_omitted)`` for the tail of a conversation.
+
+    Entries come back oldest-first. The character budget is spent from the
+    newest message backwards, so what falls off the end is the oldest
+    context — the same trade-off the LLM history window makes.
+    """
+    from workspace.chat.models import Message
+
+    rows = list(
+        Message.objects.filter(
+            conversation_id=conversation_id,
+            deleted_at__isnull=True,
+        )
+        .select_related("author", "author__bot_profile")
+        .prefetch_related("attachments")
+        .order_by("-created_at")[: limit + 1]
+    )
+    # One row over the limit only tells us older messages exist; it is never
+    # rendered.
+    older_omitted = len(rows) > limit
+    rows = rows[:limit]
+
+    budget = READ_MAX_CHARS
+    entries = []
+    for msg in rows:
+        entry = _format_message(msg, user_tz)
+        cost = len(entry["body"]) + len(entry["author"])
+        if entries and cost > budget:
+            older_omitted = True
+            break
+        budget -= cost
+        entries.append(entry)
+
+    entries.reverse()
+    return entries, older_omitted
 
 
 class ChatToolProvider(ToolProvider):
@@ -122,6 +207,107 @@ or references a past discussion."""
                 }
             )
         return json.dumps(results, ensure_ascii=False)
+
+    @tool(
+        badge_icon="📖",
+        badge_label="Read a conversation",
+        badge_running_label="Reading a conversation",
+        params=ReadConversationParams,
+    )
+    def read_conversation(self, args, user, bot, conversation_id, context):
+        """Read the most recent messages of one of the user's conversations, in order. \
+Call this after search_messages when a single matching message is not enough to know what \
+was decided, or when the user refers to a discussion held elsewhere. Returns at most \
+50 messages, oldest first, truncated to fit a fixed size budget."""
+        from workspace.chat.services.conversations import get_active_membership
+        from workspace.users.services.settings import get_user_timezone
+
+        # The *user's* membership is what grants access here, not the bot's:
+        # the user belongs to conversations this bot was never added to, and
+        # reading one on their behalf is legitimate.
+        membership = get_active_membership(user, args.conversation_id)
+        if not membership:
+            return "Error: no such conversation, or you are not a member of it."
+
+        entries, older_omitted = _read_transcript(
+            args.conversation_id,
+            get_user_timezone(user),
+            max(1, min(args.limit, READ_MAX_MESSAGES)),
+        )
+        if not entries:
+            return "This conversation has no messages yet."
+
+        return json.dumps(
+            {
+                "conversation": membership.conversation.title or "DM",
+                "messages": entries,
+                "older_messages_omitted": older_omitted,
+            },
+            ensure_ascii=False,
+        )
+
+    @tool(
+        badge_icon="📝",
+        badge_label="Summarized a conversation",
+        badge_running_label="Summarizing a conversation",
+        params=SummarizeConversationParams,
+    )
+    def summarize_conversation(self, args, user, bot, conversation_id, context):
+        """Summarize one of the user's conversations. Call this instead of read_conversation \
+when the discussion is long and you need what it was about rather than what was literally said. \
+The summary covers the older messages only — read_conversation gives you the recent ones."""
+        from workspace.ai.models import ConversationSummary
+        from workspace.ai.services.chat_summary import update_summary
+        from workspace.chat.services.conversations import get_active_membership
+        from workspace.users.services.settings import get_user_timezone
+
+        membership = get_active_membership(user, args.conversation_id)
+        if not membership:
+            return "Error: no such conversation, or you are not a member of it."
+
+        conv_id = str(args.conversation_id)
+        title = membership.conversation.title or "DM"
+
+        # Returns without calling the model when the stored summary already
+        # covers everything outside the recent window; otherwise it only
+        # summarises what arrived since ``up_to``.
+        result = update_summary(conv_id)
+        stored = ConversationSummary.objects.filter(conversation_id=conv_id).first()
+        content = stored.content if stored else ""
+
+        if content:
+            return json.dumps(
+                {
+                    "conversation": title,
+                    "summary": content,
+                    "covers": (
+                        "older messages only — call read_conversation for the "
+                        "most recent ones"
+                    ),
+                },
+                ensure_ascii=False,
+            )
+
+        if result.get("status") == "error":
+            return f"Error: could not summarize this conversation — {result['error']}"
+
+        # Nothing was ever summarised because the conversation is short enough
+        # to be read in full: hand back the transcript rather than billing a
+        # model call for a handful of messages.
+        entries, older_omitted = _read_transcript(
+            args.conversation_id, get_user_timezone(user), READ_MAX_MESSAGES
+        )
+        if not entries:
+            return "This conversation has no messages yet."
+        return json.dumps(
+            {
+                "conversation": title,
+                "note": "Short conversation — here it is in full instead of a summary.",
+                "messages": entries,
+                "older_messages_omitted": older_omitted,
+            },
+            ensure_ascii=False,
+        )
 
     @tool(
         badge_icon="💬",

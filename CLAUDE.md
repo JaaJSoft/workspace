@@ -445,6 +445,28 @@ except (ValueError, TypeError) as exc: # ✅ parentheses still MANDATORY with `a
 
 ## Frontend Conventions
 
+### Drag & drop - the source must declare an `effectAllowed` containing the target's `dropEffect`
+
+`preventDefault()` on `dragover` is **not** enough to accept a drop. The browser also checks that the `dropEffect` the target asks for is a member of the `effectAllowed` the source declared; if it isn't, it resets `dropEffect` to `none` and refuses the drop. No `drop` event fires, no request goes out, no error is raised - the zone still highlights, so it looks like the handler ran and did nothing.
+
+Leaving `effectAllowed` unset does **not** mean "anything goes": the browser derives a default that varies by platform and drag source. Chrome on Linux derives `copyMove`, which excludes `link` - and clamps an explicit `effectAllowed = 'link'` down to `copy`.
+
+```js
+// ❌ WRONG - source says nothing, target asks for 'link'. Silently refused on Chrome/Linux.
+onDragStart(e) { e.dataTransfer.setData('application/x-thing', id); }
+onDragOver(e)  { e.dataTransfer.dropEffect = 'link'; }
+
+// ✅ Correct - both sides name the same effect.
+onDragStart(e) { e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/x-thing', id); }
+onDragOver(e)  { e.dataTransfer.dropEffect = 'copy'; }
+```
+
+**Rules:**
+- Every `dragstart` handler sets `effectAllowed` explicitly. Every matching `dragover` sets a `dropEffect` that is a member of it. Grep both sides together: `grep -rn "dropEffect\|effectAllowed" --include=*.js --include=*.html workspace/`.
+- Prefer `copy` for "add a reference to this" gestures and `move` for reordering. **Avoid `link`** - it is the one effect missing from `copyMove`, the most common derived default, and Chrome refuses it outright on Linux.
+- Playwright cannot catch this. Its synthesized drags report `effectAllowed = 'all'`, which contains every effect, so the drop succeeds under test even when it is refused in a real browser. Assert the *negotiated values* on both sides (`effectAllowed` at `dragstart`, `dropEffect` at `dragover`), never just "did the drop land" - see `files/tests/e2e/test_pinned_drag_and_drop.py`.
+- To diagnose a drop that never fires, log `effectAllowed`, `dropEffect` and `defaultPrevented` from a `dragover` listener in the real browser. `prevented=true` with `dropEffect=none` is this bug.
+
 ### Django template comments - `{# #}` is single-line ONLY
 
 Django's lexer matches `{#.*?#}` **without** the DOTALL flag, so a `{# #}` whose closing delimiter is on another line is not a comment at all. The template engine treats the whole block as literal text and **renders your comment into the page**, visible to the user and shipped in the HTML.

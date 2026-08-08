@@ -8,15 +8,17 @@ from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from py_vapid import Vapid01
 from pywebpush import WebPushException
 
 from workspace.notifications import tasks as notif_tasks
 from workspace.notifications.models import Notification, PushSubscription
+from workspace.notifications.tests.vapid_fixtures import TEST_PRIVATE_KEY_RAW
 
 User = get_user_model()
 
 VALID_SETTINGS = dict(
-    WEBPUSH_VAPID_PRIVATE_KEY="fake-key",
+    WEBPUSH_VAPID_PRIVATE_KEY=TEST_PRIVATE_KEY_RAW,
     WEBPUSH_VAPID_CLAIMS={"sub": "mailto:admin@example.com"},
 )
 
@@ -91,7 +93,7 @@ class SendPushNotificationTests(TestCase):
         webpush_mock.assert_not_called()
 
     @override_settings(
-        WEBPUSH_VAPID_PRIVATE_KEY="fake-key",
+        WEBPUSH_VAPID_PRIVATE_KEY=TEST_PRIVATE_KEY_RAW,
         WEBPUSH_VAPID_CLAIMS={"sub": ""},
     )
     def test_skips_when_vapid_sub_claim_is_empty(self):
@@ -137,9 +139,10 @@ class SendPushNotificationTests(TestCase):
         self.assertEqual(first_payload["origin"], "chat")
         self.assertEqual(first_payload["icon"], "bell")
 
-        # VAPID credentials propagated.
+        # VAPID credentials propagated: a parsed signer, not the raw setting,
+        # so pywebpush never re-parses the key itself.
         kwargs = webpush_mock.call_args_list[0].kwargs
-        self.assertEqual(kwargs["vapid_private_key"], "fake-key")
+        self.assertIsInstance(kwargs["vapid_private_key"], Vapid01)
         self.assertEqual(kwargs["vapid_claims"], {"sub": "mailto:admin@example.com"})
 
     @override_settings(**VALID_SETTINGS)

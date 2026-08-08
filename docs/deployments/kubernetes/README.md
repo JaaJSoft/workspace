@@ -76,7 +76,7 @@ kubectl apply -f ingress.yaml
 | `SECRET_KEY`              | Django secret key. **Must be changed** before deploying.              |
 | `DATABASE_URL`            | Database connection string. Default: `sqlite:////app/data/db.sqlite3` |
 | `REDIS_URL`               | Redis connection. Default: `redis://localhost:6379/0` (sidecar)       |
-| `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key (PEM). Generate with `manage.py generate_vapid_keys` |
+| `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key. `manage.py generate_vapid_keys` prints raw base64url; PEM and base64url DER are also accepted |
 | `METRICS_PASSWORD`        | HTTP Basic password for `/metrics`, plain text (`stringData` needs no base64). Endpoint returns 401 to everyone until set |
 | `OAUTH_GOOGLE_CLIENT_ID` | Google OAuth2 client ID (enables Gmail login) |
 | `OAUTH_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |

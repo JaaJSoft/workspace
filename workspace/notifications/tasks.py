@@ -7,6 +7,7 @@ from django.core.cache import cache
 from pywebpush import WebPushException, webpush
 
 from workspace.common.logging import scrub
+from workspace.notifications.services.vapid import VapidKeyError, load_vapid_key
 from workspace.users.services.presence import is_active
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,15 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
     if not subscriptions:
         return
 
+    try:
+        signer = load_vapid_key(private_key)
+    except VapidKeyError as e:
+        # Reported once for the whole run: an unusable key fails every
+        # subscription identically, and the per-subscription handler below
+        # would bury the cause under one traceback per device.
+        logger.error("Push skipped: %s", e)
+        return
+
     cooldown_key = None
     if notif.priority != "urgent":
         cooldown_key = _source_cooldown_key(notif)
@@ -115,8 +125,12 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
                     "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
                 },
                 data=payload,
-                vapid_private_key=private_key,
-                vapid_claims=vapid_claims,
+                vapid_private_key=signer,
+                # pywebpush fills `aud` and `exp` into the dict it is handed
+                # and only ever revises `exp`. Passing the settings dict itself
+                # would pin every later push to the first endpoint's origin,
+                # which the other push services reject.
+                vapid_claims=dict(vapid_claims),
             )
             delivered += 1
         except WebPushException as e:

@@ -56,7 +56,7 @@ All settings are configurable via environment variables or a `.env` file next to
 | `USE_X_FORWARDED_HOST` | *(empty)*                        | Set to `1` when the proxy rewrites `Host` (Cloudflare, cloud LBs) |
 | `USE_X_FORWARDED_PORT` | *(empty)*                        | Set to `1` when the proxy rewrites the public port |
 | `GUNICORN_WORKERS`     | `6`                              | Number of Gunicorn workers                |
-| `WEBPUSH_VAPID_PRIVATE_KEY` | *(empty)*                   | VAPID private key (PEM). Generate with `manage.py generate_vapid_keys` |
+| `WEBPUSH_VAPID_PRIVATE_KEY` | *(empty)*                   | VAPID private key. `manage.py generate_vapid_keys` prints raw base64url; PEM and base64url DER are also accepted |
 | `WEBPUSH_VAPID_PUBLIC_KEY`  | *(empty)*                   | VAPID public key (base64url)              |
 | `WEBPUSH_VAPID_MAILTO`      | *(empty)*                   | Contact email for VAPID claims (`mailto:…`) |
 | `METRICS_USER`         | *(empty)*                        | HTTP Basic user for `/metrics`. Endpoint returns 401 to everyone until set |
@@ -90,9 +90,7 @@ SECRET_KEY=your-very-secret-random-key
 ALLOWED_HOSTS=workspace.example.com
 CSRF_TRUSTED_ORIGINS=https://workspace.example.com
 GUNICORN_WORKERS=4
-WEBPUSH_VAPID_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
-...
------END PRIVATE KEY-----"
+WEBPUSH_VAPID_PRIVATE_KEY=_8O5gz...base64url...
 WEBPUSH_VAPID_PUBLIC_KEY=BHh5Vu...base64url...
 WEBPUSH_VAPID_MAILTO=mailto:admin@example.com
 

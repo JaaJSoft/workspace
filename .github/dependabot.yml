@@ -39,8 +39,8 @@ updates:
       interval: "weekly"
     versioning-strategy: increase
     groups:
-      # Alpine core and its official plugins are released in lockstep and share
-      # the same version number; bumping one without the others is unsupported.
+      # Alpine core and its official plugins share a single version number and
+      # must move together.
       alpine:
         patterns:
           - "alpinejs"

@@ -1,8 +1,7 @@
-// Verifies the integrity of the vendored Alpine artifact. This test cannot
-// execute Alpine (it needs a real DOM, and the project's JS test runner
-// forbids npm dependencies): behavioral verification is done by the
-// Playwright suites. Here we lock down what would silently break loading -
-// wrong module format, missing global, floating version.
+// Integrity checks on the vendored Alpine artifact. Running Alpine would need
+// a real DOM, which this runner has no npm dependencies for - the Playwright
+// suites cover behavior. Here we only lock down what would silently break
+// loading: wrong module format, missing global, floating version.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -21,11 +20,10 @@ test('the bundle exists and is not empty', () => {
 
 test('the bundle is an IIFE, not ESM', () => {
   const src = fs.readFileSync(BUNDLE, 'utf8');
-  // esbuild's IIFE output always opens with the wrapper call. Asserting the
-  // shape we want beats enumerating the shapes we don't: minified ESM emits
-  // `import{a}from"x"` with no whitespace, which a /^\s*import\s/ guard misses.
-  // Loaded through <script defer> without type="module", ESM would raise a
-  // SyntaxError and Alpine would never start.
+  // Through <script defer> without type="module", ESM output would raise a
+  // SyntaxError and Alpine would never start. Assert the shape we want rather
+  // than enumerate the ones we don't: minified ESM emits `import{a}from"x"`,
+  // which a /^\s*import\s/ guard misses.
   assert.ok(src.trimStart().startsWith('(()=>{'), 'bundle does not open with the esbuild IIFE wrapper');
   assert.doesNotMatch(src, /^\s*(import|export)[\s{*]/m, 'ESM import/export declaration found');
 });

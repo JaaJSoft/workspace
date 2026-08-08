@@ -53,13 +53,8 @@ class BaseTemplateScriptOriginTests(TestCase):
     """Alpine must never be served from a third-party CDN.
 
     Alpine evaluates every component expression, and its reactive state holds
-    decrypted vault entries on the ``passwords`` module's pages. A tampered
-    build served by a third party would therefore exfiltrate the entire vault.
-    jsDelivr also served a floating ``3.x.x`` range, which made pinning
-    impossible.
-
-    This test reads the template from disk through the Django loader rather
-    than a hardcoded path, so it stays valid if the template tree moves.
+    decrypted vault entries on the ``passwords`` pages: a tampered third-party
+    build would exfiltrate the whole vault.
     """
 
     def test_alpine_core_is_not_loaded_from_a_cdn(self):
@@ -74,13 +69,12 @@ class BaseTemplateScriptOriginTests(TestCase):
         self.assertIn("ui/js/vendor/alpine/alpine.js", _base_template_source())
 
     def test_the_vendored_bundle_is_deferred(self):
-        # Without `defer`, the bundle would run while the <head> is still
-        # being parsed, BEFORE stores.js (end of <body>, not deferred) has
-        # attached its `alpine:init` listener - the three stores would never
-        # register and the navbar would raise on $store.notifications.
-        # Search for the whole tag rather than a line: a reformat that spreads
-        # attributes across multiple lines must not turn a held invariant into
-        # a false negative.
+        # Without `defer`, Alpine would start before stores.js (end of <body>,
+        # not deferred) has attached its `alpine:init` listener: the stores
+        # would never register and the navbar would raise on
+        # $store.notifications.
+        # Match the whole tag, not a line, so reformatting the attributes
+        # across several lines cannot produce a false negative.
         tag = re.search(
             r"<script[^>]*ui/js/vendor/alpine/alpine\.js[^>]*>",
             _base_template_source(),

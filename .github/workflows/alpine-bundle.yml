@@ -1,0 +1,64 @@
+# Rebuilds the vendored Alpine bundle when its npm manifest changes (typically
+# a Dependabot bump of scripts/alpine/package.json). Without this, a dependency
+# PR would update the manifest but leave the committed bundle stale, so CI would
+# silently keep testing the old Alpine build.
+#
+# Token note: pushes made with the default GITHUB_TOKEN do NOT retrigger CI
+# workflows, so after an auto-rebuild commit the PR's checks must be re-run
+# manually. Reuse the EDITOR_REBUILD_TOKEN secret (a PAT with contents write)
+# to make the rebuilt commit retrigger the full test suite automatically.
+name: Alpine bundle
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/alpine/**'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    # Same-repo branches only: fork heads cannot be pushed to, and Dependabot
+    # branches live in this repo.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      # persist-credentials: false keeps the token out of .git/config, so the
+      # npm/esbuild steps below never see credentials on disk. Combined with
+      # --ignore-scripts, a malicious install script in a bumped dependency
+      # can neither run nor find a token to exfiltrate.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Rebuild vendored bundle
+        run: |
+          cd scripts/alpine
+          npm ci --ignore-scripts
+          npm run build:alpine
+
+      - name: Verify bundle integrity
+        run: node --test "workspace/common/tests/js/alpine_bundle.test.js"
+
+      # The token is injected only here, after all dependency code has run.
+      - name: Commit and push if changed
+        env:
+          PUSH_TOKEN: ${{ secrets.EDITOR_REBUILD_TOKEN || github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git add -A workspace/common/static/ui/js/vendor/alpine
+          if git diff --cached --quiet; then
+            echo "Bundle already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build(common): rebuild vendored alpine bundle"
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"

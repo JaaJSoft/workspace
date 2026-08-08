@@ -79,9 +79,9 @@ class LoadVapidKeyTests(SimpleTestCase):
 
 
 class GenerateVapidKeysCommandTests(SimpleTestCase):
-    """What the command prints has to be usable as-is. The command previously
-    emitted a PEM the signing layer could not read, so the pair it produced
-    looked right and never delivered a push."""
+    """The printed pair must be usable exactly as printed: the private key
+    loads, it derives the advertised public key, and both survive being pasted
+    into an env file unedited."""
 
     def _generated_keys(self):
         out = StringIO()
@@ -158,11 +158,11 @@ class PushSigningTests(TestCase):
         WEBPUSH_VAPID_CLAIMS={"sub": "mailto:admin@example.com"},
     )
     def test_pem_private_key_produces_a_signed_request(self):
-        """A PEM key from `manage.py generate_vapid_keys` must actually sign.
+        """A PEM private key must sign.
 
-        Handing the PEM string straight to pywebpush routes it into
-        py_vapid's from_string, which base64-decodes the armor along with the
-        key and raises - so no request ever leaves the worker.
+        pywebpush hands a key given as a string to py_vapid's from_string,
+        which base64-decodes the armor along with the key material and
+        raises, so a configured PEM only works if the task parses it first.
         """
         with override_settings(WEBPUSH_VAPID_PRIVATE_KEY=self.pem):
             captured = self._run_task()

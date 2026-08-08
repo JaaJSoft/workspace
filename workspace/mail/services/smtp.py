@@ -9,6 +9,8 @@ from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, make_msgid
 from typing import NamedTuple
 
+from workspace.common.logging import scrub
+
 logger = logging.getLogger(__name__)
 
 
@@ -232,5 +234,10 @@ def send_email(
     finally:
         server.quit()
 
-    logger.info("Email sent from %s to %s: %s", account.email, to, subject)
+    logger.info(
+        "Email sent from %s to %s: %s",
+        scrub(account.email),
+        scrub(to),
+        scrub(subject),
+    )
     return SentMessage(outgoing=outgoing, archived=archived)

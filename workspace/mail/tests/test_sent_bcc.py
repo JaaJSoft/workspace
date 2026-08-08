@@ -104,6 +104,8 @@ class SendBccArchivalTests(TestCase):
             archived["Message-ID"],
             "a divergent Message-ID would detach the archived copy from its thread",
         )
+        attachment.read.assert_called_once_with()
+        self.assertIn(b"doc.pdf", sent.outgoing)
         self.assertIn(b"doc.pdf", sent.archived)
 
     @patch("workspace.mail.services.smtp.connect_smtp")

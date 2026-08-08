@@ -115,9 +115,9 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
             f"li.pinned-folder-item[data-pinned-uuid='{folder.uuid}']"
         )
         expect(pinned_item).to_be_visible()
-        assert PinnedFolder.objects.filter(
-            owner=self.user, folder=folder
-        ).exists(), "drop did not persist a PinnedFolder row"
+        assert PinnedFolder.objects.filter(owner=self.user, folder=folder).exists(), (
+            "drop did not persist a PinnedFolder row"
+        )
 
     def test_reordering_pinned_folders_shows_feedback_and_persists(self):
         first = self.make_folder("Archive")

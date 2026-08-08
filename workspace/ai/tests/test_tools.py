@@ -29,6 +29,8 @@ class ChatToolDefinitionTests(TestCase):
         self.assertIn("search_messages", names)
         self.assertIn("get_current_user_info", names)
         self.assertIn("get_weather", names)
+        self.assertIn("search_everything", names)
+        self.assertIn("search_users", names)
 
 
 TOOL_MODULES = [

@@ -117,7 +117,12 @@ class ModuleRegistry:
                 continue
             try:
                 hits = provider.search_fn(query, user, limit)
-                results.extend(asdict(h) for h in hits)
+                # provider_slug names the kind of entity ("mail-contacts",
+                # "project-tasks"); module_slug alone cannot tell two
+                # providers of the same module apart.
+                results.extend(
+                    asdict(h) | {"provider_slug": provider.slug} for h in hits
+                )
             except Exception:
                 logger.exception("Search provider '%s' failed", provider.slug)
         return results

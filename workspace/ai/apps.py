@@ -39,6 +39,10 @@ class AIConfig(AppConfig):
 
         tool_registry.register_provider(WeatherToolProvider())
 
+        from workspace.ai.tools import SearchToolProvider
+
+        tool_registry.register_provider(SearchToolProvider())
+
         from django.conf import settings
 
         if getattr(settings, "AI_IMAGE_MODEL", ""):

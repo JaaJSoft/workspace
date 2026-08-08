@@ -5,9 +5,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.cache import cached_response
+from workspace.common.limits import clamp_limit
 from workspace.common.mixins import CacheControlMixin
 from workspace.core.module_registry import registry
-from workspace.core.services.module_visibility import is_module_slug_visible
+from workspace.core.services import search as search_service
 
 
 class ModulesView(CacheControlMixin, APIView):
@@ -47,28 +48,21 @@ class UnifiedSearchView(CacheControlMixin, APIView):
     @cached_response(120)
     def get(self, request):
         query = request.query_params.get("q", "").strip()
-        if len(query) < 2:
+        if len(query) < search_service.MIN_QUERY_LENGTH:
             return Response(
-                {"error": "Query must be at least 2 characters"}, status=400
+                {
+                    "error": f"Query must be at least {search_service.MIN_QUERY_LENGTH} characters"
+                },
+                status=400,
             )
 
-        try:
-            limit = int(request.query_params.get("limit", 10))
-        except TypeError, ValueError:
-            limit = 10
-        limit = max(1, min(limit, 50))
-
-        results = registry.search(query, request.user, limit)
-        commands = [asdict(c) for c in registry.search_commands(query)]
-
-        results = [
-            r for r in results if is_module_slug_visible(request.user, r["module_slug"])
-        ]
-        commands = [
-            c
-            for c in commands
-            if is_module_slug_visible(request.user, c["module_slug"])
-        ]
+        limit = clamp_limit(
+            request.query_params.get("limit"),
+            default=search_service.DEFAULT_LIMIT,
+            maximum=search_service.MAX_LIMIT,
+        )
+        results = search_service.search_modules(query, request.user, limit)
+        commands = search_service.search_commands(query, request.user)
 
         return Response(
             {

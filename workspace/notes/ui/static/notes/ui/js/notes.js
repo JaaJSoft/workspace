@@ -217,7 +217,7 @@ window.notesApp = function notesApp(config) {
             }
 
             // Listen for sidebar refresh events
-            window.addEventListener('notes:refresh-sidebar', this.refreshSidebar.bind(this));
+            window.addEventListener('tags-changed', this.refreshSidebar.bind(this));
 
             // Listen for file action dialog events (use named functions to prevent duplicates)
             const self = this;

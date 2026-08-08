@@ -66,6 +66,24 @@ class TogglePinAction(BaseAction):
 
 
 @ActionRegistry.register
+class ManageTagsAction(BaseAction):
+    id = "manage_tags"
+    label = "Tags"
+    icon = "tag"
+    category = ActionCategory.ORGANIZE
+    node_types = ("file", "folder")
+
+    def is_available(self, user, file_obj, *, permission):
+        if file_obj.deleted_at is not None:
+            return False
+        # Tags are personal: FileTagView only writes through user_files_qs,
+        # which excludes group files and anything the user doesn't own.
+        if file_obj.group_id:
+            return False
+        return permission is not None and permission >= FilePermission.MANAGE
+
+
+@ActionRegistry.register
 class ShareAction(BaseAction):
     id = "share"
     label = "Share"

@@ -60,6 +60,7 @@ class ActionRegistryTests(TestCase):
             "copy_link",
             "toggle_favorite",
             "toggle_pin",
+            "manage_tags",
             "share",
             "rename",
             "cut",

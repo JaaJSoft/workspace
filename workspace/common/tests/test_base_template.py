@@ -1,8 +1,10 @@
 """Regression tests for ``base.html`` / ``base_with_navbar.html``."""
 
 import re
+from pathlib import Path
 
 from django.template import Context, Template
+from django.template.loader import get_template
 from django.test import TestCase
 
 
@@ -41,3 +43,44 @@ class NavbarLayoutScrollLockTests(TestCase):
         classes = self._body_classes(self._render_base_with_navbar())
         self.assertIn("overflow-hidden", classes)
         self.assertIn("h-dvh", classes)
+
+
+def _base_template_source() -> str:
+    return Path(get_template("base.html").origin.name).read_text(encoding="utf-8")
+
+
+class BaseTemplateScriptOriginTests(TestCase):
+    """Alpine ne doit jamais être servi depuis un CDN tiers.
+
+    Alpine exécute les expressions de tous les composants et son état réactif
+    contient les entrées de coffre déchiffrées sur les pages du module
+    ``passwords``. Un build altéré servi par un tiers exfiltrerait donc le coffre
+    entier. jsDelivr servait de surcroît une plage flottante ``3.x.x``, ce qui
+    rendait tout épinglage impossible.
+
+    Ce test lit le gabarit sur disque via le chargeur Django plutôt qu'un chemin
+    codé en dur, pour rester valide si l'arborescence des gabarits bouge.
+    """
+
+    def test_alpine_core_is_not_loaded_from_a_cdn(self):
+        self.assertNotIn("cdn.jsdelivr.net/npm/alpinejs", _base_template_source())
+
+    def test_alpine_plugins_are_not_loaded_from_a_cdn(self):
+        source = _base_template_source()
+        self.assertNotIn("cdn.jsdelivr.net/npm/@alpinejs", source)
+        self.assertNotIn("cdn.jsdelivr.net/npm/@imacrayon", source)
+
+    def test_alpine_is_loaded_from_the_vendored_bundle(self):
+        self.assertIn("ui/js/vendor/alpine/alpine.js", _base_template_source())
+
+    def test_the_vendored_bundle_is_deferred(self):
+        # Sans `defer`, le bundle s'exécuterait pendant l'analyse du <head>,
+        # donc AVANT que stores.js (fin de <body>, non différé) ait posé son
+        # écouteur `alpine:init` — les trois stores ne seraient jamais
+        # enregistrés et la navbar lèverait sur $store.notifications.
+        source = _base_template_source()
+        line = next(
+            line for line in source.splitlines()
+            if "ui/js/vendor/alpine/alpine.js" in line
+        )
+        self.assertIn("defer", line)

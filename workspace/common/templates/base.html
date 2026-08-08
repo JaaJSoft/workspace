@@ -16,10 +16,14 @@
   <link href="{% static 'css/app.css' %}" rel="stylesheet" type="text/css"/>
   <link href="{% static 'ui/css/mentions.css' %}" rel="stylesheet" type="text/css"/>
 
-  <!-- Alpine.js + plugins -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@imacrayon/alpine-ajax@0.12.6/dist/cdn.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <!-- Alpine.js + plugins - locally built (see scripts/alpine/, rebuilt via
+       npm run build:alpine). Alpine evaluates every component expression and
+       holds decrypted vault entries in its reactive state, so it must not come
+       from an origin we don't control. The previous jsdelivr tags also pinned
+       a floating 3.x.x range, which no integrity mechanism can cover.
+       Keep this tag deferred and in <head>: it must run after the
+       non-deferred end-of-body scripts that register `alpine:init` listeners. -->
+  <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
 
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@1.11.0/dist/umd/lucide.min.js" integrity="sha384-7PArHXNzg1s/WgbAH9xkBpx4T6MJ0jPAxaEM9yld+zvdFEjSf+wzzv0hDnem/6rw" crossorigin="anonymous"></script>

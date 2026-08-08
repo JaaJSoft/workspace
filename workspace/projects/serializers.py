@@ -230,6 +230,7 @@ class TaskCalendarSerializer(serializers.ModelSerializer):
     project_uuid = serializers.UUIDField(source="project.uuid", read_only=True)
     project_name = serializers.CharField(source="project.name", read_only=True)
     url = serializers.SerializerMethodField()
+    card_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -242,6 +243,7 @@ class TaskCalendarSerializer(serializers.ModelSerializer):
             "project_uuid",
             "project_name",
             "url",
+            "card_url",
         ]
         read_only_fields = fields
 
@@ -253,6 +255,10 @@ class TaskCalendarSerializer(serializers.ModelSerializer):
     def get_url(self, obj):
         board = reverse("projects_ui:board", args=[obj.project_id])
         return f"{board}?task={obj.uuid}"
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_card_url(self, obj):
+        return reverse("projects_ui:task_card", args=[obj.project_id, obj.uuid])
 
 
 def _parse_uuid_list(value, field_name):

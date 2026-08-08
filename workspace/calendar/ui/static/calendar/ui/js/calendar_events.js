@@ -101,7 +101,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           }
           info.el.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            window._eventCardScheduleHide(info.el);
+            window._cardPopoverScheduleHide(info.el);
             this.openContextMenu(e, info.event.extendedProps._raw);
           });
           // Event card popover on hover - desktop only.
@@ -113,7 +113,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
               window._eventCardShow(info.el, info.event.id);
             });
             info.el.addEventListener('mouseleave', () => {
-              window._eventCardScheduleHide(info.el);
+              window._cardPopoverScheduleHide(info.el);
             });
           }
           // Add recurring indicator

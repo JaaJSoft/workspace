@@ -16,4 +16,9 @@ urlpatterns = [
         views.task_panel,
         name="task_panel",
     ),
+    path(
+        "/<uuid:project_uuid>/tasks/<uuid:task_uuid>/card",
+        views.task_card,
+        name="task_card",
+    ),
 ]

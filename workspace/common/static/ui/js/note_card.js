@@ -2,7 +2,7 @@
  * Note (file) card popover - hover a graph node or an editor note-link to
  * preview a file's title, tags and first content line.
  *
- * Mirrors the event card popover (event_card.js) but uses a SINGLE shared
+ * Mirrors the event card popover (card_popover.js) but uses a SINGLE shared
  * popover element and accepts either a DOM element or a synthetic
  * { getBoundingClientRect() } anchor - the graph is canvas-drawn, so its nodes
  * are not DOM elements. Reuses window._computePopoverPosition /

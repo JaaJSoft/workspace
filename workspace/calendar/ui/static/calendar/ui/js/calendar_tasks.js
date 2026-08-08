@@ -35,6 +35,19 @@ window.calendarTasksMixin = function calendarTasksMixin() {
     decorateTaskEvent(info) {
       const task = info.event.extendedProps._task;
       info.el.title = `${task.reference} · ${task.project_name}`;
+
+      // Hover card, desktop only - (hover: hover) excludes touch-primary
+      // devices where a tap synthesizes a mouseenter and would pop the card
+      // right after the click already navigated away.
+      if (window.matchMedia('(hover: hover)').matches) {
+        info.el.addEventListener('mouseenter', () => {
+          window._cardPopoverShow(info.el, task.card_url);
+        });
+        info.el.addEventListener('mouseleave', () => {
+          window._cardPopoverScheduleHide(info.el);
+        });
+      }
+
       const titleEl = info.el.querySelector('.fc-event-title')
         || info.el.querySelector('.fc-list-event-title');
       if (!titleEl) return;

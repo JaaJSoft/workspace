@@ -1,41 +1,38 @@
 /**
- * Event card popover — hover to preview event details.
+ * Hover card popover — fetches a server-rendered partial and floats it next
+ * to the hovered element. Generic over the partial's URL: events and project
+ * tasks both ride on it, and anything else with a card endpoint can too.
  * Follows the same pattern as user card popover in avatar.js.
  * Reuses window._computePopoverPosition, _applyPopoverTransform, _setPopoverContent.
  */
 
 /* ── Cache with 30s TTL ───────────────────────────────────────── */
-const _eventCardCache = {};
-const _eventCardCacheTimes = {};
-const _EVENT_CARD_CACHE_TTL = 30000;
+const _cardPopoverCache = {};
+const _cardPopoverCacheTimes = {};
+const _CARD_POPOVER_CACHE_TTL = 30000;
 
 /**
- * Show the event card popover for a wrapper element.
+ * Show a card popover for a wrapper element, filled from `url`.
  * 500ms delay before showing to avoid accidental triggers.
+ * `cacheKey` defaults to the URL; pass one only when several URLs render
+ * the same card.
  */
-window._eventCardShow = function(wrapper, eventId) {
-  window._eventCardCancelHide(wrapper);
+window._cardPopoverShow = function(wrapper, url, cacheKey) {
+  window._cardPopoverCancelHide(wrapper);
 
-  const existing = wrapper._eventCardPopover;
+  const existing = wrapper._cardPopover;
   if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') {
     return;
   }
 
   if (wrapper._showTimeout) clearTimeout(wrapper._showTimeout);
 
-  // For recurring virtual occurrences, the ID is "masterUuid:isoDate" — extract the master UUID and occurrence start
-  let fetchId = eventId;
-  let occStart = '';
-  const colonIdx = String(eventId).indexOf(':');
-  if (colonIdx > 0) {
-    fetchId = eventId.substring(0, colonIdx);
-    occStart = eventId.substring(colonIdx + 1);
-  }
+  const key = cacheKey || url;
 
   wrapper._showTimeout = setTimeout(function() {
     wrapper._showTimeout = null;
 
-    let popover = wrapper._eventCardPopover;
+    let popover = wrapper._cardPopover;
     if (!popover) {
       popover = document.createElement('div');
       popover.className = 'event-card-popover fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
@@ -47,10 +44,10 @@ window._eventCardShow = function(wrapper, eventId) {
       spinner.className = 'loading loading-spinner loading-sm';
       spinWrap.appendChild(spinner);
       popover.appendChild(spinWrap);
-      popover.addEventListener('mouseenter', function() { window._eventCardCancelHide(wrapper); });
-      popover.addEventListener('mouseleave', function() { window._eventCardScheduleHide(wrapper); });
+      popover.addEventListener('mouseenter', function() { window._cardPopoverCancelHide(wrapper); });
+      popover.addEventListener('mouseleave', function() { window._cardPopoverScheduleHide(wrapper); });
       document.body.appendChild(popover);
-      wrapper._eventCardPopover = popover;
+      wrapper._cardPopover = popover;
     }
 
     const pos = window._computePopoverPosition(wrapper, 240);
@@ -65,27 +62,24 @@ window._eventCardShow = function(wrapper, eventId) {
     popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
     window._applyPopoverTransform(popover, pos.placement, true);
 
-    const cacheKey = occStart ? fetchId + ':' + occStart : fetchId;
-    const cached = _eventCardCache[cacheKey];
-    const cacheValid = cached && (_eventCardCacheTimes[cacheKey] || 0) + _EVENT_CARD_CACHE_TTL > Date.now();
+    const cached = _cardPopoverCache[key];
+    const cacheValid = cached && (_cardPopoverCacheTimes[key] || 0) + _CARD_POPOVER_CACHE_TTL > Date.now();
     if (cacheValid) {
       window._setPopoverContent(popover, cached);
-      _formatEventCardTimes(popover);
+      _formatCardTimes(popover);
       if (typeof Alpine !== 'undefined') Alpine.initTree(popover);
     } else if (!wrapper._fetching) {
       wrapper._fetching = true;
-      let cardUrl = '/calendar/events/' + fetchId + '/card';
-      if (occStart) cardUrl += '?start=' + encodeURIComponent(occStart);
-      fetch(cardUrl, { credentials: 'same-origin' })
+      fetch(url, { credentials: 'same-origin' })
         .then(function(r) { return r.ok ? r.text() : ''; })
         .then(function(html) {
-          _eventCardCache[cacheKey] = html;
-          _eventCardCacheTimes[cacheKey] = Date.now();
+          _cardPopoverCache[key] = html;
+          _cardPopoverCacheTimes[key] = Date.now();
           wrapper._fetching = false;
-          if (wrapper._eventCardPopover) {
-            window._setPopoverContent(wrapper._eventCardPopover, html);
-            _formatEventCardTimes(wrapper._eventCardPopover);
-            if (typeof Alpine !== 'undefined') Alpine.initTree(wrapper._eventCardPopover);
+          if (wrapper._cardPopover) {
+            window._setPopoverContent(wrapper._cardPopover, html);
+            _formatCardTimes(wrapper._cardPopover);
+            if (typeof Alpine !== 'undefined') Alpine.initTree(wrapper._cardPopover);
           }
         })
         .catch(function() { wrapper._fetching = false; });
@@ -94,16 +88,34 @@ window._eventCardShow = function(wrapper, eventId) {
 };
 
 /**
- * Schedule hiding the event card popover with a 200ms delay.
+ * Show the card for a calendar event. Recurring virtual occurrences carry an
+ * id of "masterUuid:isoDate" — the master is what the endpoint knows about,
+ * the occurrence start is what tells it which instance to label.
  */
-window._eventCardScheduleHide = function(wrapper) {
+window._eventCardShow = function(wrapper, eventId) {
+  let fetchId = eventId;
+  let occStart = '';
+  const colonIdx = String(eventId).indexOf(':');
+  if (colonIdx > 0) {
+    fetchId = eventId.substring(0, colonIdx);
+    occStart = eventId.substring(colonIdx + 1);
+  }
+  let url = '/calendar/events/' + fetchId + '/card';
+  if (occStart) url += '?start=' + encodeURIComponent(occStart);
+  window._cardPopoverShow(wrapper, url);
+};
+
+/**
+ * Schedule hiding the card popover with a 200ms delay.
+ */
+window._cardPopoverScheduleHide = function(wrapper) {
   if (wrapper._showTimeout) {
     clearTimeout(wrapper._showTimeout);
     wrapper._showTimeout = null;
   }
 
   wrapper._hideTimeout = setTimeout(function() {
-    const popover = wrapper._eventCardPopover;
+    const popover = wrapper._cardPopover;
     if (popover) {
       window._applyPopoverTransform(popover, wrapper._placement || 'bottom', false);
       wrapper._closeTimeout = setTimeout(function() { popover.style.display = 'none'; }, 150);
@@ -112,9 +124,9 @@ window._eventCardScheduleHide = function(wrapper) {
 };
 
 /**
- * Cancel a pending hide for the event card popover.
+ * Cancel a pending hide for the card popover.
  */
-window._eventCardCancelHide = function(wrapper) {
+window._cardPopoverCancelHide = function(wrapper) {
   if (wrapper._hideTimeout) {
     clearTimeout(wrapper._hideTimeout);
     wrapper._hideTimeout = null;
@@ -123,7 +135,7 @@ window._eventCardCancelHide = function(wrapper) {
     clearTimeout(wrapper._closeTimeout);
     wrapper._closeTimeout = null;
   }
-  const popover = wrapper._eventCardPopover;
+  const popover = wrapper._cardPopover;
   if (popover && popover.style.display !== 'none') {
     window._applyPopoverTransform(popover, wrapper._placement || 'bottom', true);
   }
@@ -133,7 +145,7 @@ window._eventCardCancelHide = function(wrapper) {
  * Format <time data-localtime> elements inside a freshly injected popover.
  * Reuses the same logic as the global localtime formatter in base.html.
  */
-function _formatEventCardTimes(container) {
+function _formatCardTimes(container) {
   const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
   container.querySelectorAll('time[data-localtime]').forEach(function(el) {
     const d = new Date(el.getAttribute('datetime'));

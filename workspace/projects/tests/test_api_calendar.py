@@ -45,6 +45,10 @@ class TaskCalendarApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(
             entry["url"], f"/projects/{self.project.uuid}/board?task={task.uuid}"
         )
+        self.assertEqual(
+            entry["card_url"],
+            f"/projects/{self.project.uuid}/tasks/{task.uuid}/card",
+        )
 
     def test_range_is_start_inclusive_end_exclusive(self):
         self._task("First day", date(2026, 8, 1))

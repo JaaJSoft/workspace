@@ -160,6 +160,37 @@
         </div>
       </template>
 
+      {% comment %}
+        Projects: a pseudo-calendar, not a Calendar row. Task due dates are a
+        virtual overlay queried at render time, so this toggle drives the
+        showTasks preference rather than visibleCalendars (whose keys are
+        sent verbatim as calendar_ids to the events endpoint).
+      {% endcomment %}
+      <div>
+        <hr class="mb-3 border-base-300 transition-all duration-200"
+            :class="sidebarCollapsed() ? 'opacity-0' : 'opacity-100'">
+        <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
+            :class="sidebarCollapsed() ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'">
+          <span class="flex items-center gap-2">
+            <i data-lucide="kanban" class="w-3 h-3"></i>
+            Projects
+          </span>
+        </h3>
+        <ul class="space-y-1 mb-4">
+          <li class="flex items-center gap-2 p-1.5 rounded-lg text-sm hover:bg-base-content/5"
+              :class="sidebarCollapsed() ? 'justify-center' : ''">
+            <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-secondary"
+                  :title="sidebarCollapsed() ? 'Task due dates' : ''">
+              <i data-lucide="square-check-big" class="w-4 h-4"></i>
+            </span>
+            <span x-show="!sidebarCollapsed()" x-transition class="flex-1 truncate">Task due dates</span>
+            <input x-show="!sidebarCollapsed()" type="checkbox" class="checkbox checkbox-xs checkbox-secondary flex-shrink-0"
+                   :checked="prefs.showTasks"
+                   @change="updatePref('showTasks', !prefs.showTasks)">
+          </li>
+        </ul>
+      </div>
+
       <!-- Other Calendars (subscribed) -->
       <template x-if="subscribedCalendars.length > 0">
         <div>

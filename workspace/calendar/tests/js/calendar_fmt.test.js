@@ -13,6 +13,7 @@ function makeApp(userTz) {
     // test are defined in calendar.js itself, so empty stubs are enough.
     calendarCalendarsMixin: () => ({}),
     calendarEventsMixin: () => ({}),
+    calendarTasksMixin: () => ({}),
     calendarRecurrenceMixin: () => ({}),
     calendarPollsMixin: () => ({}),
   });

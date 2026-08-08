@@ -13,8 +13,8 @@ window.calendarApp = function calendarApp() {
     currentTitle: '',
 
     // Preferences
-    _prefsDefaults: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, timeFormat: '24h', defaultAllDay: false, showDeclined: false, notifyPollVotes: true },
-    prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, timeFormat: '24h', defaultAllDay: false, showDeclined: false, notifyPollVotes: true },
+    _prefsDefaults: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, timeFormat: '24h', defaultAllDay: false, showDeclined: false, notifyPollVotes: true, showTasks: true },
+    prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, timeFormat: '24h', defaultAllDay: false, showDeclined: false, notifyPollVotes: true, showTasks: true },
 
     // Sidebar
     collapsed: localStorage.getItem('calendarSidebarCollapsed') === 'true',
@@ -108,6 +108,7 @@ window.calendarApp = function calendarApp() {
     // two mixins define the same key - later spreads override earlier ones.
     ...calendarCalendarsMixin(),
     ...calendarEventsMixin(),
+    ...calendarTasksMixin(),
     ...calendarRecurrenceMixin(),
     ...calendarPollsMixin(),
 
@@ -205,6 +206,10 @@ window.calendarApp = function calendarApp() {
         } else if (key === 'showDeclined') {
           this.calendar.refetchEvents();
           this.refetchAgenda();
+        } else if (key === 'showTasks') {
+          // Only the task source needs refreshing, but FullCalendar refetches
+          // per source or not at all; the events source is cheap enough.
+          this.calendar.refetchEvents();
         }
       }
     },

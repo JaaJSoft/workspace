@@ -11,6 +11,7 @@ class CalendarConfig(AppConfig):
         from workspace.core.module_registry import (
             CommandInfo,
             ModuleInfo,
+            PendingAction,
             PendingActionProviderInfo,
             SearchProviderInfo,
             registry,
@@ -58,7 +59,15 @@ class CalendarConfig(AppConfig):
                 datetime.combine(timezone.localdate(), time.max),
                 timezone.get_current_timezone(),
             )
-            return len(get_upcoming_for_user(user, now, end_of_today))
+            events = get_upcoming_for_user(user, now, end_of_today)
+            url = None
+            if len(events) == 1:
+                event_uuid = str(events[0].uuid)
+                # Recurring occurrences carry a synthetic "<master>:<start>"
+                # id the event endpoint cannot resolve - no deep link for those.
+                if ":" not in event_uuid:
+                    url = f"/calendar?event={event_uuid}"
+            return PendingAction(count=len(events), url=url)
 
         registry.register_pending_action_provider(
             PendingActionProviderInfo(

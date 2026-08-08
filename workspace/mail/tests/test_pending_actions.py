@@ -54,8 +54,27 @@ class MailPendingActionProviderTests(TestCase):
 
         from workspace.core.module_registry import registry
 
-        counts = registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts.get("mail"), 2)
+        action = registry.get_pending_actions(self.user)["mail"]
+        self.assertEqual(action.count, 2)
+        self.assertIsNone(action.url)
+
+    def test_pending_actions_deep_links_to_the_single_unread_message(self):
+        message = MailMessage.objects.create(
+            account=self.account,
+            folder=self.inbox,
+            imap_uid=1,
+            subject="Hello",
+            is_read=False,
+        )
+
+        from workspace.core.module_registry import registry
+
+        action = registry.get_pending_actions(self.user)["mail"]
+        self.assertEqual(action.count, 1)
+        self.assertEqual(
+            action.url,
+            f"/mail?folder={self.inbox.uuid}&message={message.uuid}",
+        )
 
     def test_pending_actions_returns_zero_when_all_read(self):
         MailMessage.objects.create(
@@ -68,8 +87,7 @@ class MailPendingActionProviderTests(TestCase):
 
         from workspace.core.module_registry import registry
 
-        counts = registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts.get("mail"), 0)
+        self.assertEqual(registry.get_pending_actions(self.user)["mail"].count, 0)
 
     def test_pending_actions_excludes_deleted_messages(self):
         from django.utils import timezone
@@ -85,8 +103,7 @@ class MailPendingActionProviderTests(TestCase):
 
         from workspace.core.module_registry import registry
 
-        counts = registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts.get("mail"), 0)
+        self.assertEqual(registry.get_pending_actions(self.user)["mail"].count, 0)
 
     def test_pending_actions_excludes_inactive_accounts(self):
         """Unread messages from inactive accounts should not be counted."""
@@ -103,8 +120,7 @@ class MailPendingActionProviderTests(TestCase):
 
         from workspace.core.module_registry import registry
 
-        counts = registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts.get("mail"), 0)
+        self.assertEqual(registry.get_pending_actions(self.user)["mail"].count, 0)
 
     def test_pending_actions_counts_only_active_accounts(self):
         """Only unread messages from active accounts should be counted."""
@@ -149,5 +165,4 @@ class MailPendingActionProviderTests(TestCase):
 
         from workspace.core.module_registry import registry
 
-        counts = registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts.get("mail"), 1)
+        self.assertEqual(registry.get_pending_actions(self.user)["mail"].count, 1)

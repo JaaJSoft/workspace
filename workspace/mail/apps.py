@@ -15,6 +15,7 @@ class MailConfig(AppConfig):
         from workspace.core.module_registry import (
             CommandInfo,
             ModuleInfo,
+            PendingAction,
             PendingActionProviderInfo,
             SearchProviderInfo,
             registry,
@@ -52,12 +53,21 @@ class MailConfig(AppConfig):
             from workspace.mail.models import MailMessage
             from workspace.mail.queries import user_account_ids
 
-            return MailMessage.objects.filter(
+            unread = MailMessage.objects.filter(
                 account_id__in=user_account_ids(user),
                 account__is_active=True,
                 is_read=False,
                 deleted_at__isnull=True,
-            ).count()
+            )
+            count = unread.count()
+            url = None
+            if count == 1:
+                # The mail UI only opens a message once its folder is
+                # selected, so the deep link carries both.
+                row = unread.values_list("uuid", "folder_id").first()
+                if row:
+                    url = f"/mail?folder={row[1]}&message={row[0]}"
+            return PendingAction(count=count, url=url)
 
         registry.register_pending_action_provider(
             PendingActionProviderInfo(

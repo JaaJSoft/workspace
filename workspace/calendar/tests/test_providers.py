@@ -29,11 +29,14 @@ class CalendarPendingActionProviderTests(CalendarTestMixin, TestCase):
         self.event.end = self.FROZEN_NOW + timedelta(hours=5)
         self.event.save()
 
-    def _counts(self, user):
+    def _action(self, user):
         from workspace.core.module_registry import registry
 
         with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW):
-            return registry.get_pending_action_counts(user)
+            return registry.get_pending_actions(user)["calendar"]
+
+    def _counts(self, user):
+        return {"calendar": self._action(user).count}
 
     def test_pending_actions_counts_todays_upcoming_events(self):
         counts = self._counts(self.owner)
@@ -74,3 +77,29 @@ class CalendarPendingActionProviderTests(CalendarTestMixin, TestCase):
         )
         counts = self._counts(self.owner)
         self.assertEqual(counts.get("calendar"), 2)
+
+    def test_pending_actions_deep_links_to_the_single_event(self):
+        action = self._action(self.owner)
+        self.assertEqual(action.count, 1)
+        self.assertEqual(action.url, f"/calendar?event={self.event.uuid}")
+
+    def test_pending_actions_has_no_target_with_several_events(self):
+        Event.objects.create(
+            calendar=self.calendar,
+            title="Second meeting",
+            start=self.FROZEN_NOW + timedelta(hours=6),
+            end=self.FROZEN_NOW + timedelta(hours=7),
+            owner=self.owner,
+        )
+        self.assertIsNone(self._action(self.owner).url)
+
+    def test_pending_actions_has_no_target_for_a_recurring_occurrence(self):
+        """A virtual occurrence id is not resolvable by the event endpoint."""
+        self.event.start = self.FROZEN_NOW - timedelta(days=7, hours=-4)
+        self.event.end = self.event.start + timedelta(hours=1)
+        self.event.recurrence_frequency = Event.RecurrenceFrequency.WEEKLY
+        self.event.save()
+
+        action = self._action(self.owner)
+        self.assertEqual(action.count, 1)
+        self.assertIsNone(action.url)

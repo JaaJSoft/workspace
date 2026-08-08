@@ -8,7 +8,7 @@ from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from workspace.core.module_registry import ModuleInfo, registry
+from workspace.core.module_registry import ModuleInfo, PendingAction, registry
 from workspace.dashboard.views import (
     ACTIVITY_LIMIT,
     _build_dashboard_context,
@@ -53,9 +53,9 @@ class BuildDashboardContextTests(TestCase):
         self, mock_visible, mock_registry
     ):
         mock_visible.return_value = [_mod("chat"), _mod("calendar"), _mod("dashboard")]
-        mock_registry.get_pending_action_counts.return_value = {
-            "chat": 5,
-            "calendar": 2,
+        mock_registry.get_pending_actions.return_value = {
+            "chat": PendingAction(count=5),
+            "calendar": PendingAction(count=2),
         }
 
         context = _build_dashboard_context(self.user)
@@ -73,7 +73,7 @@ class BuildDashboardContextTests(TestCase):
         self, mock_visible, mock_registry
     ):
         mock_visible.return_value = [_mod("files")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
 
@@ -82,9 +82,49 @@ class BuildDashboardContextTests(TestCase):
 
     @patch("workspace.dashboard.views.registry")
     @patch("workspace.dashboard.views.visible_modules")
+    def test_tile_links_to_pending_action_target(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat")]
+        mock_registry.get_pending_actions.return_value = {
+            "chat": PendingAction(count=3, url="/chat/abc"),
+        }
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertEqual(context["modules"][0]["url"], "/chat/abc")
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_tile_links_to_module_home_without_target(
+        self, mock_visible, mock_registry
+    ):
+        mock_visible.return_value = [_mod("chat")]
+        mock_registry.get_pending_actions.return_value = {
+            "chat": PendingAction(count=3),
+        }
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertEqual(context["modules"][0]["url"], "/chat")
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_tile_ignores_stale_target_when_count_is_zero(
+        self, mock_visible, mock_registry
+    ):
+        mock_visible.return_value = [_mod("chat")]
+        mock_registry.get_pending_actions.return_value = {
+            "chat": PendingAction(count=0, url="/chat/abc"),
+        }
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertEqual(context["modules"][0]["url"], "/chat")
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
     def test_excludes_dashboard_from_modules(self, mock_visible, mock_registry):
         mock_visible.return_value = [_mod("dashboard"), _mod("mail")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
         slugs = [m["slug"] for m in context["modules"]]
@@ -99,7 +139,7 @@ class BuildDashboardContextTests(TestCase):
         """Upcoming events load async via /dashboard/upcoming - not via the
         main context."""
         mock_visible.return_value = []
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
         self.assertNotIn("upcoming_events", context)
@@ -108,7 +148,7 @@ class BuildDashboardContextTests(TestCase):
     @patch("workspace.dashboard.views.registry")
     def test_context_includes_usage_stats(self, mock_registry, mock_visible):
         mock_visible.return_value = []
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
         self.assertIn("usage_stats", context)
@@ -117,7 +157,7 @@ class BuildDashboardContextTests(TestCase):
     @patch("workspace.dashboard.views.registry")
     def test_context_includes_storage_quota(self, mock_registry, mock_visible):
         mock_visible.return_value = []
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
         self.assertIn("storage_quota", context)
@@ -129,7 +169,7 @@ class BuildDashboardContextTests(TestCase):
         self, mock_visible, mock_registry, mock_activity
     ):
         mock_visible.return_value = []
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
         mock_activity.return_value = {"activity_events": []}
 
         context = _build_dashboard_context(self.user, include_activity=True)
@@ -143,7 +183,7 @@ class BuildDashboardContextTests(TestCase):
         self, mock_visible, mock_registry, mock_activity
     ):
         mock_visible.return_value = []
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user, include_activity=False)
         mock_activity.assert_not_called()
@@ -154,7 +194,7 @@ class BuildDashboardContextTests(TestCase):
     @patch("workspace.dashboard.views.visible_modules")
     def test_forwards_activity_source(self, mock_visible, mock_registry, mock_activity):
         mock_visible.return_value = []
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
         mock_activity.return_value = {}
 
         _build_dashboard_context(self.user, activity_source="chat")
@@ -164,7 +204,7 @@ class BuildDashboardContextTests(TestCase):
     @patch("workspace.dashboard.views.visible_modules")
     def test_grid_uses_visible_modules_only(self, mock_visible, mock_registry):
         mock_visible.return_value = [_mod("files")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
         self.assertEqual([m["slug"] for m in context["modules"]], ["files"])
@@ -177,7 +217,7 @@ class BuildDashboardContextTests(TestCase):
         # The home grid template renders the Preview badge off this flag, so the
         # view must carry preview through to each module dict.
         mock_visible.return_value = [_mod("files", preview=True)]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
         files_mod = context["modules"][0]
@@ -187,7 +227,7 @@ class BuildDashboardContextTests(TestCase):
     @patch("workspace.dashboard.views.visible_modules")
     def test_hidden_modules_excluded_from_grid(self, mock_visible, mock_registry):
         mock_visible.return_value = [_mod("chat"), _mod("mail"), _mod("files")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
         set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
 
         context = _build_dashboard_context(self.user)
@@ -201,7 +241,7 @@ class BuildDashboardContextTests(TestCase):
     @patch("workspace.dashboard.views.visible_modules")
     def test_empty_hidden_modules_shows_all(self, mock_visible, mock_registry):
         mock_visible.return_value = [_mod("chat"), _mod("mail")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
 
@@ -212,7 +252,7 @@ class BuildDashboardContextTests(TestCase):
     @patch("workspace.dashboard.views.visible_modules")
     def test_unknown_hidden_slug_is_ignored(self, mock_visible, mock_registry):
         mock_visible.return_value = [_mod("chat")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
         set_setting(self.user, "dashboard", "hidden_modules", ["nonexistent"])
 
         context = _build_dashboard_context(self.user)
@@ -226,7 +266,7 @@ class BuildDashboardContextTests(TestCase):
         self, mock_visible, mock_registry
     ):
         mock_visible.return_value = [_mod("chat"), _mod("mail"), _mod("dashboard")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
         set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
 
         context = _build_dashboard_context(self.user)
@@ -242,7 +282,7 @@ class BuildDashboardContextTests(TestCase):
     @patch("workspace.dashboard.views.visible_modules")
     def test_context_includes_upcoming_toggles(self, mock_visible, mock_registry):
         mock_visible.return_value = [_mod("chat")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
 
@@ -256,7 +296,7 @@ class BuildDashboardContextTests(TestCase):
         self, mock_visible, mock_registry, mock_module_visible
     ):
         mock_visible.return_value = []
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
 
@@ -270,7 +310,7 @@ class BuildDashboardContextTests(TestCase):
         self, mock_visible, mock_registry, mock_module_visible
     ):
         mock_visible.return_value = []
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
         set_setting(self.user, "dashboard", "show_my_tasks", False)
 
         context = _build_dashboard_context(self.user)
@@ -286,7 +326,7 @@ class BuildDashboardContextTests(TestCase):
         """Setting on, but the projects module is not visible to the user:
         the widget must not show and the prefs toggle must not be offered."""
         mock_visible.return_value = []
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
 
         context = _build_dashboard_context(self.user)
 
@@ -683,7 +723,7 @@ class ModulesFragmentTests(TestCase):
     @patch("workspace.dashboard.views.visible_modules")
     def test_excludes_hidden_modules(self, mock_visible, mock_registry):
         mock_visible.return_value = [_mod("chat"), _mod("mail")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
         set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
         self.client.login(username="moduser", password="pass123")
 
@@ -698,7 +738,7 @@ class ModulesFragmentTests(TestCase):
     @patch("workspace.dashboard.views.visible_modules")
     def test_renders_swap_target_id(self, mock_visible, mock_registry):
         mock_visible.return_value = [_mod("chat")]
-        mock_registry.get_pending_action_counts.return_value = {}
+        mock_registry.get_pending_actions.return_value = {}
         self.client.login(username="moduser", password="pass123")
 
         resp = self.client.get("/dashboard/modules")

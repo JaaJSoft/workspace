@@ -17,10 +17,13 @@ class ProjectsPendingActionProviderTests(ProjectTestMixin, TestCase):
         super().setUp()
         self.today = timezone.localdate()
 
-    def _counts(self, user):
+    def _action(self, user):
         from workspace.core.module_registry import registry
 
-        return registry.get_pending_action_counts(user)
+        return registry.get_pending_actions(user)["projects"]
+
+    def _counts(self, user):
+        return {"projects": self._action(user).count}
 
     def _make_task(self, *, due_date, assignees=None, status=None, project=None):
         return create_task(
@@ -67,3 +70,16 @@ class ProjectsPendingActionProviderTests(ProjectTestMixin, TestCase):
         self._make_task(due_date=self.today - timedelta(days=1))
         remove_member(self.membership)
         self.assertEqual(self._counts(self.member).get("projects"), 0)
+
+    def test_deep_links_to_the_single_pending_task(self):
+        task = self._make_task(due_date=self.today)
+        action = self._action(self.member)
+        self.assertEqual(action.count, 1)
+        self.assertEqual(action.url, f"/projects/{self.project.uuid}?task={task.uuid}")
+
+    def test_has_no_target_with_several_pending_tasks(self):
+        self._make_task(due_date=self.today)
+        self._make_task(due_date=self.today - timedelta(days=1))
+        action = self._action(self.member)
+        self.assertEqual(action.count, 2)
+        self.assertIsNone(action.url)

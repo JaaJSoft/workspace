@@ -16,6 +16,7 @@ class ChatConfig(AppConfig):
         from workspace.core.module_registry import (
             CommandInfo,
             ModuleInfo,
+            PendingAction,
             PendingActionProviderInfo,
             SearchProviderInfo,
             registry,
@@ -60,7 +61,14 @@ class ChatConfig(AppConfig):
         def _chat_pending_actions(user):
             from workspace.chat.services.conversations import get_unread_counts
 
-            return get_unread_counts(user).get("total", 0)
+            unread = get_unread_counts(user)
+            conversations = unread["conversations"]
+            url = (
+                f"/chat/{next(iter(conversations))}"
+                if len(conversations) == 1
+                else None
+            )
+            return PendingAction(count=unread["total"], url=url)
 
         registry.register_pending_action_provider(
             PendingActionProviderInfo(

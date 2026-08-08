@@ -26,6 +26,12 @@
       @change="update('showPinned', $event.target.checked)">
   </label>
   <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show tags</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-primary"
+      :checked="prefs.showTags"
+      @change="update('showTags', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
     <span class="text-sm">Show group folders</span>
     <input type="checkbox" class="toggle toggle-sm toggle-primary"
       :checked="prefs.showGroups"

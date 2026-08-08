@@ -502,7 +502,13 @@ class FileViewSet(
         # Filter by tags (comma-separated UUIDs)
         tags_param = request.query_params.get("tags")
         if tags_param:
-            tag_uuids = [u.strip() for u in tags_param.split(",") if u.strip()]
+            raw_uuids = [u.strip() for u in tags_param.split(",") if u.strip()]
+            tag_uuids = [parse_uuid_or_none(u) for u in raw_uuids]
+            if any(u is None for u in tag_uuids):
+                return Response(
+                    {"tags": "Invalid tag UUID."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if tag_uuids:
                 queryset = queryset.filter(
                     file_tags__tag__uuid__in=tag_uuids

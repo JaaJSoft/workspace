@@ -1,22 +1,40 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db.models import Exists, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.utils.html import escape
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_viewer_by_slug
 from workspace.users.services.settings import get_module_settings
 
-from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
+from ..models import (
+    File,
+    FileFavorite,
+    FileShare,
+    FileShareLink,
+    FileTag,
+    PinnedFolder,
+    Tag,
+)
 from .viewers import ViewerRegistry
 
 RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
 INITIAL_EVENTS_LIMIT = 15
 MAX_EVENTS_LIMIT = 200
+
+
+def user_tags(user):
+    """Tags owned by *user*, each annotated with its live (non-trashed) file count."""
+    return Tag.objects.filter(owner=user).annotate(
+        file_count=Count(
+            "file_tags", filter=Q(file_tags__file__deleted_at__isnull=True)
+        )
+    )
 
 
 def build_breadcrumbs(folder, user=None):
@@ -85,16 +103,28 @@ def build_breadcrumbs(folder, user=None):
 
 def _build_context(request, folder=None, is_trash_view=False):
     current_folder = None
-    is_shared_view = not is_trash_view and str(
-        request.GET.get("shared", "")
-    ).lower() in {"1", "true", "yes"}
+    active_tag = None
+    if not is_trash_view and request.GET.get("tag"):
+        tag_uuid = parse_uuid_or_none(request.GET["tag"])
+        if tag_uuid is not None:
+            active_tag = Tag.objects.filter(owner=request.user, uuid=tag_uuid).first()
+        if active_tag is None:
+            raise Http404
+    is_tag_view = active_tag is not None
+    is_shared_view = (
+        not is_trash_view
+        and not is_tag_view
+        and str(request.GET.get("shared", "")).lower() in {"1", "true", "yes"}
+    )
     is_favorites_view = (
         not is_trash_view
+        and not is_tag_view
         and not is_shared_view
         and str(request.GET.get("favorites", "")).lower() in {"1", "true", "yes"}
     )
     is_recent_view = (
         not is_trash_view
+        and not is_tag_view
         and not is_favorites_view
         and not is_shared_view
         and str(request.GET.get("recent", "")).lower() in {"1", "true", "yes"}
@@ -120,7 +150,12 @@ def _build_context(request, folder=None, is_trash_view=False):
         if is_recent_view
         else None
     )
-    if active_special:
+    if is_tag_view:
+        breadcrumbs = [
+            files_root,
+            {"label": active_tag.name, "icon": active_tag.icon or "tag"},
+        ]
+    elif active_special:
         breadcrumbs = [files_root, SPECIAL_VIEWS[active_special]]
     elif folder:
         current_folder = File.objects.filter(
@@ -133,7 +168,13 @@ def _build_context(request, folder=None, is_trash_view=False):
             raise Http404
         breadcrumbs = build_breadcrumbs(current_folder, user=request.user)
 
-    if is_shared_view:
+    if is_tag_view:
+        nodes = (
+            FileService.user_files_qs(request.user)
+            .filter(file_tags__tag=active_tag)
+            .name_ordered("-node_type")
+        )
+    elif is_shared_view:
         shared_file_ids = FileShare.objects.filter(
             shared_with=request.user,
         ).values_list("file_id", flat=True)
@@ -210,6 +251,15 @@ def _build_context(request, folder=None, is_trash_view=False):
         is_pinned=Exists(pinned_subquery),
         is_shared=Exists(is_shared_subquery),
         user_share_permission=Subquery(user_share_subquery),
+    ).prefetch_related(
+        # Scoped to the viewer's own tags: the shared-with-me listing shows
+        # other people's files, and their tags must never leak into it.
+        Prefetch(
+            "file_tags",
+            queryset=FileTag.objects.filter(tag__owner=request.user)
+            .select_related("tag")
+            .order_by(Lower("tag__name")),
+        )
     )
     if is_recent_view:
         nodes = nodes[:RECENT_FILES_LIMIT]
@@ -219,12 +269,17 @@ def _build_context(request, folder=None, is_trash_view=False):
         "folder_count": 0,
         "total_size": 0,
     }
+    # Tags actually present in this listing — the toolbar filter offers only
+    # those, so it never lists tags that would match nothing here.
+    listing_tags = {}
     for node in nodes:
         if node.node_type == File.NodeType.FILE:
             folder_stats["file_count"] += 1
             folder_stats["total_size"] += node.size or 0
         else:
             folder_stats["folder_count"] += 1
+        for file_tag in node.file_tags.all():
+            listing_tags[file_tag.tag.uuid] = file_tag.tag
 
     VIEW_META = {
         "shared": (
@@ -252,7 +307,12 @@ def _build_context(request, folder=None, is_trash_view=False):
             "Files you create or edit will show up here.",
         ),
     }
-    if active_special:
+    if is_tag_view:
+        page_title = active_tag.name
+        current_view_url = f"/files?tag={active_tag.uuid}"
+        empty_title = "No files with this tag"
+        empty_message = "Tag a file from its properties panel to see it here."
+    elif active_special:
         page_title, current_view_url, empty_title, empty_message = VIEW_META[
             active_special
         ]
@@ -312,7 +372,9 @@ def _build_context(request, folder=None, is_trash_view=False):
     # Determine which sidebar item should be active.
     # Breadcrumb dicts include 'uuid' for each folder entry, so we can
     # resolve group-root and pinned-ancestor without walking parent FKs.
-    if active_special:
+    if is_tag_view:
+        sidebar_active = f"tag:{active_tag.uuid}"
+    elif active_special:
         sidebar_active = active_special
     elif current_folder and current_folder.group_id:
         # breadcrumbs[0] = "Groups" header, breadcrumbs[1] = group root folder
@@ -350,12 +412,16 @@ def _build_context(request, folder=None, is_trash_view=False):
         "is_recent_view": is_recent_view,
         "is_trash_view": is_trash_view,
         "is_shared_view": is_shared_view,
+        "is_tag_view": is_tag_view,
+        "tags": user_tags(request.user),
+        "listing_tags": list(listing_tags.values()),
         "is_root_view": (
             not current_folder
             and not is_favorites_view
             and not is_recent_view
             and not is_trash_view
             and not is_shared_view
+            and not is_tag_view
         ),
         "page_title": page_title,
         "current_view_url": current_view_url,
@@ -604,6 +670,16 @@ def pinned_folders(request):
         {
             "pinned_folders": pinned_qs,
         },
+    )
+
+
+@login_required
+def tags_sidebar(request):
+    """Return the sidebar tags partial, re-fetched after any tag edit."""
+    return render(
+        request,
+        "files/ui/partials/tags_section.html",
+        {"tags": user_tags(request.user)},
     )
 
 

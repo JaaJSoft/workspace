@@ -3,6 +3,7 @@ window.fileTableControls = function fileTableControls() {
     storageKey: 'fileTableControls:v4',
     searchQuery: '',
     typeFilter: 'all',
+    tagFilter: [],
     sortField: window._filePrefsCache.defaultSort || 'default',
     sortDir: window._filePrefsCache.defaultSortDir || 'asc',
     columns: [
@@ -10,28 +11,31 @@ window.fileTableControls = function fileTableControls() {
       { id: 'icon', label: 'Type', required: true },
       { id: 'name', label: 'Name', required: true },
       { id: 'favorite', label: 'Fav', required: false },
+      { id: 'tags', label: 'Tags', required: false },
       { id: 'size', label: 'Size', required: false },
       { id: 'created', label: 'Created', required: false },
       { id: 'modified', label: 'Modified', required: false },
       { id: 'actions', label: 'Actions', required: false }
     ],
-    defaultColumnOrder: ['select', 'icon', 'name', 'favorite', 'size', 'created', 'modified', 'actions'],
+    defaultColumnOrder: ['select', 'icon', 'name', 'favorite', 'tags', 'size', 'created', 'modified', 'actions'],
     defaultColumnVisibility: {
       select: true,
       icon: true,
       name: true,
       favorite: true,
+      tags: true,
       size: true,
       created: false,
       modified: true,
       actions: true
     },
-    columnOrder: ['select', 'icon', 'name', 'favorite', 'size', 'created', 'modified', 'actions'],
+    columnOrder: ['select', 'icon', 'name', 'favorite', 'tags', 'size', 'created', 'modified', 'actions'],
     columnVisibility: {
       select: true,
       icon: true,
       name: true,
       favorite: true,
+      tags: true,
       size: true,
       created: false,
       modified: true,
@@ -91,6 +95,7 @@ window.fileTableControls = function fileTableControls() {
 
       this.$watch('searchQuery', () => this.applyRows());
       this.$watch('typeFilter', () => this.applyRows());
+      this.$watch('tagFilter', () => this.applyRows());
       this.$watch('sortField', () => this.applyRows());
       this.$watch('sortDir', () => this.applyRows());
       this.$watch('showHiddenFiles', () => this.applyRows());
@@ -953,6 +958,7 @@ window.fileTableControls = function fileTableControls() {
     resetAll() {
       this.searchQuery = '';
       this.typeFilter = 'all';
+      this.tagFilter = [];
       this.sortField = window._filePrefsCache.defaultSort || 'default';
       this.sortDir = window._filePrefsCache.defaultSortDir || 'asc';
       this.resetColumns();
@@ -979,7 +985,25 @@ window.fileTableControls = function fileTableControls() {
       this.tbody.replaceChildren();
       this.tbody.appendChild(fragment);
       this.updateEmptyRow(ordered.length);
+      this.applyCards();
       this.saveState();
+    },
+
+    // Mosaic cards are filtered from here rather than through an `x-show`
+    // binding: the binding evaluated once at mount and never re-ran, so
+    // every filter silently applied to the list view only.
+    applyCards() {
+      const cards = (this.$el || document).querySelectorAll('div.grid > div[data-uuid]');
+      cards.forEach((card) => {
+        card.style.display = this.shouldShowCard(card) ? '' : 'none';
+      });
+    },
+
+    // Cards and rows obey the same rules and carry the same data-*
+    // attributes, so the row predicate answers for both.
+    shouldShowCard(el) {
+      if (!el || !el.dataset) return true;
+      return this.matchesFilter(el, (this.searchQuery || '').trim().toLowerCase());
     },
 
     matchesFilter(row, query) {
@@ -1002,7 +1026,37 @@ window.fileTableControls = function fileTableControls() {
       if (this.typeFilter === 'favorites' && row.dataset.favorite !== '1') {
         return false;
       }
+      if (!this.matchesTagFilter(row.dataset.tags)) {
+        return false;
+      }
       return true;
+    },
+
+    // --- Tag filter (OR across selected tags, mirroring ?tags= on the API) ---
+    matchesTagFilter(rawTags) {
+      if (!this.tagFilter.length) return true;
+      const tags = (rawTags || '').trim().split(/\s+/);
+      return this.tagFilter.some((uuid) => tags.includes(uuid));
+    },
+
+    hasTagFilter(uuid) {
+      return this.tagFilter.indexOf(uuid) !== -1;
+    },
+
+    toggleTagFilter(uuid) {
+      this.tagFilter = this.hasTagFilter(uuid)
+        ? this.tagFilter.filter((id) => id !== uuid)
+        : [...this.tagFilter, uuid];
+    },
+
+    clearTagFilter() {
+      this.tagFilter = [];
+    },
+
+    tagFilterLabel() {
+      const count = this.tagFilter.length;
+      if (count === 0) return 'Tags';
+      return `${count} tag${count === 1 ? '' : 's'}`;
     },
 
     compareRows(a, b, dir) {
@@ -1088,36 +1142,6 @@ window.fileTableWithView = function fileTableWithView() {
   return {
     ...tableControls,
     ...viewControls,
-
-    // Method to check if a card should be visible in mosaic view (respects filters).
-    // Reads all values from the element's data-* attributes to avoid inlining
-    // (and escaping) strings in the Alpine expression.
-    shouldShowCard(el) {
-      if (!el || !el.dataset) return true;
-      const name = el.dataset.name || '';
-      const nodeType = el.dataset.nodeType || '';
-      const isFavorite = el.dataset.favorite || '0';
-      // Hidden files filter
-      if (!this.showHiddenFiles && name.startsWith('.')) {
-        return false;
-      }
-      // Search query filter
-      const query = (this.searchQuery || '').trim().toLowerCase();
-      if (query && !name.includes(query)) {
-        return false;
-      }
-      // Type filter
-      if (this.typeFilter === 'files' && nodeType !== 'file') {
-        return false;
-      }
-      if (this.typeFilter === 'folders' && nodeType !== 'folder') {
-        return false;
-      }
-      if (this.typeFilter === 'favorites' && isFavorite !== '1') {
-        return false;
-      }
-      return true;
-    },
 
     init() {
       // Call both init methods

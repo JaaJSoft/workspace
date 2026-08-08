@@ -9,6 +9,7 @@ urlpatterns = [
     path("/trash", views.trash, name="trash"),
     path("/pinned", views.pinned_folders, name="pinned_folders"),
     path("/group-folders", views.group_folders_sidebar, name="group_folders_sidebar"),
+    path("/tags", views.tags_sidebar, name="tags_sidebar"),
     path("/properties/<uuid:uuid>", views.properties, name="properties"),
     path("/<uuid:uuid>/events", views.events, name="events"),
     path("/<uuid:uuid>/card", views.file_card, name="file_card"),

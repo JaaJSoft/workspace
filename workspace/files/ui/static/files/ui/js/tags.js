@@ -136,7 +136,7 @@ window.tagsMixin = function tagsMixin() {
 
             m.saving = false;
             this.closeTagModal();
-            window.dispatchEvent(new CustomEvent('notes:refresh-sidebar'));
+            window.dispatchEvent(new CustomEvent('tags-changed'));
         },
 
         async deleteTagConfirm() {
@@ -158,7 +158,7 @@ window.tagsMixin = function tagsMixin() {
                     target.tags = target.tags.filter(function(t) { return t.uuid !== uuid; });
                 }
                 this.closeTagModal();
-                window.dispatchEvent(new CustomEvent('notes:refresh-sidebar'));
+                window.dispatchEvent(new CustomEvent('tags-changed'));
             }
         },
     };

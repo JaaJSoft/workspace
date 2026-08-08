@@ -1,0 +1,14 @@
+{% comment %}
+Tag chips for a file/folder row or card.
+
+Context variables:
+- node: File object (its ``file_tags`` are prefetched by _build_context,
+  already scoped to the viewer's own tags)
+- chip_size: badge size suffix, "xs" (default) or "sm"
+{% endcomment %}
+{% for ft in node.file_tags.all %}
+<span class="badge badge-{{ chip_size|default:'xs' }} badge-{{ ft.tag.color }} gap-0.5 pb-0.5 max-w-full" title="{{ ft.tag.name }}">
+  {% if ft.tag.icon %}<i data-lucide="{{ ft.tag.icon }}" class="w-2.5 h-2.5 flex-shrink-0"></i>{% endif %}
+  <span class="truncate">{{ ft.tag.name }}</span>
+</span>
+{% endfor %}

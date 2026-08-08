@@ -1,8 +1,17 @@
 window.fileBrowser = function fileBrowser() {
+  const tags = window.tagsMixin();
+
   return {
     // Tag CRUD + assignment (tag_manager.html / tag_dialog.html bindings).
     // The mixin reads/writes `selectedFile`, seeded by the properties partial.
-    ...window.tagsMixin(),
+    ...tags,
+
+    // Assignments change the sidebar tag counts, so announce them the same
+    // way the mixin announces tag create/edit/delete.
+    async toggleFileTag(tag) {
+      await tags.toggleFileTag.call(this, tag);
+      window.dispatchEvent(new CustomEvent('tags-changed'));
+    },
 
     cleaningTrash: false,
 
@@ -107,6 +116,9 @@ window.fileBrowser = function fileBrowser() {
             break;
           case 'extract':
             this.extractArchive(uuid, name);
+            break;
+          case 'manage_tags':
+            this.openTagPicker(uuid, name);
             break;
         }
       });
@@ -1182,6 +1194,49 @@ window.fileBrowser = function fileBrowser() {
       this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
     },
 
+    // --- Tag picker (context menu "Tags" action) ---
+    // The tags mixin operates on `selectedFile`, which the properties panel
+    // also owns. The picker borrows it while open and hands it back on close.
+    tagPickerName: '',
+    _tagPickerOpen: false,
+    _tagPickerRestore: null,
+
+    async openTagPicker(uuid, name) {
+      this.tagPickerName = name || '';
+      this._tagPickerRestore = this.selectedFile;
+
+      // Same file as the open properties panel: reuse its live object so the
+      // chips there stay in sync with what the picker toggles.
+      if (!this.selectedFile || this.selectedFile.uuid !== uuid) {
+        const resp = await fetch(`/api/v1/files/${uuid}`);
+        if (!resp.ok) {
+          this.showAlert('error', 'Failed to load tags');
+          return;
+        }
+        const data = await resp.json();
+        this.selectedFile = { uuid, tags: data.tags || [] };
+      }
+
+      this._tagPickerOpen = true;
+      document.getElementById('tag-picker-dialog')?.showModal();
+    },
+
+    closeTagPicker() {
+      document.getElementById('tag-picker-dialog')?.close();
+      this.onTagPickerClosed();
+    },
+
+    // Hands `selectedFile` back to whoever owned it before the picker.
+    // Every dismissal path (Done, backdrop, Escape) routes here, so it
+    // must stay idempotent — the guard is what makes it so.
+    onTagPickerClosed() {
+      if (!this._tagPickerOpen) return;
+      this._tagPickerOpen = false;
+      this.selectedFile = this._tagPickerRestore;
+      this._tagPickerRestore = null;
+      this.tagPickerName = '';
+    },
+
     showAlert(type, message) {
       if (window.AppAlert && typeof window.AppAlert.show === 'function') {
         window.AppAlert.show({
@@ -1213,6 +1268,31 @@ window.fileBrowser = function fileBrowser() {
         window.fileActions.createGroupFolder(e.detail.groupId, e.detail.groupName)
           .then(() => window.dispatchEvent(new CustomEvent('group-folders-changed')))
           .catch((err) => this.showAlert('error', err.message || 'Failed to create group folder'));
+      });
+
+      // Sidebar tag section (a different Alpine component) delegates
+      // create/edit to the tag dialog, which lives in this scope.
+      window.addEventListener('files:new-tag', () => this.showTagModal());
+      window.addEventListener('files:edit-tag', (e) => this.showTagModal(e.detail));
+
+      // Tag chips are rendered server-side in the listing, so any tag edit
+      // or assignment needs a re-render. Debounced: ticking several
+      // checkboxes in a row should cost one swap, not one per click.
+      window.addEventListener('tags-changed', () => {
+        clearTimeout(this._tagsRefreshTimer);
+        this._tagsRefreshTimer = setTimeout(() => {
+          const viewedTag = new URLSearchParams(window.location.search).get('tag');
+          // Deleting the tag we're looking at leaves a view that now 404s.
+          if (viewedTag && !this.allTags.some((t) => t.uuid === viewedTag)) {
+            const link = document.getElementById('folder-nav-replace');
+            if (link) {
+              link.href = '/files';
+              link.click();
+              return;
+            }
+          }
+          this.refreshFolderBrowser();
+        }, 400);
       });
 
       // Properties panel events

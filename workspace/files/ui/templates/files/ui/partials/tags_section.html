@@ -1,0 +1,74 @@
+{% comment %}
+Tags Sidebar Section
+====================
+Lists the user's tags; each entry navigates to the tag view (/files?tag=<uuid>).
+
+Swapped in place via `$ajax('/files/tags', { target: 'files-tags-section' })`
+whenever a tag is created, edited or deleted, so the `<div id="files-tags-section">`
+wrapper lives here (not in the parent template) — alpine-ajax needs the id in
+the response to morph it.
+
+Rendered inside the `sidebarCollapse()` scope: `collapsed` and `activeView`
+come from there. Tag create/edit is owned by `fileBrowser()` (a different
+component), so the buttons talk to it through window events.
+
+Context variables:
+- tags: Tag queryset annotated with file_count
+{% endcomment %}
+
+<div id="files-tags-section">
+<hr class="my-2 border-base-300" x-show="!collapsed">
+<div class="flex items-center mb-1" x-show="!collapsed" x-transition>
+  <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider flex-1">
+    <span class="flex items-center gap-2">
+      <i data-lucide="tag" class="w-3 h-3"></i>
+      Tags
+    </span>
+  </h3>
+  <button type="button"
+          class="btn btn-ghost btn-xs btn-square"
+          @click="window.dispatchEvent(new CustomEvent('files:new-tag'))"
+          title="New tag">
+    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+  </button>
+</div>
+{% if tags %}
+<hr class="my-1 border-base-300" x-show="collapsed">
+{% endif %}
+<ul class="space-y-0.5">
+  {% for tag in tags %}
+  <li class="list-none" :class="collapsed ? 'flex justify-center' : ''">
+    <a
+      href="/files?tag={{ tag.uuid }}"
+      x-target.push="folder-browser"
+      class="group flex items-center text-base rounded-lg transition-colors"
+      {% if tag.color == 'ghost' or tag.color == 'neutral' %}
+      :class="[collapsed ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3', activeView === 'tag:{{ tag.uuid }}' ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-primary']"
+      {% else %}
+      :class="[collapsed ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3', activeView === 'tag:{{ tag.uuid }}' ? 'bg-{{ tag.color }}/10 text-{{ tag.color }} hover:bg-{{ tag.color }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ tag.color }}']"
+      {% endif %}
+      :title="collapsed ? '{{ tag.name|escapejs }}' : ''"
+    >
+      <i data-lucide="{{ tag.icon|default:'tag' }}" class="w-5 h-5 flex-shrink-0 {% if tag.color != 'ghost' and tag.color != 'neutral' %}text-{{ tag.color }}{% endif %}"></i>
+      <span x-show="!collapsed" x-transition class="flex items-center gap-2 flex-1 min-w-0">
+        <span class="truncate flex-1">{{ tag.name }}</span>
+        <span class="text-xs text-base-content/40 group-hover:hidden">{{ tag.file_count }}</span>
+        <button type="button"
+                class="btn btn-ghost btn-xs btn-square hidden group-hover:inline-flex"
+                title="Edit tag"
+                @click.prevent.stop="window.dispatchEvent(new CustomEvent('files:edit-tag', { detail: { uuid: '{{ tag.uuid }}', name: '{{ tag.name|escapejs }}', icon: '{{ tag.icon|escapejs }}', color: '{{ tag.color|escapejs }}' } }))">
+          <i data-lucide="pencil" class="w-3 h-3"></i>
+        </button>
+      </span>
+    </a>
+  </li>
+  {% empty %}
+  <li class="list-none px-2 py-2 text-sm text-base-content/40" x-show="!collapsed">
+    <span class="flex items-center gap-2 justify-center">
+      <i data-lucide="tag" class="w-4 h-4"></i>
+      No tags yet
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+</div>

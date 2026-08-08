@@ -445,6 +445,29 @@ except (ValueError, TypeError) as exc: # ✅ parentheses still MANDATORY with `a
 
 ## Frontend Conventions
 
+### Django template comments - `{# #}` is single-line ONLY
+
+Django's lexer matches `{#.*?#}` **without** the DOTALL flag, so a `{# #}` whose closing delimiter is on another line is not a comment at all. The template engine treats the whole block as literal text and **renders your comment into the page**, visible to the user and shipped in the HTML.
+
+```django
+{# ✅ single line, opener and closer on the SAME line #}
+
+{# ❌ WRONG - renders verbatim into the page
+   this second line means the block was never a comment #}
+
+{% comment %}
+  ✅ Correct for anything spanning more than one line.
+{% endcomment %}
+```
+
+There is no error, no warning, and no failing test - templates have no syntax check for this. The rendered page just grows a paragraph of prose in the middle of a table cell, and it survives review because the diff looks like a comment.
+
+**Rules:**
+- One line → `{# ... #}`. Two or more → `{% comment %}` / `{% endcomment %}`. No exceptions, no judgement call.
+- Never wrap the same note in both.
+- Don't use reStructuredText markup (``` ``double backticks`` ```) inside a template comment - that convention belongs to Python docstrings. Write plain prose.
+- After touching a template comment, grep the rendered output rather than trusting the diff: `curl -s <url> | grep "<a few words of the comment>"` must return nothing.
+
 ### Alpine `init()` is auto-called - never add `x-init="init()"` on top of it
 
 If your `x-data` component defines an `init()` method (`x-data="myApp()"` where `myApp` returns an object with `init() { ... }`), Alpine **automatically** invokes it when the element mounts. Adding `x-init="init()"` next to `x-data="myApp()"` runs `init()` a **second time**, silently:

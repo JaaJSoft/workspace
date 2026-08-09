@@ -14,8 +14,8 @@ Requirements: the ``dev`` dependency group (Playwright) and a Chromium
 install (``uv run playwright install chromium``, or set
 ``SCREENSHOTS_CHROMIUM`` to an existing Chromium binary).
 
-By default the browser loads the CDN assets used by base.html (Alpine,
-lucide, ...) directly, like any normal page view. ``--offline`` serves
+By default the browser loads the CDN assets used by base.html (lucide, ...)
+directly, like any normal page view. ``--offline`` serves
 them from a local cache (``scripts/.screenshot-assets/``, filled from
 the CDN or from registry.npmjs.org tarballs) for environments without
 CDN egress, e.g. a locked-down CI.

@@ -32,3 +32,16 @@ updates:
       milkdown:
         patterns:
           - "@milkdown/*"
+
+  - package-ecosystem: "npm"
+    directory: "/scripts/alpine" # Vendored Alpine.js bundle
+    schedule:
+      interval: "weekly"
+    versioning-strategy: increase
+    groups:
+      # Alpine core and its official plugins share a single version number and
+      # must move together.
+      alpine:
+        patterns:
+          - "alpinejs"
+          - "@alpinejs/*"

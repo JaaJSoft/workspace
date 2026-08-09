@@ -1,0 +1,64 @@
+# Rebuilds the vendored Alpine bundle when its npm manifest changes, so a
+# Dependabot bump can't leave the committed artifact stale.
+#
+# Pushes made with the default GITHUB_TOKEN do not retrigger workflows: without
+# the EDITOR_REBUILD_TOKEN secret (a PAT with contents write), the PR's checks
+# have to be re-run by hand after an auto-rebuild commit.
+name: Alpine bundle
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/alpine/**'
+      - 'workspace/common/static/ui/js/vendor/alpine/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    # Same-repo branches only: fork heads cannot be pushed to.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      # persist-credentials: false keeps the token off disk while the bumped
+      # dependencies are installed; with --ignore-scripts below, an install
+      # script can neither run nor find a credential to exfiltrate.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Rebuild vendored bundle
+        run: |
+          cd scripts/alpine
+          npm ci --ignore-scripts
+          npm run build:alpine
+
+      - name: Verify bundle integrity
+        run: node --test "workspace/common/tests/js/alpine_bundle.test.js"
+
+      # The token is injected only here, after all dependency code has run.
+      - name: Commit and push if changed
+        env:
+          PUSH_TOKEN: ${{ secrets.EDITOR_REBUILD_TOKEN || github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git add -A workspace/common/static/ui/js/vendor/alpine
+          if git diff --cached --quiet; then
+            echo "Bundle already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build(common): rebuild vendored alpine bundle"
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"

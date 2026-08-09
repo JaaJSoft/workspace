@@ -60,6 +60,16 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 - Never mention "Claude", "Claude Code", "CLAUDE.md", or any AI/assistant attribution in commit messages, commit titles, PR titles, or PR descriptions. The user wants commits and PRs to read as if a human wrote them. This includes the trailing "🤖 Generated with [Claude Code]" footer and the "Co-Authored-By: Claude" trailer - omit both. References to project rules should cite the rule itself ("per the no-logic-change refactor contract"), not the file ("per CLAUDE.md").
 - All commit messages **and** PR titles must follow the Conventional Commits format `type(scope): subject` (e.g. `feat(theme): split theme picker into light and dark slots`, `fix(chat): prevent duplicate retry`). Allowed types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `style`, `build`, `ci`, `revert`. Subject is lowercase, imperative mood, no trailing period. This applies to PR titles too - don't pass a free-form title to `gh pr create`, prefix it.
 
+### Issues
+
+Issues use GitHub's native **issue type** field, not a label. Conventional Commits stay on commits and PR titles - an issue title never carries a `type(scope):` prefix, because the type field and the `module:*` labels already encode both halves of it.
+
+- **Type** (mandatory, one of three): `Bug` for something that behaves differently from what it should, `Feature` for a capability that doesn't exist yet, `Task` for everything else - refactor, perf, chore, docs, test, build, ci. Set it with `gh issue edit <n> --type Bug`; the templates in `.github/ISSUE_TEMPLATE/` set it automatically for issues opened from the web UI.
+- **Title**: `Module: Description`, e.g. `Files: support S3-compatible object storage`, `Mail: the Sent copy of a message drops its Bcc recipients`. The prefix is the module name capitalized (`AI` for `ai`, `Build` for tooling that isn't a Django app); the description is a sentence, capitalized, no trailing period.
+- **One module in the title - the main one.** An issue spanning `projects` and `calendar` reads `Projects: ...`; the fact that it also touches the calendar lives in a `module:calendar` label. The labels are the source of truth for the full scope, the title prefix is a navigation aid. Never widen the prefix into `Projects, Calendar: ...`.
+- **Labels**: one `module:*` per module actually touched. Never re-introduce `type:*` labels - they were deleted precisely because they duplicated the type field and drifted from it.
+- Opening an issue from the CLI bypasses the template, so pass the type explicitly: `gh issue create --title "Files: ..." --body "..." --label module:files` followed by `gh issue edit <n> --type Feature`, or `gh issue create --template feature.yml`.
+
 ### PR Descriptions
 
 PR descriptions must follow the structure of `.github/PULL_REQUEST_TEMPLATE.md` (Summary / Changes / Screenshots / Testing / Notes). GitHub only pre-fills that template when no body is provided, and `gh pr create --body` bypasses it - so when writing a body, reproduce the structure manually. Rules:

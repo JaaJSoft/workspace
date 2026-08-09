@@ -6,7 +6,7 @@ class PasswordsConfig(AppConfig):
     name = "workspace.passwords"
 
     def ready(self):
-        from workspace.core.module_registry import ModuleInfo, registry
+        from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
 
         registry.register(
             ModuleInfo(
@@ -19,4 +19,19 @@ class PasswordsConfig(AppConfig):
                 order=40,
                 preview=True,
             )
+        )
+
+        registry.register_commands(
+            [
+                CommandInfo(
+                    name="Passwords",
+                    keywords=["passwords", "vault", "secrets"],
+                    icon="key-round",
+                    color="error",
+                    url="/passwords",
+                    kind="navigate",
+                    module_slug="passwords",
+                    order=40,
+                ),
+            ]
         )

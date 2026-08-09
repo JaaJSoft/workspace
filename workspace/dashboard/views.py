@@ -88,8 +88,12 @@ def _dashboard_modules(user):
     (hidden slugs and the dashboard tile excluded, pending counts attached) and
     ``dashboard_apps`` is every visible app with a ``hidden`` flag for the
     settings popover.
+
+    A tile links to its module home unless the module's pending-action
+    provider resolved a single target, in which case it opens that item
+    directly (the unread conversation, the overdue task, ...).
     """
-    pending_action_counts = registry.get_pending_action_counts(user)
+    pending_actions = registry.get_pending_actions(user)
     hidden = set(get_module_settings(user, "dashboard").get("hidden_modules") or [])
     modules = []
     dashboard_apps = []
@@ -107,8 +111,10 @@ def _dashboard_modules(user):
         )
         if m.slug in hidden:
             continue
+        action = pending_actions.get(m.slug)
         data = asdict(m)
-        data["pending_action_count"] = pending_action_counts.get(m.slug, 0)
+        data["pending_action_count"] = action.count if action else 0
+        data["url"] = (action.url if action and action.count else None) or m.url
         modules.append(data)
     return modules, dashboard_apps
 

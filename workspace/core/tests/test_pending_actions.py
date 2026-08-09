@@ -5,6 +5,7 @@ from workspace.core.module_registry import (
     CommandInfo,
     ModuleInfo,
     ModuleRegistry,
+    PendingAction,
     PendingActionProviderInfo,
 )
 
@@ -44,56 +45,70 @@ class PendingActionProviderRegistryTests(TestCase):
 
     def test_register_pending_action_provider(self):
         provider = PendingActionProviderInfo(
-            module_slug="chat", pending_action_fn=lambda u: 5
+            module_slug="chat", pending_action_fn=lambda u: PendingAction(count=5)
         )
         self.registry.register_pending_action_provider(provider)
-        counts = self.registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts, {"chat": 5})
+        actions = self.registry.get_pending_actions(self.user)
+        self.assertEqual(actions, {"chat": PendingAction(count=5)})
 
     def test_register_pending_action_provider_unknown_module_raises(self):
         provider = PendingActionProviderInfo(
-            module_slug="unknown", pending_action_fn=lambda u: 0
+            module_slug="unknown", pending_action_fn=lambda u: PendingAction(count=0)
         )
         with self.assertRaises(ValueError):
             self.registry.register_pending_action_provider(provider)
 
     def test_duplicate_pending_action_provider_raises(self):
         provider = PendingActionProviderInfo(
-            module_slug="chat", pending_action_fn=lambda u: 0
+            module_slug="chat", pending_action_fn=lambda u: PendingAction(count=0)
         )
         self.registry.register_pending_action_provider(provider)
         with self.assertRaises(ValueError):
             self.registry.register_pending_action_provider(provider)
 
-    def test_get_pending_action_counts_multiple_providers(self):
+    def test_get_pending_actions_multiple_providers(self):
         self.registry.register_pending_action_provider(
             PendingActionProviderInfo(
-                module_slug="chat", pending_action_fn=lambda u: 3
+                module_slug="chat", pending_action_fn=lambda u: PendingAction(count=3)
             ),
         )
         self.registry.register_pending_action_provider(
             PendingActionProviderInfo(
-                module_slug="calendar", pending_action_fn=lambda u: 7
+                module_slug="calendar",
+                pending_action_fn=lambda u: PendingAction(count=7),
             ),
         )
-        counts = self.registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts, {"chat": 3, "calendar": 7})
+        actions = self.registry.get_pending_actions(self.user)
+        self.assertEqual(
+            actions,
+            {"chat": PendingAction(count=3), "calendar": PendingAction(count=7)},
+        )
 
-    def test_get_pending_action_counts_empty_when_no_providers(self):
-        counts = self.registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts, {})
+    def test_get_pending_actions_keeps_the_provider_target_url(self):
+        self.registry.register_pending_action_provider(
+            PendingActionProviderInfo(
+                module_slug="chat",
+                pending_action_fn=lambda u: PendingAction(count=1, url="/chat/abc"),
+            ),
+        )
+        actions = self.registry.get_pending_actions(self.user)
+        self.assertEqual(actions["chat"].url, "/chat/abc")
 
-    def test_get_pending_action_counts_handles_provider_exception(self):
+    def test_get_pending_actions_empty_when_no_providers(self):
+        actions = self.registry.get_pending_actions(self.user)
+        self.assertEqual(actions, {})
+
+    def test_get_pending_actions_handles_provider_exception(self):
         def failing_fn(u):
             raise RuntimeError("oops")
 
         self.registry.register_pending_action_provider(
             PendingActionProviderInfo(module_slug="chat", pending_action_fn=failing_fn),
         )
-        counts = self.registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts, {"chat": 0})
+        actions = self.registry.get_pending_actions(self.user)
+        self.assertEqual(actions, {"chat": PendingAction(count=0)})
 
-    def test_get_pending_action_counts_skips_inactive_modules(self):
+    def test_get_pending_actions_skips_inactive_modules(self):
         self.registry.register(
             ModuleInfo(
                 name="Notes",
@@ -108,16 +123,16 @@ class PendingActionProviderRegistryTests(TestCase):
         )
         self.registry.register_pending_action_provider(
             PendingActionProviderInfo(
-                module_slug="chat", pending_action_fn=lambda u: 3
+                module_slug="chat", pending_action_fn=lambda u: PendingAction(count=3)
             ),
         )
         self.registry.register_pending_action_provider(
             PendingActionProviderInfo(
-                module_slug="notes", pending_action_fn=lambda u: 99
+                module_slug="notes", pending_action_fn=lambda u: PendingAction(count=99)
             ),
         )
-        counts = self.registry.get_pending_action_counts(self.user)
-        self.assertEqual(counts, {"chat": 3})
+        actions = self.registry.get_pending_actions(self.user)
+        self.assertEqual(actions, {"chat": PendingAction(count=3)})
 
 
 class CommandRegistryTests(TestCase):

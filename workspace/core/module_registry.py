@@ -64,9 +64,23 @@ class SearchProviderInfo:
 
 
 @dataclass(frozen=True)
+class PendingAction:
+    """Badge count for a module tile, with an optional deep link.
+
+    ``url`` is set only when the pending work has a single unambiguous
+    target (one unread conversation, one overdue task, ...) so the tile can
+    open that item directly. It stays ``None`` as soon as the target is
+    ambiguous, and the tile falls back to the module home.
+    """
+
+    count: int
+    url: str | None = None
+
+
+@dataclass(frozen=True)
 class PendingActionProviderInfo:
     module_slug: str
-    pending_action_fn: Callable  # signature: (user) -> int
+    pending_action_fn: Callable  # signature: (user) -> PendingAction
 
 
 @dataclass(frozen=True)
@@ -139,18 +153,18 @@ class ModuleRegistry:
                 )
             self._pending_action_providers[provider.module_slug] = provider
 
-    def get_pending_action_counts(self, user) -> dict[str, int]:
-        counts = {}
+    def get_pending_actions(self, user) -> dict[str, PendingAction]:
+        actions = {}
         for slug, provider in self._pending_action_providers.items():
             module = self._modules.get(slug)
             if not module or not module.active:
                 continue
             try:
-                counts[slug] = provider.pending_action_fn(user)
+                actions[slug] = provider.pending_action_fn(user)
             except Exception:
                 logger.exception("Pending action provider '%s' failed", slug)
-                counts[slug] = 0
-        return counts
+                actions[slug] = PendingAction(count=0)
+        return actions
 
     def register_commands(self, commands: list[CommandInfo]):
         with self._lock:

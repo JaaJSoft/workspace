@@ -5,6 +5,7 @@ from workspace.core.module_registry import (
     ModuleInfo,
     ModuleRegistry,
     ModuleVisibility,
+    PendingAction,
     PendingActionProviderInfo,
     SearchProviderInfo,
     SearchResult,
@@ -182,11 +183,11 @@ class PendingActionProviderTests(TestCase):
         reg.register(_make_module("mail"))
         provider = PendingActionProviderInfo(
             module_slug="mail",
-            pending_action_fn=lambda u: 5,
+            pending_action_fn=lambda u: PendingAction(count=5),
         )
         reg.register_pending_action_provider(provider)
-        counts = reg.get_pending_action_counts(user=None)
-        self.assertEqual(counts["mail"], 5)
+        actions = reg.get_pending_actions(user=None)
+        self.assertEqual(actions["mail"], PendingAction(count=5))
 
     def test_requires_registered_module(self):
         reg = ModuleRegistry()
@@ -219,8 +220,8 @@ class PendingActionProviderTests(TestCase):
                 pending_action_fn=lambda u: (_ for _ in ()).throw(RuntimeError),
             )
         )
-        counts = reg.get_pending_action_counts(user=None)
-        self.assertEqual(counts["mail"], 0)
+        actions = reg.get_pending_actions(user=None)
+        self.assertEqual(actions["mail"], PendingAction(count=0))
 
 
 class CommandTests(TestCase):

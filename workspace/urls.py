@@ -74,6 +74,7 @@ ui_urlpatterns = [
     path("calendar", include("workspace.calendar.ui.urls")),
     path("mail", include("workspace.mail.ui.urls")),
     path("projects", include("workspace.projects.ui.urls")),
+    path("vault", include("workspace.vault.ui.urls")),
 ]
 
 urlpatterns = [

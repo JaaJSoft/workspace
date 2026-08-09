@@ -243,6 +243,10 @@ function projectBoard(config) {
       this.labels = JSON.parse(
         document.getElementById('labels-data').textContent
       );
+
+      // Catch up on board changes made elsewhere while the stream was down
+      // (resumed tab, or a bfcache restore after a mobile back).
+      window.addEventListener('sse:reconnect', () => this.refresh());
     },
 
     isMobile() {

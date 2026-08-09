@@ -1260,6 +1260,15 @@ window.fileBrowser = function fileBrowser() {
 
       this._initFileActions();
       this.loadTags();
+
+      // Catch up on changes made elsewhere while the stream was down
+      // (resumed tab, or a bfcache restore after a mobile back). The listing
+      // is server-rendered, so re-render it rather than patching state.
+      window.addEventListener('sse:reconnect', () => {
+        this.loadTags();
+        this.refreshFolderBrowser();
+      });
+
       // Listen for form submissions from dialogs
       window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));
       window.addEventListener('create-file', (e) => this.createFile(e.detail.name, e.detail.fileType, e.detail.customExt));

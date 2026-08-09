@@ -71,4 +71,14 @@
       connect();
     }
   });
+
+  // A bfcache restore (mobile back/forward) resumes a frozen page: no script
+  // re-runs, no request goes out, and the EventSource can still report OPEN
+  // while its underlying connection is already dead - so the readyState check
+  // above would skip the reconnect and leave the page on stale data forever.
+  // Reconnect unconditionally instead; connect() closes any previous stream,
+  // and onopen then fires sse:reconnect so listeners re-sync.
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) connect();
+  });
 })();

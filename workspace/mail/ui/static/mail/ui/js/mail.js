@@ -269,6 +269,10 @@ function mailApp() {
         history.replaceState(null, '', url);
       }
 
+      // Catch up on mail that landed while the stream was down (resumed tab,
+      // or a bfcache restore after a mobile back).
+      window.addEventListener('sse:reconnect', () => this.resync());
+
       // Listen for mail:compose events from contact card popovers
       document.addEventListener('mail:compose', (e) => {
         this.showCompose(e.detail || {});
@@ -306,6 +310,18 @@ function mailApp() {
         if (event.origin !== window.location.origin) return;
         handleOAuth2Result(event.data);
       });
+    },
+
+    // ── Resync ─────────────────────────────────────────────
+    async resync() {
+      await Promise.all(
+        this.accounts.flatMap((acc) => [
+          this.loadFolders(acc.uuid),
+          this.fetchLabels(acc.uuid),
+        ])
+      );
+      // Self-guards when nothing is selected yet.
+      await this.loadMessages();
     },
 
     // ── Shared HTTP helper ─────────────────────────────────

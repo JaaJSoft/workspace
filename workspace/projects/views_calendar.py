@@ -26,13 +26,14 @@ def _parse_day(value):
         return None
     try:
         parsed = parse_date(value)
+        if parsed is not None:
+            return parsed
+        dt = parse_datetime(value)
     except ValueError:
-        # parse_date raises (rather than returning None) on a well-formed
-        # but impossible date such as 2026-13-01.
+        # Both parsers raise (rather than returning None) on a value that is
+        # well-formed but impossible - 2026-13-01, Feb 30th, hour 25. Letting
+        # that escape would turn a bad query string into a 500.
         return None
-    if parsed is not None:
-        return parsed
-    dt = parse_datetime(value)
     return dt.date() if dt is not None else None
 
 

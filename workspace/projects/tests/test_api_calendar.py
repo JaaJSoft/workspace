@@ -121,10 +121,16 @@ class TaskCalendarApiTests(ProjectTestMixin, APITestCase):
         )
 
     def test_malformed_dates_are_rejected(self):
+        # The impossible-but-well-formed cases matter most: Django's parsers
+        # raise ValueError on those instead of returning None, so an unguarded
+        # view answers 500 where it documents 400.
         for start, end in [
             ("garbage", "2026-09-01"),
             ("2026-08-01", "nope"),
             ("2026-13-01", "2026-09-01"),
+            ("2026-13-01T00:00:00+02:00", "2026-09-01"),
+            ("2026-02-30T00:00:00Z", "2026-09-01"),
+            ("2026-08-01", "2026-09-01T25:00:00Z"),
         ]:
             with self.subTest(start=start, end=end):
                 self.assertEqual(

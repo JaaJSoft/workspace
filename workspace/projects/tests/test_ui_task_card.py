@@ -1,10 +1,12 @@
 import datetime
 import uuid as uuid_module
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
 from workspace.projects.models import Label
+from workspace.projects.services.members import add_member
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
 
@@ -46,6 +48,26 @@ class TaskCardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(
             resp, f"/projects/{self.project.uuid}/board?task={self.task.uuid}"
         )
+
+    def test_card_shows_five_avatars_and_counts_the_rest(self):
+        extras = [
+            get_user_model().objects.create_user(
+                username=f"crowd{i}", email=f"crowd{i}@test.com", password="pass123"
+            )
+            for i in range(6)
+        ]
+        for user in extras:
+            add_member(self.project, user)
+        self.task.assignees.set([self.member, *extras])
+
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        html = resp.content.decode()
+
+        # The card caps the avatar row at five and folds the remainder into a
+        # "+N" chip; N counts every assignee, not just the ones rendered.
+        self.assertEqual(html.count("data-user-id="), 5)
+        self.assertContains(resp, "+2")
 
     def test_outsider_gets_404(self):
         self.client.force_login(self.outsider)

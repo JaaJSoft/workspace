@@ -4,7 +4,10 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.chat.models import Conversation, ConversationMember
-from workspace.chat.services.notifications import notify_new_message
+from workspace.chat.services.notifications import (
+    notification_title,
+    notify_new_message,
+)
 from workspace.chat.services.rendering import render_message_body
 from workspace.common.services.mentions import extract_mentions
 from workspace.notifications.models import Notification
@@ -270,3 +273,49 @@ class NotifyNewMessageTests(TestCase):
         notify_new_message(self.conv, self.author, "hello")
 
         self.assertEqual(get_unread_count(self.alice), 1)
+
+    def test_titled_conversation_names_the_author_and_the_conversation(
+        self, mock_push, mock_sse
+    ):
+        notify_new_message(self.conv, self.author, "hello")
+
+        notif = Notification.objects.get(recipient=self.alice, origin="chat")
+        self.assertEqual(notif.title, "author in Team")
+
+
+# ── notification_title ──────────────────────────────────────────
+
+
+class NotificationTitleTests(TestCase):
+    """Titles must never repeat the author as their own context."""
+
+    def _conv(self, title="", kind=Conversation.Kind.GROUP):
+        return Conversation(
+            kind=kind,
+            title=title,
+            created_by_id=None,
+        )
+
+    def test_untitled_conversation_is_the_author_alone(self):
+        self.assertEqual(notification_title(self._conv(), "Alice"), "Alice")
+
+    def test_whitespace_only_title_is_the_author_alone(self):
+        self.assertEqual(notification_title(self._conv("   "), "Alice"), "Alice")
+
+    def test_dm_is_the_author_alone(self):
+        conv = self._conv(kind=Conversation.Kind.DM)
+        self.assertEqual(notification_title(conv, "Alice"), "Alice")
+
+    def test_distinct_title_is_appended(self):
+        self.assertEqual(
+            notification_title(self._conv("Team"), "Alice"), "Alice in Team"
+        )
+
+    def test_title_equal_to_the_author_is_not_repeated(self):
+        self.assertEqual(notification_title(self._conv("Alice"), "Alice"), "Alice")
+
+    def test_title_equal_to_the_author_is_matched_case_insensitively(self):
+        self.assertEqual(notification_title(self._conv("alice"), "Alice"), "Alice")
+
+    def test_surrounding_whitespace_does_not_defeat_the_dedup(self):
+        self.assertEqual(notification_title(self._conv("  Alice "), "Alice"), "Alice")

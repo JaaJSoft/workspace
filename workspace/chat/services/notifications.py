@@ -16,6 +16,19 @@ def notify_conversation_members(conversation, exclude_user=None):
         notify_sse("chat", uid)
 
 
+def notification_title(conversation, author_name):
+    """Notification title for a message from *author_name* in *conversation*.
+
+    ``Alice in Team``, collapsed to ``Alice`` when the conversation label
+    adds nothing: DMs and untitled groups carry no title, and a title that
+    already reads as the author's name would repeat it.
+    """
+    label = (conversation.title or "").strip()
+    if not label or label.casefold() == author_name.casefold():
+        return author_name
+    return f"{author_name} in {label}"
+
+
 def notify_new_message(
     conversation, author, body, mentioned_user_ids=None, mention_everyone=False
 ):
@@ -43,10 +56,7 @@ def notify_new_message(
 
     author_name = author.get_full_name() or author.username
     preview = (body[:150] + "...") if len(body) > 150 else body
-    if conversation.title:
-        title = f"{author_name} in {conversation.title}"
-    else:
-        title = author_name
+    title = notification_title(conversation, author_name)
 
     if mention_everyone:
         priority_map = dict.fromkeys(member_ids, "high")

@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from .views_actions import ProjectActionsView
+from .views_calendar import TaskCalendarView
 from .viewsets import (
     LabelViewSet,
     MemberViewSet,
@@ -37,6 +38,11 @@ urlpatterns = [
         "api/v1/projects/actions",
         ProjectActionsView.as_view(),
         name="project-actions",
+    ),
+    path(
+        "api/v1/projects/tasks/calendar",
+        TaskCalendarView.as_view(),
+        name="project-tasks-calendar",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/members",

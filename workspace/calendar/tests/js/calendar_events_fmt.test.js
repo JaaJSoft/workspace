@@ -39,6 +39,7 @@ function makeCalendarApp(userTz) {
     matchMedia: () => ({ matches: false, addEventListener: () => {}, addListener: () => {} }),
     calendarCalendarsMixin: mixinStub,
     calendarEventsMixin: mixinStub,
+    calendarTasksMixin: mixinStub,
     calendarRecurrenceMixin: mixinStub,
     calendarPollsMixin: mixinStub,
   });

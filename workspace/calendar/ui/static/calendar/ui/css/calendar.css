@@ -117,6 +117,34 @@
 .fc .fc-event.event-color-warning { background-color: oklch(var(--wa)); color: oklch(var(--wac)); }
 .fc .fc-event.event-color-error { background-color: oklch(var(--er)); color: oklch(var(--erc)); }
 
+/* Task due dates: outlined, never filled, so a deadline reads as an
+   annotation on the day rather than as a block of booked time. */
+.fc .fc-event.event-task {
+  background-color: transparent;
+  border: 1px dashed oklch(var(--bc) / 0.35);
+  border-left: 3px solid oklch(var(--s));
+}
+
+/* FullCalendar paints .fc-event-main with --fc-event-text-color (white),
+   which is only legible over a filled event body. Repeat the color down to
+   the title, or the label washes out on the page background. */
+.fc .fc-event.event-task,
+.fc .fc-event.event-task .fc-event-main,
+.fc .fc-event.event-task .fc-event-title {
+  color: oklch(var(--bc));
+}
+
+.fc .fc-event.event-task.event-task-high { border-left-color: oklch(var(--wa)); }
+.fc .fc-event.event-task.event-task-urgent { border-left-color: oklch(var(--er)); }
+
+.fc .fc-list-event.event-task .fc-list-event-dot {
+  border-color: oklch(var(--s));
+  border-style: dashed;
+}
+
+.fc .fc-list-event.event-task.event-task-high .fc-list-event-dot { border-color: oklch(var(--wa)); }
+.fc .fc-list-event.event-task.event-task-urgent .fc-list-event-dot { border-color: oklch(var(--er)); }
+
 /* Event: invited (slightly dimmed) */
 .fc .fc-event.event-invited {
   opacity: 0.8;

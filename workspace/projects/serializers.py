@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.urls import reverse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -215,6 +216,49 @@ class TaskSerializer(serializers.ModelSerializer):
                     f"{user.username} is not a member of this project."
                 )
         return users
+
+
+class TaskCalendarSerializer(serializers.ModelSerializer):
+    """Read-only projection of a task for the calendar overlay.
+
+    Deliberately thinner than ``TaskSerializer``: the calendar paints a
+    label and links out to the board, so assignees, labels and description
+    would only cost joins nobody renders.
+    """
+
+    reference = serializers.SerializerMethodField()
+    project_uuid = serializers.UUIDField(source="project.uuid", read_only=True)
+    project_name = serializers.CharField(source="project.name", read_only=True)
+    url = serializers.SerializerMethodField()
+    card_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Task
+        fields = [
+            "uuid",
+            "title",
+            "due_date",
+            "priority",
+            "reference",
+            "project_uuid",
+            "project_name",
+            "url",
+            "card_url",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_reference(self, obj):
+        return f"{obj.project.key}-{obj.number}"
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_url(self, obj):
+        board = reverse("projects_ui:board", args=[obj.project_id])
+        return f"{board}?task={obj.uuid}"
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_card_url(self, obj):
+        return reverse("projects_ui:task_card", args=[obj.project_id, obj.uuid])
 
 
 def _parse_uuid_list(value, field_name):

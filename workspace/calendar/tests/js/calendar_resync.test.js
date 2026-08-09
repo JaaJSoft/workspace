@@ -16,6 +16,7 @@ function makeApp() {
     matchMedia: () => ({ matches: false, addEventListener: () => {}, addListener: () => {} }),
     calendarCalendarsMixin: () => ({}),
     calendarEventsMixin: () => ({}),
+    calendarTasksMixin: () => ({}),
     calendarRecurrenceMixin: () => ({}),
     calendarPollsMixin: () => ({}),
   });

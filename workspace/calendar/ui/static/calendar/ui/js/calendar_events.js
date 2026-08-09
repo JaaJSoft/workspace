@@ -52,9 +52,13 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         listDayFormat: { weekday: 'long', day: 'numeric', month: 'long' },
         listDaySideFormat: false,
 
-        events: (info) => {
-          return this.fetchEvents(info.startStr, info.endStr);
-        },
+        // Two independent sources rather than one merged fetch: project task
+        // due dates are a read-only overlay with its own endpoint, toggle and
+        // failure mode, and refetchEvents() refreshes both.
+        eventSources: [
+          { events: (info) => this.fetchEvents(info.startStr, info.endStr) },
+          { events: (info) => this.fetchTaskEvents(info.startStr, info.endStr) },
+        ],
 
         dateClick: (info) => {
           if (info.allDay) {
@@ -79,13 +83,25 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         },
 
         eventClick: (info) => {
+          const task = info.event.extendedProps._task;
+          if (task) {
+            this.openTaskFromCalendar(task);
+            return;
+          }
           this.openViewPanel(info.event.extendedProps._raw);
         },
 
         eventDidMount: (info) => {
+          // Task entries own none of the event affordances below: no context
+          // menu (nothing here can edit a task), and the hover card would
+          // fetch /calendar/events/<id> for a uuid that isn't an event.
+          if (info.event.extendedProps._task) {
+            this.decorateTaskEvent(info);
+            return;
+          }
           info.el.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            window._eventCardScheduleHide(info.el);
+            window._cardPopoverScheduleHide(info.el);
             this.openContextMenu(e, info.event.extendedProps._raw);
           });
           // Event card popover on hover - desktop only.
@@ -97,7 +113,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
               window._eventCardShow(info.el, info.event.id);
             });
             info.el.addEventListener('mouseleave', () => {
-              window._eventCardScheduleHide(info.el);
+              window._cardPopoverScheduleHide(info.el);
             });
           }
           // Add recurring indicator

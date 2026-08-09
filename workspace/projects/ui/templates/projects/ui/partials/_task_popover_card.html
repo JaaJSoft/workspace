@@ -1,0 +1,58 @@
+{% comment %}
+  Compact task card for the hover popover, served by projects_ui:task_card.
+  Mirrors calendar/ui/partials/event_card.html: same width, same density, so
+  hovering a task and hovering an event on the same grid feel like one UI.
+{% endcomment %}
+<div class="p-3 w-72">
+  <div class="flex items-start gap-3 mb-2">
+    <span class="flex-shrink-0 mt-0.5 text-base-content/50">
+      <i data-lucide="square-check-big" class="w-4 h-4"></i>
+    </span>
+    <div class="min-w-0 flex-1">
+      <div class="font-semibold text-sm break-words">{{ task.title }}</div>
+      <div class="text-xs text-base-content/50 truncate">
+        <span class="font-mono">{{ project.key }}-{{ task.number }}</span>
+        · {{ project.name }}
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-1.5 text-xs text-base-content/60 mb-3">
+    <div class="flex items-center gap-1.5">
+      <i data-lucide="calendar" class="w-3 h-3 flex-shrink-0"></i>
+      <span {% if task.due_date < today %}class="text-error font-medium"{% endif %}>
+        Due {{ task.due_date|date:"DATE_FORMAT" }}
+      </span>
+    </div>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <span class="badge badge-sm badge-ghost">{{ task.status.name }}</span>
+      {% include "projects/ui/partials/_priority_badge.html" %}
+    </div>
+    {% if task.labels.all %}
+      <div class="flex flex-wrap gap-1">
+        {% for label in task.labels.all %}
+          <tag-chip name="{{ label.name }}" color="{{ label.color }}" size="sm"></tag-chip>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  {% if assignees %}
+  <div class="flex items-center gap-1.5 mb-3">
+    <div class="flex -space-x-2">
+      {% for assignee in assignees %}
+        {% include "ui/partials/user_avatar.html" with user=assignee size="xs" show_presence=False show_card=False %}
+      {% endfor %}
+    </div>
+    {% if task.assignees.count > 5 %}
+      <span class="text-xs text-base-content/40">+{{ task.assignees.count|add:"-5" }}</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <a href="{% url 'projects_ui:board' project_uuid=project.uuid %}?task={{ task.uuid }}"
+     class="btn btn-ghost btn-xs w-full gap-1">
+    <i data-lucide="external-link" class="w-3 h-3"></i>
+    Open task
+  </a>
+</div>

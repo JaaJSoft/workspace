@@ -224,6 +224,27 @@ def task_panel(request, project_uuid, task_uuid):
 
 
 @login_required
+def task_card(request, project_uuid, task_uuid):
+    """Compact task card for the hover popover (calendar overlay, and any
+    other surface that shows a task it cannot render in full)."""
+    project, _role = _get_project_or_404(request.user, project_uuid)
+    task = get_object_or_404(
+        project.tasks.select_related("status").prefetch_related("assignees", "labels"),
+        uuid=task_uuid,
+    )
+    return render(
+        request,
+        "projects/ui/partials/_task_popover_card.html",
+        {
+            "project": project,
+            "task": task,
+            "assignees": list(task.assignees.all())[:5],
+            "today": timezone.localdate(),
+        },
+    )
+
+
+@login_required
 @ensure_csrf_cookie
 def board(request, project_uuid):
     project, role = _get_project_or_404(request.user, project_uuid)

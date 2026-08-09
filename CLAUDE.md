@@ -42,6 +42,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `mail` | IMAP/SMTP, OAuth2 providers, labels, autodiscover |
 | `notes` | Markdown notes built on the files module |
 | `notifications` | Web push, in-app notifications |
+| `passwords` | End-to-end encrypted password vault (preview) |
 | `users` | User model, settings, profile, activity feed |
 
 ## Infrastructure

@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.35.0 - Voice, Agents & Tags
+
+### Highlights
+
+Chat gains a voice: record a message with one tap and play it right in the conversation. Assistants grow up too - they can now pursue long-running goals on their own, tell you live what they are working on, and search across your whole workspace instead of one module at a time. And web push notifications, which never actually reached a single device, finally do.
+
+### Chat & Assistant
+
+- Record and send voice messages: a microphone button in the composer captures your message, and audio plays inline in the bubble with its own player, on desktop and mobile alike.
+- Bots can pursue autonomous goals. Give an assistant a mission spanning days or months - watch a topic, follow up on something, prepare a recurring digest - and it wakes up on its own to work on it, keeps its own notes, decides when to check in next, and stays quiet unless it has something genuinely worth telling you. Goals are created in conversation or from the Start AI Chat dialog, and managed from the chat info panel.
+- The typing indicator now says what the assistant is doing while it works - searching the web, reading your calendar, generating an image - instead of an anonymous animated bubble for up to half a minute. In group conversations everyone sees it, not just whoever asked.
+- Cancelling a bot response actually stops it. Until now the assistant kept working to the end behind the scenes, saving memories and generating images for an answer nobody would read.
+- Reloading the page in the middle of a response no longer loses the thread: the conversation picks the response back up where it was.
+- The assistant can search everything at once - files, mail, events, messages, tasks - and find a colleague from a partial name, so asking about a topic no longer takes it three guesses. It can also read back a conversation and summarize it when you ask what was decided.
+- Image generation is retried when the service hiccups, instead of quietly returning fewer images than you asked for and never mentioning it.
+- Assistant replies no longer leak the model's raw internal reasoning, nor stray `[image: ...]` markers, into the text you read.
+
+### Files & Tags
+
+- Tags are now part of the file browser: each file and folder shows its tags in both list and mosaic view, a context-menu entry assigns them, and a toolbar filter narrows the listing to a single tag.
+- Tags and project labels look and behave the same everywhere, with a real color palette - two colors that used to render grey now show their actual color, and tag colors are consistent between notes, files and projects.
+- Filtering in mosaic view works at last: search, type and favorites filters used to apply to the list view only.
+
+### Comments & Mentions
+
+- Mention people with `@` in file comments and task comments, exactly as in chat: an autocomplete suggests who can see the thread, the mention renders as a badge with the profile card, and the person is notified. Only the file's or project's actual audience can be mentioned.
+- Mentions now work for usernames containing dots or hyphens - the `firstname.lastname` shape never produced a badge or a notification before.
+
+### Mail
+
+- Replies sent from the app now thread properly: recipients' clients group them under the original message, and conversations started from the app group in your own mailbox too.
+- The copy of a sent message kept in Sent now records its Bcc recipients, so you can check afterwards who was blind-copied.
+
+### Calendar
+
+- Task deadlines appear on the calendar. Due dates from your projects show up alongside events as light all-day annotations, with a preview on hover and a click through to the task; a sidebar switch turns the overlay off.
+- Multi-day all-day events cover every day they span - a two-day event used to be painted one day short.
+
+### Dashboard
+
+- A tile with a single pending item opens it directly: the unread conversation, the unread email, today's event, the overdue task. With several items pending it still takes you to the module.
+
+### Projects
+
+- A Help dialog, reachable from the sidebar or with the `?` key, covering views, task management, task references, members, settings and API access - like the other modules already had.
+
+### Notifications
+
+- Web push works. Notifications had never been delivered to a single device: they failed at signing time, before any request left the server. No configuration change is needed on existing instances.
+- Push delivery is also more consistent: a mention is never swallowed by grouping, a push arriving while you are in the app is retried shortly after instead of dropped, a device unsubscribed server-side re-registers itself on the next load, and a transient failure no longer blocks the following notification.
+- Notifications about the same thing group together instead of stacking, and clear on their own once you open what they were about. Read notifications are removed after 90 days; unread ones are kept.
+
+### Fixes
+
+- Going back on mobile no longer shows stale data: mail, files, calendar, notes and projects refresh when the page is restored from the browser's history.
+- Chat notifications no longer repeat the author when the conversation is named after them - `Jarvis in Jarvis` is now just `Jarvis`.
+- Dragging a folder onto the sidebar to pin it works again in Chrome, and reordering pinned folders shows the drag feedback it lost.
+- The mobile chat composer is back to its normal proportions: the microphone and send button take turns instead of crowding the text field, and the bar no longer jumps while recording.
+
 ## 0.34.0 - Time Zones & AI Transparency
 
 ### Highlights

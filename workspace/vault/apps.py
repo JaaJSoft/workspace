@@ -6,7 +6,7 @@ class VaultConfig(AppConfig):
     name = "workspace.vault"
 
     def ready(self):
-        from workspace.core.module_registry import ModuleInfo, registry
+        from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
 
         registry.register(
             ModuleInfo(
@@ -19,4 +19,19 @@ class VaultConfig(AppConfig):
                 order=40,
                 preview=True,
             )
+        )
+
+        registry.register_commands(
+            [
+                CommandInfo(
+                    name="Vault",
+                    keywords=["passwords", "vault", "secrets"],
+                    icon="key-round",
+                    color="error",
+                    url="/vault",
+                    kind="navigate",
+                    module_slug="vault",
+                    order=40,
+                ),
+            ]
         )

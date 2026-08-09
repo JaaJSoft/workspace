@@ -155,6 +155,10 @@ window.calendarApp = function calendarApp() {
         if (this.calendar) this.$nextTick(() => this.calendar.updateSize());
       });
 
+      // Catch up on events created elsewhere while the stream was down
+      // (resumed tab, or a bfcache restore after a mobile back).
+      window.addEventListener('sse:reconnect', () => this.resync());
+
       this.$watch('showPanel', () => {
         setTimeout(() => { if (this.calendar) this.calendar.updateSize(); }, 250);
       });
@@ -241,6 +245,11 @@ window.calendarApp = function calendarApp() {
     toggleCalendarVisibility(uuid) {
       this.visibleCalendars = { ...this.visibleCalendars, [uuid]: !this.visibleCalendars[uuid] };
       this._saveVisibility();
+      if (this.calendar) this.calendar.refetchEvents();
+      this.refetchAgenda();
+    },
+
+    resync() {
       if (this.calendar) this.calendar.refetchEvents();
       this.refetchAgenda();
     },

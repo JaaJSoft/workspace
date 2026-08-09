@@ -219,6 +219,10 @@ window.notesApp = function notesApp(config) {
             // Listen for sidebar refresh events
             window.addEventListener('tags-changed', this.refreshSidebar.bind(this));
 
+            // Catch up on notes changed elsewhere while the stream was down
+            // (resumed tab, or a bfcache restore after a mobile back).
+            window.addEventListener('sse:reconnect', () => this.resync());
+
             // Listen for file action dialog events (use named functions to prevent duplicates)
             const self = this;
             if (!window._notesFileActionsRegistered) {
@@ -1402,6 +1406,12 @@ window.notesApp = function notesApp(config) {
 
         applyFilters() {
             this.loadNotes(this._buildNotesUrl());
+        },
+
+        resync() {
+            this.refreshSidebar();
+            // The graph owns its own data and is not driven by loadNotes().
+            if (this.activeView !== 'graph') this.loadNotes(this._buildNotesUrl());
         },
 
         toggleFilter(name) {

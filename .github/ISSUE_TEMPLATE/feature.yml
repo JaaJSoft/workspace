@@ -1,0 +1,38 @@
+name: Feature
+description: A capability the app does not have yet
+type: Feature
+title: "Module: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Replace `Module` in the title with the main module affected, capitalized:
+        `AI`, `Calendar`, `Chat`, `Common`, `Core`, `Dashboard`, `Files`, `Mail`,
+        `Notes`, `Notifications`, `Projects`, `Users`, or `Build` for tooling.
+        Then add the matching `module:*` label, plus one per secondary module.
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What this enables
+      description: The user-visible outcome, and who it is for.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: >
+        What is in, and explicitly what is out. Call out anything that would need a
+        data migration, a breaking change to an existing endpoint, or a new dependency.
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Prior art, related issues, design constraints, open questions.
+    validations:
+      required: false

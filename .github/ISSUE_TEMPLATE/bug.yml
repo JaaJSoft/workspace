@@ -1,0 +1,41 @@
+name: Bug
+description: Something behaves differently from what it should
+type: Bug
+title: "Module: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Replace `Module` in the title with the main module affected, capitalized:
+        `AI`, `Calendar`, `Chat`, `Common`, `Core`, `Dashboard`, `Files`, `Mail`,
+        `Notes`, `Notifications`, `Projects`, `Users`, or `Build` for tooling.
+        Then add the matching `module:*` label, plus one per secondary module.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happens
+      description: The observed behavior, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. The panel shows ... instead of ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: >
+        Anything that narrows it down: browser, stack trace, whether it survives a
+        reload, whether it depends on the database backend (PostgreSQL vs SQLite).
+    validations:
+      required: false

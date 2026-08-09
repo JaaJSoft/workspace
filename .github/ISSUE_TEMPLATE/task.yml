@@ -1,0 +1,31 @@
+name: Task
+description: Refactor, performance, tooling, tests, docs - work with no new user-facing capability
+type: Task
+title: "Module: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Replace `Module` in the title with the main module affected, capitalized:
+        `AI`, `Calendar`, `Chat`, `Common`, `Core`, `Dashboard`, `Files`, `Mail`,
+        `Notes`, `Notifications`, `Projects`, `Users`, or `Build` for tooling.
+        Then add the matching `module:*` label, plus one per secondary module.
+
+  - type: textarea
+    id: work
+    attributes:
+      label: What needs doing
+      description: The change, and what makes it worth doing now.
+    validations:
+      required: true
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety net
+      description: >
+        For a refactor or an optimization: which tests already cover the code being
+        touched. If none do, the first step is writing one that passes against the
+        current code.
+    validations:
+      required: false

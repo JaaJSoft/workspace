@@ -1324,14 +1324,26 @@ class CleanLlmContentTests(TestCase):
         )
 
     def test_strips_assistant_images_marker_mid_text(self):
-        cleaned = self.clean(
-            "Voila ton image !\n\n"
-            "[Images sent by the assistant in the message above]\n\n"
-            "Tu en veux une autre ?"
+        """Dropping a standalone marker must not leave a blank line behind."""
+        self.assertEqual(
+            self.clean(
+                "Voila ton image !\n\n"
+                "[Images sent by the assistant in the message above]\n\n"
+                "Tu en veux une autre ?"
+            ),
+            "Voila ton image !\n\nTu en veux une autre ?",
         )
-        self.assertNotIn("[Images sent by the assistant", cleaned)
-        self.assertIn("Voila ton image !", cleaned)
-        self.assertIn("Tu en veux une autre ?", cleaned)
+
+    def test_strips_timestamp_exposed_by_marker_removal(self):
+        """Both artifacts can leak at once; the timestamp prefix regex is
+        anchored, so it only sees the message once the marker is gone."""
+        self.assertEqual(
+            self.clean(
+                "[Images sent by the assistant in the message above]\n"
+                "[2026-04-10 20:07] Hello!"
+            ),
+            "Hello!",
+        )
 
     def test_strips_assistant_images_marker_case_insensitively(self):
         self.assertEqual(

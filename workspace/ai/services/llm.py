@@ -21,11 +21,12 @@ _RAW_TOOL_CALL_RE = re.compile(r"</?tool_call>", re.IGNORECASE)
 # "[2026-04-10 20:07] ..." or "2026-04-10 20:07 ..."
 _TIMESTAMP_PREFIX_RE = re.compile(r"^\[?\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]?\s*")
 # Image stand-ins injected by conversation_history; the model imitates them.
-# Stripped anywhere, not just as a prefix - they are never legitimate output.
-# The `!` lookbehind spares a markdown image whose alt text starts with "image:".
+# Stripped anywhere (never legitimate output); the leading newline run is put back
+# so a standalone marker leaves no blank line, and the `!` lookbehind spares a
+# markdown image whose alt text starts with "image:".
 _IMAGE_MARKER_RE = re.compile(
-    r"(?<!!)\[(?:Images sent by the assistant in the message above|image:[^\n]*?)\]"
-    r"[ \t]*\n?",
+    r"(\n*)(?<!!)\[(?:Images sent by the assistant in the message above"
+    r"|image:[^\n]*?)\][ \t]*\n*",
     re.IGNORECASE,
 )
 
@@ -33,8 +34,10 @@ _IMAGE_MARKER_RE = re.compile(
 def clean_llm_content(content: str) -> str:
     """Strip artifacts that LLMs sometimes leak into their replies."""
     content = _RAW_TOOL_CALL_RE.sub("", content)
+    # Markers first: _TIMESTAMP_PREFIX_RE is anchored, so a timestamp sitting
+    # behind one is only reachable once the marker is gone.
+    content = _IMAGE_MARKER_RE.sub(r"\1", content)
     content = _TIMESTAMP_PREFIX_RE.sub("", content)
-    content = _IMAGE_MARKER_RE.sub("", content)
     return content.strip()
 
 

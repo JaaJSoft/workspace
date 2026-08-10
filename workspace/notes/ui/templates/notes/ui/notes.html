@@ -177,6 +177,15 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
 <div class="h-full w-full" x-show="activeView === 'graph'" x-cloak>
   {% include "notes/ui/partials/graph.html" %}
 </div>
+
+<!-- Mobile new note FAB -->
+<button class="btn btn-success btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
+        @click="createNote()"
+        x-show="!selectedNote && ['all', 'folder', 'group_folder'].includes(activeView)"
+        x-cloak
+        aria-label="New note">
+  <i data-lucide="plus" class="w-5 h-5"></i>
+</button>
 </div>
 {% include "files/ui/partials/tag_dialog.html" %}
 {% include "files/ui/partials/folder_dialog.html" %}

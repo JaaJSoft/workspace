@@ -20,12 +20,21 @@ _RAW_TOOL_CALL_RE = re.compile(r"</?tool_call>", re.IGNORECASE)
 # Matches timestamp prefixes leaked by the LLM, with or without brackets:
 # "[2026-04-10 20:07] ..." or "2026-04-10 20:07 ..."
 _TIMESTAMP_PREFIX_RE = re.compile(r"^\[?\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]?\s*")
+# Image stand-ins injected by conversation_history; the model imitates them.
+# Stripped anywhere, not just as a prefix - they are never legitimate output.
+# The `!` lookbehind spares a markdown image whose alt text starts with "image:".
+_IMAGE_MARKER_RE = re.compile(
+    r"(?<!!)\[(?:Images sent by the assistant in the message above|image:[^\n]*?)\]"
+    r"[ \t]*\n?",
+    re.IGNORECASE,
+)
 
 
 def clean_llm_content(content: str) -> str:
     """Strip artifacts that LLMs sometimes leak into their replies."""
     content = _RAW_TOOL_CALL_RE.sub("", content)
     content = _TIMESTAMP_PREFIX_RE.sub("", content)
+    content = _IMAGE_MARKER_RE.sub("", content)
     return content.strip()
 
 

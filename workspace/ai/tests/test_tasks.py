@@ -1315,6 +1315,54 @@ class CleanLlmContentTests(TestCase):
     def test_only_timestamp_no_brackets(self):
         self.assertEqual(self.clean("2026-04-10 20:07"), "")
 
+    def test_strips_assistant_images_marker_prefix(self):
+        self.assertEqual(
+            self.clean(
+                "[Images sent by the assistant in the message above]\nVoila ton image !"
+            ),
+            "Voila ton image !",
+        )
+
+    def test_strips_assistant_images_marker_mid_text(self):
+        cleaned = self.clean(
+            "Voila ton image !\n\n"
+            "[Images sent by the assistant in the message above]\n\n"
+            "Tu en veux une autre ?"
+        )
+        self.assertNotIn("[Images sent by the assistant", cleaned)
+        self.assertIn("Voila ton image !", cleaned)
+        self.assertIn("Tu en veux une autre ?", cleaned)
+
+    def test_strips_assistant_images_marker_case_insensitively(self):
+        self.assertEqual(
+            self.clean("[images sent by the ASSISTANT in the message above]\nHello"),
+            "Hello",
+        )
+
+    def test_strips_every_assistant_images_marker(self):
+        marker = "[Images sent by the assistant in the message above]"
+        self.assertEqual(self.clean(f"{marker}\nA\n{marker}\nB"), "A\nB")
+
+    def test_strips_image_caption_marker_mid_sentence(self):
+        self.assertEqual(
+            self.clean("Regarde [image: chat.png - A cat.] c'est mignon"),
+            "Regarde c'est mignon",
+        )
+
+    def test_strips_image_caption_marker_on_its_own_line(self):
+        self.assertEqual(
+            self.clean("Et voila :\n[image: chat.png]\nMignon"), "Et voila :\nMignon"
+        )
+
+    def test_only_marker_becomes_empty(self):
+        self.assertEqual(
+            self.clean("[Images sent by the assistant in the message above]"), ""
+        )
+
+    def test_preserves_markdown_image_syntax(self):
+        text = "![image: diagram](/static/a.png)"
+        self.assertEqual(self.clean(text), text)
+
 
 @override_settings(
     AI_API_KEY="test-key",

@@ -28,8 +28,11 @@ def deliver_message(
     counters then land with the row, and the fan-out is deferred to commit so
     no client is ever told about a message it cannot read yet.
 
-    The notification fan-out runs as a robust callback of its own: a broker
-    error while dispatching the push must not take the SSE refresh with it.
+    Both callbacks are robust, and both halves need it: a non-robust callback
+    that raises propagates out of Django's commit loop, which drops every
+    callback still queued behind it — robust ones included. The transaction is
+    already committed at that point, so the message would exist while one of
+    its two fan-outs never ran.
     """
     author = message.author
 
@@ -45,7 +48,8 @@ def deliver_message(
     )
 
     transaction.on_commit(
-        lambda: notify_conversation_members(conversation, exclude_user=author)
+        lambda: notify_conversation_members(conversation, exclude_user=author),
+        robust=True,
     )
     transaction.on_commit(
         lambda: notify_new_message(

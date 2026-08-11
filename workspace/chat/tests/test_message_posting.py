@@ -116,6 +116,47 @@ class SendMessageEndpointTests(MessagePostingMixin, APITestCase):
         self.assertEqual(mock_push.call_count, 2)
 
 
+@patch("workspace.notifications.tasks.send_push_notification.delay")
+class FanOutIsolationTests(MessagePostingMixin, APITestCase):
+    """Neither half of the fan-out may take the other down with it.
+
+    Django's commit loop drops every queued callback behind one that raises
+    without robust=True, and the transaction has already committed by then.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.client.force_authenticate(self.author)
+        self.url = f"/api/v1/chat/conversations/{self.conv.uuid}/messages"
+
+    def _send(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            with patch("workspace.chat.views._trigger_bot_response"):
+                return self.client.post(self.url, {"body": "hello"}, format="json")
+
+    @patch(
+        "workspace.chat.services.posting.notify_conversation_members",
+        side_effect=RuntimeError("redis down"),
+    )
+    def test_a_failing_sse_fan_out_still_notifies(self, _sse, _push):
+        self._send()
+
+        self.assertEqual(self._notified(), {self.alice.id, self.bob.id})
+
+    @patch(
+        "workspace.chat.services.posting.notify_new_message",
+        side_effect=RuntimeError("broker down"),
+    )
+    @patch("workspace.chat.services.notifications.notify_sse")
+    def test_a_failing_notification_still_refreshes_clients(
+        self, mock_sse, _notify, _push
+    ):
+        self._send()
+
+        self.assertIn(self.alice.id, self._sse_targets(mock_sse))
+
+
 @patch("workspace.chat.services.notifications.notify_sse")
 @patch("workspace.notifications.tasks.send_push_notification.delay")
 class BotReplyTests(MessagePostingMixin, TestCase):

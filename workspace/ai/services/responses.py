@@ -42,18 +42,13 @@ def post_bot_message(
     Returns (body, bot_message).
     """
     from django.core.files.base import ContentFile
-    from django.db.models import F
 
     from workspace.chat.models import (
-        ConversationMember,
         Message,
         MessageAttachment,
         MessageInteraction,
     )
-    from workspace.chat.services.notifications import (
-        notify_conversation_members,
-        notify_new_message,
-    )
+    from workspace.chat.services.posting import deliver_message
     from workspace.chat.services.rendering import render_message_body
 
     body = clean_llm_content(result["content"])
@@ -120,27 +115,7 @@ def post_bot_message(
             lambda atts=created_attachments: [enqueue_caption_if_image(a) for a in atts]
         )
 
-    ConversationMember.objects.filter(
-        conversation_id=conversation.pk,
-        left_at__isnull=True,
-    ).exclude(user=bot_user).update(
-        unread_count=F("unread_count") + 1,
-    )
-
-    from workspace.chat.models import Conversation as Conv
-
-    Conv.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
-
-    # Defer notification until after the surrounding transaction commits —
-    # otherwise clients can observe the message before its rows are visible,
-    # and a notify failure rolls back the entire write. Two callbacks rather
-    # than one so a failure in either still leaves the other to run.
-    transaction.on_commit(
-        lambda: notify_conversation_members(conversation, exclude_user=bot_user)
-    )
-    transaction.on_commit(
-        lambda: notify_new_message(conversation, bot_user, body), robust=True
-    )
+    deliver_message(conversation, bot_message)
 
     ai_task.status = ai_task.Status.COMPLETED
     ai_task.result = body
@@ -158,13 +133,8 @@ def post_bot_message(
 @transaction.atomic
 def handle_generation_error(conversation, bot_user, ai_task, error):
     """Handle a failed bot response: post error message, update counts, notify."""
-    from django.db.models import F
-
-    from workspace.chat.models import ConversationMember, Message
-    from workspace.chat.services.notifications import (
-        notify_conversation_members,
-        notify_new_message,
-    )
+    from workspace.chat.models import Message
+    from workspace.chat.services.posting import deliver_message
     from workspace.chat.services.rendering import render_message_body
 
     # Detailed error stays on AITask + logs; the chat sees a generic message so
@@ -181,24 +151,10 @@ def handle_generation_error(conversation, bot_user, ai_task, error):
         "⚠️ Sorry, I encountered an error generating a response. Please try again."
     )
     error_html = render_message_body(error_body)
-    Message.objects.create(
+    error_message = Message.objects.create(
         conversation_id=conversation.pk,
         author=bot_user,
         body=error_body,
         body_html=error_html,
     )
-    ConversationMember.objects.filter(
-        conversation_id=conversation.pk,
-        left_at__isnull=True,
-    ).exclude(user=bot_user).update(
-        unread_count=F("unread_count") + 1,
-    )
-    from workspace.chat.models import Conversation as Conv
-
-    Conv.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
-    transaction.on_commit(
-        lambda: notify_conversation_members(conversation, exclude_user=bot_user)
-    )
-    transaction.on_commit(
-        lambda: notify_new_message(conversation, bot_user, error_body), robust=True
-    )
+    deliver_message(conversation, error_message)

@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from .models import Message, MessageInteraction, Reaction
 from .serializers import MessageSerializer
 from .services.conversations import get_active_membership
+from .services.posting import deliver_message
 from .services.rendering import render_message_body
 from .views import _trigger_bot_response
 
@@ -120,6 +121,7 @@ class MessageInteractionAnswerView(APIView):
             locked.save(
                 update_fields=["interacted_at", "interacted_by", "state"],
             )
+            deliver_message(interaction.message.conversation, answer)
 
         _trigger_bot_response(
             interaction.message.conversation_id,

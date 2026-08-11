@@ -34,7 +34,8 @@ from .serializers import (
     ReactionToggleSerializer,
 )
 from .services.conversations import get_active_membership
-from .services.notifications import notify_conversation_members, notify_new_message
+from .services.notifications import notify_conversation_members
+from .services.posting import deliver_message
 from .services.rendering import render_message_body
 
 User = get_user_model()
@@ -300,17 +301,12 @@ class MessageListView(CacheControlMixin, APIView):
                         attachment.save()
                     created_attachments.append(attachment)
 
-                # Increment unread_count for other active members
-                ConversationMember.objects.filter(
-                    conversation_id=conversation_id,
-                    left_at__isnull=True,
-                ).exclude(user=request.user).update(
-                    unread_count=F("unread_count") + 1,
-                )
-
-                # Bump conversation updated_at
-                Conversation.objects.filter(pk=conversation_id).update(
-                    updated_at=timezone.now(),
+                conversation = Conversation.objects.get(pk=conversation_id)
+                deliver_message(
+                    conversation,
+                    message,
+                    mentioned_user_ids=mentioned_user_ids,
+                    mention_everyone=has_everyone,
                 )
         except (FileNotFoundError, OSError) as exc:
             logger.warning("Workspace file content unavailable: %s", scrub(str(exc)))
@@ -330,20 +326,6 @@ class MessageListView(CacheControlMixin, APIView):
 
                 for att in created_attachments:
                     enqueue_caption_if_image(att)
-
-        # Notify other members via SSE + push notifications
-        conversation = Conversation.objects.get(pk=conversation_id)
-        notify_conversation_members(
-            conversation,
-            exclude_user=request.user,
-        )
-        notify_new_message(
-            conversation,
-            request.user,
-            body,
-            mentioned_user_ids=mentioned_user_ids,
-            mention_everyone=has_everyone,
-        )
 
         # Clear typing indicator now that the message is sent
         from .services.typing import clear_typing

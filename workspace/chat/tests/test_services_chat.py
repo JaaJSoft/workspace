@@ -257,6 +257,83 @@ class NotifyNewMessageTests(TestCase):
         self.assertEqual(recipients, {self.alice.id, self.bob.id})
         self.assertEqual(mock_push.call_count, 2)
 
+    def _set_level(self, user, level):
+        ConversationMember.objects.filter(conversation=self.conv, user=user).update(
+            notification_level=level,
+        )
+
+    def test_level_none_silences_every_message(self, mock_push, mock_sse):
+        self._set_level(self.alice, ConversationMember.NotificationLevel.NONE)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(
+                self.conv,
+                self.author,
+                "@alice look",
+                mentioned_user_ids={self.alice.id},
+            )
+
+        self.assertFalse(Notification.objects.filter(recipient=self.alice).exists())
+        # Even a direct mention stays silent — 'none' means none.
+        self.assertTrue(Notification.objects.filter(recipient=self.bob).exists())
+
+    def test_level_mentions_skips_ordinary_messages(self, mock_push, mock_sse):
+        self._set_level(self.alice, ConversationMember.NotificationLevel.MENTIONS)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(self.conv, self.author, "just chatting")
+
+        self.assertFalse(Notification.objects.filter(recipient=self.alice).exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.bob).exists())
+
+    def test_level_mentions_lets_a_direct_mention_through(self, mock_push, mock_sse):
+        self._set_level(self.alice, ConversationMember.NotificationLevel.MENTIONS)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(
+                self.conv,
+                self.author,
+                "@alice look",
+                mentioned_user_ids={self.alice.id},
+            )
+
+        notif = Notification.objects.get(recipient=self.alice)
+        self.assertEqual(notif.priority, "high")
+
+    def test_level_mentions_lets_everyone_through(self, mock_push, mock_sse):
+        self._set_level(self.alice, ConversationMember.NotificationLevel.MENTIONS)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(
+                self.conv,
+                self.author,
+                "@everyone ship it",
+                mention_everyone=True,
+            )
+
+        self.assertTrue(Notification.objects.filter(recipient=self.alice).exists())
+
+    def test_silenced_member_still_gets_no_sse_of_their_own(self, mock_push, mock_sse):
+        """Muting scopes the bell and the push, not message delivery.
+
+        notify_new_message drives the notification channel only; the live
+        message and the unread badge ride notify_conversation_members, which
+        this function never touches.
+        """
+        self._set_level(self.alice, ConversationMember.NotificationLevel.NONE)
+
+        notify_new_message(self.conv, self.author, "hello")
+
+        notified = {call.args[1] for call in mock_sse.call_args_list}
+        self.assertEqual(notified, {self.bob.id})
+
+    def test_default_level_is_all(self, mock_push, mock_sse):
+        member = ConversationMember.objects.get(conversation=self.conv, user=self.alice)
+        self.assertEqual(
+            member.notification_level,
+            ConversationMember.NotificationLevel.ALL,
+        )
+
     def test_batched_flow_stays_constant_in_query_count(self, mock_push, mock_sse):
         """Regression guard: the batched flow must not slip back to N+1.
 

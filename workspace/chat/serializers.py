@@ -186,6 +186,10 @@ class ConversationListSerializer(serializers.ModelSerializer):
     is_pinned = serializers.BooleanField(read_only=True, default=False)
     pin_position = serializers.IntegerField(read_only=True, default=None)
     is_bot_conversation = serializers.SerializerMethodField()
+    notification_level = serializers.CharField(
+        read_only=True,
+        default=ConversationMember.NotificationLevel.ALL,
+    )
 
     class Meta:
         model = Conversation
@@ -206,6 +210,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             "is_pinned",
             "pin_position",
             "is_bot_conversation",
+            "notification_level",
         ]
 
     def get_member_count(self, obj):
@@ -248,6 +253,10 @@ class ConversationListSerializer(serializers.ModelSerializer):
 class ConversationDetailSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
     groups = GroupBriefSerializer(many=True, read_only=True)
+    notification_level = serializers.CharField(
+        read_only=True,
+        default=ConversationMember.NotificationLevel.ALL,
+    )
 
     class Meta:
         model = Conversation
@@ -262,7 +271,14 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
             "has_avatar",
             "members",
             "groups",
+            "notification_level",
         ]
+
+
+class NotificationLevelSerializer(serializers.Serializer):
+    level = serializers.ChoiceField(
+        choices=ConversationMember.NotificationLevel.choices
+    )
 
 
 class ConversationCreateSerializer(serializers.Serializer):

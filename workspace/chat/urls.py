@@ -38,6 +38,12 @@ urlpatterns = [
         views.ConversationMemberRemoveView.as_view(),
         name="chat-conversation-member-remove",
     ),
+    # Per-member notification level
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/notification-level",
+        views.ConversationNotificationLevelView.as_view(),
+        name="chat-conversation-notification-level",
+    ),
     # Messages
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/messages/search",

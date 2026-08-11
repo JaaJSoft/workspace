@@ -50,7 +50,10 @@ def post_bot_message(
         MessageAttachment,
         MessageInteraction,
     )
-    from workspace.chat.services.notifications import notify_conversation_members
+    from workspace.chat.services.notifications import (
+        notify_conversation_members,
+        notify_new_message,
+    )
     from workspace.chat.services.rendering import render_message_body
 
     body = clean_llm_content(result["content"])
@@ -128,11 +131,15 @@ def post_bot_message(
 
     Conv.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
 
-    # Defer the SSE/email notification until after the surrounding transaction
-    # commits — otherwise clients can observe the message before its rows are
-    # visible, and a notify failure rolls back the entire write.
+    # Defer notification until after the surrounding transaction commits —
+    # otherwise clients can observe the message before its rows are visible,
+    # and a notify failure rolls back the entire write. Two callbacks rather
+    # than one so a failure in either still leaves the other to run.
     transaction.on_commit(
         lambda: notify_conversation_members(conversation, exclude_user=bot_user)
+    )
+    transaction.on_commit(
+        lambda: notify_new_message(conversation, bot_user, body), robust=True
     )
 
     ai_task.status = ai_task.Status.COMPLETED
@@ -154,7 +161,10 @@ def handle_generation_error(conversation, bot_user, ai_task, error):
     from django.db.models import F
 
     from workspace.chat.models import ConversationMember, Message
-    from workspace.chat.services.notifications import notify_conversation_members
+    from workspace.chat.services.notifications import (
+        notify_conversation_members,
+        notify_new_message,
+    )
     from workspace.chat.services.rendering import render_message_body
 
     # Detailed error stays on AITask + logs; the chat sees a generic message so
@@ -188,4 +198,7 @@ def handle_generation_error(conversation, bot_user, ai_task, error):
     Conv.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
     transaction.on_commit(
         lambda: notify_conversation_members(conversation, exclude_user=bot_user)
+    )
+    transaction.on_commit(
+        lambda: notify_new_message(conversation, bot_user, error_body), robust=True
     )

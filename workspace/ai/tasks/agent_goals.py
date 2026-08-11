@@ -104,7 +104,6 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
     from workspace.ai.models import AgentGoal, AITask, BotProfile
     from workspace.ai.prompts.chat import build_chat_messages
     from workspace.chat.models import Conversation
-    from workspace.chat.services.notifications import notify_new_message
     from workspace.users.services.settings import get_user_timezone
 
     User = get_user_model()
@@ -252,8 +251,6 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             raw_messages,
             tool_data=tool_data,
         )
-
-        notify_new_message(conversation, bot_user, body)
 
         maybe_dispatch_summary_update(str(conversation.pk), summary_text)
 

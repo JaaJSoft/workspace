@@ -69,7 +69,6 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
     from workspace.ai.models import AITask, BotProfile, ScheduledMessage
     from workspace.ai.prompts.chat import build_chat_messages
     from workspace.chat.models import Conversation
-    from workspace.chat.services.notifications import notify_new_message
     from workspace.users.services.settings import get_user_timezone
 
     User = get_user_model()
@@ -229,8 +228,6 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             raw_messages,
             tool_data=tool_data,
         )
-
-        notify_new_message(conversation, bot_user, body)
 
         maybe_dispatch_summary_update(str(conversation.pk), summary_text)
 

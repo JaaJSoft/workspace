@@ -2,6 +2,19 @@
 // (with user search), conversation pin / unpin / drag-drop reorder,
 // list-level context menu, conversation display helpers (name, avatar,
 // member list).
+
+// Human label for a ConversationMember.NotificationLevel value. Unknown and
+// missing values read as 'all', matching the model default, so a conversation
+// serialized before the field existed does not render a blank menu.
+function chatNotificationLevelLabel(level) {
+  switch (level) {
+    case 'mentions': return 'Mentions only';
+    case 'none': return 'Nothing';
+    default: return 'All messages';
+  }
+}
+window.chatNotificationLevelLabel = chatNotificationLevelLabel;
+
 window.chatConversationsMixin = function chatConversationsMixin() {
   // Read the URL-targeted conversation UUID synchronously from the embedded
   // JSON so the first Alpine binding pass already knows we're going to have
@@ -449,6 +462,42 @@ window.chatConversationsMixin = function chatConversationsMixin() {
         .map(m => m.user.username);
       if (conv.kind === 'dm') return 'Direct message';
       return names.length + 1 + ' members';
+    },
+
+    // ── Notification level ───────────────────────────────────
+    notificationLevel(conv) {
+      return (conv || this.activeConversation)?.notification_level || 'all';
+    },
+
+    notificationLevelLabel(conv) {
+      return window.chatNotificationLevelLabel(this.notificationLevel(conv));
+    },
+
+    async setNotificationLevel(level) {
+      const conv = this.activeConversation;
+      if (!conv) return;
+      const previous = conv.notification_level;
+      // Optimistic: the dropdown closes on click, so a round trip before the
+      // icon updates reads as a dead button.
+      conv.notification_level = level;
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${conv.uuid}/notification-level`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ level }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const listed = this.conversations.find(c => c.uuid === conv.uuid);
+        if (listed) listed.notification_level = level;
+      } catch (e) {
+        conv.notification_level = previous;
+        console.error('Failed to set notification level', e);
+        this.showAlert?.('error', 'Could not change the notification level');
+      }
     },
 
     // ── Conversation pinning ─────────────────────────────────

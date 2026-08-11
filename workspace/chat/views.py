@@ -19,6 +19,7 @@ from .serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
     ConversationListSerializer,
+    NotificationLevelSerializer,
 )
 from .services.conversations import (
     get_active_membership,
@@ -124,6 +125,11 @@ class ConversationListView(CacheControlMixin, APIView):
             pin_pos = pin_map.get(str(c.uuid))
             c.is_pinned = pin_pos is not None
             c.pin_position = pin_pos
+            # Read off the prefetched active members rather than querying:
+            # the requesting user is necessarily among them here.
+            own = next((m for m in c.members.all() if m.user_id == user.id), None)
+            if own:
+                c.notification_level = own.notification_level
 
         serializer = ConversationListSerializer(conv_list, many=True)
         return Response(serializer.data)
@@ -284,6 +290,7 @@ class ConversationDetailView(APIView):
             )
             .first()
         )
+        conversation.notification_level = membership.notification_level
         return Response(ConversationDetailSerializer(conversation).data)
 
     @extend_schema(
@@ -464,6 +471,32 @@ class ConversationMembersView(APIView):
             ConversationDetailSerializer(conversation).data,
             status=status.HTTP_200_OK,
         )
+
+
+@extend_schema(tags=["Chat"])
+class ConversationNotificationLevelView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Set your notification level for a conversation",
+        request=NotificationLevelSerializer,
+    )
+    def put(self, request, conversation_id):
+        membership = get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {"detail": "Not a member of this conversation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        ser = NotificationLevelSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        level = ser.validated_data["level"]
+
+        if membership.notification_level != level:
+            membership.notification_level = level
+            membership.save(update_fields=["notification_level"])
+        return Response({"notification_level": level})
 
 
 @extend_schema(tags=["Chat"])

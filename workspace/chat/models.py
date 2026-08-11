@@ -39,6 +39,18 @@ class Conversation(models.Model):
 
 
 class ConversationMember(models.Model):
+    class NotificationLevel(models.TextChoices):
+        """How much of a conversation reaches the bell and the push channel.
+
+        Scopes notifications only: the unread badge and the live message
+        delivery are untouched, so a silenced conversation still shows new
+        messages when the user goes looking for them.
+        """
+
+        ALL = "all", "All messages"
+        MENTIONS = "mentions", "Mentions only"
+        NONE = "none", "Nothing"
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     conversation = models.ForeignKey(
         Conversation,
@@ -54,6 +66,11 @@ class ConversationMember(models.Model):
     joined_at = models.DateTimeField(auto_now_add=True)
     left_at = models.DateTimeField(null=True, blank=True)
     unread_count = models.IntegerField(default=0)
+    notification_level = models.CharField(
+        max_length=8,
+        choices=NotificationLevel.choices,
+        default=NotificationLevel.ALL,
+    )
 
     class Meta:
         constraints = [

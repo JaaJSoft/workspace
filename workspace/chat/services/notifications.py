@@ -45,15 +45,21 @@ def notify_new_message(
 
     # Bots are ordinary members but never read a notification, so a row
     # created for one is never marked read and never pruned.
-    member_ids = list(
-        ConversationMember.objects.filter(
-            conversation=conversation,
-            left_at__isnull=True,
-            user__bot_profile__isnull=True,
+    members = ConversationMember.objects.filter(
+        conversation=conversation,
+        left_at__isnull=True,
+        user__bot_profile__isnull=True,
+    ).exclude(user=author)
+
+    levels = ConversationMember.NotificationLevel
+    member_ids = [
+        uid
+        for uid, level in members.values_list("user_id", "notification_level")
+        if level == levels.ALL
+        or (
+            level == levels.MENTIONS and (mention_everyone or uid in mentioned_user_ids)
         )
-        .exclude(user=author)
-        .values_list("user_id", flat=True)
-    )
+    ]
     if not member_ids:
         return
 

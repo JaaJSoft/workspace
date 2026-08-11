@@ -73,9 +73,38 @@
           >
             <i data-lucide="search" class="w-4 h-4"></i>
           </button>
-          <button class="btn btn-ghost btn-sm btn-square" title="Mute notifications — Coming soon" disabled>
-            <i data-lucide="bell-off" class="w-4 h-4"></i>
-          </button>
+          <div class="dropdown dropdown-end">
+            <button
+              tabindex="0"
+              class="btn btn-ghost btn-sm btn-square"
+              :class="notificationLevel() !== 'all' ? 'text-warning' : ''"
+              :title="'Notifications: ' + notificationLevelLabel()"
+            >
+              <i x-show="notificationLevel() === 'all'" data-lucide="bell" class="w-4 h-4"></i>
+              <i x-show="notificationLevel() === 'mentions'" data-lucide="at-sign" class="w-4 h-4"></i>
+              <i x-show="notificationLevel() === 'none'" data-lucide="bell-off" class="w-4 h-4"></i>
+            </button>
+            <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-56 mt-2 z-50">
+              <li>
+                <a @click="document.activeElement.blur(); setNotificationLevel('all')"
+                   :class="notificationLevel() === 'all' ? 'active' : ''">
+                  <i data-lucide="bell" class="w-4 h-4"></i> All messages
+                </a>
+              </li>
+              <li>
+                <a @click="document.activeElement.blur(); setNotificationLevel('mentions')"
+                   :class="notificationLevel() === 'mentions' ? 'active' : ''">
+                  <i data-lucide="at-sign" class="w-4 h-4"></i> Mentions only
+                </a>
+              </li>
+              <li>
+                <a @click="document.activeElement.blur(); setNotificationLevel('none')"
+                   :class="notificationLevel() === 'none' ? 'active' : ''">
+                  <i data-lucide="bell-off" class="w-4 h-4"></i> Nothing
+                </a>
+              </li>
+            </ul>
+          </div>
           <button
             class="btn btn-ghost btn-sm btn-square"
             :class="showInfoPanel ? 'bg-base-200' : ''"

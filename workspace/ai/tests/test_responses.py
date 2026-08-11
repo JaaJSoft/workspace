@@ -2,17 +2,19 @@ import io
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from PIL import Image
 
-from workspace.ai.models import AITask
-from workspace.ai.services.responses import post_bot_message
+from workspace.ai.models import AITask, BotProfile
+from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
     MessageAttachment,
     MessageInteraction,
 )
+from workspace.notifications.models import Notification
 
 User = get_user_model()
 
@@ -75,6 +77,85 @@ class PostBotMessageInteractionTests(TestCase):
             ai_task=self.ai_task,
         )
         self.assertFalse(MessageInteraction.objects.filter(message=msg).exists())
+
+
+@patch("workspace.notifications.services.notifications.notify_sse")
+@patch("workspace.notifications.tasks.send_push_notification.delay")
+class PostBotMessageNotificationTests(TestCase):
+    """A bot reply must reach the notification pipeline, not just SSE.
+
+    Only the SSE cache flag used to fire, so a bot reply never created a
+    Notification row and never produced a web push — the recipient got a
+    badge and nothing else.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.bot = User.objects.create_user(username="bot", password="pw")
+        BotProfile.objects.create(user=self.bot)
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM,
+            created_by=self.user,
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+        ConversationMember.objects.create(conversation=self.conv, user=self.bot)
+        self.ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CHAT,
+        )
+        self.result = {
+            "content": "Voici la réponse.",
+            "model": "test",
+            "prompt_tokens": 1,
+            "completion_tokens": 1,
+        }
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_reply_notifies_the_human_member_and_dispatches_push(
+        self, mock_push, mock_sse
+    ):
+        with self.captureOnCommitCallbacks(execute=True):
+            post_bot_message(
+                conversation=self.conv,
+                bot_user=self.bot,
+                result=self.result,
+                tool_context={},
+                ai_task=self.ai_task,
+            )
+
+        notif = Notification.objects.get(origin="chat")
+        self.assertEqual(notif.recipient_id, self.user.id)
+        self.assertEqual(notif.actor_id, self.bot.id)
+        self.assertEqual(notif.body, "Voici la réponse.")
+        self.assertEqual(notif.url, f"/chat/{self.conv.pk}")
+        self.assertEqual(notif.conversation_id, self.conv.pk)
+        mock_push.assert_called_once_with(str(notif.uuid))
+
+    def test_bot_itself_is_never_a_recipient(self, mock_push, mock_sse):
+        with self.captureOnCommitCallbacks(execute=True):
+            post_bot_message(
+                conversation=self.conv,
+                bot_user=self.bot,
+                result=self.result,
+                tool_context={},
+                ai_task=self.ai_task,
+            )
+
+        self.assertFalse(Notification.objects.filter(recipient=self.bot).exists())
+
+    def test_generation_error_notifies_too(self, mock_push, mock_sse):
+        with self.captureOnCommitCallbacks(execute=True):
+            handle_generation_error(
+                self.conv, self.bot, self.ai_task, RuntimeError("backend down")
+            )
+
+        notif = Notification.objects.get(origin="chat")
+        self.assertEqual(notif.recipient_id, self.user.id)
+        # The generic chat-facing text, never the provider error.
+        self.assertNotIn("backend down", notif.body)
+        mock_push.assert_called_once_with(str(notif.uuid))
 
 
 def _image_bytes(fmt):

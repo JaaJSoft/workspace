@@ -237,6 +237,26 @@ class NotifyNewMessageTests(TestCase):
         mock_push.assert_not_called()
         mock_sse.assert_not_called()
 
+    def test_bot_members_get_no_notification(self, mock_push, mock_sse):
+        """A bot never reads its notifications, so a row created for one is
+        never marked read and never pruned — it must not be created at all."""
+        from workspace.ai.models import BotProfile
+
+        bot = User.objects.create_user(username="assistant", password="p")
+        BotProfile.objects.create(user=bot)
+        ConversationMember.objects.create(conversation=self.conv, user=bot)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(self.conv, self.author, "hello")
+
+        recipients = set(
+            Notification.objects.filter(origin="chat").values_list(
+                "recipient_id", flat=True
+            )
+        )
+        self.assertEqual(recipients, {self.alice.id, self.bob.id})
+        self.assertEqual(mock_push.call_count, 2)
+
     def test_batched_flow_stays_constant_in_query_count(self, mock_push, mock_sse):
         """Regression guard: the batched flow must not slip back to N+1.
 

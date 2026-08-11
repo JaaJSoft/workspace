@@ -43,10 +43,13 @@ def notify_new_message(
 
     mentioned_user_ids = mentioned_user_ids or set()
 
+    # Bots are ordinary members but never read a notification, so a row
+    # created for one is never marked read and never pruned.
     member_ids = list(
         ConversationMember.objects.filter(
             conversation=conversation,
             left_at__isnull=True,
+            user__bot_profile__isnull=True,
         )
         .exclude(user=author)
         .values_list("user_id", flat=True)

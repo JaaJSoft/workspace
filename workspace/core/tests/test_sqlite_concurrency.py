@@ -7,7 +7,7 @@ starts as a reader and tries to upgrade to a writer at the first INSERT /
 UPDATE / DELETE. When two connections both hold a read snapshot and both
 try to upgrade, SQLite raises ``SQLITE_BUSY_SNAPSHOT`` *immediately* -
 the ``busy_timeout`` PRAGMA does NOT apply to snapshot upgrades, so the
-60-second wait we configured in ``settings.py`` is bypassed and the user
+60-second wait we configured in ``settings/db.py`` is bypassed and the user
 sees ``OperationalError: database is locked``.
 
 The fix is ``OPTIONS['transaction_mode'] = 'IMMEDIATE'`` which makes every
@@ -46,5 +46,5 @@ class SQLiteTransactionModeConfigTests(unittest.TestCase):
             "IMMEDIATE",
             "SQLite must use BEGIN IMMEDIATE to avoid SQLITE_BUSY_SNAPSHOT "
             "on concurrent update_or_create calls; see the comment block in "
-            "workspace/settings.py next to this option.",
+            "workspace/settings/db.py next to this option.",
         )

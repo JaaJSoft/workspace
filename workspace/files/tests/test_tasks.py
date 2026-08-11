@@ -284,7 +284,7 @@ class PurgeTrashTaskTests(TestCase):
     def test_retention_days_defaults_to_30_when_unset(self):
         from django.conf import settings as dj_settings
 
-        # settings.py always defines TRASH_RETENTION_DAYS, so delete it
+        # settings/files.py always defines TRASH_RETENTION_DAYS, so delete it
         # inside an empty override block (the UserSettingsHolder restores
         # it on exit) to actually exercise the getattr fallback in
         # purge_trash. Overriding with None would not do it: the attribute

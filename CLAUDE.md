@@ -175,6 +175,15 @@ assert.equal(ctx.isValidUuid('...'), true);
 
 ## Backend Conventions
 
+### Settings
+
+Project settings live in the `workspace/settings/` **package**, one module per topic (`base`, `security`, `apps`, `middleware`, `templates`, `db`, `cache`, `api`, `monitoring`, `storage`, `files`, `chat`, `mail`, `notifications`, `ai`, `celery`, `debug_toolbar`). `__init__.py` only star-imports those modules - that is the mechanism Django uses to read settings as attributes of `workspace.settings`, and the one sanctioned exception to the no-re-export rule.
+
+- Add a new setting to the module that owns its topic, **never** to `__init__.py`. A new module must be added to the star-import list; `workspace/core/tests/test_settings_layout.py` fails if it isn't.
+- Each setting is assigned in exactly one module (the same test enforces it), so import order carries no meaning - a module needing a value from another one imports it explicitly (`from .base import DEBUG`).
+- Values that are wiring rather than settings (derived Redis URLs, env scratch variables) are `_`-prefixed so the star import keeps them out of `django.conf.settings`.
+- Read env vars through `env_bool` / `env_list` from `workspace/settings/env.py`; importing that module is also what loads `.env`.
+
 ### API
 
 All API endpoints must be prefixed with `/api/` and have no trailing slashes.

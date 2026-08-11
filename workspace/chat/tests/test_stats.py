@@ -240,9 +240,14 @@ class UnreadCountModelTests(ChatTestMixin, APITestCase):
         """POST /read marks the matching chat notification as read."""
         from workspace.notifications.models import Notification
 
-        # Creator sends a message -> notify_new_message creates a notification for member
+        # Creator sends a message -> notify_new_message creates a notification
+        # for member. The fan-out is a post-commit effect, so the callbacks
+        # have to be executed for it to land inside the test transaction.
         self.client.force_authenticate(self.creator)
-        self.client.post(self._msg_url(self.group.uuid), {"body": "hey"}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                self._msg_url(self.group.uuid), {"body": "hey"}, format="json"
+            )
 
         notif = Notification.objects.get(recipient=self.member, conversation=self.group)
         self.assertIsNone(notif.read_at)
@@ -260,10 +265,16 @@ class UnreadCountModelTests(ChatTestMixin, APITestCase):
         """POST /read only clears notifications for that specific conversation."""
         from workspace.notifications.models import Notification
 
-        # Notify member in both conversations via the real message-send path
+        # Notify member in both conversations via the real message-send path.
+        # The fan-out is a post-commit effect, hence the callback execution.
         self.client.force_authenticate(self.creator)
-        self.client.post(self._msg_url(self.group.uuid), {"body": "hey"}, format="json")
-        self.client.post(self._msg_url(self.dm.uuid), {"body": "dm msg"}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                self._msg_url(self.group.uuid), {"body": "hey"}, format="json"
+            )
+            self.client.post(
+                self._msg_url(self.dm.uuid), {"body": "dm msg"}, format="json"
+            )
 
         notif_group = Notification.objects.get(
             recipient=self.member, conversation=self.group

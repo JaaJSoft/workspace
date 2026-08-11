@@ -84,7 +84,7 @@
               <i x-show="notificationLevel() === 'mentions'" data-lucide="at-sign" class="w-4 h-4"></i>
               <i x-show="notificationLevel() === 'none'" data-lucide="bell-off" class="w-4 h-4"></i>
             </button>
-            <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-56 mt-2 z-50">
+            <ul tabindex="0" class="dropdown-content menu menu-sm gap-1 bg-base-100 border border-base-300 rounded-box shadow-lg w-56 mt-2 z-50">
               <li>
                 <a @click="document.activeElement.blur(); setNotificationLevel('all')"
                    :class="notificationLevel() === 'all' ? 'active' : ''">
@@ -372,7 +372,7 @@
             <button tabindex="0" class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" title="Attach file">
               <i data-lucide="paperclip" class="w-5 h-5"></i>
             </button>
-            <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
+            <ul tabindex="0" class="dropdown-content menu menu-sm gap-1 bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
               <li><a @click="document.activeElement.blur(); openFileDialog()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
               <li><a @click="document.activeElement.blur(); attachFromWorkspace()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
             </ul>
@@ -514,7 +514,7 @@
               <button tabindex="0" class="btn btn-ghost btn-xs btn-square" title="Attach file">
                 <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
               </button>
-              <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
+              <ul tabindex="0" class="dropdown-content menu menu-sm gap-1 bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
                 <li><a @click="document.activeElement.blur(); openFileDialog()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
                 <li><a @click="document.activeElement.blur(); attachFromWorkspace()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
               </ul>

@@ -13,7 +13,7 @@ from workspace.users.services.presence import is_active
 logger = logging.getLogger(__name__)
 
 PUSH_COOLDOWN_SECONDS = 60
-ACTIVE_RETRY_DELAY_SECONDS = 120
+ACTIVE_RETRY_DELAY_SECONDS = 60
 RETENTION_DAYS = 90
 _SOURCE_ID_ATTRS = (
     "conversation_id",

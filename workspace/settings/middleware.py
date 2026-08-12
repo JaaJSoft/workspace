@@ -9,6 +9,9 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     # HTTP conditional GET support (ETags & Last-Modified headers for browser caching)
     "django.middleware.http.ConditionalGetMiddleware",
+    # Below ConditionalGetMiddleware so the header is set before the ETag/304
+    # is computed (the 304 copies Cache-Control from the full response)
+    "workspace.common.middleware.HtmlCacheControlMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",

@@ -159,7 +159,7 @@
         class="rounded-lg px-3 py-2 hover:bg-base-200 transition-colors cursor-pointer text-sm"
         :class="searchHighlight === idx ? 'bg-base-200' : ''"
         :data-search-result-active="searchHighlight === idx"
-        @click="scrollToMessage(result.uuid)"
+        @click="scrollToMessage(result.uuid, result.thread_root)"
         @mouseenter="searchHighlight = idx"
       >
         <div class="flex items-center gap-2 mb-0.5">

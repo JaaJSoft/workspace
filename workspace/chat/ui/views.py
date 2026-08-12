@@ -505,6 +505,11 @@ def thread_messages_view(request, root_uuid):
         .order_by("-created_at")
     )
 
+    # Set only when the cursor actually resolved. A malformed or unknown
+    # `?before` is ignored, which makes the response the *first* page again -
+    # and the first page has to carry the root.
+    is_older_page = False
+
     before = request.GET.get("before")
     if before:
         before_uuid = parse_uuid_or_none(before)
@@ -516,6 +521,7 @@ def thread_messages_view(request, root_uuid):
             )
             if cursor is not None:
                 qs = qs.filter(created_at__lt=cursor.created_at)
+                is_older_page = True
 
     limit = 50
     page = list(qs[: limit + 1])
@@ -525,7 +531,7 @@ def thread_messages_view(request, root_uuid):
 
     # The root heads the first page only: a "load older" fetch prepends into an
     # existing list that already shows it.
-    messages = page if before else [root, *page]
+    messages = page if is_older_page else [root, *page]
 
     return render(
         request,

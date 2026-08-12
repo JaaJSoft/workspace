@@ -87,3 +87,85 @@ class ThreadPostingTests(TestCase):
     def test_the_serializer_exposes_the_thread_anchor(self):
         resp = self._post(self.bob, "reply", reply_to=self.root)
         self.assertEqual(resp.data["thread_root"], str(self.root.uuid))
+
+    def test_last_reply_at_is_the_reply_own_timestamp(self):
+        resp = self._post(self.bob, "reply", reply_to=self.root)
+        reply = Message.objects.get(uuid=resp.data["uuid"])
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.last_reply_at, reply.created_at)
+
+
+class ThreadDeletionTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="x")
+        self.bob = User.objects.create_user(username="bob", password="x")
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.alice
+        )
+        for user in (self.alice, self.bob):
+            ConversationMember.objects.create(conversation=self.conversation, user=user)
+        self.root = Message.objects.create(
+            conversation=self.conversation, author=self.alice, body="root"
+        )
+        self.client = APIClient()
+
+    def _reply(self, body):
+        self.client.force_authenticate(user=self.bob)
+        resp = self.client.post(
+            reverse(
+                "chat-messages", kwargs={"conversation_id": self.conversation.uuid}
+            ),
+            {"body": body, "reply_to_uuid": str(self.root.uuid)},
+            format="json",
+        )
+        return Message.objects.get(uuid=resp.data["uuid"])
+
+    def _delete(self, message, user):
+        self.client.force_authenticate(user=user)
+        return self.client.delete(
+            reverse(
+                "chat-message-detail",
+                kwargs={
+                    "conversation_id": self.conversation.uuid,
+                    "message_id": message.uuid,
+                },
+            )
+        )
+
+    def test_deleting_the_latest_reply_rewinds_the_root_counters(self):
+        first = self._reply("first")
+        second = self._reply("second")
+
+        self.assertEqual(self._delete(second, self.bob).status_code, 204)
+
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.reply_count, 1)
+        self.assertEqual(self.root.last_reply_at, first.created_at)
+
+    def test_deleting_the_final_reply_empties_the_thread(self):
+        only = self._reply("only")
+
+        self.assertEqual(self._delete(only, self.bob).status_code, 204)
+
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.reply_count, 0)
+        self.assertIsNone(self.root.last_reply_at)
+
+    def test_deleting_a_middle_reply_keeps_the_latest_timestamp(self):
+        first = self._reply("first")
+        second = self._reply("second")
+
+        self._delete(first, self.bob)
+
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.reply_count, 1)
+        self.assertEqual(self.root.last_reply_at, second.created_at)
+
+    def test_deleting_the_root_leaves_its_own_counters_alone(self):
+        reply = self._reply("a reply")
+
+        self.assertEqual(self._delete(self.root, self.alice).status_code, 204)
+
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.reply_count, 1)
+        self.assertEqual(self.root.last_reply_at, reply.created_at)

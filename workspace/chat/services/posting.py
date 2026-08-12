@@ -40,9 +40,12 @@ def _thread_delivery(message, author):
         user_id__in=recipient_ids,
     ).update(unread_count=F("unread_count") + 1)
 
+    # The reply's own timestamp, not "now": backfill_threads derives
+    # last_reply_at from max(created_at), and a live write that used a slightly
+    # later clock would disagree with a re-run of the backfill.
     Message.objects.filter(pk=root.pk).update(
         reply_count=F("reply_count") + 1,
-        last_reply_at=timezone.now(),
+        last_reply_at=message.created_at,
     )
     return recipient_ids
 

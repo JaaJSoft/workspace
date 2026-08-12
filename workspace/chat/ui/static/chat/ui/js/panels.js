@@ -220,7 +220,8 @@ window.chatPanelsMixin = function chatPanelsMixin() {
         this._scrollSearchResultIntoView();
       } else if (e.key === 'Enter' && this.searchHighlight >= 0) {
         e.preventDefault();
-        this.scrollToMessage(this.searchResults[this.searchHighlight].uuid);
+        const hit = this.searchResults[this.searchHighlight];
+        this.scrollToMessage(hit.uuid, hit.thread_root);
       }
     },
 
@@ -238,16 +239,40 @@ window.chatPanelsMixin = function chatPanelsMixin() {
       return bodyHtml.replace(regex, '<mark class="bg-warning/40 rounded px-0.5">$1</mark>');
     },
 
-    scrollToMessage(uuid) {
-      const el = document.getElementById(`${this._messageIdPrefix()}-${uuid}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
-        setTimeout(() => {
-          el.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
-        }, 2000);
+    // Scroll to a message on the given surface and flash it. Returns whether
+    // it was found there.
+    _highlightMessage(uuid, prefix) {
+      const el = document.getElementById(`${prefix}-${uuid}`);
+      if (!el) return false;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+      setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+      }, 2000);
+      return true;
+    },
+
+    /**
+     * @param {string} uuid
+     * @param {string|null} threadRoot - set for a search hit that lives in a
+     *   thread. Without it a threaded reply is unreachable: it is not in the
+     *   main flow, so paging further back never finds it.
+     */
+    async scrollToMessage(uuid, threadRoot = null) {
+      if (this._highlightMessage(uuid, this._messageIdPrefix())) return;
+
+      if (threadRoot && typeof this.openThread === 'function') {
+        this.openThread(threadRoot);
+        // The panel fetches its own contents, so the target does not exist
+        // yet. Bounded poll rather than new plumbing, same shape as the
+        // load-older retry below.
+        for (let attempt = 0; attempt < 20; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          if (this._highlightMessage(uuid, 'tmsg')) return;
+        }
         return;
       }
+
       // Message not loaded yet — load all then retry
       this._loadAllAndScrollTo(uuid);
     },
@@ -258,16 +283,8 @@ window.chatPanelsMixin = function chatPanelsMixin() {
       while (this.hasMoreMessages && attempts < 20) {
         await this.loadMoreMessages();
         attempts++;
-        const el = document.getElementById(`${this._messageIdPrefix()}-${uuid}`);
-        if (el) {
-          await this.$nextTick();
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
-          setTimeout(() => {
-            el.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
-          }, 2000);
-          return;
-        }
+        await this.$nextTick();
+        if (this._highlightMessage(uuid, this._messageIdPrefix())) return;
       }
     },
   };

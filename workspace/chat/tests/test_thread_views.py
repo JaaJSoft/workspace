@@ -90,6 +90,32 @@ class ThreadMessagesViewTests(TestCase):
         html = self.client.get(flow_url).content.decode()
         self.assertIn("the root message</p>", html)
 
+    def test_a_malformed_cursor_still_shows_the_root(self):
+        # A cursor that does not parse is ignored, so the response is the first
+        # page - and the first page heads with the root.
+        self.client.force_login(self.alice)
+        html = self.client.get(self.url, {"before": "not-a-uuid"}).content.decode()
+        self.assertIn("the root message", html)
+
+    def test_an_unknown_cursor_still_shows_the_root(self):
+        self.client.force_login(self.alice)
+        stranger = Message.objects.create(
+            conversation=self.conversation, author=self.alice, body="elsewhere"
+        )
+        html = self.client.get(
+            self.url, {"before": str(stranger.uuid)}
+        ).content.decode()
+        self.assertIn("the root message", html)
+
+    def test_a_real_cursor_omits_the_root(self):
+        # A genuine "load older" page prepends into a list that already shows
+        # the root, so repeating it would duplicate the message.
+        self.client.force_login(self.alice)
+        html = self.client.get(
+            self.url, {"before": str(self.reply.uuid)}
+        ).content.decode()
+        self.assertNotIn("the root message", html)
+
     def test_a_reply_is_not_a_thread_root(self):
         self.client.force_login(self.alice)
         url = reverse("chat_ui:thread_messages", kwargs={"root_uuid": self.reply.uuid})
@@ -128,9 +154,69 @@ class ThreadReadViewTests(TestCase):
         )
         self.assertEqual(participant.unread_count, 0)
 
+    def test_reading_the_same_thread_twice_only_clears_it_once(self):
+        # The second call finds the counter already at zero, so it must report
+        # nothing cleared and leave the conversation badge where the first
+        # call put it.
+        self.client.force_login(self.alice)
+        first = self.client.post(self.url)
+        second = self.client.post(self.url)
+
+        self.assertEqual(first.json()["cleared"], 3)
+        self.assertEqual(second.json()["cleared"], 0)
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.unread_count, 2)
+
     def test_the_conversation_badge_never_goes_negative(self):
         ConversationMember.objects.filter(pk=self.membership.pk).update(unread_count=1)
         self.client.force_login(self.alice)
         self.client.post(self.url)
         self.membership.refresh_from_db()
         self.assertEqual(self.membership.unread_count, 0)
+
+
+class ThreadSearchTests(TestCase):
+    """A search hit inside a thread has to say so, or the UI cannot reach it."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="secret")
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.alice
+        )
+        ConversationMember.objects.create(
+            conversation=self.conversation, user=self.alice
+        )
+        self.root = Message.objects.create(
+            conversation=self.conversation, author=self.alice, body="needle in the root"
+        )
+        self.reply = Message.objects.create(
+            conversation=self.conversation,
+            author=self.alice,
+            body="needle in a reply",
+            reply_to=self.root,
+            thread_root=self.root,
+        )
+        self.client.force_login(self.alice)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _search(self):
+        url = reverse(
+            "chat-message-search",
+            kwargs={"conversation_id": self.conversation.uuid},
+        )
+        return {
+            r["body"]: r
+            for r in self.client.get(url, {"q": "needle"}).json()["results"]
+        }
+
+    def test_a_threaded_hit_carries_its_thread_root(self):
+        results = self._search()
+        self.assertEqual(
+            results["needle in a reply"]["thread_root"], str(self.root.uuid)
+        )
+
+    def test_a_main_flow_hit_carries_no_thread_root(self):
+        results = self._search()
+        self.assertIsNone(results["needle in the root"]["thread_root"])

@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.chat.services.rendering import render_message_body
 
 User = get_user_model()
 
@@ -27,10 +28,14 @@ class ThreadFooterTests(TestCase):
         cache.clear()
 
     def _root(self, reply_count):
+        # body_html too: the bubble only renders the rendered HTML, so a
+        # message built from body alone would carry a footer under an empty
+        # bubble - not the shape these tests mean to exercise.
         return Message.objects.create(
             conversation=self.conversation,
             author=self.alice,
             body="root",
+            body_html=render_message_body("root"),
             reply_count=reply_count,
         )
 

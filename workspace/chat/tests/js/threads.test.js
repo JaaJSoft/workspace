@@ -78,6 +78,37 @@ test('the panel overrides every surface hook so it cannot touch the main flow', 
   assert.equal(panel._messagesUrl('t9'), '/chat/threads/r1/messages?before=t9');
 });
 
+test('writing in the panel tells the main flow to repaint', async () => {
+  // SSE never echoes your own message back to you, so nothing else would tell
+  // the conversation that its reply count changed - or, with the inline
+  // preference on, that a new reply belongs in the flow. Without this the user
+  // has to reload the page to see either.
+  const dispatched = [];
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/threads.js', {
+    ...MIXIN_STUBS,
+    chatMessagesMixin: () => ({
+      _refreshCurrentMessages: async function () {
+        this._panelRefreshed = true;
+      },
+    }),
+    getCSRFToken: () => 'csrf-token',
+    document: { querySelectorAll: () => [] },
+    CustomEvent: class {
+      constructor(type) {
+        this.type = type;
+      }
+    },
+    dispatchEvent: (e) => dispatched.push(e.type),
+    fetch: async () => ({ ok: true, json: async () => ({}) }),
+  });
+
+  const panel = ctx.chatThreadPanel('r1');
+  await panel._refreshCurrentMessages();
+
+  assert.equal(panel._panelRefreshed, true, 'the panel still refreshes itself');
+  assert.deepStrictEqual(dispatched, ['chat:refresh-messages']);
+});
+
 test('replying to nothing in particular answers the thread root', () => {
   const panel = load().chatThreadPanel('r1');
   panel.replyingTo = null;
@@ -120,18 +151,21 @@ test('opening a thread clears its counter and closes the other panels', () => {
   assert.equal(searchClosed, true, 'opening a thread closes the search panel');
 });
 
-test('opening a thread with nothing unread does not call the read endpoint', async () => {
-  let calls = 0;
+test('opening a thread clears it server-side even with no locally seen backlog', async () => {
+  // The local counter only holds what this page session saw over SSE and
+  // starts empty, so skipping the POST when it reads zero would leave a
+  // backlog from before the page loaded unread forever.
+  const urls = [];
   const ctx = load({
-    fetch: async () => {
-      calls++;
-      return { ok: true, json: async () => ({ cleared: 0 }) };
+    fetch: async (url, opts) => {
+      urls.push([url, opts.method]);
+      return { ok: true, json: async () => ({ cleared: 4 }) };
     },
   });
   const app = ctx.chatThreadsMixin();
   app.threadUnreadCounts = {};
   await app.markThreadRead('r1');
-  assert.equal(calls, 0);
+  assert.deepStrictEqual(urls, [['/api/v1/chat/threads/r1/read', 'POST']]);
 });
 
 test('opening a thread with a backlog posts to the read endpoint', async () => {

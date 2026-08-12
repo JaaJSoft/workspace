@@ -9,7 +9,7 @@ const { loadScripts } = require('../../../common/tests/js/loader');
  * most one may be open. Each opener has to close the other two; a rule enforced
  * in only one direction leaves two panels side by side on desktop.
  */
-function buildApp() {
+function buildApp(documentOverrides = {}) {
   const ctx = loadScripts(
     [
       'workspace/chat/ui/static/chat/ui/js/panels.js',
@@ -17,7 +17,12 @@ function buildApp() {
     ],
     {
       getCSRFToken: () => 'csrf-token',
-      document: { querySelectorAll: () => [], getElementById: () => null },
+      setTimeout,
+      document: {
+        querySelectorAll: () => [],
+        getElementById: () => null,
+        ...documentOverrides,
+      },
       fetch: async () => ({ ok: true, json: async () => ({}) }),
     },
   );
@@ -25,6 +30,7 @@ function buildApp() {
   const app = { ...ctx.chatPanelsMixin(), ...ctx.chatThreadsMixin() };
   Object.assign(app, {
     activeConversation: { uuid: 'c1' },
+    _messageIdPrefix: () => 'msg',
     isBotConversation: () => false,
     loadConversationStats() {},
     loadPinnedMessages() {},
@@ -69,6 +75,41 @@ test('opening the search panel closes an open thread', () => {
   app.toggleSearchPanel();
 
   assert.deepStrictEqual(openPanels(app), { info: false, search: true, thread: false });
+});
+
+test('a search hit inside a thread opens that thread to reach it', async () => {
+  // A threaded reply is not in the main flow, so paging further back never
+  // finds it; the panel has to be opened first.
+  const inPanel = { id: 'tmsg-m9', classList: { add() {}, remove() {} }, scrollIntoView() {} };
+  const nodes = {};
+  const app = buildApp({
+    getElementById: (id) => nodes[id] || null,
+  });
+  let pagedBack = 0;
+  app._loadAllAndScrollTo = () => {
+    pagedBack++;
+  };
+
+  const scrolling = app.scrollToMessage('m9', 'r1');
+  // The panel fetches its contents, so the target appears a beat later.
+  setTimeout(() => {
+    nodes['tmsg-m9'] = inPanel;
+  }, 120);
+  await scrolling;
+
+  assert.equal(app.openThreadRoot, 'r1', 'the thread is opened');
+  assert.equal(pagedBack, 0, 'the main flow is not paged back through');
+});
+
+test('a search hit in the main flow does not open any thread', async () => {
+  const inFlow = { id: 'msg-m1', classList: { add() {}, remove() {} }, scrollIntoView() {} };
+  const app = buildApp({
+    getElementById: (id) => (id === 'msg-m1' ? inFlow : null),
+  });
+
+  await app.scrollToMessage('m1', null);
+
+  assert.equal(app.openThreadRoot, null);
 });
 
 test('closing the search panel leaves the thread alone', () => {

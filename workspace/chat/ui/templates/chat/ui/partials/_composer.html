@@ -151,6 +151,8 @@
             class="btn btn-info btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
             x-show="!recorderSupported || hasComposerContent()"
             @click="sendOrEdit()"
+            title="Send"
+            aria-label="Send message"
             :disabled="!hasComposerContent() || (botTyping && isBotConversation(activeConversation))"
           >
             <i data-lucide="send" class="w-[1.125rem] h-[1.125rem]"></i>
@@ -204,7 +206,7 @@
         </template>
 
         <!-- Desktop input (>= sm) -->
-        <div class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50" x-show="recorderState === 'idle'">
+        <div class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50" x-show="recorderState === 'idle'" x-cloak>
           <!-- Toolbar + Send -->
           <div class="flex items-center gap-0.5 pl-2 pr-1 py-1">
             <!-- Formatting buttons (left) -->
@@ -284,6 +286,8 @@
             <button
               class="btn btn-info btn-sm btn-square"
               @click="sendOrEdit()"
+              title="Send"
+              aria-label="Send message"
               :disabled="!hasComposerContent() || (botTyping && isBotConversation(activeConversation))"
             >
               <i data-lucide="send" class="w-3.5 h-3.5"></i>

@@ -40,10 +40,14 @@ function listNode(id, { hasMore = 'false', firstUuid = '', children = [] } = {})
       return this.children[0] || null;
     },
     insertBefore(fragment, ref) {
-      for (const child of fragment.children.splice(0)) {
-        child.parentNode = this;
-        this.children.unshift(child);
-      }
+      // splice at the reference's index, in one go: unshifting the children
+      // one by one would reverse them, so a page of several older messages
+      // would land newest-first and the stub would silently disagree with a
+      // real DOM.
+      const moved = fragment.children.splice(0);
+      for (const child of moved) child.parentNode = this;
+      const at = ref ? this.children.indexOf(ref) : this.children.length;
+      this.children.splice(at < 0 ? this.children.length : at, 0, ...moved);
     },
   };
   for (const name of children) {
@@ -159,14 +163,22 @@ test('loadMoreMessages pages backwards from the list cursor and prepends', async
     dom,
     html: '<ignored/>',
     urls,
-    parsed: listNode('message-list', { hasMore: 'false', firstUuid: 'm9', children: ['older'] }),
+    parsed: listNode('message-list', {
+      hasMore: 'false',
+      firstUuid: 'm9',
+      children: ['older-1', 'older-2'],
+    }),
   });
   app.hasMoreMessages = true;
 
   await app.loadMoreMessages();
 
   assert.deepStrictEqual(urls, ['/chat/c1/messages?before=m0']);
-  assert.deepStrictEqual(names(live), ['older', 'existing'], 'older messages prepend');
+  assert.deepStrictEqual(
+    names(live),
+    ['older-1', 'older-2', 'existing'],
+    'older messages prepend, oldest first',
+  );
   assert.equal(app.hasMoreMessages, false, 'pagination state follows the response');
   assert.equal(live.dataset.firstUuid, 'm9', 'the cursor advances to the new first message');
 });

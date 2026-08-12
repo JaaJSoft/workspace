@@ -37,7 +37,11 @@ from .services.conversations import get_active_membership
 from .services.notifications import notify_conversation_members
 from .services.posting import deliver_message
 from .services.rendering import render_message_body
-from .services.threads import resolve_thread_root, show_thread_replies_inline
+from .services.threads import (
+    recount_thread,
+    resolve_thread_root,
+    show_thread_replies_inline,
+)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -492,6 +496,12 @@ class MessageDetailView(APIView):
 
         message.deleted_at = timezone.now()
         message.save(update_fields=["deleted_at"])
+
+        # A deleted reply must stop counting, or the parent advertises replies
+        # the panel no longer shows. Deleting a root leaves its own counters
+        # alone: its replies still exist and still belong to it.
+        if message.thread_root_id:
+            recount_thread(message.thread_root)
 
         # Decrement unread_count for members who hadn't read this message
         ConversationMember.objects.filter(

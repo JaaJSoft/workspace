@@ -525,6 +525,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this._messageEls(updated.uuid).forEach((el) => {
             const bodyEl = el.querySelector('.msg-body');
             if (bodyEl) bodyEl.innerHTML = updated.body_html;
+            // data-body too, not just the rendered HTML: startEdit reads it
+            // back to prefill the composer, so leaving it stale makes the next
+            // edit start from the pre-edit text.
+            el.dataset.body = updated.body;
             // Add edited indicator if not already present
             if (!el.querySelector('.edited-indicator')) {
               const indicator = document.createElement('span');

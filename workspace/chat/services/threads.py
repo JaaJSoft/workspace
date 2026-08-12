@@ -48,8 +48,17 @@ def mark_thread_read(root, user):
 
     The caller needs the amount to subtract the same number from the
     conversation badge, which counts thread replies only for participants.
+
+    Locks the participant row: read-modify-write on the counter, so two
+    concurrent reads of the same thread would otherwise both see the full
+    backlog and both subtract it from the badge. Callers must therefore run
+    this inside a transaction. (SQLite ignores the lock, having one writer.)
     """
-    participant = ThreadParticipant.objects.filter(root_message=root, user=user).first()
+    participant = (
+        ThreadParticipant.objects.select_for_update()
+        .filter(root_message=root, user=user)
+        .first()
+    )
     if participant is None:
         return 0
     cleared = max(0, participant.unread_count)
@@ -57,6 +66,28 @@ def mark_thread_read(root, user):
     participant.last_read_at = timezone.now()
     participant.save(update_fields=["unread_count", "last_read_at"])
     return cleared
+
+
+def recount_thread(root):
+    """Recompute *root*'s denormalised counters from its live replies.
+
+    Called after a reply is soft-deleted. Derived rather than decremented: a
+    decrement would also have to know whether the deleted row was the latest
+    reply, and would drift from the truth the moment any other path touched a
+    message.
+    """
+    from django.db.models import Count, Max
+
+    from ..models import Message
+
+    stats = Message.objects.filter(thread_root=root, deleted_at__isnull=True).aggregate(
+        total=Count("uuid"),
+        latest=Max("created_at"),
+    )
+    Message.objects.filter(pk=root.pk).update(
+        reply_count=stats["total"],
+        last_reply_at=stats["latest"],
+    )
 
 
 def show_thread_replies_inline(user):
@@ -74,6 +105,11 @@ def show_thread_replies_inline(user):
 
 def backfill_threads(message_model, participant_model, member_model):
     """Turn historical `reply_to` chains into threads.
+
+    Called by migration 0028_backfill_thread_roots, which passes the historical
+    models from the app registry. Its signature therefore has to stay
+    compatible, and the body must keep working against historical model
+    classes: no model methods, no properties, only fields and the manager.
 
     Takes its models as arguments so the data migration can pass the historical
     versions from the app registry while the tests pass the real ones.

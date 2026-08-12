@@ -5,8 +5,16 @@
   root uuid in at construction, so the component has to be built when a thread
   is opened, not once at page load with a null root.
 {% endcomment %}
-<div class="h-full flex flex-col min-w-0 bg-base-100"
+{% comment %}
+  tabindex="-1" so the panel can hold focus, which init() gives it: on mobile it
+  is a full-screen overlay, and without that the keyboard stays on the message
+  list behind it and Escape has nothing to close. Escape is bound here rather
+  than on window so it only fires while the panel is mounted.
+{% endcomment %}
+<div class="h-full flex flex-col min-w-0 bg-base-100 focus:outline-none"
      x-data="chatThreadPanel(openThreadRoot)"
+     tabindex="-1"
+     @keydown.escape.prevent.stop="closeThread()"
      @thread-reply-received.window="if ($event.detail.root === threadRootUuid) loadMessages(activeConversation.uuid)">
 
   <div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">

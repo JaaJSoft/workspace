@@ -56,9 +56,12 @@ window.chatThreadsMixin = function chatThreadsMixin() {
     },
 
     async markThreadRead(rootUuid) {
-      const backlog = this.threadUnreadCounts[rootUuid] || 0;
       this.threadUnreadCounts = { ...this.threadUnreadCounts, [rootUuid]: 0 };
-      if (!backlog) return;
+      // Always POST, even when the local counter reads zero: it only ever
+      // holds what this page session saw arrive over SSE, and starts empty on
+      // load. A thread with a backlog from before the page opened would
+      // otherwise never be cleared server-side, and its badge would survive
+      // every visit.
       try {
         await fetch(`/api/v1/chat/threads/${rootUuid}/read`, {
           method: 'POST',
@@ -95,11 +98,15 @@ window.chatThreadsMixin = function chatThreadsMixin() {
 };
 
 window.chatThreadPanel = function chatThreadPanel(rootUuid) {
+  // Kept before the spread so the override below can still reach the shared
+  // implementation: object spread copies values, leaving no `super` to call.
+  const messages = chatMessagesMixin();
+
   return {
     threadRootUuid: rootUuid,
 
     ...chatUiHelpersMixin(),
-    ...chatMessagesMixin(),
+    ...messages,
     ...chatInputMixin(),
     ...chatRecorderMixin(),
 
@@ -115,9 +122,31 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     // Writing in the panel with nothing quoted answers the thread itself.
     _replyTarget() { return this.replyingTo?.uuid || this.threadRootUuid; },
 
+    async _refreshCurrentMessages() {
+      await messages._refreshCurrentMessages.call(this);
+      // Then the conversation behind the panel: its copy of the root carries
+      // the reply count, and with the inline preference on it lists the
+      // replies too. Neither updates on its own, because SSE never echoes your
+      // own message back to you - so without this, writing in the panel needs
+      // a page reload to show up in the flow.
+      window.dispatchEvent(new CustomEvent('chat:refresh-messages'));
+    },
+
     async init() {
       this.initRecorder?.();
+      // Take focus so the panel's own Escape binding is reachable from the
+      // keyboard, which matters most on mobile where it covers the page.
+      this.$nextTick(() => this.$el?.focus?.());
       await this.loadMessages(this.activeConversation.uuid);
+    },
+
+    // Alpine calls this when x-if tears the panel down - closing the thread,
+    // opening another one, or switching to the info panel. A recording in
+    // flight holds a live microphone track and an object URL; without this
+    // they survive the component and the browser keeps showing the recording
+    // indicator. cancelRecording() already releases both.
+    destroy() {
+      this.cancelRecording?.();
     },
   };
 };

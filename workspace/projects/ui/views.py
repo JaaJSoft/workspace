@@ -357,7 +357,7 @@ def analytics(request, project_uuid):
                 [
                     {
                         "name": "Created",
-                        "css_class": "fill-accent",
+                        "css_class": "fill-info",
                         "values": [row["created"] for row in flow],
                     },
                     {

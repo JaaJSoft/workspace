@@ -24,8 +24,14 @@ no arithmetic on purpose - see the docstring in charts.py.
       </span>
     {% endfor %}
   </div>
+  {% comment %}
+    The SVG scales uniformly, so on a narrow viewport the axis labels shrink
+    below legibility. Scrolling a fixed minimum width keeps them readable
+    instead; wide containers never reach the minimum and never scroll.
+  {% endcomment %}
+  <div class="overflow-x-auto">
   <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}"
-       class="w-full h-auto"
+       class="w-full h-auto min-w-[42rem]"
        role="img" aria-label="{{ aria_label }}">
     {% for line in chart.gridlines %}
       <line x1="{{ chart.plot.x }}" y1="{{ line.y }}"
@@ -46,4 +52,5 @@ no arithmetic on purpose - see the docstring in charts.py.
             text-anchor="middle" class="fill-base-content/50" font-size="9">{{ cat.label }}</text>
     {% endfor %}
   </svg>
+  </div>
 </div>

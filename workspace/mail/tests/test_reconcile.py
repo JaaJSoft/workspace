@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.services.imap_sync import _reconcile_folder
+from workspace.notifications.models import Notification
 
 User = get_user_model()
 
@@ -142,6 +143,26 @@ class ReconcileSoftDeleteTests(ReconcileFolderMixin, TestCase):
 
         msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
         self.assertIsNone(msg.deleted_at)
+
+    def test_soft_delete_marks_the_messages_notification_read(self):
+        """A message vanished from another IMAP client never CASCADEs its
+        Notification row (this is a soft delete): the notification must be
+        marked read directly, or it stays unread forever - no rendered page
+        can ever list a deleted message for mark_sources_read to catch."""
+        msg = self._make_msg(100)
+        notif = Notification.objects.create(
+            recipient=self.user,
+            origin="mail",
+            icon="",
+            title="Hi",
+            mail_message=msg,
+        )
+
+        conn = self._mock_conn([])
+        _reconcile_folder(conn, self.folder)
+
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
 
 
 class ReconcileFlagTests(ReconcileFolderMixin, TestCase):

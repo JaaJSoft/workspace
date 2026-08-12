@@ -127,6 +127,12 @@ def sync_folder_messages(account, folder):
             folder.uid_validity = uid_validity
         folder.save(update_fields=["uid_validity", "updated_at"])
 
+        # Captured here on purpose. Reading it at function entry would miss the
+        # UIDVALIDITY reset just above, which purges the folder and re-imports
+        # everything - as silent an event as a first sync. Reading it at the end
+        # would always say "not initial", because the cursor advances below.
+        was_initial_sync = folder.last_sync_uid == 0
+
         # Search for new UIDs (always use UID SEARCH to get real UIDs)
         uid_list = []
         if folder.last_sync_uid > 0:
@@ -231,6 +237,19 @@ def sync_folder_messages(account, folder):
 
         _update_folder_counts(folder)
 
+        # Own try/except, like the rules engine, the AI dispatch and the ICS
+        # pass below: a notification failure must never break a sync.
+        try:
+            from workspace.mail.services.notifications import notify_new_messages
+
+            notify_new_messages(
+                folder, new_message_uuids, was_initial_sync=was_initial_sync
+            )
+        except Exception:
+            logger.exception(
+                "Failed to send mail notifications for %s", scrub(folder.name)
+            )
+
         # Run user-defined rules first - explicit user intent takes precedence
         # over AI classification. Wrapped in try/except so a misbehaving rule
         # never breaks the sync.
@@ -266,7 +285,10 @@ def sync_folder_messages(account, folder):
                             dispatch(
                                 owner=account.owner,
                                 task_type=AITask.TaskType.CLASSIFY,
-                                input_data={"message_uuids": new_message_uuids},
+                                input_data={
+                                    "message_uuids": new_message_uuids,
+                                    "initial_sync": was_initial_sync,
+                                },
                             )
                             dispatched.append("classify")
                         except Exception:

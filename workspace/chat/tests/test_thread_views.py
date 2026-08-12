@@ -56,6 +56,40 @@ class ThreadMessagesViewTests(TestCase):
         self.client.force_login(self.mallory)
         self.assertEqual(self.client.get(self.url).status_code, 403)
 
+    def test_the_panel_drops_the_quote_of_the_root_it_already_shows(self):
+        self.client.force_login(self.alice)
+        html = self.client.get(self.url).content.decode()
+        # The reply answers the root, which the panel renders right above it.
+        # Repeating it as a quote on every reply is noise.
+        self.assertNotIn("the root message</p>", html)
+
+    def test_the_panel_keeps_the_quote_when_a_reply_answers_another_reply(self):
+        Message.objects.create(
+            conversation=self.conversation,
+            author=self.alice,
+            body="answering the reply, not the root",
+            reply_to=self.reply,
+            thread_root=self.root,
+        )
+        self.client.force_login(self.alice)
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("the threaded reply</p>", html)
+
+    def test_the_main_flow_keeps_the_quote(self):
+        self.client.force_login(self.alice)
+        flow_url = reverse(
+            "chat_ui:conversation_messages",
+            kwargs={"conversation_uuid": self.conversation.uuid},
+        )
+        Message.objects.create(
+            conversation=self.conversation,
+            author=self.alice,
+            body="an old-style inline reply",
+            reply_to=self.root,
+        )
+        html = self.client.get(flow_url).content.decode()
+        self.assertIn("the root message</p>", html)
+
     def test_a_reply_is_not_a_thread_root(self):
         self.client.force_login(self.alice)
         url = reverse("chat_ui:thread_messages", kwargs={"root_uuid": self.reply.uuid})

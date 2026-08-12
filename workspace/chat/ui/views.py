@@ -534,6 +534,7 @@ def thread_messages_view(request, root_uuid):
             "groups": group_messages(messages, request.user),
             "has_more": has_more,
             "first_uuid": str(page[0].uuid) if page else "",
+            "root_uuid": root.uuid,
             "current_user": request.user,
             "quick_emojis": quick_reactions_for(request.user),
             "pinned_message_ids": set(),

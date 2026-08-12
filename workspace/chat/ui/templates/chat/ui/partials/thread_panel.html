@@ -1,0 +1,45 @@
+{% comment %}
+  One thread: header, the root message and its replies, and a composer.
+
+  Mounted by the caller with x-if, never x-show. chatThreadPanel() bakes the
+  root uuid in at construction, so the component has to be built when a thread
+  is opened, not once at page load with a null root.
+{% endcomment %}
+<div class="h-full flex flex-col min-w-0 bg-base-100"
+     x-data="chatThreadPanel(openThreadRoot)"
+     @thread-reply-received.window="if ($event.detail.root === threadRootUuid) loadMessages(activeConversation.uuid)">
+
+  <div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+    <h4 class="font-semibold text-sm flex items-center gap-2">
+      <i data-lucide="messages-square" class="w-4 h-4 text-info"></i>
+      Thread
+    </h4>
+    <button class="btn btn-ghost btn-xs btn-square" @click="closeThread()" title="Close thread">
+      <i data-lucide="x" class="w-3.5 h-3.5"></i>
+    </button>
+  </div>
+
+  <div class="flex-1 overflow-y-auto overflow-x-hidden p-4"
+       x-ref="messagesContainer"
+       @scroll="handleScroll()"
+       @dragenter.prevent="handleDragEnter($event)"
+       @dragover.prevent="handleDragOver($event)"
+       @dragleave.prevent="handleDragLeave($event)"
+       @drop.prevent="handleDrop($event)">
+    <div x-show="hasMoreMessages" class="flex justify-center py-2">
+      <button class="btn btn-ghost btn-xs" @click="loadMoreMessages()"
+              :disabled="loadingMoreMessages">
+        <span x-show="!loadingMoreMessages">Load older replies</span>
+        <span x-show="loadingMoreMessages" class="loading loading-spinner loading-xs"></span>
+      </button>
+    </div>
+    <div x-show="loadingMessages" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-md text-info"></span>
+    </div>
+    <div id="thread-messages-container"></div>
+  </div>
+
+  <div data-testid="thread-composer">
+    {% include "chat/ui/partials/_composer.html" %}
+  </div>
+</div>

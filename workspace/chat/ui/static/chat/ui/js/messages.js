@@ -457,7 +457,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       const targetUuid = this.activeConversation.uuid;
       try {
         const resp = await fetch(
-          `/chat/${targetUuid}/messages`,
+          this._messagesUrl(null),
           { credentials: 'same-origin' }
         );
         if (this.activeConversation?.uuid !== targetUuid) return;

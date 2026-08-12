@@ -118,6 +118,34 @@ test('loadMessages clears the container before injecting', async () => {
   assert.equal(dom.nodes['messages-container'].innerHTML, '<p>fresh</p>');
 });
 
+test('_refreshCurrentMessages refetches through the surface hook, not a hard-coded url', async () => {
+  // Regression: it used the scoped container but a literal
+  // `/chat/<conv>/messages`, so a refresh on the thread panel injected the
+  // whole conversation into the panel's container.
+  const dom = buildDom();
+  const urls = [];
+  const app = buildApp({
+    dom,
+    html: '<p>thread</p>',
+    urls,
+    overrides: {
+      _messagesContainerId: () => 'thread-messages-container',
+      _messagesUrl: (cursor) =>
+        `/chat/threads/r1/messages${cursor ? '?before=' + cursor : ''}`,
+    },
+  });
+
+  await app._refreshCurrentMessages();
+
+  assert.deepStrictEqual(urls, ['/chat/threads/r1/messages']);
+  assert.equal(dom.nodes['thread-messages-container'].innerHTML, '<p>thread</p>');
+  assert.equal(
+    dom.nodes['messages-container'].innerHTML,
+    '',
+    'the main flow container must not be touched',
+  );
+});
+
 test('loadMoreMessages pages backwards from the list cursor and prepends', async () => {
   const dom = buildDom();
   const urls = [];

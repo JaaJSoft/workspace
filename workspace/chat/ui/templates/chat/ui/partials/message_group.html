@@ -43,7 +43,13 @@
                id="{{ prefix }}-{{ msg.uuid }}"
                data-message-uuid="{{ msg.uuid }}"
                data-body="{{ msg.body }}">
-            {% if msg.reply_to %}
+            {% comment %}
+              hide_quote_for is the thread panel's root: a reply that answers
+              the root would otherwise quote a message rendered right above it,
+              on every single reply. A reply answering another reply still
+              quotes, because that target may be far up the thread.
+            {% endcomment %}
+            {% if msg.reply_to and msg.reply_to.uuid != hide_quote_for %}
               <a href="#{{ prefix }}-{{ msg.reply_to.uuid }}"
                  @click.prevent="scrollToMessage('{{ msg.reply_to.uuid }}')"
                  class="flex gap-2 my-1.5 rounded-lg px-2 py-1 cursor-pointer transition-colors no-underline

@@ -116,8 +116,9 @@
         </div>
       </div>
 
+      {# `relative` anchors the thread panel's mobile overlay to this area #}
       <!-- Content area: messages + optional info panel -->
-      <div class="flex-1 flex min-h-0 min-w-0">
+      <div class="flex-1 flex min-h-0 min-w-0 relative">
         <!-- Messages column -->
         <div class="flex-1 flex flex-col min-w-0 relative">
           <!-- Join banner: this conversation has an active call you have not
@@ -291,6 +292,32 @@
             {% include "chat/ui/partials/search_panel.html" %}
           </div>
         </div>
+
+        {% comment %}
+          Thread panel. ONE instance, positioned responsively: a full-screen
+          overlay on mobile, a side column from lg up. The info and search
+          panels ship a desktop copy and a mobile copy because they only toggle
+          CSS; the thread panel cannot, because two copies would mean two
+          chatThreadPanel components both writing into
+          #thread-messages-container and both firing init().
+
+          x-if, not x-show: chatThreadPanel() takes the root uuid as a
+          constructor argument and an x-data expression is evaluated once, so a
+          mounted-but-hidden panel would be stuck on whatever openThreadRoot
+          held at page load, which is null. x-if also remounts on every root
+          change, which is what makes opening a second thread from an already
+          open panel work.
+
+          No width transition, unlike the info and search panels: x-if swaps
+          presence, so there is no width to animate between.
+        {% endcomment %}
+        <template x-if="openThreadRoot">
+          <div data-testid="thread-panel"
+               class="absolute inset-0 z-30 flex flex-col overflow-hidden bg-base-100
+                      {% if not overlay_panels %}lg:static lg:inset-auto lg:z-auto lg:w-96 lg:border-l lg:border-base-300{% endif %}">
+            {% include "chat/ui/partials/thread_panel.html" %}
+          </div>
+        </template>
       </div><!-- /content area -->
 
       <!-- Mobile info panel (full-screen overlay) -->

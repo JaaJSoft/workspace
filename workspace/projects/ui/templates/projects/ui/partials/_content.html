@@ -4,7 +4,7 @@
     centering and scrollbar as the active view - overview and settings render
     a centered max-width column, board and backlog use the full width.
   {% endcomment %}
-  <div class="flex items-center gap-3 min-w-0 mb-4{% if view == 'overview' or view == 'settings' %} max-w-6xl mx-auto{% endif %}">
+  <div class="flex items-center gap-3 min-w-0 mb-4{% if view == 'overview' or view == 'settings' or view == 'analytics' %} max-w-6xl mx-auto{% endif %}">
     {% include "ui/partials/drawer_toggle.html" with drawer_id="projects-drawer" class="lg:hidden" %}
     <h1 class="text-xl font-semibold truncate">{{ project.name }}</h1>
     {% if project.archived_at %}<span class="badge badge-ghost">Archived</span>{% endif %}
@@ -15,6 +15,8 @@
     {% include "projects/ui/partials/all_tasks.html" %}
   {% elif view == "overview" %}
     {% include "projects/ui/partials/overview.html" %}
+  {% elif view == "analytics" %}
+    {% include "projects/ui/partials/analytics.html" %}
   {% elif view == "settings" %}
     {% include "projects/ui/partials/settings.html" %}
   {% else %}

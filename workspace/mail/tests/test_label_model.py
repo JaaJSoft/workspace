@@ -272,3 +272,36 @@ class NotifyOnApplyBackfillTests(TestCase):
                 account=self.account, name="urgent bis"
             ).notify_on_apply
         )
+
+    def test_reverse_only_unflags_urgent_not_user_flagged_labels(self):
+        """The reverse migration must not discard a flag a user set on an
+        unrelated label after this migration ran in production."""
+        import importlib
+
+        from django.apps import apps
+
+        from workspace.mail.models import MailLabel
+
+        module = importlib.import_module(
+            "workspace.mail.migrations.0031_seed_notify_on_apply"
+        )
+
+        class _Editor:
+            class connection:
+                alias = "default"
+
+        MailLabel.objects.filter(account=self.account, name="Urgent").update(
+            notify_on_apply=True
+        )
+        MailLabel.objects.filter(account=self.account, name="Action").update(
+            notify_on_apply=True
+        )
+
+        module.unflag_urgent_labels(apps, _Editor)
+
+        self.assertFalse(
+            MailLabel.objects.get(account=self.account, name="Urgent").notify_on_apply
+        )
+        self.assertTrue(
+            MailLabel.objects.get(account=self.account, name="Action").notify_on_apply
+        )

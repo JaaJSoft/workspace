@@ -68,9 +68,11 @@ class Notification(models.Model):
         blank=True,
         related_name="+",
     )
-    # Source object refs: the container the user opens (conversation, not
-    # message). At most one may be set (see constraint); all-null means a
-    # sourceless announcement. CASCADE: notifications die with their source.
+    # Source object refs: usually the container the user opens (mail_message
+    # is the exception - the message itself is the unit opened). At most one
+    # may be set (see constraint); all-null means a sourceless announcement.
+    # CASCADE only covers hard deletion; a soft-deleting source (mail) settles
+    # its own unread notifications - see clear_notifications_for_deleted_messages.
     conversation = models.ForeignKey(
         "chat.Conversation",
         on_delete=models.CASCADE,

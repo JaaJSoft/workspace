@@ -10,11 +10,11 @@ def flag_urgent_labels(apps, schema_editor):
     ).update(notify_on_apply=True)
 
 
-def unflag_all(apps, schema_editor):
+def unflag_urgent_labels(apps, schema_editor):
     MailLabel = apps.get_model("mail", "MailLabel")
-    MailLabel.objects.using(schema_editor.connection.alias).update(
-        notify_on_apply=False
-    )
+    MailLabel.objects.using(schema_editor.connection.alias).filter(
+        name__iexact="Urgent"
+    ).update(notify_on_apply=False)
 
 
 class Migration(migrations.Migration):
@@ -23,5 +23,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(flag_urgent_labels, unflag_all),
+        migrations.RunPython(flag_urgent_labels, unflag_urgent_labels),
     ]

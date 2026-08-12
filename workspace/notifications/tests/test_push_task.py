@@ -59,6 +59,32 @@ class SendPushNotificationTests(TestCase):
         send_push_notification(str(self.notif.uuid))
         self.assertEqual(mock_webpush.call_count, 2)
 
+    @patch("workspace.notifications.tasks.is_active", return_value=False)
+    @patch("workspace.notifications.tasks.webpush")
+    def test_payload_carries_the_tag_alongside_the_other_display_fields(
+        self, mock_webpush, _
+    ):
+        import orjson
+
+        from workspace.notifications.tasks import (
+            _notification_tag,
+            send_push_notification,
+        )
+
+        send_push_notification(str(self.notif.uuid))
+        payload = orjson.loads(mock_webpush.call_args.kwargs["data"])
+        self.assertEqual(
+            payload,
+            {
+                "title": self.notif.title,
+                "body": self.notif.body,
+                "icon": self.notif.icon,
+                "url": self.notif.url,
+                "origin": self.notif.origin,
+                "tag": _notification_tag(self.notif),
+            },
+        )
+
     @patch("workspace.notifications.tasks.is_active", return_value=True)
     @patch("workspace.notifications.tasks.webpush")
     def test_skips_push_when_user_is_active(self, mock_webpush, mock_is_active):

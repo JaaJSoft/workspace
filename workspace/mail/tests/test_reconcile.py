@@ -144,6 +144,29 @@ class ReconcileSoftDeleteTests(ReconcileFolderMixin, TestCase):
         msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
         self.assertIsNone(msg.deleted_at)
 
+    def test_the_final_update_still_excludes_already_deleted_rows(self):
+        """The pk-scoped UPDATE (split off to capture gone_pks first) must
+        keep the deleted_at IS NULL guard the original single-query form
+        had. Without it, a message soft-deleted by something else between
+        the pk-capture SELECT and this UPDATE would be re-stamped with a
+        newer deleted_at and double-counted in the reconciled total."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self._make_msg(100)
+        conn = self._mock_conn([])
+
+        with CaptureQueriesContext(connection) as ctx:
+            _reconcile_folder(conn, self.folder)
+
+        update_queries = [
+            q
+            for q in ctx.captured_queries
+            if q["sql"].startswith("UPDATE") and "mail_mailmessage" in q["sql"]
+        ]
+        self.assertEqual(len(update_queries), 1)
+        self.assertIn("IS NULL", update_queries[0]["sql"].upper())
+
     def test_soft_delete_marks_the_messages_notification_read(self):
         """A message vanished from another IMAP client never CASCADEs its
         Notification row (this is a soft delete): the notification must be

@@ -27,6 +27,7 @@ from ..imap_messages import (
     star_message,
     unstar_message,
 )
+from ..notifications import clear_notifications_for_deleted_messages
 from .schema import (
     AddLabelAction,
     DeleteAction,
@@ -129,6 +130,11 @@ def _move_to_folder(action: MoveToFolderAction, message: MailMessage) -> dict:
 def _delete(action: DeleteAction, message: MailMessage) -> dict:
     message.deleted_at = timezone.now()
     message.save(update_fields=["deleted_at", "updated_at"])
+    # Not redundant on the sync path: apply_rule_to_folder runs this same
+    # handler against existing messages, which can already carry an unread
+    # notification the sync path never has. A no-op there (UPDATE matches
+    # zero rows) is cheaper than a second code path to distinguish the two.
+    clear_notifications_for_deleted_messages(message.account.owner, [message.pk])
     try:
         delete_message(message.account, message)
     except Exception as e:

@@ -388,9 +388,9 @@ def _reconcile_folder(conn, folder):
                 deleted_at__isnull=True,
             ).values_list("pk", flat=True)
         )
-        count = MailMessage.objects.filter(pk__in=gone_pks).update(
-            deleted_at=dj_timezone.now()
-        )
+        count = MailMessage.objects.filter(
+            pk__in=gone_pks, deleted_at__isnull=True
+        ).update(deleted_at=dj_timezone.now())
         if count:
             logger.info(
                 "Reconciled %s: soft-deleted %d messages no longer on server",

@@ -198,7 +198,6 @@ class NotifyRunsAfterRulesTests(TestCase):
         return conn
 
     @patch("workspace.ai.services.dispatch.dispatch")
-    @patch("workspace.users.services.settings.get_setting", return_value=True)
     @patch("workspace.ai.client.is_ai_enabled", return_value=True)
     @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
     @patch("workspace.mail.services.imap_sync._reconcile_folder")
@@ -211,7 +210,6 @@ class NotifyRunsAfterRulesTests(TestCase):
         _mock_recon,
         _mock_proc,
         _mock_ai,
-        _mock_setting,
         _mock_dispatch,
     ):
         from workspace.mail.services.imap_sync import sync_folder_messages
@@ -241,7 +239,6 @@ class NotifyRunsAfterRulesTests(TestCase):
         self.assertEqual(Notification.objects.count(), 0)
 
     @patch("workspace.ai.services.dispatch.dispatch")
-    @patch("workspace.users.services.settings.get_setting", return_value=True)
     @patch("workspace.ai.client.is_ai_enabled", return_value=True)
     @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
     @patch("workspace.mail.services.imap_sync._reconcile_folder")
@@ -254,7 +251,6 @@ class NotifyRunsAfterRulesTests(TestCase):
         _mock_recon,
         _mock_proc,
         _mock_ai,
-        _mock_setting,
         _mock_dispatch,
     ):
         from workspace.mail.services.imap_sync import sync_folder_messages

@@ -4,7 +4,13 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.mail.models import MailAccount, MailFolder, MailLabel, MailMessage
+from workspace.mail.models import (
+    MailAccount,
+    MailFolder,
+    MailLabel,
+    MailMessage,
+    MailMessageLabel,
+)
 from workspace.mail.services.notifications import (
     DEFAULT_NOTIFY_BURST,
     HARD_MAX_NOTIFY_BURST,
@@ -455,6 +461,25 @@ class ClassifyWiringTests(MailNotifyBase):
         message = self.make_message(uid=1, subject="Server down")
         self.run_classify(message, ["Urgent", "Action"])
         self.assertEqual(Notification.objects.count(), 1)
+
+    def test_a_message_soft_deleted_before_the_task_runs_is_skipped(self):
+        """The task is queued, so the message can vanish before the LLM answers.
+
+        A soft delete must drop it from both the classification and the notify
+        pass: the notify path reads these rows through ``.only()``, which does
+        not load ``deleted_at``, so the queryset is the only place that can.
+        """
+        from django.utils import timezone
+
+        message = self.make_message(uid=1, subject="Server down")
+        MailMessage.objects.filter(pk=message.pk).update(deleted_at=timezone.now())
+
+        self.run_classify(message, "Urgent")
+
+        self.assertEqual(Notification.objects.count(), 0)
+        self.assertEqual(
+            MailMessageLabel.objects.filter(message_id=message.pk).count(), 0
+        )
 
     def test_the_message_queryset_avoids_per_message_folder_queries(self):
         from workspace.ai.tasks.mail import _classify_message_queryset

@@ -180,6 +180,11 @@ def _classify_message_queryset(owner, message_uuids):
         MailMessage.objects.filter(
             uuid__in=message_uuids,
             account__owner=owner,
+            # The task is queued, so a message can be soft-deleted between
+            # dispatch and the LLM call returning. Excluding it here is the only
+            # place that can: the notify path reads these rows through .only(),
+            # which does not load deleted_at.
+            deleted_at__isnull=True,
         )
         .select_related("folder")
         .only(

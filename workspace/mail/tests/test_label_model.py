@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
+from django.db import IntegrityError, migrations
 from django.test import TestCase
 
 from workspace.mail.models import (
@@ -273,9 +273,14 @@ class NotifyOnApplyBackfillTests(TestCase):
             ).notify_on_apply
         )
 
-    def test_reverse_only_unflags_urgent_not_user_flagged_labels(self):
-        """The reverse migration must not discard a flag a user set on an
-        unrelated label after this migration ran in production."""
+    def test_reverse_leaves_every_flag_untouched(self):
+        """Reversing must not write to notify_on_apply at all.
+
+        The column is user-editable through the label API, so a reverse cannot
+        tell a seeded default from a deliberate choice - including on "Urgent"
+        itself, where a user who turned the flag off and then back on looks
+        exactly like the migration's own write.
+        """
         import importlib
 
         from django.apps import apps
@@ -285,19 +290,23 @@ class NotifyOnApplyBackfillTests(TestCase):
         module = importlib.import_module(
             "workspace.mail.migrations.0031_seed_notify_on_apply"
         )
+        reverse = module.Migration.operations[0].reverse_code
 
         class _Editor:
             class connection:
                 alias = "default"
 
         MailLabel.objects.filter(account=self.account, name="Urgent").update(
-            notify_on_apply=True
+            notify_on_apply=False
         )
         MailLabel.objects.filter(account=self.account, name="Action").update(
             notify_on_apply=True
         )
 
-        module.unflag_urgent_labels(apps, _Editor)
+        # Run whatever the migration actually declares, so this fails if the
+        # reverse is ever replaced by something that writes.
+        self.assertIs(reverse, migrations.RunPython.noop)
+        reverse(apps, _Editor)
 
         self.assertFalse(
             MailLabel.objects.get(account=self.account, name="Urgent").notify_on_apply

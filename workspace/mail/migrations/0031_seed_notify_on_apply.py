@@ -10,18 +10,14 @@ def flag_urgent_labels(apps, schema_editor):
     ).update(notify_on_apply=True)
 
 
-def unflag_urgent_labels(apps, schema_editor):
-    MailLabel = apps.get_model("mail", "MailLabel")
-    MailLabel.objects.using(schema_editor.connection.alias).filter(
-        name__iexact="Urgent"
-    ).update(notify_on_apply=False)
-
-
 class Migration(migrations.Migration):
     dependencies = [
         ("mail", "0030_maillabel_notify_on_apply"),
     ]
 
     operations = [
-        migrations.RunPython(flag_urgent_labels, unflag_urgent_labels),
+        # No reverse: notify_on_apply is user-editable through the label API, so
+        # a reverse cannot tell a seeded default from a deliberate choice and
+        # would silently discard the latter.
+        migrations.RunPython(flag_urgent_labels, migrations.RunPython.noop),
     ]

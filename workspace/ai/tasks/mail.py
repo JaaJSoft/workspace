@@ -167,6 +167,36 @@ CLASSIFY_BATCH_SIZE = 10
 MAX_LABELS_PER_MESSAGE = 3
 
 
+def _classify_message_queryset(owner, message_uuids):
+    """Messages to classify, with the fields the notify-on-apply path needs.
+
+    Shared with the test suite so the query-shape regression test (folder
+    fields must be selected via ``folder__x``, not deferred-loaded one at a
+    time) pins the queryset that actually ships, not a copy of it.
+    """
+    from workspace.mail.models import MailMessage
+
+    return (
+        MailMessage.objects.filter(
+            uuid__in=message_uuids,
+            account__owner=owner,
+        )
+        .select_related("folder")
+        .only(
+            "uuid",
+            "subject",
+            "from_name",
+            "from_email",
+            "snippet",
+            "is_read",
+            "account_id",
+            "folder_id",
+            "folder__folder_type",
+            "folder__is_hidden",
+        )
+    )
+
+
 @shared_task(name="ai.classify_mail", bind=True, max_retries=0)
 def classify_mail_messages(self, task_id: str):
     """Classify a batch of mail messages by assigning labels.
@@ -178,30 +208,14 @@ def classify_mail_messages(self, task_id: str):
     """
     from workspace.ai.models import AITask
     from workspace.ai.prompts.mail import build_classify_messages
-    from workspace.mail.models import MailLabel, MailMessage, MailMessageLabel
+    from workspace.mail.models import MailLabel, MailMessageLabel
 
     try:
         with ai_task_lifecycle(task_id, log_label="Classify") as ai_task:
             message_uuids = ai_task.input_data.get("message_uuids", [])
             by_uuid = {
                 str(m.uuid): m
-                for m in MailMessage.objects.filter(
-                    uuid__in=message_uuids,
-                    account__owner=ai_task.owner,
-                )
-                .select_related("folder")
-                .only(
-                    "uuid",
-                    "subject",
-                    "from_name",
-                    "from_email",
-                    "snippet",
-                    "is_read",
-                    "account_id",
-                    "folder_id",
-                    "folder__folder_type",
-                    "folder__is_hidden",
-                )
+                for m in _classify_message_queryset(ai_task.owner, message_uuids)
             }
             # Preserve the caller's input order. The DB returns rows in
             # PK (uuid) order which is random for v4 UUIDs, so the LLM

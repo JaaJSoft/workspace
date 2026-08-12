@@ -364,8 +364,13 @@ class ClassifyWiringTests(MailNotifyBase):
     def setUp(self):
         super().setUp()
         set_setting(self.alice, "mail", "notify_mode", "labels")
+        # Push dispatch is unrelated to this policy layer; stub it out so the
+        # suite doesn't warn about an unconfigured VAPID key.
+        self.enterContext(
+            patch("workspace.notifications.tasks.send_push_notification.delay")
+        )
 
-    def run_classify(self, message, label_name):
+    def run_classify(self, message, label_names, *, initial_sync=False):
         # Mirror the AITask fixture used by workspace/ai/tests/test_tasks.py -
         # read it first and copy its kwargs rather than guessing which fields
         # are required. The task object is called directly (not .delay()); a
@@ -373,12 +378,18 @@ class ClassifyWiringTests(MailNotifyBase):
         from workspace.ai.models import AITask
         from workspace.ai.tasks.mail import classify_mail_messages
 
+        if isinstance(label_names, str):
+            label_names = [label_names]
+        input_data = {"message_uuids": [str(message.uuid)]}
+        if initial_sync:
+            input_data["initial_sync"] = True
         task = AITask.objects.create(
             owner=self.alice,
             task_type=AITask.TaskType.CLASSIFY,
-            input_data={"message_uuids": [str(message.uuid)]},
+            input_data=input_data,
         )
-        payload = f'[{{"i": 1, "labels": ["{label_name}"]}}]'
+        labels_json = ", ".join(f'"{name}"' for name in label_names)
+        payload = f'[{{"i": 1, "labels": [{labels_json}]}}]'
         with patch(
             "workspace.ai.tasks.mail.call_llm",
             return_value={
@@ -407,3 +418,32 @@ class ClassifyWiringTests(MailNotifyBase):
         message = self.make_message(uid=1, subject="Server down")
         self.run_classify(message, "Urgent")
         self.assertEqual(Notification.objects.count(), 0)
+
+    def test_initial_sync_suppresses_notifications_from_the_classifier(self):
+        message = self.make_message(uid=1, subject="Server down")
+        self.run_classify(message, "Urgent", initial_sync=True)
+        self.assertEqual(Notification.objects.count(), 0)
+
+    def test_two_notifying_labels_on_one_message_produce_a_single_notification(self):
+        # Flip a second seeded label rather than creating a new one, so the
+        # fixture stays close to real account data.
+        MailLabel.objects.filter(account=self.account, name="Action").update(
+            notify_on_apply=True
+        )
+        message = self.make_message(uid=1, subject="Server down")
+        self.run_classify(message, ["Urgent", "Action"])
+        self.assertEqual(Notification.objects.count(), 1)
+
+    def test_the_message_queryset_avoids_per_message_folder_queries(self):
+        from workspace.ai.tasks.mail import _classify_message_queryset
+
+        messages = [self.make_message(uid=i) for i in range(3)]
+        uuids = [str(m.uuid) for m in messages]
+
+        with self.assertNumQueries(1):
+            fetched = list(_classify_message_queryset(self.alice, uuids))
+
+        with self.assertNumQueries(0):
+            for m in fetched:
+                self.assertIsNotNone(m.folder.folder_type)
+                self.assertFalse(m.folder.is_hidden)

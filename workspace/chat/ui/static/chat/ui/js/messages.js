@@ -12,6 +12,20 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     replyingTo: null,
     pinnedMessages: [],
 
+    // ── Surface hooks ────────────────────────────────────────
+    // The mixin is spread into more than one component per page (the
+    // conversation pane and the thread panel), so every DOM id and endpoint it
+    // touches has to be instance-scoped. Defaults are the main conversation
+    // surface; the thread panel overrides all of them.
+    _messagesContainerId() { return 'messages-container'; },
+    _messageListId() { return 'message-list'; },
+    _messageIdPrefix() { return 'msg'; },
+    _messagesUrl(cursor) {
+      const base = `/chat/${this.activeConversation.uuid}/messages`;
+      return cursor ? `${base}?before=${cursor}` : base;
+    },
+    _replyTarget() { return this.replyingTo?.uuid || null; },
+
     // ── Server-rendered HTML helpers ─────────────────────────
     _initMessagesDom(container) {
       // Initialize Alpine on dynamically injected HTML
@@ -28,12 +42,12 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
     async loadMessages(conversationId) {
       this.loadingMessages = true;
-      const container = document.getElementById('messages-container');
+      const container = document.getElementById(this._messagesContainerId());
       if (container) container.innerHTML = ''; // safe: cleared to empty
 
       try {
         const resp = await fetch(
-          `/chat/${conversationId}/messages`,
+          this._messagesUrl(null),
           { credentials: 'same-origin' }
         );
         // Discard stale response if user already switched conversation
@@ -55,7 +69,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     _readPaginationState() {
-      const list = document.getElementById('message-list');
+      const list = document.getElementById(this._messageListId());
       if (!list) return;
       this.hasMoreMessages = list.dataset.hasMore === 'true';
     },
@@ -64,7 +78,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (!this.activeConversation || !this.hasMoreMessages || this.loadingMoreMessages) return;
 
       this.loadingMoreMessages = true;
-      const list = document.getElementById('message-list');
+      const list = document.getElementById(this._messageListId());
       const firstUuid = list?.dataset.firstUuid;
       if (!firstUuid) {
         this.loadingMoreMessages = false;
@@ -80,7 +94,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       try {
         const resp = await fetch(
-          `/chat/${targetUuid}/messages?before=${firstUuid}`,
+          this._messagesUrl(firstUuid),
           { credentials: 'same-origin' }
         );
         if (this.activeConversation?.uuid !== targetUuid) {
@@ -95,7 +109,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           }
           const parser = new DOMParser();
           const doc = parser.parseFromString(html, 'text/html');
-          const newList = doc.getElementById('message-list');
+          const newList = doc.getElementById(this._messageListId());
 
           if (newList && list) {
             // Update pagination data from the new response
@@ -172,7 +186,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       const wsFiles = [...(this.pendingPickedFiles || [])];
       if ((!body && files.length === 0 && wsFiles.length === 0) || !this.activeConversation) return;
 
-      const replyToUuid = this.replyingTo?.uuid || null;
+      const replyToUuid = this._replyTarget();
       const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
 
       this.messageBody = '';
@@ -248,7 +262,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           await this._refreshCurrentMessages();
           // If bot already replied during the round-trip, hide typing immediately
           if (isBotConv) {
-            const lastGroup = document.getElementById('messages-container')?.querySelector('.msg-group:last-child');
+            const lastGroup = document.getElementById(this._messagesContainerId())?.querySelector('.msg-group:last-child');
             if (lastGroup && lastGroup.classList.contains('msg-group-start')) {
               this.botTyping = false;
               this.clearBotStep?.();
@@ -283,7 +297,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     async sendVoiceMessage(file, duration) {
       if (!this.activeConversation) return false;
       const convUuid = this.activeConversation.uuid;
-      const replyToUuid = this.replyingTo?.uuid || null;
+      const replyToUuid = this._replyTarget();
       const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
       const isBotConv = this.isBotConversation(this.activeConversation);
       this.cancelReply();
@@ -342,7 +356,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     _injectOptimisticMessage(tempId, body, replyInfo, files) {
-      const container = document.getElementById('messages-container');
+      const container = document.getElementById(this._messagesContainerId());
       if (!container) return;
 
       const user = this._getCurrentUser();
@@ -430,7 +444,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       // conversation; capture the target uuid up front and bail if the
       // active conversation no longer matches when we're about to mutate.
       if (!this.activeConversation) return;
-      const container = document.getElementById('messages-container');
+      const container = document.getElementById(this._messagesContainerId());
       const targetUuid = this.activeConversation.uuid;
       try {
         const resp = await fetch(
@@ -646,7 +660,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // ── Edit last own message shortcut ───────────────────────
     editLastOwnMessage() {
       // Find the last message bubble authored by the current user
-      const container = document.getElementById('messages-container');
+      const container = document.getElementById(this._messagesContainerId());
       if (!container) return;
 
       const bubbles = container.querySelectorAll('.msg-bubble[data-body]');

@@ -13,6 +13,7 @@ from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.notifications.services.notifications import mark_sources_read
 
 from .models import MailFolder, MailLabel, MailMessage, MailMessageLabel
 from .queries import user_account_ids
@@ -140,7 +141,7 @@ class MailMessageListView(CacheControlMixin, APIView):
 
         total = qs.count()
         order_fields = ("-search_rank", "-date") if search else ("-date",)
-        messages = (
+        messages = list(
             qs.annotate(attachments_count=Count("attachments"))
             .prefetch_related(
                 Prefetch(
@@ -152,6 +153,11 @@ class MailMessageListView(CacheControlMixin, APIView):
             )
             .order_by(*order_fields)[offset : offset + page_size]
         )
+
+        # Seeing the row in the list is seeing the mail arrive. Covers the
+        # folder, label and inbox=all modes at once, which a folder-scoped
+        # hook would not: the default mail view is a unified inbox.
+        mark_sources_read(request.user, messages)
 
         return Response(
             {

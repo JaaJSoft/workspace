@@ -41,6 +41,10 @@ class MailNotifyBase(TestCase):
         cache.clear()
 
     def make_message(self, *, uid, subject="Hi", is_read=False, folder=None):
+        from datetime import timedelta
+
+        from django.utils import timezone as dj_timezone
+
         return MailMessage.objects.create(
             account=self.account,
             folder=folder or self.inbox,
@@ -49,6 +53,7 @@ class MailNotifyBase(TestCase):
             from_name="Bob",
             from_email="bob@example.test",
             is_read=is_read,
+            date=dj_timezone.now() + timedelta(seconds=uid),
         )
 
 
@@ -447,3 +452,43 @@ class ClassifyWiringTests(MailNotifyBase):
             for m in fetched:
                 self.assertIsNotNone(m.folder.folder_type)
                 self.assertFalse(m.folder.is_hidden)
+
+
+class MessageListMarksNotificationsReadTests(MailNotifyBase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.alice)
+
+    def make_notification(self, message):
+        return Notification.objects.create(
+            recipient=self.alice,
+            origin="mail",
+            icon="",
+            title="Hi",
+            mail_message=message,
+        )
+
+    def test_listing_a_folder_marks_its_notifications_read(self):
+        message = self.make_message(uid=1)
+        notif = self.make_notification(message)
+        resp = self.client.get(f"/api/v1/mail/messages?folder={self.inbox.uuid}")
+        self.assertEqual(resp.status_code, 200)
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
+
+    def test_the_unified_inbox_view_marks_them_too(self):
+        message = self.make_message(uid=1)
+        notif = self.make_notification(message)
+        resp = self.client.get("/api/v1/mail/messages?inbox=all")
+        self.assertEqual(resp.status_code, 200)
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
+
+    def test_a_message_on_another_page_keeps_its_notification(self):
+        # page_size is 50; only the first page is marked.
+        messages = [self.make_message(uid=i) for i in range(60)]
+        oldest = min(messages, key=lambda m: m.imap_uid)
+        notif = self.make_notification(oldest)
+        self.client.get(f"/api/v1/mail/messages?folder={self.inbox.uuid}&page=1")
+        notif.refresh_from_db()
+        self.assertIsNone(notif.read_at)

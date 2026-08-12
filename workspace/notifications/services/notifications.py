@@ -246,6 +246,28 @@ def mark_source_read(user, source):
     return marked
 
 
+def mark_sources_read(user, sources):
+    """Batch form of mark_source_read for a page of same-typed sources.
+
+    Sources must share a model; the field is derived from the first one. Used
+    where the user demonstrably sees many objects at once, such as a page of
+    the mail message list. Returns the number of rows marked.
+    """
+    sources = list(sources)
+    if not sources:
+        return 0
+    field = source_field(sources[0])
+    marked = Notification.objects.filter(
+        recipient=user,
+        read_at__isnull=True,
+        **{f"{field}__in": [s.pk for s in sources]},
+    ).update(read_at=timezone.now())
+    if marked:
+        invalidate_tags(_user_tag(user.pk))
+        notify_sse("notifications", user.pk)
+    return marked
+
+
 @cached(
     key=lambda user: f"notif:unread:{user.pk}",
     ttl=_UNREAD_TTL,

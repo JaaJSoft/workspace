@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
+from workspace.chat.models import Conversation
 from workspace.notifications.models import Notification
 from workspace.notifications.services.notifications import (
     get_unread_count,
@@ -193,3 +194,46 @@ class NotifySourceTests(TestCase):
                 title="Hi",
                 source=self.alice,  # User is not a notification source
             )
+
+
+class MarkSourcesReadTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user(username="marksrcs", password="pass")
+        self.conv_a = Conversation.objects.create(created_by=self.alice, kind="dm")
+        self.conv_b = Conversation.objects.create(created_by=self.alice, kind="dm")
+
+    def make(self, conversation):
+        return Notification.objects.create(
+            recipient=self.alice,
+            origin="chat",
+            icon="",
+            title="Hi",
+            conversation=conversation,
+        )
+
+    def test_marks_every_listed_source(self):
+        from workspace.notifications.services.notifications import mark_sources_read
+
+        self.make(self.conv_a)
+        self.make(self.conv_b)
+        self.assertEqual(mark_sources_read(self.alice, [self.conv_a, self.conv_b]), 2)
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient=self.alice, read_at__isnull=True
+            ).count(),
+            0,
+        )
+
+    def test_leaves_unlisted_sources_alone(self):
+        from workspace.notifications.services.notifications import mark_sources_read
+
+        self.make(self.conv_a)
+        kept = self.make(self.conv_b)
+        self.assertEqual(mark_sources_read(self.alice, [self.conv_a]), 1)
+        kept.refresh_from_db()
+        self.assertIsNone(kept.read_at)
+
+    def test_empty_source_list_is_a_no_op(self):
+        from workspace.notifications.services.notifications import mark_sources_read
+
+        self.assertEqual(mark_sources_read(self.alice, []), 0)

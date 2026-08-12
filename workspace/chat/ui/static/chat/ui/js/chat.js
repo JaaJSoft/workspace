@@ -34,6 +34,7 @@ function chatApp(currentUserId) {
     ...chatSseMixin(),
     ...chatMembersMixin(),
     ...chatPanelsMixin(),
+    ...chatThreadsMixin(),
     ...chatBotMixin(),
     ...chatInputMixin(),
     ...chatCallMixin(),

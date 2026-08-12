@@ -14,6 +14,7 @@ const stubs = {
   chatSseMixin: () => ({ _sse: true }),
   chatMembersMixin: () => ({ _members: true }),
   chatPanelsMixin: () => ({ _panels: true }),
+  chatThreadsMixin: () => ({ _threads: true }),
   chatBotMixin: () => ({ _bot: true }),
   chatCallMixin: () => ({ startOrJoinCall: async () => {}, _start: true }),
   chatCallDiagnosticMixin: () => ({ _diag: true }),

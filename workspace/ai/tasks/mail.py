@@ -167,6 +167,41 @@ CLASSIFY_BATCH_SIZE = 10
 MAX_LABELS_PER_MESSAGE = 3
 
 
+def _classify_message_queryset(owner, message_uuids):
+    """Messages to classify, with the fields the notify-on-apply path needs.
+
+    Shared with the test suite so the query-shape regression test (folder
+    fields must be selected via ``folder__x``, not deferred-loaded one at a
+    time) pins the queryset that actually ships, not a copy of it.
+    """
+    from workspace.mail.models import MailMessage
+
+    return (
+        MailMessage.objects.filter(
+            uuid__in=message_uuids,
+            account__owner=owner,
+            # The task is queued, so a message can be soft-deleted between
+            # dispatch and the LLM call returning. Excluding it here is the only
+            # place that can: the notify path reads these rows through .only(),
+            # which does not load deleted_at.
+            deleted_at__isnull=True,
+        )
+        .select_related("folder")
+        .only(
+            "uuid",
+            "subject",
+            "from_name",
+            "from_email",
+            "snippet",
+            "is_read",
+            "account_id",
+            "folder_id",
+            "folder__folder_type",
+            "folder__is_hidden",
+        )
+    )
+
+
 @shared_task(name="ai.classify_mail", bind=True, max_retries=0)
 def classify_mail_messages(self, task_id: str):
     """Classify a batch of mail messages by assigning labels.
@@ -178,24 +213,14 @@ def classify_mail_messages(self, task_id: str):
     """
     from workspace.ai.models import AITask
     from workspace.ai.prompts.mail import build_classify_messages
-    from workspace.mail.models import MailLabel, MailMessage, MailMessageLabel
+    from workspace.mail.models import MailLabel, MailMessageLabel
 
     try:
         with ai_task_lifecycle(task_id, log_label="Classify") as ai_task:
             message_uuids = ai_task.input_data.get("message_uuids", [])
             by_uuid = {
                 str(m.uuid): m
-                for m in MailMessage.objects.filter(
-                    uuid__in=message_uuids,
-                    account__owner=ai_task.owner,
-                ).only(
-                    "uuid",
-                    "subject",
-                    "from_name",
-                    "from_email",
-                    "snippet",
-                    "account_id",
-                )
+                for m in _classify_message_queryset(ai_task.owner, message_uuids)
             }
             # Preserve the caller's input order. The DB returns rows in
             # PK (uuid) order which is random for v4 UUIDs, so the LLM
@@ -289,6 +314,9 @@ def classify_mail_messages(self, task_id: str):
 
             with transaction.atomic():
                 if all_links:
+                    # Callers only ever pass unlabelled messages, so all_links
+                    # holds new assignments only; ignore_conflicts is a race
+                    # guard, not a sign of a message being re-notified.
                     MailMessageLabel.objects.bulk_create(
                         all_links, ignore_conflicts=True
                     )
@@ -296,6 +324,11 @@ def classify_mail_messages(self, task_id: str):
                 ai_task.model_used = model_used
                 ai_task.prompt_tokens = total_prompt
                 ai_task.completion_tokens = total_completion
+
+            # Outside the atomic block on purpose: notify() dispatches the push
+            # task immediately, and inside an open transaction the worker can
+            # run before the rows are visible and drop the push silently.
+            _notify_for_notifying_labels(ai_task, all_links)
 
             logger.info(
                 "Classify complete: task=%s messages=%d tokens=%d+%d",
@@ -310,3 +343,31 @@ def classify_mail_messages(self, task_id: str):
         return {"status": "error", "error": "Task not found"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+
+def _notify_for_notifying_labels(ai_task, links):
+    """Push a notification for each message that got a notify_on_apply label.
+
+    Called from the task rather than from a post_save signal on
+    MailMessageLabel: a signal would also fire when the user labels their own
+    message by hand, notifying them about their own action. The same reason
+    is why a manually-dispatched classify task sets suppress_notifications.
+    """
+    from workspace.mail.services.notifications import notify_labeled_messages
+
+    by_pk = {
+        link.message.pk: link.message for link in links if link.label.notify_on_apply
+    }
+    if not by_pk:
+        return
+    try:
+        notify_labeled_messages(
+            ai_task.owner,
+            list(by_pk.values()),
+            was_initial_sync=bool(ai_task.input_data.get("suppress_notifications")),
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send mail label notifications for task %s",
+            scrub(str(ai_task.pk)),
+        )

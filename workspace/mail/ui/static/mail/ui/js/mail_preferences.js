@@ -42,6 +42,14 @@ window.mailPreferences = function mailPreferences() {
             const el = document.getElementById('mail-ai-features-data');
             return el ? JSON.parse(el.textContent) : { classify: true, extract: true, manual: true };
         })(),
+        notifyMode: (function () {
+            const el = document.getElementById('mail-notify-mode-data');
+            return el ? JSON.parse(el.textContent) : 'never';
+        })(),
+        notifyBurst: (function () {
+            const el = document.getElementById('mail-notify-burst-data');
+            return el ? JSON.parse(el.textContent) : 10;
+        })(),
 
         async init() {
             await window._mailPrefsReady;
@@ -61,6 +69,25 @@ window.mailPreferences = function mailPreferences() {
             this.ai[feature] = value;
             fetch('/api/v1/settings/mail/ai_' + feature, {
                 method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                body: JSON.stringify({ value: value }),
+            }).catch(function() {});
+        },
+
+        saveNotifyMode(value) {
+            this.notifyMode = value;
+            this._saveMailSetting('notify_mode', value);
+        },
+
+        saveNotifyBurst(value) {
+            this.notifyBurst = value;
+            this._saveMailSetting('notify_max_burst', value);
+        },
+
+        _saveMailSetting(key, value) {
+            fetch('/api/v1/settings/mail/' + key, {
+                method: 'PUT',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
                 body: JSON.stringify({ value: value }),
             }).catch(function() {});

@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from workspace.chat.models import Conversation
 from workspace.notifications.models import Notification, PushSubscription
 from workspace.notifications.tests.vapid_fixtures import (
     TEST_PRIVATE_KEY_RAW,
@@ -57,6 +58,32 @@ class SendPushNotificationTests(TestCase):
 
         send_push_notification(str(self.notif.uuid))
         self.assertEqual(mock_webpush.call_count, 2)
+
+    @patch("workspace.notifications.tasks.is_active", return_value=False)
+    @patch("workspace.notifications.tasks.webpush")
+    def test_payload_carries_the_tag_alongside_the_other_display_fields(
+        self, mock_webpush, _
+    ):
+        import orjson
+
+        from workspace.notifications.tasks import (
+            _notification_tag,
+            send_push_notification,
+        )
+
+        send_push_notification(str(self.notif.uuid))
+        payload = orjson.loads(mock_webpush.call_args.kwargs["data"])
+        self.assertEqual(
+            payload,
+            {
+                "title": self.notif.title,
+                "body": self.notif.body,
+                "icon": self.notif.icon,
+                "url": self.notif.url,
+                "origin": self.notif.origin,
+                "tag": _notification_tag(self.notif),
+            },
+        )
 
     @patch("workspace.notifications.tasks.is_active", return_value=True)
     @patch("workspace.notifications.tasks.webpush")
@@ -276,3 +303,68 @@ class ActiveUserRetryTests(TestCase):
             tasks.send_push_notification(str(self.notif.uuid), is_retry=True)
         mock_webpush.assert_not_called()
         mock_apply.assert_not_called()
+
+
+class NotificationTagTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user(username="tagtests", password="pass")
+
+    def test_tag_is_per_source_not_per_origin(self):
+        from workspace.notifications.tasks import _notification_tag
+
+        conv_a = Conversation.objects.create(created_by=self.alice, kind="dm")
+        conv_b = Conversation.objects.create(created_by=self.alice, kind="dm")
+        notif_a = Notification.objects.create(
+            recipient=self.alice, origin="chat", icon="", title="A", conversation=conv_a
+        )
+        notif_b = Notification.objects.create(
+            recipient=self.alice, origin="chat", icon="", title="B", conversation=conv_b
+        )
+        self.assertNotEqual(_notification_tag(notif_a), _notification_tag(notif_b))
+
+    def test_sourceless_notifications_do_not_share_a_tag(self):
+        from workspace.notifications.tasks import _notification_tag
+
+        first = Notification.objects.create(
+            recipient=self.alice, origin="core", icon="", title="A"
+        )
+        second = Notification.objects.create(
+            recipient=self.alice, origin="core", icon="", title="B"
+        )
+        self.assertNotEqual(_notification_tag(first), _notification_tag(second))
+
+    def test_a_mail_message_source_yields_a_tag_and_a_cooldown_key(self):
+        """The mail source must reach both derived helpers.
+
+        This is the test for the failure mode that used to be silent: a source
+        missing from the cooldown list produced a None key, which disabled the
+        60-second per-source throttle without logging anything.
+        """
+        from workspace.mail.models import MailAccount, MailFolder, MailMessage
+        from workspace.notifications.tasks import (
+            _notification_tag,
+            _source_cooldown_key,
+        )
+
+        account = MailAccount.objects.create(
+            owner=self.alice,
+            email="tag@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="tag@example.test",
+        )
+        folder = MailFolder.objects.create(
+            account=account, name="INBOX", display_name="Inbox", folder_type="inbox"
+        )
+        message = MailMessage.objects.create(
+            account=account, folder=folder, imap_uid=1, subject="Hi"
+        )
+        notif = Notification.objects.create(
+            recipient=self.alice,
+            origin="mail",
+            icon="",
+            title="Hi",
+            mail_message=message,
+        )
+        self.assertIn("mail_message_id", _notification_tag(notif))
+        self.assertIsNotNone(_source_cooldown_key(notif))

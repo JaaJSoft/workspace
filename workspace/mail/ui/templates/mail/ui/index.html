@@ -216,6 +216,14 @@ x-data="mailApp()"
       " class="mb-4">
         {% include "ui/partials/icon_picker.html" %}
       </div>
+      <label class="flex items-center justify-between gap-2 cursor-pointer mb-3">
+        <span class="text-sm">
+          Notify me about these emails
+          <span class="block text-xs text-base-content/50">A new email getting this label sends a notification.</span>
+        </span>
+        <input type="checkbox" class="toggle toggle-sm toggle-warning"
+               x-model="labelModal.notifyOnApply">
+      </label>
       <div x-show="labelModal.error" x-cloak class="mb-3">
         <div class="text-sm text-error" x-text="labelModal.error"></div>
       </div>
@@ -530,6 +538,8 @@ x-data="mailApp()"
 {{ accounts|json_script:"accounts-data" }}
 {{ oauth_providers|json_script:"oauth-providers-data" }}
 {{ mail_ai_features|json_script:"mail-ai-features-data" }}
+{{ notify_mode|json_script:"mail-notify-mode-data" }}
+{{ notify_max_burst|json_script:"mail-notify-burst-data" }}
 {% endblock %}
 
 {% block extra_scripts %}

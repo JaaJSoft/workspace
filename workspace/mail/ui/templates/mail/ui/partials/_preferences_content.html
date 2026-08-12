@@ -52,4 +52,32 @@
       :checked="ai.manual"
       @change="saveAiFeature('manual', $event.target.checked)">
   </label>
+  <hr class="border-base-300">
+  <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Notifications</div>
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Notify me about</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="notifyMode"
+      @change="saveNotifyMode($event.target.value)">
+      <option value="all">All new emails</option>
+      <option value="labels">Only labels I chose</option>
+      <option value="never">Never</option>
+    </select>
+  </div>
+  <template x-if="notifyMode === 'labels' && !ai.classify">
+    {% include "ui/partials/inline_alert.html" with type="warning" message="Auto-classify is off, so no email gets labelled and no notification is sent." class="mt-1" %}
+  </template>
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Max notifications per folder at once</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="notifyBurst"
+      @change="saveNotifyBurst(parseInt($event.target.value))">
+      <option value="3">3</option>
+      <option value="5">5</option>
+      <option value="10">10</option>
+      <option value="20">20</option>
+      <option value="50">50</option>
+    </select>
+    <p class="text-xs text-base-content/50 mt-1">When several emails arrive together, only the first ones are notified. The rest still appear in your inbox.</p>
+  </div>
 </div>

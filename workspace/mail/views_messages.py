@@ -13,6 +13,7 @@ from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.notifications.services.notifications import mark_sources_read
 
 from .models import MailFolder, MailLabel, MailMessage, MailMessageLabel
 from .queries import user_account_ids
@@ -140,7 +141,7 @@ class MailMessageListView(CacheControlMixin, APIView):
 
         total = qs.count()
         order_fields = ("-search_rank", "-date") if search else ("-date",)
-        messages = (
+        messages = list(
             qs.annotate(attachments_count=Count("attachments"))
             .prefetch_related(
                 Prefetch(
@@ -152,6 +153,11 @@ class MailMessageListView(CacheControlMixin, APIView):
             )
             .order_by(*order_fields)[offset : offset + page_size]
         )
+
+        # Seeing the row in the list is seeing the mail arrive. Covers the
+        # folder, label and inbox=all modes at once, which a folder-scoped
+        # hook would not: the default mail view is a unified inbox.
+        mark_sources_read(request.user, messages)
 
         return Response(
             {
@@ -252,6 +258,7 @@ class MailMessageDetailView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         from .services.imap_messages import delete_message
+        from .services.notifications import clear_notifications_for_deleted_messages
         from .views import _refresh_folder_counts, _refresh_message_label_counts
 
         with transaction.atomic():
@@ -259,6 +266,11 @@ class MailMessageDetailView(APIView):
             msg.save(update_fields=["deleted_at", "updated_at"])
             _refresh_folder_counts(msg.folder)
             _refresh_message_label_counts(msg)
+
+        # Soft delete never CASCADEs the row's Notification, and a deleted
+        # message can never again appear on a rendered page for
+        # mark_sources_read to catch it - settle it here instead.
+        clear_notifications_for_deleted_messages(request.user, [msg.pk])
 
         try:
             delete_message(msg.account, msg)
@@ -322,12 +334,14 @@ class MailBatchActionView(APIView):
         affected_folders = set()
         to_bulk_update = []
         bulk_update_fields = set()
+        deleted_pks = []
         for msg in messages:
             affected_folders.add(msg.folder_id)
             try:
                 if action == "delete":
                     msg.deleted_at = timezone.now()
                     msg.save(update_fields=["deleted_at", "updated_at"])
+                    deleted_pks.append(msg.pk)
                     try:
                         delete_message(msg.account, msg)
                     except Exception as e:
@@ -376,6 +390,7 @@ class MailBatchActionView(APIView):
                 )
 
         from .services.label_counts import refresh_labels_for_messages
+        from .services.notifications import clear_notifications_for_deleted_messages
         from .views import _refresh_folders_counts_bulk
 
         with transaction.atomic():
@@ -391,5 +406,11 @@ class MailBatchActionView(APIView):
             # Refresh label counts for read/unread/delete actions
             if action in ("mark_read", "mark_unread", "delete"):
                 refresh_labels_for_messages([m.pk for m in messages])
+
+        if deleted_pks:
+            # Soft delete never CASCADEs the row's Notification, and a
+            # deleted message can never again appear on a rendered page for
+            # mark_sources_read to catch it - settle it here instead.
+            clear_notifications_for_deleted_messages(request.user, deleted_pks)
 
         return Response({"processed": processed})

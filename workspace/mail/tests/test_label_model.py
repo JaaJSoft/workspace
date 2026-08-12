@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
+from django.db import IntegrityError, migrations
 from django.test import TestCase
 
 from workspace.mail.models import (
@@ -195,3 +195,122 @@ class DefaultLabelSeedTests(TestCase):
             using="default",
         )
         self.assertEqual(MailLabel.objects.count(), before)
+
+
+class LabelNotifyOnApplySeedTests(TestCase):
+    def test_seeding_flags_urgent_only(self):
+        from workspace.mail.models import MailAccount, MailLabel
+
+        account = MailAccount.objects.create(
+            owner=User.objects.create_user(username="seedflag", password="pass"),
+            email="s@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="s@example.test",
+        )
+        flagged = set(
+            MailLabel.objects.filter(account=account, notify_on_apply=True).values_list(
+                "name", flat=True
+            )
+        )
+        self.assertEqual(flagged, {"Urgent"})
+
+    def test_new_labels_default_to_not_notifying(self):
+        from workspace.mail.models import MailAccount, MailLabel
+
+        account = MailAccount.objects.create(
+            owner=User.objects.create_user(username="defaultflag", password="pass"),
+            email="d@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="d@example.test",
+        )
+        label = MailLabel.objects.create(account=account, name="Custom")
+        self.assertFalse(label.notify_on_apply)
+
+
+class NotifyOnApplyBackfillTests(TestCase):
+    """The data migration flags pre-existing Urgent labels, case-insensitively."""
+
+    def setUp(self):
+        from workspace.mail.models import MailAccount, MailLabel
+
+        self.account = MailAccount.objects.create(
+            owner=User.objects.create_user(username="backfill", password="pass"),
+            email="b@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="b@example.test",
+        )
+        # The post_save signal already seeded the defaults; reset so this test
+        # exercises the migration rather than the signal.
+        MailLabel.objects.filter(account=self.account).update(notify_on_apply=False)
+
+    def test_backfill_flags_urgent_regardless_of_case(self):
+        import importlib
+
+        from django.apps import apps
+
+        from workspace.mail.models import MailLabel
+
+        MailLabel.objects.create(account=self.account, name="urgent bis")
+        module = importlib.import_module(
+            "workspace.mail.migrations.0031_seed_notify_on_apply"
+        )
+
+        class _Editor:
+            class connection:
+                alias = "default"
+
+        module.flag_urgent_labels(apps, _Editor)
+
+        self.assertTrue(
+            MailLabel.objects.get(account=self.account, name="Urgent").notify_on_apply
+        )
+        self.assertFalse(
+            MailLabel.objects.get(
+                account=self.account, name="urgent bis"
+            ).notify_on_apply
+        )
+
+    def test_reverse_leaves_every_flag_untouched(self):
+        """Reversing must not write to notify_on_apply at all.
+
+        The column is user-editable through the label API, so a reverse cannot
+        tell a seeded default from a deliberate choice - including on "Urgent"
+        itself, where a user who turned the flag off and then back on looks
+        exactly like the migration's own write.
+        """
+        import importlib
+
+        from django.apps import apps
+
+        from workspace.mail.models import MailLabel
+
+        module = importlib.import_module(
+            "workspace.mail.migrations.0031_seed_notify_on_apply"
+        )
+        reverse = module.Migration.operations[0].reverse_code
+
+        class _Editor:
+            class connection:
+                alias = "default"
+
+        MailLabel.objects.filter(account=self.account, name="Urgent").update(
+            notify_on_apply=False
+        )
+        MailLabel.objects.filter(account=self.account, name="Action").update(
+            notify_on_apply=True
+        )
+
+        # Run whatever the migration actually declares, so this fails if the
+        # reverse is ever replaced by something that writes.
+        self.assertIs(reverse, migrations.RunPython.noop)
+        reverse(apps, _Editor)
+
+        self.assertFalse(
+            MailLabel.objects.get(account=self.account, name="Urgent").notify_on_apply
+        )
+        self.assertTrue(
+            MailLabel.objects.get(account=self.account, name="Action").notify_on_apply
+        )

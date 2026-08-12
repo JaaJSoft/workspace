@@ -127,6 +127,12 @@ def sync_folder_messages(account, folder):
             folder.uid_validity = uid_validity
         folder.save(update_fields=["uid_validity", "updated_at"])
 
+        # Captured here on purpose. Reading it at function entry would miss the
+        # UIDVALIDITY reset just above, which purges the folder and re-imports
+        # everything - as silent an event as a first sync. Reading it at the end
+        # would always say "not initial", because the cursor advances below.
+        was_initial_sync = folder.last_sync_uid == 0
+
         # Search for new UIDs (always use UID SEARCH to get real UIDs)
         uid_list = []
         if folder.last_sync_uid > 0:
@@ -242,6 +248,21 @@ def sync_folder_messages(account, folder):
             except Exception:
                 logger.exception("rules engine failed for %s", scrub(folder.name))
 
+        # After rules, not before: notify_new_messages re-queries is_read and
+        # deleted_at, so a rule that marks read/deletes a message here also
+        # suppresses its push. Own try/except, like the AI dispatch below: a
+        # notification failure must never break a sync.
+        try:
+            from workspace.mail.services.notifications import notify_new_messages
+
+            notify_new_messages(
+                folder, new_message_uuids, was_initial_sync=was_initial_sync
+            )
+        except Exception:
+            logger.exception(
+                "Failed to send mail notifications for %s", scrub(folder.name)
+            )
+
         # Dispatch AI classification / extraction for new messages
         # (skip sent/drafts). Classify and extract are gated by independent
         # per-user toggles AND wrapped in independent try/except blocks so a
@@ -266,7 +287,10 @@ def sync_folder_messages(account, folder):
                             dispatch(
                                 owner=account.owner,
                                 task_type=AITask.TaskType.CLASSIFY,
-                                input_data={"message_uuids": new_message_uuids},
+                                input_data={
+                                    "message_uuids": new_message_uuids,
+                                    "suppress_notifications": was_initial_sync,
+                                },
                             )
                             dispatched.append("classify")
                         except Exception:
@@ -354,10 +378,18 @@ def _reconcile_folder(conn, folder):
     # Soft-delete messages that are no longer on the server
     gone = local_uids - remote_uids
     if gone:
+        # Captured before the update: the row survives (this is a soft
+        # delete, not a CASCADE), but pk is what the notification helper
+        # needs, and gone/imap_uid alone can't join back to it after.
+        gone_pks = list(
+            MailMessage.objects.filter(
+                folder=folder,
+                imap_uid__in=gone,
+                deleted_at__isnull=True,
+            ).values_list("pk", flat=True)
+        )
         count = MailMessage.objects.filter(
-            folder=folder,
-            imap_uid__in=gone,
-            deleted_at__isnull=True,
+            pk__in=gone_pks, deleted_at__isnull=True
         ).update(deleted_at=dj_timezone.now())
         if count:
             logger.info(
@@ -365,6 +397,11 @@ def _reconcile_folder(conn, folder):
                 scrub(folder.name),
                 count,
             )
+            from workspace.mail.services.notifications import (
+                clear_notifications_for_deleted_messages,
+            )
+
+            clear_notifications_for_deleted_messages(folder.account.owner, gone_pks)
 
     # Update flags for remaining messages
     present = local_uids & remote_uids

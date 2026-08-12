@@ -334,7 +334,12 @@ class ClassifyView(APIView):
         ai_task = dispatch(
             owner=request.user,
             task_type=AITask.TaskType.CLASSIFY,
-            input_data={"message_uuids": [str(u) for u in message_uuids]},
+            input_data={
+                "message_uuids": [str(u) for u in message_uuids],
+                # A user-triggered backfill is not news about the user's own
+                # action - see _notify_for_notifying_labels.
+                "suppress_notifications": True,
+            },
         )
 
         return Response(

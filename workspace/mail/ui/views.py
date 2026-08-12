@@ -8,6 +8,10 @@ from workspace.mail.services.ai_settings import (
     MAIL_AI_FEATURES,
     is_mail_ai_feature_enabled,
 )
+from workspace.mail.services.notifications import (
+    resolve_notify_burst,
+    resolve_notify_mode,
+)
 from workspace.mail.services.oauth2 import get_available_providers
 
 
@@ -25,5 +29,7 @@ def index(request):
             "mail_ai_features": {
                 f: is_mail_ai_feature_enabled(request.user, f) for f in MAIL_AI_FEATURES
             },
+            "notify_mode": resolve_notify_mode(request.user),
+            "notify_max_burst": resolve_notify_burst(request.user),
         },
     )

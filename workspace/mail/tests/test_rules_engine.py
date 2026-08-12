@@ -249,6 +249,30 @@ class ApplyRuleToFolderTests(TestCase):
         self.assertEqual(rule.match_count, 0)
         self.assertIsNone(rule.last_matched_at)
 
+    def test_delete_action_clears_an_existing_unread_notification(self):
+        """apply_rule_to_folder runs against existing messages, unlike the
+        sync path, so a message it deletes can already carry a notification
+        (e.g. delivered earlier under notify mode "all"). Soft delete never
+        cascades that row - it must be marked read explicitly."""
+        from workspace.notifications.models import Notification
+
+        m = self._msg(imap_uid=1)
+        notif = Notification.objects.create(
+            recipient=self.user,
+            origin="mail",
+            icon="",
+            title="Hi",
+            mail_message=m,
+        )
+        rule = self._rule(actions=[{"type": "delete"}])
+
+        with patch("workspace.mail.services.rules.actions.delete_message"):
+            result = apply_rule_to_folder(rule, self.folder, dry_run=False)
+
+        self.assertEqual(result["applied"], 1)
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
+
     def test_imap_failure_counted(self):
         self._msg(imap_uid=1)
         target = MailFolder.objects.create(

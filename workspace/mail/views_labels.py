@@ -73,6 +73,7 @@ class MailLabelListView(APIView):
             name=ser.validated_data["name"],
             color=ser.validated_data.get("color", ""),
             icon=ser.validated_data.get("icon", ""),
+            notify_on_apply=ser.validated_data.get("notify_on_apply", False),
         )
         return Response(MailLabelSerializer(label).data, status=status.HTTP_201_CREATED)
 
@@ -110,7 +111,7 @@ class MailLabelDetailView(APIView):
                 )
 
         update_fields = ["updated_at"]
-        for field in ("name", "color", "icon", "position"):
+        for field in ("name", "color", "icon", "position", "notify_on_apply"):
             if field in ser.validated_data:
                 setattr(label, field, ser.validated_data[field])
                 update_fields.append(field)

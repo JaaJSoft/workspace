@@ -315,3 +315,33 @@ class ClassifyViewTests(APITestCase):
 
         ai_task = AITask.objects.get(pk=resp.data["uuid"])
         self.assertEqual(ai_task.input_data["message_uuids"], [])
+
+    def test_manual_classify_never_notifies_about_the_users_own_action(self):
+        # CELERY_TASK_ALWAYS_EAGER defaults to True outside an override, so
+        # dispatch() -> .delay() runs classify_mail_messages synchronously
+        # here, exercising the real notify path instead of a mocked one.
+        from django.core.cache import cache
+
+        from workspace.notifications.models import Notification
+        from workspace.users.services.settings import set_setting
+
+        self.addCleanup(cache.clear)
+        set_setting(self.user, "mail", "notify_mode", "labels")
+        self.client.force_authenticate(self.user)
+
+        with (
+            patch(
+                "workspace.ai.tasks.mail.call_llm",
+                return_value={
+                    "content": '[{"i": 1, "labels": ["Urgent"]}]',
+                    "model": "test",
+                    "prompt_tokens": 1,
+                    "completion_tokens": 1,
+                },
+            ),
+            patch("workspace.notifications.tasks.send_push_notification.delay"),
+        ):
+            resp = self.client.post("/api/v1/ai/tasks/mail/classify", {}, format="json")
+
+        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(Notification.objects.filter(recipient=self.user).count(), 0)

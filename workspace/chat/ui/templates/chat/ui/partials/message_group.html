@@ -307,6 +307,15 @@
         {# Reactions #}
         {% render_reactions msg current_user %}
 
+        {% comment %}
+          A message is either a thread's root (it has replies) or one of its
+          replies - never both, since replies are flattened onto the root. So
+          these two cases are exclusive.
+
+          The reply's link only appears in the main flow: inside the panel the
+          thread is already open, and a "View thread" under every reply would
+          be pure noise.
+        {% endcomment %}
         {% if msg.reply_count %}
           <button type="button"
                   data-testid="thread-footer"
@@ -321,6 +330,19 @@
             <span data-thread-count="{{ msg.uuid }}">{{ msg.reply_count }} repl{{ msg.reply_count|pluralize:"y,ies" }}</span>
             <span x-show="threadUnread('{{ msg.uuid }}') > 0" x-cloak
                   class="w-1.5 h-1.5 rounded-full bg-info"></span>
+          </button>
+        {% elif msg.thread_root_id and not in_thread %}
+          {% comment %}
+            thread_root_id, not thread_root.uuid: the flow queryset does not
+            select_related the root, so dereferencing it would fire a query per
+            reply.
+          {% endcomment %}
+          <button type="button"
+                  data-testid="thread-link"
+                  class="flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded-full text-xs text-base-content/50 hover:text-info hover:bg-info/10 transition-colors"
+                  @click="openThread('{{ msg.thread_root_id }}')">
+            <i data-lucide="messages-square" class="w-3 h-3"></i>
+            <span>View thread</span>
           </button>
         {% endif %}
       {% endif %}

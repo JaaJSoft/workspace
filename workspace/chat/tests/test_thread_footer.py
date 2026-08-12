@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.chat.services.rendering import render_message_body
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -61,3 +62,47 @@ class ThreadFooterTests(TestCase):
         html = self.client.get(self.url).content.decode()
         self.assertIn("1 reply", html)
         self.assertNotIn("1 replies", html)
+
+    def _reply(self, root, body="a reply"):
+        return Message.objects.create(
+            conversation=self.conversation,
+            author=self.alice,
+            body=body,
+            body_html=render_message_body(body),
+            reply_to=root,
+            thread_root=root,
+        )
+
+    def test_a_reply_shown_inline_can_reopen_its_thread(self):
+        # With the inline preference on, a reply is visible in the flow far
+        # below its root. Without its own way back into the thread, the only
+        # route is scrolling up to hunt for the root.
+        set_setting(
+            self.alice, "chat", "preferences", {"showThreadRepliesInline": True}
+        )
+        root = self._root(1)
+        self._reply(root)
+
+        html = self.client.get(self.url).content.decode()
+
+        self.assertIn("View thread", html)
+        # Both the root's count and the reply's link point at the same thread.
+        self.assertEqual(html.count(f"openThread('{root.uuid}')"), 2)
+
+    def test_a_reply_hidden_from_the_flow_adds_no_link(self):
+        root = self._root(1)
+        self._reply(root)
+
+        html = self.client.get(self.url).content.decode()
+
+        self.assertNotIn("View thread", html)
+
+    def test_the_panel_does_not_offer_to_open_the_thread_it_is_showing(self):
+        root = self._root(1)
+        self._reply(root)
+
+        html = self.client.get(
+            reverse("chat_ui:thread_messages", kwargs={"root_uuid": root.uuid})
+        ).content.decode()
+
+        self.assertNotIn("View thread", html)

@@ -68,7 +68,7 @@ window.mailLabelsMixin = function mailLabelsMixin() {
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
           body: JSON.stringify(isEdit
             ? { name: m.name.trim(), color: m.color, icon: m.icon, notify_on_apply: m.notifyOnApply }
-            : { account_id: m.accountId, name: m.name.trim(), color: m.color, icon: m.icon }
+            : { account_id: m.accountId, name: m.name.trim(), color: m.color, icon: m.icon, notify_on_apply: m.notifyOnApply }
           ),
         });
         if (resp.ok) {

@@ -102,6 +102,7 @@ class MailLabelCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100)
     color = serializers.CharField(max_length=30, required=False, default="")
     icon = serializers.CharField(max_length=50, required=False, default="")
+    notify_on_apply = serializers.BooleanField(required=False, default=False)
 
 
 class MailLabelUpdateSerializer(serializers.Serializer):

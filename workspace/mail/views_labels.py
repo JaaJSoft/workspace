@@ -73,6 +73,7 @@ class MailLabelListView(APIView):
             name=ser.validated_data["name"],
             color=ser.validated_data.get("color", ""),
             icon=ser.validated_data.get("icon", ""),
+            notify_on_apply=ser.validated_data.get("notify_on_apply", False),
         )
         return Response(MailLabelSerializer(label).data, status=status.HTTP_201_CREATED)
 

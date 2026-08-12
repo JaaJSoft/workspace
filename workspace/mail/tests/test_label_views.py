@@ -68,6 +68,21 @@ class MailLabelCRUDTests(TestCase):
             MailLabel.objects.filter(account=self.account, name="Custom").exists()
         )
 
+    def test_create_label_with_notify_on_apply_persists_it(self):
+        resp = self.client.post(
+            "/api/v1/mail/labels",
+            {
+                "account_id": str(self.account.uuid),
+                "name": "Critical",
+                "notify_on_apply": True,
+            },
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(resp.data["notify_on_apply"])
+        self.assertTrue(
+            MailLabel.objects.get(account=self.account, name="Critical").notify_on_apply
+        )
+
     def test_create_duplicate_name(self):
         resp = self.client.post(
             "/api/v1/mail/labels",

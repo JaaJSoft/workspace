@@ -22,7 +22,7 @@ window.chatSseMixin = function chatSseMixin() {
           this.clearBotStep();
         }
         // Check if message already exists in the DOM
-        if (!document.getElementById(`msg-${detail.message.uuid}`)) {
+        if (!document.getElementById(`${this._messageIdPrefix()}-${detail.message.uuid}`)) {
           const wasAtBottom = this._isNearBottom();
           await this._refreshCurrentMessages();
           if (wasAtBottom) this.scrollToBottom();
@@ -40,8 +40,9 @@ window.chatSseMixin = function chatSseMixin() {
 
     handleSSEMessageEdited(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        const el = document.getElementById(`msg-${detail.message_id}`);
-        if (el) {
+        // Every copy: the message can be rendered in the main flow and in the
+        // thread panel at the same time.
+        this._messageEls(detail.message_id).forEach((el) => {
           const bodyEl = el.querySelector('.msg-body');
           if (bodyEl) bodyEl.innerHTML = detail.body_html;
           if (!el.querySelector('.edited-indicator')) {
@@ -51,7 +52,7 @@ window.chatSseMixin = function chatSseMixin() {
             el.appendChild(indicator);
           }
           el.dataset.body = detail.body;
-        }
+        });
       }
     },
 

@@ -30,7 +30,8 @@
         <div class="msg-bubble rounded-2xl text-sm italic
                     bg-base-200 text-base-content/40"
              :class="chatPrefs.compactMessageView ? 'px-2.5 py-1' : 'px-3 py-1.5'"
-             id="{{ prefix }}-{{ msg.uuid }}">
+             id="{{ prefix }}-{{ msg.uuid }}"
+             data-message-uuid="{{ msg.uuid }}">
           Message deleted
         </div>
       {% else %}
@@ -40,6 +41,7 @@
                       {% if is_own %}bg-info/15 text-base-content{% else %}bg-base-200 text-base-content{% endif %}"
                :class="chatPrefs.compactMessageView ? 'px-2.5 py-1' : 'px-3 py-1.5'"
                id="{{ prefix }}-{{ msg.uuid }}"
+               data-message-uuid="{{ msg.uuid }}"
                data-body="{{ msg.body }}">
             {% if msg.reply_to %}
               <a href="#{{ prefix }}-{{ msg.reply_to.uuid }}"
@@ -298,6 +300,18 @@
 
         {# Reactions #}
         {% render_reactions msg current_user %}
+
+        {% if msg.reply_count %}
+          <button type="button"
+                  data-testid="thread-footer"
+                  class="flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded-full text-xs text-info hover:bg-info/10 transition-colors"
+                  @click="openThread('{{ msg.uuid }}')">
+            <i data-lucide="messages-square" class="w-3 h-3"></i>
+            <span data-thread-count>{{ msg.reply_count }} repl{{ msg.reply_count|pluralize:"y,ies" }}</span>
+            <span x-show="threadUnread('{{ msg.uuid }}') > 0" x-cloak
+                  class="w-1.5 h-1.5 rounded-full bg-info"></span>
+          </button>
+        {% endif %}
       {% endif %}
     {% endfor %}
 

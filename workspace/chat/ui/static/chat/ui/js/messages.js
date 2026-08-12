@@ -26,6 +26,15 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
     _replyTarget() { return this.replyingTo?.uuid || null; },
 
+    // Every rendered copy of a message, across surfaces. With the inline
+    // preference on and the thread panel open, one message is on screen twice,
+    // so a state change (edit, delete, reaction) has to reach both. Use this
+    // for updates; use `_messageIdPrefix()` + getElementById when you mean
+    // "the copy on THIS surface", such as a scroll target.
+    _messageEls(uuid) {
+      return document.querySelectorAll(`[data-message-uuid="${uuid}"]`);
+    },
+
     // ── Server-rendered HTML helpers ─────────────────────────
     _initMessagesDom(container) {
       // Initialize Alpine on dynamically injected HTML
@@ -479,7 +488,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
     // ── Editing ────────────────────────────────────────────
     startEdit(msgUuid) {
-      const el = document.getElementById(`msg-${msgUuid}`);
+      const el = this._messageEls(msgUuid)[0];
       if (!el) return;
       this.editingMessageUuid = msgUuid;
       this.messageBody = el.dataset.body || '';
@@ -511,9 +520,9 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
         if (resp.ok) {
           const updated = await resp.json();
-          // Update the DOM element directly
-          const el = document.getElementById(`msg-${updated.uuid}`);
-          if (el) {
+          // Update every rendered copy, not just the first: the message can be
+          // on screen in both the main flow and the thread panel.
+          this._messageEls(updated.uuid).forEach((el) => {
             const bodyEl = el.querySelector('.msg-body');
             if (bodyEl) bodyEl.innerHTML = updated.body_html;
             // Add edited indicator if not already present
@@ -523,7 +532,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
               indicator.textContent = '(edited)';
               el.appendChild(indicator);
             }
-          }
+          });
         }
       } catch (e) {
         console.error('Failed to edit message', e);
@@ -554,17 +563,18 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         );
 
         if (resp.ok) {
-          // Replace the message bubble with a "deleted" placeholder
-          const el = document.getElementById(`msg-${msgUuid}`);
-          if (el) {
+          // Replace every rendered copy with a "deleted" placeholder, keeping
+          // each one's own id so its surface's scroll anchors still resolve.
+          this._messageEls(msgUuid).forEach((el) => {
             // Replace the entire row (parent .group/msg div) with a simple deleted indicator
             const row = el.closest('.group\\/msg') || el.parentElement;
             const placeholder = document.createElement('div');
             placeholder.className = 'msg-bubble rounded-2xl px-3 py-1.5 text-sm italic bg-base-200 text-base-content/40';
-            placeholder.id = `msg-${msgUuid}`;
+            placeholder.id = el.id;
+            placeholder.dataset.messageUuid = msgUuid;
             placeholder.textContent = 'Message deleted';
             row.replaceWith(placeholder);
-          }
+          });
         }
       } catch (e) {
         console.error('Failed to delete message', e);

@@ -233,7 +233,7 @@ window.chatPanelsMixin = function chatPanelsMixin() {
     },
 
     scrollToMessage(uuid) {
-      const el = document.getElementById(`msg-${uuid}`);
+      const el = document.getElementById(`${this._messageIdPrefix()}-${uuid}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
@@ -252,7 +252,7 @@ window.chatPanelsMixin = function chatPanelsMixin() {
       while (this.hasMoreMessages && attempts < 20) {
         await this.loadMoreMessages();
         attempts++;
-        const el = document.getElementById(`msg-${uuid}`);
+        const el = document.getElementById(`${this._messageIdPrefix()}-${uuid}`);
         if (el) {
           await this.$nextTick();
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });

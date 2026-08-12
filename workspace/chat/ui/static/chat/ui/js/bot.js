@@ -131,7 +131,7 @@ window.chatBotMixin = function chatBotMixin() {
       const convId = this.activeConversation.uuid;
 
       // Remove the error message from the DOM immediately
-      const el = document.getElementById(`msg-${errorMsgUuid}`);
+      const el = this._messageEls(errorMsgUuid)[0];
       const group = el?.closest('.msg-group');
       if (group) group.remove();
 

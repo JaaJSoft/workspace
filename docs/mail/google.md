@@ -11,13 +11,13 @@ Both end up on the same IMAP and SMTP servers (`imap.gmail.com:993` and `smtp.gm
 
 |                          | App password                                        | OAuth2                                                              |
 |--------------------------|-----------------------------------------------------|---------------------------------------------------------------------|
-| Who sets it up           | Each user, on their own                             | Administrator once, then one click per user                          |
+| Who sets it up           | Each user, on their own, when the organization allows it | Administrator once, then one click per user                     |
 | Effort                   | ~2 minutes per mailbox                              | ~15 minutes once in the Google Cloud console                         |
 | Prerequisites            | 2-Step Verification on the Google account           | A Google Cloud project and a public HTTPS URL for the instance       |
 | Stored by Workspace      | The 16-character password, encrypted                | Access and refresh tokens, encrypted                                 |
-| Expiry                   | None                                                | None, **except 7 days** for an unpublished external app (see below)  |
+| Expiry                   | None                                                | No fixed expiry, but Google invalidates tokens on several events; a flat **7 days** for an unpublished external app ([details](#when-google-invalidates-a-refresh-token)) |
 | Revoking access          | Delete the app password on the Google account       | Revoke the app; Workspace deactivates the account and notifies its owner |
-| Blocked when             | 2-Step Verification is off, Advanced Protection is on, or an organization policy forbids app passwords | You cannot register a client, or the instance has no HTTPS URL |
+| Blocked when             | 2-Step Verification is off, Advanced Protection is on, or the organization enforces security keys as the only second factor | You cannot register a client, or the instance has no HTTPS URL |
 
 **Rule of thumb.** A personal or family instance with a handful of mailboxes: use an **app password**, it is the shortest path and has no moving parts. An instance shared with users you do not administrate, or a Google Workspace domain: use **OAuth2**, so that no long-lived credential is stored and each user can cut access from their Google account at any time.
 
@@ -29,7 +29,7 @@ Nothing prevents mixing both on the same instance: the choice is per mailbox, no
 
 ## 1. Enable 2-Step Verification
 
-App passwords only exist for accounts with 2-Step Verification enabled, under [Security > 2-Step Verification](https://myaccount.google.com/signinoptions/two-step-verification). Accounts enrolled in Google's Advanced Protection Program cannot use app passwords at all, and a Google Workspace administrator can disable them for the whole organization. In either case, go with [OAuth2](#option-b-oauth2).
+App passwords only exist for accounts with 2-Step Verification enabled, under [Security > 2-Step Verification](https://myaccount.google.com/signinoptions/two-step-verification). Two situations remove the option entirely: accounts enrolled in Google's Advanced Protection Program, and organizations whose administrator enforces security keys as the only second factor. There is no "allow app passwords" toggle in the admin console, so an administrator who wants to rule them out does it that way, or blocks the access at the API-controls level. In any of these cases, go with [OAuth2](#option-b-oauth2).
 
 ## 2. Generate the password
 
@@ -75,6 +75,19 @@ Useful to know before touching the Google console, because it explains what Goog
 
 If Google ever refuses a refresh (token revoked, consent withdrawn, password reset), the account is deactivated and its owner receives a high-priority notification asking them to reconnect.
 
+## When Google invalidates a refresh token
+
+A refresh token has no fixed lifetime, but "no expiry" is not the same as "forever". Google drops one when:
+
+- The app is an **external app still in Testing**: those tokens are hard-capped at **7 days**, counted from issuance and regardless of activity. This is the one that bites self-hosted instances, and the reason the audience decision below matters.
+- The token has **not been used for six months**. A mailbox that syncs on a schedule never gets there; one belonging to a deactivated account can.
+- The user **changes their Google account password**. Google invalidates refresh tokens of apps holding Gmail scopes on password change, and `https://mail.google.com/` is one of them. Expect every connected mailbox of that user to disconnect.
+- The user **revokes the app** from [their third-party apps page](https://myaccount.google.com/connections).
+- The account **exceeds the number of live refresh tokens** allowed for a single client, at which point the oldest ones are silently dropped.
+- An **administrator policy** cuts it: app access control blocking the client, or a Google Cloud session-control duration elapsing.
+
+All of these surface the same way: the next refresh returns `invalid_grant`, Workspace deactivates the account, notifies its owner, and one click on **Connect with Google** puts it back.
+
 ## 1. Create a Google Cloud project
 
 1. Open the [Google Cloud console](https://console.cloud.google.com/) and create a project (or reuse one). The project only holds the OAuth client; it costs nothing and needs no billing account.
@@ -86,9 +99,9 @@ Everything hinges on one Google rule: **`https://mail.google.com/` is a *restric
 
 | Audience | Who can connect | What Google requires | Refresh token lifetime |
 |---|---|---|---|
-| **Internal** (Google Workspace organizations only) | Any account in your Workspace domain | Nothing: no verification, no consent warning | Unlimited |
+| **Internal** (Google Workspace organizations only) | Any account in your Workspace domain | Nothing: no verification, no consent warning | [The usual rules](#when-google-invalidates-a-refresh-token) |
 | **External + Testing** | Only the accounts you list as test users (up to 100) | Nothing, but users see an "unverified app" warning | **7 days**, then every account must be reconnected |
-| **External + Published** | Anyone with a Google account | App verification **and** an annual CASA security assessment, because of the restricted scope | Unlimited |
+| **External + Published** | Anyone with a Google account | App verification **and** an annual CASA security assessment, because of the restricted scope | [The usual rules](#when-google-invalidates-a-refresh-token) |
 
 For a self-hosted instance the practical choices are the first two. If you have a Google Workspace domain, choose **Internal** and you are done. On personal Gmail accounts, **External + Testing** works for a handful of users, as long as you accept the weekly reconnection - it is Google's rule for unpublished apps, not a Workspace limitation. If that is a dealbreaker, [an app password](#option-a-app-password) has no expiry.
 
@@ -98,13 +111,13 @@ Configure it in **APIs & Services > OAuth consent screen** (recent consoles surf
 2. **Audience**: Internal or External. If External, add every mailbox you intend to connect under **Test users** - an account missing from that list gets `Error 403: access_denied` with no further explanation.
 3. **Data Access > Add or remove scopes**: add exactly the three scopes Workspace requests.
 
-```
+```text
 https://mail.google.com/
 openid
 email
 ```
 
-`https://mail.google.com/` is usually not in the picker list; use **Manually add scopes** and paste it. The scope string is hard-coded in `workspace/mail/services/oauth2.py`, so requesting fewer scopes in the console will simply make the consent screen fail.
+`https://mail.google.com/` is usually not in the picker list; use **Manually add scopes** and paste it. The scope string is hard-coded in `workspace/mail/services/oauth2.py` and cannot be narrowed from the console: a console declaration that does not cover all three scopes leaves the app in an inconsistent state, which surfaces either as an `invalid_scope` error, as the unverified-app screen, or as a mailbox that connects but fails on the first IMAP command. Declare the three of them.
 
 ## 3. Create the OAuth client
 
@@ -125,7 +138,7 @@ Three details Google is strict about:
 - **HTTPS is mandatory**, with a single exception: `http://localhost` (and `http://127.0.0.1`) are accepted for development. A LAN address such as `http://192.168.1.20:8000` is not.
 - **The host and port must match what Django itself builds.** Workspace never lets you configure the callback: it derives it from the incoming request. See [Behind a reverse proxy](#behind-a-reverse-proxy) if yours is fronted by nginx, Traefik or Cloudflare.
 
-Google shows the **client ID** and **client secret** once the client is created. The secret can be re-read later from the same page.
+Google shows the **client ID** and **client secret** once the client is created. **The full secret is displayed only at that moment**; the credentials page shows a truncated value afterwards. Copy it into your secret manager (or straight into the deployment configuration) right away - a lost secret cannot be recovered, only replaced by a new one.
 
 ## 4. Configure Workspace
 
@@ -172,9 +185,10 @@ Reconnecting an account that was disconnected uses the very same button: Workspa
 
 The redirect URI is built from the request, so a proxy that rewrites the `Host` header or terminates TLS without saying so produces a callback that does not match what you registered - and Google answers `redirect_uri_mismatch`. Make sure the proxy forwards:
 
-- `Host` (or `X-Forwarded-Host` together with `USE_X_FORWARDED_HOST=1`)
+- `Host`, carrying the public host **and the public port** when it is not 443 (or `X-Forwarded-Host` together with `USE_X_FORWARDED_HOST=1`)
 - `X-Forwarded-Proto: https`
-- `X-Forwarded-Port`, plus `USE_X_FORWARDED_PORT=1`, when the public port differs from the one Gunicorn sees
+
+`USE_X_FORWARDED_PORT` does not help here: Django reads the port from `X-Forwarded-Port` only when no `Host` header is present at all, which never happens behind a proxy. The port has to be part of the host header itself.
 
 See [the reverse proxy section of the deployment overview](../deployments/README.md#reverse-proxy) for the full header list and the security warning that comes with `SECURE_PROXY_SSL_HEADER`.
 
@@ -185,7 +199,7 @@ To see the URI Workspace actually sends, open the Google consent popup and read 
 # Security notes
 
 - **Everything is encrypted at rest** with a Fernet key derived from Django's `SECRET_KEY`: app passwords and OAuth2 tokens alike. Consequence worth remembering: **changing `SECRET_KEY` makes every stored credential undecryptable**, and all mail accounts have to be reconnected regardless of the method used.
-- **The OAuth client secret is instance-wide.** It never reaches a browser, and no user needs it. Treat it like `SECRET_KEY`: keep it out of version control, and rotate it in the Google console if it leaks (existing connections keep working until their next token refresh, then need reconnecting).
+- **The OAuth client secret is instance-wide.** It never reaches a browser, and no user needs it. Treat it like `SECRET_KEY`: keep it out of version control. Rotating it does **not** invalidate anything on the user side, because refresh tokens are bound to the client ID rather than to the secret. Google lets a client hold two secrets at once, which is what makes a zero-downtime rotation possible: add the new secret, deploy it to the web process **and** the Celery worker, wait for a sync to confirm that refreshes still succeed, then disable the old one. Mailboxes only need reconnecting if a refresh actually failed in between.
 - **App passwords bypass 2-Step Verification by design.** Anyone holding one has full IMAP and SMTP access to the mailbox, with no second factor and no per-device restriction. That is the price of the shorter setup; it is also why OAuth2 is the better fit when the instance is shared with users you do not administrate.
 - **Revocation lives on Google's side** for both methods: [the app passwords page](https://myaccount.google.com/apppasswords) for one, [the third-party apps page](https://myaccount.google.com/connections) for the other. With OAuth2, the next sync fails with `invalid_grant` and Workspace deactivates the account and notifies its owner instead of retrying forever.
 - **IMAP access can still be blocked by a Workspace administrator** (*Admin console > Apps > Google Workspace > Gmail > End User Access*), and organizations using API access control must additionally allowlist the OAuth client ID. Personal Gmail accounts have no such switch: IMAP is always available.

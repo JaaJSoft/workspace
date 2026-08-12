@@ -205,6 +205,23 @@ class NotifyNewMessagesTests(MailNotifyBase):
                 self.assertEqual(self.notify([message]), 0)
                 message.delete()
 
+    def test_the_query_stays_single_and_skips_the_body_columns(self):
+        # The sync hot path must not pull body_text/body_html into memory
+        # for messages it is only ever going to look at title/subject for.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        messages = [self.make_message(uid=i) for i in range(3)]
+        with CaptureQueriesContext(connection) as ctx:
+            self.notify(messages)
+
+        mail_queries = [
+            q for q in ctx.captured_queries if "mail_mailmessage" in q["sql"]
+        ]
+        self.assertEqual(len(mail_queries), 1)
+        self.assertNotIn("body_text", mail_queries[0]["sql"])
+        self.assertNotIn("body_html", mail_queries[0]["sql"])
+
 
 class NotifyLabeledMessagesTests(MailNotifyBase):
     def setUp(self):
@@ -375,7 +392,7 @@ class ClassifyWiringTests(MailNotifyBase):
             patch("workspace.notifications.tasks.send_push_notification.delay")
         )
 
-    def run_classify(self, message, label_names, *, initial_sync=False):
+    def run_classify(self, message, label_names, *, suppress_notifications=False):
         # Mirror the AITask fixture used by workspace/ai/tests/test_tasks.py -
         # read it first and copy its kwargs rather than guessing which fields
         # are required. The task object is called directly (not .delay()); a
@@ -386,8 +403,8 @@ class ClassifyWiringTests(MailNotifyBase):
         if isinstance(label_names, str):
             label_names = [label_names]
         input_data = {"message_uuids": [str(message.uuid)]}
-        if initial_sync:
-            input_data["initial_sync"] = True
+        if suppress_notifications:
+            input_data["suppress_notifications"] = True
         task = AITask.objects.create(
             owner=self.alice,
             task_type=AITask.TaskType.CLASSIFY,
@@ -424,9 +441,9 @@ class ClassifyWiringTests(MailNotifyBase):
         self.run_classify(message, "Urgent")
         self.assertEqual(Notification.objects.count(), 0)
 
-    def test_initial_sync_suppresses_notifications_from_the_classifier(self):
+    def test_suppress_notifications_suppresses_notifications_from_the_classifier(self):
         message = self.make_message(uid=1, subject="Server down")
-        self.run_classify(message, "Urgent", initial_sync=True)
+        self.run_classify(message, "Urgent", suppress_notifications=True)
         self.assertEqual(Notification.objects.count(), 0)
 
     def test_two_notifying_labels_on_one_message_produce_a_single_notification(self):

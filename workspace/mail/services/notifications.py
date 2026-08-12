@@ -7,8 +7,10 @@ when it is synced: ``notify_new_messages`` runs inside the IMAP sync,
 
 import logging
 
+from django.db.models import F
+
 from workspace.common.logging import scrub
-from workspace.notifications.services.notifications import notify
+from workspace.notifications.services.notifications import mark_sources_read, notify
 from workspace.users.services.settings import get_module_settings
 
 from ..models import MailMessage
@@ -91,7 +93,11 @@ def notify_new_messages(folder, message_uuids, *, was_initial_sync) -> int:
     qualifying = list(
         MailMessage.objects.filter(
             uuid__in=message_uuids, is_read=False, deleted_at__isnull=True
-        ).order_by("-date")
+        )
+        # NULLs sort last on Postgres by default but first on SQLite; both are
+        # production backends here, so the ordering must be forced explicitly.
+        .order_by(F("date").desc(nulls_last=True))
+        .only("uuid", "subject", "from_name", "from_email")
     )
     total = len(qualifying)
     if not total:
@@ -133,3 +139,20 @@ def notify_labeled_messages(user, messages, *, was_initial_sync) -> int:
             len(eligible),
         )
     return _notify_messages(user, eligible[:limit], priority="high")
+
+
+def clear_notifications_for_deleted_messages(user, message_pks) -> int:
+    """Mark read the push notifications for messages that just got soft-deleted.
+
+    Deletion here never CASCADEs: every mail queryset filters
+    ``deleted_at__isnull=True``, so a deleted message can never again appear
+    on a rendered page for ``mark_sources_read`` to catch. Called from
+    reconciliation (another IMAP client deleted or moved the message) and
+    from the in-app delete paths. Lightweight, unsaved ``MailMessage``
+    instances stand in for the deleted rows, mirroring the pattern already
+    used for a single source in ``chat/views_messages.py``.
+    """
+    message_pks = list(message_pks)
+    if not message_pks:
+        return 0
+    return mark_sources_read(user, [MailMessage(pk=pk) for pk in message_pks])

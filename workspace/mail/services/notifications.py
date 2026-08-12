@@ -11,6 +11,7 @@ from workspace.common.logging import scrub
 from workspace.notifications.services.notifications import notify
 from workspace.users.services.settings import get_module_settings
 
+from ..models import MailMessage
 from .ai_settings import is_mail_ai_feature_enabled
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ def resolve_notify_burst(user) -> int:
     raw = get_module_settings(user, "mail").get("notify_max_burst")
     try:
         value = int(raw)
-    except TypeError, ValueError:
+    except TypeError, ValueError, OverflowError:
         return DEFAULT_NOTIFY_BURST
     return max(1, min(value, HARD_MAX_NOTIFY_BURST))
 
@@ -86,16 +87,16 @@ def notify_new_messages(folder, message_uuids, *, was_initial_sync) -> int:
     if resolve_notify_mode(user) != "all":
         return 0
 
-    from ..models import MailMessage
-
     limit = resolve_notify_burst(user)
-    qs = MailMessage.objects.filter(
-        uuid__in=message_uuids, is_read=False, deleted_at__isnull=True
+    qualifying = list(
+        MailMessage.objects.filter(
+            uuid__in=message_uuids, is_read=False, deleted_at__isnull=True
+        ).order_by("-date")
     )
-    total = qs.count()
+    total = len(qualifying)
     if not total:
         return 0
-    messages = list(qs.order_by("-date")[:limit])
+    messages = qualifying[:limit]
     if total > limit:
         logger.info(
             "Mail notifications capped in %s: %d of %d notified",

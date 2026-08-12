@@ -104,6 +104,21 @@ class ResolveNotifyBurstTests(MailNotifyBase):
         set_setting(self.alice, "mail", "notify_max_burst", 999999)
         self.assertEqual(resolve_notify_burst(self.alice), HARD_MAX_NOTIFY_BURST)
 
+    def test_infinite_values_fall_back_to_the_default(self):
+        # Not stored via set_setting: JSONField round-trips a raw float
+        # infinity inconsistently across backends (SQLite accepts the
+        # non-standard "Infinity" token, Postgres JSONB rejects it), so this
+        # goes straight at int()'s OverflowError instead of through storage.
+        for bad in (float("inf"), float("-inf")):
+            with self.subTest(value=bad):
+                with patch(
+                    "workspace.mail.services.notifications.get_module_settings",
+                    return_value={"notify_max_burst": bad},
+                ):
+                    self.assertEqual(
+                        resolve_notify_burst(self.alice), DEFAULT_NOTIFY_BURST
+                    )
+
 
 class NotifyNewMessagesTests(MailNotifyBase):
     def setUp(self):

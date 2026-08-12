@@ -2,6 +2,7 @@
 window._chatPrefsDefaults = {
     compactConversationList: false,
     compactMessageView: false,
+    showThreadRepliesInline: false,
 };
 window._chatPrefsCache = { ...window._chatPrefsDefaults };
 

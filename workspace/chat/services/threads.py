@@ -59,6 +59,19 @@ def mark_thread_read(root, user):
     return cleared
 
 
+def show_thread_replies_inline(user):
+    """Whether *user* wants thread replies repeated in the main flow.
+
+    Read server-side and applied as a queryset filter, not hidden client-side:
+    the message list is cursor-paginated 50 at a time, and dropping rows after
+    the fact would yield half-empty pages and a wrong "load older" boundary.
+    """
+    from workspace.users.services.settings import get_setting
+
+    preferences = get_setting(user, "chat", "preferences", default=None) or {}
+    return bool(preferences.get("showThreadRepliesInline"))
+
+
 def backfill_threads(message_model, participant_model, member_model):
     """Turn historical `reply_to` chains into threads.
 

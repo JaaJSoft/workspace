@@ -37,7 +37,7 @@ from .services.conversations import get_active_membership
 from .services.notifications import notify_conversation_members
 from .services.posting import deliver_message
 from .services.rendering import render_message_body
-from .services.threads import resolve_thread_root
+from .services.threads import resolve_thread_root, show_thread_replies_inline
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -90,6 +90,9 @@ class MessageListView(CacheControlMixin, APIView):
                 "link_previews__preview",
             )
         )
+
+        if not show_thread_replies_inline(request.user):
+            messages = messages.filter(thread_root__isnull=True)
 
         if before:
             before_uuid = parse_uuid_or_none(before)

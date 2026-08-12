@@ -23,6 +23,7 @@ from workspace.chat.services.conversations import (
     user_conversation_ids,
 )
 from workspace.chat.services.reactions import quick_reactions_for
+from workspace.chat.services.threads import show_thread_replies_inline
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.ui.viewers import ViewerRegistry
 from workspace.users.services.settings import get_setting
@@ -386,6 +387,9 @@ def conversation_messages_view(request, conversation_uuid):
         .prefetch_related("reactions__user", "attachments", "link_previews__preview")
         .order_by("-created_at")
     )
+
+    if not show_thread_replies_inline(request.user):
+        qs = qs.filter(thread_root__isnull=True)
 
     before = request.GET.get("before")
     if before:

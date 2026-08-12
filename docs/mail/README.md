@@ -21,6 +21,10 @@ IMAP/SMTP email client with OAuth2, AI-powered features, and full folder managem
 - **Read tracking** - Read/unread status with mark-all-as-read support
 - **Connection testing** - Test IMAP and SMTP connectivity before saving account settings
 
+## Guides
+
+- [Connecting Gmail with OAuth2](../guides/gmail-oauth2.md) - register the Google Cloud client, pick the audience, wire the redirect URI
+
 ## API
 
 All endpoints under `/api/v1/mail/` - see the [Swagger UI](/schema/swagger-ui/) for full documentation.

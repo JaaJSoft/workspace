@@ -23,6 +23,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 
 ## Guides
 
+- [Connecting Gmail with OAuth2](guides/gmail-oauth2.md) - Google Cloud client setup, scopes, redirect URI, troubleshooting
 - [Migrating from SQLite to PostgreSQL](guides/sqlite-to-postgres.md)
 - [Monitoring with Prometheus](guides/monitoring.md) - `/metrics` credentials, scrape config, exposed series
 

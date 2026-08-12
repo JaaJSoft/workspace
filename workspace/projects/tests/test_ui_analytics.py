@@ -131,6 +131,19 @@ class AnalyticsContentTests(ProjectTestMixin, TestCase):
         self.assertEqual(summary["created"], 2)
         self.assertEqual(summary["net"], 2)
 
+    def test_a_flat_net_reads_as_unchanged_not_shrinking(self):
+        for event_type in (TaskEvent.Type.CREATED, TaskEvent.Type.COMPLETED):
+            TaskEvent.objects.create(
+                project=self.project, task_title="Churned", type=event_type
+            )
+        self.client.force_login(self.member)
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["flow_summary"]["net"], 0)
+        html = response.content.decode()
+        self.assertIn("backlog unchanged", html)
+        self.assertNotIn("backlog shrinking", html)
+        self.assertNotIn('data-lucide="trending-down"', html)
+
     def test_multiline_template_comments_do_not_leak_into_the_page(self):
         create_task(self.project, self.admin, title="Work")
         self.client.force_login(self.member)

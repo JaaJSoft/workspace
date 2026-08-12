@@ -27,12 +27,17 @@
         <div class="stat-desc">last 12 weeks</div>
       </div>
       <div class="stat">
-        <div class="stat-figure {% if flow_summary.net > 0 %}text-warning{% else %}text-success{% endif %}">
-          <i data-lucide="{% if flow_summary.net > 0 %}trending-up{% else %}trending-down{% endif %}" class="w-6 h-6"></i>
+        {% comment %}
+          Three-way on purpose: a dormant project (open tasks, no events in
+          the window) nets zero, and folding that into the negative branch
+          reports a shrinking backlog on a board where nothing moved.
+        {% endcomment %}
+        <div class="stat-figure {% if flow_summary.net > 0 %}text-warning{% elif flow_summary.net < 0 %}text-success{% else %}text-base-content/50{% endif %}">
+          <i data-lucide="{% if flow_summary.net > 0 %}trending-up{% elif flow_summary.net < 0 %}trending-down{% else %}minus{% endif %}" class="w-6 h-6"></i>
         </div>
         <div class="stat-title">Net change</div>
         <div class="stat-value text-2xl">{% if flow_summary.net > 0 %}+{% endif %}{{ flow_summary.net }}</div>
-        <div class="stat-desc">{% if flow_summary.net > 0 %}backlog growing{% else %}backlog shrinking{% endif %}</div>
+        <div class="stat-desc">{% if flow_summary.net > 0 %}backlog growing{% elif flow_summary.net < 0 %}backlog shrinking{% else %}backlog unchanged{% endif %}</div>
       </div>
       <div class="stat">
         <div class="stat-figure text-accent">

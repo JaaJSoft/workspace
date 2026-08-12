@@ -130,6 +130,7 @@ class MailLabelCRUDTests(TestCase):
         resp = self.client.get(f"/api/v1/mail/labels?account={self.account.uuid}")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("notify_on_apply", resp.json()[0])
+        self.assertFalse(resp.json()[0]["notify_on_apply"])
 
 
 class MessageLabelFilterTests(TestCase):

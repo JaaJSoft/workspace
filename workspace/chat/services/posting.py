@@ -95,6 +95,7 @@ def deliver_message(
             message.body,
             mentioned_user_ids=mentioned_user_ids,
             mention_everyone=mention_everyone,
+            thread_recipient_ids=recipient_ids,
         ),
         robust=True,
     )

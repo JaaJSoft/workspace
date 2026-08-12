@@ -30,9 +30,19 @@ def notification_title(conversation, author_name):
 
 
 def notify_new_message(
-    conversation, author, body, mentioned_user_ids=None, mention_everyone=False
+    conversation,
+    author,
+    body,
+    mentioned_user_ids=None,
+    mention_everyone=False,
+    thread_recipient_ids=None,
 ):
     """Send notifications for a new chat message.
+
+    For a thread reply, *thread_recipient_ids* narrows the candidate pool to
+    the thread's participants. A mention is always added on top of that pool:
+    being named in a thread you do not follow is exactly the case where the
+    notification matters most.
 
     Storage semantics (merge into the recipient's unread notification for
     this conversation, push only on fresh rows) live in notify_stream.
@@ -50,6 +60,11 @@ def notify_new_message(
         left_at__isnull=True,
         user__bot_profile__isnull=True,
     ).exclude(user=author)
+
+    if thread_recipient_ids is not None:
+        members = members.filter(
+            user_id__in=set(thread_recipient_ids) | set(mentioned_user_ids)
+        )
 
     levels = ConversationMember.NotificationLevel
     member_ids = [

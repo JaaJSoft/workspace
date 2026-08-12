@@ -37,6 +37,7 @@ from .services.conversations import get_active_membership
 from .services.notifications import notify_conversation_members
 from .services.posting import deliver_message
 from .services.rendering import render_message_body
+from .services.threads import resolve_thread_root
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -256,6 +257,8 @@ class MessageListView(CacheControlMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        thread_root = resolve_thread_root(reply_to) if reply_to else None
+
         created_attachments = []
         try:
             with transaction.atomic():
@@ -265,6 +268,7 @@ class MessageListView(CacheControlMixin, APIView):
                     body=body,
                     body_html=body_html,
                     reply_to=reply_to,
+                    thread_root=thread_root,
                 )
 
                 for f, detection, viewer in zip(

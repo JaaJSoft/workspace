@@ -132,6 +132,9 @@ class MessageSerializer(serializers.ModelSerializer):
     link_previews = LinkPreviewSerializer(many=True, read_only=True)
     conversation_id = serializers.UUIDField()
     reply_to = ReplyToSerializer(read_only=True, allow_null=True)
+    thread_root = serializers.UUIDField(
+        source="thread_root_id", read_only=True, allow_null=True
+    )
     interaction = MessageInteractionSerializer(read_only=True, allow_null=True)
 
     class Meta:
@@ -151,6 +154,9 @@ class MessageSerializer(serializers.ModelSerializer):
             "attachments",
             "link_previews",
             "reply_to",
+            "thread_root",
+            "reply_count",
+            "last_reply_at",
             "interaction",
         ]
 

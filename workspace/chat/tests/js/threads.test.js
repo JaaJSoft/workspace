@@ -154,3 +154,132 @@ test('closing a thread leaves the panel with no root', () => {
   app.closeThread();
   assert.equal(app.openThreadRoot, null);
 });
+
+// ── Rendered counter ───────────────────────────────────────
+
+function labelNode(uuid, text) {
+  return { dataset: { threadCount: uuid }, textContent: text };
+}
+
+test('the rendered reply counter grows on every copy of the root', () => {
+  const labels = [labelNode('r1', '2 replies'), labelNode('r1', '2 replies')];
+  const ctx = load({
+    document: {
+      querySelectorAll: (sel) => (sel.includes('r1') ? labels : []),
+    },
+  });
+  ctx.chatThreadsMixin()._bumpRenderedReplyCount('r1');
+  assert.deepStrictEqual(
+    labels.map((l) => l.textContent),
+    ['3 replies', '3 replies'],
+  );
+});
+
+test('the counter pluralises correctly on the first reply', () => {
+  const label = labelNode('r1', '0 replies');
+  const ctx = load({ document: { querySelectorAll: () => [label] } });
+  ctx.chatThreadsMixin()._bumpRenderedReplyCount('r1');
+  assert.equal(label.textContent, '1 reply');
+});
+
+test('a root that is not on screen is simply skipped', () => {
+  const ctx = load({ document: { querySelectorAll: () => [] } });
+  assert.doesNotThrow(() => ctx.chatThreadsMixin()._bumpRenderedReplyCount('r9'));
+});
+
+// ── SSE delivery ───────────────────────────────────────────
+
+const { loadScripts } = require('../../../common/tests/js/loader');
+
+/**
+ * chatApp's SSE handler with the threads mixin composed in, as the real page
+ * composes them, and every collaborator it calls stubbed out.
+ */
+function buildSseApp({ openThreadRoot = null, showInline = false } = {}) {
+  const dispatched = [];
+  const ctx = loadScripts(
+    [
+      'workspace/chat/ui/static/chat/ui/js/threads.js',
+      'workspace/chat/ui/static/chat/ui/js/sse.js',
+    ],
+    {
+      ...MIXIN_STUBS,
+      getCSRFToken: () => 'csrf-token',
+      document: { querySelectorAll: () => [], getElementById: () => null },
+      fetch: async () => ({ ok: true, json: async () => ({ cleared: 0 }) }),
+      CustomEvent: class {
+        constructor(type, init) {
+          this.type = type;
+          this.detail = init?.detail;
+        }
+      },
+    },
+  );
+  ctx.dispatchEvent = (e) => dispatched.push(e);
+
+  const counters = { refreshed: 0, scrolled: 0, read: 0 };
+  const app = { ...ctx.chatThreadsMixin(), ...ctx.chatSseMixin() };
+  Object.assign(app, {
+    openThreadRoot,
+    chatPrefs: { showThreadRepliesInline: showInline },
+    activeConversation: { uuid: 'c1' },
+    botTyping: false,
+    isBotMessage: () => false,
+    clearBotStep() {},
+    // Provided by chatMessagesMixin on the real component.
+    _messageIdPrefix: () => 'msg',
+    _isNearBottom: () => true,
+    async _refreshCurrentMessages() {
+      counters.refreshed++;
+    },
+    scrollToBottom() {
+      counters.scrolled++;
+    },
+    async markAsRead() {
+      counters.read++;
+    },
+    _updateConversationLastMessage() {},
+    _bumpConversationUnread() {},
+    refreshConversationItems() {},
+  });
+  return { app, counters, dispatched };
+}
+
+const reply = (threadRoot) => ({
+  conversation_id: 'c1',
+  message: { uuid: 'm9', thread_root: threadRoot },
+});
+
+test('a live thread reply does not disturb the main flow', async () => {
+  const { app, counters } = buildSseApp();
+  await app.handleSSEMessage(reply('r1'));
+  assert.equal(counters.refreshed, 0, 'the main flow must not refetch');
+  assert.equal(app.threadUnread('r1'), 1, 'the thread counter grows instead');
+});
+
+test('a live plain message still refreshes the main flow', async () => {
+  const { app, counters } = buildSseApp();
+  await app.handleSSEMessage(reply(null));
+  assert.equal(counters.refreshed, 1);
+});
+
+test('the inline preference lets a live thread reply into the main flow', async () => {
+  const { app, counters } = buildSseApp({ showInline: true });
+  await app.handleSSEMessage(reply('r1'));
+  assert.equal(counters.refreshed, 1);
+});
+
+test('a live reply reaches an open panel through a window event', async () => {
+  const { app, dispatched } = buildSseApp({ openThreadRoot: 'r1' });
+  await app.handleSSEMessage(reply('r1'));
+  assert.deepStrictEqual(
+    dispatched.map((e) => [e.type, e.detail.root]),
+    [['thread-reply-received', 'r1']],
+  );
+});
+
+test('a live reply for another thread does not wake the open panel', async () => {
+  const { app, dispatched } = buildSseApp({ openThreadRoot: 'r1' });
+  await app.handleSSEMessage(reply('r2'));
+  assert.deepStrictEqual(dispatched, []);
+});

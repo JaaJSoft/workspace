@@ -15,7 +15,25 @@ window.chatSseMixin = function chatSseMixin() {
         this.generatingConversations.delete(detail.conversation_id);
       }
 
-      if (isViewing) {
+      // Where this message belongs. A thread reply skips the main flow unless
+      // the user asked to see replies inline, and reaches the panel through a
+      // window event rather than by being appended here: the panel owns its
+      // own container and reloads itself.
+      const route = window.chatThreadRouteTargets(detail, {
+        openThreadRoot: this.openThreadRoot,
+        showInline: !!this.chatPrefs?.showThreadRepliesInline,
+      });
+      if (route.bumpRoot) {
+        this.bumpThreadUnread(route.bumpRoot);
+        this._bumpRenderedReplyCount(route.bumpRoot);
+        if (route.panel) {
+          window.dispatchEvent(
+            new CustomEvent('thread-reply-received', { detail: { root: route.bumpRoot } }),
+          );
+        }
+      }
+
+      if (isViewing && route.mainFlow) {
         // Hide bot typing indicator if the incoming message is from a bot
         if (this.botTyping && this.isBotMessage(detail.message)) {
           this.botTyping = false;

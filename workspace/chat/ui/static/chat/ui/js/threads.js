@@ -77,15 +77,19 @@ window.chatThreadsMixin = function chatThreadsMixin() {
     },
 
     _bumpRenderedReplyCount(rootUuid) {
-      // The root may not be on screen (an old message never paginated in).
-      // There is then nothing to update, which is correct: the count is
-      // rendered server-side the next time that page is fetched.
-      document.querySelectorAll(`[data-message-uuid="${rootUuid}"]`).forEach((el) => {
-        const label = el.parentElement?.parentElement?.querySelector('[data-thread-count]');
-        if (!label) return;
-        const next = (parseInt(label.textContent, 10) || 0) + 1;
-        label.textContent = `${next} ${next === 1 ? 'reply' : 'replies'}`;
-      });
+      // Keyed by uuid rather than found by walking siblings: a message group
+      // holds several messages, so a positional lookup would land on a
+      // neighbour's counter. Every rendered copy is updated, since the root can
+      // be on screen in both the main flow and a panel.
+      //
+      // A root that was never paginated in has no counter here, and that is
+      // correct: the count is rendered server-side next time the page loads.
+      document
+        .querySelectorAll(`[data-thread-count="${rootUuid}"]`)
+        .forEach((label) => {
+          const next = (parseInt(label.textContent, 10) || 0) + 1;
+          label.textContent = `${next} ${next === 1 ? 'reply' : 'replies'}`;
+        });
     },
   };
 };

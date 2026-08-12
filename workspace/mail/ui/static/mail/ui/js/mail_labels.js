@@ -35,6 +35,7 @@ window.mailLabelsMixin = function mailLabelsMixin() {
         name: label?.name || '',
         color: label?.color || 'ghost',
         icon: label?.icon || '',
+        notifyOnApply: label?.notify_on_apply || false,
         saving: false,
         error: '',
       };
@@ -66,7 +67,7 @@ window.mailLabelsMixin = function mailLabelsMixin() {
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
           body: JSON.stringify(isEdit
-            ? { name: m.name.trim(), color: m.color, icon: m.icon }
+            ? { name: m.name.trim(), color: m.color, icon: m.icon, notify_on_apply: m.notifyOnApply }
             : { account_id: m.accountId, name: m.name.trim(), color: m.color, icon: m.icon }
           ),
         });

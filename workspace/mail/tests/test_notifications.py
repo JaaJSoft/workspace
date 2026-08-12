@@ -492,3 +492,23 @@ class MessageListMarksNotificationsReadTests(MailNotifyBase):
         self.client.get(f"/api/v1/mail/messages?folder={self.inbox.uuid}&page=1")
         notif.refresh_from_db()
         self.assertIsNone(notif.read_at)
+
+
+class MailIndexEmbedsNotificationPrefsTests(MailNotifyBase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.alice)
+
+    def test_the_resolved_mode_and_burst_are_embedded(self):
+        set_setting(self.alice, "mail", "notify_mode", "all")
+        set_setting(self.alice, "mail", "notify_max_burst", 999999)
+        resp = self.client.get("/mail")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["notify_mode"], "all")
+        # Embedded already clamped, so the select cannot show an unrunnable value.
+        self.assertEqual(resp.context["notify_max_burst"], HARD_MAX_NOTIFY_BURST)
+
+    def test_the_page_renders_both_json_script_blocks(self):
+        html = self.client.get("/mail").content.decode()
+        self.assertIn('id="mail-notify-mode-data"', html)
+        self.assertIn('id="mail-notify-burst-data"', html)

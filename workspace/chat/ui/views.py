@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import OuterRef, Prefetch, Subquery, prefetch_related_objects
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -473,6 +473,71 @@ def conversation_messages_view(request, conversation_uuid):
             "conversation_kind": conversation_kind,
             "conversation_uuid": str(conversation_uuid),
             "bot_processing": bot_processing,
+        },
+    )
+
+
+@login_required
+def thread_messages_view(request, root_uuid):
+    """Partial: a thread's root message followed by its replies."""
+    root = (
+        Message.objects.filter(uuid=root_uuid, thread_root__isnull=True)
+        .select_related("author", "author__bot_profile", "conversation")
+        .first()
+    )
+    if root is None:
+        raise Http404
+    if not get_active_membership(request.user, root.conversation_id):
+        return HttpResponseForbidden()
+
+    qs = (
+        Message.objects.filter(thread_root=root)
+        .select_related(
+            "author",
+            "author__bot_profile",
+            "reply_to",
+            "reply_to__author",
+            "conversation",
+            "interaction",
+            "interaction__interacted_by",
+        )
+        .prefetch_related("reactions__user", "attachments", "link_previews__preview")
+        .order_by("-created_at")
+    )
+
+    before = request.GET.get("before")
+    if before:
+        before_uuid = parse_uuid_or_none(before)
+        if before_uuid is not None:
+            cursor = (
+                Message.objects.filter(thread_root=root, uuid=before_uuid)
+                .only("created_at")
+                .first()
+            )
+            if cursor is not None:
+                qs = qs.filter(created_at__lt=cursor.created_at)
+
+    limit = 50
+    page = list(qs[: limit + 1])
+    has_more = len(page) > limit
+    page = page[:limit]
+    page.reverse()
+
+    # The root heads the first page only: a "load older" fetch prepends into an
+    # existing list that already shows it.
+    messages = page if before else [root, *page]
+
+    return render(
+        request,
+        "chat/ui/partials/thread_message_list.html",
+        {
+            "groups": group_messages(messages, request.user),
+            "has_more": has_more,
+            "first_uuid": str(page[0].uuid) if page else "",
+            "current_user": request.user,
+            "quick_emojis": quick_reactions_for(request.user),
+            "pinned_message_ids": set(),
+            "conversation_kind": root.conversation.kind,
         },
     )
 

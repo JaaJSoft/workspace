@@ -1,5 +1,5 @@
 {% load chat_tags ui_filters %}
-{% with author=group.author is_own=group.is_own is_bot=group.is_bot messages=group.messages first_msg=group.messages.0 %}
+{% with author=group.author is_own=group.is_own is_bot=group.is_bot messages=group.messages first_msg=group.messages.0 prefix=id_prefix|default:"msg" %}
 <div class="msg-group {% if is_own %}msg-group-end{% else %}msg-group-start{% endif %} flex gap-2 {% if is_own %}flex-row-reverse{% endif %}"
      :class="chatPrefs.compactMessageView ? 'mb-1.5' : 'mb-3'">
 
@@ -30,7 +30,7 @@
         <div class="msg-bubble rounded-2xl text-sm italic
                     bg-base-200 text-base-content/40"
              :class="chatPrefs.compactMessageView ? 'px-2.5 py-1' : 'px-3 py-1.5'"
-             id="msg-{{ msg.uuid }}">
+             id="{{ prefix }}-{{ msg.uuid }}">
           Message deleted
         </div>
       {% else %}
@@ -39,10 +39,10 @@
           <div class="msg-bubble rounded-2xl text-sm
                       {% if is_own %}bg-info/15 text-base-content{% else %}bg-base-200 text-base-content{% endif %}"
                :class="chatPrefs.compactMessageView ? 'px-2.5 py-1' : 'px-3 py-1.5'"
-               id="msg-{{ msg.uuid }}"
+               id="{{ prefix }}-{{ msg.uuid }}"
                data-body="{{ msg.body }}">
             {% if msg.reply_to %}
-              <a href="#msg-{{ msg.reply_to.uuid }}"
+              <a href="#{{ prefix }}-{{ msg.reply_to.uuid }}"
                  @click.prevent="scrollToMessage('{{ msg.reply_to.uuid }}')"
                  class="flex gap-2 my-1.5 rounded-lg px-2 py-1 cursor-pointer transition-colors no-underline
                         {% if is_own %}bg-info/15 hover:bg-info/25{% else %}bg-base-300/50 hover:bg-base-300{% endif %}">

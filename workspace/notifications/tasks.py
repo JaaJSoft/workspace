@@ -7,6 +7,7 @@ from django.core.cache import cache
 from pywebpush import WebPushException, webpush
 
 from workspace.common.logging import scrub
+from workspace.notifications.models import SOURCE_FIELD_NAMES
 from workspace.notifications.services.vapid import VapidKeyError, load_vapid_key
 from workspace.users.services.presence import is_active
 
@@ -15,21 +16,24 @@ logger = logging.getLogger(__name__)
 PUSH_COOLDOWN_SECONDS = 60
 ACTIVE_RETRY_DELAY_SECONDS = 60
 RETENTION_DAYS = 90
-_SOURCE_ID_ATTRS = (
-    "conversation_id",
-    "file_id",
-    "task_id",
-    "event_id",
-    "poll_id",
-)
+_SOURCE_ID_ATTRS = tuple(f"{name}_id" for name in SOURCE_FIELD_NAMES)
 
 
-def _source_cooldown_key(notif):
+def _source_ref(notif):
+    """(attr, value) for the notification's source FK, None when sourceless."""
     for attr in _SOURCE_ID_ATTRS:
         value = getattr(notif, attr)
         if value:
-            return f"push:cd:{notif.recipient_id}:{attr}:{value}"
+            return attr, value
     return None
+
+
+def _source_cooldown_key(notif):
+    ref = _source_ref(notif)
+    if ref is None:
+        return None
+    attr, value = ref
+    return f"push:cd:{notif.recipient_id}:{attr}:{value}"
 
 
 @shared_task(name="notifications.send_push", ignore_result=True, soft_time_limit=30)

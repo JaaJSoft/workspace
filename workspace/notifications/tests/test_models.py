@@ -4,7 +4,8 @@ from django.test import TestCase
 
 from workspace.chat.models import Conversation
 from workspace.files.models import File
-from workspace.notifications.models import Notification
+from workspace.notifications.models import SOURCE_FIELD_NAMES, Notification
+from workspace.notifications.services.notifications import SOURCE_FIELDS
 
 User = get_user_model()
 
@@ -58,3 +59,28 @@ class NotificationSourceFieldsTests(TestCase):
         )
         conv.delete()
         self.assertEqual(Notification.objects.count(), 0)
+
+
+class NotificationSourceRegistryTests(TestCase):
+    """The source field list is declared once and consumed everywhere."""
+
+    def test_every_source_name_is_a_real_fk_on_notification(self):
+        for name in SOURCE_FIELD_NAMES:
+            field = Notification._meta.get_field(name)
+            self.assertTrue(
+                field.is_relation and field.many_to_one,
+                f"{name} is declared as a notification source but is not a FK",
+            )
+
+    def test_source_fields_map_covers_every_source_fk(self):
+        # SOURCE_FIELDS cannot be derived (a model label is not recoverable
+        # from a field name), so it is the one list that can still drift.
+        self.assertEqual(set(SOURCE_FIELDS.values()), set(SOURCE_FIELD_NAMES))
+
+    def test_cooldown_attrs_are_derived_from_the_source_names(self):
+        from workspace.notifications.tasks import _SOURCE_ID_ATTRS
+
+        self.assertEqual(
+            tuple(_SOURCE_ID_ATTRS),
+            tuple(f"{name}_id" for name in SOURCE_FIELD_NAMES),
+        )

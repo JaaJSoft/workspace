@@ -57,3 +57,99 @@ def mark_thread_read(root, user):
     participant.last_read_at = timezone.now()
     participant.save(update_fields=["unread_count", "last_read_at"])
     return cleared
+
+
+def backfill_threads(message_model, participant_model, member_model):
+    """Turn historical `reply_to` chains into threads.
+
+    Takes its models as arguments so the data migration can pass the historical
+    versions from the app registry while the tests pass the real ones.
+    Idempotent: re-running it recomputes the same counters and adds no
+    duplicate participants.
+
+    A chain that loops (possible only from corrupted legacy data) is left
+    unthreaded rather than picked arbitrarily: an unthreaded message renders
+    exactly as it does today, which is the safe failure.
+    """
+    parents = dict(
+        message_model.objects.filter(reply_to__isnull=False).values_list(
+            "uuid", "reply_to_id"
+        )
+    )
+
+    roots = {}
+    for uuid in parents:
+        seen = {uuid}
+        current = uuid
+        while current in parents:
+            current = parents[current]
+            if current in seen:
+                current = None
+                break
+            seen.add(current)
+        if current is not None and current != uuid:
+            roots[uuid] = current
+
+    if not roots:
+        return
+
+    replies = list(
+        message_model.objects.filter(uuid__in=roots).only(
+            "uuid", "author_id", "created_at", "conversation_id"
+        )
+    )
+    for reply in replies:
+        reply.thread_root_id = roots[reply.uuid]
+    message_model.objects.bulk_update(replies, ["thread_root"], batch_size=500)
+
+    by_root = {}
+    for reply in replies:
+        by_root.setdefault(reply.thread_root_id, []).append(reply)
+
+    roots_meta = {
+        uuid: (author_id, conversation_id)
+        for uuid, author_id, conversation_id in message_model.objects.filter(
+            uuid__in=by_root
+        ).values_list("uuid", "author_id", "conversation_id")
+    }
+
+    root_rows = list(message_model.objects.filter(uuid__in=by_root).only("uuid"))
+    for root in root_rows:
+        group = by_root[root.uuid]
+        root.reply_count = len(group)
+        root.last_reply_at = max(r.created_at for r in group)
+    message_model.objects.bulk_update(
+        root_rows, ["reply_count", "last_reply_at"], batch_size=500
+    )
+
+    read_marks = {
+        (conversation_id, user_id): last_read_at
+        for conversation_id, user_id, last_read_at in member_model.objects.filter(
+            conversation_id__in={c for _, c in roots_meta.values()}
+        ).values_list("conversation_id", "user_id", "last_read_at")
+    }
+
+    existing = {
+        (root_id, user_id)
+        for root_id, user_id in participant_model.objects.filter(
+            root_message_id__in=by_root
+        ).values_list("root_message_id", "user_id")
+    }
+
+    to_create = []
+    for root_id, group in by_root.items():
+        root_author_id, conversation_id = roots_meta[root_id]
+        user_ids = {root_author_id} | {r.author_id for r in group}
+        for user_id in user_ids:
+            if (root_id, user_id) in existing:
+                continue
+            to_create.append(
+                participant_model(
+                    root_message_id=root_id,
+                    user_id=user_id,
+                    last_read_at=read_marks.get((conversation_id, user_id)),
+                )
+            )
+    participant_model.objects.bulk_create(
+        to_create, batch_size=500, ignore_conflicts=True
+    )

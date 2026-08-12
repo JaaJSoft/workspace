@@ -1,5 +1,9 @@
 // Right-side panels: info panel (stats + shared media) and search panel
 // (in-conversation message search with filters and scroll-to-message).
+//
+// Info, search and the thread panel (chatThreadsMixin) share one column, so at
+// most one may be open. Every opener closes the other two; enforcing that in
+// only one direction leaves two panels side by side on desktop.
 window.chatPanelsMixin = function chatPanelsMixin() {
   return {
     // ── Info panel state ─────────────────────────────────────
@@ -32,6 +36,7 @@ window.chatPanelsMixin = function chatPanelsMixin() {
     openInfoPanel({ scrollTo = null } = {}) {
       this.showInfoPanel = true;
       this.closeSearchPanel();
+      this.closeThread?.();
       if (this.activeConversation) {
         const conversationId = this.activeConversation.uuid;
         this.loadConversationStats(conversationId);
@@ -121,6 +126,7 @@ window.chatPanelsMixin = function chatPanelsMixin() {
       this.showSearchPanel = !this.showSearchPanel;
       if (this.showSearchPanel) {
         this.showInfoPanel = false;
+        this.closeThread?.();
         this.$nextTick(() => {
           this.$refs.searchInput?.focus();
         });

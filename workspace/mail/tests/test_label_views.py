@@ -114,6 +114,23 @@ class MailLabelCRUDTests(TestCase):
         resp = self.client.get(f"/api/v1/mail/labels?account={self.account.uuid}")
         self.assertIn(resp.status_code, [401, 403])
 
+    def test_patch_sets_notify_on_apply(self):
+        label = MailLabel.objects.create(account=self.account, name="Deadline")
+        resp = self.client.patch(
+            f"/api/v1/mail/labels/{label.uuid}",
+            {"notify_on_apply": True},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        label.refresh_from_db()
+        self.assertTrue(label.notify_on_apply)
+
+    def test_list_exposes_notify_on_apply(self):
+        MailLabel.objects.create(account=self.account, name="Deadline")
+        resp = self.client.get(f"/api/v1/mail/labels?account={self.account.uuid}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("notify_on_apply", resp.json()[0])
+
 
 class MessageLabelFilterTests(TestCase):
     def setUp(self):

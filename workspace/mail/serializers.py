@@ -91,6 +91,7 @@ class MailLabelSerializer(serializers.ModelSerializer):
             "color",
             "icon",
             "position",
+            "notify_on_apply",
             "unread_count",
         ]
         read_only_fields = ["uuid", "account_id", "unread_count"]
@@ -108,6 +109,7 @@ class MailLabelUpdateSerializer(serializers.Serializer):
     color = serializers.CharField(max_length=30, required=False)
     icon = serializers.CharField(max_length=50, required=False)
     position = serializers.IntegerField(min_value=0, required=False)
+    notify_on_apply = serializers.BooleanField(required=False)
 
 
 class MailFolderSerializer(serializers.ModelSerializer):

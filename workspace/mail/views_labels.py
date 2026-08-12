@@ -110,7 +110,7 @@ class MailLabelDetailView(APIView):
                 )
 
         update_fields = ["updated_at"]
-        for field in ("name", "color", "icon", "position"):
+        for field in ("name", "color", "icon", "position", "notify_on_apply"):
             if field in ser.validated_data:
                 setattr(label, field, ser.validated_data[field])
                 update_fields.append(field)

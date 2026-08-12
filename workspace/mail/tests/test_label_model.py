@@ -195,3 +195,80 @@ class DefaultLabelSeedTests(TestCase):
             using="default",
         )
         self.assertEqual(MailLabel.objects.count(), before)
+
+
+class LabelNotifyOnApplySeedTests(TestCase):
+    def test_seeding_flags_urgent_only(self):
+        from workspace.mail.models import MailAccount, MailLabel
+
+        account = MailAccount.objects.create(
+            owner=User.objects.create_user(username="seedflag", password="pass"),
+            email="s@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="s@example.test",
+        )
+        flagged = set(
+            MailLabel.objects.filter(account=account, notify_on_apply=True).values_list(
+                "name", flat=True
+            )
+        )
+        self.assertEqual(flagged, {"Urgent"})
+
+    def test_new_labels_default_to_not_notifying(self):
+        from workspace.mail.models import MailAccount, MailLabel
+
+        account = MailAccount.objects.create(
+            owner=User.objects.create_user(username="defaultflag", password="pass"),
+            email="d@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="d@example.test",
+        )
+        label = MailLabel.objects.create(account=account, name="Custom")
+        self.assertFalse(label.notify_on_apply)
+
+
+class NotifyOnApplyBackfillTests(TestCase):
+    """The data migration flags pre-existing Urgent labels, case-insensitively."""
+
+    def setUp(self):
+        from workspace.mail.models import MailAccount, MailLabel
+
+        self.account = MailAccount.objects.create(
+            owner=User.objects.create_user(username="backfill", password="pass"),
+            email="b@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="b@example.test",
+        )
+        # The post_save signal already seeded the defaults; reset so this test
+        # exercises the migration rather than the signal.
+        MailLabel.objects.filter(account=self.account).update(notify_on_apply=False)
+
+    def test_backfill_flags_urgent_regardless_of_case(self):
+        import importlib
+
+        from django.apps import apps
+
+        from workspace.mail.models import MailLabel
+
+        MailLabel.objects.create(account=self.account, name="urgent bis")
+        module = importlib.import_module(
+            "workspace.mail.migrations.0031_seed_notify_on_apply"
+        )
+
+        class _Editor:
+            class connection:
+                alias = "default"
+
+        module.flag_urgent_labels(apps, _Editor)
+
+        self.assertTrue(
+            MailLabel.objects.get(account=self.account, name="Urgent").notify_on_apply
+        )
+        self.assertFalse(
+            MailLabel.objects.get(
+                account=self.account, name="urgent bis"
+            ).notify_on_apply
+        )

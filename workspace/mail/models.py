@@ -173,6 +173,9 @@ class MailLabel(models.Model):
     icon = models.CharField(max_length=50, blank=True, default="")
     position = models.PositiveIntegerField(default=0)
     unread_count = models.IntegerField(default=0)
+    # When True, the AI classifier applying this label sends a push
+    # notification. Only consulted in the "labels" notification mode.
+    notify_on_apply = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -2,7 +2,13 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 DEFAULT_LABELS = [
-    {"name": "Urgent", "color": "error", "icon": "alert-triangle", "position": 0},
+    {
+        "name": "Urgent",
+        "color": "error",
+        "icon": "alert-triangle",
+        "position": 0,
+        "notify_on_apply": True,
+    },
     {"name": "Action", "color": "warning", "icon": "check-circle", "position": 1},
     {"name": "FYI", "color": "info", "icon": "info", "position": 2},
     {"name": "Newsletter", "color": "secondary", "icon": "newspaper", "position": 3},

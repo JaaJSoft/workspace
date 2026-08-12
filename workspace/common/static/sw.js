@@ -123,6 +123,19 @@ function networkFirstWithOffline(request) {
    Push Notifications (existing functionality)
    ────────────────────────────────────────── */
 
+function buildNotificationOptions(payload) {
+  return {
+    body: payload.body || '',
+    icon: '/static/icons/icon-192.png',
+    badge: '/static/icons/badge-72.png',
+    // Per-source, not per-module: a shared tag makes each notification
+    // replace the previous one on screen.
+    tag: payload.tag || payload.origin || 'workspace',
+    renotify: true,
+    data: { url: payload.url || '/' },
+  };
+}
+
 self.addEventListener('push', function (event) {
   if (!event.data) return;
 
@@ -133,17 +146,11 @@ self.addEventListener('push', function (event) {
     payload = { title: 'New notification', body: event.data.text() };
   }
 
-  const options = {
-    body: payload.body || '',
-    icon: '/static/icons/icon-192.png',
-    badge: '/static/icons/badge-72.png',
-    tag: payload.origin || 'workspace',
-    renotify: true,
-    data: { url: payload.url || '/' },
-  };
-
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'Workspace', options)
+    self.registration.showNotification(
+      payload.title || 'Workspace',
+      buildNotificationOptions(payload)
+    )
   );
 });
 

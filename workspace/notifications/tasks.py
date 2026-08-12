@@ -36,6 +36,21 @@ def _source_cooldown_key(notif):
     return f"push:cd:{notif.recipient_id}:{attr}:{value}"
 
 
+def _notification_tag(notif):
+    """Tag the OS uses to decide what a notification replaces.
+
+    Must be per source: a single tag per module makes every new notification
+    overwrite the previous one on screen, so the user never sees the first.
+    Sourceless notifications fall back to their own uuid so two announcements
+    never collapse into one.
+    """
+    ref = _source_ref(notif)
+    if ref is None:
+        return f"notif:{notif.uuid}"
+    attr, value = ref
+    return f"{attr}:{value}"
+
+
 @shared_task(name="notifications.send_push", ignore_result=True, soft_time_limit=30)
 def send_push_notification(notification_uuid: str, is_retry: bool = False):
     """Send a Web Push notification to all of the recipient's subscriptions.
@@ -117,6 +132,7 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
             "icon": notif.icon,
             "url": notif.url,
             "origin": notif.origin,
+            "tag": _notification_tag(notif),
         }
     )
 

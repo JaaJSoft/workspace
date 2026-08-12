@@ -16,6 +16,7 @@ SOURCE_FIELD_NAMES = (
     "task",
     "event",
     "poll",
+    "mail_message",
 )
 
 
@@ -100,6 +101,13 @@ class Notification(models.Model):
     )
     poll = models.ForeignKey(
         "calendar.Poll",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    mail_message = models.ForeignKey(
+        "mail.MailMessage",
         on_delete=models.CASCADE,
         null=True,
         blank=True,

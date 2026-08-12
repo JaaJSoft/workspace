@@ -16,15 +16,17 @@ def _user_tag(user_id):
     return f"notif:user:{user_id}"
 
 
-# Model label -> Notification FK field. The FK targets are the containers
-# users open (conversation, not message): they double as dedup key and
-# auto-read trigger.
+# Model label -> Notification FK field. Most FK targets are the containers
+# users open (conversation, not message) and double as dedup key and
+# auto-read trigger; a mail message is the exception, since the message
+# itself is the unit the user opens.
 SOURCE_FIELDS = {
     "chat.conversation": "conversation",
     "files.file": "file",
     "projects.task": "task",
     "calendar.event": "event",
     "calendar.poll": "poll",
+    "mail.mailmessage": "mail_message",
 }
 
 

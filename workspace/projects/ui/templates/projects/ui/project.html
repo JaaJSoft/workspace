@@ -102,7 +102,8 @@ x-data="projectBoard({
         {% include "ui/partials/drawer_item.html" with href=backlog_url icon="list-todo" label="Backlog" color="accent" active_binding="currentView === 'backlog'" x_target="project-content" x_target_history="push" onclick="currentView = 'backlog'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Backlog" badge=backlog_count %}
         {% url 'projects_ui:all_tasks' project.uuid as all_tasks_url %}
         {% include "ui/partials/drawer_item.html" with href=all_tasks_url icon="list" label="All tasks" color="accent" active_binding="currentView === 'tasks'" x_target="project-content" x_target_history="push" onclick="currentView = 'tasks'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="All tasks" %}
-        {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Analytics" disabled=True badge="Soon" collapse_expr="sidebarCollapsed()" %}
+        {% url 'projects_ui:analytics' project.uuid as analytics_url %}
+        {% include "ui/partials/drawer_item.html" with href=analytics_url icon="bar-chart-3" label="Analytics" color="accent" active_binding="currentView === 'analytics'" x_target="project-content" x_target_history="push" onclick="currentView = 'analytics'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Analytics" %}
         {% if role == "admin" %}
           {% url 'projects_ui:settings' project.uuid as settings_url %}
           {% include "ui/partials/drawer_item.html" with href=settings_url icon="settings" label="Settings" color="accent" active_binding="currentView === 'settings'" x_target="project-content" x_target_history="push" onclick="currentView = 'settings'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Settings" %}

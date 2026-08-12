@@ -1036,6 +1036,35 @@ test('onPopState recognizes the tasks view', () => {
   assert.equal(board.currentView, 'tasks');
 });
 
+test('refresh targets the analytics partial when viewing analytics', () => {
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  const calls = [];
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.currentView = 'analytics';
+  board.$ajax = (url) => calls.push(url);
+  board.refresh();
+  assert.deepStrictEqual(Array.from(calls), ['/projects/p/analytics']);
+});
+
+test('onPopState recognizes the analytics view', () => {
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.location = {
+    pathname: '/projects/p/analytics',
+    href: 'http://x.test/projects/p/analytics',
+  };
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.onPopState();
+  assert.equal(board.currentView, 'analytics');
+});
+
 function keydownBoard() {
   ctx.localStorage = { getItem: () => null, setItem: () => {} };
   return ctx.projectBoard({

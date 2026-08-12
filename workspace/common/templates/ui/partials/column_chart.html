@@ -1,0 +1,56 @@
+{% comment %}
+Column Chart
+============
+Renders the geometry produced by workspace.common.charts.column_chart as an
+inline SVG, with a legend above it.
+
+Parameters:
+-----------
+- chart: the dict returned by column_chart()
+- aria_label: accessible description of what the chart shows
+
+Every coordinate in `chart` is a pre-formatted string and the template does
+no arithmetic on purpose - see the docstring in charts.py.
+{% endcomment %}
+
+<div class="w-full">
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2">
+    {% for s in chart.series %}
+      <span class="flex items-center gap-1.5 text-xs text-base-content/70">
+        <svg viewBox="0 0 8 8" class="w-2.5 h-2.5 {{ s.css_class }}" aria-hidden="true">
+          <rect width="8" height="8" rx="1.5" />
+        </svg>
+        {{ s.name }}
+      </span>
+    {% endfor %}
+  </div>
+  {% comment %}
+    The SVG scales uniformly, so on a narrow viewport the axis labels shrink
+    below legibility. Scrolling a fixed minimum width keeps them readable
+    instead; wide containers never reach the minimum and never scroll.
+  {% endcomment %}
+  <div class="overflow-x-auto">
+  <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}"
+       class="w-full h-auto min-w-[42rem]"
+       role="img" aria-label="{{ aria_label }}">
+    {% for line in chart.gridlines %}
+      <line x1="{{ chart.plot.x }}" y1="{{ line.y }}"
+            x2="{{ chart.width }}" y2="{{ line.y }}"
+            class="stroke-base-content/10" stroke-width="1" />
+      <text x="{{ chart.plot.x }}" y="{{ line.y }}" dx="-6" dy="3"
+            text-anchor="end" class="fill-base-content/50" font-size="9">{{ line.value }}</text>
+    {% endfor %}
+    {% for bar in chart.bars %}
+      <rect x="{{ bar.x }}" y="{{ bar.y }}"
+            width="{{ bar.width }}" height="{{ bar.height }}"
+            rx="1.5" class="{{ bar.css_class }}">
+        <title>{{ bar.tooltip }}</title>
+      </rect>
+    {% endfor %}
+    {% for cat in chart.categories %}
+      <text x="{{ cat.x }}" y="{{ chart.height }}" dy="-8"
+            text-anchor="middle" class="fill-base-content/50" font-size="9">{{ cat.label }}</text>
+    {% endfor %}
+  </svg>
+  </div>
+</div>

@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from workspace.common.charts import column_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.services.activity import annotate_time_ago
 from workspace.projects.actions import ProjectActionRegistry
@@ -16,6 +17,11 @@ from workspace.projects.queries import (
     get_project_role,
     project_users,
     user_project_ids,
+)
+from workspace.projects.services.analytics import (
+    flow_summary,
+    open_task_distribution,
+    weekly_flow,
 )
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.projects import get_or_create_personal_project
@@ -27,6 +33,7 @@ VIEW_OVERVIEW = "overview"
 VIEW_BOARD = "board"
 VIEW_BACKLOG = "backlog"
 VIEW_TASKS = "tasks"
+VIEW_ANALYTICS = "analytics"
 VIEW_SETTINGS = "settings"
 
 
@@ -322,6 +329,60 @@ def all_tasks(request, project_uuid):
         .order_by("status__position", "status__created_at", "position", "created_at")
     )
     return _render_project_view(request, context)
+
+
+@login_required
+@ensure_csrf_cookie
+def analytics(request, project_uuid):
+    project, role = _get_project_or_404(request.user, project_uuid)
+    _record_visit(request.user, project_uuid)
+    context = _base_context(request, project, role, VIEW_ANALYTICS)
+    context["backlog_count"] = project.tasks.filter(
+        status__category=TaskStatus.Category.BACKLOG
+    ).count()
+    flow = weekly_flow(project)
+    summary = flow_summary(flow)
+    distribution = {
+        key: _with_bar_maximum(entries)
+        for key, entries in open_task_distribution(project).items()
+    }
+    open_count = sum(entry["count"] for entry in distribution["by_priority"])
+    context.update(
+        {
+            "flow_summary": summary,
+            # "%b %d" rather than "%b %-d": the padding-strip flag is not
+            # portable to Windows.
+            "flow_chart": column_chart(
+                [row["week_start"].strftime("%b %d") for row in flow],
+                [
+                    {
+                        "name": "Created",
+                        "css_class": "fill-info",
+                        "values": [row["created"] for row in flow],
+                    },
+                    {
+                        "name": "Completed",
+                        "css_class": "fill-success",
+                        "values": [row["completed"] for row in flow],
+                    },
+                ],
+            ),
+            "distribution": distribution,
+            "open_count": open_count,
+            "is_empty": open_count == 0
+            and summary["created"] == 0
+            and summary["completed"] == 0,
+        }
+    )
+    return _render_project_view(request, context)
+
+
+def _with_bar_maximum(entries):
+    """Bar widths are relative to the busiest row, and {% widthratio %}
+    cannot compute that itself. Floors at 1 so an all-zero breakdown
+    divides safely."""
+    top = max((entry["count"] for entry in entries), default=0)
+    return [{**entry, "max_count": top or 1} for entry in entries]
 
 
 @login_required

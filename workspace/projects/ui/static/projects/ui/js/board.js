@@ -347,6 +347,7 @@ function projectBoard(config) {
       if (this.currentView === 'backlog') url += '/backlog';
       else if (this.currentView === 'tasks') url += '/tasks';
       else if (this.currentView === 'settings') url += '/settings';
+      else if (this.currentView === 'analytics') url += '/analytics';
       else if (this.currentView !== 'overview') url += '/board';
       this.$ajax(url, { target: 'project-content' });
       // Board-level changes (drag moves, send-to-board, field edits) also
@@ -517,7 +518,9 @@ function projectBoard(config) {
             ? 'board'
             : path.endsWith('/settings')
               ? 'settings'
-              : 'overview';
+              : path.endsWith('/analytics')
+                ? 'analytics'
+                : 'overview';
       const task = new URL(window.location.href).searchParams.get('task');
       if (task && task !== this.panelTaskUuid) {
         this.panelTaskUuid = task;

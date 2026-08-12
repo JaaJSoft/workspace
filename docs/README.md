@@ -23,7 +23,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 
 ## Guides
 
-- [Connecting a Google account](guides/google.md) - Gmail over IMAP/SMTP, with an app password or with OAuth2
+- [Connecting a Google account](mail/google.md) - Gmail over IMAP/SMTP, with an app password or with OAuth2
 - [Migrating from SQLite to PostgreSQL](guides/sqlite-to-postgres.md)
 - [Monitoring with Prometheus](guides/monitoring.md) - `/metrics` credentials, scrape config, exposed series
 

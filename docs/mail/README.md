@@ -23,7 +23,7 @@ IMAP/SMTP email client with OAuth2, AI-powered features, and full folder managem
 
 ## Guides
 
-- [Connecting a Google account](../guides/google.md) - Gmail over IMAP/SMTP, choosing between an app password and OAuth2
+- [Connecting a Google account](google.md) - Gmail over IMAP/SMTP, choosing between an app password and OAuth2
 
 ## API
 

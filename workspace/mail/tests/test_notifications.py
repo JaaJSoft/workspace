@@ -356,3 +356,54 @@ class SyncWiringTests(MailNotifyBase):
 
         self.assertTrue(notifier.called)
         self.assertTrue(notifier.call_args.kwargs["was_initial_sync"])
+
+
+class ClassifyWiringTests(MailNotifyBase):
+    """The classify task notifies only for labels that opted in."""
+
+    def setUp(self):
+        super().setUp()
+        set_setting(self.alice, "mail", "notify_mode", "labels")
+
+    def run_classify(self, message, label_name):
+        # Mirror the AITask fixture used by workspace/ai/tests/test_tasks.py -
+        # read it first and copy its kwargs rather than guessing which fields
+        # are required. The task object is called directly (not .delay()); a
+        # bind=True Celery task supports that and binds self itself.
+        from workspace.ai.models import AITask
+        from workspace.ai.tasks.mail import classify_mail_messages
+
+        task = AITask.objects.create(
+            owner=self.alice,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={"message_uuids": [str(message.uuid)]},
+        )
+        payload = f'[{{"i": 1, "labels": ["{label_name}"]}}]'
+        with patch(
+            "workspace.ai.tasks.mail.call_llm",
+            return_value={
+                "content": payload,
+                "model": "test",
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+            },
+        ):
+            classify_mail_messages(str(task.pk))
+
+    def test_a_notifying_label_produces_a_notification(self):
+        message = self.make_message(uid=1, subject="Server down")
+        self.run_classify(message, "Urgent")
+        notif = Notification.objects.get(recipient=self.alice)
+        self.assertEqual(notif.mail_message_id, message.pk)
+        self.assertEqual(notif.priority, "high")
+
+    def test_a_non_notifying_label_produces_nothing(self):
+        message = self.make_message(uid=1, subject="Weekly digest")
+        self.run_classify(message, "Newsletter")
+        self.assertEqual(Notification.objects.count(), 0)
+
+    def test_mode_all_does_not_notify_from_the_classifier(self):
+        set_setting(self.alice, "mail", "notify_mode", "all")
+        message = self.make_message(uid=1, subject="Server down")
+        self.run_classify(message, "Urgent")
+        self.assertEqual(Notification.objects.count(), 0)

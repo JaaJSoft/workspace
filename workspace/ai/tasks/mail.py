@@ -188,13 +188,19 @@ def classify_mail_messages(self, task_id: str):
                 for m in MailMessage.objects.filter(
                     uuid__in=message_uuids,
                     account__owner=ai_task.owner,
-                ).only(
+                )
+                .select_related("folder")
+                .only(
                     "uuid",
                     "subject",
                     "from_name",
                     "from_email",
                     "snippet",
+                    "is_read",
                     "account_id",
+                    "folder_id",
+                    "folder__folder_type",
+                    "folder__is_hidden",
                 )
             }
             # Preserve the caller's input order. The DB returns rows in
@@ -297,6 +303,11 @@ def classify_mail_messages(self, task_id: str):
                 ai_task.prompt_tokens = total_prompt
                 ai_task.completion_tokens = total_completion
 
+            # Outside the atomic block on purpose: notify() dispatches the push
+            # task immediately, and inside an open transaction the worker can
+            # run before the rows are visible and drop the push silently.
+            _notify_for_notifying_labels(ai_task, all_links)
+
             logger.info(
                 "Classify complete: task=%s messages=%d tokens=%d+%d",
                 scrub(task_id),
@@ -310,3 +321,30 @@ def classify_mail_messages(self, task_id: str):
         return {"status": "error", "error": "Task not found"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+
+def _notify_for_notifying_labels(ai_task, links):
+    """Push a notification for each message that got a notify_on_apply label.
+
+    Called from the task rather than from a post_save signal on
+    MailMessageLabel: a signal would also fire when the user labels their own
+    message by hand, notifying them about their own action.
+    """
+    from workspace.mail.services.notifications import notify_labeled_messages
+
+    by_pk = {
+        link.message.pk: link.message for link in links if link.label.notify_on_apply
+    }
+    if not by_pk:
+        return
+    try:
+        notify_labeled_messages(
+            ai_task.owner,
+            list(by_pk.values()),
+            was_initial_sync=bool(ai_task.input_data.get("initial_sync")),
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send mail label notifications for task %s",
+            scrub(str(ai_task.pk)),
+        )

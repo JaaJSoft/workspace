@@ -23,7 +23,7 @@ IMAP/SMTP email client with OAuth2, AI-powered features, and full folder managem
 
 ## Guides
 
-- [Connecting Gmail with OAuth2](../guides/gmail-oauth2.md) - register the Google Cloud client, pick the audience, wire the redirect URI
+- [Connecting a Google account](../guides/google.md) - Gmail over IMAP/SMTP, choosing between an app password and OAuth2
 
 ## API
 

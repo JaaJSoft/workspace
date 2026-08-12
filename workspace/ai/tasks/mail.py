@@ -309,6 +309,9 @@ def classify_mail_messages(self, task_id: str):
 
             with transaction.atomic():
                 if all_links:
+                    # Callers only ever pass unlabelled messages, so all_links
+                    # holds new assignments only; ignore_conflicts is a race
+                    # guard, not a sign of a message being re-notified.
                     MailMessageLabel.objects.bulk_create(
                         all_links, ignore_conflicts=True
                     )
@@ -342,7 +345,8 @@ def _notify_for_notifying_labels(ai_task, links):
 
     Called from the task rather than from a post_save signal on
     MailMessageLabel: a signal would also fire when the user labels their own
-    message by hand, notifying them about their own action.
+    message by hand, notifying them about their own action. The same reason
+    is why a manually-dispatched classify task sets suppress_notifications.
     """
     from workspace.mail.services.notifications import notify_labeled_messages
 
@@ -355,7 +359,7 @@ def _notify_for_notifying_labels(ai_task, links):
         notify_labeled_messages(
             ai_task.owner,
             list(by_pk.values()),
-            was_initial_sync=bool(ai_task.input_data.get("initial_sync")),
+            was_initial_sync=bool(ai_task.input_data.get("suppress_notifications")),
         )
     except Exception:
         logger.exception(

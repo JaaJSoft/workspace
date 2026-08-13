@@ -8,22 +8,20 @@ poison the batch.
 """
 
 import logging
-import re
 from datetime import datetime
 from typing import Literal
 
-import orjson
 from celery import shared_task
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone as dj_tz
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from workspace.ai.models import AITask
 from workspace.ai.prompts.calendar import build_event_extraction_messages
 from workspace.ai.services.ai_task import ai_task_lifecycle
-from workspace.ai.services.llm import call_llm
+from workspace.ai.services.llm import call_llm_structured
 from workspace.calendar.models import Event
 from workspace.calendar.services.event_creation import create_event_from_payload
 from workspace.common.logging import scrub
@@ -31,8 +29,6 @@ from workspace.mail.models import MailExtraction, MailMessage
 from workspace.mail.services.threads import get_thread
 
 logger = logging.getLogger(__name__)
-
-_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 
 class ExtractedEvent(BaseModel):
@@ -44,6 +40,12 @@ class ExtractedEvent(BaseModel):
     description: str = ""
     confidence: Literal["high", "medium", "low"]
     reasoning: str = ""
+
+
+class ExtractedEvents(BaseModel):
+    """Envelope: the json_schema response format requires a top-level object."""
+
+    events: list[ExtractedEvent]
 
 
 @shared_task(name="ai.extract_from_mail", bind=True, max_retries=0)
@@ -107,39 +109,22 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
     user_tz = get_user_timezone(msg.account.owner)
     messages = build_event_extraction_messages(thread, user_tz=user_tz)
     model = settings.AI_EXTRACT_MODEL or settings.AI_MODEL
-    result = call_llm(messages, model=model)
+    parsed, result = call_llm_structured(messages, ExtractedEvents, model=model)
 
-    raw_content = _FENCE_RE.sub("", (result.get("content") or "").strip())
-    try:
-        items = orjson.loads(raw_content)
-    except ValueError, TypeError:
-        logger.warning("Extract: malformed JSON for message %s", scrub(str(msg.pk)))
-        return {
-            "count": 0,
-            "prompt_tokens": result.get("prompt_tokens", 0) or 0,
-            "completion_tokens": result.get("completion_tokens", 0) or 0,
-            "model": result.get("model", ""),
-        }
-    if not isinstance(items, list):
-        logger.warning("Extract: expected JSON array, got %s", type(items).__name__)
-        return {
-            "count": 0,
-            "prompt_tokens": result.get("prompt_tokens", 0) or 0,
-            "completion_tokens": result.get("completion_tokens", 0) or 0,
-            "model": result.get("model", ""),
-        }
+    usage = {
+        "prompt_tokens": result.get("prompt_tokens", 0) or 0,
+        "completion_tokens": result.get("completion_tokens", 0) or 0,
+        "model": result.get("model", ""),
+    }
+    if parsed is None:
+        logger.warning(
+            "Extract: unparseable LLM output for message %s", scrub(str(msg.pk))
+        )
+        return {"count": 0, **usage}
 
     created = 0
     now = dj_tz.now()
-    for raw_item in items:
-        if not isinstance(raw_item, dict):
-            continue
-        try:
-            extracted = ExtractedEvent.model_validate(raw_item)
-        except ValidationError:
-            logger.debug("Extract: invalid event shape from LLM, dropping")
-            continue
-
+    for extracted in parsed.events:
         if extracted.confidence != "high":
             logger.debug("Extract: dropping non-high confidence event")
             continue
@@ -168,13 +153,8 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
                 target_object_id=event.uuid,
                 confidence=extracted.confidence,
                 model_used=result.get("model", ""),
-                raw_output=raw_item,
+                raw_output=extracted.model_dump(mode="json"),
             )
         created += 1
 
-    return {
-        "count": created,
-        "prompt_tokens": result.get("prompt_tokens", 0) or 0,
-        "completion_tokens": result.get("completion_tokens", 0) or 0,
-        "model": result.get("model", ""),
-    }
+    return {"count": created, **usage}

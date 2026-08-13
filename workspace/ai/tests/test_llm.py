@@ -3,11 +3,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import SimpleTestCase, TestCase
+from pydantic import BaseModel
 
 from workspace.ai.services.llm import (
     _extract_thinking,
     build_tool_content,
     call_llm,
+    call_llm_structured,
     extract_text_tool_calls,
     serialize_response,
     truncate_tool_result,
@@ -220,6 +222,95 @@ class CallLlmThinkingTests(SimpleTestCase):
         )
         result = self._call(msg)
         self.assertEqual(result["thinking"], "")
+
+
+class _Payload(BaseModel):
+    items: list[str]
+
+
+class CallLlmStructuredTests(SimpleTestCase):
+    def _call(self, content):
+        msg = SimpleNamespace(content=content, tool_calls=None)
+        with patch(
+            "workspace.ai.client.get_ai_client",
+            return_value=_fake_client(msg),
+        ):
+            return call_llm_structured(
+                [{"role": "user", "content": "hi"}], _Payload, model="m"
+            )
+
+    def test_valid_json_returns_validated_instance(self):
+        parsed, result = self._call('{"items": ["a", "b"]}')
+        self.assertEqual(parsed.items, ["a", "b"])
+        self.assertEqual(result["model"], "test-model")
+
+    def test_fenced_json_is_tolerated(self):
+        parsed, _ = self._call('```json\n{"items": ["a"]}\n```')
+        self.assertEqual(parsed.items, ["a"])
+
+    def test_invalid_json_returns_none_with_usage(self):
+        parsed, result = self._call("not json")
+        self.assertIsNone(parsed)
+        self.assertEqual(result["prompt_tokens"], 1)
+        self.assertEqual(result["completion_tokens"], 2)
+
+    def test_schema_mismatch_returns_none(self):
+        parsed, _ = self._call('{"items": "nope"}')
+        self.assertIsNone(parsed)
+
+    def test_think_tags_are_stripped_before_parsing(self):
+        parsed, _ = self._call('<think>hm</think>{"items": []}')
+        self.assertEqual(parsed.items, [])
+
+    def test_sends_strict_json_schema_response_format(self):
+        with patch(
+            "workspace.ai.services.llm.call_llm",
+            return_value={"content": '{"items": []}'},
+        ) as mock_call:
+            call_llm_structured([{"role": "user", "content": "hi"}], _Payload)
+        response_format = mock_call.call_args.kwargs["response_format"]
+        self.assertEqual(response_format["type"], "json_schema")
+        self.assertEqual(response_format["json_schema"]["name"], "_Payload")
+        self.assertIs(response_format["json_schema"]["strict"], True)
+        schema = response_format["json_schema"]["schema"]
+        self.assertIs(schema["additionalProperties"], False)
+        self.assertEqual(schema["required"], ["items"])
+
+    def test_strict_schema_normalizes_nested_models(self):
+        class Item(BaseModel):
+            name: str
+            note: str = ""
+            when: str | None = None
+
+        class Envelope(BaseModel):
+            entries: list[Item]
+
+        with patch(
+            "workspace.ai.services.llm.call_llm",
+            return_value={"content": '{"entries": []}'},
+        ) as mock_call:
+            call_llm_structured([{"role": "user", "content": "hi"}], Envelope)
+        schema = mock_call.call_args.kwargs["response_format"]["json_schema"]["schema"]
+        item = schema["$defs"]["Item"]
+        self.assertIs(item["additionalProperties"], False)
+        self.assertEqual(item["required"], ["name", "note", "when"])
+        self.assertNotIn("default", item["properties"]["note"])
+        self.assertNotIn("default", item["properties"]["when"])
+
+    def test_strict_schema_spares_a_property_named_default(self):
+        class Odd(BaseModel):
+            default: str = "x"
+            items: list[str] = []
+
+        with patch(
+            "workspace.ai.services.llm.call_llm",
+            return_value={"content": '{"default": "a", "items": []}'},
+        ) as mock_call:
+            call_llm_structured([{"role": "user", "content": "hi"}], Odd)
+        schema = mock_call.call_args.kwargs["response_format"]["json_schema"]["schema"]
+        self.assertIn("default", schema["properties"])
+        self.assertIn("items", schema["properties"])
+        self.assertEqual(schema["required"], ["default", "items"])
 
 
 class SerializeResponseThinkingTests(SimpleTestCase):

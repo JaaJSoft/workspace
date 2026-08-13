@@ -116,7 +116,7 @@
         <input type="file" multiple x-ref="fileInput" class="hidden" @change="handleFileSelect($event)" />
 
         <!-- Mobile input (< sm) -->
-        <div class="flex sm:hidden items-end gap-1.5" x-show="recorderState === 'idle'">
+        <div class="flex sm:hidden items-end gap-1.5" x-show="recorderState === 'idle'" x-cloak>
           <div class="dropdown dropdown-top flex-shrink-0">
             <button tabindex="0" class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" title="Attach file">
               <i data-lucide="paperclip" class="w-5 h-5"></i>

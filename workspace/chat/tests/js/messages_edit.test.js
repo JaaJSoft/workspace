@@ -17,6 +17,10 @@ function bubble(uuid, body) {
       return el._children[sel] || null;
     },
     appendChild(child) {
+      // Counted, not just stored: a stub that silently overwrites the marker
+      // cannot tell one insertion from two, and the "added once" test below
+      // needs exactly that distinction.
+      el.appendCalls = (el.appendCalls || 0) + 1;
       el._children['.edited-indicator'] = child;
     },
   };
@@ -64,6 +68,12 @@ test('an edit repaints every rendered copy of the message', async () => {
     copies.map((c) => c.querySelector('.msg-body').innerHTML),
     ['<p>after</p>', '<p>after</p>'],
   );
+  // data-body too, on every copy: it is what the next startEdit reads back,
+  // and a copy left holding the pre-edit text would revert the message.
+  assert.deepStrictEqual(
+    copies.map((c) => c.dataset.body),
+    ['after', 'after'],
+  );
 });
 
 test('a second edit starts from the first edit, not the original text', async () => {
@@ -88,4 +98,7 @@ test('the edited marker is added once, not on every edit', async () => {
   await app.saveEdit();
 
   assert.ok(copies[0].querySelector('.edited-indicator'), 'the marker is present');
+  // The count, not just presence: appendChild overwrites the stored marker,
+  // so without it a second insertion would be invisible to this test.
+  assert.equal(copies[0].appendCalls, 1, 'the marker is inserted exactly once');
 });

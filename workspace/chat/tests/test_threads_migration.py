@@ -93,3 +93,35 @@ class BackfillThreadsTests(TestCase):
         root.refresh_from_db()
         self.assertEqual(root.reply_count, 1)
         self.assertEqual(ThreadParticipant.objects.filter(root_message=root).count(), 2)
+
+    def test_a_soft_deleted_reply_is_threaded_but_not_counted(self):
+        # The panel renders live replies only (and recount_thread counts the
+        # same), so the backfilled counters must agree - a deleted reply keeps
+        # its thread identity but must not be advertised.
+        from django.utils import timezone
+
+        root = self._message(self.alice, "root")
+        live = self._message(self.bob, "live", reply_to=root)
+        late_deleted = self._message(
+            self.bob, "deleted later", reply_to=root, deleted_at=timezone.now()
+        )
+
+        self._backfill()
+
+        root.refresh_from_db()
+        late_deleted.refresh_from_db()
+        self.assertEqual(late_deleted.thread_root_id, root.uuid)
+        self.assertEqual(root.reply_count, 1)
+        self.assertEqual(root.last_reply_at, live.created_at)
+
+    def test_a_thread_of_only_deleted_replies_advertises_nothing(self):
+        from django.utils import timezone
+
+        root = self._message(self.alice, "root")
+        self._message(self.bob, "gone", reply_to=root, deleted_at=timezone.now())
+
+        self._backfill()
+
+        root.refresh_from_db()
+        self.assertEqual(root.reply_count, 0)
+        self.assertIsNone(root.last_reply_at)

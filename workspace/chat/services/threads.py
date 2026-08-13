@@ -198,7 +198,7 @@ def backfill_threads(message_model, participant_model, member_model):
 
     replies = list(
         message_model.objects.filter(uuid__in=roots).only(
-            "uuid", "author_id", "created_at", "conversation_id"
+            "uuid", "author_id", "created_at", "conversation_id", "deleted_at"
         )
     )
     for reply in replies:
@@ -216,11 +216,14 @@ def backfill_threads(message_model, participant_model, member_model):
         ).values_list("uuid", "author_id", "conversation_id")
     }
 
+    # Live replies only, matching recount_thread: the panel does not render a
+    # soft-deleted reply, so it must not be advertised either. A soft-deleted
+    # reply still gets its thread_root above - identity is not accounting.
     root_rows = list(message_model.objects.filter(uuid__in=by_root).only("uuid"))
     for root in root_rows:
-        group = by_root[root.uuid]
-        root.reply_count = len(group)
-        root.last_reply_at = max(r.created_at for r in group)
+        live = [r for r in by_root[root.uuid] if r.deleted_at is None]
+        root.reply_count = len(live)
+        root.last_reply_at = max((r.created_at for r in live), default=None)
     message_model.objects.bulk_update(
         root_rows, ["reply_count", "last_reply_at"], batch_size=500
     )

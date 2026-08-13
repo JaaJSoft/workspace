@@ -15,7 +15,9 @@
      x-data="chatThreadPanel(openThreadRoot)"
      tabindex="-1"
      @keydown.escape.prevent.stop="closeThread()"
-     @thread-reply-received.window="if ($event.detail.root === threadRootUuid) loadMessages(activeConversation.uuid)">
+     @thread-reply-received.window="if ($event.detail.root === threadRootUuid) loadMessages(activeConversation.uuid)"
+     {# A reaction toggled in the main flow repainted the flow only; the panel's copy of the message goes stale without this. #}
+     @chat-refresh-thread.window="refreshPanelOnly()">
 
   <div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
     <h4 class="font-semibold text-sm flex items-center gap-2">

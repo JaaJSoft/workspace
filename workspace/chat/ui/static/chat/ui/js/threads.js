@@ -131,6 +131,13 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     // Writing in the panel with nothing quoted answers the thread itself.
     _replyTarget() { return this.replyingTo?.uuid || this.threadRootUuid; },
 
+    // Set by destroy(). The mixin's conversation-uuid staleness guards cannot
+    // catch a torn-down panel: opening thread B while thread A still loads
+    // keeps the same conversation and the same container id, so without this
+    // A's late response would be injected into B's panel.
+    _dead: false,
+    _surfaceGone() { return this._dead; },
+
     async _refreshCurrentMessages() {
       await messages._refreshCurrentMessages.call(this);
       // Then the conversation behind the panel: its copy of the root carries
@@ -140,6 +147,16 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
       // a page reload to show up in the flow.
       window.dispatchEvent(new CustomEvent('chat:refresh-messages'));
     },
+
+    // The panel-only repaint, without the chat:refresh-messages echo above.
+    // Used by the chat:refresh-thread listener: a reaction toggled in the main
+    // flow already repainted the flow, so echoing back would fetch it twice.
+    refreshPanelOnly() { return messages._refreshCurrentMessages.call(this); },
+
+    // No-op on purpose: the panel's _refreshCurrentMessages already tells the
+    // main flow to repaint, and dispatching chat:refresh-thread from the
+    // panel would just make it fetch its own contents a second time.
+    _notifyReactionPeers() {},
 
     async init() {
       this.initRecorder?.();
@@ -153,8 +170,11 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     // opening another one, or switching to the info panel. A recording in
     // flight holds a live microphone track and an object URL; without this
     // they survive the component and the browser keeps showing the recording
-    // indicator. cancelRecording() already releases both.
+    // indicator. cancelRecording() already releases both. _dead makes every
+    // fetch still in flight drop its response instead of writing into
+    // whatever panel now owns the container.
     destroy() {
+      this._dead = true;
       this.cancelRecording?.();
     },
   };

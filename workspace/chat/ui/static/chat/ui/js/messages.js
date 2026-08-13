@@ -35,6 +35,13 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       return document.querySelectorAll(`[data-message-uuid="${uuid}"]`);
     },
 
+    // Whether this component's surface has been torn down while a fetch was
+    // in flight. The conversation-uuid guards below cannot catch it: two
+    // thread panels opened in quick succession share one conversation and one
+    // container id, so a late response for the first thread would land in the
+    // second one's panel. The thread panel flips this in destroy().
+    _surfaceGone() { return false; },
+
     // ── Server-rendered HTML helpers ─────────────────────────
     _initMessagesDom(container) {
       // Initialize Alpine on dynamically injected HTML
@@ -64,7 +71,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           { credentials: 'same-origin' }
         );
         // Discard stale response if user already switched conversation
-        if (this.activeConversation?.uuid !== conversationId) return;
+        // (or this surface was torn down while the fetch was in flight)
+        if (this._surfaceGone() || this.activeConversation?.uuid !== conversationId) return;
         if (resp.ok) {
           const html = await resp.text();
           if (container) {
@@ -110,13 +118,13 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this._messagesUrl(firstUuid),
           { credentials: 'same-origin' }
         );
-        if (this.activeConversation?.uuid !== targetUuid) {
+        if (this._surfaceGone() || this.activeConversation?.uuid !== targetUuid) {
           this.loadingMoreMessages = false;
           return;
         }
         if (resp.ok) {
           const html = await resp.text();
-          if (this.activeConversation?.uuid !== targetUuid) {
+          if (this._surfaceGone() || this.activeConversation?.uuid !== targetUuid) {
             this.loadingMoreMessages = false;
             return;
           }
@@ -464,10 +472,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this._messagesUrl(null),
           { credentials: 'same-origin' }
         );
-        if (this.activeConversation?.uuid !== targetUuid) return;
+        if (this._surfaceGone() || this.activeConversation?.uuid !== targetUuid) return;
         if (resp.ok) {
           const html = await resp.text();
-          if (this.activeConversation?.uuid !== targetUuid) return;
+          if (this._surfaceGone() || this.activeConversation?.uuid !== targetUuid) return;
           if (container) {
             container.innerHTML = html;
             this._initMessagesDom(container);
@@ -608,10 +616,20 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         if (resp.ok) {
           // Re-fetch to get server-rendered reactions with proper grouping
           await this._refreshCurrentMessages();
+          // Then whatever other surface shows a copy of this message: the
+          // refresh above only repaints the surface the click landed on.
+          this._notifyReactionPeers();
         }
       } catch (e) {
         console.error('Failed to toggle reaction', e);
       }
+    },
+
+    // Reaction fan-out to the other surface. The main flow tells the thread
+    // panel; the panel overrides this to a no-op because its own
+    // _refreshCurrentMessages already asks the main flow to repaint.
+    _notifyReactionPeers() {
+      window.dispatchEvent(new CustomEvent('chat:refresh-thread'));
     },
 
     // ── Read status ────────────────────────────────────────

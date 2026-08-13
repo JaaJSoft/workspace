@@ -11,7 +11,7 @@ const { loadScript } = require('../../../common/tests/js/loader');
  * to exist before the module body runs; `calls` therefore records that first
  * hydration GET too, and the tests look at the PUTs only.
  */
-function load({ putResolves = true } = {}) {
+function load({ putResolves = true, putOk = true } = {}) {
   const calls = [];
   const dispatched = [];
   let releasePut;
@@ -28,6 +28,7 @@ function load({ putResolves = true } = {}) {
       if ((opts.method || 'GET') === 'PUT') {
         if (!putResolves) throw new Error('offline');
         releasePut();
+        return { ok: putOk, status: putOk ? 200 : 500, json: async () => ({ value: {} }) };
       }
       return { ok: true, json: async () => ({ value: {} }) };
     },
@@ -92,6 +93,17 @@ test('the list is refreshed in place rather than by reloading the page', async (
 
 test('a failed write skips the refetch, leaving the list as the server has it', async () => {
   const h = load({ putResolves: false });
+
+  await h.app.updateAndSync('showThreadRepliesInline', true);
+
+  assert.deepStrictEqual(h.refreshes(), []);
+});
+
+test('an http error response skips the refetch too', async () => {
+  // fetch resolves on 4xx/5xx, so a rejected promise is not the only failure
+  // shape: a 500 also means the server kept the old value, and refetching
+  // would repaint the list filtered by a preference that was never saved.
+  const h = load({ putOk: false });
 
   await h.app.updateAndSync('showThreadRepliesInline', true);
 

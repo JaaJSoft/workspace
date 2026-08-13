@@ -462,3 +462,108 @@ test('switching conversations closes the thread panel', async () => {
 
   assert.equal(app.openThreadRoot, null, 'the previous conversation\'s thread is closed');
 });
+
+// ── Stale responses and cross-surface reactions ────────────
+
+test('a late response for a destroyed panel is dropped, not injected', async () => {
+  // Open thread A, open thread B while A is still loading: both panels share
+  // one conversation and one container id, so the conversation-uuid guard
+  // cannot tell A's response from B's - only the destroy flag can.
+  let releaseA;
+  const slowResponse = new Promise((resolve) => {
+    releaseA = resolve;
+  });
+  const container = { innerHTML: 'contents of thread B', writes: 0 };
+  Object.defineProperty(container, 'html', {});
+  const ctx = loadScripts(
+    ['workspace/chat/ui/static/chat/ui/js/messages.js', 'workspace/chat/ui/static/chat/ui/js/threads.js'],
+    {
+      chatUiHelpersMixin: () => ({}),
+      chatInputMixin: () => ({}),
+      chatRecorderMixin: () => ({}),
+      getCSRFToken: () => 'csrf-token',
+      document: {
+        querySelectorAll: () => [],
+        getElementById: (id) => (id === 'thread-messages-container' ? container : null),
+      },
+      fetch: async () => {
+        await slowResponse;
+        return { ok: true, text: async () => 'contents of thread A' };
+      },
+      Alpine: undefined,
+      CustomEvent: class {
+        constructor(type) {
+          this.type = type;
+        }
+      },
+      dispatchEvent: () => {},
+    },
+  );
+
+  const panelA = ctx.chatThreadPanel('rA');
+  panelA.activeConversation = { uuid: 'c1' };
+  panelA.scrollToBottom = () => {};
+
+  const loading = panelA.loadMessages('c1');
+  panelA.destroy();
+  container.innerHTML = 'contents of thread B';
+  releaseA();
+  await loading;
+
+  assert.equal(container.innerHTML, 'contents of thread B',
+    "thread A's late response must not overwrite thread B's panel");
+});
+
+test('a reaction in the main flow tells the panel to repaint', async () => {
+  const dispatched = [];
+  const ctx = loadScripts(
+    ['workspace/chat/ui/static/chat/ui/js/messages.js'],
+    {
+      getCSRFToken: () => 'csrf-token',
+      document: { querySelectorAll: () => [], getElementById: () => null },
+      fetch: async () => ({ ok: true, text: async () => '' }),
+      CustomEvent: class {
+        constructor(type) {
+          this.type = type;
+        }
+      },
+      dispatchEvent: (e) => dispatched.push(e.type),
+    },
+  );
+  const app = ctx.chatMessagesMixin();
+  app.activeConversation = { uuid: 'c1' };
+  app._refreshCurrentMessages = async () => {};
+
+  await app.toggleReaction('m1', '👍');
+
+  assert.deepStrictEqual(dispatched, ['chat:refresh-thread']);
+});
+
+test('a reaction in the panel does not echo back into a second panel fetch', async () => {
+  const dispatched = [];
+  const ctx = loadScripts(
+    ['workspace/chat/ui/static/chat/ui/js/messages.js', 'workspace/chat/ui/static/chat/ui/js/threads.js'],
+    {
+      chatUiHelpersMixin: () => ({}),
+      chatInputMixin: () => ({}),
+      chatRecorderMixin: () => ({}),
+      getCSRFToken: () => 'csrf-token',
+      document: { querySelectorAll: () => [], getElementById: () => null },
+      fetch: async () => ({ ok: true, text: async () => '' }),
+      CustomEvent: class {
+        constructor(type) {
+          this.type = type;
+        }
+      },
+      dispatchEvent: (e) => dispatched.push(e.type),
+    },
+  );
+  const panel = ctx.chatThreadPanel('r1');
+  panel.activeConversation = { uuid: 'c1' };
+
+  await panel.toggleReaction('m1', '👍');
+
+  // The panel's own refresh dispatches chat:refresh-messages (main flow
+  // repaint); chat:refresh-thread would make the panel fetch itself twice.
+  assert.deepStrictEqual(dispatched, ['chat:refresh-messages']);
+});

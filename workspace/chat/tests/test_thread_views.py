@@ -12,6 +12,7 @@ from workspace.chat.models import (
     PinnedMessage,
     ThreadParticipant,
 )
+from workspace.chat.services.rendering import render_message_body
 
 User = get_user_model()
 
@@ -26,18 +27,24 @@ class ThreadMessagesViewTests(TestCase):
         ConversationMember.objects.create(
             conversation=self.conversation, user=self.alice
         )
-        self.root = Message.objects.create(
-            conversation=self.conversation, author=self.alice, body="the root message"
-        )
-        self.reply = Message.objects.create(
-            conversation=self.conversation,
-            author=self.alice,
-            body="the threaded reply",
-            reply_to=self.root,
-            thread_root=self.root,
+        self.root = self._message("the root message")
+        self.reply = self._message(
+            "the threaded reply", reply_to=self.root, thread_root=self.root
         )
         self.url = reverse(
             "chat_ui:thread_messages", kwargs={"root_uuid": self.root.uuid}
+        )
+
+    def _message(self, body, **kwargs):
+        # body_html too: the bubble renders the rendered HTML only, so a
+        # message built with body alone is an empty bubble and every text
+        # assertion would silently match the data-body attribute instead.
+        return Message.objects.create(
+            conversation=self.conversation,
+            author=self.alice,
+            body=body,
+            body_html=render_message_body(body),
+            **kwargs,
         )
 
     def tearDown(self):
@@ -63,20 +70,20 @@ class ThreadMessagesViewTests(TestCase):
         self.client.force_login(self.alice)
         html = self.client.get(self.url).content.decode()
         # The reply answers the root, which the panel renders right above it.
-        # Repeating it as a quote on every reply is noise.
-        self.assertNotIn("the root message</p>", html)
+        # Repeating it as a quote on every reply is noise. The quote block is
+        # the anchor pointing at the quoted message; the root's own bubble
+        # legitimately stays on the page, so assert on the anchor.
+        self.assertNotIn(f'href="#tmsg-{self.root.uuid}"', html)
 
     def test_the_panel_keeps_the_quote_when_a_reply_answers_another_reply(self):
-        Message.objects.create(
-            conversation=self.conversation,
-            author=self.alice,
-            body="answering the reply, not the root",
+        self._message(
+            "answering the reply, not the root",
             reply_to=self.reply,
             thread_root=self.root,
         )
         self.client.force_login(self.alice)
         html = self.client.get(self.url).content.decode()
-        self.assertIn("the threaded reply</p>", html)
+        self.assertIn(f'href="#tmsg-{self.reply.uuid}"', html)
 
     def test_the_main_flow_keeps_the_quote(self):
         self.client.force_login(self.alice)
@@ -84,14 +91,9 @@ class ThreadMessagesViewTests(TestCase):
             "chat_ui:conversation_messages",
             kwargs={"conversation_uuid": self.conversation.uuid},
         )
-        Message.objects.create(
-            conversation=self.conversation,
-            author=self.alice,
-            body="an old-style inline reply",
-            reply_to=self.root,
-        )
+        self._message("an old-style inline reply", reply_to=self.root)
         html = self.client.get(flow_url).content.decode()
-        self.assertIn("the root message</p>", html)
+        self.assertIn(f'href="#msg-{self.root.uuid}"', html)
 
     def test_a_malformed_cursor_still_shows_the_root(self):
         # A cursor that does not parse is ignored, so the response is the first
@@ -102,9 +104,7 @@ class ThreadMessagesViewTests(TestCase):
 
     def test_an_unknown_cursor_still_shows_the_root(self):
         self.client.force_login(self.alice)
-        stranger = Message.objects.create(
-            conversation=self.conversation, author=self.alice, body="elsewhere"
-        )
+        stranger = self._message("elsewhere")
         html = self.client.get(
             self.url, {"before": str(stranger.uuid)}
         ).content.decode()

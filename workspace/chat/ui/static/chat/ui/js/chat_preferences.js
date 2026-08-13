@@ -67,8 +67,9 @@ window.chatPreferences = function chatPreferences() {
             this.prefs[key] = value;
             this._broadcast();
             clearTimeout(_saveTimer);
+            let resp;
             try {
-                await fetch(API_URL, {
+                resp = await fetch(API_URL, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
                     body: JSON.stringify({ value: this.prefs }),
@@ -78,6 +79,12 @@ window.chatPreferences = function chatPreferences() {
                 // The toggle did not stick; skip the refetch rather than
                 // repaint the list with the value the server still holds.
                 console.error('Failed to save preference', e);
+                return;
+            }
+            // fetch resolves on 4xx/5xx too - an HTTP error also means the
+            // server kept the old value, so the same rule applies.
+            if (!resp.ok) {
+                console.error('Failed to save preference', resp.status);
                 return;
             }
             window.dispatchEvent(new CustomEvent('chat:refresh-messages'));

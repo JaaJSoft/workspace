@@ -417,9 +417,9 @@ class ClassifyWiringTests(MailNotifyBase):
             input_data=input_data,
         )
         labels_json = ", ".join(f'"{name}"' for name in label_names)
-        payload = f'[{{"i": 1, "labels": [{labels_json}]}}]'
+        payload = f'{{"results": [{{"i": 1, "labels": [{labels_json}]}}]}}'
         with patch(
-            "workspace.ai.tasks.mail.call_llm",
+            "workspace.ai.services.llm.call_llm",
             return_value={
                 "content": payload,
                 "model": "test",

@@ -12,7 +12,8 @@ MAX_BODY_CHARS = 4000  # per message; threads can have many messages.
 
 SYSTEM_PROMPT = (
     "You extract calendar events from email threads. Output rules:\n"
-    "1. Return a JSON array of events. Empty array means no event.\n"
+    '1. Return a JSON object with an "events" array. An empty array means '
+    "no event.\n"
     "2. ONLY extract events that are CONFIRMED and SCHEDULED: a meeting "
     "with a date and time, a flight, a train ticket, a concert booking, "
     "a medical appointment, a restaurant reservation.\n"
@@ -29,12 +30,12 @@ SYSTEM_PROMPT = (
     "local timezone (use UTC if unknown).\n"
     "7. Do NOT extract recurring events as a series; if a mail describes "
     "a recurrence, extract only the next occurrence.\n"
-    "Output format: a JSON array, no other text, no markdown fences.\n"
-    'Example: [{"title":"Train Paris-Lyon","start":'
+    'Output format: {"events": [...]}, no other text, no markdown fences.\n'
+    'Example: {"events":[{"title":"Train Paris-Lyon","start":'
     '"2026-06-01T08:00:00+02:00","end":"2026-06-01T10:00:00+02:00",'
     '"all_day":false,"location":"Gare de Lyon","description":"",'
     '"confidence":"high","reasoning":"Booking confirmation with '
-    'departure time and station."}]'
+    'departure time and station."}]}'
 )
 
 

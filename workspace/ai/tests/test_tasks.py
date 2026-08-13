@@ -960,10 +960,12 @@ class ClassifyMailMessagesTests(TestCase):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = json.dumps(
-            [
-                {"i": 1, "labels": ["Urgent"]},
-                {"i": 2, "labels": ["Newsletter"]},
-            ]
+            {
+                "results": [
+                    {"i": 1, "labels": ["Urgent"]},
+                    {"i": 2, "labels": ["Newsletter"]},
+                ]
+            }
         )
         mock_response.choices[0].message.tool_calls = None
         mock_response.model = "gpt-4o-mini"
@@ -1000,7 +1002,7 @@ class ClassifyMailMessagesTests(TestCase):
         """The prompt payload must carry each message's sender columns."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps([])
+        mock_response.choices[0].message.content = json.dumps({"results": []})
         mock_response.choices[0].message.tool_calls = None
         mock_response.model = "gpt-4o-mini"
         mock_response.usage.prompt_tokens = 10
@@ -1056,7 +1058,7 @@ class ClassifyMailMessagesTests(TestCase):
         def _response(index_labels):
             resp = MagicMock()
             resp.choices = [MagicMock()]
-            resp.choices[0].message.content = json.dumps(index_labels)
+            resp.choices[0].message.content = json.dumps({"results": index_labels})
             resp.choices[0].message.tool_calls = None
             resp.model = "gpt-4o-mini"
             resp.usage.prompt_tokens = 10
@@ -1132,10 +1134,12 @@ class ClassifyMailMessagesTests(TestCase):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = json.dumps(
-            [
-                {"i": 1, "labels": ["Urgent"]},
-                {"i": 2, "labels": ["Newsletter"]},
-            ]
+            {
+                "results": [
+                    {"i": 1, "labels": ["Urgent"]},
+                    {"i": 2, "labels": ["Newsletter"]},
+                ]
+            }
         )
         mock_response.choices[0].message.tool_calls = None
         mock_response.model = "gpt-4o-mini"
@@ -1170,9 +1174,7 @@ class ClassifyMailMessagesTests(TestCase):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = json.dumps(
-            [
-                {"i": 1, "labels": ["Urgent", "NonExistent"]},
-            ]
+            {"results": [{"i": 1, "labels": ["Urgent", "NonExistent"]}]}
         )
         mock_response.choices[0].message.tool_calls = None
         mock_response.model = "gpt-4o-mini"
@@ -1197,9 +1199,7 @@ class ClassifyMailMessagesTests(TestCase):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = json.dumps(
-            [
-                {"i": 1, "labels": ["urgent", "NEWSLETTER"]},
-            ]
+            {"results": [{"i": 1, "labels": ["urgent", "NEWSLETTER"]}]}
         )
         mock_response.choices[0].message.tool_calls = None
         mock_response.model = "gpt-4o-mini"
@@ -1223,12 +1223,20 @@ class ClassifyMailMessagesTests(TestCase):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = json.dumps(
-            [
-                {
-                    "i": 1,
-                    "labels": ["Urgent", "Action", "FYI", "Newsletter", "Notification"],
-                },
-            ]
+            {
+                "results": [
+                    {
+                        "i": 1,
+                        "labels": [
+                            "Urgent",
+                            "Action",
+                            "FYI",
+                            "Newsletter",
+                            "Notification",
+                        ],
+                    }
+                ]
+            }
         )
         mock_response.choices[0].message.tool_calls = None
         mock_response.model = "gpt-4o-mini"

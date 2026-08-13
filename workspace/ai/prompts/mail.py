@@ -119,8 +119,8 @@ def _build_classify_system(labels: list[str]) -> str:
         "You are an email classification assistant. Assign 1-3 labels to each email "
         "from the list below.\n\n"
         f"Available labels:\n{label_list}\n\n"
-        "Return a JSON array only, no other text.\n"
-        'Response format: [{"i":1,"labels":["Label1","Label2"]},...]'
+        "Return a JSON object only, no other text.\n"
+        'Response format: {"results":[{"i":1,"labels":["Label1","Label2"]},...]}'
     )
 
 

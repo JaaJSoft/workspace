@@ -4,6 +4,9 @@ import re
 import time
 
 from django.conf import settings
+from pydantic import BaseModel, ValidationError
+
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,9 @@ _IMAGE_MARKER_RE = re.compile(
     r"|image:[^\n]*?)\][ \t]*\n*",
     re.IGNORECASE,
 )
+# Fallback for backends that ignore response_format and wrap their JSON in
+# markdown fences anyway.
+_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.DOTALL)
 
 
 def clean_llm_content(content: str) -> str:
@@ -177,6 +183,7 @@ def call_llm(
     model: str | None = None,
     max_tokens: int | None = None,
     tools: list | None = None,
+    response_format: dict | None = None,
 ) -> dict:
     """Call an LLM via OpenAI SDK and return a dict with content and usage info."""
     from workspace.ai.client import get_ai_client
@@ -195,6 +202,8 @@ def call_llm(
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
+    if response_format:
+        kwargs["response_format"] = response_format
 
     started = time.monotonic()
     try:
@@ -256,3 +265,49 @@ def call_llm(
         if response.usage
         else None,
     }
+
+
+def call_llm_structured(
+    messages: list[dict],
+    schema: type[BaseModel],
+    model: str | None = None,
+    max_tokens: int | None = None,
+) -> tuple[BaseModel | None, dict]:
+    """Call the LLM with output constrained to *schema* and validate the reply.
+
+    The schema is sent as a ``json_schema`` response_format so backends with
+    constrained decoding (OpenAI, vLLM, Ollama, LM Studio) guarantee the shape
+    at generation time. The reply is validated with Pydantic regardless: a
+    backend may silently ignore the constraint, which is also why stray
+    markdown fences are still stripped before parsing.
+
+    *schema* must describe a top-level JSON object, not an array - the
+    json_schema response format requires it. Wrap lists in an envelope model.
+
+    Returns ``(instance, result)`` where *instance* is ``None`` when the reply
+    does not validate; *result* is the raw :func:`call_llm` dict so callers can
+    still record model and token usage.
+    """
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": schema.__name__,
+            "schema": schema.model_json_schema(),
+        },
+    }
+    result = call_llm(
+        messages,
+        model=model,
+        max_tokens=max_tokens,
+        response_format=response_format,
+    )
+    raw = _FENCE_RE.sub("", (result.get("content") or "").strip())
+    try:
+        return schema.model_validate_json(raw), result
+    except ValidationError as e:
+        logger.warning(
+            "LLM output failed %s validation: %s",
+            schema.__name__,
+            scrub(str(e)[:500]),
+        )
+        return None, result

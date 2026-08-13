@@ -1,18 +1,18 @@
 """Mail-related AI Celery tasks (summarize, compose, classify)."""
 
 import logging
-import re
 from collections import defaultdict
 from itertools import batched
 
-import orjson
 from celery import shared_task
 from django.conf import settings
 from django.db import transaction
+from pydantic import BaseModel
 
 from workspace.ai.services.ai_task import ai_task_lifecycle
 from workspace.ai.services.llm import (
     call_llm,
+    call_llm_structured,
     sanitize_messages_for_storage,
     serialize_response,
 )
@@ -20,8 +20,16 @@ from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
-# Tolerate LLM outputs wrapped in ``` / ```json fences instead of strict JSON.
-_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.DOTALL)
+
+class LabelAssignment(BaseModel):
+    i: int
+    labels: list[str] = []
+
+
+class ClassifiedEmails(BaseModel):
+    """Envelope: the json_schema response format requires a top-level object."""
+
+    results: list[LabelAssignment]
 
 
 @shared_task(name="ai.summarize", bind=True, max_retries=0)
@@ -264,47 +272,30 @@ def classify_mail_messages(self, task_id: str):
                         )
 
                     messages = build_classify_messages(emails, label_names)
-                    result = call_llm(messages, model=settings.AI_SMALL_MODEL)
+                    parsed, result = call_llm_structured(
+                        messages, ClassifiedEmails, model=settings.AI_SMALL_MODEL
+                    )
 
                     model_used = result["model"]
                     total_prompt += result["prompt_tokens"] or 0
                     total_completion += result["completion_tokens"] or 0
 
-                    # Tolerate ```json fences and stray whitespace - small models
-                    # often emit fenced code blocks despite the prompt asking for
-                    # plain JSON.
-                    raw_content = _FENCE_RE.sub("", (result["content"] or "").strip())
-                    try:
-                        items = orjson.loads(raw_content)
-                    except (ValueError, TypeError) as e:
+                    if parsed is None:
                         logger.warning(
                             "Classify: malformed JSON response for task %s",
                             scrub(task_id),
                         )
-                        raise ValueError("Malformed JSON response from LLM") from e
+                        raise ValueError("Malformed JSON response from LLM")
 
-                    if not isinstance(items, list):
-                        raise ValueError("Expected JSON array from LLM")
-
-                    for item in items:
-                        if not isinstance(item, dict):
-                            continue
-                        idx = item.get("i")
-                        raw_labels = item.get("labels", [])
-
-                        msg = uuid_index.get(idx)
+                    for item in parsed.results:
+                        msg = uuid_index.get(item.i)
                         if not msg:
                             continue
 
-                        if not isinstance(raw_labels, list):
-                            continue
-
                         count = 0
-                        for raw_name in raw_labels:
+                        for raw_name in item.labels:
                             if count >= MAX_LABELS_PER_MESSAGE:
                                 break
-                            if not isinstance(raw_name, str):
-                                continue
                             label = label_by_lower.get(raw_name.lower())
                             if label:
                                 all_links.append(

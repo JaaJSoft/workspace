@@ -71,3 +71,26 @@ class ThreadNotificationTests(TestCase):
         self.assertEqual(
             self._recipients(notify_stream), {self.alice.id, self.carol.id}
         )
+
+    @patch("workspace.notifications.services.notifications.notify_stream")
+    def test_a_thread_reply_deep_links_to_its_thread(self, notify_stream):
+        # By default the reply is not in the main flow, so a notification
+        # landing on the bare conversation would show nothing new.
+        notify_new_message(
+            self.conversation,
+            self.bob,
+            "a reply",
+            thread_recipient_ids={self.alice.id},
+            thread_root_id=self.root.uuid,
+        )
+        self.assertEqual(
+            notify_stream.call_args.kwargs["url"],
+            f"/chat/{self.conversation.uuid}?thread={self.root.uuid}",
+        )
+
+    @patch("workspace.notifications.services.notifications.notify_stream")
+    def test_a_plain_message_links_to_the_conversation(self, notify_stream):
+        notify_new_message(self.conversation, self.bob, "hello")
+        self.assertEqual(
+            notify_stream.call_args.kwargs["url"], f"/chat/{self.conversation.uuid}"
+        )

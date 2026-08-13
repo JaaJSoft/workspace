@@ -9,6 +9,8 @@ Skipped unless E2E=1 is set.
 
 from __future__ import annotations
 
+import time
+
 from playwright.sync_api import expect
 
 from workspace.chat.models import Conversation, ConversationMember, Message
@@ -101,6 +103,49 @@ class ThreadPanelTests(PlaywrightTestCase):
         ).to_have_count(0)
 
         # The server agrees: the reply is anchored to the thread, not loose in
-        # the conversation.
+        # the conversation. Polled, because the visible bubble above can be the
+        # optimistic copy injected before the POST commits - asserting the row
+        # immediately races the server.
+        deadline = time.monotonic() + 10
+        while (
+            not Message.objects.filter(body=sent).exists()
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.1)
         posted = Message.objects.get(body=sent)
         self.assertEqual(posted.thread_root_id, self.root.uuid)
+
+    def test_a_notification_deep_link_opens_the_thread_panel(self):
+        # A thread-reply notification points at /chat/<conv>?thread=<root>: the
+        # reply is not in the main flow, so without the panel opening on
+        # arrival the page would show nothing new.
+        self.login_as(self.user)
+        self.page.goto(
+            f"{self.live_server_url}/chat/{self.conv.uuid}?thread={self.root.uuid}"
+        )
+        panel = self.page.locator("#thread-messages-container")
+        expect(panel).to_be_attached()
+        expect(panel.get_by_text("a reply hidden in the thread")).to_be_visible()
+
+    def test_opening_a_second_thread_switches_the_panel_to_it(self):
+        # x-if only remounts through a falsy value, so switching roots relies
+        # on openThread bouncing through null - a panel stuck on the first
+        # thread is exactly what that would look like.
+        other_root = self._message("another discussion entirely")
+        self._message(
+            "the reply in the second thread",
+            reply_to=other_root,
+            thread_root=other_root,
+        )
+        Message.objects.filter(pk=other_root.pk).update(reply_count=1)
+
+        self._open_conversation()
+        footers = self.page.locator('[data-testid="thread-footer"]')
+        expect(footers).to_have_count(2)
+        footers.first.click()
+        panel = self.page.locator("#thread-messages-container")
+        expect(panel.get_by_text("a reply hidden in the thread")).to_be_visible()
+
+        footers.nth(1).click()
+        expect(panel.get_by_text("the reply in the second thread")).to_be_visible()
+        expect(panel.get_by_text("a reply hidden in the thread")).to_have_count(0)

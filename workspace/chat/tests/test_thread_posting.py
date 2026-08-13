@@ -169,3 +169,154 @@ class ThreadDeletionTests(TestCase):
         self.root.refresh_from_db()
         self.assertEqual(self.root.reply_count, 1)
         self.assertEqual(self.root.last_reply_at, reply.created_at)
+
+
+class ThreadReplyDeletionAccountingTests(TestCase):
+    """Deleting a reply must retract exactly the unread it delivered.
+
+    Delivery moves the counters of the thread's participants only, so the
+    deletion may only move those back - and both halves (the participant's
+    thread counter and their conversation badge) must move together.
+    """
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="x")
+        self.bob = User.objects.create_user(username="bob", password="x")
+        self.carol = User.objects.create_user(username="carol", password="x")
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.alice
+        )
+        for user in (self.alice, self.bob, self.carol):
+            ConversationMember.objects.create(conversation=self.conversation, user=user)
+        self.root = Message.objects.create(
+            conversation=self.conversation, author=self.alice, body="root"
+        )
+        self.client = APIClient()
+
+    def _post(self, user, body, reply_to=None):
+        self.client.force_authenticate(user=user)
+        payload = {"body": body}
+        if reply_to is not None:
+            payload["reply_to_uuid"] = str(reply_to.uuid)
+        resp = self.client.post(
+            reverse(
+                "chat-messages", kwargs={"conversation_id": self.conversation.uuid}
+            ),
+            payload,
+            format="json",
+        )
+        return Message.objects.get(uuid=resp.data["uuid"])
+
+    def _delete(self, message, user):
+        self.client.force_authenticate(user=user)
+        return self.client.delete(
+            reverse(
+                "chat-message-detail",
+                kwargs={
+                    "conversation_id": self.conversation.uuid,
+                    "message_id": message.uuid,
+                },
+            )
+        )
+
+    def _badge(self, user):
+        return ConversationMember.objects.get(
+            conversation=self.conversation, user=user
+        ).unread_count
+
+    def _thread_counter(self, user):
+        participant = ThreadParticipant.objects.filter(
+            root_message=self.root, user=user
+        ).first()
+        return participant.unread_count if participant else 0
+
+    def _read_thread(self, user):
+        self.client.force_authenticate(user=user)
+        return self.client.post(
+            reverse("chat-thread-read", kwargs={"root_uuid": self.root.uuid})
+        )
+
+    def test_deleting_a_reply_leaves_non_participants_badges_alone(self):
+        # carol is not in the thread: the reply never moved her badge, only the
+        # main-flow message did - so the deletion must not move it either.
+        self._post(self.bob, "a main-flow message")
+        reply = self._post(self.bob, "reply", reply_to=self.root)
+        self.assertEqual(self._badge(self.carol), 1)
+
+        self._delete(reply, self.bob)
+
+        self.assertEqual(self._badge(self.carol), 1)
+
+    def test_deleting_a_reply_rewinds_the_participants_counters_together(self):
+        reply = self._post(self.bob, "reply", reply_to=self.root)
+        self.assertEqual(self._badge(self.alice), 1)
+        self.assertEqual(self._thread_counter(self.alice), 1)
+
+        self._delete(reply, self.bob)
+
+        self.assertEqual(self._badge(self.alice), 0)
+        self.assertEqual(self._thread_counter(self.alice), 0)
+
+    def test_a_deletion_then_a_thread_read_does_not_double_subtract(self):
+        # The deleted reply must not leave a phantom +1 on the thread counter
+        # that a later read subtracts from a badge that dropped it already.
+        reply = self._post(self.bob, "reply", reply_to=self.root)
+        self._post(self.bob, "a main-flow message")
+        self.assertEqual(self._badge(self.alice), 2)
+
+        self._delete(reply, self.bob)
+        resp = self._read_thread(self.alice)
+
+        self.assertEqual(resp.json()["cleared"], 0)
+        self.assertEqual(self._badge(self.alice), 1)
+
+    def test_deleting_an_already_read_reply_does_not_move_the_badge(self):
+        reply = self._post(self.bob, "reply", reply_to=self.root)
+        self._read_thread(self.alice)
+        self._post(self.bob, "a main-flow message")
+        self.assertEqual(self._badge(self.alice), 1)
+
+        self._delete(reply, self.bob)
+
+        self.assertEqual(self._badge(self.alice), 1)
+        self.assertEqual(self._thread_counter(self.alice), 0)
+
+
+class ThreadNotificationWiringTests(TestCase):
+    """deliver_message must hand the thread anchor to the notification."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="x")
+        self.bob = User.objects.create_user(username="bob", password="x")
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.alice
+        )
+        for user in (self.alice, self.bob):
+            ConversationMember.objects.create(conversation=self.conversation, user=user)
+        self.root = Message.objects.create(
+            conversation=self.conversation, author=self.alice, body="root"
+        )
+        self.client = APIClient()
+
+    def test_a_posted_reply_notifies_with_the_thread_deep_link(self):
+        from unittest.mock import patch
+
+        self.client.force_authenticate(user=self.bob)
+        with (
+            patch(
+                "workspace.notifications.services.notifications.notify_stream"
+            ) as notify_stream,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.client.post(
+                reverse(
+                    "chat-messages",
+                    kwargs={"conversation_id": self.conversation.uuid},
+                ),
+                {"body": "a reply", "reply_to_uuid": str(self.root.uuid)},
+                format="json",
+            )
+        self.assertEqual(
+            notify_stream.call_args.kwargs["url"],
+            f"/chat/{self.conversation.uuid}?thread={self.root.uuid}",
+        )

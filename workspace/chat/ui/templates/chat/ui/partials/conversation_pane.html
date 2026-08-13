@@ -304,9 +304,10 @@
           x-if, not x-show: chatThreadPanel() takes the root uuid as a
           constructor argument and an x-data expression is evaluated once, so a
           mounted-but-hidden panel would be stuck on whatever openThreadRoot
-          held at page load, which is null. x-if also remounts on every root
-          change, which is what makes opening a second thread from an already
-          open panel work.
+          held at page load, which is null. Note that x-if only remounts when
+          the expression passes through falsy - switching straight from one
+          root to another would keep the old component, which is why
+          openThread() bounces openThreadRoot through null on a root change.
 
           No width transition, unlike the info and search panels: x-if swaps
           presence, so there is no width to animate between.

@@ -16,17 +16,20 @@ from .notifications import notify_conversation_members, notify_new_message
 from .threads import ensure_participants, participant_user_ids
 
 
-def _thread_delivery(message, author):
+def _thread_delivery(message, author, mentioned_user_ids):
     """Counters for a reply: the thread's participants, and nobody else.
 
     Returns the participant ids so the notification fan-out targets the same
     set the badges moved for. A member of the conversation who is not in the
     thread sees only the reply count on the root message change.
+
+    The retraction mirror lives in threads.retract_thread_reply - a change to
+    who gets counted here must change who gets un-counted there.
     """
     root = message.thread_root
     ensure_participants(root, [root.author_id, author.id])
-    if message.mentioned_user_ids:
-        ensure_participants(root, message.mentioned_user_ids)
+    if mentioned_user_ids:
+        ensure_participants(root, mentioned_user_ids)
 
     recipient_ids = participant_user_ids(root) - {author.id}
 
@@ -69,11 +72,10 @@ def deliver_message(
     already committed at that point, so the message would exist while one of
     its two fan-outs never ran.
     """
-    message.mentioned_user_ids = mentioned_user_ids or set()
     author = message.author
 
     if message.thread_root_id:
-        recipient_ids = _thread_delivery(message, author)
+        recipient_ids = _thread_delivery(message, author, mentioned_user_ids or set())
     else:
         recipient_ids = None
         ConversationMember.objects.filter(
@@ -99,6 +101,7 @@ def deliver_message(
             mentioned_user_ids=mentioned_user_ids,
             mention_everyone=mention_everyone,
             thread_recipient_ids=recipient_ids,
+            thread_root_id=message.thread_root_id,
         ),
         robust=True,
     )

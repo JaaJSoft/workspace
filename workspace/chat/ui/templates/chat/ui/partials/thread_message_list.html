@@ -1,9 +1,23 @@
 {% load chat_tags ui_filters %}
 {% comment %}
-  Thread contents: the root message first, then its replies, grouped by the same
+  Thread contents: the root message, then its replies, grouped by the same
   rules as the main flow. id_prefix is tmsg so a message shown on both surfaces
   (inline preference on, panel open) does not produce two nodes at one id.
+
+  The root lives OUTSIDE #thread-message-list: "load older" prepends fetched
+  content into that list, so a root inside it would sink below the older
+  replies it prepends. root_groups is None on an older page, whose content is
+  prepended into a panel already showing the root.
 {% endcomment %}
+{% if root_groups %}
+  <div id="thread-root-message">
+    {% for group in root_groups %}
+      {% if group.type == 'messages' %}
+        {% include "chat/ui/partials/message_group.html" with group=group current_user=current_user pinned_message_ids=pinned_message_ids conversation_kind=conversation_kind quick_emojis=quick_emojis id_prefix="tmsg" in_thread=True %}
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endif %}
 <div id="thread-message-list"
      data-has-more="{{ has_more|yesno:'true,false' }}"
      {% if first_uuid %}data-first-uuid="{{ first_uuid }}"{% endif %}>

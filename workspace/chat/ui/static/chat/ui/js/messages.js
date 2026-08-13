@@ -49,6 +49,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       // as a hook point if additional init is ever required.
     },
 
+    // `conversationId` is only the staleness guard - the fetch URL comes from
+    // _messagesUrl(), which reads the active conversation (or, on the thread
+    // panel, the thread root). Callers pass the uuid they expect to still be
+    // active when the response lands.
     async loadMessages(conversationId) {
       this.loadingMessages = true;
       const container = document.getElementById(this._messagesContainerId());

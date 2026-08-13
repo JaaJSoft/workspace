@@ -24,12 +24,18 @@ window.chatSseMixin = function chatSseMixin() {
         showInline: !!this.chatPrefs?.showThreadRepliesInline,
       });
       if (route.bumpRoot) {
-        this.bumpThreadUnread(route.bumpRoot);
         this._bumpRenderedReplyCount(route.bumpRoot);
         if (route.panel) {
+          // The user is looking at this thread, so the reply must not survive
+          // as unread: the server already counted it on both the participant
+          // row and the conversation badge, and only the read endpoint moves
+          // those back. Fire-and-forget, same as openThread's call.
+          this.markThreadRead(route.bumpRoot);
           window.dispatchEvent(
             new CustomEvent('thread-reply-received', { detail: { root: route.bumpRoot } }),
           );
+        } else {
+          this.bumpThreadUnread(route.bumpRoot);
         }
       }
 

@@ -6,9 +6,13 @@ decides membership, and it always points at the message that started the whole
 thing.
 """
 
+from django.db.models import Count, F, Max, Q, Value
+from django.db.models.functions import Greatest
 from django.utils import timezone
 
-from ..models import ThreadParticipant
+from workspace.users.services.settings import get_setting
+
+from ..models import ConversationMember, Message, ThreadParticipant
 
 
 def resolve_thread_root(parent):
@@ -68,6 +72,59 @@ def mark_thread_read(root, user):
     return cleared
 
 
+def retract_thread_reply(message):
+    """Undo the unread accounting of a soft-deleted reply.
+
+    Mirrors the delivery side (`_thread_delivery` in posting): a reply only
+    moved the counters of the thread's participants, so those are the only
+    counters a deletion may move back - the conversation-wide decrement used
+    for main-flow messages would rob non-participants of unread they never
+    gained. Both counters move together for exactly the participants who still
+    hold the reply as unread, so neither can drift against the other.
+
+    The read predicate is the *participant's* last_read_at, not the member's:
+    a thread reply is settled by mark_thread_read (or by marking the whole
+    conversation read), and both stamp the participant row.
+    """
+    still_unread = Q(last_read_at__isnull=True) | Q(last_read_at__lt=message.created_at)
+    recipient_ids = set(
+        ThreadParticipant.objects.filter(
+            still_unread,
+            root_message_id=message.thread_root_id,
+            unread_count__gt=0,
+        )
+        .exclude(user_id=message.author_id)
+        .values_list("user_id", flat=True)
+    )
+    if not recipient_ids:
+        return
+    ThreadParticipant.objects.filter(
+        root_message_id=message.thread_root_id,
+        user_id__in=recipient_ids,
+    ).update(unread_count=Greatest(F("unread_count") - 1, Value(0)))
+    ConversationMember.objects.filter(
+        conversation_id=message.conversation_id,
+        left_at__isnull=True,
+        user_id__in=recipient_ids,
+    ).update(unread_count=Greatest(F("unread_count") - 1, Value(0)))
+
+
+def mark_conversation_threads_read(user, conversation_id):
+    """Zero *user*'s thread backlogs in a conversation, in step with its badge.
+
+    The conversation badge counts thread replies for participants, so every
+    path that zeroes the badge (marking the conversation read, rejoining it)
+    must zero the thread counters with it: left standing, mark_thread_read
+    would later subtract them from a badge that no longer counts them.
+    last_read_at is stamped for the same reason - a reply counted before this
+    point must not look retractable to retract_thread_reply afterwards.
+    """
+    ThreadParticipant.objects.filter(
+        user=user,
+        root_message__conversation_id=conversation_id,
+    ).update(unread_count=0, last_read_at=timezone.now())
+
+
 def recount_thread(root):
     """Recompute *root*'s denormalised counters from its live replies.
 
@@ -76,10 +133,6 @@ def recount_thread(root):
     reply, and would drift from the truth the moment any other path touched a
     message.
     """
-    from django.db.models import Count, Max
-
-    from ..models import Message
-
     stats = Message.objects.filter(thread_root=root, deleted_at__isnull=True).aggregate(
         total=Count("uuid"),
         latest=Max("created_at"),
@@ -96,9 +149,10 @@ def show_thread_replies_inline(user):
     Read server-side and applied as a queryset filter, not hidden client-side:
     the message list is cursor-paginated 50 at a time, and dropping rows after
     the fact would yield half-empty pages and a wrong "load older" boundary.
-    """
-    from workspace.users.services.settings import get_setting
 
+    A UI preference, so it only shapes the server-rendered partial - the REST
+    message list is not filtered by it.
+    """
     preferences = get_setting(user, "chat", "preferences", default=None) or {}
     return bool(preferences.get("showThreadRepliesInline"))
 

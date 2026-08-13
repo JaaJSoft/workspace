@@ -36,13 +36,21 @@ def notify_new_message(
     mentioned_user_ids=None,
     mention_everyone=False,
     thread_recipient_ids=None,
+    thread_root_id=None,
 ):
     """Send notifications for a new chat message.
 
     For a thread reply, *thread_recipient_ids* narrows the candidate pool to
     the thread's participants. A mention is always added on top of that pool:
     being named in a thread you do not follow is exactly the case where the
-    notification matters most.
+    notification matters most. Deliberately, ``@everyone`` does not widen the
+    pool back to the whole conversation - inside a thread it raises the
+    priority for the thread's participants (and anyone explicitly mentioned),
+    nobody else.
+
+    *thread_root_id* deep-links the notification to the thread panel: by
+    default a reply is not in the main flow, so landing on the bare
+    conversation would show nothing new.
 
     Storage semantics (merge into the recipient's unread notification for
     this conversation, push only on fresh rows) live in notify_stream.
@@ -87,13 +95,17 @@ def notify_new_message(
     else:
         priority_map = {uid: "high" for uid in member_ids if uid in mentioned_user_ids}
 
+    url = f"/chat/{conversation.pk}"
+    if thread_root_id:
+        url = f"{url}?thread={thread_root_id}"
+
     notify_stream(
         recipient_ids=member_ids,
         source=conversation,
         origin="chat",
         title=title,
         body=preview,
-        url=f"/chat/{conversation.pk}",
+        url=url,
         actor=author,
         priority_map=priority_map,
     )

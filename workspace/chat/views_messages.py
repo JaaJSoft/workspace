@@ -38,8 +38,10 @@ from .services.notifications import notify_conversation_members
 from .services.posting import deliver_message
 from .services.rendering import render_message_body
 from .services.threads import (
+    mark_conversation_threads_read,
     recount_thread,
     resolve_thread_root,
+    retract_thread_reply,
     show_thread_replies_inline,
 )
 
@@ -497,22 +499,27 @@ class MessageDetailView(APIView):
         message.deleted_at = timezone.now()
         message.save(update_fields=["deleted_at"])
 
-        # A deleted reply must stop counting, or the parent advertises replies
-        # the panel no longer shows. Deleting a root leaves its own counters
-        # alone: its replies still exist and still belong to it.
         if message.thread_root_id:
+            # A deleted reply must stop counting, or the parent advertises
+            # replies the panel no longer shows. Deleting a root leaves its own
+            # counters alone: its replies still exist and still belong to it.
+            #
+            # Its unread accounting is retracted for thread participants only,
+            # mirroring delivery: the conversation-wide decrement below would
+            # rob non-participants of unread they never gained for this reply.
+            retract_thread_reply(message)
             recount_thread(message.thread_root)
-
-        # Decrement unread_count for members who hadn't read this message
-        ConversationMember.objects.filter(
-            conversation_id=message.conversation_id,
-            left_at__isnull=True,
-            unread_count__gt=0,
-        ).filter(
-            Q(last_read_at__isnull=True) | Q(last_read_at__lt=message.created_at),
-        ).exclude(user=message.author).update(
-            unread_count=Greatest(F("unread_count") - 1, 0),
-        )
+        else:
+            # Decrement unread_count for members who hadn't read this message
+            ConversationMember.objects.filter(
+                conversation_id=message.conversation_id,
+                left_at__isnull=True,
+                unread_count__gt=0,
+            ).filter(
+                Q(last_read_at__isnull=True) | Q(last_read_at__lt=message.created_at),
+            ).exclude(user=message.author).update(
+                unread_count=Greatest(F("unread_count") - 1, 0),
+            )
 
         PinnedMessage.objects.filter(message=message).delete()
 
@@ -674,6 +681,13 @@ class MarkReadView(APIView):
 
         if update_fields:
             membership.save(update_fields=update_fields)
+
+        # The badge this just zeroed counted thread replies too (for
+        # participants), so the per-thread counters must fall with it -
+        # otherwise opening an old thread later subtracts its stale backlog
+        # from a badge that no longer contains it. Unconditional: a stale
+        # thread counter can outlive an already-zero badge.
+        mark_conversation_threads_read(request.user, conversation_id)
 
         # Clear this conversation's unread notification (cache + SSE included).
         from workspace.notifications.services.notifications import mark_source_read

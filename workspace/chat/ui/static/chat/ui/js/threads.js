@@ -47,7 +47,16 @@ window.chatThreadsMixin = function chatThreadsMixin() {
       // fight them for the same column, so opening one closes the others.
       this.showInfoPanel = false;
       this.closeSearchPanel?.();
-      this.openThreadRoot = rootUuid;
+      if (this.openThreadRoot && this.openThreadRoot !== rootUuid) {
+        // x-if only tears down through a falsy value - a root that merely
+        // changes never unmounts the panel, which would keep showing the
+        // thread it was constructed for. Bounce through null so Alpine
+        // rebuilds the component around the new root.
+        this.openThreadRoot = null;
+        this.$nextTick(() => { this.openThreadRoot = rootUuid; });
+      } else {
+        this.openThreadRoot = rootUuid;
+      }
       this.markThreadRead(rootUuid);
     },
 

@@ -490,8 +490,10 @@ def thread_messages_view(request, root_uuid):
     if not get_active_membership(request.user, root.conversation_id):
         return HttpResponseForbidden()
 
+    # Live replies only: the counters on the root (recount_thread) count live
+    # replies, and the panel must show the number the footer advertises.
     qs = (
-        Message.objects.filter(thread_root=root)
+        Message.objects.filter(thread_root=root, deleted_at__isnull=True)
         .select_related(
             "author",
             "author__bot_profile",
@@ -529,21 +531,30 @@ def thread_messages_view(request, root_uuid):
     page = page[:limit]
     page.reverse()
 
-    # The root heads the first page only: a "load older" fetch prepends into an
-    # existing list that already shows it.
-    messages = page if is_older_page else [root, *page]
+    pinned_message_ids = set(
+        PinnedMessage.objects.filter(conversation_id=root.conversation_id).values_list(
+            "message_id", flat=True
+        )
+    )
 
     return render(
         request,
         "chat/ui/partials/thread_message_list.html",
         {
-            "groups": group_messages(messages, request.user),
+            "groups": group_messages(page, request.user),
+            # The root renders outside the paginated list, on the first page
+            # only: "load older" prepends into the list, so a root inside it
+            # would sink below the older replies; an older page prepends into a
+            # panel that already shows it.
+            "root_groups": None
+            if is_older_page
+            else group_messages([root], request.user),
             "has_more": has_more,
             "first_uuid": str(page[0].uuid) if page else "",
             "root_uuid": root.uuid,
             "current_user": request.user,
             "quick_emojis": quick_reactions_for(request.user),
-            "pinned_message_ids": set(),
+            "pinned_message_ids": pinned_message_ids,
             "conversation_kind": root.conversation.kind,
         },
     )

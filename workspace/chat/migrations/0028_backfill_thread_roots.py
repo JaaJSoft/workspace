@@ -1,5 +1,9 @@
 from django.db import migrations
 
+# A live-code import inside a migration: backfill_threads only touches the
+# historical models passed in below, but moving or renaming it would break
+# `migrate` from scratch. If services.threads ever loses that function, freeze
+# a copy of it in this file instead of updating the import.
 from workspace.chat.services.threads import backfill_threads
 
 

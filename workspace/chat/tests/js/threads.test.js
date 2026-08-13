@@ -317,3 +317,148 @@ test('a live reply for another thread does not wake the open panel', async () =>
   await app.handleSSEMessage(reply('r2'));
   assert.deepStrictEqual(dispatched, []);
 });
+
+// ── Switching threads ──────────────────────────────────────
+
+test('opening a second thread bounces the root through null so x-if remounts', () => {
+  // x-if only tears down through a falsy value: switching straight from one
+  // root to another keeps the component built for the first thread, panel
+  // stuck on it. openThread must pass through null and re-set on nextTick.
+  const app = load().chatThreadsMixin();
+  const ticks = [];
+  app.$nextTick = (fn) => ticks.push(fn);
+  app.closeSearchPanel = () => {};
+  app.showInfoPanel = false;
+
+  app.openThread('r1');
+  assert.equal(app.openThreadRoot, 'r1');
+
+  app.openThread('r2');
+  assert.equal(app.openThreadRoot, null, 'the panel unmounts first');
+  ticks.forEach((fn) => fn());
+  assert.equal(app.openThreadRoot, 'r2', 'then remounts on the new root');
+});
+
+test('reopening the thread already shown does not remount the panel', () => {
+  const app = load().chatThreadsMixin();
+  let bounced = false;
+  app.$nextTick = () => {
+    bounced = true;
+  };
+  app.closeSearchPanel = () => {};
+
+  app.openThread('r1');
+  app.openThread('r1');
+
+  assert.equal(app.openThreadRoot, 'r1');
+  assert.equal(bounced, false, 'same root must not tear the panel down');
+});
+
+test('a live reply landing in the open panel is marked read server-side', async () => {
+  // The server counted the reply on the participant row and the conversation
+  // badge before pushing it over SSE; the user is looking at it, so only the
+  // read endpoint can settle those counters again.
+  const { app, urls } = buildSseAppCapturingFetch({ openThreadRoot: 'r1' });
+  await app.handleSSEMessage(reply('r1'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepStrictEqual(urls, [['/api/v1/chat/threads/r1/read', 'POST']]);
+  assert.equal(app.threadUnread('r1'), 0, 'no local unread survives either');
+});
+
+test('a live reply to a closed thread is not marked read', async () => {
+  const { app, urls } = buildSseAppCapturingFetch({ openThreadRoot: null });
+  await app.handleSSEMessage(reply('r1'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepStrictEqual(urls, []);
+  assert.equal(app.threadUnread('r1'), 1);
+});
+
+function buildSseAppCapturingFetch({ openThreadRoot = null } = {}) {
+  const urls = [];
+  const ctx = loadScripts(
+    [
+      'workspace/chat/ui/static/chat/ui/js/threads.js',
+      'workspace/chat/ui/static/chat/ui/js/sse.js',
+    ],
+    {
+      ...MIXIN_STUBS,
+      getCSRFToken: () => 'csrf-token',
+      document: { querySelectorAll: () => [], getElementById: () => null },
+      fetch: async (url, opts) => {
+        urls.push([url, opts.method]);
+        return { ok: true, json: async () => ({ cleared: 0 }) };
+      },
+      CustomEvent: class {
+        constructor(type, init) {
+          this.type = type;
+          this.detail = init?.detail;
+        }
+      },
+    },
+  );
+  ctx.dispatchEvent = () => {};
+
+  const app = { ...ctx.chatThreadsMixin(), ...ctx.chatSseMixin() };
+  Object.assign(app, {
+    openThreadRoot,
+    chatPrefs: { showThreadRepliesInline: false },
+    activeConversation: { uuid: 'c1' },
+    botTyping: false,
+    isBotMessage: () => false,
+    clearBotStep() {},
+    _messageIdPrefix: () => 'msg',
+    _isNearBottom: () => true,
+    async _refreshCurrentMessages() {},
+    scrollToBottom() {},
+    async markAsRead() {},
+    _updateConversationLastMessage() {},
+    _bumpConversationUnread() {},
+    refreshConversationItems() {},
+  });
+  return { app, urls };
+}
+
+// ── Conversation switching ─────────────────────────────────
+
+test('switching conversations closes the thread panel', async () => {
+  // A thread belongs to the conversation it was opened in: left open across a
+  // switch, writing in the panel would post a reply into the wrong
+  // conversation (its reply_to lives elsewhere, the endpoint 400s).
+  const ctx = loadScripts(
+    [
+      'workspace/chat/ui/static/chat/ui/js/threads.js',
+      'workspace/chat/ui/static/chat/ui/js/conversations.js',
+    ],
+    {
+      ...MIXIN_STUBS,
+      getCSRFToken: () => 'csrf-token',
+      document: { querySelectorAll: () => [], getElementById: () => null },
+      fetch: async () => ({ ok: true, json: async () => ({}) }),
+      localStorage: { getItem: () => '', setItem() {}, removeItem() {} },
+      history: { pushState() {} },
+      location: { pathname: '/chat' },
+      URL: { revokeObjectURL() {} },
+    },
+  );
+
+  const app = { ...ctx.chatConversationsMixin(), ...ctx.chatThreadsMixin() };
+  Object.assign(app, {
+    activeConversation: { uuid: 'c1' },
+    messageBody: '',
+    pendingFiles: [],
+    generatingConversations: new Set(),
+    $nextTick: async (fn) => {
+      if (fn) fn();
+    },
+    async loadMessages() {},
+    async markAsRead() {},
+    async loadPinnedMessages() {},
+    scrollToBottom() {},
+    getMessageInput: () => null,
+  });
+  app.openThreadRoot = 'r1';
+
+  await app.selectConversation({ uuid: 'c2' }, false);
+
+  assert.equal(app.openThreadRoot, null, 'the previous conversation\'s thread is closed');
+});

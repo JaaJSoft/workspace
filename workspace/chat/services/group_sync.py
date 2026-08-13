@@ -55,8 +55,9 @@ def resync_conversation_members(conversation):
         )
         # The badge restarts at zero, so the thread counters it used to
         # contain must restart with it.
-        for m in to_reactivate:
-            mark_conversation_threads_read(m.user_id, conversation.pk)
+        mark_conversation_threads_read(
+            [m.user_id for m in to_reactivate], conversation.pk
+        )
 
     now = timezone.now()
     to_deactivate = [

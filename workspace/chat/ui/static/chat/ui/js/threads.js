@@ -164,6 +164,17 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
       // keyboard, which matters most on mobile where it covers the page.
       this.$nextTick(() => this.$el?.focus?.());
       await this.loadMessages(this.activeConversation.uuid);
+      // The root has to belong to the conversation the panel sits in. The
+      // server enforces membership, not coherence: a crafted
+      // /chat/<A>?thread=<root of B> deep link loads fine as long as the user
+      // is a member of B - and would show B's thread inside A, with a
+      // composer that posts into A and 400s. The server stamps the thread's
+      // conversation on the list; on mismatch, close rather than mislead.
+      const list = document.getElementById(this._messageListId());
+      const owner = list?.dataset.conversationUuid;
+      if (owner && owner !== this.activeConversation.uuid) {
+        this.closeThread?.();
+      }
     },
 
     // Alpine calls this when x-if tears the panel down - closing the thread,

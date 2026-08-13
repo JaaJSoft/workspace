@@ -276,6 +276,13 @@ class ThreadPanelRenderingTests(TestCase):
         html = self.client.get(self.url).content.decode()
         self.assertNotIn(f'id="tmsg-{self.reply.uuid}"', html)
 
+    def test_the_list_carries_its_conversation_for_the_panel_to_verify(self):
+        # The panel compares this against the conversation it sits in: a
+        # crafted ?thread= deep link can point at any thread the user is a
+        # member of, and without the stamp the panel cannot notice.
+        html = self.client.get(self.url).content.decode()
+        self.assertIn(f'data-conversation-uuid="{self.conversation.uuid}"', html)
+
     def test_a_pinned_reply_keeps_its_marker(self):
         PinnedMessage.objects.create(
             conversation=self.conversation, message=self.reply, pinned_by=self.alice

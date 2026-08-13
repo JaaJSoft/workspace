@@ -567,3 +567,132 @@ test('a reaction in the panel does not echo back into a second panel fetch', asy
   // repaint); chat:refresh-thread would make the panel fetch itself twice.
   assert.deepStrictEqual(dispatched, ['chat:refresh-messages']);
 });
+
+// ── Re-review findings ─────────────────────────────────────
+
+test('the edit shortcut resolves the panel surface prefix', () => {
+  // editLastOwnMessage hard-coded 'msg-': on the panel a bubble is tmsg-<uuid>,
+  // so the stripped id kept a leading 't' and startEdit found nothing.
+  const bubble = {
+    id: 'tmsg-m7',
+    closest: (sel) => (sel === '.msg-group-end' ? {} : null),
+  };
+  const ctx = loadScripts(
+    ['workspace/chat/ui/static/chat/ui/js/messages.js', 'workspace/chat/ui/static/chat/ui/js/threads.js'],
+    {
+      chatUiHelpersMixin: () => ({}),
+      chatInputMixin: () => ({}),
+      chatRecorderMixin: () => ({}),
+      getCSRFToken: () => 'csrf-token',
+      document: {
+        querySelectorAll: () => [],
+        getElementById: (id) =>
+          id === 'thread-messages-container'
+            ? { querySelectorAll: () => [bubble] }
+            : null,
+      },
+      fetch: async () => ({ ok: true, text: async () => '' }),
+      CustomEvent: class {},
+      dispatchEvent: () => {},
+    },
+  );
+  const panel = ctx.chatThreadPanel('r1');
+  const edited = [];
+  panel.startEdit = (uuid) => edited.push(uuid);
+
+  panel.editLastOwnMessage();
+
+  assert.deepStrictEqual(edited, ['m7']);
+});
+
+test('overlapping refreshes of one panel resolve to the newest response', async () => {
+  // A thread-reply reload and a reaction repaint can overlap on the same live
+  // panel: same component, same conversation, nothing torn down - only the
+  // fetch generation can tell the slower, older response to stand down.
+  let releaseFirst;
+  const firstGate = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  let call = 0;
+  const container = { innerHTML: '' };
+  const ctx = loadScripts(
+    ['workspace/chat/ui/static/chat/ui/js/messages.js', 'workspace/chat/ui/static/chat/ui/js/threads.js'],
+    {
+      chatUiHelpersMixin: () => ({}),
+      chatInputMixin: () => ({}),
+      chatRecorderMixin: () => ({}),
+      getCSRFToken: () => 'csrf-token',
+      document: {
+        querySelectorAll: () => [],
+        getElementById: (id) => (id === 'thread-messages-container' ? container : null),
+      },
+      fetch: async () => {
+        call += 1;
+        if (call === 1) {
+          await firstGate;
+          return { ok: true, text: async () => 'OLD' };
+        }
+        return { ok: true, text: async () => 'NEW' };
+      },
+      Alpine: undefined,
+      CustomEvent: class {},
+      dispatchEvent: () => {},
+    },
+  );
+  const panel = ctx.chatThreadPanel('r1');
+  panel.activeConversation = { uuid: 'c1' };
+  panel.scrollToBottom = () => {};
+
+  const slow = panel.loadMessages('c1');
+  await panel.refreshPanelOnly();
+  releaseFirst();
+  await slow;
+
+  assert.equal(container.innerHTML, 'NEW', 'the older response must not win');
+});
+
+test('a deep link to another conversation closes the panel instead of misleading', async () => {
+  // /chat/<A>?thread=<root of B> passes the server's membership check as long
+  // as the user belongs to B - the panel itself has to notice the thread does
+  // not belong to the conversation it sits in.
+  const buildPanel = (listConversation) => {
+    const ctx = loadScripts(
+      ['workspace/chat/ui/static/chat/ui/js/messages.js', 'workspace/chat/ui/static/chat/ui/js/threads.js'],
+      {
+        chatUiHelpersMixin: () => ({}),
+        chatInputMixin: () => ({}),
+        chatRecorderMixin: () => ({}),
+        getCSRFToken: () => 'csrf-token',
+        document: {
+          querySelectorAll: () => [],
+          getElementById: (id) =>
+            id === 'thread-message-list'
+              ? { dataset: { conversationUuid: listConversation, hasMore: 'false' } }
+              : null,
+        },
+        fetch: async () => ({ ok: true, text: async () => '' }),
+        Alpine: undefined,
+        CustomEvent: class {},
+        dispatchEvent: () => {},
+      },
+    );
+    const panel = ctx.chatThreadPanel('r1');
+    panel.activeConversation = { uuid: 'c1' };
+    panel.scrollToBottom = () => {};
+    panel.$nextTick = () => {};
+    panel.$el = null;
+    panel.closed = 0;
+    panel.closeThread = () => {
+      panel.closed += 1;
+    };
+    return panel;
+  };
+
+  const foreign = buildPanel('c2');
+  await foreign.init();
+  assert.equal(foreign.closed, 1, "a thread from another conversation closes");
+
+  const local = buildPanel('c1');
+  await local.init();
+  assert.equal(local.closed, 0, 'a matching thread stays open');
+});

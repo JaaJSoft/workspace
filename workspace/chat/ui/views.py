@@ -556,6 +556,7 @@ def thread_messages_view(request, root_uuid):
             "quick_emojis": quick_reactions_for(request.user),
             "pinned_message_ids": pinned_message_ids,
             "conversation_kind": root.conversation.kind,
+            "conversation_uuid": root.conversation_id,
         },
     )
 

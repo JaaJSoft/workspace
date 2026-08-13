@@ -688,7 +688,7 @@ class MarkReadView(APIView):
         # otherwise opening an old thread later subtracts its stale backlog
         # from a badge that no longer contains it. Unconditional: a stale
         # thread counter can outlive an already-zero badge.
-        mark_conversation_threads_read(request.user, conversation_id)
+        mark_conversation_threads_read([request.user.id], conversation_id)
 
         # Clear this conversation's unread notification (cache + SSE included).
         from workspace.notifications.services.notifications import mark_source_read

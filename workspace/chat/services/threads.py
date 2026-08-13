@@ -109,8 +109,8 @@ def retract_thread_reply(message):
     ).update(unread_count=Greatest(F("unread_count") - 1, Value(0)))
 
 
-def mark_conversation_threads_read(user, conversation_id):
-    """Zero *user*'s thread backlogs in a conversation, in step with its badge.
+def mark_conversation_threads_read(user_ids, conversation_id):
+    """Zero these users' thread backlogs in a conversation, with its badge.
 
     The conversation badge counts thread replies for participants, so every
     path that zeroes the badge (marking the conversation read, rejoining it)
@@ -118,9 +118,12 @@ def mark_conversation_threads_read(user, conversation_id):
     would later subtract them from a badge that no longer counts them.
     last_read_at is stamped for the same reason - a reply counted before this
     point must not look retractable to retract_thread_reply afterwards.
+
+    Takes ids, plural: the group-sync and member-add paths reactivate several
+    members at once, and one UPDATE covers them all.
     """
     ThreadParticipant.objects.filter(
-        user=user,
+        user_id__in=user_ids,
         root_message__conversation_id=conversation_id,
     ).update(unread_count=0, last_read_at=timezone.now())
 

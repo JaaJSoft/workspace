@@ -205,6 +205,8 @@ class ThreadReplyDeletionAccountingTests(TestCase):
             payload,
             format="json",
         )
+        # Asserted here so a 4xx surfaces as itself, not as a KeyError below.
+        self.assertEqual(resp.status_code, 201, resp.data)
         return Message.objects.get(uuid=resp.data["uuid"])
 
     def _delete(self, message, user):
@@ -316,6 +318,9 @@ class ThreadNotificationWiringTests(TestCase):
                 {"body": "a reply", "reply_to_uuid": str(self.root.uuid)},
                 format="json",
             )
+        # called first: call_args is None when the fan-out never ran, and the
+        # AttributeError would bury the actual failure.
+        self.assertTrue(notify_stream.called)
         self.assertEqual(
             notify_stream.call_args.kwargs["url"],
             f"/chat/{self.conversation.uuid}?thread={self.root.uuid}",

@@ -42,6 +42,21 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // second one's panel. The thread panel flips this in destroy().
     _surfaceGone() { return false; },
 
+    // Bumped at the start of every container-touching fetch below; each
+    // response only lands if no newer fetch started meanwhile. Covers what
+    // the two guards above cannot: overlapping refreshes of the SAME live
+    // surface (an SSE-triggered reload racing a reaction repaint), where the
+    // conversation is unchanged and nothing was torn down.
+    _fetchGeneration: 0,
+
+    _staleFetch(gen, conversationUuid) {
+      return (
+        this._surfaceGone()
+        || gen !== this._fetchGeneration
+        || this.activeConversation?.uuid !== conversationUuid
+      );
+    },
+
     // ── Server-rendered HTML helpers ─────────────────────────
     _initMessagesDom(container) {
       // Initialize Alpine on dynamically injected HTML
@@ -62,6 +77,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // active when the response lands.
     async loadMessages(conversationId) {
       this.loadingMessages = true;
+      const gen = ++this._fetchGeneration;
       const container = document.getElementById(this._messagesContainerId());
       if (container) container.innerHTML = ''; // safe: cleared to empty
 
@@ -70,11 +86,14 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this._messagesUrl(null),
           { credentials: 'same-origin' }
         );
-        // Discard stale response if user already switched conversation
-        // (or this surface was torn down while the fetch was in flight)
-        if (this._surfaceGone() || this.activeConversation?.uuid !== conversationId) return;
+        // Discard stale response if user already switched conversation, this
+        // surface was torn down, or a newer fetch started meanwhile
+        if (this._staleFetch(gen, conversationId)) return;
         if (resp.ok) {
           const html = await resp.text();
+          // Re-checked after the body read: it awaits too, and the switch can
+          // happen while the body is still streaming
+          if (this._staleFetch(gen, conversationId)) return;
           if (container) {
             container.innerHTML = html; // server-rendered trusted HTML
             this._initMessagesDom(container);
@@ -99,6 +118,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (!this.activeConversation || !this.hasMoreMessages || this.loadingMoreMessages) return;
 
       this.loadingMoreMessages = true;
+      const gen = ++this._fetchGeneration;
       const list = document.getElementById(this._messageListId());
       const firstUuid = list?.dataset.firstUuid;
       if (!firstUuid) {
@@ -118,13 +138,13 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this._messagesUrl(firstUuid),
           { credentials: 'same-origin' }
         );
-        if (this._surfaceGone() || this.activeConversation?.uuid !== targetUuid) {
+        if (this._staleFetch(gen, targetUuid)) {
           this.loadingMoreMessages = false;
           return;
         }
         if (resp.ok) {
           const html = await resp.text();
-          if (this._surfaceGone() || this.activeConversation?.uuid !== targetUuid) {
+          if (this._staleFetch(gen, targetUuid)) {
             this.loadingMoreMessages = false;
             return;
           }
@@ -465,6 +485,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       // conversation; capture the target uuid up front and bail if the
       // active conversation no longer matches when we're about to mutate.
       if (!this.activeConversation) return;
+      const gen = ++this._fetchGeneration;
       const container = document.getElementById(this._messagesContainerId());
       const targetUuid = this.activeConversation.uuid;
       try {
@@ -472,10 +493,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this._messagesUrl(null),
           { credentials: 'same-origin' }
         );
-        if (this._surfaceGone() || this.activeConversation?.uuid !== targetUuid) return;
+        if (this._staleFetch(gen, targetUuid)) return;
         if (resp.ok) {
           const html = await resp.text();
-          if (this._surfaceGone() || this.activeConversation?.uuid !== targetUuid) return;
+          if (this._staleFetch(gen, targetUuid)) return;
           if (container) {
             container.innerHTML = html;
             this._initMessagesDom(container);
@@ -705,7 +726,9 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         const bubble = bubbles[i];
         // msg-group-end marks own messages (chat-end / right-aligned)
         if (bubble.closest('.msg-group-end')) {
-          const msgId = bubble.id?.replace('msg-', '');
+          // The surface's own prefix: a hard-coded 'msg-' would mangle the
+          // thread panel's tmsg- ids into t<uuid> and the edit would no-op.
+          const msgId = bubble.id?.replace(`${this._messageIdPrefix()}-`, '');
           if (msgId) {
             this.startEdit(msgId);
             return;

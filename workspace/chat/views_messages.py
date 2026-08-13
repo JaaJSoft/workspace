@@ -42,7 +42,6 @@ from .services.threads import (
     recount_thread,
     resolve_thread_root,
     retract_thread_reply,
-    show_thread_replies_inline,
 )
 
 User = get_user_model()
@@ -97,8 +96,10 @@ class MessageListView(CacheControlMixin, APIView):
             )
         )
 
-        if not show_thread_replies_inline(request.user):
-            messages = messages.filter(thread_root__isnull=True)
+        # Thread replies are always included, carrying their thread_root.
+        # Hiding them from the main flow is a UI presentation preference, and
+        # a preference must not shrink an API response - the server-rendered
+        # partial is where it applies.
 
         if before:
             before_uuid = parse_uuid_or_none(before)

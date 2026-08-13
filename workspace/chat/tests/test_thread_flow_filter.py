@@ -51,23 +51,28 @@ class MainFlowFilterTests(TestCase):
         self.assertIn("the root message", html)
         self.assertIn("the threaded reply", html)
 
-    def test_the_api_message_list_hides_them_too(self):
+    def _api_messages(self):
         api = APIClient()
         api.force_authenticate(user=self.alice)
         url = reverse(
             "chat-messages", kwargs={"conversation_id": self.conversation.uuid}
         )
-        bodies = [m["body"] for m in api.get(url).data["messages"]]
-        self.assertEqual(bodies, ["the root message"])
+        return api.get(url).data["messages"]
 
-    def test_the_api_message_list_honours_the_preference(self):
-        set_setting(
-            self.alice, "chat", "preferences", {"showThreadRepliesInline": True}
-        )
-        api = APIClient()
-        api.force_authenticate(user=self.alice)
-        url = reverse(
-            "chat-messages", kwargs={"conversation_id": self.conversation.uuid}
-        )
-        bodies = [m["body"] for m in api.get(url).data["messages"]]
+    def test_the_api_message_list_always_includes_thread_replies(self):
+        # The inline preference shapes the server-rendered partial only: a UI
+        # preference must not shrink an API response. Clients that want the
+        # main flow filter on thread_root themselves.
+        bodies = [m["body"] for m in self._api_messages()]
         self.assertEqual(bodies, ["the root message", "the threaded reply"])
+
+    def test_the_api_message_list_ignores_the_preference(self):
+        set_setting(
+            self.alice, "chat", "preferences", {"showThreadRepliesInline": False}
+        )
+        by_body = {m["body"]: m for m in self._api_messages()}
+        self.assertIn("the threaded reply", by_body)
+        # thread_root is what lets a client rebuild the main flow client-side.
+        self.assertEqual(
+            by_body["the threaded reply"]["thread_root"], str(self.root.uuid)
+        )

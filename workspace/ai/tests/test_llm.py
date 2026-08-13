@@ -262,7 +262,7 @@ class CallLlmStructuredTests(SimpleTestCase):
         parsed, _ = self._call('<think>hm</think>{"items": []}')
         self.assertEqual(parsed.items, [])
 
-    def test_sends_json_schema_response_format(self):
+    def test_sends_strict_json_schema_response_format(self):
         with patch(
             "workspace.ai.services.llm.call_llm",
             return_value={"content": '{"items": []}'},
@@ -271,9 +271,46 @@ class CallLlmStructuredTests(SimpleTestCase):
         response_format = mock_call.call_args.kwargs["response_format"]
         self.assertEqual(response_format["type"], "json_schema")
         self.assertEqual(response_format["json_schema"]["name"], "_Payload")
-        self.assertEqual(
-            response_format["json_schema"]["schema"], _Payload.model_json_schema()
-        )
+        self.assertIs(response_format["json_schema"]["strict"], True)
+        schema = response_format["json_schema"]["schema"]
+        self.assertIs(schema["additionalProperties"], False)
+        self.assertEqual(schema["required"], ["items"])
+
+    def test_strict_schema_normalizes_nested_models(self):
+        class Item(BaseModel):
+            name: str
+            note: str = ""
+            when: str | None = None
+
+        class Envelope(BaseModel):
+            entries: list[Item]
+
+        with patch(
+            "workspace.ai.services.llm.call_llm",
+            return_value={"content": '{"entries": []}'},
+        ) as mock_call:
+            call_llm_structured([{"role": "user", "content": "hi"}], Envelope)
+        schema = mock_call.call_args.kwargs["response_format"]["json_schema"]["schema"]
+        item = schema["$defs"]["Item"]
+        self.assertIs(item["additionalProperties"], False)
+        self.assertEqual(item["required"], ["name", "note", "when"])
+        self.assertNotIn("default", item["properties"]["note"])
+        self.assertNotIn("default", item["properties"]["when"])
+
+    def test_strict_schema_spares_a_property_named_default(self):
+        class Odd(BaseModel):
+            default: str = "x"
+            items: list[str] = []
+
+        with patch(
+            "workspace.ai.services.llm.call_llm",
+            return_value={"content": '{"default": "a", "items": []}'},
+        ) as mock_call:
+            call_llm_structured([{"role": "user", "content": "hi"}], Odd)
+        schema = mock_call.call_args.kwargs["response_format"]["json_schema"]["schema"]
+        self.assertIn("default", schema["properties"])
+        self.assertIn("items", schema["properties"])
+        self.assertEqual(schema["required"], ["default", "items"])
 
 
 class SerializeResponseThinkingTests(SimpleTestCase):

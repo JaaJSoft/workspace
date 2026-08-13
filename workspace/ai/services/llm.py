@@ -267,6 +267,30 @@ def call_llm(
     }
 
 
+def _make_strict(node: dict) -> None:
+    """Normalize a Pydantic JSON schema in place for strict structured outputs.
+
+    Strict mode (OpenAI-style) only guarantees adherence when every object
+    forbids extra keys and lists all its properties as required; ``default``
+    is dropped because a property that is always present never falls back to
+    it. Recursion follows schema keywords only - a *property* named
+    ``default`` or ``items`` must not be touched.
+    """
+    node.pop("default", None)
+    if node.get("type") == "object" and isinstance(node.get("properties"), dict):
+        node["additionalProperties"] = False
+        node["required"] = list(node["properties"])
+        for prop in node["properties"].values():
+            _make_strict(prop)
+    for sub in node.get("$defs", {}).values():
+        _make_strict(sub)
+    if isinstance(node.get("items"), dict):
+        _make_strict(node["items"])
+    for keyword in ("anyOf", "oneOf", "allOf", "prefixItems"):
+        for sub in node.get(keyword, []):
+            _make_strict(sub)
+
+
 def call_llm_structured(
     messages: list[dict],
     schema: type[BaseModel],
@@ -275,24 +299,29 @@ def call_llm_structured(
 ) -> tuple[BaseModel | None, dict]:
     """Call the LLM with output constrained to *schema* and validate the reply.
 
-    The schema is sent as a ``json_schema`` response_format so backends with
-    constrained decoding (OpenAI, vLLM, Ollama, LM Studio) guarantee the shape
-    at generation time. The reply is validated with Pydantic regardless: a
-    backend may silently ignore the constraint, which is also why stray
+    The schema is sent as a strict ``json_schema`` response_format so backends
+    with constrained decoding (OpenAI, vLLM, Ollama, LM Studio) guarantee the
+    shape at generation time. The reply is validated with Pydantic regardless:
+    a backend may silently ignore the constraint, which is also why stray
     markdown fences are still stripped before parsing.
 
     *schema* must describe a top-level JSON object, not an array - the
     json_schema response format requires it. Wrap lists in an envelope model.
+    Strict normalization marks every field required, so the model always
+    emits fields that carry a Pydantic default.
 
     Returns ``(instance, result)`` where *instance* is ``None`` when the reply
     does not validate; *result* is the raw :func:`call_llm` dict so callers can
     still record model and token usage.
     """
+    schema_dict = schema.model_json_schema()
+    _make_strict(schema_dict)
     response_format = {
         "type": "json_schema",
         "json_schema": {
             "name": schema.__name__,
-            "schema": schema.model_json_schema(),
+            "schema": schema_dict,
+            "strict": True,
         },
     }
     result = call_llm(

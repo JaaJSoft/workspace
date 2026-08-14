@@ -130,10 +130,12 @@ window.chatBotMixin = function chatBotMixin() {
       if (!this.activeConversation) return;
       const convId = this.activeConversation.uuid;
 
-      // Remove the error message from the DOM immediately
-      const el = document.getElementById(`msg-${errorMsgUuid}`);
-      const group = el?.closest('.msg-group');
-      if (group) group.remove();
+      // Remove the error message from the DOM immediately, in every surface
+      // that renders it: leaving a copy behind shows an error for a response
+      // that is being retried.
+      this._messageEls(errorMsgUuid).forEach((el) => {
+        el.closest('.msg-group')?.remove();
+      });
 
       this.botTyping = true;
       this.clearBotStep();

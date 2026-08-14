@@ -191,6 +191,10 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       this.botTyping = false;
       this.clearBotStep?.();
       this.showInfoPanel = false;
+      // A thread belongs to the conversation it was opened in: left open, the
+      // panel would keep showing the previous conversation's thread, and
+      // writing in it would post a reply into the wrong conversation.
+      this.closeThread?.();
       this.conversationStats = null;
       this.conversationMedia = [];
       this.conversationMediaTotal = 0;

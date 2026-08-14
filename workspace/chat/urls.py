@@ -12,6 +12,7 @@ from . import (
     views_pins,
     views_scheduled,
     views_search,
+    views_threads,
     views_typing,
 )
 
@@ -26,6 +27,12 @@ urlpatterns = [
         "api/v1/chat/conversations/<uuid:conversation_id>",
         views.ConversationDetailView.as_view(),
         name="chat-conversation-detail",
+    ),
+    # Threads
+    path(
+        "api/v1/chat/threads/<uuid:root_uuid>/read",
+        views_threads.ThreadReadView.as_view(),
+        name="chat-thread-read",
     ),
     # Members
     path(

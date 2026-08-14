@@ -12,6 +12,51 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     replyingTo: null,
     pinnedMessages: [],
 
+    // ── Surface hooks ────────────────────────────────────────
+    // The mixin is spread into more than one component per page (the
+    // conversation pane and the thread panel), so every DOM id and endpoint it
+    // touches has to be instance-scoped. Defaults are the main conversation
+    // surface; the thread panel overrides all of them.
+    _messagesContainerId() { return 'messages-container'; },
+    _messageListId() { return 'message-list'; },
+    _messageIdPrefix() { return 'msg'; },
+    _messagesUrl(cursor) {
+      const base = `/chat/${this.activeConversation.uuid}/messages`;
+      return cursor ? `${base}?before=${cursor}` : base;
+    },
+    _replyTarget() { return this.replyingTo?.uuid || null; },
+
+    // Every rendered copy of a message, across surfaces. With the inline
+    // preference on and the thread panel open, one message is on screen twice,
+    // so a state change (edit, delete, reaction) has to reach both. Use this
+    // for updates; use `_messageIdPrefix()` + getElementById when you mean
+    // "the copy on THIS surface", such as a scroll target.
+    _messageEls(uuid) {
+      return document.querySelectorAll(`[data-message-uuid="${uuid}"]`);
+    },
+
+    // Whether this component's surface has been torn down while a fetch was
+    // in flight. The conversation-uuid guards below cannot catch it: two
+    // thread panels opened in quick succession share one conversation and one
+    // container id, so a late response for the first thread would land in the
+    // second one's panel. The thread panel flips this in destroy().
+    _surfaceGone() { return false; },
+
+    // Bumped at the start of every container-touching fetch below; each
+    // response only lands if no newer fetch started meanwhile. Covers what
+    // the two guards above cannot: overlapping refreshes of the SAME live
+    // surface (an SSE-triggered reload racing a reaction repaint), where the
+    // conversation is unchanged and nothing was torn down.
+    _fetchGeneration: 0,
+
+    _staleFetch(gen, conversationUuid) {
+      return (
+        this._surfaceGone()
+        || gen !== this._fetchGeneration
+        || this.activeConversation?.uuid !== conversationUuid
+      );
+    },
+
     // ── Server-rendered HTML helpers ─────────────────────────
     _initMessagesDom(container) {
       // Initialize Alpine on dynamically injected HTML
@@ -26,20 +71,29 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       // as a hook point if additional init is ever required.
     },
 
+    // `conversationId` is only the staleness guard - the fetch URL comes from
+    // _messagesUrl(), which reads the active conversation (or, on the thread
+    // panel, the thread root). Callers pass the uuid they expect to still be
+    // active when the response lands.
     async loadMessages(conversationId) {
       this.loadingMessages = true;
-      const container = document.getElementById('messages-container');
+      const gen = ++this._fetchGeneration;
+      const container = document.getElementById(this._messagesContainerId());
       if (container) container.innerHTML = ''; // safe: cleared to empty
 
       try {
         const resp = await fetch(
-          `/chat/${conversationId}/messages`,
+          this._messagesUrl(null),
           { credentials: 'same-origin' }
         );
-        // Discard stale response if user already switched conversation
-        if (this.activeConversation?.uuid !== conversationId) return;
+        // Discard stale response if user already switched conversation, this
+        // surface was torn down, or a newer fetch started meanwhile
+        if (this._staleFetch(gen, conversationId)) return;
         if (resp.ok) {
           const html = await resp.text();
+          // Re-checked after the body read: it awaits too, and the switch can
+          // happen while the body is still streaming
+          if (this._staleFetch(gen, conversationId)) return;
           if (container) {
             container.innerHTML = html; // server-rendered trusted HTML
             this._initMessagesDom(container);
@@ -55,7 +109,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     _readPaginationState() {
-      const list = document.getElementById('message-list');
+      const list = document.getElementById(this._messageListId());
       if (!list) return;
       this.hasMoreMessages = list.dataset.hasMore === 'true';
     },
@@ -64,7 +118,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (!this.activeConversation || !this.hasMoreMessages || this.loadingMoreMessages) return;
 
       this.loadingMoreMessages = true;
-      const list = document.getElementById('message-list');
+      const gen = ++this._fetchGeneration;
+      const list = document.getElementById(this._messageListId());
       const firstUuid = list?.dataset.firstUuid;
       if (!firstUuid) {
         this.loadingMoreMessages = false;
@@ -80,22 +135,22 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       try {
         const resp = await fetch(
-          `/chat/${targetUuid}/messages?before=${firstUuid}`,
+          this._messagesUrl(firstUuid),
           { credentials: 'same-origin' }
         );
-        if (this.activeConversation?.uuid !== targetUuid) {
+        if (this._staleFetch(gen, targetUuid)) {
           this.loadingMoreMessages = false;
           return;
         }
         if (resp.ok) {
           const html = await resp.text();
-          if (this.activeConversation?.uuid !== targetUuid) {
+          if (this._staleFetch(gen, targetUuid)) {
             this.loadingMoreMessages = false;
             return;
           }
           const parser = new DOMParser();
           const doc = parser.parseFromString(html, 'text/html');
-          const newList = doc.getElementById('message-list');
+          const newList = doc.getElementById(this._messageListId());
 
           if (newList && list) {
             // Update pagination data from the new response
@@ -172,7 +227,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       const wsFiles = [...(this.pendingPickedFiles || [])];
       if ((!body && files.length === 0 && wsFiles.length === 0) || !this.activeConversation) return;
 
-      const replyToUuid = this.replyingTo?.uuid || null;
+      const replyToUuid = this._replyTarget();
       const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
 
       this.messageBody = '';
@@ -248,7 +303,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           await this._refreshCurrentMessages();
           // If bot already replied during the round-trip, hide typing immediately
           if (isBotConv) {
-            const lastGroup = document.getElementById('messages-container')?.querySelector('.msg-group:last-child');
+            const lastGroup = document.getElementById(this._messagesContainerId())?.querySelector('.msg-group:last-child');
             if (lastGroup && lastGroup.classList.contains('msg-group-start')) {
               this.botTyping = false;
               this.clearBotStep?.();
@@ -283,7 +338,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     async sendVoiceMessage(file, duration) {
       if (!this.activeConversation) return false;
       const convUuid = this.activeConversation.uuid;
-      const replyToUuid = this.replyingTo?.uuid || null;
+      const replyToUuid = this._replyTarget();
       const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
       const isBotConv = this.isBotConversation(this.activeConversation);
       this.cancelReply();
@@ -342,7 +397,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     _injectOptimisticMessage(tempId, body, replyInfo, files) {
-      const container = document.getElementById('messages-container');
+      const container = document.getElementById(this._messagesContainerId());
       if (!container) return;
 
       const user = this._getCurrentUser();
@@ -430,17 +485,18 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       // conversation; capture the target uuid up front and bail if the
       // active conversation no longer matches when we're about to mutate.
       if (!this.activeConversation) return;
-      const container = document.getElementById('messages-container');
+      const gen = ++this._fetchGeneration;
+      const container = document.getElementById(this._messagesContainerId());
       const targetUuid = this.activeConversation.uuid;
       try {
         const resp = await fetch(
-          `/chat/${targetUuid}/messages`,
+          this._messagesUrl(null),
           { credentials: 'same-origin' }
         );
-        if (this.activeConversation?.uuid !== targetUuid) return;
+        if (this._staleFetch(gen, targetUuid)) return;
         if (resp.ok) {
           const html = await resp.text();
-          if (this.activeConversation?.uuid !== targetUuid) return;
+          if (this._staleFetch(gen, targetUuid)) return;
           if (container) {
             container.innerHTML = html;
             this._initMessagesDom(container);
@@ -465,7 +521,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
     // ── Editing ────────────────────────────────────────────
     startEdit(msgUuid) {
-      const el = document.getElementById(`msg-${msgUuid}`);
+      const el = this._messageEls(msgUuid)[0];
       if (!el) return;
       this.editingMessageUuid = msgUuid;
       this.messageBody = el.dataset.body || '';
@@ -497,11 +553,15 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
         if (resp.ok) {
           const updated = await resp.json();
-          // Update the DOM element directly
-          const el = document.getElementById(`msg-${updated.uuid}`);
-          if (el) {
+          // Update every rendered copy, not just the first: the message can be
+          // on screen in both the main flow and the thread panel.
+          this._messageEls(updated.uuid).forEach((el) => {
             const bodyEl = el.querySelector('.msg-body');
             if (bodyEl) bodyEl.innerHTML = updated.body_html;
+            // data-body too, not just the rendered HTML: startEdit reads it
+            // back to prefill the composer, so leaving it stale makes the next
+            // edit start from the pre-edit text.
+            el.dataset.body = updated.body;
             // Add edited indicator if not already present
             if (!el.querySelector('.edited-indicator')) {
               const indicator = document.createElement('span');
@@ -509,7 +569,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
               indicator.textContent = '(edited)';
               el.appendChild(indicator);
             }
-          }
+          });
         }
       } catch (e) {
         console.error('Failed to edit message', e);
@@ -540,17 +600,18 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         );
 
         if (resp.ok) {
-          // Replace the message bubble with a "deleted" placeholder
-          const el = document.getElementById(`msg-${msgUuid}`);
-          if (el) {
+          // Replace every rendered copy with a "deleted" placeholder, keeping
+          // each one's own id so its surface's scroll anchors still resolve.
+          this._messageEls(msgUuid).forEach((el) => {
             // Replace the entire row (parent .group/msg div) with a simple deleted indicator
             const row = el.closest('.group\\/msg') || el.parentElement;
             const placeholder = document.createElement('div');
             placeholder.className = 'msg-bubble rounded-2xl px-3 py-1.5 text-sm italic bg-base-200 text-base-content/40';
-            placeholder.id = `msg-${msgUuid}`;
+            placeholder.id = el.id;
+            placeholder.dataset.messageUuid = msgUuid;
             placeholder.textContent = 'Message deleted';
             row.replaceWith(placeholder);
-          }
+          });
         }
       } catch (e) {
         console.error('Failed to delete message', e);
@@ -576,10 +637,20 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         if (resp.ok) {
           // Re-fetch to get server-rendered reactions with proper grouping
           await this._refreshCurrentMessages();
+          // Then whatever other surface shows a copy of this message: the
+          // refresh above only repaints the surface the click landed on.
+          this._notifyReactionPeers();
         }
       } catch (e) {
         console.error('Failed to toggle reaction', e);
       }
+    },
+
+    // Reaction fan-out to the other surface. The main flow tells the thread
+    // panel; the panel overrides this to a no-op because its own
+    // _refreshCurrentMessages already asks the main flow to repaint.
+    _notifyReactionPeers() {
+      window.dispatchEvent(new CustomEvent('chat:refresh-thread'));
     },
 
     // ── Read status ────────────────────────────────────────
@@ -646,7 +717,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // ── Edit last own message shortcut ───────────────────────
     editLastOwnMessage() {
       // Find the last message bubble authored by the current user
-      const container = document.getElementById('messages-container');
+      const container = document.getElementById(this._messagesContainerId());
       if (!container) return;
 
       const bubbles = container.querySelectorAll('.msg-bubble[data-body]');
@@ -655,7 +726,9 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         const bubble = bubbles[i];
         // msg-group-end marks own messages (chat-end / right-aligned)
         if (bubble.closest('.msg-group-end')) {
-          const msgId = bubble.id?.replace('msg-', '');
+          // The surface's own prefix: a hard-coded 'msg-' would mangle the
+          // thread panel's tmsg- ids into t<uuid> and the edit would no-op.
+          const msgId = bubble.id?.replace(`${this._messageIdPrefix()}-`, '');
           if (msgId) {
             this.startEdit(msgId);
             return;

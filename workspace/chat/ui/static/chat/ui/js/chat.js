@@ -34,6 +34,7 @@ function chatApp(currentUserId) {
     ...chatSseMixin(),
     ...chatMembersMixin(),
     ...chatPanelsMixin(),
+    ...chatThreadsMixin(),
     ...chatBotMixin(),
     ...chatInputMixin(),
     ...chatCallMixin(),
@@ -217,6 +218,15 @@ function chatApp(currentUserId) {
         // Replace current history entry so back goes to /chat
         history.replaceState({ conversationUuid: uuid }, '', `/chat/${uuid}`);
         await this.selectConversationById(uuid, false);
+
+        // ?thread=<root> - a thread-reply notification lands here. The reply
+        // is not in the main flow (default preference), so without opening the
+        // panel the page would show nothing new. `params` was captured before
+        // the replaceState above stripped the query string.
+        const threadParam = params.get('thread');
+        if (threadParam && this.activeConversation?.uuid === uuid) {
+          this.openThread(threadParam);
+        }
       }
       this.pendingInitialConvUuid = null;
 

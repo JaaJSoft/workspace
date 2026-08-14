@@ -43,6 +43,7 @@ function chatRoomApp(currentUserId, conversationId) {
     ...chatSseMixin(),
     ...chatMembersMixin(),
     ...chatPanelsMixin(),
+    ...chatThreadsMixin(),
     ...chatBotMixin(),
     ...chatCallMixin(),
     ...chatCallDiagnosticMixin(),

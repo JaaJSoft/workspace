@@ -2,6 +2,7 @@
 window._chatPrefsDefaults = {
     compactConversationList: false,
     compactMessageView: false,
+    showThreadRepliesInline: false,
 };
 window._chatPrefsCache = { ...window._chatPrefsDefaults };
 
@@ -52,6 +53,41 @@ window.chatPreferences = function chatPreferences() {
             this.prefs[key] = value;
             this._saveRemote();
             this._broadcast();
+        },
+
+        // For a preference the server applies when it renders the message
+        // list, so the list has to be refetched for it to take effect.
+        //
+        // The write cannot be debounced like update()'s: the filter runs
+        // server-side, so a refetch issued before the PUT lands would come
+        // back filtered by the old value. Await the write, then ask chatApp
+        // for its incremental refresh - which preserves scroll position,
+        // unlike a full reload.
+        async updateAndSync(key, value) {
+            this.prefs[key] = value;
+            this._broadcast();
+            clearTimeout(_saveTimer);
+            let resp;
+            try {
+                resp = await fetch(API_URL, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ value: this.prefs }),
+                    credentials: 'same-origin',
+                });
+            } catch (e) {
+                // The toggle did not stick; skip the refetch rather than
+                // repaint the list with the value the server still holds.
+                console.error('Failed to save preference', e);
+                return;
+            }
+            // fetch resolves on 4xx/5xx too - an HTTP error also means the
+            // server kept the old value, so the same rule applies.
+            if (!resp.ok) {
+                console.error('Failed to save preference', resp.status);
+                return;
+            }
+            window.dispatchEvent(new CustomEvent('chat:refresh-messages'));
         },
 
         saveCallSounds(value) {

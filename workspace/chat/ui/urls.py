@@ -29,6 +29,11 @@ urlpatterns = [
         name="room",
     ),
     path(
+        "/threads/<uuid:root_uuid>/messages",
+        views.thread_messages_view,
+        name="thread_messages",
+    ),
+    path(
         "/view-attachment/<uuid:attachment_uuid>",
         views.view_attachment,
         name="view_attachment",

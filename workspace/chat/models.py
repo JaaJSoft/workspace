@@ -111,6 +111,19 @@ class Message(models.Model):
         on_delete=models.SET_NULL,
         related_name="replies",
     )
+    # NULL on a thread's root message, set on every reply. The main conversation
+    # flow is therefore `thread_root__isnull=True`. Replies to a reply are
+    # flattened onto the same root: a thread is a list, never a tree.
+    thread_root = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="thread_replies",
+    )
+    # Denormalised onto the root so a 50-message page does not aggregate per row.
+    reply_count = models.PositiveIntegerField(default=0)
+    last_reply_at = models.DateTimeField(null=True, blank=True)
     body = models.TextField()
     body_html = models.TextField(blank=True, default="")
     tool_data = models.JSONField(null=True, blank=True)
@@ -125,6 +138,10 @@ class Message(models.Model):
             # serves both ASC and DESC ordering on (conversation, created_at).
             models.Index(fields=["conversation", "created_at"]),
             models.Index(fields=["deleted_at"], name="msg_deleted_at"),
+            models.Index(
+                fields=["conversation", "thread_root", "created_at"],
+                name="msg_conv_thread_created",
+            ),
         ]
 
     def __str__(self):
@@ -153,6 +170,45 @@ class Message(models.Model):
             for a in self.attachments.all()
             if not (a.is_image or a.is_video or a.is_audio)
         ]
+
+
+class ThreadParticipant(models.Model):
+    """Who takes part in a thread, and how much of it they have read.
+
+    A row appears when a user authors the root, posts a reply, or is mentioned
+    in one. It is never toggled by hand: participation is derived. The table
+    does two jobs, read state and notification recipients, so the two can never
+    disagree about who cares about a thread.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    root_message = models.ForeignKey(
+        Message,
+        on_delete=models.CASCADE,
+        related_name="participants",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="chat_thread_participations",
+    )
+    last_read_at = models.DateTimeField(null=True, blank=True)
+    unread_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["root_message", "user"],
+                name="unique_thread_participant",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "root_message"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user} in thread {self.root_message_id}"
 
 
 class Reaction(models.Model):

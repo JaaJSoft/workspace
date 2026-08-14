@@ -15,14 +15,38 @@ window.chatSseMixin = function chatSseMixin() {
         this.generatingConversations.delete(detail.conversation_id);
       }
 
-      if (isViewing) {
+      // Where this message belongs. A thread reply skips the main flow unless
+      // the user asked to see replies inline, and reaches the panel through a
+      // window event rather than by being appended here: the panel owns its
+      // own container and reloads itself.
+      const route = window.chatThreadRouteTargets(detail, {
+        openThreadRoot: this.openThreadRoot,
+        showInline: !!this.chatPrefs?.showThreadRepliesInline,
+      });
+      if (route.bumpRoot) {
+        this._bumpRenderedReplyCount(route.bumpRoot);
+        if (route.panel) {
+          // The user is looking at this thread, so the reply must not survive
+          // as unread: the server already counted it on both the participant
+          // row and the conversation badge, and only the read endpoint moves
+          // those back. Fire-and-forget, same as openThread's call.
+          this.markThreadRead(route.bumpRoot);
+          window.dispatchEvent(
+            new CustomEvent('thread-reply-received', { detail: { root: route.bumpRoot } }),
+          );
+        } else {
+          this.bumpThreadUnread(route.bumpRoot);
+        }
+      }
+
+      if (isViewing && route.mainFlow) {
         // Hide bot typing indicator if the incoming message is from a bot
         if (this.botTyping && this.isBotMessage(detail.message)) {
           this.botTyping = false;
           this.clearBotStep();
         }
         // Check if message already exists in the DOM
-        if (!document.getElementById(`msg-${detail.message.uuid}`)) {
+        if (!document.getElementById(`${this._messageIdPrefix()}-${detail.message.uuid}`)) {
           const wasAtBottom = this._isNearBottom();
           await this._refreshCurrentMessages();
           if (wasAtBottom) this.scrollToBottom();
@@ -40,8 +64,9 @@ window.chatSseMixin = function chatSseMixin() {
 
     handleSSEMessageEdited(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        const el = document.getElementById(`msg-${detail.message_id}`);
-        if (el) {
+        // Every copy: the message can be rendered in the main flow and in the
+        // thread panel at the same time.
+        this._messageEls(detail.message_id).forEach((el) => {
           const bodyEl = el.querySelector('.msg-body');
           if (bodyEl) bodyEl.innerHTML = detail.body_html;
           if (!el.querySelector('.edited-indicator')) {
@@ -51,7 +76,7 @@ window.chatSseMixin = function chatSseMixin() {
             el.appendChild(indicator);
           }
           el.dataset.body = detail.body;
-        }
+        });
       }
     },
 

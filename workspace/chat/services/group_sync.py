@@ -3,6 +3,8 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
+from .threads import mark_conversation_threads_read
+
 
 @transaction.atomic
 def resync_conversation_members(conversation):
@@ -50,6 +52,11 @@ def resync_conversation_members(conversation):
     if to_reactivate:
         ConversationMember.objects.bulk_update(
             to_reactivate, ["left_at", "unread_count"]
+        )
+        # The badge restarts at zero, so the thread counters it used to
+        # contain must restart with it.
+        mark_conversation_threads_read(
+            [m.user_id for m in to_reactivate], conversation.pk
         )
 
     now = timezone.now()

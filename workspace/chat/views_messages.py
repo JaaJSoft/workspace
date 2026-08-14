@@ -37,6 +37,12 @@ from .services.conversations import get_active_membership
 from .services.notifications import notify_conversation_members
 from .services.posting import deliver_message
 from .services.rendering import render_message_body
+from .services.threads import (
+    mark_conversation_threads_read,
+    recount_thread,
+    resolve_thread_root,
+    retract_thread_reply,
+)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -89,6 +95,11 @@ class MessageListView(CacheControlMixin, APIView):
                 "link_previews__preview",
             )
         )
+
+        # Thread replies are always included, carrying their thread_root.
+        # Hiding them from the main flow is a UI presentation preference, and
+        # a preference must not shrink an API response - the server-rendered
+        # partial is where it applies.
 
         if before:
             before_uuid = parse_uuid_or_none(before)
@@ -256,6 +267,8 @@ class MessageListView(CacheControlMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        thread_root = resolve_thread_root(reply_to) if reply_to else None
+
         created_attachments = []
         try:
             with transaction.atomic():
@@ -265,6 +278,7 @@ class MessageListView(CacheControlMixin, APIView):
                     body=body,
                     body_html=body_html,
                     reply_to=reply_to,
+                    thread_root=thread_root,
                 )
 
                 for f, detection, viewer in zip(
@@ -486,16 +500,27 @@ class MessageDetailView(APIView):
         message.deleted_at = timezone.now()
         message.save(update_fields=["deleted_at"])
 
-        # Decrement unread_count for members who hadn't read this message
-        ConversationMember.objects.filter(
-            conversation_id=message.conversation_id,
-            left_at__isnull=True,
-            unread_count__gt=0,
-        ).filter(
-            Q(last_read_at__isnull=True) | Q(last_read_at__lt=message.created_at),
-        ).exclude(user=message.author).update(
-            unread_count=Greatest(F("unread_count") - 1, 0),
-        )
+        if message.thread_root_id:
+            # A deleted reply must stop counting, or the parent advertises
+            # replies the panel no longer shows. Deleting a root leaves its own
+            # counters alone: its replies still exist and still belong to it.
+            #
+            # Its unread accounting is retracted for thread participants only,
+            # mirroring delivery: the conversation-wide decrement below would
+            # rob non-participants of unread they never gained for this reply.
+            retract_thread_reply(message)
+            recount_thread(message.thread_root)
+        else:
+            # Decrement unread_count for members who hadn't read this message
+            ConversationMember.objects.filter(
+                conversation_id=message.conversation_id,
+                left_at__isnull=True,
+                unread_count__gt=0,
+            ).filter(
+                Q(last_read_at__isnull=True) | Q(last_read_at__lt=message.created_at),
+            ).exclude(user=message.author).update(
+                unread_count=Greatest(F("unread_count") - 1, 0),
+            )
 
         PinnedMessage.objects.filter(message=message).delete()
 
@@ -657,6 +682,13 @@ class MarkReadView(APIView):
 
         if update_fields:
             membership.save(update_fields=update_fields)
+
+        # The badge this just zeroed counted thread replies too (for
+        # participants), so the per-thread counters must fall with it -
+        # otherwise opening an old thread later subtracts its stale backlog
+        # from a badge that no longer contains it. Unconditional: a stale
+        # thread counter can outlive an already-zero badge.
+        mark_conversation_threads_read([request.user.id], conversation_id)
 
         # Clear this conversation's unread notification (cache + SSE included).
         from workspace.notifications.services.notifications import mark_source_read

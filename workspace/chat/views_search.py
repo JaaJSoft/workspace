@@ -150,6 +150,10 @@ class ConversationMessageSearchView(APIView):
                 },
                 "body": msg.body,
                 "body_html": msg.body_html,
+                # Lets the UI open the thread a hit lives in: a threaded reply
+                # is not in the main flow, so scrolling to it there finds
+                # nothing.
+                "thread_root": str(msg.thread_root_id) if msg.thread_root_id else None,
                 "created_at": msg.created_at.isoformat(),
             }
             for msg in messages

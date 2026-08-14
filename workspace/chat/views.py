@@ -28,6 +28,7 @@ from .services.conversations import (
     user_conversation_ids,
 )
 from .services.group_sync import create_group_conversation, is_group_linked
+from .services.threads import mark_conversation_threads_read
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -437,6 +438,7 @@ class ConversationMembersView(APIView):
 
         added = []
         to_create = []
+        rejoined_ids = []
         for u in users:
             existing = existing_members.get(u.id)
             if existing:
@@ -444,6 +446,7 @@ class ConversationMembersView(APIView):
                     existing.left_at = None
                     existing.unread_count = 0
                     existing.save(update_fields=["left_at", "unread_count"])
+                    rejoined_ids.append(u.id)
                     added.append(u.id)
                 # Already active member - skip silently
             else:
@@ -452,6 +455,11 @@ class ConversationMembersView(APIView):
 
         if to_create:
             ConversationMember.objects.bulk_create(to_create)
+
+        if rejoined_ids:
+            # The badge restarts at zero, so the thread counters it used to
+            # contain must restart with it.
+            mark_conversation_threads_read(rejoined_ids, conversation.pk)
 
         # Refetch conversation with members
         conversation = (

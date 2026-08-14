@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScript, loadScripts } = require('../../../common/tests/js/loader');
 
 // Composes the sse + bot mixins the way chatApp() does, with controllable
 // timers so the failsafe hide can be triggered synchronously.
@@ -12,11 +12,17 @@ function buildApp() {
     setTimeout: (fn) => { timers.fns.push(fn); return timers.fns.length; },
     clearTimeout: (id) => { if (id) timers.cleared++; },
   };
-  const sseCtx = loadScript('workspace/chat/ui/static/chat/ui/js/sse.js', stubs);
+  const sseCtx = loadScripts(
+    [
+      'workspace/chat/ui/static/chat/ui/js/threads.js',
+      'workspace/chat/ui/static/chat/ui/js/sse.js',
+    ],
+    stubs,
+  );
   const botCtx = loadScript('workspace/chat/ui/static/chat/ui/js/bot.js', stubs);
   // Same order as chatApp(): sse first, bot last, so an overlapping key
   // resolves here the way it does in production.
-  const app = Object.assign({}, sseCtx.chatSseMixin(), botCtx.chatBotMixin(), {
+  const app = Object.assign({}, sseCtx.chatThreadsMixin(), sseCtx.chatSseMixin(), botCtx.chatBotMixin(), {
     activeConversation: { uuid: 'conv-1' },
   });
   return { app, timers };
@@ -139,12 +145,19 @@ function buildAppWithConversations() {
     // so only the announced set can raise the indicator.
     document: { getElementById: () => null },
   };
-  const sseCtx = loadScript('workspace/chat/ui/static/chat/ui/js/sse.js', stubs);
+  const sseCtx = loadScripts(
+    [
+      'workspace/chat/ui/static/chat/ui/js/threads.js',
+      'workspace/chat/ui/static/chat/ui/js/sse.js',
+    ],
+    stubs,
+  );
   const convCtx = loadScript('workspace/chat/ui/static/chat/ui/js/conversations.js', stubs);
   const botCtx = loadScript('workspace/chat/ui/static/chat/ui/js/bot.js', stubs);
   const app = Object.assign(
     {},
     convCtx.chatConversationsMixin(),
+    sseCtx.chatThreadsMixin(),
     sseCtx.chatSseMixin(),
     botCtx.chatBotMixin(),
     {

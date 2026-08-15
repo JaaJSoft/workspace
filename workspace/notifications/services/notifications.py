@@ -292,6 +292,10 @@ def settle_sources(sources, *, max_priority=None):
     if not sources:
         return 0
     field = source_field(sources[0])
+    # Cross-recipient writes deserve a hard guard: with mixed models the
+    # __in filter below would silently settle the wrong rows.
+    if any(source_field(s) != field for s in sources[1:]):
+        raise ValueError("settle_sources requires sources of a single model")
     qs = Notification.objects.filter(
         read_at__isnull=True,
         **{f"{field}__in": [s.pk for s in sources]},

@@ -31,15 +31,17 @@ class TodayEventNotificationMixin(CalendarTestMixin):
             datetime.combine(timezone.localdate(), time.max),
             timezone.get_current_timezone(),
         )
-        start = min(
-            timezone.now() + timedelta(hours=1),
-            end_of_today - timedelta(minutes=30),
-        )
+        now = timezone.now()
+        start = min(now + timedelta(hours=1), end_of_today - timedelta(minutes=30))
+        if start + timedelta(minutes=29) <= now:
+            # Final minute of the day: the clamped slot is already over, so
+            # fall back to an ongoing event capped at end of day.
+            start = now - timedelta(minutes=1)
         return Event.objects.create(
             calendar=self.calendar,
             title=title,
             start=start,
-            end=start + timedelta(minutes=29),
+            end=min(start + timedelta(minutes=29), end_of_today),
             owner=self.owner,
             **kwargs,
         )

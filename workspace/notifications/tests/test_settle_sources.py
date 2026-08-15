@@ -65,6 +65,12 @@ class SettleSourcesTests(TestCase):
         self.assertIsNotNone(reminder.read_at)
         self.assertIsNone(mention.read_at)
 
+    def test_rejects_mixed_source_models(self):
+        from workspace.projects.models import Task
+
+        with self.assertRaises(ValueError):
+            settle_sources([self.conv, Task(pk=self.conv.pk)])
+
     def test_noop_on_empty_or_already_read(self):
         self.assertEqual(settle_sources([]), 0)
 

@@ -94,9 +94,7 @@ class BuildDashboardContextTests(TestCase):
 
     @patch("workspace.dashboard.views.get_unread_badges")
     @patch("workspace.dashboard.views.visible_modules")
-    def test_tile_links_to_module_home_without_target(
-        self, mock_visible, mock_badges
-    ):
+    def test_tile_links_to_module_home_without_target(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat")]
         mock_badges.return_value = {
             "chat": {"count": 3, "url": None},
@@ -119,9 +117,7 @@ class BuildDashboardContextTests(TestCase):
 
     @patch("workspace.dashboard.views.visible_modules")
     @patch("workspace.dashboard.views.get_unread_badges")
-    def test_context_does_not_include_upcoming_events(
-        self, mock_badges, mock_visible
-    ):
+    def test_context_does_not_include_upcoming_events(self, mock_badges, mock_visible):
         """Upcoming events load async via /dashboard/upcoming - not via the
         main context."""
         mock_visible.return_value = []
@@ -197,9 +193,7 @@ class BuildDashboardContextTests(TestCase):
 
     @patch("workspace.dashboard.views.get_unread_badges")
     @patch("workspace.dashboard.views.visible_modules")
-    def test_preview_flag_carried_into_module_context(
-        self, mock_visible, mock_badges
-    ):
+    def test_preview_flag_carried_into_module_context(self, mock_visible, mock_badges):
         # The home grid template renders the Preview badge off this flag, so the
         # view must carry preview through to each module dict.
         mock_visible.return_value = [_mod("files", preview=True)]

@@ -179,9 +179,7 @@ def notify_today_events():
     notified = 0
     for user in get_user_model().objects.filter(is_active=True).only("pk"):
         for event in get_upcoming_for_user(user, now, end_of_today):
-            source = (
-                event.master if isinstance(event, VirtualOccurrence) else event
-            )
+            source = event.master if isinstance(event, VirtualOccurrence) else event
             if event.all_day:
                 body = "All day today"
             else:

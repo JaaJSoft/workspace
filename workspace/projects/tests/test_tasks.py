@@ -67,9 +67,7 @@ class NotifyDueTasksCronTests(NotifyDueTasksMixin, TestCase):
 
     def test_skips_future_undated_and_done_tasks(self):
         self._task(due_days=2, title="future")
-        create_task(
-            self.project, self.admin, title="undated", assignees=[self.member]
-        )
+        create_task(self.project, self.admin, title="undated", assignees=[self.member])
         self._task(due_days=0, title="finished", status=self.done)
 
         notify_due_tasks()

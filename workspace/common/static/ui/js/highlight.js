@@ -8,18 +8,26 @@
 // only when the input is already server-rendered, sanitized HTML - chat message
 // bodies are the sole such caller.
 //
-// The query is escaped as a *regex*, not as HTML, because it never reaches the
-// output directly: only the `$1` backreference does, and that is a slice of the
-// already-escaped text. The mismatch has a known consequence - a query holding
-// an HTML metacharacter (`&`, `<`, `"`) is compared against its escaped
-// counterpart in the text, so it either fails to match or splits an entity.
-// Behaviour carried over from the four copies this helper replaces.
+// Either way the text is HTML by the time the match runs while the query is
+// still the raw string the user typed, so the query is HTML-escaped too: it is
+// the escaped forms that have to line up. Matching a bare `&` or `"` against
+// text holding `&amp;` and `&quot;` otherwise misses the hit, or marks half an
+// entity and renders it as literal text.
+//
+// The one asymmetry is the apostrophe. escapeHtml emits `&#39;` for it, which
+// is right for text this helper escaped itself, but the markdown renderer
+// behind a pre-escaped body escapes only `&<>"` and leaves `'` alone - so
+// escaping the query's would stop `don't` from ever matching there.
 function highlightMatch(text, query, options) {
-  const source = options && options.escape === false ? text : escapeHtml(text);
+  const preEscaped = !!(options && options.escape === false);
+  const source = preEscaped ? text : escapeHtml(text);
   if (!source || !query) return source;
-  const term = String(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const term = preEscaped ? escapeHtml(query).replace(/&#39;/g, "'") : escapeHtml(query);
+  // Escaped last: escapeHtml emits none of the regex metacharacters, so the
+  // ones left to neutralize are the ones the user actually typed.
+  const pattern = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return source.replace(
-    new RegExp(`(${term})`, 'gi'),
+    new RegExp(`(${pattern})`, 'gi'),
     '<mark class="bg-warning/40 text-inherit rounded-sm px-0.5">$1</mark>'
   );
 }

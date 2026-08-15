@@ -75,16 +75,56 @@ test('escape: false hands back a falsy body unchanged', () => {
   assert.equal(highlightMatch('<p>hi</p>', '', { escape: false }), '<p>hi</p>');
 });
 
-// Characterization, not endorsement: the query is regex-escaped but not
-// HTML-escaped, so it is matched against text that has been. A query holding an
-// HTML metacharacter therefore misses (`"hi"` never matches `&quot;hi&quot;`)
-// or lands inside an entity and splits it. Behaviour predates this helper and
-// is unchanged by it; these two assertions are here so that fixing it has to be
-// a deliberate edit rather than a silent one.
-test('an HTML metacharacter in the query does not match its escaped text', () => {
-  assert.equal(highlightMatch('Say "hi"', '"hi"'), 'Say &quot;hi&quot;');
+// Regression: the query used to be regex-escaped but not HTML-escaped, so it
+// was matched against text that had been. A term holding an HTML
+// metacharacter therefore either missed entirely or landed inside an entity
+// and split it, emitting `<mark>&</mark>amp;` - which renders as the literal
+// text "&amp;".
+test('matches a query whose HTML metacharacters are entities in the text', () => {
+  assert.equal(highlightMatch('Say "hi"', '"hi"'), `Say ${mark('&quot;hi&quot;')}`);
+  assert.equal(highlightMatch('a < b', '<'), `a ${mark('&lt;')} b`);
 });
 
-test('an ampersand query splits the entity it lands in', () => {
-  assert.equal(highlightMatch('Tom & Jerry', '&'), `Tom ${mark('&')}amp; Jerry`);
+test('marks an ampersand as a whole entity', () => {
+  assert.equal(highlightMatch('Tom & Jerry', '&'), `Tom ${mark('&amp;')} Jerry`);
+});
+
+test('escapes the query for HTML before neutralizing its regex metacharacters', () => {
+  assert.equal(
+    highlightMatch('total (a & b) due', '(a & b)'),
+    `total ${mark('(a &amp; b)')} due`
+  );
+});
+
+test('escapes the apostrophe alongside the text it is matched against', () => {
+  assert.equal(highlightMatch("don't stop", "don't"), `${mark('don&#39;t')} stop`);
+});
+
+// The markdown renderer that produces chat bodies escapes only `&<>"`, so an
+// apostrophe reaches the browser literally. Escaping the query's would make
+// every term holding one unmatchable on that path.
+test('escape: false leaves the apostrophe raw to match a pre-escaped body', () => {
+  assert.equal(
+    highlightMatch("<p>don't stop</p>", "don't", { escape: false }),
+    `<p>${mark("don't")} stop</p>`
+  );
+});
+
+test('escape: false matches the entities a pre-escaped body carries', () => {
+  assert.equal(
+    highlightMatch('<p>Tom &amp; Jerry</p>', '&', { escape: false }),
+    `<p>Tom ${mark('&amp;')} Jerry</p>`
+  );
+  assert.equal(
+    highlightMatch('<p>say &quot;hi&quot;</p>', '"hi"', { escape: false }),
+    `<p>say ${mark('&quot;hi&quot;')}</p>`
+  );
+});
+
+test('escape: false keeps a "<" query out of the surrounding markup', () => {
+  // Unescaped, this matched the `<` of `<p>` and cut the tag in half.
+  assert.equal(
+    highlightMatch('<p>a &lt; b</p>', '<', { escape: false }),
+    `<p>a ${mark('&lt;')} b</p>`
+  );
 });

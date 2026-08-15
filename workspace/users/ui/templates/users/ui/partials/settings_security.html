@@ -200,8 +200,10 @@
       showFeedback(type, message) {
         const container = this.$refs.feedbackContainer;
         if (!container) return;
-        container.replaceChildren();
-        container.appendChild(InlineAlert.create({ type, message }));
+        const alert = document.createElement('inline-alert');
+        alert.setAttribute('type', type);
+        alert.setAttribute('message', message);
+        container.replaceChildren(alert);
       },
     };
   }

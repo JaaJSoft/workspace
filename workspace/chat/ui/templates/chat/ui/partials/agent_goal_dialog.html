@@ -83,7 +83,7 @@
       </p>
 
       <div x-show="goalEditor.error" x-cloak>
-        {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="goalEditor.error"></span>' %}
+        <inline-alert type="error"><span x-text="goalEditor.error"></span></inline-alert>
       </div>
     </div>
 

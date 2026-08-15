@@ -301,8 +301,10 @@
       showFeedback(type, message) {
         const container = this.$refs.avatarFeedback;
         if (!container) return;
-        container.replaceChildren();
-        container.appendChild(InlineAlert.create({ type, message }));
+        const alert = document.createElement('inline-alert');
+        alert.setAttribute('type', type);
+        alert.setAttribute('message', message);
+        container.replaceChildren(alert);
       },
     };
   }
@@ -332,8 +334,11 @@
       showFeedback(type, message) {
         const container = this.$refs.profileFieldsFeedback;
         if (!container) return;
-        container.replaceChildren();
-        container.appendChild(InlineAlert.create({ type, message, dismissible: true }));
+        const alert = document.createElement('inline-alert');
+        alert.setAttribute('type', type);
+        alert.setAttribute('message', message);
+        alert.setAttribute('dismissible', '');
+        container.replaceChildren(alert);
       },
     };
   }
@@ -394,8 +399,11 @@
       showFeedback(type, message) {
         const container = this.$refs.paletteFeedback;
         if (!container) return;
-        container.replaceChildren();
-        container.appendChild(InlineAlert.create({ type, message, dismissible: true }));
+        const alert = document.createElement('inline-alert');
+        alert.setAttribute('type', type);
+        alert.setAttribute('message', message);
+        alert.setAttribute('dismissible', '');
+        container.replaceChildren(alert);
       },
     };
   }

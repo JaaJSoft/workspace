@@ -272,8 +272,11 @@
       showFeedback(type, message) {
         const container = this.$refs.tokensFeedback;
         if (!container) return;
-        container.replaceChildren();
-        container.appendChild(InlineAlert.create({ type, message, dismissible: true }));
+        const alert = document.createElement('inline-alert');
+        alert.setAttribute('type', type);
+        alert.setAttribute('message', message);
+        alert.setAttribute('dismissible', '');
+        container.replaceChildren(alert);
       },
     };
   }

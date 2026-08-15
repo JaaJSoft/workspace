@@ -171,7 +171,7 @@ x-data="projectBoard({
       </button>
     </div>
     <template x-if="error">
-      {% include "ui/partials/inline_alert.html" with type="error" class="mb-2" slot='<span x-text="error"></span>' %}
+      <inline-alert type="error" class="mb-2"><span x-text="error"></span></inline-alert>
     </template>
     <form @submit.prevent="
       creating = true; error = '';

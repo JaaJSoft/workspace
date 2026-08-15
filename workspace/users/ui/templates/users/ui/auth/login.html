@@ -18,12 +18,12 @@
 
       <!-- Error messages -->
       {% if form.errors %}
-        {% include "ui/partials/inline_alert.html" with type="error" message="Invalid username or password. Please try again." class="mb-4" %}
+        <inline-alert type="error" message="Invalid username or password. Please try again." class="mb-4"></inline-alert>
       {% endif %}
 
       {% if next %}
         {% if user.is_authenticated %}
-          {% include "ui/partials/inline_alert.html" with type="warning" message="Your account doesn't have access to this page." class="mb-4" %}
+          <inline-alert type="warning" message="Your account doesn't have access to this page." class="mb-4"></inline-alert>
         {% endif %}
       {% endif %}
 

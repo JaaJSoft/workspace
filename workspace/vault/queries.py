@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from .models import Vault, VaultFolder, VaultKeyWrap, VaultRole
+from .models import Vault, VaultFolder, VaultKeyWrap, VaultRole, VaultTag
 
 
 def user_vault_ids(user):
@@ -49,3 +49,10 @@ def visible_folders(user, vault):
     if get_vault_role(user, vault) is None:
         return VaultFolder.objects.none()
     return VaultFolder.objects.filter(vault=vault)
+
+
+def visible_tags(user, vault):
+    """Tags of *vault*, or an empty queryset if *user* cannot open it."""
+    if get_vault_role(user, vault) is None:
+        return VaultTag.objects.none()
+    return VaultTag.objects.filter(vault=vault)

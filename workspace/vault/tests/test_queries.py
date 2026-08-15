@@ -8,12 +8,14 @@ from workspace.vault.models import (
     VaultFolder,
     VaultKeyWrap,
     VaultRole,
+    VaultTag,
 )
 from workspace.vault.queries import (
     accessible_entries_q,
     get_vault_role,
     user_vault_ids,
     visible_folders,
+    visible_tags,
 )
 
 User = get_user_model()
@@ -92,3 +94,8 @@ class AccessHelperTests(TestCase):
         )
         self.assertEqual(list(visible_folders(self.owner, self.vault)), [folder])
         self.assertEqual(list(visible_folders(self.stranger, self.vault)), [])
+
+    def test_visible_tags_are_scoped_to_an_accessible_vault(self):
+        tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        self.assertEqual(list(visible_tags(self.owner, self.vault)), [tag])
+        self.assertEqual(list(visible_tags(self.stranger, self.vault)), [])

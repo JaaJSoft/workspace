@@ -555,14 +555,71 @@ class AgentGoalAPITests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_notes_are_read_only(self):
+    def test_update_mission_brief(self):
         self.client.force_authenticate(self.user)
         resp = self.client.patch(
-            self._detail_url(), data={"notes": "injected"}, format="json"
+            self._detail_url(),
+            data={
+                "success_criteria": "The user finished the marathon.",
+                "constraints": "No training plan over 5 sessions a week.",
+                "reporting": "Only message me on Sundays.",
+            },
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.goal.refresh_from_db()
-        self.assertEqual(self.goal.notes, "")
+        self.assertEqual(self.goal.success_criteria, "The user finished the marathon.")
+        self.assertEqual(
+            self.goal.constraints, "No training plan over 5 sessions a week."
+        )
+        self.assertEqual(self.goal.reporting, "Only message me on Sundays.")
+
+    def test_update_notes(self):
+        # The notes are the agent's memory between check-ins; the user can
+        # correct them from the UI.
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._detail_url(),
+            data={"notes": "Week 3 done, knee is fine now."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.notes, "Week 3 done, knee is fine now.")
+
+    def test_update_next_check_at(self):
+        self.client.force_authenticate(self.user)
+        when = timezone.now() + timedelta(days=2)
+        resp = self.client.patch(
+            self._detail_url(), data={"next_check_at": when.isoformat()}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.goal.refresh_from_db()
+        self.assertAlmostEqual(
+            self.goal.next_check_at.timestamp(), when.timestamp(), delta=1
+        )
+
+    def test_update_next_check_at_clamped_to_floor(self):
+        self.client.force_authenticate(self.user)
+        past = timezone.now() - timedelta(hours=3)
+        resp = self.client.patch(
+            self._detail_url(), data={"next_check_at": past.isoformat()}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.goal.refresh_from_db()
+        self.assertGreater(self.goal.next_check_at, timezone.now())
+
+    def test_outcome_and_check_count_are_read_only(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._detail_url(),
+            data={"outcome": "injected", "check_count": 99},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.outcome, "")
+        self.assertEqual(self.goal.check_count, 0)
 
     def test_delete_marks_abandoned(self):
         self.client.force_authenticate(self.user)
@@ -599,6 +656,24 @@ class AgentGoalAPITests(APITestCase):
         self.assertAlmostEqual(
             goal.next_check_at.timestamp(), first_check.timestamp(), delta=1
         )
+
+    def test_create_goal_with_mission_brief(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            self._list_url(),
+            data={
+                "goal": "Watch upstream releases.",
+                "success_criteria": "Version 2.0 is out and summarized.",
+                "constraints": "Only official release notes.",
+                "reporting": "Message me for major versions only.",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        goal = AgentGoal.objects.get(uuid=resp.data["uuid"])
+        self.assertEqual(goal.success_criteria, "Version 2.0 is out and summarized.")
+        self.assertEqual(goal.constraints, "Only official release notes.")
+        self.assertEqual(goal.reporting, "Message me for major versions only.")
 
     def test_create_goal_defaults(self):
         # No title, no first_check_at: title falls back to the goal text and
@@ -735,6 +810,24 @@ class AgentGoalToolTests(TestCase):
         self.assertEqual(goal.status, AgentGoal.Status.ACTIVE)
         self.assertEqual(goal.created_by, self.user)
 
+    def test_create_goal_with_mission_brief(self):
+        result = self._call(
+            "create_agent_goal",
+            CreateAgentGoalParams(
+                title="Find a flat",
+                goal="Track listings in Lyon.",
+                first_check_at=(timezone.now() + timedelta(hours=3)).isoformat(),
+                success_criteria="Lease signed.",
+                constraints="Budget under 900 euros.",
+                reporting="Only for visits worth booking.",
+            ),
+        )
+        self.assertIn("Created goal", result)
+        goal = AgentGoal.objects.get(conversation=self.conversation)
+        self.assertEqual(goal.success_criteria, "Lease signed.")
+        self.assertEqual(goal.constraints, "Budget under 900 euros.")
+        self.assertEqual(goal.reporting, "Only for visits worth booking.")
+
     def test_create_goal_invalid_datetime(self):
         result = self._call(
             "create_agent_goal",
@@ -802,7 +895,45 @@ class AgentGoalToolTests(TestCase):
         self.assertIn("Existing goal", result)
         self.assertIn("Working notes here.", result)
 
+    def test_list_goals_includes_mission_brief(self):
+        self._goal(
+            success_criteria="Lease signed.",
+            constraints="Budget under 900 euros.",
+            reporting="Only for visits worth booking.",
+        )
+        result = self._call("list_agent_goals", {})
+        self.assertIn("Lease signed.", result)
+        self.assertIn("Budget under 900 euros.", result)
+        self.assertIn("Only for visits worth booking.", result)
+
     # -- update --------------------------------------------------------------
+
+    def test_update_mission_brief(self):
+        goal = self._goal()
+        result = self._call(
+            "update_agent_goal",
+            UpdateAgentGoalParams(
+                goal_id=goal.uuid,
+                success_criteria="Lease signed.",
+                constraints="Budget under 900 euros.",
+                reporting="Only for visits worth booking.",
+            ),
+        )
+        self.assertIn("Updated goal", result)
+        goal.refresh_from_db()
+        self.assertEqual(goal.success_criteria, "Lease signed.")
+        self.assertEqual(goal.constraints, "Budget under 900 euros.")
+        self.assertEqual(goal.reporting, "Only for visits worth booking.")
+
+    def test_update_leaves_unset_brief_fields_untouched(self):
+        goal = self._goal(success_criteria="Lease signed.", reporting="Weekly recap.")
+        self._call(
+            "update_agent_goal",
+            UpdateAgentGoalParams(goal_id=goal.uuid, notes="Progress."),
+        )
+        goal.refresh_from_db()
+        self.assertEqual(goal.success_criteria, "Lease signed.")
+        self.assertEqual(goal.reporting, "Weekly recap.")
 
     def test_update_notes_and_next_check(self):
         goal = self._goal()
@@ -940,3 +1071,58 @@ class AgentGoalPromptTests(TestCase):
         self.assertIn("## Autonomous goals", messages[0]["content"])
         self.assertIn("create_agent_goal", messages[0]["content"])
         self.assertIn("send_user_message", messages[0]["content"])
+
+    def test_system_prompt_mentions_the_mission_brief(self):
+        from workspace.ai.prompts.chat import build_chat_messages
+
+        content = build_chat_messages("You are a bot.", [])[0]["content"]
+        self.assertIn("success_criteria", content)
+        self.assertIn("constraints", content)
+        self.assertIn("reporting", content)
+
+
+class AgentGoalCheckInInstructionTests(TestCase):
+    """The check-in injection is the only place the agent reads the brief."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="user", password="pass123")
+        self.bot_user = User.objects.create_user(username="bot")
+        BotProfile.objects.create(user=self.bot_user, system_prompt="Bot.")
+        self.conversation = _make_conversation(self.user, self.bot_user)
+
+    def _instruction(self, **kwargs):
+        from workspace.ai.tasks.agent_goals import _build_goal_instruction
+
+        goal = AgentGoal.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            title="Find a flat",
+            goal="Track listings in Lyon.",
+            next_check_at=timezone.now() + timedelta(hours=1),
+            **kwargs,
+        )
+        return _build_goal_instruction(goal, timezone.get_current_timezone())
+
+    def test_brief_is_injected(self):
+        text = self._instruction(
+            success_criteria="Lease signed.",
+            constraints="Budget under 900 euros.",
+            reporting="Only for visits worth booking.",
+        )
+        self.assertIn("Definition of done: Lease signed.", text)
+        self.assertIn("Constraints set by the user: Budget under 900 euros.", text)
+        self.assertIn(
+            "When the user wants to hear from you: Only for visits worth booking.",
+            text,
+        )
+        self.assertIn("definition of done above", text)
+        self.assertIn("respecting the constraints above", text)
+        self.assertIn("reporting rule above", text)
+
+    def test_empty_brief_leaves_the_instruction_unqualified(self):
+        text = self._instruction()
+        self.assertNotIn("Definition of done", text)
+        self.assertNotIn("Constraints set by the user", text)
+        self.assertNotIn("reporting rule above", text)
+        self.assertIn("what the goal says to report", text)

@@ -477,6 +477,15 @@
               <div class="flex-1 min-w-0">
                 <div class="text-xs font-semibold truncate" x-text="goal.title"></div>
                 <p class="text-xs text-base-content/70 break-words line-clamp-2" x-text="goal.goal"></p>
+                <p x-show="goal.success_criteria" class="text-[0.65rem] text-base-content/50 break-words line-clamp-2 mt-0.5">
+                  Done when: <span x-text="goal.success_criteria"></span>
+                </p>
+                <p x-show="goal.reporting" class="text-[0.65rem] text-base-content/50 break-words line-clamp-2">
+                  Reports: <span x-text="goal.reporting"></span>
+                </p>
+                <p x-show="goal.constraints" class="text-[0.65rem] text-base-content/50 break-words line-clamp-2">
+                  Constraints: <span x-text="goal.constraints"></span>
+                </p>
                 <p x-show="goal.notes" class="text-[0.65rem] text-base-content/50 break-words line-clamp-2 mt-0.5 italic" x-text="goal.notes"></p>
                 <div class="flex items-center gap-1 mt-0.5">
                   <span class="badge badge-xs" :class="goal.status === 'paused' ? 'badge-ghost' : 'badge-warning badge-outline'" x-text="goal.status === 'paused' ? 'Paused' : 'Active'"></span>
@@ -484,6 +493,9 @@
                 </div>
                 <p class="text-[0.65rem] text-base-content/40 mt-0.5">
                   Next: <span x-text="formatDateTime(goal.next_check_at)"></span>
+                  <template x-if="goal.deadline">
+                    <span> · deadline <span x-text="formatDateTime(goal.deadline)"></span></span>
+                  </template>
                 </p>
               </div>
               <!-- Actions -->

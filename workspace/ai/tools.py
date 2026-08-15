@@ -119,6 +119,21 @@ class CreateAgentGoalParams(BaseModel):
         default="",
         description="Optional ISO datetime by which the goal should be wrapped up.",
     )
+    success_criteria: str = Field(
+        default="",
+        description="How the user will know the goal is done — the condition that "
+        "lets you close it. Agree on it with the user rather than inventing one.",
+    )
+    constraints: str = Field(
+        default="",
+        description="Rules and preferences to respect while working on the goal "
+        "(budget, sources to use or avoid, tone, things not to do).",
+    )
+    reporting: str = Field(
+        default="",
+        description="When the user wants to be contacted between check-ins "
+        "(e.g. only for listings under 900€, or a weekly recap on Sundays).",
+    )
 
 
 class UpdateAgentGoalParams(BaseModel):
@@ -128,6 +143,21 @@ class UpdateAgentGoalParams(BaseModel):
         description="Replace your private working notes (plan, progress, findings). "
         "They are your only memory between check-ins — always rewrite them in full "
         "with everything you still need.",
+    )
+    success_criteria: str = Field(
+        default="",
+        description="Replace the definition of done. Only set it when the user "
+        "tells you how the goal should end.",
+    )
+    constraints: str = Field(
+        default="",
+        description="Replace the constraints to respect while working on the goal. "
+        "Only set it when the user states new rules or preferences.",
+    )
+    reporting: str = Field(
+        default="",
+        description="Replace the rule for when to contact the user between "
+        "check-ins. Only set it when the user tells you when to reach out.",
     )
     next_check_at: str = Field(
         default="",
@@ -681,6 +711,9 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
             created_by=user,
             title=title,
             goal=goal,
+            success_criteria=args.success_criteria.strip(),
+            constraints=args.constraints.strip(),
+            reporting=args.reporting.strip(),
             deadline=deadline,
             next_check_at=first_check,
         )
@@ -729,6 +762,12 @@ duplicates) and whenever the user asks what you are working on autonomously."""
             if g.deadline:
                 line += f", deadline {g.deadline.astimezone(user_tz).strftime('%Y-%m-%d %H:%M')}"
             line += f"\n  Objective: {g.goal[:200]}"
+            if g.success_criteria:
+                line += f"\n  Definition of done: {g.success_criteria[:200]}"
+            if g.constraints:
+                line += f"\n  Constraints: {g.constraints[:200]}"
+            if g.reporting:
+                line += f"\n  Report to the user: {g.reporting[:200]}"
             if g.notes:
                 line += f"\n  Notes: {g.notes[:300]}"
             lines.append(line)
@@ -744,7 +783,8 @@ duplicates) and whenever the user asks what you are working on autonomously."""
     )
     def update_agent_goal(self, args, user, bot, conversation_id, context):
         """Update one of your long-term goals: rewrite your private working notes, set your \
-next check-in time, change the deadline, or pause/resume it. During an autonomous check-in, \
+next check-in time, change the deadline, record what the user asks of the mission (definition \
+of done, constraints, when to report), or pause/resume it. During an autonomous check-in, \
 ALWAYS call this to save your updated notes and choose your next check-in time."""
         from workspace.users.services.settings import get_user_timezone
 
@@ -762,6 +802,17 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
             goal.notes = args.notes.strip()
             update_fields.append("notes")
             changes.append("notes saved")
+
+        for field, label in (
+            ("success_criteria", "definition of done"),
+            ("constraints", "constraints"),
+            ("reporting", "reporting rule"),
+        ):
+            value = getattr(args, field).strip()
+            if value:
+                setattr(goal, field, value)
+                update_fields.append(field)
+                changes.append(f"{label} updated")
 
         if args.next_check_at.strip():
             next_check = _parse_local_datetime(args.next_check_at.strip(), user_tz)

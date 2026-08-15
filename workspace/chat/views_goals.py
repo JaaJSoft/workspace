@@ -109,6 +109,9 @@ class AgentGoalListView(APIView):
             created_by=request.user,
             title=title[:200],
             goal=goal_text,
+            success_criteria=(data.get("success_criteria") or "").strip(),
+            constraints=(data.get("constraints") or "").strip(),
+            reporting=(data.get("reporting") or "").strip(),
             deadline=data.get("deadline"),
             next_check_at=AgentGoal.clamp_next_check(first_check),
         )
@@ -132,7 +135,9 @@ class AgentGoalDetailView(APIView):
             .first()
         )
 
-    @extend_schema(summary="Update an agent goal (title, objective, pause/resume)")
+    @extend_schema(
+        summary="Update an agent goal (mission brief, notes, schedule, pause/resume)"
+    )
     def patch(self, request, conversation_id, goal_id):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:

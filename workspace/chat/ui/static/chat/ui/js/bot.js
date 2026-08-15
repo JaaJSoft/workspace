@@ -24,6 +24,25 @@ window.chatBotMixin = function chatBotMixin() {
     // Draft for the optional "Agent mode" section of the bot picker.
     botGoalDraft: { enabled: false, goal: '', title: '', first_check_at: '', deadline: '' },
 
+    // Full editor for an existing goal — the mission brief the agent reads at
+    // every check-in, plus the schedule and its working notes.
+    goalEditor: {
+      open: false,
+      saving: false,
+      error: '',
+      goal_uuid: null,
+      title: '',
+      goal: '',
+      success_criteria: '',
+      constraints: '',
+      reporting: '',
+      notes: '',
+      deadline: '',
+      next_check_at: '',
+      check_count: 0,
+      last_checked_at: null,
+    },
+
     async fetchBots() {
       try {
         const resp = await fetch('/api/v1/ai/bots', { credentials: 'same-origin' });
@@ -62,12 +81,29 @@ window.chatBotMixin = function chatBotMixin() {
 
     // The datetime-local inputs produce naive local strings; convert to ISO
     // with offset so the backend doesn't have to guess the user's timezone.
+    localInputToIso(value) {
+      if (!value) return null;
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? null : d.toISOString();
+    },
+
+    isoToLocalInput(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+        + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    },
+
     _goalDraftPayload() {
       const draft = this.botGoalDraft;
       const payload = { goal: draft.goal.trim() };
       if (draft.title.trim()) payload.title = draft.title.trim();
-      if (draft.first_check_at) payload.first_check_at = new Date(draft.first_check_at).toISOString();
-      if (draft.deadline) payload.deadline = new Date(draft.deadline).toISOString();
+      const firstCheck = this.localInputToIso(draft.first_check_at);
+      if (firstCheck) payload.first_check_at = firstCheck;
+      const deadline = this.localInputToIso(draft.deadline);
+      if (deadline) payload.deadline = deadline;
       return payload;
     },
 
@@ -272,19 +308,63 @@ window.chatBotMixin = function chatBotMixin() {
       }
     },
 
-    async editGoal(goal) {
-      const text = await AppDialog.prompt({
-        title: 'Edit goal',
-        message: goal.title,
-        value: goal.goal,
-        placeholder: 'Objective...',
-        okLabel: 'Save',
-        inputSize: 'textarea',
-        icon: 'target',
-        iconClass: 'bg-warning/10 text-warning',
-      });
-      if (text === null || text.trim() === goal.goal) return;
-      await this._patchGoal(goal, { goal: text.trim() });
+    editGoal(goal) {
+      this.goalEditor = {
+        open: true,
+        saving: false,
+        error: '',
+        goal_uuid: goal.uuid,
+        title: goal.title || '',
+        goal: goal.goal || '',
+        success_criteria: goal.success_criteria || '',
+        constraints: goal.constraints || '',
+        reporting: goal.reporting || '',
+        notes: goal.notes || '',
+        deadline: this.isoToLocalInput(goal.deadline),
+        next_check_at: this.isoToLocalInput(goal.next_check_at),
+        check_count: goal.check_count || 0,
+        last_checked_at: goal.last_checked_at || null,
+      };
+    },
+
+    closeGoalEditor() {
+      this.goalEditor.open = false;
+    },
+
+    goalEditorPayload() {
+      const form = this.goalEditor;
+      return {
+        title: form.title.trim(),
+        goal: form.goal.trim(),
+        success_criteria: form.success_criteria.trim(),
+        constraints: form.constraints.trim(),
+        reporting: form.reporting.trim(),
+        notes: form.notes.trim(),
+        // Clearing a datetime input means "no deadline"; the API takes null.
+        deadline: this.localInputToIso(form.deadline),
+        next_check_at: this.localInputToIso(form.next_check_at),
+      };
+    },
+
+    async saveGoalEdit() {
+      const payload = this.goalEditorPayload();
+      if (!payload.title || !payload.goal) {
+        this.goalEditor.error = 'Title and objective are required.';
+        return;
+      }
+      // next_check_at is non-nullable on the model: an emptied input keeps the
+      // current schedule instead of sending null and getting a 400 back.
+      if (payload.next_check_at === null) delete payload.next_check_at;
+
+      this.goalEditor.saving = true;
+      this.goalEditor.error = '';
+      const updated = await this._patchGoal({ uuid: this.goalEditor.goal_uuid }, payload);
+      this.goalEditor.saving = false;
+      if (updated) {
+        this.goalEditor.open = false;
+      } else {
+        this.goalEditor.error = 'Could not save the goal. Please try again.';
+      }
     },
 
     async toggleGoalPause(goal) {
@@ -307,13 +387,14 @@ window.chatBotMixin = function chatBotMixin() {
             body: JSON.stringify(payload),
           },
         );
-        if (resp.ok) {
-          const updated = await resp.json();
-          const idx = this.agentGoals.findIndex(g => g.uuid === goal.uuid);
-          if (idx !== -1) this.agentGoals[idx] = updated;
-        }
+        if (!resp.ok) return null;
+        const updated = await resp.json();
+        const idx = this.agentGoals.findIndex(g => g.uuid === goal.uuid);
+        if (idx !== -1) this.agentGoals[idx] = updated;
+        return updated;
       } catch (e) {
         console.error('Failed to update agent goal', e);
+        return null;
       }
     },
 

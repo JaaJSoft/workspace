@@ -7,10 +7,10 @@
   <div class="flex-shrink-0 mt-auto"
        :class="chatPrefs.compactMessageView ? 'w-6' : 'w-8'">
     <template x-if="!chatPrefs.compactMessageView">
-      {% include "ui/partials/user_avatar.html" with user=author size="sm" show_card=True %}
+      <user-avatar user-id="{{ author.id }}" username="{{ author.username }}" size="sm" presence card></user-avatar>
     </template>
     <template x-if="chatPrefs.compactMessageView">
-      {% include "ui/partials/user_avatar.html" with user=author size="xs" show_card=True %}
+      <user-avatar user-id="{{ author.id }}" username="{{ author.username }}" size="xs" presence card></user-avatar>
     </template>
   </div>
 

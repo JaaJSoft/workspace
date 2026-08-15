@@ -51,7 +51,7 @@
             @click="selectUser(user)"
             @mouseenter="highlight = idx"
           >
-            <div class="flex-shrink-0 flex items-center" x-html="userAvatarHtml(user.id, user.username, 'w-7 h-7 text-xs')"></div>
+            <user-avatar :user-id="user.id" :username="user.username" size="sm" presence></user-avatar>
             <div class="flex flex-col items-start">
               <span class="font-medium text-sm" x-text="user.username"></span>
               <span

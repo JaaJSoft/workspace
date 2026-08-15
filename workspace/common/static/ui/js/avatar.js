@@ -1,72 +1,12 @@
-/* ── Deterministic initials-fallback colors ───────────────────── */
-
-// Mirrors AVATAR_PALETTE in scripts/seed_demo.py (the Tailwind *-500 RGB
-// values); keep both lists in lockstep so demo-generated avatars and the
-// initials fallback read as one family.
-const AVATAR_COLORS = [
-  'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500',
-  'bg-emerald-500', 'bg-cyan-500', 'bg-blue-500', 'bg-indigo-500',
-  'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500',
-];
 
 /**
- * Stable background class for a user's initials avatar.
+ * User card popover — the card that floats next to an avatar on hover, plus
+ * the positioning helpers the event and note card popovers share with it.
  *
- * @param {number|string} userId
- * @returns {string} one of AVATAR_COLORS, or 'bg-neutral' for invalid input
+ * The avatar itself is the <user-avatar> element (ui/js/user_avatar.js); it
+ * calls _userCardShow/_userCardScheduleHide from here when given the `card`
+ * attribute.
  */
-window.userAvatarColorClass = function(userId) {
-  const id = typeof userId === 'number' ? userId : Number.parseInt(userId, 10);
-  if (!Number.isInteger(id)) return 'bg-neutral';
-  const n = AVATAR_COLORS.length;
-  return AVATAR_COLORS[((id % n) + n) % n];
-};
-
-/**
- * Generate avatar HTML for a user.
- * Attempts to load the avatar image; falls back to initials on error.
- *
- * @param {number|string} userId
- * @param {string} username
- * @param {string} sizeClass - Tailwind size classes, e.g. 'w-7 h-7 text-xs'
- * @returns {string} HTML string
- */
-window.userAvatarHtml = function(userId, username, sizeClass, options) {
-  const showPresence = !options || options.presence !== false;
-  const initial = (username || '?')[0].toUpperCase();
-  const imgUrl = `/api/v1/users/${userId}/avatar`;
-  const colorClass = window.userAvatarColorClass(userId);
-
-  // Keep the ring SHAPE static (like the dot below) so the avatar always has
-  // a visible ring; only its COLOR comes from the reactive `:class` binding.
-  // When this HTML is injected into a list (x-html / alpine-ajax swap) the
-  // Alpine binding is not always re-initialised — if `ring-2` lived inside the
-  // binding the ring would vanish entirely, while the statically-shaped dot
-  // survived ("dot but no ring"). Static shape + reactive colour fixes that.
-  const ringShape = showPresence ? ' ring-2 ring-offset-base-100 ring-offset-1' : '';
-  const ringAttr = showPresence
-    ? ` :class="$store.presence.ringClass(${userId})"`
-    : '';
-  const dotHtml = showPresence
-    ? `<span class="absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass(${userId})"></span>`
-    : '';
-
-  return `<div class="avatar relative" data-user-id="${userId}">` +
-    `<div class="${sizeClass} rounded-full overflow-hidden${ringShape}"${ringAttr}>` +
-      `<img src="${imgUrl}" alt="${username}" class="block w-full h-full object-cover" ` +
-        // The initials fallback must ADD classes, never overwrite className:
-        // overwriting would wipe the static ring shape above (and the colour
-        // class Alpine already applied), leaving the presence dot without its
-        // matching ring for every user whose avatar 404s.
-        `onerror="this.onerror=null;` +
-        `let d=this.closest('.avatar');` +
-        `d.classList.add('placeholder');` +
-        `d.firstElementChild.classList.add('${colorClass}','text-white','flex','items-center','justify-center');` +
-        `this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${initial}'}));" />` +
-    `</div>` +
-    dotHtml +
-  `</div>`;
-};
 
 /* ── Patch user card status from Alpine presence store ────────── */
 
@@ -164,22 +104,6 @@ window._applyPopoverTransform = function _applyPopoverTransform(popover, placeme
     popover.style.opacity = '0';
     popover.style.transform = baseX + slideOffset;
   }
-};
-
-/**
- * Generate avatar HTML wrapped in a popover that shows a user card on hover.
- * Uses imperative DOM events (no Alpine x-data) so it works when injected via x-html.
- *
- * @param {number|string} userId
- * @param {string} username
- * @param {string} sizeClass - Tailwind size classes, e.g. 'w-7 h-7 text-xs'
- * @returns {string} HTML string
- */
-window.userAvatarWithCardHtml = function(userId, username, sizeClass, options) {
-  const avatar = window.userAvatarHtml(userId, username, sizeClass, options);
-  return `<div class="flex" onmouseenter="window._userCardShow(this,${userId})" onmouseleave="window._userCardScheduleHide(this)">` +
-    avatar +
-  `</div>`;
 };
 
 /**
@@ -312,18 +236,20 @@ window._userCardCancelHide = function(wrapper) {
   }
 };
 
-/* ── Alpine component for server-rendered avatars (show_card=True) ── */
+
+/* ── Alpine component: attach a user card to an arbitrary element ── */
 
 /**
- * Alpine.js component for user card popover.
- * Used by _user_avatar_inner.html when show_card=True.
- * Delegates to the imperative _userCardShow/_userCardScheduleHide functions
- * which create and manage their own popover on document.body.
+ * Alpine.js component for the user card popover.
+ *
+ * <user-avatar card> wires its own listeners and does not need this. Use it
+ * when the hover zone must be WIDER than the avatar — user_identity.html puts
+ * it on the avatar+name row so hovering the name shows the card too.
  *
  * @param {number|string} userId
  * @returns {object} Alpine data object
  */
-window.userCard = function(userId) {
+window.userCard = function (userId) {
   return {
     show() {
       window._userCardShow(this.$el, userId);
@@ -337,6 +263,6 @@ window.userCard = function(userId) {
       if (popover && popover.parentNode) {
         popover.parentNode.removeChild(popover);
       }
-    }
+    },
   };
 };

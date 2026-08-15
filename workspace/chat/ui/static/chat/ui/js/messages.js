@@ -402,7 +402,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       const user = this._getCurrentUser();
       const avatarHtml = user
-        ? window.userAvatarHtml(user.id, user.username, 'w-8 h-8 text-xs', { presence: false })
+        ? window.userAvatarTag(user.id, user.username, { size: 'sm' })
         : '';
 
       // Build body HTML with basic line breaks

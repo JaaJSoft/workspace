@@ -2,7 +2,7 @@
 <div id="user-card-{{ card_user.id }}">
 <div class="p-3 w-64">
   <div class="flex items-center gap-3 mb-2">
-    {% include "ui/partials/user_avatar.html" with user=card_user size="md" %}
+    <user-avatar user-id="{{ card_user.id }}" username="{{ card_user.username }}" size="md" presence></user-avatar>
     <div class="min-w-0 flex-1">
       <div class="font-semibold text-sm truncate">
         {% if card_user.first_name or card_user.last_name %}

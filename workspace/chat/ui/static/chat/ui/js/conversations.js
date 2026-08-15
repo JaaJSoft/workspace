@@ -436,14 +436,10 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       return names.join(', ');
     },
 
-    _avatarHtml(user, size, bgClass) {
-      return window.userAvatarHtml(user.id, user.username, size);
-    },
-
     conversationAvatar(conv) {
       if (conv.kind === 'dm') {
         const other = conv.members?.find(m => m.user.id !== this.currentUserId);
-        if (other) return window.userAvatarWithCardHtml(other.user.id, other.user.username, 'w-10 h-10 text-sm');
+        if (other) return window.userAvatarTag(other.user.id, other.user.username, { size: 'md', presence: true, card: true });
         return `<div class="w-10 h-10 rounded-full bg-neutral text-neutral-content flex items-center justify-center flex-shrink-0"><span class="text-sm">?</span></div>`;
       }
       // Group with custom avatar

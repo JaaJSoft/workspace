@@ -207,7 +207,7 @@ window.chatBotMixin = function chatBotMixin() {
     botTypingAvatar() {
       const m = this._getBotMember();
       if (m) {
-        return window.userAvatarHtml(m.user.id, m.user.username, 'w-8 h-8 text-xs', { presence: false });
+        return window.userAvatarTag(m.user.id, m.user.username, { size: 'sm' });
       }
       return '<div class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center"><i data-lucide="sparkles" class="w-4 h-4 text-secondary-content"></i></div>';
     },

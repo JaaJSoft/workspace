@@ -48,7 +48,7 @@
   </span>
   <span class="w-24 hidden md:flex justify-end -space-x-2 shrink-0">
     {% for assignee in task.assignees.all %}
-      {% include "ui/partials/user_avatar.html" with user=assignee size="2xs" show_presence=False show_card=True %}
+      <user-avatar user-id="{{ assignee.id }}" username="{{ assignee.username }}" size="2xs" card></user-avatar>
     {% endfor %}
   </span>
   {% if writable and not row_readonly %}

@@ -152,7 +152,7 @@
       <!-- User menu dropdown -->
       <div class="dropdown dropdown-end leading-[0]">
         <label tabindex="0" class="btn btn-ghost btn-circle btn-sm cursor-pointer">
-          {% include 'ui/partials/user_avatar.html' with user=user size='sm' show_ring=True %}
+          <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="sm" presence ring></user-avatar>
         </label>
         <ul
           tabindex="0"
@@ -161,7 +161,7 @@
           {% if user.is_authenticated %}
             <!-- User info header -->
             <li class="menu-title px-3 py-2 flex-row items-center gap-2">
-              {% include 'ui/partials/user_avatar.html' with user=user size='md' %}
+              <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="md" presence></user-avatar>
               <div class="flex-1 min-w-0">
                 <div class="font-semibold text-base-content truncate">{{ user.username }}</div>
                 <div class="text-xs text-base-content/60 truncate">{{ user.email|default:"No email" }}</div>

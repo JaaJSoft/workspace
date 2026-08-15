@@ -15,7 +15,7 @@ Params:
   - remove_show_expr: optional - expression gating the cross's visibility (x-show)
 {% endcomment %}
 <span class="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100 py-0.5 pl-0.5 pr-1">
-  <div class="flex items-center justify-center w-6 h-6 flex-shrink-0" x-html="userAvatarHtml({{ user_id_expr }}, {{ username_expr }}, 'w-6 h-6 text-[0.6rem]', {presence: false})"></div>
+  <user-avatar :user-id="{{ user_id_expr }}" :username="{{ username_expr }}" size="xs"></user-avatar>
   <span class="text-xs" x-text="{{ username_expr }}"></span>
   {% if remove_expr %}
     {% comment %}Inline SVG on purpose: lucide.createIcons() does not process

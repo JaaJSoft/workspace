@@ -101,7 +101,7 @@
                     </div>
                   </template>
                   <template x-if="user.username !== 'everyone'">
-                    <div x-html="window.userAvatarHtml(user.id, user.username, 'w-7 h-7 text-[0.6rem]', { presence: false })"></div>
+                    <user-avatar :user-id="user.id" :username="user.username" size="sm"></user-avatar>
                   </template>
                   <div class="flex-1 min-w-0">
                     <span class="font-medium" x-text="user.username === 'everyone' ? '@everyone' : '@' + user.username"></span>

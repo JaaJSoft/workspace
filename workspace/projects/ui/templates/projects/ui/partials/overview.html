@@ -82,7 +82,7 @@
         <ul class="flex flex-col gap-2">
           {% for m in members %}
             <li class="flex items-center gap-2">
-              {% include "ui/partials/user_avatar.html" with user=m.user size="xs" %}
+              <user-avatar user-id="{{ m.user.id }}" username="{{ m.user.username }}" size="xs" presence></user-avatar>
               <span class="text-sm">{{ m.user.username }}</span>
               {% if m.role == "admin" %}<span class="badge badge-ghost badge-sm">Admin</span>{% endif %}
             </li>

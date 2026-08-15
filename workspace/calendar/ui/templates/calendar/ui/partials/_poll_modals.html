@@ -471,7 +471,7 @@
                 <td class="font-medium text-sm">
                   <div class="flex items-center gap-2">
                     <template x-if="p.isUser">
-                      <div class="w-6 h-6 flex-shrink-0" x-html="userAvatarWithCardHtml(p.userId, p.name, 'w-6 h-6 text-[0.5rem]', {presence: false})"></div>
+                      <user-avatar :user-id="p.userId" :username="p.name" size="xs" card></user-avatar>
                     </template>
                     <template x-if="!p.isUser">
                       <div class="w-6 h-6 rounded-full bg-base-300 flex items-center justify-center text-xs font-bold uppercase flex-shrink-0"

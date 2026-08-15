@@ -130,8 +130,21 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
       instances.delete(this);
       // The card popover is appended to <body>, so it outlives the avatar
       // unless it is torn down here (alpine-ajax swaps, x-if teardown).
+      // Cancel the pending timers FIRST: _userCardShow runs on a delay, and a
+      // timer that fires after the avatar is gone would build a fresh popover
+      // and append it to <body> with nothing left to dismiss it.
+      if (this._showTimeout) {
+        clearTimeout(this._showTimeout);
+        this._showTimeout = null;
+      }
+      if (this._hideTimeout) {
+        clearTimeout(this._hideTimeout);
+        this._hideTimeout = null;
+      }
       const popover = this._userCardPopover;
       if (popover && popover.parentNode) popover.parentNode.removeChild(popover);
+      this._userCardPopover = null;
+      this._fetching = false;
     }
 
     attributeChangedCallback() {
@@ -157,6 +170,13 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
       this.classList.remove(...this._appliedClasses);
       this._appliedClasses = window.userAvatarHostClasses(size);
       this.classList.add(...this._appliedClasses);
+
+      // The face and dot below are rebuilt from scratch, so the classes the
+      // presence patch last applied are gone with the old nodes. Forget them,
+      // or applyPresence would compare against a status that still matches,
+      // skip the write, and leave the new nodes with no colour at all.
+      this._ringClass = null;
+      this._dotClass = null;
 
       const face = document.createElement('span');
       face.className = [

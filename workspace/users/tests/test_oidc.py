@@ -165,6 +165,22 @@ class OidcSettingsWiringTests(TestCase):
         self.assertEqual(dj_settings.OIDC_USERNAME_CLAIM, "preferred_username")
 
 
+class OidcRoutesTests(TestCase):
+    """The routes are ours, not mozilla-django-oidc's slash-suffixed URLconf.
+
+    APPEND_SLASH is False, so a trailing slash is a 404 rather than a redirect,
+    and the callback path is what admins register at the IdP - it cannot drift.
+    """
+
+    def test_routes_have_no_trailing_slash(self):
+        self.assertEqual(reverse("oidc_authentication_init"), "/oidc/authenticate")
+        self.assertEqual(reverse("oidc_authentication_callback"), "/oidc/callback")
+        self.assertEqual(reverse("oidc_logout"), "/oidc/logout")
+
+    def test_trailing_slash_is_not_routed(self):
+        self.assertEqual(self.client.get("/oidc/callback/").status_code, 404)
+
+
 class LoginPageOidcButtonTests(TestCase):
     def test_button_hidden_when_disabled(self):
         resp = self.client.get(reverse("login"))

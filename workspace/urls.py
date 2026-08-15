@@ -29,6 +29,7 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
+from mozilla_django_oidc import views as oidc_views
 
 from workspace.core.metrics_auth import metrics_basic_auth
 from workspace.core.views_health import LiveView, ReadyView, StartupView
@@ -80,9 +81,26 @@ urlpatterns = [
     # Authentication
     path("login", WorkspaceLoginView.as_view(), name="login"),
     path("logout", auth_views.LogoutView.as_view(), name="logout"),
-    # OIDC (SSO) login - init/callback views from mozilla-django-oidc.
-    # Configure the IdP redirect_uri to {origin}/oidc/callback/.
-    path("oidc/", include("mozilla_django_oidc.urls")),
+    # OIDC (SSO) login. The views come from mozilla-django-oidc but its own
+    # URLconf is not included: its paths carry trailing slashes, which APPEND_SLASH
+    # = False turns into a 404 for the slash-less form used everywhere else here.
+    # The route names are the library's - it reverses them to build redirect_uri.
+    # Configure the IdP redirect_uri to {origin}/oidc/callback.
+    path(
+        "oidc/authenticate",
+        oidc_views.OIDCAuthenticationRequestView.as_view(),
+        name="oidc_authentication_init",
+    ),
+    path(
+        "oidc/callback",
+        oidc_views.OIDCAuthenticationCallbackView.as_view(),
+        name="oidc_authentication_callback",
+    ),
+    path(
+        "oidc/logout",
+        oidc_views.OIDCLogoutView.as_view(),
+        name="oidc_logout",
+    ),
     # Service Worker (must be at root scope for push notifications)
     path(
         "sw.js",

@@ -142,7 +142,7 @@
     </li>
     <template x-for="member in activeConversation.members || []" :key="member.uuid">
       <li class="group flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors">
-        <div class="flex-shrink-0" x-html="userAvatarWithCardHtml(member.user.id, member.user.username, 'w-8 h-8 text-xs')"></div>
+        <user-avatar :user-id="member.user.id" :username="member.user.username" size="sm" presence card></user-avatar>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">
             <span class="text-sm font-medium truncate" x-text="memberDisplayName(member)"></span>

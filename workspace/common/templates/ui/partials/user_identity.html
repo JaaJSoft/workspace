@@ -4,8 +4,11 @@ Parameters:
   - user: Object with id, username, and optionally full_name
   - size: Avatar size: '2xs', 'xs', 'sm' (default: '2xs')
   - show_presence: Boolean (default: False)
+
+The card popover sits on the wrapper, not on the avatar, so hovering the name
+shows it too. That is why this uses userCard() instead of <user-avatar card>.
 {% endcomment %}
 <div class="inline-flex items-center gap-1" x-data="userCard({{ user.id }})" @mouseenter="show()" @mouseleave="scheduleHide()">
-  {% include "ui/partials/user_avatar.html" with user=user size=size|default:"2xs" show_presence=show_presence|default:False show_card=False %}
+  <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="{{ size|default:'2xs' }}"{% if show_presence %} presence{% endif %}></user-avatar>
   <a href="/users/profile/{{ user.username }}" class="hover:underline">{{ user.full_name|default:user.username }}</a>
 </div>

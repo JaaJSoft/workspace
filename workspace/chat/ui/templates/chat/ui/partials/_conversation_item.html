@@ -42,10 +42,10 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
     <div class="relative flex-shrink-0 flex">
       {% if conv.kind == 'dm' and conv.other_user %}
         <template x-if="collapsed || !chatPrefs.compactConversationList">
-          {% include "ui/partials/user_avatar.html" with user=conv.other_user size="sm" %}
+          <user-avatar user-id="{{ conv.other_user.id }}" username="{{ conv.other_user.username }}" size="sm" presence></user-avatar>
         </template>
         <template x-if="!collapsed && chatPrefs.compactConversationList">
-          {% include "ui/partials/user_avatar.html" with user=conv.other_user size="xs" %}
+          <user-avatar user-id="{{ conv.other_user.id }}" username="{{ conv.other_user.username }}" size="xs" presence></user-avatar>
         </template>
       {% elif conv.has_avatar %}
         <div class="rounded-full overflow-hidden"

@@ -41,7 +41,7 @@
   <div class="flex items-center gap-1.5 mb-3">
     <div class="flex -space-x-2">
       {% for assignee in assignees %}
-        {% include "ui/partials/user_avatar.html" with user=assignee size="xs" show_presence=False show_card=False %}
+        <user-avatar user-id="{{ assignee.id }}" username="{{ assignee.username }}" size="xs"></user-avatar>
       {% endfor %}
     </div>
     {% if task.assignees.count > 5 %}

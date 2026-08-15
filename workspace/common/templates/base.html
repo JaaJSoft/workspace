@@ -32,10 +32,11 @@
   <script src="{% static 'ui/js/html.js' %}"></script>
   <script src="{% static 'ui/js/filesize.js' %}"></script>
   <script src="{% static 'ui/js/swipe_nav.js' %}"></script>
-  {% comment %}In <head> and not deferred on purpose: the tag-chip element
-  must be defined before the parser reaches the server-rendered chips, or
-  they flash unstyled.{% endcomment %}
+  {% comment %}In <head> and not deferred on purpose: these custom elements
+  must be defined before the parser reaches the server-rendered chips and
+  avatars, or they flash unstyled.{% endcomment %}
   <script src="{% static 'ui/js/tag_chip.js' %}"></script>
+  <script src="{% static 'ui/js/user_avatar.js' %}"></script>
   <style>.lucide { pointer-events: none; }</style>
 
   <!-- Favicon -->

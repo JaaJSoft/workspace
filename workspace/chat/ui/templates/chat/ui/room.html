@@ -62,7 +62,7 @@
                        x-effect="$el.srcObject = streamFor(p.user_id)"></video>
                 <template x-if="!hasVideo(p)">
                   <div class="flex flex-col items-center gap-2">
-                    <div x-html="window.userAvatarHtml(p.user_id, p.display_name, 'w-16 h-16 text-xl', { presence: false })"></div>
+                    <user-avatar :user-id="p.user_id" :username="p.display_name" size="lg"></user-avatar>
                     <span class="text-sm truncate max-w-full px-2" x-text="p.display_name"></span>
                   </div>
                 </template>
@@ -84,7 +84,7 @@
                        x-effect="$el.srcObject = streamFor(spotlightUserId())"></video>
               </template>
               <template x-if="spotlightParticipant() && !hasVideo(spotlightParticipant())">
-                <div x-html="window.userAvatarHtml(spotlightParticipant().user_id, spotlightParticipant().display_name, 'w-24 h-24 text-2xl', { presence: false })"></div>
+                <user-avatar :user-id="spotlightParticipant().user_id" :username="spotlightParticipant().display_name" size="xl"></user-avatar>
               </template>
               <span class="absolute bottom-2 left-3 text-sm bg-black/50 text-white rounded px-2 py-0.5" x-text="spotlightParticipant() ? spotlightParticipant().display_name : ''"></span>
               <button class="btn btn-xs absolute top-2 right-2" @click.stop="backToGrid()" title="Back to grid">
@@ -102,7 +102,7 @@
                          class="absolute inset-0 w-full h-full object-cover bg-black"
                          x-effect="$el.srcObject = streamFor(p.user_id)"></video>
                   <template x-if="!hasVideo(p)">
-                    <div x-html="window.userAvatarHtml(p.user_id, p.display_name, 'w-8 h-8 text-sm', { presence: false })"></div>
+                    <user-avatar :user-id="p.user_id" :username="p.display_name" size="sm"></user-avatar>
                   </template>
                   <span class="absolute bottom-0.5 left-1 text-[10px] bg-black/50 text-white rounded px-1 truncate max-w-[6rem]" x-text="p.display_name"></span>
                 </div>
@@ -121,7 +121,7 @@
                    x-effect="$el.srcObject = streamFor(currentUserId)"></video>
             <template x-if="!hasVideo(selfParticipant())">
               <div class="flex flex-col items-center gap-1">
-                <div x-html="window.userAvatarHtml(selfParticipant().user_id, selfParticipant().display_name, 'w-10 h-10', { presence: false })"></div>
+                <user-avatar :user-id="selfParticipant().user_id" :username="selfParticipant().display_name" size="md"></user-avatar>
                 <span class="text-xs truncate max-w-full text-center px-1" x-text="selfParticipant().display_name"></span>
               </div>
             </template>

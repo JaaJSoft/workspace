@@ -22,7 +22,7 @@ Params:
 
     <template x-for="comment in comments" :key="comment.uuid">
       <div class="flex gap-2">
-        <div class="flex-shrink-0" x-html="userAvatarWithCardHtml(comment.author.id, comment.author.username, 'w-7 h-7 text-xs')"></div>
+        <user-avatar :user-id="comment.author.id" :username="comment.author.username" size="sm" presence card></user-avatar>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 text-xs">
             <span class="font-medium" x-text="comment.author.username"></span>

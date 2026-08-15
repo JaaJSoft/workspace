@@ -66,7 +66,7 @@ class TaskCardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
 
         # The card caps the avatar row at five and folds the remainder into a
         # "+N" chip; N counts every assignee, not just the ones rendered.
-        self.assertEqual(html.count("data-user-id="), 5)
+        self.assertEqual(html.count("<user-avatar "), 5)
         self.assertContains(resp, "+2")
 
     def test_outsider_gets_404(self):

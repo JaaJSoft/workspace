@@ -75,6 +75,17 @@ test('reconnect refreshes immediately without debounce', () => {
   assert.equal(ajaxCalls.length, 1);
 });
 
+test('reconnect supersedes a queued debounced refresh', () => {
+  const { fire, runTimers, ajaxCalls } = buildApp();
+
+  fire('sse:notifications.count');
+  fire('sse:notifications.count'); // debounced refresh pending
+  fire('sse:reconnect');
+  runTimers();
+
+  assert.equal(ajaxCalls.length, 1);
+});
+
 test('destroy removes the window listeners and pending timer', () => {
   const { app, fire, runTimers, ajaxCalls, listeners } = buildApp();
 

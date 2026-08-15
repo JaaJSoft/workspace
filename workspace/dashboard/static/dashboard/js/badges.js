@@ -44,6 +44,11 @@ function dashboardBadges(refreshUrl) {
       }, 400);
     },
     refresh() {
+      // An immediate refresh supersedes any queued debounced one.
+      if (this._timer) {
+        clearTimeout(this._timer);
+        this._timer = null;
+      }
       this.$ajax(refreshUrl, { target: 'dashboard-modules-grid' });
     },
   };

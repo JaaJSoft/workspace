@@ -197,3 +197,93 @@ class VaultTag(models.Model):
 
     def __str__(self):
         return f"Tag {self.uuid}"
+
+
+class EntryType(models.TextChoices):
+    LOGIN = "login", "Login"
+
+
+class VaultEntry(models.Model):
+    """One secret, stored flat.
+
+    The table is deliberately not split per type: child tables would hold
+    nothing but opaque text, the table an entry sits in cannot be encrypted,
+    and the main query would turn polymorphic on the second type. Type
+    specialisation lives in Python proxies over ``type`` instead.
+
+    ``key_version`` names the vault key generation that derived the entry
+    key; ``entry_version`` versions the content schema. They move for
+    unrelated reasons - never collapse them into one column.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    vault = models.ForeignKey(
+        Vault,
+        on_delete=models.CASCADE,
+        related_name="entries",
+    )
+    type = models.CharField(
+        max_length=32, choices=EntryType.choices, default=EntryType.LOGIN
+    )
+    folder = models.ForeignKey(
+        VaultFolder,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="entries",
+    )
+    tags = models.ManyToManyField(VaultTag, blank=True, related_name="entries")
+    is_favorite = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    encrypted_name = models.TextField()
+    encrypted_notes = models.TextField(blank=True, default="")
+    key_version = models.PositiveIntegerField(default=1)
+    entry_version = models.PositiveIntegerField(default=1)
+    metadata_sig = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name_plural = "vault entries"
+        indexes = [
+            models.Index(fields=["vault", "deleted_at"]),
+            models.Index(fields=["vault", "folder"]),
+            models.Index(fields=["vault", "is_favorite"]),
+        ]
+
+    def __str__(self):
+        return f"Entry {self.uuid}"
+
+
+class EntryField(models.Model):
+    """One encrypted field of an entry.
+
+    ``field_id`` is bound into the AEAD associated data, which is what stops
+    a ciphertext from being moved between two fields of the same entry. The
+    reserved-identifier catalogue is enforced by the type registry, not here:
+    a new entry type must be able to declare its own without a migration.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    entry = models.ForeignKey(
+        VaultEntry,
+        on_delete=models.CASCADE,
+        related_name="fields",
+    )
+    field_id = models.CharField(max_length=64)
+    encrypted_value = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["entry", "field_id"],
+                name="unique_entry_field_id",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.field_id} of {self.entry_id}"

@@ -57,6 +57,39 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
+            name='VaultEntry',
+            fields=[
+                ('uuid', models.UUIDField(default=workspace.common.uuids.uuid_v7_or_v4, editable=False, primary_key=True, serialize=False)),
+                ('type', models.CharField(choices=[('login', 'Login')], default='login', max_length=32)),
+                ('is_favorite', models.BooleanField(default=False)),
+                ('deleted_at', models.DateTimeField(blank=True, null=True)),
+                ('last_used_at', models.DateTimeField(blank=True, null=True)),
+                ('encrypted_name', models.TextField()),
+                ('encrypted_notes', models.TextField(blank=True, default='')),
+                ('key_version', models.PositiveIntegerField(default=1)),
+                ('entry_version', models.PositiveIntegerField(default=1)),
+                ('metadata_sig', models.TextField()),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+                ('vault', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='entries', to='vault.vault')),
+            ],
+            options={
+                'verbose_name_plural': 'vault entries',
+                'ordering': ['-created_at'],
+            },
+        ),
+        migrations.CreateModel(
+            name='EntryField',
+            fields=[
+                ('uuid', models.UUIDField(default=workspace.common.uuids.uuid_v7_or_v4, editable=False, primary_key=True, serialize=False)),
+                ('field_id', models.CharField(max_length=64)),
+                ('encrypted_value', models.TextField()),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+                ('entry', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='fields', to='vault.vaultentry')),
+            ],
+        ),
+        migrations.CreateModel(
             name='VaultFolder',
             fields=[
                 ('uuid', models.UUIDField(default=workspace.common.uuids.uuid_v7_or_v4, editable=False, primary_key=True, serialize=False)),
@@ -70,6 +103,11 @@ class Migration(migrations.Migration):
             options={
                 'ordering': ['position', 'created_at'],
             },
+        ),
+        migrations.AddField(
+            model_name='vaultentry',
+            name='folder',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='entries', to='vault.vaultfolder'),
         ),
         migrations.CreateModel(
             name='VaultKeyWrap',
@@ -96,9 +134,18 @@ class Migration(migrations.Migration):
                 'ordering': ['created_at'],
             },
         ),
+        migrations.AddField(
+            model_name='vaultentry',
+            name='tags',
+            field=models.ManyToManyField(blank=True, related_name='entries', to='vault.vaulttag'),
+        ),
         migrations.AddIndex(
             model_name='vault',
             index=models.Index(fields=['owner', 'created_at'], name='vault_vault_owner_i_7404b4_idx'),
+        ),
+        migrations.AddConstraint(
+            model_name='entryfield',
+            constraint=models.UniqueConstraint(fields=('entry', 'field_id'), name='unique_entry_field_id'),
         ),
         migrations.AddIndex(
             model_name='vaultfolder',
@@ -111,5 +158,17 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='vaultkeywrap',
             constraint=models.UniqueConstraint(fields=('vault', 'recipient'), name='unique_vault_key_wrap_per_recipient'),
+        ),
+        migrations.AddIndex(
+            model_name='vaultentry',
+            index=models.Index(fields=['vault', 'deleted_at'], name='vault_vault_vault_i_9d69ab_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='vaultentry',
+            index=models.Index(fields=['vault', 'folder'], name='vault_vault_vault_i_dd959e_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='vaultentry',
+            index=models.Index(fields=['vault', 'is_favorite'], name='vault_vault_vault_i_ad1917_idx'),
         ),
     ]

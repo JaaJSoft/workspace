@@ -5,7 +5,10 @@ from django.test import TestCase
 
 from workspace.vault.models import (
     AccountIdentity,
+    EntryField,
+    EntryType,
     Vault,
+    VaultEntry,
     VaultFolder,
     VaultKeyWrap,
     VaultTag,
@@ -168,3 +171,76 @@ class VaultTagTests(TestCase):
         tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
         self.assertEqual(tag.color, "neutral")
         self.assertEqual(list(self.vault.tags.all()), [tag])
+
+
+class VaultEntryTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.vault = make_vault(self.user)
+
+    def _entry(self, **overrides):
+        fields = {
+            "vault": self.vault,
+            "encrypted_name": "AQEBAAEFZW50cnk",
+            "metadata_sig": "AXNpZ25hdHVyZQ",
+        }
+        fields.update(overrides)
+        return VaultEntry.objects.create(**fields)
+
+    def test_defaults_to_a_login_entry(self):
+        entry = self._entry()
+        self.assertEqual(entry.type, EntryType.LOGIN)
+        self.assertEqual(entry.key_version, 1)
+        self.assertEqual(entry.entry_version, 1)
+        self.assertIsNone(entry.deleted_at)
+
+    def test_survives_the_deletion_of_its_folder(self):
+        folder = VaultFolder.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+        )
+        entry = self._entry(folder=folder)
+        folder.delete()
+        entry.refresh_from_db()
+        self.assertIsNone(entry.folder_id)
+
+    def test_carries_tags(self):
+        tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        entry = self._entry()
+        entry.tags.add(tag)
+        self.assertEqual(list(tag.entries.all()), [entry])
+
+    def test_deleted_with_its_vault(self):
+        self._entry()
+        self.vault.delete()
+        self.assertEqual(VaultEntry.objects.count(), 0)
+
+
+class EntryFieldTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.vault = make_vault(self.user)
+        self.entry = VaultEntry.objects.create(
+            vault=self.vault,
+            encrypted_name="AQEBAAEFZW50cnk",
+            metadata_sig="AXNpZ25hdHVyZQ",
+        )
+
+    def _field(self, field_id="password"):
+        return EntryField.objects.create(
+            entry=self.entry, field_id=field_id, encrypted_value="AQEBAAEFdmFsdWU"
+        )
+
+    def test_one_row_per_field_id_and_entry(self):
+        self._field()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self._field()
+
+    def test_custom_fields_live_alongside_reserved_ones(self):
+        self._field("password")
+        self._field("custom:recovery-code")
+        self.assertEqual(self.entry.fields.count(), 2)
+
+    def test_deleted_with_its_entry(self):
+        self._field()
+        self.entry.delete()
+        self.assertEqual(EntryField.objects.count(), 0)

@@ -82,6 +82,14 @@ class VaultTests(TestCase):
         self.assertEqual(vault.key_version, 1)
         self.assertFalse(vault.is_favorite)
 
+    def test_rejects_an_unsigned_vault(self):
+        """Django enforces blank=False only through full_clean(), which no
+        caller runs on its own - so an unsigned vault, exactly what a hostile
+        server would insert, must be refused by the database itself.
+        """
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            make_vault(self.user, metadata_sig="")
+
     def test_reachable_from_the_owner(self):
         vault = make_vault(self.user)
         self.assertEqual(list(self.user.vaults.all()), [vault])
@@ -237,6 +245,10 @@ class VaultEntryTests(TestCase):
         }
         fields.update(overrides)
         return VaultEntry.objects.create(**fields)
+
+    def test_rejects_an_unsigned_entry(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self._entry(metadata_sig="")
 
     def test_defaults_to_a_login_entry(self):
         entry = self._entry()

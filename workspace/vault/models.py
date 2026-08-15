@@ -88,6 +88,15 @@ class Vault(models.Model):
         indexes = [
             models.Index(fields=["owner", "created_at"]),
         ]
+        constraints = [
+            # An unsigned vault is what a hostile server would insert. Django
+            # only enforces blank=False through full_clean(), which nothing
+            # calls on its own, so the guarantee has to live in the database.
+            models.CheckConstraint(
+                condition=~models.Q(metadata_sig=""),
+                name="vault_metadata_sig_not_empty",
+            ),
+        ]
 
     def __str__(self):
         return f"Vault {self.uuid}"
@@ -253,6 +262,12 @@ class VaultEntry(models.Model):
             models.Index(fields=["vault", "deleted_at"]),
             models.Index(fields=["vault", "folder"]),
             models.Index(fields=["vault", "is_favorite"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(metadata_sig=""),
+                name="entry_metadata_sig_not_empty",
+            ),
         ]
 
     def __str__(self):

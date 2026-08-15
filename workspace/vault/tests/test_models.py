@@ -331,7 +331,10 @@ class EntryFieldTests(TestCase):
     def test_custom_fields_live_alongside_reserved_ones(self):
         self._field("password")
         self._field("custom:recovery-code")
-        self.assertEqual(self.entry.fields.count(), 2)
+        self.assertEqual(
+            set(self.entry.fields.values_list("field_id", flat=True)),
+            {"password", "custom:recovery-code"},
+        )
 
     def test_deleted_with_its_entry(self):
         self._field()
@@ -341,3 +344,17 @@ class EntryFieldTests(TestCase):
     def test_string_representation_names_the_field_and_entry(self):
         field = self._field()
         self.assertEqual(str(field), f"password of {self.entry.uuid}")
+
+    def test_rejects_the_name_and_notes_field_ids(self):
+        """`name` and `notes` derive the same associated data as
+        VaultEntry.encrypted_name/encrypted_notes (design spec §3.4); the
+        database constraint closes the permutation a unique(entry, field_id)
+        cannot, since the two ciphertexts live in different tables.
+        """
+        for reserved in ("name", "notes"):
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                self._field(reserved)
+
+    def test_accepts_a_custom_field_named_name(self):
+        field = self._field("custom:name")
+        self.assertEqual(field.field_id, "custom:name")

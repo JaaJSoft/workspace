@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
                 ('wrapped_kex_priv', models.TextField()),
                 ('wrapped_sig_priv', models.TextField()),
                 ('sig_over_kex_pub', models.TextField()),
-                ('state', models.CharField(choices=[('pending', 'Pending'), ('active', 'Active')], default='pending', max_length=7)),
+                ('state', models.CharField(choices=[('pending', 'Pending'), ('active', 'Active')], default='pending', max_length=16)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='vault_identity', to=settings.AUTH_USER_MODEL)),
@@ -146,6 +146,10 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='entryfield',
             constraint=models.UniqueConstraint(fields=('entry', 'field_id'), name='unique_entry_field_id'),
+        ),
+        migrations.AddConstraint(
+            model_name='entryfield',
+            constraint=models.CheckConstraint(condition=models.Q(('field_id__in', ('name', 'notes')), _negated=True), name='entry_field_id_not_reserved'),
         ),
         migrations.AddIndex(
             model_name='vaultfolder',

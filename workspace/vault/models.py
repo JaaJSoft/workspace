@@ -36,7 +36,9 @@ class AccountIdentity(models.Model):
     wrapped_kex_priv = models.TextField()
     wrapped_sig_priv = models.TextField()
     sig_over_kex_pub = models.TextField()
-    state = models.CharField(max_length=7, choices=State.choices, default=State.PENDING)
+    state = models.CharField(
+        max_length=16, choices=State.choices, default=State.PENDING
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -295,6 +297,15 @@ class EntryField(models.Model):
             models.UniqueConstraint(
                 fields=["entry", "field_id"],
                 name="unique_entry_field_id",
+            ),
+            # "name" and "notes" derive the same AEAD associated data as
+            # VaultEntry.encrypted_name/encrypted_notes (design spec
+            # §3.4), which live in another table and so escape the unique
+            # constraint above - a permutation between the two would still
+            # pass AEAD verification.
+            models.CheckConstraint(
+                condition=~models.Q(field_id__in=("name", "notes")),
+                name="entry_field_id_not_reserved",
             ),
         ]
 

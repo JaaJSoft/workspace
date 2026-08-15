@@ -90,6 +90,18 @@ kubectl apply -f ingress.yaml
 | `OAUTH_GENERIC_SCOPES` | Space-separated OAuth2 scopes |
 | `OAUTH_GENERIC_IMAP_HOST` | IMAP server hostname |
 | `OAUTH_GENERIC_SMTP_HOST` | SMTP server hostname |
+| `OIDC_RP_CLIENT_ID` | OIDC client ID. Set this plus the secret and the four endpoints to enable SSO login |
+| `OIDC_RP_CLIENT_SECRET` | OIDC client secret |
+| `OIDC_OP_AUTHORIZATION_ENDPOINT` | Provider authorization endpoint |
+| `OIDC_OP_TOKEN_ENDPOINT` | Provider token endpoint |
+| `OIDC_OP_USER_ENDPOINT` | Provider userinfo endpoint |
+| `OIDC_OP_JWKS_ENDPOINT` | Provider JWKS endpoint (required for RS256) |
+| `OIDC_PROVIDER_NAME` | Label shown on the login button |
+| `OIDC_RP_SIGN_ALGO` | ID token signing algorithm |
+| `OIDC_RP_SCOPES` | Requested scopes (`profile` provides the display name) |
+| `OIDC_ALLOWED_DOMAINS` | Comma-separated email-domain allowlist for sign-up |
+| `OIDC_REQUIRE_EMAIL_VERIFIED` | Set to `1` to require the `email_verified` claim |
+| `OIDC_USERNAME_CLAIM` | Claim used for the Django username |
 | `AI_API_KEY`             | OpenAI API key (or compatible provider). AI disabled if empty |
 | `AI_BASE_URL`            | Custom base URL for the LLM API (Ollama, LM Studio, etc.) |
 | `AI_IMAGE_BASE_URL`      | Custom base URL for image generation (falls back to `AI_BASE_URL`) |

@@ -14,6 +14,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "knox",
+    "mozilla_django_oidc",
     "django_filters",
     "django_prometheus",
     "django_http_compression",

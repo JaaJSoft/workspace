@@ -31,6 +31,7 @@ from .mail import *  # noqa: F403
 from .middleware import *  # noqa: F403
 from .monitoring import *  # noqa: F403
 from .notifications import *  # noqa: F403
+from .oidc import *  # noqa: F403
 from .security import *  # noqa: F403
 from .storage import *  # noqa: F403
 from .templates import *  # noqa: F403

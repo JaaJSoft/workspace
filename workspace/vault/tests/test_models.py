@@ -129,6 +129,23 @@ class VaultKeyWrapTests(TestCase):
         wrap = self._wrap(self.user)
         self.assertEqual(str(wrap), f"Key wrap of {self.vault.uuid} for {self.user.pk}")
 
+    def test_deleted_with_its_vault(self):
+        self._wrap(self.user)
+        self.vault.delete()
+        self.assertEqual(VaultKeyWrap.objects.count(), 0)
+
+    def test_deleted_with_its_recipient(self):
+        other_vault = make_vault(self.user)
+        recipient = User.objects.create_user(username="recipient", password="pw")
+        VaultKeyWrap.objects.create(
+            vault=other_vault,
+            recipient=recipient,
+            wrapped_key="ZW5jfHdyYXBwZWQ",
+            hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
+        )
+        recipient.delete()
+        self.assertEqual(VaultKeyWrap.objects.count(), 0)
+
 
 class VaultFolderTests(TestCase):
     def setUp(self):
@@ -201,6 +218,11 @@ class VaultTagTests(TestCase):
         tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
         self.assertEqual(str(tag), f"Tag {tag.uuid}")
 
+    def test_deleted_with_its_vault(self):
+        VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        self.vault.delete()
+        self.assertEqual(VaultTag.objects.count(), 0)
+
 
 class VaultEntryTests(TestCase):
     def setUp(self):
@@ -237,6 +259,23 @@ class VaultEntryTests(TestCase):
         entry = self._entry()
         entry.tags.add(tag)
         self.assertEqual(list(tag.entries.all()), [entry])
+
+    def test_accepts_a_tag_from_another_vault_today(self):
+        """Known limitation: attaching a tag from a different vault raises
+        nothing today. ``clean()`` cannot check the ``tags`` M2M because
+        Django only validates a many-to-many once the row exists, so
+        enforcement is deferred to the entry API (PR 7, design spec §9).
+
+        This pins the current permissive behavior so that PR 7 fails here
+        loudly instead of silently leaving the hole open.
+        """
+        other_vault = make_vault(self.user)
+        outsider_tag = VaultTag.objects.create(
+            vault=other_vault, encrypted_name="AQEBAAEDdGFn"
+        )
+        entry = self._entry()
+        entry.tags.add(outsider_tag)
+        self.assertEqual(list(entry.tags.all()), [outsider_tag])
 
     def test_deleted_with_its_vault(self):
         self._entry()

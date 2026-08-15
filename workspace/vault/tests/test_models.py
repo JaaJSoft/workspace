@@ -214,6 +214,23 @@ class VaultEntryTests(TestCase):
         self.vault.delete()
         self.assertEqual(VaultEntry.objects.count(), 0)
 
+    def test_rejects_a_folder_from_another_vault(self):
+        other_vault = make_vault(self.user)
+        outsider = VaultFolder.objects.create(
+            vault=other_vault, encrypted_name="AQEBAAEGb3RoZXI"
+        )
+        entry = self._entry()
+        entry.folder = outsider
+        with self.assertRaises(ValidationError):
+            entry.clean()
+
+    def test_accepts_a_folder_from_its_own_vault(self):
+        folder = VaultFolder.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+        )
+        entry = self._entry(folder=folder)
+        entry.clean()
+
 
 class EntryFieldTests(TestCase):
     def setUp(self):

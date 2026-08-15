@@ -256,6 +256,19 @@ class VaultEntry(models.Model):
     def __str__(self):
         return f"Entry {self.uuid}"
 
+    def clean(self):
+        """Reject a folder belonging to another vault.
+
+        Not expressible as a database constraint, so callers must run
+        ``full_clean()`` before saving. The ``tags`` M2M carries the same
+        risk and cannot be checked here - Django validates a many-to-many
+        only after the row exists - so the API layer owns that one.
+        """
+        if self.folder_id is None:
+            return
+        if self.folder.vault_id != self.vault_id:
+            raise ValidationError({"folder": "Folder belongs to another vault."})
+
 
 class EntryField(models.Model):
     """One encrypted field of an entry.

@@ -1,6 +1,7 @@
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.test import APIRequestFactory
 
 from workspace.ai.models import BotProfile
 from workspace.chat.models import Conversation, ConversationMember
@@ -30,7 +31,11 @@ class ConversationGroupsModelTests(TestCase):
             kind=Conversation.Kind.GROUP, title="Chan", created_by=self.user
         )
         conv.groups.add(self.team)
-        data = ConversationDetailSerializer(conv).data
+        # The serializer labels the avatar from the viewer's point of view,
+        # so it needs the request the same way a view would give it one.
+        request = APIRequestFactory().get("/")
+        request.user = self.user
+        data = ConversationDetailSerializer(conv, context={"request": request}).data
         self.assertEqual(data["groups"], [{"id": self.team.pk, "name": "Team A"}])
 
 

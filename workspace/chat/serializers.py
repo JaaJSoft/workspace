@@ -11,6 +11,7 @@ from .models import (
     PinnedMessage,
     Reaction,
 )
+from .services.avatar import conversation_avatar_initial
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -192,6 +193,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     is_pinned = serializers.BooleanField(read_only=True, default=False)
     pin_position = serializers.IntegerField(read_only=True, default=None)
     is_bot_conversation = serializers.SerializerMethodField()
+    avatar_initial = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
         default=ConversationMember.NotificationLevel.ALL,
@@ -208,6 +210,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "has_avatar",
+            "avatar_initial",
             "members",
             "groups",
             "member_count",
@@ -227,6 +230,9 @@ class ConversationListSerializer(serializers.ModelSerializer):
         if cache and "members" in cache:
             return len(cache["members"])
         return obj.members.filter(left_at__isnull=True).count()
+
+    def get_avatar_initial(self, obj) -> str:
+        return conversation_avatar_initial(obj, self.context["request"].user)
 
     def get_is_bot_conversation(self, obj):
         """Check if this conversation includes a bot member."""
@@ -259,6 +265,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
 class ConversationDetailSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
     groups = GroupBriefSerializer(many=True, read_only=True)
+    avatar_initial = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
         default=ConversationMember.NotificationLevel.ALL,
@@ -275,10 +282,14 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "has_avatar",
+            "avatar_initial",
             "members",
             "groups",
             "notification_level",
         ]
+
+    def get_avatar_initial(self, obj) -> str:
+        return conversation_avatar_initial(obj, self.context["request"].user)
 
 
 class NotificationLevelSerializer(serializers.Serializer):

@@ -76,10 +76,13 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       this.$el.addEventListener('ajax:after', () => {
         const target = document.getElementById('conversation-list');
         if (!target) return;
+        // The server-rendered rows know nothing of an upload that happened
+        // after the page load, so re-stamp the cache-busting token the
+        // element builds its image URL from.
         for (const conv of this.conversations) {
           if (conv._avatar_bust) {
-            const img = target.querySelector(`img[src*="/conversations/${conv.uuid}/avatar/"]`);
-            if (img) img.src = `/api/v1/chat/conversations/${conv.uuid}/avatar/image?t=${conv._avatar_bust}`;
+            const avatar = target.querySelector(`conversation-avatar[uuid="${conv.uuid}"]`);
+            if (avatar) avatar.setAttribute('bust', conv._avatar_bust);
           }
         }
       }, { once: true });
@@ -436,23 +439,12 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       return names.join(', ');
     },
 
-    conversationAvatar(conv) {
-      if (conv.kind === 'dm') {
-        const other = conv.members?.find(m => m.user.id !== this.currentUserId);
-        if (other) return window.userAvatarTag(other.user.id, other.user.username, { size: 'md', presence: true, card: true });
-        return `<div class="w-10 h-10 rounded-full bg-neutral text-neutral-content flex items-center justify-center flex-shrink-0"><span class="text-sm">?</span></div>`;
-      }
-      // Group with custom avatar
-      if (conv.has_avatar) {
-        const bust = conv._avatar_bust ? `?t=${conv._avatar_bust}` : '';
-        return `<div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0"><img src="/api/v1/chat/conversations/${conv.uuid}/avatar/image${bust}" alt="Group avatar" class="w-full h-full object-cover" /></div>`;
-      }
-      const initials = (conv.members || [])
-        .filter(m => m.user.id !== this.currentUserId)
-        .slice(0, 2)
-        .map(m => this.memberDisplayName(m)[0].toUpperCase())
-        .join('');
-      return `<div class="w-10 h-10 rounded-full bg-info text-info-content flex items-center justify-center flex-shrink-0"><span class="text-sm">${initials || 'G'}</span></div>`;
+    // The other participant of a direct message - who the row's avatar and
+    // name stand for. Null for a group, and for a DM nobody else is left in.
+    // Read by <conversation-avatar> through _conversation_avatar.html.
+    dmPartner(conv) {
+      if (!conv || conv.kind !== 'dm') return null;
+      return conv.members?.find(m => m.user.id !== this.currentUserId)?.user || null;
     },
 
     membersList(conv) {

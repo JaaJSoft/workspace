@@ -40,27 +40,16 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
     :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
   >
     <div class="relative flex-shrink-0 flex">
-      {% if conv.kind == 'dm' and conv.other_user %}
-        <template x-if="collapsed || !chatPrefs.compactConversationList">
-          <user-avatar user-id="{{ conv.other_user.id }}" username="{{ conv.other_user.username }}" size="sm" presence></user-avatar>
-        </template>
-        <template x-if="!collapsed && chatPrefs.compactConversationList">
-          <user-avatar user-id="{{ conv.other_user.id }}" username="{{ conv.other_user.username }}" size="xs" presence></user-avatar>
-        </template>
-      {% elif conv.has_avatar %}
-        <div class="rounded-full overflow-hidden"
-             :class="(!collapsed && chatPrefs.compactConversationList) ? 'w-6 h-6' : 'w-8 h-8'">
-          <img src="/api/v1/chat/conversations/{{ conv.uuid }}/avatar/image" alt="{{ conv.display_name|escapejs }}" class="w-full h-full object-cover" loading="lazy" decoding="async" />
-        </div>
-      {% else %}
-        <div class="rounded-full flex items-center justify-center"
-             :class="[
-               (!collapsed && chatPrefs.compactConversationList) ? 'w-6 h-6' : 'w-8 h-8',
-               activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info text-info-content' : 'bg-{% if conv.kind == 'dm' %}neutral text-neutral-content{% else %}info/20 text-info{% endif %}'
-             ]">
-          <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>
-        </div>
-      {% endif %}
+      <conversation-avatar
+        kind="{{ conv.kind }}"
+        uuid="{{ conv.uuid }}"
+        name="{{ conv.display_name }}"
+        initials="{{ conv.avatar_initial }}"
+        {% if conv.has_avatar %}has-avatar{% endif %}
+        {% if conv.other_user %}user-id="{{ conv.other_user.id }}" username="{{ conv.other_user.username }}" presence{% endif %}
+        size="sm"
+        :size="(!collapsed && chatPrefs.compactConversationList) ? 'xs' : 'sm'"
+        :active="activeConversation?.uuid === '{{ conv.uuid }}'"></conversation-avatar>
       <div class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-info rounded-full border-2 border-base-200"
            x-show="collapsed && (conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0)" x-cloak></div>
     </div>

@@ -18,7 +18,7 @@
           <i data-lucide="arrow-left" class="w-5 h-5"></i>
         </button>
 
-        <div x-html="conversationAvatar(activeConversation)"></div>
+        {% include "chat/ui/partials/_conversation_avatar.html" with conv="activeConversation" %}
 
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5 min-w-0">

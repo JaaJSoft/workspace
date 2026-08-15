@@ -4,6 +4,7 @@ Covers the HTML partial returned for the chat sidebar (Alpine AJAX refresh),
 including the `?q=` search filter.
 """
 
+import re
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
@@ -174,3 +175,67 @@ class ConversationListViewPartialTests(ChatTestMixin, TestCase):
             convs = _build_conversation_context(self.creator)
         group = next(c for c in convs if c.pk == self.group.pk)
         self.assertEqual(group.time_ago, "Feb 01")
+
+
+class ConversationAvatarMarkupTests(ChatTestMixin, TestCase):
+    """The sidebar row and the API payload must label a conversation alike.
+
+    They used to derive the avatar separately - the server rendering initials
+    into the row, the client recomputing them from the member list for the
+    header - and had drifted apart.
+    """
+
+    TAG = re.compile(r"<conversation-avatar\b[^>]*>")
+    # Bare flags carry no value, so they are absent from the pairs below.
+    FLAGS = ("has-avatar", "presence")
+
+    def _row_avatar(self, html, uuid):
+        """The attributes of the sidebar row's <conversation-avatar>."""
+        for tag in self.TAG.findall(html):
+            attrs = dict(re.findall(r'\s([a-z-]+)="([^"]*)"', tag))
+            if attrs.get("uuid") != str(uuid):
+                continue
+            attrs.update(
+                {flag: "" for flag in self.FLAGS if re.search(rf"\s{flag}[\s>]", tag)}
+            )
+            return attrs
+        raise AssertionError(
+            f"no <conversation-avatar> for {uuid} in the rendered sidebar"
+        )
+
+    def test_sidebar_and_api_agree_on_every_conversation(self):
+        self.client.force_login(self.creator)
+        html = self.client.get("/chat/conversations").content.decode()
+        payload = self.client.get("/api/v1/chat/conversations").json()
+
+        self.assertTrue(payload)
+        for conv in payload:
+            attrs = self._row_avatar(html, conv["uuid"])
+            self.assertEqual(attrs["kind"], conv["kind"])
+            self.assertEqual(attrs["initials"], conv["avatar_initial"])
+
+    def test_a_dm_row_carries_the_other_participant(self):
+        self.client.force_login(self.creator)
+        html = self.client.get("/chat/conversations").content.decode()
+
+        attrs = self._row_avatar(html, self.dm.uuid)
+        self.assertEqual(attrs["user-id"], str(self.member.id))
+        self.assertEqual(attrs["username"], self.member.username)
+        self.assertEqual(attrs["initials"], "M")
+
+    def test_a_group_row_carries_its_members_initials(self):
+        self.client.force_login(self.creator)
+        html = self.client.get("/chat/conversations").content.decode()
+
+        attrs = self._row_avatar(html, self.group.uuid)
+        self.assertNotIn("user-id", attrs)
+        self.assertEqual(attrs["initials"], "M")
+
+    def test_the_uploaded_picture_is_flagged_on_the_row(self):
+        self.client.force_login(self.creator)
+        html = self.client.get("/chat/conversations").content.decode()
+        self.assertNotIn("has-avatar", self._row_avatar(html, self.group.uuid))
+
+        Conversation.objects.filter(pk=self.group.pk).update(has_avatar=True)
+        html = self.client.get("/chat/conversations").content.decode()
+        self.assertIn("has-avatar", self._row_avatar(html, self.group.uuid))

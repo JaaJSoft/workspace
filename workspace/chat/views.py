@@ -132,7 +132,9 @@ class ConversationListView(CacheControlMixin, APIView):
             if own:
                 c.notification_level = own.notification_level
 
-        serializer = ConversationListSerializer(conv_list, many=True)
+        serializer = ConversationListSerializer(
+            conv_list, many=True, context={"request": request}
+        )
         return Response(serializer.data)
 
     @extend_schema(
@@ -172,7 +174,9 @@ class ConversationListView(CacheControlMixin, APIView):
                 .first()
             )
             return Response(
-                ConversationDetailSerializer(conversation).data,
+                ConversationDetailSerializer(
+                    conversation, context={"request": request}
+                ).data,
                 status=status.HTTP_201_CREATED,
             )
 
@@ -260,7 +264,9 @@ class ConversationListView(CacheControlMixin, APIView):
                 .first()
             )
         return Response(
-            ConversationDetailSerializer(conversation).data,
+            ConversationDetailSerializer(
+                conversation, context={"request": request}
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -292,7 +298,11 @@ class ConversationDetailView(APIView):
             .first()
         )
         conversation.notification_level = membership.notification_level
-        return Response(ConversationDetailSerializer(conversation).data)
+        return Response(
+            ConversationDetailSerializer(
+                conversation, context={"request": request}
+            ).data
+        )
 
     @extend_schema(
         summary="Update conversation details",
@@ -476,7 +486,9 @@ class ConversationMembersView(APIView):
             .first()
         )
         return Response(
-            ConversationDetailSerializer(conversation).data,
+            ConversationDetailSerializer(
+                conversation, context={"request": request}
+            ).data,
             status=status.HTTP_200_OK,
         )
 

@@ -4,6 +4,10 @@
 {% block title %}Chat - Workspace{% endblock %}
 
 {% block extra_head %}
+{% comment %}In <head> and not deferred on purpose: <conversation-avatar> must
+be defined before the parser reaches the markup using it, or server-rendered
+avatars flash unstyled.{% endcomment %}
+<script src="{% static 'chat/ui/js/conversation_avatar.js' %}"></script>
 <link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}">
 <link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" integrity="sha384-6LFfkTKLRlzFtgx8xsWyBdKGpcMMQTkv+dB7rAbugeJAu1Ym2q1Aji1cjHBG12Xh" crossorigin="anonymous" />

@@ -338,6 +338,9 @@ class AgentGoalSerializer(serializers.ModelSerializer):
             "uuid",
             "title",
             "goal",
+            "success_criteria",
+            "constraints",
+            "reporting",
             "notes",
             "outcome",
             "status",
@@ -352,9 +355,7 @@ class AgentGoalSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "uuid",
-            "notes",
             "outcome",
-            "next_check_at",
             "last_checked_at",
             "check_count",
             "bot_username",
@@ -375,10 +376,18 @@ class AgentGoalSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate_next_check_at(self, value):
+        # Same floor the agent's own update_agent_goal tool obeys: rescheduling
+        # a check-in from the UI must not fire a full LLM run right away.
+        return AgentGoal.clamp_next_check(value)
+
 
 class AgentGoalCreateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=200, required=False, allow_blank=True)
     goal = serializers.CharField()
+    success_criteria = serializers.CharField(required=False, allow_blank=True)
+    constraints = serializers.CharField(required=False, allow_blank=True)
+    reporting = serializers.CharField(required=False, allow_blank=True)
     first_check_at = serializers.DateTimeField(required=False, allow_null=True)
     deadline = serializers.DateTimeField(required=False, allow_null=True)
 

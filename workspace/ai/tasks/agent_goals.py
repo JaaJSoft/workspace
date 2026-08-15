@@ -51,6 +51,26 @@ def _build_goal_instruction(goal, user_tz):
         deadline_local = goal.deadline.astimezone(user_tz)
         deadline_line = f"- Deadline: {deadline_local.strftime('%Y-%m-%d %H:%M')}\n"
 
+    # The mission brief comes from the user, so it outranks anything the agent
+    # wrote in its own notes when the two disagree.
+    brief_lines = ""
+    if goal.success_criteria:
+        brief_lines += f"- Definition of done: {goal.success_criteria}\n"
+    if goal.constraints:
+        brief_lines += f"- Constraints set by the user: {goal.constraints}\n"
+    if goal.reporting:
+        brief_lines += f"- When the user wants to hear from you: {goal.reporting}\n"
+
+    constraints_clause = (
+        " and respecting the constraints above" if goal.constraints else ""
+    )
+    done_clause = (
+        " (measured against the definition of done above)"
+        if goal.success_criteria
+        else ""
+    )
+    report_source = "reporting rule above" if goal.reporting else "goal"
+
     notes_block = goal.notes or "(none yet — this is your first check-in)"
     elapsed_days = (timezone.now() - goal.created_at).days
 
@@ -63,20 +83,23 @@ def _build_goal_instruction(goal, user_tz):
         f"- Objective: {goal.goal}\n"
         f"- Started {elapsed_days} day(s) ago; this is check-in #{goal.check_count + 1}.\n"
         f"{deadline_line}"
+        f"{brief_lines}"
         f"- Your private notes from previous check-ins:\n{notes_block}\n\n"
         f"This check-in is SILENT BY DEFAULT. The user sees nothing of what "
         f"happens here: any plain text you write is discarded, never delivered. "
         f"The ONLY way to reach the user is the send_user_message tool.\n\n"
         f"Do the following now:\n"
-        f"1. Work on the goal, using your tools when helpful.\n"
+        f"1. Work on the goal, using your tools when helpful{constraints_clause}.\n"
         f"2. Save your updated private notes with update_agent_goal (goal_id above) — "
         f"they are your only memory until the next check-in.\n"
         f"3. Choose when to check in next and set it with update_agent_goal's "
         f"next_check_at. If you don't, the next check-in defaults to 24 hours from now.\n"
-        f"4. If the goal is achieved or no longer relevant, call complete_agent_goal.\n"
+        f"4. If the goal is achieved{done_clause} or no longer relevant, call "
+        f"complete_agent_goal.\n"
         f"5. Only if you found something genuinely worth telling the user — a "
-        f"result, an important change, a deadline at risk, or what the goal says "
-        f"to report — call send_user_message with that message, written naturally "
+        f"result, an important change, a deadline at risk, or what the "
+        f"{report_source} says to report — call send_user_message with that "
+        f"message, written naturally "
         f"(do not mention check-ins or that you are an automated process). Do NOT "
         f"message just to say you checked and found nothing: staying silent is "
         f"the normal outcome of most check-ins."

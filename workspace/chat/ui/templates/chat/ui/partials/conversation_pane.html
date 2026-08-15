@@ -370,6 +370,7 @@
 <!-- New conversation dialog -->
 {% include "chat/ui/partials/new_conversation_dialog.html" %}
 {% include "chat/ui/partials/add_member_dialog.html" %}
+{% if ai_enabled %}{% include "chat/ui/partials/agent_goal_dialog.html" %}{% endif %}
 {% include "chat/ui/partials/help_dialog.html" %}
 
 <!-- Preferences dialog (mobile) -->

@@ -237,6 +237,12 @@ class AgentGoal(models.Model):
 
     title = models.CharField(max_length=200)
     goal = models.TextField()
+    # Mission brief: user-owned steering text injected in every check-in
+    # prompt. Each field maps to one decision the agent makes on its own —
+    # when to close the goal, how to work on it, and when to break silence.
+    success_criteria = models.TextField(blank=True, default="")
+    constraints = models.TextField(blank=True, default="")
+    reporting = models.TextField(blank=True, default="")
     notes = models.TextField(blank=True, default="")
     outcome = models.TextField(blank=True, default="")
     status = models.CharField(

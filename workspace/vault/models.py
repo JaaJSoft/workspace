@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from workspace.common.uuids import uuid_v7_or_v4
@@ -127,3 +128,72 @@ class VaultKeyWrap(models.Model):
 
     def __str__(self):
         return f"Key wrap of {self.vault_id} for {self.recipient_id}"
+
+
+class VaultFolder(models.Model):
+    """A folder inside one vault. The tree shape is plaintext; only the name
+    is encrypted.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    vault = models.ForeignKey(
+        Vault,
+        on_delete=models.CASCADE,
+        related_name="folders",
+    )
+    parent = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="children",
+    )
+    encrypted_name = models.TextField()
+    position = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["position", "created_at"]
+        indexes = [
+            models.Index(fields=["vault", "parent"]),
+        ]
+
+    def __str__(self):
+        return f"Folder {self.uuid}"
+
+    def clean(self):
+        """Reject a cross-vault parent and any parent cycle.
+
+        Neither is expressible as a database constraint without a recursive
+        trigger, so callers must run ``full_clean()`` before saving.
+        """
+        if self.parent_id is None:
+            return
+        if self.parent.vault_id != self.vault_id:
+            raise ValidationError({"parent": "Parent folder belongs to another vault."})
+        seen = {self.pk}
+        ancestor = self.parent
+        while ancestor is not None:
+            if ancestor.pk in seen:
+                raise ValidationError({"parent": "Folder cannot contain itself."})
+            seen.add(ancestor.pk)
+            ancestor = ancestor.parent
+
+
+class VaultTag(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    vault = models.ForeignKey(
+        Vault,
+        on_delete=models.CASCADE,
+        related_name="tags",
+    )
+    encrypted_name = models.TextField()
+    color = models.CharField(max_length=32, default="neutral")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Tag {self.uuid}"

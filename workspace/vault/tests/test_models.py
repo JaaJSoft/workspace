@@ -1,8 +1,15 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
+from workspace.vault.models import (
+    AccountIdentity,
+    Vault,
+    VaultFolder,
+    VaultKeyWrap,
+    VaultTag,
+)
 
 User = get_user_model()
 
@@ -106,3 +113,58 @@ class VaultKeyWrapTests(TestCase):
             hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
         )
         self.assertEqual(self.user.vault_key_wraps.count(), 2)
+
+
+class VaultFolderTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.vault = make_vault(self.user)
+
+    def _folder(self, name="AQEBAAEGZm9sZGVy", **overrides):
+        return VaultFolder.objects.create(
+            vault=self.vault, encrypted_name=name, **overrides
+        )
+
+    def test_nests_under_a_parent(self):
+        parent = self._folder()
+        child = self._folder(parent=parent)
+        self.assertEqual(list(parent.children.all()), [child])
+
+    def test_rejects_being_its_own_parent(self):
+        folder = self._folder()
+        folder.parent = folder
+        with self.assertRaises(ValidationError):
+            folder.clean()
+
+    def test_rejects_a_parent_cycle(self):
+        grandparent = self._folder()
+        parent = self._folder(parent=grandparent)
+        grandparent.parent = parent
+        with self.assertRaises(ValidationError):
+            grandparent.clean()
+
+    def test_rejects_a_parent_from_another_vault(self):
+        other_vault = make_vault(self.user)
+        outsider = VaultFolder.objects.create(
+            vault=other_vault, encrypted_name="AQEBAAEGb3RoZXI"
+        )
+        folder = self._folder()
+        folder.parent = outsider
+        with self.assertRaises(ValidationError):
+            folder.clean()
+
+    def test_deleted_with_its_vault(self):
+        self._folder()
+        self.vault.delete()
+        self.assertEqual(VaultFolder.objects.count(), 0)
+
+
+class VaultTagTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.vault = make_vault(self.user)
+
+    def test_defaults_to_a_neutral_color(self):
+        tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        self.assertEqual(tag.color, "neutral")
+        self.assertEqual(list(self.vault.tags.all()), [tag])

@@ -57,6 +57,21 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
+            name='VaultFolder',
+            fields=[
+                ('uuid', models.UUIDField(default=workspace.common.uuids.uuid_v7_or_v4, editable=False, primary_key=True, serialize=False)),
+                ('encrypted_name', models.TextField()),
+                ('position', models.PositiveIntegerField(default=0)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+                ('parent', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='children', to='vault.vaultfolder')),
+                ('vault', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='folders', to='vault.vault')),
+            ],
+            options={
+                'ordering': ['position', 'created_at'],
+            },
+        ),
+        migrations.CreateModel(
             name='VaultKeyWrap',
             fields=[
                 ('uuid', models.UUIDField(default=workspace.common.uuids.uuid_v7_or_v4, editable=False, primary_key=True, serialize=False)),
@@ -68,9 +83,26 @@ class Migration(migrations.Migration):
                 ('vault', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='key_wraps', to='vault.vault')),
             ],
         ),
+        migrations.CreateModel(
+            name='VaultTag',
+            fields=[
+                ('uuid', models.UUIDField(default=workspace.common.uuids.uuid_v7_or_v4, editable=False, primary_key=True, serialize=False)),
+                ('encrypted_name', models.TextField()),
+                ('color', models.CharField(default='neutral', max_length=32)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('vault', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='tags', to='vault.vault')),
+            ],
+            options={
+                'ordering': ['created_at'],
+            },
+        ),
         migrations.AddIndex(
             model_name='vault',
             index=models.Index(fields=['owner', 'created_at'], name='vault_vault_owner_i_7404b4_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='vaultfolder',
+            index=models.Index(fields=['vault', 'parent'], name='vault_vault_vault_i_5c6650_idx'),
         ),
         migrations.AddIndex(
             model_name='vaultkeywrap',

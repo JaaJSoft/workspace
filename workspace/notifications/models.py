@@ -61,6 +61,10 @@ class Notification(models.Model):
     title = models.CharField(max_length=255)
     body = models.TextField(blank=True, default="")
     url = models.CharField(max_length=500, blank=True, default="")
+    # Merge channel within a source: notify_stream only merges rows sharing a
+    # stream, so the reminder crons ("reminder") can never overwrite a mention
+    # or an invitation created on the default stream ("").
+    stream = models.CharField(max_length=20, blank=True, default="")
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

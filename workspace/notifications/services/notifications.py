@@ -143,6 +143,7 @@ def notify_stream(
     default_priority="normal",
     icon="",
     color="",
+    stream="",
 ):
     """Merge-or-create notifications keyed on a source object.
 
@@ -152,6 +153,10 @@ def notify_stream(
     the incoming priority is high/urgent (a mention must not be swallowed by
     the merge). Everyone else gets a fresh row plus a push. This is the
     generic form of chat's per-conversation merge.
+
+    *stream* narrows the merge to rows carrying the same channel: the
+    reminder crons pass ``"reminder"`` so their daily refresh can never
+    repurpose a mention or an invitation that happens to share the source.
     """
     recipient_ids = list(recipient_ids)
     if not recipient_ids:
@@ -165,6 +170,7 @@ def notify_stream(
         for n in Notification.objects.filter(
             recipient_id__in=recipient_ids,
             read_at__isnull=True,
+            stream=stream,
             **{field: source},
         )
     }
@@ -199,6 +205,7 @@ def notify_stream(
                     url=url,
                     actor=actor,
                     priority=priority,
+                    stream=stream,
                     **{field: source},
                 )
             )

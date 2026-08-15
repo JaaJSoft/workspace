@@ -47,6 +47,7 @@ def notify_due_tasks():
                 title=task.title,
                 body=body,
                 url=f"/projects/{task.project_id}?task={task.uuid}",
+                stream="reminder",
             )
             notified += 1
     if notified:

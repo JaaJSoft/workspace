@@ -92,6 +92,29 @@ class NotifyDueTasksCronTests(NotifyDueTasksMixin, TestCase):
 
         self.assertEqual(self._unread(task, self.member).count(), 1)
 
+    def test_reminder_does_not_repurpose_an_existing_task_notification(self):
+        task = self._task(due_days=0)
+        mention = Notification.objects.create(
+            recipient=self.member,
+            origin="projects",
+            icon="i",
+            title="admin1 mentioned you",
+            body="see my comment",
+            priority="high",
+            task=task,
+        )
+
+        notify_due_tasks()
+
+        mention.refresh_from_db()
+        self.assertEqual(mention.title, "admin1 mentioned you")
+        self.assertEqual(mention.body, "see my comment")
+        # The reminder lands on its own row instead of merging into the
+        # mention - notify_stream only merges within a stream.
+        self.assertEqual(self._unread(task, self.member).count(), 2)
+        reminder = self._unread(task, self.member).exclude(pk=mention.pk).get()
+        self.assertEqual(reminder.stream, "reminder")
+
     def test_read_notification_is_recreated_on_next_run(self):
         task = self._task(due_days=-1)
 

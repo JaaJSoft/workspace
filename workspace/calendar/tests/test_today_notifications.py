@@ -1,6 +1,6 @@
 """Tests for the today's-events notification cron and its read-on-display path."""
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.core.cache import cache
 from django.test import TestCase
@@ -23,12 +23,23 @@ class TodayEventNotificationMixin(CalendarTestMixin):
         cache.clear()
 
     def _event_today(self, title="Standup", **kwargs):
-        start = timezone.now() + timedelta(hours=1)
+        # Clamped inside the current local day so the fixture stays valid
+        # whenever the suite runs: near midnight "now + 1h" would land on
+        # tomorrow, while a fixed hour would already be over by the evening.
+        # An already-started event is fine - the cron includes ongoing ones.
+        end_of_today = timezone.make_aware(
+            datetime.combine(timezone.localdate(), time.max),
+            timezone.get_current_timezone(),
+        )
+        start = min(
+            timezone.now() + timedelta(hours=1),
+            end_of_today - timedelta(minutes=30),
+        )
         return Event.objects.create(
             calendar=self.calendar,
             title=title,
             start=start,
-            end=start + timedelta(hours=1),
+            end=start + timedelta(minutes=29),
             owner=self.owner,
             **kwargs,
         )
@@ -92,6 +103,24 @@ class NotifyTodayEventsCronTests(TodayEventNotificationMixin, TestCase):
         notify_today_events()
 
         self.assertEqual(self._unread(self.owner, event).count(), 1)
+
+    def test_reminder_does_not_repurpose_an_existing_invitation(self):
+        event = self._event_today()
+        invitation = Notification.objects.create(
+            recipient=self.owner,
+            origin="calendar",
+            icon="i",
+            title="You're invited to Standup",
+            event=event,
+        )
+
+        notify_today_events()
+
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.title, "You're invited to Standup")
+        # The reminder lands on its own row instead of merging into the
+        # invitation - notify_stream only merges within a stream.
+        self.assertEqual(self._unread(self.owner, event).count(), 2)
 
 
 class DisplayedEventsMarkReadTests(TodayEventNotificationMixin, APITestCase):

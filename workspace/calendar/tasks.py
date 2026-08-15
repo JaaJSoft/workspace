@@ -195,6 +195,7 @@ def notify_today_events():
                 body=body,
                 url=url,
                 default_priority="low",
+                stream="reminder",
             )
             notified += 1
     if notified:

@@ -57,6 +57,10 @@ class AccountIdentityTests(TestCase):
         self.user.delete()
         self.assertEqual(AccountIdentity.objects.count(), 0)
 
+    def test_string_representation_names_the_user(self):
+        identity = make_identity(self.user)
+        self.assertEqual(str(identity), f"Vault identity of {self.user.pk}")
+
 
 def make_vault(owner, **overrides):
     fields = {
@@ -86,6 +90,10 @@ class VaultTests(TestCase):
         make_vault(self.user)
         self.user.delete()
         self.assertEqual(Vault.objects.count(), 0)
+
+    def test_string_representation_names_the_vault(self):
+        vault = make_vault(self.user)
+        self.assertEqual(str(vault), f"Vault {vault.uuid}")
 
 
 class VaultKeyWrapTests(TestCase):
@@ -117,6 +125,10 @@ class VaultKeyWrapTests(TestCase):
         )
         self.assertEqual(self.user.vault_key_wraps.count(), 2)
 
+    def test_string_representation_names_the_vault_and_recipient(self):
+        wrap = self._wrap(self.user)
+        self.assertEqual(str(wrap), f"Key wrap of {self.vault.uuid} for {self.user.pk}")
+
 
 class VaultFolderTests(TestCase):
     def setUp(self):
@@ -132,6 +144,15 @@ class VaultFolderTests(TestCase):
         parent = self._folder()
         child = self._folder(parent=parent)
         self.assertEqual(list(parent.children.all()), [child])
+
+    def test_accepts_no_parent(self):
+        folder = self._folder()
+        folder.clean()
+
+    def test_accepts_a_valid_parent(self):
+        parent = self._folder()
+        child = self._folder(parent=parent)
+        child.clean()
 
     def test_rejects_being_its_own_parent(self):
         folder = self._folder()
@@ -161,6 +182,10 @@ class VaultFolderTests(TestCase):
         self.vault.delete()
         self.assertEqual(VaultFolder.objects.count(), 0)
 
+    def test_string_representation_names_the_folder(self):
+        folder = self._folder()
+        self.assertEqual(str(folder), f"Folder {folder.uuid}")
+
 
 class VaultTagTests(TestCase):
     def setUp(self):
@@ -171,6 +196,10 @@ class VaultTagTests(TestCase):
         tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
         self.assertEqual(tag.color, "neutral")
         self.assertEqual(list(self.vault.tags.all()), [tag])
+
+    def test_string_representation_names_the_tag(self):
+        tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        self.assertEqual(str(tag), f"Tag {tag.uuid}")
 
 
 class VaultEntryTests(TestCase):
@@ -213,6 +242,14 @@ class VaultEntryTests(TestCase):
         self._entry()
         self.vault.delete()
         self.assertEqual(VaultEntry.objects.count(), 0)
+
+    def test_string_representation_names_the_entry(self):
+        entry = self._entry()
+        self.assertEqual(str(entry), f"Entry {entry.uuid}")
+
+    def test_accepts_no_folder(self):
+        entry = self._entry()
+        entry.clean()
 
     def test_rejects_a_folder_from_another_vault(self):
         other_vault = make_vault(self.user)
@@ -261,3 +298,7 @@ class EntryFieldTests(TestCase):
         self._field()
         self.entry.delete()
         self.assertEqual(EntryField.objects.count(), 0)
+
+    def test_string_representation_names_the_field_and_entry(self):
+        field = self._field()
+        self.assertEqual(str(field), f"password of {self.entry.uuid}")

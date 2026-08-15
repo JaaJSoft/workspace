@@ -10,8 +10,9 @@ from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.chat.models import Conversation
+from workspace.chat.models import Conversation, ConversationMember
 from workspace.chat.services.avatar import (
+    conversation_avatar_initial,
     delete_group_avatar,
     get_group_avatar_etag,
     get_group_avatar_path,
@@ -30,6 +31,54 @@ class AvatarPathTests(TestCase):
             get_group_avatar_path("abc-123"),
             "avatars/groups/abc-123.webp",
         )
+
+
+class ConversationAvatarInitialTests(TestCase):
+    """The initials the sidebar row and the conversation header both read."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.viewer = User.objects.create_user(username="viewer", password="pass")
+        cls.sam = User.objects.create_user(
+            username="sam", password="pass", first_name="Sam", last_name="Rivera"
+        )
+        cls.jordan = User.objects.create_user(username="jordan", password="pass")
+        cls.robin = User.objects.create_user(username="robin", password="pass")
+
+    def _conversation(self, kind, members):
+        conversation = Conversation.objects.create(kind=kind, created_by=self.viewer)
+        ConversationMember.objects.bulk_create(
+            ConversationMember(conversation=conversation, user=user) for user in members
+        )
+        return conversation
+
+    def test_dm_uses_the_other_participant(self):
+        dm = self._conversation(Conversation.Kind.DM, [self.viewer, self.sam])
+
+        self.assertEqual(conversation_avatar_initial(dm, self.viewer), "S")
+        self.assertEqual(conversation_avatar_initial(dm, self.sam), "V")
+
+    def test_dm_prefers_the_full_name_over_the_username(self):
+        dm = self._conversation(Conversation.Kind.DM, [self.viewer, self.jordan])
+        self.jordan.first_name = "Alex"
+        self.jordan.save(update_fields=["first_name"])
+
+        self.assertEqual(conversation_avatar_initial(dm, self.viewer), "A")
+
+    def test_group_uses_the_first_two_other_members(self):
+        group = self._conversation(
+            Conversation.Kind.GROUP,
+            [self.viewer, self.sam, self.jordan, self.robin],
+        )
+
+        self.assertEqual(conversation_avatar_initial(group, self.viewer), "SJ")
+
+    def test_empty_conversations_fall_back_per_kind(self):
+        dm = self._conversation(Conversation.Kind.DM, [self.viewer])
+        group = self._conversation(Conversation.Kind.GROUP, [self.viewer])
+
+        self.assertEqual(conversation_avatar_initial(dm, self.viewer), "?")
+        self.assertEqual(conversation_avatar_initial(group, self.viewer), "G")
 
 
 class GroupAvatarServiceTests(TestCase):

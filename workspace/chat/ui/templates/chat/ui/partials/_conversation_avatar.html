@@ -1,0 +1,30 @@
+{% comment %}
+Conversation Avatar Partial (client-side)
+=========================================
+<conversation-avatar> bound to a conversation held in Alpine state, for the
+views that render from the API payload rather than from the server-built
+sidebar context (which writes the element directly).
+
+Params:
+  - conv: Alpine expression resolving to a conversation object (required),
+          e.g. "activeConversation"
+  - size: a key of USER_AVATAR_SIZES (default "md")
+
+Used by:
+  - chat/ui/partials/conversation_pane.html (header)
+  - chat/ui/partials/info_panel.html
+{% endcomment %}
+<conversation-avatar
+  :kind="{{ conv }}.kind"
+  :uuid="{{ conv }}.uuid"
+  :name="conversationName({{ conv }})"
+  :initials="{{ conv }}.avatar_initial"
+  :has-avatar="{{ conv }}.has_avatar"
+  :bust="{{ conv }}._avatar_bust"
+  :user-id="dmPartner({{ conv }})?.id"
+  :username="dmPartner({{ conv }})?.username"
+  size="{{ size|default:'md' }}"
+  {% comment %}Always `active`: these views only ever show the conversation the
+  sidebar draws as selected, and the two must wear the same colour.{% endcomment %}
+  active
+  presence card></conversation-avatar>

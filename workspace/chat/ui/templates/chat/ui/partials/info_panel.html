@@ -11,7 +11,9 @@
   <div class="flex flex-col items-center text-center gap-2">
     <!-- Clickable group avatar (upload on click) -->
     <div class="relative group/avatar mb-2" :class="activeConversation.kind === 'group' ? 'cursor-pointer' : ''">
-      <div x-html="conversationAvatar(activeConversation)" class="scale-150"></div>
+      <div class="scale-150">
+        {% include "chat/ui/partials/_conversation_avatar.html" with conv="activeConversation" %}
+      </div>
       <!-- Camera overlay for group conversations -->
       <template x-if="activeConversation.kind === 'group'">
         <div

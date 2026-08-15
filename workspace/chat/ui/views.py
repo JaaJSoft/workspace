@@ -17,6 +17,7 @@ from workspace.chat.models import (
     PinnedMessage,
 )
 from workspace.chat.serializers import ConversationListSerializer
+from workspace.chat.services.avatar import conversation_avatar_initial
 from workspace.chat.services.conversations import (
     get_active_membership,
     get_unread_counts,
@@ -111,13 +112,12 @@ def _build_conversation_context(user, conversation_uuids=None):
             c.display_name = ", ".join(names) if names else "Group"
 
         # Avatar
-        if c.kind == Conversation.Kind.DM and other_members:
-            c.avatar_initial = _display(other_members[0].user)[0].upper()
-            c.other_user = other_members[0].user
-        else:
-            initials = [_display(m.user)[0].upper() for m in other_members[:2]]
-            c.avatar_initial = "".join(initials) or "G"
-            c.other_user = None
+        c.avatar_initial = conversation_avatar_initial(c, user)
+        c.other_user = (
+            other_members[0].user
+            if c.kind == Conversation.Kind.DM and other_members
+            else None
+        )
 
         # Last message preview & time ago
         if c._last_message:
@@ -160,7 +160,9 @@ def _build_conversation_context(user, conversation_uuids=None):
 def chat_view(request, conversation_uuid=None):
     """Main chat page with server-rendered conversation list."""
     conv_list = _build_conversation_context(request.user)
-    serializer = ConversationListSerializer(conv_list, many=True)
+    serializer = ConversationListSerializer(
+        conv_list, many=True, context={"request": request}
+    )
 
     pinned = sorted(
         [c for c in conv_list if c.is_pinned],
@@ -217,7 +219,9 @@ def chat_room_view(request, conversation_uuid):
         "groups",
     )
 
-    conversation_data = ConversationListSerializer(conversation).data
+    conversation_data = ConversationListSerializer(
+        conversation, context={"request": request}
+    ).data
 
     # Reuse the prefetched members for the title.
     active_members = sorted(conversation.members.all(), key=lambda m: m.user_id)

@@ -16,7 +16,30 @@ from workspace.common.services.image import (
     save_image,
 )
 
+from ..models import Conversation
+
 logger = logging.getLogger(__name__)
+
+
+def conversation_avatar_initial(conversation, viewer) -> str:
+    """The letters drawn when *conversation* has no uploaded avatar.
+
+    One letter for a direct message (the other participant), up to two for a
+    group (its first two other members). Reads the members off the instance,
+    so a caller that prefetched them filtered to the active ones gets those.
+
+    Both rendering paths go through this: the sidebar row renders it into the
+    markup, the API sends it as ``avatar_initial`` for the header and the info
+    panel. Computing it twice is what let them disagree.
+    """
+    others = [m.user for m in conversation.members.all() if m.user_id != viewer.id]
+    if conversation.kind == Conversation.Kind.DM:
+        return _initial(others[0]) if others else "?"
+    return "".join(_initial(user) for user in others[:2]) or "G"
+
+
+def _initial(user) -> str:
+    return (user.get_full_name() or user.username)[:1].upper()
 
 
 def get_group_avatar_path(conversation_uuid) -> str:

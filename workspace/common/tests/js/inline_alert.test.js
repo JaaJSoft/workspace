@@ -98,7 +98,6 @@ function collect(el, pred, out = []) {
 }
 
 const isButton = (el) => el.tagName === 'BUTTON';
-const hasClass = (cls) => (el) => el.className.split(/\s+/).includes(cls);
 
 test('registers the element and exposes the per-type style table', () => {
   const { InlineAlertElement, ctx } = load();

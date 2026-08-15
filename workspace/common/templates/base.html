@@ -30,6 +30,8 @@
   <script src="{% static 'ui/js/csrf.js' %}"></script>
   <script src="{% static 'ui/js/uuid.js' %}"></script>
   <script src="{% static 'ui/js/html.js' %}"></script>
+  {# Must follow html.js: highlightMatch escapes through escapeHtml. #}
+  <script src="{% static 'ui/js/highlight.js' %}"></script>
   <script src="{% static 'ui/js/filesize.js' %}"></script>
   <script src="{% static 'ui/js/swipe_nav.js' %}"></script>
   {% comment %}In <head> and not deferred on purpose: these custom elements

@@ -77,9 +77,8 @@ class VaultTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="owner", password="pw")
 
-    def test_encrypts_uris_by_default(self):
+    def test_starts_on_the_first_key_generation(self):
         vault = make_vault(self.user)
-        self.assertTrue(vault.encrypt_uris)
         self.assertEqual(vault.key_version, 1)
         self.assertFalse(vault.is_favorite)
 

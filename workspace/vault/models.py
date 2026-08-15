@@ -74,10 +74,6 @@ class Vault(models.Model):
     icon = models.CharField(max_length=64, default="lock")
     color = models.CharField(max_length=32, default="primary")
     key_version = models.PositiveIntegerField(default=1)
-    # Deliberate departure from §9 of the crypto norm, documented in the
-    # design spec: URIs are encrypted, so autofill matching happens client
-    # side and the server cannot profile which sites a user holds.
-    encrypt_uris = models.BooleanField(default=True)
     metadata_sig = models.TextField()
     is_favorite = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

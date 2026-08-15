@@ -236,11 +236,15 @@ class VaultEntry(models.Model):
     type = models.CharField(
         max_length=32, choices=EntryType.choices, default=EntryType.LOGIN
     )
+    # RESTRICT, not SET_NULL: folder_id is plaintext but signed (§3.5), so a
+    # database-side unlink would break metadata_sig and the client would read a
+    # legitimate folder deletion as tampering. Not PROTECT either - that would
+    # also refuse a whole-vault deletion, where the entries go with the vault.
     folder = models.ForeignKey(
         VaultFolder,
         null=True,
         blank=True,
-        on_delete=models.SET_NULL,
+        on_delete=models.RESTRICT,
         related_name="entries",
     )
     tags = models.ManyToManyField(VaultTag, blank=True, related_name="entries")

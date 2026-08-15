@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import RestrictedError
 from django.test import TestCase
 
 from workspace.vault.models import (
@@ -257,14 +258,67 @@ class VaultEntryTests(TestCase):
         self.assertEqual(entry.entry_version, 1)
         self.assertIsNone(entry.deleted_at)
 
-    def test_survives_the_deletion_of_its_folder(self):
+    def test_blocks_deleting_a_folder_that_still_holds_entries(self):
+        """folder_id is plaintext but signed (design spec §3.5). A SET_NULL
+        would let the database rewrite signed data behind the client's back,
+        and the client would then flag a legitimate folder deletion as
+        tampering. Emptying the folder is the API's job, with the entries
+        re-signed client side.
+        """
+        folder = VaultFolder.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+        )
+        self._entry(folder=folder)
+        with self.assertRaises(RestrictedError), transaction.atomic():
+            folder.delete()
+
+    def test_blocks_deleting_a_parent_whose_subtree_holds_entries(self):
+        parent = VaultFolder.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEGcGFyZW50"
+        )
+        child = VaultFolder.objects.create(
+            vault=self.vault, parent=parent, encrypted_name="AQEBAAEFY2hpbGQ"
+        )
+        self._entry(folder=child)
+        with self.assertRaises(RestrictedError), transaction.atomic():
+            parent.delete()
+
+    def test_an_emptied_folder_can_be_deleted(self):
         folder = VaultFolder.objects.create(
             vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
         )
         entry = self._entry(folder=folder)
+        entry.folder = None
+        entry.save(update_fields=["folder"])
         folder.delete()
-        entry.refresh_from_db()
-        self.assertIsNone(entry.folder_id)
+        self.assertEqual(VaultFolder.objects.count(), 0)
+        self.assertEqual(VaultEntry.objects.count(), 1)
+
+    def test_deleting_the_vault_still_cascades_through_a_folder(self):
+        """RESTRICT must not turn a vault deletion into an error: the entries
+        go with the vault by their own cascade, so the folder is free to go.
+        """
+        folder = VaultFolder.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+        )
+        self._entry(folder=folder)
+        self.vault.delete()
+        self.assertEqual(VaultEntry.objects.count(), 0)
+        self.assertEqual(VaultFolder.objects.count(), 0)
+
+    def test_deleting_the_account_still_purges_a_foldered_entry(self):
+        """Account deletion is a GDPR requirement, and RESTRICT is exactly the
+        kind of guard that can break it two cascade hops away from where it is
+        declared. Pinned here so PR 14 inherits a working baseline.
+        """
+        folder = VaultFolder.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+        )
+        self._entry(folder=folder)
+        self.user.delete()
+        self.assertEqual(Vault.objects.count(), 0)
+        self.assertEqual(VaultFolder.objects.count(), 0)
+        self.assertEqual(VaultEntry.objects.count(), 0)
 
     def test_carries_tags(self):
         tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")

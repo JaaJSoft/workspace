@@ -1,5 +1,5 @@
 {% extends 'base_with_navbar.html' %}
-{% load ui_filters %}
+{% load static ui_filters %}
 
 {% block title %}Dashboard - Workspace{% endblock %}
 {% block body_class %}bg-base-100 min-h-screen flex flex-col{% endblock %}
@@ -105,7 +105,10 @@
   </section>
 
   {# ── Modules grid ── #}
-  {% include 'dashboard/partials/modules_grid_fragment.html' %}
+  {# The x-data wrapper sits outside the swap target so the SSE listeners survive every fragment refresh. #}
+  <div x-data="dashboardBadges('{% url 'dashboard:modules_fragment' %}')">
+    {% include 'dashboard/partials/modules_grid_fragment.html' %}
+  </div>
 
   {% if show_upcoming_events %}
     {# ── Upcoming events (loaded async via alpine-ajax) ── #}
@@ -198,6 +201,7 @@
 
 </div>
 
+<script src="{% static 'dashboard/js/badges.js' %}"></script>
 <script>
 const _weatherCodes = {
   0:'clear-day',1:'clear-day',2:'partly-cloudy',3:'cloudy',

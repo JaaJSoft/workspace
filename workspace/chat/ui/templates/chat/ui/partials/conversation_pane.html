@@ -364,7 +364,7 @@
 
 <!-- Context menu -->
 <div id="conv-context-menu">
-{% include "chat/ui/partials/conversation_context_menu.html" %}
+{% include "ui/partials/context_menu_panel.html" with items="chat/ui/partials/conversation_context_menu.html" open="ctxMenu.open" close="ctxMenu.open = false" x="ctxMenu.x" y="ctxMenu.y" %}
 </div>
 
 <!-- New conversation dialog -->

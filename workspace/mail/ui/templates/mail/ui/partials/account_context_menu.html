@@ -1,58 +1,15 @@
-<!-- Account Context Menu -->
-<div
-  x-show="accountCtx.open"
-  x-cloak
-  @click.outside="accountCtx.open = false"
-  @keydown.escape.window="accountCtx.open = false"
-  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-44 p-1"
-  :style="`top: ${accountCtx.y}px; left: ${accountCtx.x}px;`"
-  id="account-context-menu"
->
-  <ul class="menu menu-sm p-0">
-    <li>
-      <button type="button" class="gap-3 rounded" @click="accountCtxAction('sync')"
-              :class="syncingAccounts[accountCtx.account?.uuid] ? 'pointer-events-none opacity-50' : ''">
-        <i data-lucide="refresh-cw" class="w-4 h-4" x-show="!syncingAccounts[accountCtx.account?.uuid]"></i>
-        <span class="loading loading-spinner loading-xs" x-show="syncingAccounts[accountCtx.account?.uuid]" x-cloak></span>
-        <span x-text="syncingAccounts[accountCtx.account?.uuid] ? 'Syncing...' : 'Sync'"></span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="accountCtxAction('edit')">
-        <i data-lucide="settings" class="w-4 h-4"></i>
-        <span>Edit</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="accountCtxAction('signature')">
-        <i data-lucide="pen-line" class="w-4 h-4"></i>
-        <span>Signature</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="accountCtxAction('test')">
-        <i data-lucide="plug" class="w-4 h-4"></i>
-        <span>Test</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="accountCtxAction('hidden_folders')">
-        <i data-lucide="eye-off" class="w-4 h-4"></i>
-        <span>Hidden folders</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="accountCtxAction('filters_rules')">
-        <i data-lucide="filter" class="w-4 h-4"></i>
-        <span>Filters &amp; Rules</span>
-      </button>
-    </li>
-    <hr class="my-1 border-base-300" />
-    <li>
-      <button type="button" class="gap-3 rounded text-error" @click="accountCtxAction('remove')">
-        <i data-lucide="trash-2" class="w-4 h-4"></i>
-        <span>Remove</span>
-      </button>
-    </li>
-  </ul>
-</div>
+{% comment %}
+Rows of the account context menu. The panel around them is
+`ui/partials/context_menu_panel.html`, included from index.html.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  {% include "ui/partials/context_menu_item.html" with icon="refresh-cw" label_expr="syncingAccounts[accountCtx.account?.uuid] ? 'Syncing...' : 'Sync'" click="accountCtxAction('sync')" loading="syncingAccounts[accountCtx.account?.uuid]" class_expr="syncingAccounts[accountCtx.account?.uuid] ? 'pointer-events-none opacity-50' : ''" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="settings" label="Edit" click="accountCtxAction('edit')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="pen-line" label="Signature" click="accountCtxAction('signature')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="plug" label="Test" click="accountCtxAction('test')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="eye-off" label="Hidden folders" click="accountCtxAction('hidden_folders')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="filter" label="Filters & Rules" click="accountCtxAction('filters_rules')" only %}
+
+  <hr class="my-1 border-base-300" />
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Remove" tone="error" click="accountCtxAction('remove')" only %}
+</ul>

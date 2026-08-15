@@ -1,350 +1,43 @@
-<!-- Context Menu Component -->
-<div
-  x-data="contextMenu()"
-  x-show="isOpen"
-  x-cloak
-  @click.outside="close()"
-  @keydown.escape.window="close()"
-  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-64 p-1"
-  :style="`top: ${position.y}px; left: ${position.x}px;`"
->
-  <!-- Background menu (right-click on empty area) -->
-  <template x-if="isBackgroundMenu">
-    <ul class="menu menu-sm p-0">
-      <!-- Create folder -->
-      <li>
-        <button
-          type="button"
-          class="gap-3 rounded"
-          @click="createFolder()"
-        >
-          <i data-lucide="folder-plus" class="w-4 h-4"></i>
-          <span>New folder</span>
-        </button>
+{% comment %}
+Rows of the file browser context menu. The panel around them is
+`ui/partials/context_menu_panel.html`, included from index.html, and it is
+what carries the `contextMenu()` component (see files/ui/js/context_menu.js).
+
+The node menu is driven entirely by `POST /api/v1/files/actions`: the
+registry decides which actions exist and whether they're available, so
+nothing here may hard-code a row. The background menu (right-click on empty
+space) targets the current folder rather than a node, so it has no registry
+entry and is written out below.
+{% endcomment %}
+<template x-if="isBackgroundMenu">
+  <ul class="menu menu-sm p-0">
+    {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label="New folder" click="createFolder()" only %}
+    {% include "ui/partials/context_menu_item.html" with icon="file-text" label="New file" click="createFile()" only %}
+    {% include "ui/partials/context_menu_item.html" with icon="file-plus" label="Upload files" click="uploadFiles()" only %}
+
+    <template x-if="hasClipboardItems">
+      <hr class="my-1 border-base-300" />
+    </template>
+    <template x-if="hasClipboardItems">
+      {% include "ui/partials/context_menu_item.html" with icon="clipboard-paste" label="Paste" shortcut="Ctrl+V" click="pasteHere()" only %}
+    </template>
+  </ul>
+</template>
+
+<template x-if="nodeData && !isBackgroundMenu">
+  <ul class="menu menu-sm p-0">
+    <template x-for="(action, idx) in nodeData.actions" :key="action.id">
+      <li
+        x-show="action.id !== 'paste_into' || hasClipboardItems"
+        :class="idx > 0 && action.category !== nodeData.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
+      >
+        {% comment %}Download and open-in-new-tab need a real link to carry the
+        download attribute / target. In bulk mode they fall back to the button
+        so the click goes through the /bulk-download endpoint instead.{% endcomment %}
+        {% include "ui/partials/context_menu_item.html" with bare=1 show="action.id === 'download' && !isBulkSelection" icon="download" label_expr="action.label" href_expr="`/api/v1/files/${nodeData.uuid}/download`" download_expr="nodeData.nodeType === 'folder' ? nodeData.name + '.zip' : nodeData.name" click="close()" only %}
+        {% include "ui/partials/context_menu_item.html" with bare=1 show="action.id === 'open_new_tab' && !isBulkSelection" icon="external-link" label_expr="action.label" href_expr="`/api/v1/files/${nodeData.uuid}/content`" blank=1 click="close()" only %}
+        {% include "ui/partials/context_menu_item.html" with bare=1 show="(action.id !== 'download' && action.id !== 'open_new_tab') || isBulkSelection" icon_expr="action.icon" icon_class_expr="iconClass(action)" label_expr="action.label" class_expr="action.css_class" click="executeAction(action)" shortcut_expr="action.shortcut" only %}
       </li>
-
-      <!-- Create file -->
-      <li>
-        <button
-          type="button"
-          class="gap-3 rounded"
-          @click="createFile()"
-        >
-          <i data-lucide="file-text" class="w-4 h-4"></i>
-          <span>New file</span>
-        </button>
-      </li>
-
-      <!-- Upload -->
-      <li>
-        <button
-          type="button"
-          class="gap-3 rounded"
-          @click="uploadFiles()"
-        >
-          <i data-lucide="file-plus" class="w-4 h-4"></i>
-          <span>Upload files</span>
-        </button>
-      </li>
-
-      <!-- Paste (only show when clipboard has items) -->
-      <template x-if="hasClipboardItems">
-        <hr class="my-1 border-base-300" />
-      </template>
-      <template x-if="hasClipboardItems">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="pasteHere()"
-          >
-            <i data-lucide="clipboard-paste" class="w-4 h-4"></i>
-            <span>Paste</span>
-            <kbd class="kbd kbd-xs ml-auto">Ctrl+V</kbd>
-          </button>
-        </li>
-      </template>
-    </ul>
-  </template>
-
-  <!-- Node menu (right-click on file/folder) -->
-  <template x-if="nodeData && !isBackgroundMenu">
-    <ul class="menu menu-sm p-0">
-      <template x-for="(action, idx) in nodeData.actions" :key="action.id">
-        <li
-          x-show="action.id !== 'paste_into' || hasClipboardItems"
-          :class="idx > 0 && action.category !== nodeData.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
-        >
-          <!-- Download action (single-file): <a> with download attribute.
-               In bulk mode we fall back to the default button so the click
-               goes through the /bulk-download endpoint instead. -->
-          <a
-            x-show="action.id === 'download' && !isBulkSelection"
-            :href="`/api/v1/files/${nodeData.uuid}/download`"
-            download
-            :download="nodeData.nodeType === 'folder' ? nodeData.name + '.zip' : nodeData.name"
-            class="gap-3 rounded"
-            @click="close()"
-          >
-            <i data-lucide="download" class="w-4 h-4"></i>
-            <span x-text="action.label"></span>
-          </a>
-
-          <!-- Open in new tab: <a> with target="_blank" -->
-          <a
-            x-show="action.id === 'open_new_tab' && !isBulkSelection"
-            :href="`/api/v1/files/${nodeData.uuid}/content`"
-            target="_blank"
-            class="gap-3 rounded"
-            @click="close()"
-          >
-            <i data-lucide="external-link" class="w-4 h-4"></i>
-            <span x-text="action.label"></span>
-          </a>
-
-          <!-- Default: button with @click -->
-          <button
-            x-show="(action.id !== 'download' && action.id !== 'open_new_tab') || isBulkSelection"
-            type="button"
-            class="gap-3 rounded"
-            :class="action.css_class"
-            @click="executeAction(action)"
-          >
-            <i
-              :data-lucide="action.icon"
-              class="w-4 h-4"
-              :class="iconClass(action)"
-            ></i>
-            <span x-text="action.label"></span>
-            <kbd x-show="action.shortcut" class="kbd kbd-xs ml-auto" x-text="action.shortcut"></kbd>
-          </button>
-        </li>
-      </template>
-    </ul>
-  </template>
-</div>
-
-<script>
-function contextMenu() {
-  return {
-    isOpen: false,
-    position: { x: 0, y: 0 },
-    nodeData: null,
-    isBackgroundMenu: false,
-    hasClipboardItems: false,
-
-    get isBulkSelection() {
-      return !!(this.nodeData
-        && Array.isArray(this.nodeData.selectionUuids)
-        && this.nodeData.selectionUuids.length > 1);
-    },
-
-    init() {
-      // Listen for context menu events (on files/folders)
-      window.addEventListener('open-context-menu', (e) => {
-        this.open(e.detail.event, e.detail.nodeData);
-      });
-
-      // Listen for background context menu events (on empty area)
-      window.addEventListener('open-background-context-menu', (e) => {
-        this.openBackground(e.detail.event);
-      });
-
-      // Listen for clipboard changes
-      window.addEventListener('clipboard-changed', () => {
-        this.hasClipboardItems = window.fileClipboard.hasItems();
-      });
-
-      // Initialize clipboard state
-      this.hasClipboardItems = window.fileClipboard.hasItems();
-    },
-
-    open(event, nodeData) {
-      event.preventDefault();
-
-      // Update node data first
-      this.nodeData = nodeData;
-      this.isBackgroundMenu = false;
-
-      // If already open, just update position and return
-      if (this.isOpen) {
-        this.updatePosition(event);
-        return;
-      }
-
-      this.isOpen = true;
-
-      // Calculate position to avoid overflow
-      this.$nextTick(() => {
-        this.updatePosition(event);
-      });
-    },
-
-    openBackground(event) {
-      event.preventDefault();
-
-      this.nodeData = null;
-      this.isBackgroundMenu = true;
-
-      if (this.isOpen) {
-        this.updatePosition(event);
-        return;
-      }
-
-      this.isOpen = true;
-
-      this.$nextTick(() => {
-        this.updatePosition(event);
-      });
-    },
-
-    updatePosition(event) {
-      const menu = this.$el;
-      const menuRect = menu.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      let x = event.clientX;
-      let y = event.clientY;
-
-      // Adjust if menu would overflow right edge
-      if (x + menuRect.width > viewportWidth) {
-        x = viewportWidth - menuRect.width - 10;
-      }
-
-      // Adjust if menu would overflow bottom edge
-      if (y + menuRect.height > viewportHeight) {
-        y = viewportHeight - menuRect.height - 10;
-      }
-
-      this.position = { x, y };
-    },
-
-    close() {
-      this.isOpen = false;
-      this.nodeData = null;
-    },
-
-    iconClass(action) {
-      if (action.id === 'toggle_favorite' && action.state && action.state.is_favorite) {
-        return 'text-warning fill-current';
-      }
-      if (action.id === 'toggle_pin' && action.state && action.state.is_pinned) {
-        return 'text-primary fill-current';
-      }
-      return '';
-    },
-
-    executeAction(action) {
-      const nd = this.nodeData;
-
-      // Multi-selection: route through the bulk-action event bus so the
-      // chosen action applies to every selected file, not just the one
-      // under the cursor.
-      if (this.isBulkSelection) {
-        const uuids = nd.selectionUuids;
-        let detail = null;
-        switch (action.id) {
-          case 'toggle_favorite':
-            detail = { action: 'favorite', uuids, add: !!action._bulkAdd };
-            break;
-          case 'toggle_pin':
-            detail = { action: 'pin', uuids, add: !!action._bulkAdd };
-            break;
-          case 'delete':
-          case 'restore':
-          case 'purge':
-          case 'cut':
-          case 'copy':
-          case 'download':
-            detail = { action: action.id, uuids };
-            break;
-        }
-        if (detail) {
-          window.dispatchEvent(new CustomEvent('bulk-action', { detail }));
-        }
-        this.close();
-        return;
-      }
-
-      switch (action.id) {
-        case 'view':
-          window.dispatchEvent(new CustomEvent('open-file-viewer', {
-            detail: { uuid: nd.uuid, name: nd.name, type: nd.fileType }
-          }));
-          break;
-        case 'open':
-          document.querySelector(`a[href="/files/${nd.uuid}"]`)?.click();
-          break;
-        case 'copy_link': {
-          const url = new URL(window.location.origin + window.location.pathname);
-          url.searchParams.set('open', nd.uuid);
-          navigator.clipboard.writeText(url.toString()).then(() => {
-            if (window.AppAlert) {
-              window.AppAlert.success('Link copied to clipboard', { duration: 2000 });
-            }
-          }).catch(err => {
-            console.error('Failed to copy link:', err);
-            if (window.AppAlert) {
-              window.AppAlert.error('Failed to copy link');
-            }
-          });
-          break;
-        }
-        case 'share':
-          window.dispatchEvent(new CustomEvent('open-share-modal', {
-            detail: { uuid: nd.uuid, name: nd.name }
-          }));
-          break;
-        case 'properties':
-          window.dispatchEvent(new CustomEvent('open-properties', {
-            detail: { uuid: nd.uuid, nodeType: nd.nodeType }
-          }));
-          break;
-        default:
-          // All other actions dispatch file-action event
-          window.dispatchEvent(new CustomEvent('file-action', {
-            detail: {
-              action: action.id,
-              uuid: nd.uuid,
-              name: nd.name,
-              nodeType: nd.nodeType,
-              isGroupFolder: !!nd.isGroupFolder,
-              state: action.state || {}
-            }
-          }));
-      }
-      this.close();
-    },
-
-    // Background menu actions
-    createFolder() {
-      window.dispatchEvent(new CustomEvent('folder-action', {
-        detail: { action: 'createFolder' }
-      }));
-      this.close();
-    },
-
-    createFile() {
-      window.dispatchEvent(new CustomEvent('folder-action', {
-        detail: { action: 'createFile' }
-      }));
-      this.close();
-    },
-
-    uploadFiles() {
-      window.dispatchEvent(new CustomEvent('folder-action', {
-        detail: { action: 'upload' }
-      }));
-      this.close();
-    },
-
-    pasteHere() {
-      window.dispatchEvent(new CustomEvent('folder-action', {
-        detail: { action: 'paste' }
-      }));
-      this.close();
-    }
-  };
-}
-</script>
+    </template>
+  </ul>
+</template>

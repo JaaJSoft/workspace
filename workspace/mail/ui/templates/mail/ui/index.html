@@ -143,36 +143,13 @@ x-data="mailApp()"
 {% include "mail/ui/partials/move_dialog.html" %}
 
 <!-- Account context menu -->
-{% include "mail/ui/partials/account_context_menu.html" %}
+{% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/account_context_menu.html" open="accountCtx.open" close="accountCtx.open = false" x="accountCtx.x" y="accountCtx.y" width="w-44" id="account-context-menu" %}
 
 <!-- Folder context menu -->
-{% include "mail/ui/partials/folder_context_menu.html" %}
+{% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/folder_context_menu.html" open="folderCtx.open" close="folderCtx.open = false" x="folderCtx.x" y="folderCtx.y" width="w-52" id="folder-context-menu" %}
 
 <!-- Label context menu -->
-<div
-  x-show="labelCtx.open"
-  x-cloak
-  @click.outside="labelCtx.open = false"
-  @keydown.escape.window="labelCtx.open = false"
-  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-44 p-1"
-  :style="`top: ${labelCtx.y}px; left: ${labelCtx.x}px;`"
-  id="label-context-menu"
->
-  <ul class="menu menu-sm p-0">
-    <li>
-      <button type="button" class="gap-3 rounded" @click="labelCtxAction('edit')">
-        <i data-lucide="pencil" class="w-4 h-4"></i>
-        <span>Edit</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded text-error" @click="labelCtxAction('delete')">
-        <i data-lucide="trash-2" class="w-4 h-4"></i>
-        <span>Delete</span>
-      </button>
-    </li>
-  </ul>
-</div>
+{% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/label_context_menu.html" open="labelCtx.open" close="labelCtx.open = false" x="labelCtx.x" y="labelCtx.y" width="w-44" id="label-context-menu" %}
 
 <!-- Label create/edit dialog -->
 <dialog id="mail-label-dialog" class="modal">
@@ -248,7 +225,7 @@ x-data="mailApp()"
 {% include "mail/ui/partials/hidden_folders_dialog.html" %}
 
 <!-- Message context menu -->
-{% include "mail/ui/partials/message_context_menu.html" %}
+{% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/message_context_menu.html" open="msgCtx.open" close="msgCtx.open = false" x="msgCtx.x" y="msgCtx.y" width="w-52" id="message-context-menu" %}
 
 <!-- Folder icon picker dialog -->
 <dialog id="mail-folder-icon-dialog" class="modal">

@@ -258,7 +258,7 @@ class MailMessageDetailView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         from .services.imap_messages import delete_message
-        from .services.notifications import clear_notifications_for_deleted_messages
+        from .services.notifications import settle_message_notifications
         from .views import _refresh_folder_counts, _refresh_message_label_counts
 
         with transaction.atomic():
@@ -270,7 +270,7 @@ class MailMessageDetailView(APIView):
         # Soft delete never CASCADEs the row's Notification, and a deleted
         # message can never again appear on a rendered page for
         # mark_sources_read to catch it - settle it here instead.
-        clear_notifications_for_deleted_messages(request.user, [msg.pk])
+        settle_message_notifications(request.user, [msg.pk])
 
         try:
             delete_message(msg.account, msg)
@@ -390,7 +390,7 @@ class MailBatchActionView(APIView):
                 )
 
         from .services.label_counts import refresh_labels_for_messages
-        from .services.notifications import clear_notifications_for_deleted_messages
+        from .services.notifications import settle_message_notifications
         from .views import _refresh_folders_counts_bulk
 
         with transaction.atomic():
@@ -411,6 +411,6 @@ class MailBatchActionView(APIView):
             # Soft delete never CASCADEs the row's Notification, and a
             # deleted message can never again appear on a rendered page for
             # mark_sources_read to catch it - settle it here instead.
-            clear_notifications_for_deleted_messages(request.user, deleted_pks)
+            settle_message_notifications(request.user, deleted_pks)
 
         return Response({"processed": processed})

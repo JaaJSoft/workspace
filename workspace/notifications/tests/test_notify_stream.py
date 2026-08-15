@@ -52,6 +52,18 @@ class NotifyStreamTests(TestCase):
         self.assertEqual(notif.title, "second")
         self.assertEqual(notif.body, "newer")
 
+    def test_merge_is_scoped_to_the_stream(self, mock_sse, mock_push):
+        self._send()
+        self._send(title="reminder", stream="reminder")
+
+        # One default-stream row and one reminder row per recipient: the
+        # reminder must not repurpose the existing notification.
+        self.assertEqual(Notification.objects.count(), 4)
+        default = Notification.objects.get(recipient=self.alice, stream="")
+        self.assertEqual(default.title, "first")
+        reminder = Notification.objects.get(recipient=self.alice, stream="reminder")
+        self.assertEqual(reminder.title, "reminder")
+
     def test_merge_only_targets_unread(self, mock_sse, mock_push):
         from django.utils import timezone
 

@@ -5,8 +5,6 @@ from workspace.core.module_registry import (
     ModuleInfo,
     ModuleRegistry,
     ModuleVisibility,
-    PendingAction,
-    PendingActionProviderInfo,
     SearchProviderInfo,
     SearchResult,
 )
@@ -175,53 +173,6 @@ class SearchProviderTests(TestCase):
         # Should not raise
         hits = reg.search("test", user=None)
         self.assertEqual(hits, [])
-
-
-class PendingActionProviderTests(TestCase):
-    def test_register_pending_action(self):
-        reg = ModuleRegistry()
-        reg.register(_make_module("mail"))
-        provider = PendingActionProviderInfo(
-            module_slug="mail",
-            pending_action_fn=lambda u: PendingAction(count=5),
-        )
-        reg.register_pending_action_provider(provider)
-        actions = reg.get_pending_actions(user=None)
-        self.assertEqual(actions["mail"], PendingAction(count=5))
-
-    def test_requires_registered_module(self):
-        reg = ModuleRegistry()
-        with self.assertRaises(ValueError):
-            reg.register_pending_action_provider(
-                PendingActionProviderInfo(
-                    module_slug="mail", pending_action_fn=lambda u: 0
-                )
-            )
-
-    def test_duplicate_raises(self):
-        reg = ModuleRegistry()
-        reg.register(_make_module("mail"))
-        reg.register_pending_action_provider(
-            PendingActionProviderInfo(module_slug="mail", pending_action_fn=lambda u: 0)
-        )
-        with self.assertRaises(ValueError):
-            reg.register_pending_action_provider(
-                PendingActionProviderInfo(
-                    module_slug="mail", pending_action_fn=lambda u: 0
-                )
-            )
-
-    def test_handles_provider_error(self):
-        reg = ModuleRegistry()
-        reg.register(_make_module("mail"))
-        reg.register_pending_action_provider(
-            PendingActionProviderInfo(
-                module_slug="mail",
-                pending_action_fn=lambda u: (_ for _ in ()).throw(RuntimeError),
-            )
-        )
-        actions = reg.get_pending_actions(user=None)
-        self.assertEqual(actions["mail"], PendingAction(count=0))
 
 
 class CommandTests(TestCase):

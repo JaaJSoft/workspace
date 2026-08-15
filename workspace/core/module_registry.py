@@ -64,26 +64,6 @@ class SearchProviderInfo:
 
 
 @dataclass(frozen=True)
-class PendingAction:
-    """Badge count for a module tile, with an optional deep link.
-
-    ``url`` is set only when the pending work has a single unambiguous
-    target (one unread conversation, one overdue task, ...) so the tile can
-    open that item directly. It stays ``None`` as soon as the target is
-    ambiguous, and the tile falls back to the module home.
-    """
-
-    count: int
-    url: str | None = None
-
-
-@dataclass(frozen=True)
-class PendingActionProviderInfo:
-    module_slug: str
-    pending_action_fn: Callable  # signature: (user) -> PendingAction
-
-
-@dataclass(frozen=True)
 class CommandInfo:
     name: str
     keywords: list[str]
@@ -99,7 +79,6 @@ class ModuleRegistry:
     def __init__(self):
         self._modules: dict[str, ModuleInfo] = {}
         self._search_providers: dict[str, SearchProviderInfo] = {}
-        self._pending_action_providers: dict[str, PendingActionProviderInfo] = {}
         self._commands: list[CommandInfo] = []
         self._lock = threading.Lock()
 
@@ -140,31 +119,6 @@ class ModuleRegistry:
             except Exception:
                 logger.exception("Search provider '%s' failed", provider.slug)
         return results
-
-    def register_pending_action_provider(self, provider: PendingActionProviderInfo):
-        with self._lock:
-            if provider.module_slug not in self._modules:
-                raise ValueError(
-                    f"Module '{provider.module_slug}' must be registered before its pending action provider"
-                )
-            if provider.module_slug in self._pending_action_providers:
-                raise ValueError(
-                    f"Pending action provider for '{provider.module_slug}' is already registered"
-                )
-            self._pending_action_providers[provider.module_slug] = provider
-
-    def get_pending_actions(self, user) -> dict[str, PendingAction]:
-        actions = {}
-        for slug, provider in self._pending_action_providers.items():
-            module = self._modules.get(slug)
-            if not module or not module.active:
-                continue
-            try:
-                actions[slug] = provider.pending_action_fn(user)
-            except Exception:
-                logger.exception("Pending action provider '%s' failed", slug)
-                actions[slug] = PendingAction(count=0)
-        return actions
 
     def register_commands(self, commands: list[CommandInfo]):
         with self._lock:

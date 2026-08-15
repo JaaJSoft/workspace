@@ -398,10 +398,10 @@ def _reconcile_folder(conn, folder):
                 count,
             )
             from workspace.mail.services.notifications import (
-                clear_notifications_for_deleted_messages,
+                settle_message_notifications,
             )
 
-            clear_notifications_for_deleted_messages(folder.account.owner, gone_pks)
+            settle_message_notifications(folder.account.owner, gone_pks)
 
     # Update flags for remaining messages
     present = local_uids & remote_uids
@@ -468,7 +468,11 @@ def _reconcile_folder(conn, folder):
             base.filter(imap_uid__in=read_changed_uids).values_list("pk", flat=True)
         )
 
+    externally_read_pks = []
     if need_read:
+        externally_read_pks = list(
+            base.filter(imap_uid__in=need_read).values_list("pk", flat=True)
+        )
         base.filter(imap_uid__in=need_read).update(is_read=True)
     if need_unread:
         base.filter(imap_uid__in=need_unread).update(is_read=False)
@@ -481,6 +485,13 @@ def _reconcile_folder(conn, folder):
         from .label_counts import refresh_labels_for_messages
 
         refresh_labels_for_messages(affected_message_ids)
+
+    # A message read from another client was seen there; its notification
+    # would otherwise stay unread forever (no page render happens here).
+    if externally_read_pks:
+        from .notifications import settle_message_notifications
+
+        settle_message_notifications(folder.account.owner, externally_read_pks)
 
 
 def _update_folder_counts(folder):

@@ -141,16 +141,23 @@ def notify_labeled_messages(user, messages, *, was_initial_sync) -> int:
     return _notify_messages(user, eligible[:limit], priority="high")
 
 
-def clear_notifications_for_deleted_messages(user, message_pks) -> int:
-    """Mark read the push notifications for messages that just got soft-deleted.
+def settle_message_notifications(user, message_pks) -> int:
+    """Mark read the notifications for messages that stopped being news.
 
-    Deletion here never CASCADEs: every mail queryset filters
-    ``deleted_at__isnull=True``, so a deleted message can never again appear
-    on a rendered page for ``mark_sources_read`` to catch. Called from
-    reconciliation (another IMAP client deleted or moved the message) and
-    from the in-app delete paths. Lightweight, unsaved ``MailMessage``
-    instances stand in for the deleted rows, mirroring the pattern already
-    used for a single source in ``chat/views_messages.py``.
+    Two callers, one invariant - the notification's job is over:
+
+    - soft-deleted messages: deletion never CASCADEs here, and every mail
+      queryset filters ``deleted_at__isnull=True``, so a deleted message can
+      never again appear on a rendered page for ``mark_sources_read`` to
+      catch. Called from reconciliation (another IMAP client deleted or
+      moved the message) and from the in-app delete paths.
+    - messages read from another IMAP client: flag reconciliation flips
+      ``is_read`` without any page being rendered in this app, so the badge
+      would otherwise keep counting a message the user has already seen.
+
+    Lightweight, unsaved ``MailMessage`` instances stand in for the rows,
+    mirroring the pattern already used for a single source in
+    ``chat/views_messages.py``.
     """
     message_pks = list(message_pks)
     if not message_pks:

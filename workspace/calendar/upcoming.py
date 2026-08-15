@@ -1,6 +1,6 @@
 """Upcoming events helper that expands recurring occurrences.
 
-Used by the dashboard (event list + pending action count).
+Used by the dashboard event list and the today's-events notification cron.
 """
 
 from datetime import UTC, datetime, time, timedelta
@@ -19,9 +19,14 @@ from workspace.calendar.recurrence import (
 
 
 class VirtualOccurrence:
-    """Lightweight event-like object for recurring occurrences in templates."""
+    """Lightweight event-like object for recurring occurrences in templates.
 
-    __slots__ = ("uuid", "title", "all_day", "start", "calendar")
+    ``master`` carries the real Event row, for consumers that need a
+    database-addressable object behind the synthetic uuid (the notification
+    cron keys its rows on it).
+    """
+
+    __slots__ = ("uuid", "title", "all_day", "start", "calendar", "master")
 
     def __init__(self, master, occ_start):
         self.uuid = f"{master.uuid}:{occ_start.isoformat()}"
@@ -29,6 +34,7 @@ class VirtualOccurrence:
         self.all_day = master.all_day
         self.start = occ_start
         self.calendar = master.calendar
+        self.master = master
 
 
 def get_upcoming_for_user(user, now, end_of_today):

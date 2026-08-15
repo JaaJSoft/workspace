@@ -15,6 +15,7 @@ from workspace.common.cache import cached_response, invalidate
 from workspace.common.mixins import CacheControlMixin
 from workspace.notifications.services.notifications import (
     mark_source_read,
+    mark_sources_read,
     notify,
     notify_many,
 )
@@ -33,6 +34,17 @@ from .serializers import (
 )
 from .services.timezones import current_timezone_name, normalize_all_day
 from .upcoming import get_upcoming_page
+
+
+def _mark_displayed_events_read(user, event_pks):
+    """Displayed events are demonstrably seen - settle their notifications.
+
+    A recurring occurrence's synthetic ``<master>:<start>`` id resolves to
+    the master row, which is also what the notification cron keys on.
+    """
+    pks = {str(pk).split(":", 1)[0] for pk in event_pks if pk}
+    if pks:
+        mark_sources_read(user, [Event(pk=pk) for pk in pks])
 
 
 def _parse_dt(value):
@@ -321,6 +333,7 @@ class EventListView(CacheControlMixin, APIView):
             calendar_ids=calendar_ids,
             show_declined=show_declined,
         )
+        _mark_displayed_events_read(request.user, [e.get("uuid") for e in events])
         return Response({"events": events, "next_after": next_after})
 
     def _get_range(self, request):
@@ -386,6 +399,7 @@ class EventListView(CacheControlMixin, APIView):
         # sort would misorder them.
         all_events = non_recurring_data + recurring_data
         all_events.sort(key=lambda e: _sort_instant(e.get("start")))
+        _mark_displayed_events_read(request.user, [e.get("uuid") for e in all_events])
         return Response(all_events)
 
     @extend_schema(summary="Create an event", request=EventCreateSerializer)

@@ -16,8 +16,6 @@ class ChatConfig(AppConfig):
         from workspace.core.module_registry import (
             CommandInfo,
             ModuleInfo,
-            PendingAction,
-            PendingActionProviderInfo,
             SearchProviderInfo,
             registry,
         )
@@ -55,25 +53,6 @@ class ChatConfig(AppConfig):
             SSEProviderInfo(
                 slug="chat",
                 provider_cls=ChatSSEProvider,
-            )
-        )
-
-        def _chat_pending_actions(user):
-            from workspace.chat.services.conversations import get_unread_counts
-
-            unread = get_unread_counts(user)
-            conversations = unread["conversations"]
-            url = (
-                f"/chat/{next(iter(conversations))}"
-                if len(conversations) == 1
-                else None
-            )
-            return PendingAction(count=unread["total"], url=url)
-
-        registry.register_pending_action_provider(
-            PendingActionProviderInfo(
-                module_slug="chat",
-                pending_action_fn=_chat_pending_actions,
             )
         )
 

@@ -302,6 +302,43 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         label.refresh_from_db()
         self.assertEqual(label.unread_count, 1)
 
+    def test_externally_read_message_settles_its_notification(self):
+        """A message read from another IMAP client never renders a page here,
+        so reconciliation itself must mark its notification read - otherwise
+        the badge keeps counting a message the user has already seen."""
+        msg = self._make_msg(100, is_read=False)
+        notif = Notification.objects.create(
+            recipient=self.user,
+            origin="mail",
+            icon="mail",
+            title="New email",
+            mail_message=msg,
+        )
+
+        conn = self._mock_conn([100], flags={100: r"\Seen"})
+        _reconcile_folder(conn, self.folder)
+
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
+
+    def test_marking_unread_does_not_touch_notifications(self):
+        """Only the read direction settles: a message flipped back to unread
+        on the server must not mark anything read."""
+        msg = self._make_msg(100, is_read=True)
+        notif = Notification.objects.create(
+            recipient=self.user,
+            origin="mail",
+            icon="mail",
+            title="New email",
+            mail_message=msg,
+        )
+
+        conn = self._mock_conn([100], flags={100: ""})
+        _reconcile_folder(conn, self.folder)
+
+        notif.refresh_from_db()
+        self.assertIsNone(notif.read_at)
+
     def test_flag_fetch_failure_skips_update(self):
         """Flag update is skipped when UID FETCH fails."""
         self._make_msg(100, is_read=False)

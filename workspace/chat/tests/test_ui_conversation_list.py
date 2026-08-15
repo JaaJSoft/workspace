@@ -199,7 +199,9 @@ class ConversationAvatarMarkupTests(ChatTestMixin, TestCase):
                 {flag: "" for flag in self.FLAGS if re.search(rf"\s{flag}[\s>]", tag)}
             )
             return attrs
-        self.fail(f"no <conversation-avatar> for {uuid} in the rendered sidebar")
+        raise AssertionError(
+            f"no <conversation-avatar> for {uuid} in the rendered sidebar"
+        )
 
     def test_sidebar_and_api_agree_on_every_conversation(self):
         self.client.force_login(self.creator)

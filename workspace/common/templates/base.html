@@ -55,6 +55,12 @@
       display: none !important;
     }
 
+    /* <inline-alert> styles itself when ui/js/inline_alert.js (end of body)
+       defines it; hide the raw markup until then. */
+    inline-alert:not(:defined) {
+      display: none;
+    }
+
     /* Use dynamic viewport height where supported, fall back to vh */
     .h-dvh {
       height: 100vh;
@@ -186,29 +192,37 @@
         const text = document.createElement('span');
         text.append('Your browser looks like it is in ', zone, '. Update your timezone?');
         let saving = false;
-        banner.appendChild(InlineAlert.create({
-          type: 'info',
-          iconName: 'globe',
-          slot: text,
-          actions: [
-            { label: 'Update', style: 'primary', onClick: function () {
-              if (saving) return;
-              saving = true;
-              putTimezone(detected).then(function (resp) {
-                if (!resp.ok) throw new Error('timezone save failed');
-                window.location.reload();
-              }).catch(function () {
-                saving = false;
-                text.textContent = 'Could not save your timezone. Try again?';
-              });
-            } },
-            { label: 'Ignore', onClick: function () {
-              localStorage.setItem('tz-suggest-dismissed', detected);
-              // Hide the wrapper instead of dismissing the inner alert, because removing only the alert would leave the opaque wrapper as an empty floating box.
-              banner.classList.add('hidden');
-            } },
-          ],
-        }));
+        const alert = document.createElement('inline-alert');
+        alert.setAttribute('type', 'info');
+        alert.setAttribute('icon', 'globe');
+        const update = document.createElement('button');
+        update.type = 'button';
+        update.setAttribute('slot', 'actions');
+        update.className = 'btn btn-xs btn-primary';
+        update.textContent = 'Update';
+        update.addEventListener('click', function () {
+          if (saving) return;
+          saving = true;
+          putTimezone(detected).then(function (resp) {
+            if (!resp.ok) throw new Error('timezone save failed');
+            window.location.reload();
+          }).catch(function () {
+            saving = false;
+            text.textContent = 'Could not save your timezone. Try again?';
+          });
+        });
+        const ignore = document.createElement('button');
+        ignore.type = 'button';
+        ignore.setAttribute('slot', 'actions');
+        ignore.className = 'btn btn-xs btn-ghost';
+        ignore.textContent = 'Ignore';
+        ignore.addEventListener('click', function () {
+          localStorage.setItem('tz-suggest-dismissed', detected);
+          // Hide the wrapper instead of dismissing the inner alert, because removing only the alert would leave the opaque wrapper as an empty floating box.
+          banner.classList.add('hidden');
+        });
+        alert.append(text, update, ignore);
+        banner.appendChild(alert);
         banner.classList.remove('hidden');
       });
     })();

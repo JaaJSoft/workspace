@@ -19,9 +19,9 @@
     {% endif %}
   {% else %}
     {% if activity_search %}
-      {% include "ui/partials/inline_alert.html" with type="info" message="No activity matching your search." %}
+      <inline-alert type="info" message="No activity matching your search."></inline-alert>
     {% else %}
-      {% include "ui/partials/inline_alert.html" with type="info" message="No activity to show." %}
+      <inline-alert type="info" message="No activity to show."></inline-alert>
     {% endif %}
   {% endif %}
 </div>

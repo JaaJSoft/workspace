@@ -30,7 +30,7 @@
     <template x-if="rulesEditing === null && rulesApplying === null">
       <div class="space-y-2">
         <template x-if="!rulesList.length">
-          {% include "ui/partials/inline_alert.html" with type="info" message="No rules yet. Click 'New rule' to create one." %}
+          <inline-alert type="info" message="No rules yet. Click 'New rule' to create one."></inline-alert>
         </template>
 
         <template x-if="rulesList.length > 0">

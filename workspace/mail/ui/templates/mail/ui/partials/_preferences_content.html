@@ -65,7 +65,7 @@
     </select>
   </div>
   <template x-if="notifyMode === 'labels' && !ai.classify">
-    {% include "ui/partials/inline_alert.html" with type="warning" message="Auto-classify is off, so no email gets labelled and no notification is sent." class="mt-1" %}
+    <inline-alert type="warning" message="Auto-classify is off, so no email gets labelled and no notification is sent." class="mt-1"></inline-alert>
   </template>
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Max notifications per folder at once</label>

@@ -20,10 +20,10 @@
         General
       </h3>
       <template x-if="error">
-        {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
+        <inline-alert type="error"><span x-text="error"></span></inline-alert>
       </template>
       <template x-if="saved">
-        {% include "ui/partials/inline_alert.html" with type="success" message="Saved." %}
+        <inline-alert type="success" message="Saved."></inline-alert>
       </template>
       <label class="form-control w-full">
         <div class="label py-1"><span class="label-text">Name</span></div>
@@ -87,14 +87,14 @@
           <p class="text-sm text-base-content/60 mt-0.5">Share this project with a group or add people directly.</p>
         </div>
         <template x-if="error">
-          {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
+          <inline-alert type="error"><span x-text="error"></span></inline-alert>
         </template>
 
         <div id="settings-group" class="flex flex-col gap-2"
              x-data="projectGroupAccess({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
              @project-group-selected.window="addGroup($event.detail.group)">
           <template x-if="error">
-            {% include "ui/partials/inline_alert.html" with type="error" class="mb-2" slot='<span x-text="error"></span>' %}
+            <inline-alert type="error" class="mb-2"><span x-text="error"></span></inline-alert>
           </template>
           <div class="flex items-center justify-between">
             <h4 class="text-sm font-medium text-base-content/70">Groups</h4>
@@ -176,7 +176,7 @@
         {% endif %}
       </div>
       <template x-if="error">
-        {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
+        <inline-alert type="error"><span x-text="error"></span></inline-alert>
       </template>
 
       <template x-if="adding">
@@ -286,7 +286,7 @@
         {% endif %}
       </div>
       <template x-if="error">
-        {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
+        <inline-alert type="error"><span x-text="error"></span></inline-alert>
       </template>
       <template x-if="adding">
         <form class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-100"
@@ -377,7 +377,7 @@
           Danger zone
         </h3>
         <template x-if="error">
-          {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
+          <inline-alert type="error"><span x-text="error"></span></inline-alert>
         </template>
         <div class="grid gap-3 sm:grid-cols-2 items-stretch">
           <div class="rounded-box bg-base-100 p-3 flex items-center justify-between gap-3 flex-wrap">

@@ -111,7 +111,7 @@
 
         <!-- Error -->
         <template x-if="editError">
-          {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="editError"></span>' class="text-xs" %}
+          <inline-alert type="error" class="text-xs"><span x-text="editError"></span></inline-alert>
         </template>
 
         <!-- Edit history actions (visible when there's a preview) -->

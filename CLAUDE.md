@@ -723,22 +723,33 @@ Always use the existing UI partials located in `workspace/common/templates/ui/pa
 
 #### Alerts
 
-Use the `inline_alert` partial for all alert messages:
+Use the `<inline-alert>` custom element for all inline alert messages (defined in `workspace/common/static/ui/js/inline_alert.js`, loaded globally by `base.html`). One implementation for both rendering paths: Django templates write the element directly, runtime JS creates it with `document.createElement('inline-alert')` and the same attributes.
 
 ```django
-{% include "ui/partials/inline_alert.html" with type="error" message="Your error message" %}
-{% include "ui/partials/inline_alert.html" with type="warning" message="Your warning message" %}
-{% include "ui/partials/inline_alert.html" with type="success" message="Your success message" %}
-{% include "ui/partials/inline_alert.html" with type="info" message="Your info message" %}
+<inline-alert type="error" message="Your error message"></inline-alert>
+<inline-alert type="warning" message="Heads up" class="mb-4"></inline-alert>
+<inline-alert type="success" title="Saved" message="Your changes are in." dismissible></inline-alert>
 ```
 
-Available parameters:
+Available attributes:
 - `type`: 'info' (default), 'success', 'warning', 'error'
-- `message`: The message to display
-- `title`: Optional title
-- `dismissible`: True/False - adds close button
-- `icon`: True (default) / False - show/hide icon
-- `class`: Additional CSS classes (e.g., "mb-4")
+- `message`: plain-text body
+- `title`: optional bold heading above the message
+- `dismissible`: boolean attribute - adds a close button that removes the alert
+- `icon`: lucide icon name override; `icon="none"` hides the icon
+- `class`: additional CSS classes (e.g., "mb-4"), merged with the element's own
+
+Dynamic or rich content goes in as child content instead of `message` (slot mode); action buttons are children with `slot="actions"` (style them yourself, `data-dismiss` also removes the alert):
+
+```django
+<inline-alert type="error"><span x-text="error"></span></inline-alert>
+<inline-alert message="A new version is available.">
+  <button slot="actions" class="btn btn-xs btn-primary" @click="reload()">Reload</button>
+  <button slot="actions" class="btn btn-xs btn-ghost" data-dismiss>Ignore</button>
+</inline-alert>
+```
+
+Attributes and children are read once, when the element first connects - author them before inserting it, and use slot mode (not attribute bindings) for text that changes afterwards.
 
 #### Dialogs
 

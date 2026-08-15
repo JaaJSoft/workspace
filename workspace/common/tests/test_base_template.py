@@ -53,7 +53,7 @@ class BaseTemplateScriptOriginTests(TestCase):
     """Alpine must never be served from a third-party CDN.
 
     Alpine evaluates every component expression, and its reactive state holds
-    decrypted vault entries on the ``passwords`` pages: a tampered third-party
+    decrypted vault entries on the ``vault`` pages: a tampered third-party
     build would exfiltrate the whole vault.
     """
 

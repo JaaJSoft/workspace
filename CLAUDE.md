@@ -43,6 +43,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `notes` | Markdown notes built on the files module |
 | `notifications` | Web push, in-app notifications |
 | `users` | User model, settings, profile, activity feed |
+| `vault` | End-to-end encrypted password vault (preview) |
 
 ## Infrastructure
 

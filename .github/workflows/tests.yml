@@ -67,6 +67,8 @@ jobs:
             min_coverage: 85
           - module: users
             min_coverage: 85
+          - module: vault
+            min_coverage: 95
     name: Tests (${{ matrix.module }})
     steps:
       - name: Checkout repository

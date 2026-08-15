@@ -1,49 +1,9 @@
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.chat.models import Conversation, Message
 
 from .test_chat import ChatTestMixin
-
-
-class ChatPendingActionProviderTests(ChatTestMixin, TestCase):
-    """Tests for the chat pending action provider."""
-
-    def test_pending_actions_returns_unread_count(self):
-        ConversationMember.objects.filter(
-            conversation=self.group,
-            user=self.member,
-        ).update(unread_count=3)
-        ConversationMember.objects.filter(
-            conversation=self.dm,
-            user=self.member,
-        ).update(unread_count=2)
-
-        from workspace.core.module_registry import registry
-
-        action = registry.get_pending_actions(self.member)["chat"]
-        self.assertEqual(action.count, 5)
-        # Two conversations are unread - no unambiguous target.
-        self.assertIsNone(action.url)
-
-    def test_pending_actions_returns_zero_when_no_unread(self):
-        from workspace.core.module_registry import registry
-
-        action = registry.get_pending_actions(self.creator)["chat"]
-        self.assertEqual(action.count, 0)
-        self.assertIsNone(action.url)
-
-    def test_pending_actions_deep_links_to_the_single_unread_conversation(self):
-        ConversationMember.objects.filter(
-            conversation=self.group,
-            user=self.member,
-        ).update(unread_count=3)
-
-        from workspace.core.module_registry import registry
-
-        action = registry.get_pending_actions(self.member)["chat"]
-        self.assertEqual(action.count, 3)
-        self.assertEqual(action.url, f"/chat/{self.group.uuid}")
 
 
 class ChatActivityProviderTests(ChatTestMixin, TestCase):

@@ -11,8 +11,6 @@ class CalendarConfig(AppConfig):
         from workspace.core.module_registry import (
             CommandInfo,
             ModuleInfo,
-            PendingAction,
-            PendingActionProviderInfo,
             SearchProviderInfo,
             registry,
         )
@@ -44,35 +42,6 @@ class CalendarConfig(AppConfig):
                 slug="calendar_polls",
                 module_slug="calendar",
                 search_fn=search_polls,
-            )
-        )
-
-        def _calendar_pending_actions(user):
-            from datetime import datetime, time
-
-            from django.utils import timezone
-
-            from workspace.calendar.upcoming import get_upcoming_for_user
-
-            now = timezone.now()
-            end_of_today = timezone.make_aware(
-                datetime.combine(timezone.localdate(), time.max),
-                timezone.get_current_timezone(),
-            )
-            events = get_upcoming_for_user(user, now, end_of_today)
-            url = None
-            if len(events) == 1:
-                event_uuid = str(events[0].uuid)
-                # Recurring occurrences carry a synthetic "<master>:<start>"
-                # id the event endpoint cannot resolve - no deep link for those.
-                if ":" not in event_uuid:
-                    url = f"/calendar?event={event_uuid}"
-            return PendingAction(count=len(events), url=url)
-
-        registry.register_pending_action_provider(
-            PendingActionProviderInfo(
-                module_slug="calendar",
-                pending_action_fn=_calendar_pending_actions,
             )
         )
 

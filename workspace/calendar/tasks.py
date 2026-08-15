@@ -149,3 +149,56 @@ def sync_all_external_calendars():
         label="external calendar sync",
         log=logger,
     ).as_dict()
+
+
+@shared_task(name="calendar.notify_today_events", ignore_result=True)
+def notify_today_events():
+    """Notify each user of their remaining events today.
+
+    Runs every morning. Keyed per event through ``notify_stream`` (a
+    recurring occurrence keys on its master row), so a rerun merges into the
+    existing unread notification instead of stacking a duplicate. Priority
+    "low": the badge and the bell are the point - a push per calendar entry
+    every morning would be noise. Deleting an event CASCADEs its rows away;
+    displaying it in the calendar or the event detail marks them read.
+    """
+    from datetime import datetime, time
+
+    from django.contrib.auth import get_user_model
+    from django.utils import timezone as dj_timezone
+
+    from workspace.calendar.upcoming import VirtualOccurrence, get_upcoming_for_user
+    from workspace.notifications.services.notifications import notify_stream
+
+    now = dj_timezone.now()
+    end_of_today = dj_timezone.make_aware(
+        datetime.combine(dj_timezone.localdate(), time.max),
+        dj_timezone.get_current_timezone(),
+    )
+
+    notified = 0
+    for user in get_user_model().objects.filter(is_active=True).only("pk"):
+        for event in get_upcoming_for_user(user, now, end_of_today):
+            source = (
+                event.master if isinstance(event, VirtualOccurrence) else event
+            )
+            if event.all_day:
+                body = "All day today"
+            else:
+                body = f"Today at {dj_timezone.localtime(event.start):%H:%M}"
+            url = ""
+            if not isinstance(event, VirtualOccurrence):
+                url = f"/calendar?event={event.uuid}"
+            notify_stream(
+                recipient_ids=[user.pk],
+                source=source,
+                origin="calendar",
+                title=event.title,
+                body=body,
+                url=url,
+                default_priority="low",
+            )
+            notified += 1
+    if notified:
+        logger.info("Today's-event notifications refreshed for %d events", notified)
+    return notified

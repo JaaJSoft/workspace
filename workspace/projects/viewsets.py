@@ -53,6 +53,7 @@ from .services.tasks import (
     has_field_updates,
     move_tasks,
     reorder_tasks,
+    settle_task_notifications,
 )
 
 User = get_user_model()
@@ -424,6 +425,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         old_status = serializer.instance.status
+        old_due_date = serializer.instance.due_date
         # Compared before save: afterwards the instance already carries the
         # new values and every edit would look like a no-op.
         fields_updated = has_field_updates(
@@ -436,6 +438,10 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             record_task_event(
                 task, type=TaskEvent.Type.UPDATED, actor=self.request.user
             )
+        if task.due_date != old_due_date and (
+            task.due_date is None or task.due_date > timezone.localdate()
+        ):
+            settle_task_notifications([task])
 
     def destroy(self, request, *args, **kwargs):
         self._require_writable()

@@ -8,7 +8,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
-from workspace.core.module_registry import registry
 from workspace.core.services.activity import (
     annotate_time_ago,
     get_recent_events,
@@ -19,6 +18,7 @@ from workspace.core.services.module_visibility import (
     is_module_slug_visible,
     visible_modules,
 )
+from workspace.notifications.services.notifications import get_unread_badges
 from workspace.projects.queries import assigned_open_tasks
 from workspace.users.services.settings import get_module_settings, get_setting
 
@@ -85,15 +85,15 @@ def _dashboard_modules(user):
     """Build the dashboard app tiles and the settings-popover app list.
 
     Returns ``(modules, dashboard_apps)`` where ``modules`` is the visible grid
-    (hidden slugs and the dashboard tile excluded, pending counts attached) and
-    ``dashboard_apps`` is every visible app with a ``hidden`` flag for the
-    settings popover.
+    (hidden slugs and the dashboard tile excluded, unread notification counts
+    attached) and ``dashboard_apps`` is every visible app with a ``hidden``
+    flag for the settings popover.
 
-    A tile links to its module home unless the module's pending-action
-    provider resolved a single target, in which case it opens that item
-    directly (the unread conversation, the overdue task, ...).
+    A tile links to its module home unless the module has exactly one unread
+    notification with a url, in which case it opens that item directly (the
+    unread conversation, the due task, ...).
     """
-    pending_actions = registry.get_pending_actions(user)
+    badges = get_unread_badges(user)
     hidden = set(get_module_settings(user, "dashboard").get("hidden_modules") or [])
     modules = []
     dashboard_apps = []
@@ -111,10 +111,10 @@ def _dashboard_modules(user):
         )
         if m.slug in hidden:
             continue
-        action = pending_actions.get(m.slug)
+        badge = badges.get(m.slug)
         data = asdict(m)
-        data["pending_action_count"] = action.count if action else 0
-        data["url"] = (action.url if action and action.count else None) or m.url
+        data["notification_count"] = badge["count"] if badge else 0
+        data["url"] = (badge["url"] if badge else None) or m.url
         modules.append(data)
     return modules, dashboard_apps
 

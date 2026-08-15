@@ -44,30 +44,6 @@ class ProjectsConfig(AppConfig):
             )
         )
 
-        from workspace.core.module_registry import (
-            PendingAction,
-            PendingActionProviderInfo,
-        )
-
-        def _projects_pending_actions(user):
-            from workspace.projects.queries import pending_tasks
-
-            tasks = pending_tasks(user)
-            count = tasks.count()
-            url = None
-            if count == 1:
-                row = tasks.values_list("uuid", "project_id").first()
-                if row:
-                    url = f"/projects/{row[1]}?task={row[0]}"
-            return PendingAction(count=count, url=url)
-
-        registry.register_pending_action_provider(
-            PendingActionProviderInfo(
-                module_slug="projects",
-                pending_action_fn=_projects_pending_actions,
-            )
-        )
-
         from workspace.core.activity_registry import (
             ActivityProviderInfo,
             activity_registry,

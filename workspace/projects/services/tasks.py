@@ -2,9 +2,22 @@ from django.db import transaction
 from django.db.models import Max, Q
 from django.utils import timezone
 
+from workspace.notifications.services.notifications import settle_sources
+
 from ..models import Task, TaskEvent, TaskStatus
 from .events import move_event_type, record_task_event
 from .references import allocate_task_number
+
+
+def settle_task_notifications(tasks):
+    """Settle the due reminders of resolved tasks for every recipient.
+
+    Called when tasks complete (or their due date moves back): the reminder
+    is moot, whoever it was for. Capped at "normal" so high/urgent rows
+    (comment mentions) stay unread - resolving a task does not prove its
+    mentions were seen.
+    """
+    settle_sources(tasks, max_priority="normal")
 
 
 def next_position(project, status):
@@ -125,6 +138,8 @@ def apply_status_change(task, *, actor=None, old_status=None):
             from_status=old_status,
             to_status=task.status,
         )
+    if task.status.category == TaskStatus.Category.DONE:
+        settle_task_notifications([task])
 
 
 def delete_task(task, actor=None):
@@ -183,6 +198,8 @@ def move_tasks(project, status, task_uuids, *, actor=None):
                 from_status=old_status,
                 to_status=status,
             )
+    if moved and status.category == TaskStatus.Category.DONE:
+        settle_task_notifications([task for task, _ in moved])
     return [task for task, _ in moved]
 
 
@@ -260,3 +277,5 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
                 from_status=old_status,
                 to_status=status,
             )
+    if moved and status.category == TaskStatus.Category.DONE:
+        settle_task_notifications([task for task, _ in moved])

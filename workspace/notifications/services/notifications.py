@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 
 from workspace.common.cache import cached, invalidate_tags
@@ -268,6 +269,41 @@ def mark_sources_read(user, sources):
     return marked
 
 
+def settle_sources(sources, *, max_priority=None):
+    """Mark every recipient's unread notifications for *sources* as read.
+
+    ``mark_source_read``/``mark_sources_read`` record that one user saw a
+    source; this records that the sources resolved themselves (task completed,
+    due date pushed back), so their notifications are settled for everyone.
+
+    ``max_priority`` bounds what gets settled: pass ``"normal"`` to leave
+    high/urgent rows untouched - completing a task proves its due reminder is
+    moot, not that its mentions were seen. Sources must share a model.
+    Returns the number of rows marked.
+    """
+    sources = list(sources)
+    if not sources:
+        return 0
+    field = source_field(sources[0])
+    qs = Notification.objects.filter(
+        read_at__isnull=True,
+        **{f"{field}__in": [s.pk for s in sources]},
+    )
+    if max_priority is not None:
+        ceiling = _PRIORITY_RANK[max_priority]
+        qs = qs.filter(
+            priority__in=[p for p, rank in _PRIORITY_RANK.items() if rank <= ceiling]
+        )
+    recipient_ids = list(qs.values_list("recipient_id", flat=True).distinct())
+    if not recipient_ids:
+        return 0
+    marked = qs.update(read_at=timezone.now())
+    for uid in recipient_ids:
+        invalidate_tags(_user_tag(uid))
+        notify_sse("notifications", uid)
+    return marked
+
+
 @cached(
     key=lambda user: f"notif:unread:{user.pk}",
     ttl=_UNREAD_TTL,
@@ -275,3 +311,27 @@ def mark_sources_read(user, sources):
 )
 def get_unread_count(user):
     return Notification.objects.filter(recipient=user, read_at__isnull=True).count()
+
+
+@cached(
+    key=lambda user: f"notif:badges:{user.pk}",
+    ttl=_UNREAD_TTL,
+    tags=lambda user: [_user_tag(user.pk)],
+)
+def get_unread_badges(user):
+    """Per-module unread counts for the dashboard tiles.
+
+    Returns ``{origin: {"count": n, "url": deep_link}}``. ``url`` is set only
+    when the module has exactly one unread notification carrying a url, so
+    the tile can open that item directly; with several the target is
+    ambiguous and the tile falls back to the module home.
+    """
+    unread = Notification.objects.filter(recipient=user, read_at__isnull=True)
+    badges = {
+        row["origin"]: {"count": row["n"], "url": None}
+        for row in unread.values("origin").annotate(n=Count("uuid"))
+    }
+    singles = [origin for origin, b in badges.items() if b["count"] == 1]
+    for origin, url in unread.filter(origin__in=singles).values_list("origin", "url"):
+        badges[origin]["url"] = url or None
+    return badges

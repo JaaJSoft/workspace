@@ -8,9 +8,9 @@
         <div class="w-12 h-12 rounded-xl bg-{{ module.color }}/10 flex items-center justify-center text-{{ module.color }} group-hover:bg-{{ module.color }}/20 transition-colors">
           <i data-lucide="{{ module.icon }}" class="w-6 h-6"></i>
         </div>
-        {% if module.pending_action_count %}
+        {% if module.notification_count %}
           <span class="absolute -top-1.5 -right-1.5 min-w-5 h-5 flex items-center justify-center rounded-full bg-{{ module.color }} text-{{ module.color }}-content text-xs font-bold px-1">
-            {{ module.pending_action_count }}
+            {{ module.notification_count }}
           </span>
         {% endif %}
       </div>

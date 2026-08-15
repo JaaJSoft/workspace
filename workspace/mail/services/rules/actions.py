@@ -27,7 +27,7 @@ from ..imap_messages import (
     star_message,
     unstar_message,
 )
-from ..notifications import clear_notifications_for_deleted_messages
+from ..notifications import settle_message_notifications
 from .schema import (
     AddLabelAction,
     DeleteAction,
@@ -134,7 +134,7 @@ def _delete(action: DeleteAction, message: MailMessage) -> dict:
     # handler against existing messages, which can already carry an unread
     # notification the sync path never has. A no-op there (UPDATE matches
     # zero rows) is cheaper than a second code path to distinguish the two.
-    clear_notifications_for_deleted_messages(message.account.owner, [message.pk])
+    settle_message_notifications(message.account.owner, [message.pk])
     try:
         delete_message(message.account, message)
     except Exception as e:

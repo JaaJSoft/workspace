@@ -436,12 +436,7 @@ function mailApp() {
     },
 
     highlightSearch(text) {
-      if (!text) return '';
-      const escaped = escapeHtml(text);
-      const q = this.filters.search?.trim();
-      if (!q) return escaped;
-      const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-      return escaped.replace(re, '<mark class="bg-warning/40 text-inherit rounded-sm px-0.5">$1</mark>');
+      return highlightMatch(text, this.filters.search?.trim());
     },
 
     toggleCollapse() {

@@ -232,13 +232,6 @@ window.chatPanelsMixin = function chatPanelsMixin() {
       });
     },
 
-    highlightMatch(bodyHtml, query) {
-      if (!query || !bodyHtml) return bodyHtml;
-      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`(${escaped})`, 'gi');
-      return bodyHtml.replace(regex, '<mark class="bg-warning/40 rounded px-0.5">$1</mark>');
-    },
-
     // Scroll to a message on the given surface and flash it. Returns whether
     // it was found there.
     _highlightMessage(uuid, prefix) {

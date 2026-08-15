@@ -63,6 +63,18 @@ class RenderMessageBodyTest(TestCase):
         self.assertNotIn("<script>", html)
         self.assertIn("&lt;script&gt;", html)
 
+    def test_escaping_convention_the_search_highlighter_relies_on(self):
+        # The chat search panel feeds this HTML to highlightMatch() with
+        # `escape: false` and matches the raw term the user typed against it,
+        # so it escapes that term the same way the renderer escapes the body:
+        # `&<>"` become entities, `'` stays literal. A change here silently
+        # stops search terms holding those characters from highlighting.
+        html = render_message_body("""don't say "hi" & <b>""")
+        self.assertIn("don't", html)
+        self.assertIn("&quot;hi&quot;", html)
+        self.assertIn("&amp;", html)
+        self.assertIn("&lt;b&gt;", html)
+
     def test_mentions_preserved(self):
         html = render_message_body("hello @alice", mention_map={"alice": 42})
         self.assertIn('class="mention-badge"', html)

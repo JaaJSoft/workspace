@@ -41,6 +41,13 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
             logger.warning("OIDC login refused: no email claim")
             return False
 
+        # The subject is the account's immutable identity: without it the user
+        # would be provisioned unlinked, hence not IdP-managed, and any later
+        # subject could claim the account through the email match.
+        if not isinstance(claims.get("sub"), str) or not claims["sub"].strip():
+            logger.warning("OIDC login refused: no subject claim for %s", scrub(email))
+            return False
+
         if settings.OIDC_REQUIRE_EMAIL_VERIFIED:
             verified = claims.get("email_verified")
             if verified not in (True, "true", "True"):
@@ -59,6 +66,21 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
                 return False
 
         return True
+
+    def filter_users_by_claims(self, claims):
+        """Resolve a linked subject first, then fall back to the email match.
+
+        The library matches on the email address alone, so a user whose address
+        changed at the IdP would miss their own account, be sent down
+        create_user, and have the login refused by the subject that is already
+        bound. The subject is the stable identifier - it wins over the email.
+        """
+        sub = str(claims.get("sub") or "")
+        if sub:
+            linked = self.UserModel.objects.filter(oidc_identity__sub=sub)
+            if linked.exists():
+                return linked
+        return super().filter_users_by_claims(claims)
 
     def create_user(self, claims):
         """JIT-provision a Django user with a readable username and profile fields.
@@ -80,14 +102,18 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
     def update_user(self, user, claims):
         """Sync IdP-managed profile fields on each login and keep the link.
 
-        The identity provider is authoritative for the display name, so refresh
-        first_name / last_name from the claims - but only when the claim is
+        The identity provider is authoritative for the display name and the
+        address, so refresh them from the claims - but only when the claim is
         present, so a provider that omits them never wipes an existing value.
         The identity link is validated first, so a subject mismatch refuses the
         login before any profile field is touched.
         """
         self._link_identity(user, claims)
         fields = []
+        email = str(claims.get("email") or "")
+        if email and email != user.email:
+            user.email = email[:254]
+            fields.append("email")
         given_name = claims.get("given_name")
         if given_name:
             user.first_name = str(given_name)[:150]
@@ -111,9 +137,12 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
         """
         from ..models import OIDCIdentity
 
-        sub = str(claims.get("sub") or "")
+        sub = str(claims.get("sub") or "").strip()
         if not sub:
-            return
+            # verify_claims already refused this login; reaching here means the
+            # backend was driven directly, and an unlinked account is exactly
+            # what the subject binding exists to prevent.
+            raise SuspiciousOperation("OIDC claims carry no subject")
 
         existing = OIDCIdentity.objects.filter(user=user).first()
         if existing is not None:

@@ -17,6 +17,7 @@ Skipped unless ``E2E=1`` is set (see the base class docstring).
 
 from __future__ import annotations
 
+import httpx
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 
@@ -66,7 +67,7 @@ class OidcLoginE2ETests(PlaywrightTestCase):
             ],
         )
         server = cls._op_context.__enter__()
-        issuer = f"http://localhost:{server.server_port}"
+        issuer = cls.idp_url = f"http://localhost:{server.server_port}"
         # OIDC_ENABLED and AUTHENTICATION_BACKENDS are computed at settings
         # import time, so overriding the endpoints alone would leave the backend
         # unwired: both have to be set explicitly here.
@@ -103,6 +104,17 @@ class OidcLoginE2ETests(PlaywrightTestCase):
         # The provider lists its known subjects as authorize buttons.
         self.page.locator(f"button[name='sub'][value='{sub}']").click()
         self.page.wait_for_load_state("networkidle")
+
+    def set_idp_claims(self, sub, claims):
+        """Change what the provider returns for ``sub`` (its runtime user API).
+
+        Deliberately not driven through ``self.page.request``: this also runs
+        from ``addCleanup``, which fires after the browser context is closed.
+        """
+        response = httpx.put(
+            f"{self.idp_url}/users/{sub}", json=claims, trust_env=False
+        )
+        self.assertEqual(response.status_code, 204, response.text)
 
     def current_username(self):
         """Username behind the browser session, or None when anonymous."""
@@ -149,6 +161,21 @@ class OidcLoginE2ETests(PlaywrightTestCase):
             OIDCIdentity.objects.get(user__username="jane.doe").sub, JANE["sub"]
         )
         self.assertEqual(User.objects.filter(email=JANE["email"]).count(), 1)
+
+    def test_email_change_at_the_idp_keeps_the_same_account(self):
+        self.sign_in_with_idp(JANE["sub"])
+        self.context.clear_cookies()
+        # The provider outlives each test, so put the original claims back.
+        self.addCleanup(self.set_idp_claims, JANE["sub"], JANE)
+        self.set_idp_claims(JANE["sub"], JANE | {"email": "jane.moved@corp.example"})
+
+        self.sign_in_with_idp(JANE["sub"])
+
+        self.assertEqual(self.current_username(), "jane.doe")
+        self.assertEqual(User.objects.filter(username__startswith="jane").count(), 1)
+        self.assertEqual(
+            User.objects.get(username="jane.doe").email, "jane.moved@corp.example"
+        )
 
     def test_domain_outside_the_allowlist_is_refused(self):
         with override_settings(OIDC_ALLOWED_DOMAINS=["other.example"]):

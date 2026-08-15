@@ -27,50 +27,53 @@ class VerifyClaimsTests(TestCase):
     def setUp(self):
         self.backend = WorkspaceOIDCBackend()
 
+    @staticmethod
+    def claims(**overrides):
+        """Claims of a login the IdP considers valid, minus what a test changes."""
+        return {"sub": "subject-1", "email": "jane@corp.com"} | overrides
+
     def test_passes_for_basic_email(self):
-        self.assertTrue(self.backend.verify_claims({"email": "jane@corp.com"}))
+        self.assertTrue(self.backend.verify_claims(self.claims()))
 
     def test_rejects_when_no_email(self):
         self.assertFalse(self.backend.verify_claims({"sub": "x"}))
 
+    def test_rejects_when_no_subject(self):
+        # Without a subject the account would be provisioned unlinked, so any
+        # later subject could claim it through the email match.
+        self.assertFalse(self.backend.verify_claims({"email": "jane@corp.com"}))
+        self.assertFalse(self.backend.verify_claims(self.claims(sub="")))
+        self.assertFalse(self.backend.verify_claims(self.claims(sub="   ")))
+        self.assertFalse(self.backend.verify_claims(self.claims(sub=12345)))
+
     @override_settings(OIDC_REQUIRE_EMAIL_VERIFIED=True)
     def test_requires_email_verified_when_enabled(self):
-        self.assertFalse(self.backend.verify_claims({"email": "a@corp.com"}))
-        self.assertFalse(
-            self.backend.verify_claims({"email": "a@corp.com", "email_verified": False})
-        )
-        self.assertTrue(
-            self.backend.verify_claims({"email": "a@corp.com", "email_verified": True})
-        )
-        self.assertTrue(
-            self.backend.verify_claims(
-                {"email": "a@corp.com", "email_verified": "true"}
-            )
-        )
+        self.assertFalse(self.backend.verify_claims(self.claims()))
+        self.assertFalse(self.backend.verify_claims(self.claims(email_verified=False)))
+        self.assertTrue(self.backend.verify_claims(self.claims(email_verified=True)))
+        self.assertTrue(self.backend.verify_claims(self.claims(email_verified="true")))
 
     def test_email_verified_not_imposed_by_default(self):
-        self.assertTrue(
-            self.backend.verify_claims({"email": "a@corp.com", "email_verified": False})
-        )
+        self.assertTrue(self.backend.verify_claims(self.claims(email_verified=False)))
 
     @override_settings(OIDC_ALLOWED_DOMAINS=["corp.com"])
     def test_allowlist_rejects_outside_domain(self):
-        self.assertFalse(self.backend.verify_claims({"email": "a@evil.com"}))
-        self.assertTrue(self.backend.verify_claims({"email": "a@corp.com"}))
+        self.assertFalse(self.backend.verify_claims(self.claims(email="a@evil.com")))
+        self.assertTrue(self.backend.verify_claims(self.claims(email="a@corp.com")))
 
     def test_allowlist_empty_allows_any_domain(self):
-        self.assertTrue(self.backend.verify_claims({"email": "a@anything.io"}))
+        self.assertTrue(self.backend.verify_claims(self.claims(email="a@anything.io")))
 
     def test_rejects_empty_email(self):
         # 'email' key present but empty: super() passes (key present), our own
         # guard rejects it.
-        self.assertFalse(self.backend.verify_claims({"email": ""}))
+        self.assertFalse(self.backend.verify_claims(self.claims(email="")))
 
     @override_settings(OIDC_ALLOWED_DOMAINS=["corp.com"])
     def test_allowlist_handles_non_string_email(self):
         # A non-conforming IdP returning a non-string email must be refused
         # cleanly, not raise a 500.
-        self.assertFalse(self.backend.verify_claims({"email": 12345}))
+        self.assertFalse(self.backend.verify_claims(self.claims(email=12345)))
 
 
 @override_settings(**OIDC_OP_SETTINGS)
@@ -127,6 +130,7 @@ class CreateUserTests(TestCase):
 
     def test_creates_user_with_readable_username_and_profile(self):
         claims = {
+            "sub": "subject-jdoe",
             "preferred_username": "jdoe",
             "email": "jdoe@corp.com",
             "given_name": "John",
@@ -210,11 +214,14 @@ class OidcIdentitySyncTests(TestCase):
         self.assertTrue(OIDCIdentity.objects.filter(user=user, sub="sub-1").exists())
         self.assertTrue(is_oidc_managed(user))
 
-    def test_create_user_without_sub_is_not_managed(self):
-        user = self.backend.create_user(
-            {"preferred_username": "nosub", "email": "nosub@corp.com"}
-        )
-        self.assertFalse(is_oidc_managed(user))
+    def test_create_user_without_sub_is_refused(self):
+        # An unlinked account is what the subject binding exists to prevent:
+        # it would not be IdP-managed and any subject could later claim it.
+        with self.assertRaises(SuspiciousOperation):
+            self.backend.create_user(
+                {"preferred_username": "nosub", "email": "nosub@corp.com"}
+            )
+        self.assertFalse(User.objects.filter(username="nosub").exists())
 
     def test_update_user_syncs_names_from_claims(self):
         user = User.objects.create_user(
@@ -248,6 +255,43 @@ class OidcIdentitySyncTests(TestCase):
         self.assertFalse(is_oidc_managed(user))
         self.backend.update_user(user, {"email": "e2@corp.com", "sub": "sub-4"})
         self.assertTrue(is_oidc_managed(user))
+
+    def test_linked_subject_wins_over_the_email_match(self):
+        # The address changed at the IdP. Matching on email alone would miss
+        # the account, provision a second one, and then refuse the login on the
+        # already-bound subject - locking the user out of their own account.
+        user = User.objects.create_user("moved", email="old@corp.com")
+        OIDCIdentity.objects.create(user=user, sub="sub-moved")
+
+        matched = self.backend.filter_users_by_claims(
+            {"sub": "sub-moved", "email": "new@corp.com"}
+        )
+
+        self.assertEqual([u.pk for u in matched], [user.pk])
+
+    def test_unknown_subject_still_matches_on_email(self):
+        user = User.objects.create_user("bymail", email="bymail@corp.com")
+
+        matched = self.backend.filter_users_by_claims(
+            {"sub": "sub-never-seen", "email": "bymail@corp.com"}
+        )
+
+        self.assertEqual([u.pk for u in matched], [user.pk])
+
+    def test_update_user_syncs_a_changed_email(self):
+        user = User.objects.create_user("moved2", email="old2@corp.com")
+        OIDCIdentity.objects.create(user=user, sub="sub-moved2")
+
+        self.backend.update_user(user, {"sub": "sub-moved2", "email": "new2@corp.com"})
+
+        user.refresh_from_db()
+        self.assertEqual(user.email, "new2@corp.com")
+
+    def test_update_user_without_sub_is_refused(self):
+        user = User.objects.create_user("nosub2", email="nosub2@corp.com")
+        with self.assertRaises(SuspiciousOperation):
+            self.backend.update_user(user, {"email": "nosub2@corp.com"})
+        self.assertFalse(is_oidc_managed(user))
 
     def test_is_oidc_managed_false_for_plain_user(self):
         user = User.objects.create_user("plain", email="p@corp.com")

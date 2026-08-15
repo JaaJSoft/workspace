@@ -36,9 +36,15 @@
 
 /* ── Deterministic initials-fallback colors ───────────────────── */
 
-// Mirrors AVATAR_PALETTE in scripts/seed_demo.py (the Tailwind *-500 RGB
-// values); keep both lists in lockstep so demo-generated avatars and the
-// initials fallback read as one family.
+// Mirrors AVATAR_PALETTE in scripts/seed_demo.py (the same colours as RGB,
+// because Pillow paints the demo avatars and cannot read a Tailwind class).
+// The two lists are held in lockstep by
+// workspace/common/tests/test_avatar_palette.py, which compares the seeder's
+// RGB against what these classes actually paint in the compiled bundle.
+//
+// Only the palette is shared, not the index into it: this picks by user id,
+// the seeder picks by seed string. They never disagree in practice — a seeded
+// user has a real picture, so this fallback colour is not the one on screen.
 const AVATAR_COLORS = [
   'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500',
   'bg-emerald-500', 'bg-cyan-500', 'bg-blue-500', 'bg-indigo-500',

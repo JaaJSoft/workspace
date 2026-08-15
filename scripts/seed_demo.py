@@ -356,6 +356,11 @@ STATUS_WEIGHTS = {
 
 AVATAR_SIZE = 256
 
+# Mirrors AVATAR_COLORS in workspace/common/static/ui/js/user_avatar.js, which
+# names the same colours as Tailwind `bg-*-500` classes for the initials
+# fallback. workspace/common/tests/test_avatar_palette.py fails if the two
+# drift, comparing these tuples against what those classes paint in the
+# compiled CSS bundle. Add a colour to one list and you must add it to both.
 AVATAR_PALETTE = [
     (239, 68, 68),
     (249, 115, 22),

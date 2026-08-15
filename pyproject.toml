@@ -55,6 +55,8 @@ dependencies = [
     # streaming ZIP generation for bulk downloads (constant RAM)
     "zipstream-ng>=1.9.2",
     "faker>=40.36.0",
+    # OpenID Connect (SSO) login
+    "mozilla-django-oidc>=5.0.2",
 ]
 
 [build-system]

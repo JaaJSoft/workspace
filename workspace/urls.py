@@ -32,6 +32,7 @@ from drf_spectacular.views import (
 
 from workspace.core.metrics_auth import metrics_basic_auth
 from workspace.core.views_health import LiveView, ReadyView, StartupView
+from workspace.users.ui.views import WorkspaceLoginView
 
 api_urlpatterns = [
     # OpenAPI schema and documentation
@@ -77,12 +78,11 @@ ui_urlpatterns = [
 urlpatterns = [
     path("admin/", admin.site.urls),
     # Authentication
-    path(
-        "login",
-        auth_views.LoginView.as_view(template_name="users/ui/auth/login.html"),
-        name="login",
-    ),
+    path("login", WorkspaceLoginView.as_view(), name="login"),
     path("logout", auth_views.LogoutView.as_view(), name="logout"),
+    # OIDC (SSO) login - init/callback views from mozilla-django-oidc.
+    # Configure the IdP redirect_uri to {origin}/oidc/callback/.
+    path("oidc/", include("mozilla_django_oidc.urls")),
     # Service Worker (must be at root scope for push notifications)
     path(
         "sw.js",

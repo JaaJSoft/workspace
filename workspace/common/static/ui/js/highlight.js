@@ -25,9 +25,20 @@ function highlightMatch(text, query, options) {
   const term = preEscaped ? escapeHtml(query).replace(/&#39;/g, "'") : escapeHtml(query);
   // Escaped last: escapeHtml emits none of the regex metacharacters, so the
   // ones left to neutralize are the ones the user actually typed.
-  const pattern = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return source.replace(
-    new RegExp(`(${pattern})`, 'gi'),
-    '<mark class="bg-warning/40 text-inherit rounded-sm px-0.5">$1</mark>'
-  );
+  const pattern = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  // Only the even segments are text; the odd ones are whole tags. A pre-escaped
+  // body carries markup, and an everyday term - `http`, `code`, `strong` - would
+  // otherwise match inside an href or a tag name and cut the element in half.
+  // Splitting on `<[^>]*>` is sound precisely because the input is escaped: a
+  // literal `<` reaches the browser as `&lt;`, in attribute values included, so
+  // every `<` left in the string does open a tag. Text this helper escaped
+  // itself holds no `<` at all, which makes the split a no-op on that path.
+  return source
+    .split(/(<[^>]*>)/)
+    .map((segment, i) => (
+      i % 2 === 0
+        ? segment.replace(pattern, '<mark class="bg-warning/40 text-inherit rounded-sm px-0.5">$1</mark>')
+        : segment
+    ))
+    .join('');
 }

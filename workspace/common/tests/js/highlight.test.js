@@ -121,6 +121,32 @@ test('escape: false matches the entities a pre-escaped body carries', () => {
   );
 });
 
+// Regression: the match used to run over the whole pre-escaped string, tags
+// included, so an everyday term cut the markup in half - `strong` reached
+// x-html as `<<mark>strong</mark>>`, and `http` rewrote every href.
+test('escape: false marks text nodes only, never tag names', () => {
+  assert.equal(
+    highlightMatch('<p><strong>strong</strong></p>', 'strong', { escape: false }),
+    `<p><strong>${mark('strong')}</strong></p>`
+  );
+});
+
+test('escape: false leaves attribute values alone', () => {
+  const html = '<p><a href="https://example.com">docs</a></p>';
+  assert.equal(highlightMatch(html, 'http', { escape: false }), html);
+  assert.equal(
+    highlightMatch('<p>see <code class="code-inline">x</code></p>', 'code', { escape: false }),
+    '<p>see <code class="code-inline">x</code></p>'
+  );
+});
+
+test('escape: false still marks the same term when it appears in the text', () => {
+  assert.equal(
+    highlightMatch('<p>a <code class="code-inline">code</code> sample</p>', 'code', { escape: false }),
+    `<p>a <code class="code-inline">${mark('code')}</code> sample</p>`
+  );
+});
+
 test('escape: false keeps a "<" query out of the surrounding markup', () => {
   // Unescaped, this matched the `<` of `<p>` and cut the tag in half.
   assert.equal(

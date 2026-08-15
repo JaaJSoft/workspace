@@ -44,3 +44,86 @@ class AccountIdentity(models.Model):
 
     def __str__(self):
         return f"Vault identity of {self.user_id}"
+
+
+class VaultRole(models.TextChoices):
+    OWNER = "owner", "Owner"
+    MEMBER = "member", "Member"
+
+
+class Vault(models.Model):
+    """A container of entries, sealed under a single symmetric vault key.
+
+    ``metadata_sig`` signs the canonical CBOR of the vault metadata, so a
+    server that rewrites ``encrypted_name`` or ``icon`` is detected by the
+    client. ``key_version`` is bumped by a vault key rotation and is what
+    lets an old ciphertext name the wrap it needs.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="vaults",
+    )
+    encrypted_name = models.TextField()
+    encrypted_description = models.TextField(blank=True, default="")
+    icon = models.CharField(max_length=64, default="lock")
+    color = models.CharField(max_length=32, default="primary")
+    key_version = models.PositiveIntegerField(default=1)
+    # Deliberate departure from §9 of the crypto norm, documented in the
+    # design spec: URIs are encrypted, so autofill matching happens client
+    # side and the server cannot profile which sites a user holds.
+    encrypt_uris = models.BooleanField(default=True)
+    metadata_sig = models.TextField()
+    is_favorite = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["owner", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Vault {self.uuid}"
+
+
+class VaultKeyWrap(models.Model):
+    """The vault key sealed to one recipient with HPKE.
+
+    ``hpke_suite`` records the suite that produced ``wrapped_key`` so the
+    suite can change without a data migration; never assume the v1 values.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    vault = models.ForeignKey(
+        Vault,
+        on_delete=models.CASCADE,
+        related_name="key_wraps",
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="vault_key_wraps",
+    )
+    # Native HPKE output (enc || ciphertext); not the §3.3 wire format.
+    wrapped_key = models.TextField()
+    key_version = models.PositiveIntegerField(default=1)
+    hpke_suite = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["vault", "recipient"],
+                name="unique_vault_key_wrap_per_recipient",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["recipient"]),
+        ]
+
+    def __str__(self):
+        return f"Key wrap of {self.vault_id} for {self.recipient_id}"

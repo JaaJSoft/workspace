@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from workspace.vault.models import AccountIdentity
+from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
 
 User = get_user_model()
 
@@ -46,3 +46,63 @@ class AccountIdentityTests(TestCase):
         make_identity(self.user)
         self.user.delete()
         self.assertEqual(AccountIdentity.objects.count(), 0)
+
+
+def make_vault(owner, **overrides):
+    fields = {
+        "owner": owner,
+        "encrypted_name": "AQEBAAEMbmFtZQ",
+        "metadata_sig": "AXNpZ25hdHVyZQ",
+    }
+    fields.update(overrides)
+    return Vault.objects.create(**fields)
+
+
+class VaultTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+
+    def test_encrypts_uris_by_default(self):
+        vault = make_vault(self.user)
+        self.assertTrue(vault.encrypt_uris)
+        self.assertEqual(vault.key_version, 1)
+        self.assertFalse(vault.is_favorite)
+
+    def test_reachable_from_the_owner(self):
+        vault = make_vault(self.user)
+        self.assertEqual(list(self.user.vaults.all()), [vault])
+
+    def test_deleted_with_its_owner(self):
+        make_vault(self.user)
+        self.user.delete()
+        self.assertEqual(Vault.objects.count(), 0)
+
+
+class VaultKeyWrapTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.vault = make_vault(self.user)
+
+    def _wrap(self, recipient):
+        return VaultKeyWrap.objects.create(
+            vault=self.vault,
+            recipient=recipient,
+            wrapped_key="ZW5jfHdyYXBwZWQ",
+            hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
+        )
+
+    def test_one_wrap_per_recipient_and_vault(self):
+        self._wrap(self.user)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self._wrap(self.user)
+
+    def test_same_recipient_may_hold_wraps_for_several_vaults(self):
+        self._wrap(self.user)
+        other = make_vault(self.user)
+        VaultKeyWrap.objects.create(
+            vault=other,
+            recipient=self.user,
+            wrapped_key="ZW5jfG90aGVy",
+            hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
+        )
+        self.assertEqual(self.user.vault_key_wraps.count(), 2)

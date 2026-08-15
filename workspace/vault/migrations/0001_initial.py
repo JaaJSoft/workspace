@@ -36,4 +36,48 @@ class Migration(migrations.Migration):
                 'verbose_name_plural': 'account identities',
             },
         ),
+        migrations.CreateModel(
+            name='Vault',
+            fields=[
+                ('uuid', models.UUIDField(default=workspace.common.uuids.uuid_v7_or_v4, editable=False, primary_key=True, serialize=False)),
+                ('encrypted_name', models.TextField()),
+                ('encrypted_description', models.TextField(blank=True, default='')),
+                ('icon', models.CharField(default='lock', max_length=64)),
+                ('color', models.CharField(default='primary', max_length=32)),
+                ('key_version', models.PositiveIntegerField(default=1)),
+                ('encrypt_uris', models.BooleanField(default=True)),
+                ('metadata_sig', models.TextField()),
+                ('is_favorite', models.BooleanField(default=False)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='vaults', to=settings.AUTH_USER_MODEL)),
+            ],
+            options={
+                'ordering': ['created_at'],
+            },
+        ),
+        migrations.CreateModel(
+            name='VaultKeyWrap',
+            fields=[
+                ('uuid', models.UUIDField(default=workspace.common.uuids.uuid_v7_or_v4, editable=False, primary_key=True, serialize=False)),
+                ('wrapped_key', models.TextField()),
+                ('key_version', models.PositiveIntegerField(default=1)),
+                ('hpke_suite', models.JSONField(default=dict)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('recipient', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='vault_key_wraps', to=settings.AUTH_USER_MODEL)),
+                ('vault', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='key_wraps', to='vault.vault')),
+            ],
+        ),
+        migrations.AddIndex(
+            model_name='vault',
+            index=models.Index(fields=['owner', 'created_at'], name='vault_vault_owner_i_7404b4_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='vaultkeywrap',
+            index=models.Index(fields=['recipient'], name='vault_vault_recipie_ebe9cc_idx'),
+        ),
+        migrations.AddConstraint(
+            model_name='vaultkeywrap',
+            constraint=models.UniqueConstraint(fields=('vault', 'recipient'), name='unique_vault_key_wrap_per_recipient'),
+        ),
     ]

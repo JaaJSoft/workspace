@@ -1,0 +1,8 @@
+{% comment %}
+Rows of the label context menu. The panel around them is
+`ui/partials/context_menu_panel.html`, included from index.html.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  {% include "ui/partials/context_menu_item.html" with icon="pencil" label="Edit" click="labelCtxAction('edit')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="labelCtxAction('delete')" only %}
+</ul>

@@ -271,7 +271,7 @@
 {% include 'files/ui/partials/dialogs.html' %}
 {% include 'files/ui/partials/group_folder_dialog.html' %}
 {% include 'files/ui/partials/file_viewer_modal.html' %}
-{% include 'files/ui/partials/context_menu.html' %}
+{% include "ui/partials/context_menu_panel.html" with items="files/ui/partials/context_menu.html" x_data="contextMenu()" open="isOpen" close="close()" x="position.x" y="position.y" width="w-64" %}
 {% include 'files/ui/partials/share_modal.html' %}
 
 <!-- Mobile preferences dialog -->
@@ -315,6 +315,7 @@
 <script src="{% static 'files/ui/js/browser.js' %}"></script>
 <script src="{% static 'files/ui/js/table.js' %}"></script>
 <script src="{% static 'files/ui/js/pinned.js' %}"></script>
+<script src="{% static 'files/ui/js/context_menu.js' %}"></script>
 <script src="{% static 'files/ui/js/share_modal.js' %}"></script>
 <script src="{% static 'ui/js/comments.js' %}"></script>
 

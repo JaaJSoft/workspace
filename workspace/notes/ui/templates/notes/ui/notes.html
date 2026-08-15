@@ -190,7 +190,7 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
 {% include "files/ui/partials/tag_dialog.html" %}
 {% include "files/ui/partials/folder_dialog.html" %}
 {% include "files/ui/partials/rename_dialog.html" %}
-{% include "notes/ui/partials/context_menu.html" %}
+{% include "ui/partials/context_menu_panel.html" with items="notes/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" width="w-52" %}
 {% include "notes/ui/partials/help_dialog.html" %}
 
 <!-- Create Group Folder Dialog -->

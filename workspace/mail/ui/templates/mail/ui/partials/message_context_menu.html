@@ -1,78 +1,36 @@
-<!-- Message Context Menu -->
-<div
-  x-show="msgCtx.open"
-  x-cloak
-  @click.outside="msgCtx.open = false"
-  @keydown.escape.window="msgCtx.open = false"
-  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-52 p-1"
-  :style="`top: ${msgCtx.y}px; left: ${msgCtx.x}px;`"
-  id="message-context-menu"
->
-  <ul class="menu menu-sm p-0">
+{% comment %}
+Rows of the message context menu. The panel around them is
+`ui/partials/context_menu_panel.html`, included from index.html.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  {% include "ui/partials/context_menu_item.html" with icon="reply" label="Reply" click="msgCtxAction('reply')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="reply-all" label="Reply all" click="msgCtxAction('reply_all')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="forward" label="Forward" click="msgCtxAction('forward')" only %}
+
+  <hr class="my-1 border-base-300" />
+  {% include "ui/partials/context_menu_item.html" with icon="star" label_expr="msgCtx.msg?.is_starred ? 'Unstar' : 'Star'" click="msgCtxAction('toggle_star')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="mail" icon_alt="mail-open" icon_toggle="msgCtx.msg?.is_read" label_expr="msgCtx.msg?.is_read ? 'Mark unread' : 'Mark read'" click="msgCtxAction('toggle_read')" only %}
+
+  <hr class="my-1 border-base-300" />
+  {% include "ui/partials/context_menu_item.html" with icon="folder-input" label="Move to..." click="msgCtxAction('move')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="msgCtx.msg && msgCtx.msg.from_address && msgCtx.msg.from_address.email" icon="filter" label="Create filter" aria_label="Create filter from sender" click="msgCtxAction('create_rule_from_sender')" only %}
+
+  <hr class="my-1 border-base-300" />
+  {% comment %}Label toggles: a leading icon in the label's own color and a
+  trailing check for the ones already applied, so not a plain action row.{% endcomment %}
+  <template x-for="label in _getMsgCtxAccountLabels()" :key="label.uuid">
     <li>
-      <button type="button" class="gap-3 rounded" @click="msgCtxAction('reply')">
-        <i data-lucide="reply" class="w-4 h-4"></i>
-        <span>Reply</span>
+      <button type="button" class="gap-3 rounded focus:bg-base-content/10 active:!bg-base-content/10" @click.stop="toggleMsgLabel(label)">
+        <span :class="label.color && label.color !== 'ghost' ? 'text-' + label.color : 'text-base-content/50'">
+          <i :data-lucide="label.icon || 'tag'" class="w-4 h-4"></i>
+        </span>
+        <span class="truncate" x-text="label.name"></span>
+        <i data-lucide="check" class="w-3.5 h-3.5 text-warning"
+           x-show="_msgCtxHasLabel(label.uuid)" x-cloak></i>
       </button>
     </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="msgCtxAction('reply_all')">
-        <i data-lucide="reply-all" class="w-4 h-4"></i>
-        <span>Reply all</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="msgCtxAction('forward')">
-        <i data-lucide="forward" class="w-4 h-4"></i>
-        <span>Forward</span>
-      </button>
-    </li>
-    <hr class="my-1 border-base-300" />
-    <li>
-      <button type="button" class="gap-3 rounded" @click="msgCtxAction('toggle_star')">
-        <i data-lucide="star" class="w-4 h-4"></i>
-        <span x-text="msgCtx.msg?.is_starred ? 'Unstar' : 'Star'"></span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="msgCtxAction('toggle_read')">
-        <i data-lucide="mail" class="w-4 h-4" x-show="msgCtx.msg?.is_read"></i>
-        <i data-lucide="mail-open" class="w-4 h-4" x-show="!msgCtx.msg?.is_read"></i>
-        <span x-text="msgCtx.msg?.is_read ? 'Mark unread' : 'Mark read'"></span>
-      </button>
-    </li>
-    <hr class="my-1 border-base-300" />
-    <li>
-      <button type="button" class="gap-3 rounded" @click="msgCtxAction('move')">
-        <i data-lucide="folder-input" class="w-4 h-4"></i>
-        <span>Move to...</span>
-      </button>
-    </li>
-    <li x-show="msgCtx.msg && msgCtx.msg.from_address && msgCtx.msg.from_address.email">
-      <button type="button" class="gap-3 rounded" @click="msgCtxAction('create_rule_from_sender')" aria-label="Create filter from sender">
-        <i data-lucide="filter" class="w-4 h-4"></i>
-        <span>Create filter</span>
-      </button>
-    </li>
-    <hr class="my-1 border-base-300" />
-    <template x-for="label in _getMsgCtxAccountLabels()" :key="label.uuid">
-      <li>
-        <button type="button" class="gap-3 rounded focus:bg-base-content/10 active:!bg-base-content/10" @click.stop="toggleMsgLabel(label)">
-          <span :class="label.color && label.color !== 'ghost' ? 'text-' + label.color : 'text-base-content/50'">
-            <i :data-lucide="label.icon || 'tag'" class="w-4 h-4"></i>
-          </span>
-          <span class="truncate" x-text="label.name"></span>
-          <i data-lucide="check" class="w-3.5 h-3.5 text-warning"
-             x-show="_msgCtxHasLabel(label.uuid)" x-cloak></i>
-        </button>
-      </li>
-    </template>
-    <hr class="my-1 border-base-300" />
-    <li>
-      <button type="button" class="gap-3 rounded text-error" @click="msgCtxAction('delete')">
-        <i data-lucide="trash-2" class="w-4 h-4"></i>
-        <span>Delete</span>
-      </button>
-    </li>
-  </ul>
-</div>
+  </template>
+
+  <hr class="my-1 border-base-300" />
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="msgCtxAction('delete')" only %}
+</ul>

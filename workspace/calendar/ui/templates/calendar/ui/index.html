@@ -152,7 +152,7 @@
 
 {% include "calendar/ui/partials/_poll_modals.html" %}
 
-{% include "calendar/ui/partials/event_context_menu.html" %}
+{% include "ui/partials/context_menu_panel.html" with items="calendar/ui/partials/event_context_menu.html" open="ctxMenu.open" close="ctxMenu.open = false" x="ctxMenu.x" y="ctxMenu.y" %}
 {% include "calendar/ui/partials/help_dialog.html" %}
 
 <!-- Mobile preferences dialog -->

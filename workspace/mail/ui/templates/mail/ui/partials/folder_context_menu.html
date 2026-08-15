@@ -1,79 +1,24 @@
-<!-- Folder Context Menu -->
-<div
-  x-show="folderCtx.open"
-  x-cloak
-  @click.outside="folderCtx.open = false"
-  @keydown.escape.window="folderCtx.open = false"
-  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-52 p-1"
-  :style="`top: ${folderCtx.y}px; left: ${folderCtx.x}px;`"
-  id="folder-context-menu"
->
-  <ul class="menu menu-sm p-0">
-    <li>
-      <button type="button" class="gap-3 rounded" @click="folderCtxAction('refresh')">
-        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-        <span>Refresh</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="folderCtxAction('mark_all_read')">
-        <i data-lucide="mail-check" class="w-4 h-4"></i>
-        <span>Mark all as read</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="folderCtxAction('change_icon')">
-        <i data-lucide="palette" class="w-4 h-4"></i>
-        <span>Change icon</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="folderCtxAction('toggle_classify')">
-        <i data-lucide="tags" class="w-4 h-4"></i>
-        <span x-text="folderCtx.folder?.ai_classify_disabled ? 'Enable auto-labeling' : 'Disable auto-labeling'"></span>
-      </button>
-    </li>
-    <hr class="my-1 border-base-300" />
-    <li>
-      <button type="button" class="gap-3 rounded" @click="folderCtxAction('create')">
-        <i data-lucide="folder-plus" class="w-4 h-4"></i>
-        <span x-text="folderCtx.folder?.folder_type === 'other' ? 'New subfolder' : 'New folder'"></span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="folderCtxAction('rename')"
-              :class="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''">
-        <i data-lucide="pencil" class="w-4 h-4"></i>
-        <span>Rename</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="folderCtxAction('move')"
-              :class="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''">
-        <i data-lucide="folder-input" class="w-4 h-4"></i>
-        <span>Move to...</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded" @click="folderCtxAction('hide')"
-              :class="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''">
-        <i data-lucide="eye-off" class="w-4 h-4"></i>
-        <span>Hide</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="gap-3 rounded text-error" @click="folderCtxAction('delete')"
-              :class="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''">
-        <i data-lucide="trash-2" class="w-4 h-4"></i>
-        <span>Delete</span>
-      </button>
-    </li>
-    <hr class="my-1 border-base-300" />
-    <li>
-      <button type="button" class="gap-3 rounded" @click="folderCtxAction('sync')">
-        <i data-lucide="cloud-download" class="w-4 h-4"></i>
-        <span>Sync account</span>
-      </button>
-    </li>
-  </ul>
-</div>
+{% comment %}
+Rows of the folder context menu. The panel around them is
+`ui/partials/context_menu_panel.html`, included from index.html.
+
+Everything below the first separator only applies to user-created folders:
+the IMAP special folders (Inbox, Sent, ...) can't be renamed, moved, hidden
+or deleted, hence the shared `folder_type !== 'other'` disabling.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  {% include "ui/partials/context_menu_item.html" with icon="refresh-cw" label="Refresh" click="folderCtxAction('refresh')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="mail-check" label="Mark all as read" click="folderCtxAction('mark_all_read')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="palette" label="Change icon" click="folderCtxAction('change_icon')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="tags" label_expr="folderCtx.folder?.ai_classify_disabled ? 'Enable auto-labeling' : 'Disable auto-labeling'" click="folderCtxAction('toggle_classify')" only %}
+
+  <hr class="my-1 border-base-300" />
+  {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label_expr="folderCtx.folder?.folder_type === 'other' ? 'New subfolder' : 'New folder'" click="folderCtxAction('create')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="pencil" label="Rename" click="folderCtxAction('rename')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="folder-input" label="Move to..." click="folderCtxAction('move')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="eye-off" label="Hide" click="folderCtxAction('hide')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="folderCtxAction('delete')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
+
+  <hr class="my-1 border-base-300" />
+  {% include "ui/partials/context_menu_item.html" with icon="cloud-download" label="Sync account" click="folderCtxAction('sync')" only %}
+</ul>

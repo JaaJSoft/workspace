@@ -134,9 +134,19 @@ function makeEnv({ djangoMessages = null, readyState = 'complete' } = {}) {
 
 // The one assertion helper that knows how a toast encodes its type.
 function toastType(el) {
-  const match = (el.className || '').match(/alert-(success|error|warning|info)/);
-  return match ? match[1] : null;
+  return el.getAttribute('type');
 }
+
+// Depth-first collector, since the ✕ nests inside the rendered tree.
+function collect(el, pred, out = []) {
+  if (pred(el)) out.push(el);
+  for (const child of el.childNodes) {
+    if (child.nodeType === 1) collect(child, pred, out);
+  }
+  return out;
+}
+
+const buttons = (el) => collect(el, (n) => n.tagName === 'BUTTON');
 
 test('exposes the AppAlert API', () => {
   const { AppAlert } = makeEnv();
@@ -160,10 +170,40 @@ test('show without a message returns null and renders nothing', () => {
   assert.equal(container.children.length, 0);
 });
 
-test('unknown types fall back to info', () => {
+test('unknown types fall back to info styling', () => {
   const { AppAlert } = makeEnv();
-  assert.equal(toastType(AppAlert.show({ message: 'm', type: 'catastrophe' })), 'info');
+  const weird = AppAlert.show({ message: 'm', type: 'catastrophe' });
+  assert.ok(weird.className.includes('border-info/30'));
   assert.equal(toastType(AppAlert.show({ message: 'm' })), 'info');
+});
+
+test('a toast is an <inline-alert> in its toast placement variant', () => {
+  const { AppAlert } = makeEnv();
+  const el = AppAlert.show({ message: 'hello', type: 'warning', title: 'Heads up' });
+  assert.equal(el.tagName, 'INLINE-ALERT');
+  assert.ok(el.hasAttribute('toast'));
+  assert.equal(el.getAttribute('message'), 'hello');
+  assert.equal(collect(el, (n) => n.textContent === 'Heads up').length, 1);
+  const classes = el.className.split(/\s+/);
+  assert.ok(classes.includes('bg-base-100'));
+  assert.ok(classes.includes('shadow-lg'));
+  assert.ok(classes.includes('border-warning/30'));
+});
+
+test('toasts are dismissible by default; dismissible false drops the ✕', () => {
+  const { AppAlert } = makeEnv();
+  assert.equal(buttons(AppAlert.show({ message: 'm' })).length, 1);
+  assert.equal(buttons(AppAlert.show({ message: 'm', dismissible: false })).length, 0);
+});
+
+test('the ✕ slides the toast out before removing it', () => {
+  const { AppAlert, container } = makeEnv();
+  const el = AppAlert.show({ message: 'm', duration: 0 });
+  buttons(el)[0].click();
+  assert.equal(container.children.length, 1);
+  assert.ok(String(el.style.animation).includes('slideOutRight'));
+  el.dispatch('animationend');
+  assert.equal(container.children.length, 0);
 });
 
 test('shorthands set the type; error lingers 8s, the others 5s', () => {

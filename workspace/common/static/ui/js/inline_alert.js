@@ -18,6 +18,9 @@
  *                  first render so it doesn't double as a native tooltip.
  *   - dismissible  boolean attribute — trailing ✕ removes the alert.
  *   - icon         lucide icon name override; "none" renders no icon.
+ *   - toast        boolean attribute — placement variant for floating
+ *                  toasts (created by ui/js/toast.js): opaque background
+ *                  and shadow instead of the translucent inline surface.
  *
  * Slot mode: an element with child content keeps it as the body, taking
  * priority over `message` (the same trick <tag-chip> uses). Wrap dynamic
@@ -54,8 +57,13 @@ window.INLINE_ALERT_TYPES = {
 
 (function defineInlineAlert() {
   const CONTAINER_CLASSES = [
-    'flex', 'items-start', 'gap-3', 'rounded-lg', 'border', 'bg-base-200/50', 'px-4', 'py-3',
+    'flex', 'items-start', 'gap-3', 'rounded-lg', 'border', 'px-4', 'py-3',
   ];
+  // Surface by placement: inline alerts sit on the page and stay
+  // translucent; toasts float over arbitrary content, so they need an
+  // opaque background and a shadow.
+  const INLINE_SURFACE = ['bg-base-200/50'];
+  const TOAST_SURFACE = ['bg-base-100', 'shadow-lg'];
 
   // Inline SVG on purpose (same as <tag-chip>'s remove cross): the dismiss
   // button has no text, so a data-lucide icon that fails to hydrate would
@@ -74,12 +82,28 @@ window.INLINE_ALERT_TYPES = {
       this.render();
     }
 
+    // Toasts declare an exit animation (ui/js/toast.js sets
+    // data-animation-out); route every removal path — the ✕ button,
+    // data-dismiss actions, AppAlert.dismiss — through it so they all
+    // slide out the same way. Alerts without one detach immediately.
+    remove() {
+      const exit = this.dataset.animationOut;
+      if (!exit || this._removing || !this.parentNode) {
+        super.remove();
+        return;
+      }
+      this._removing = true;
+      this.style.animation = `${exit} 0.3s ease-in`;
+      this.addEventListener('animationend', () => super.remove());
+    }
+
     render() {
       const style = window.INLINE_ALERT_TYPES[this.getAttribute('type')] || window.INLINE_ALERT_TYPES.info;
       this.setAttribute('role', 'alert');
       // add() rather than a className assignment, so the author's own
       // classes (mb-4, text-xs, ...) survive.
-      this.classList.add(...CONTAINER_CLASSES, style.border);
+      const surface = this.hasAttribute('toast') ? TOAST_SURFACE : INLINE_SURFACE;
+      this.classList.add(...CONTAINER_CLASSES, ...surface, style.border);
 
       // Partition the authored children before rebuilding.
       const actionNodes = [];

@@ -15,6 +15,8 @@ class FakeNode {
     this.listeners = {};
     this.className = '';
     this.textContent = '';
+    this.style = {};
+    this.dataset = {};
     this.parentNode = null;
     const self = this;
     this.classList = {
@@ -53,7 +55,8 @@ class FakeNode {
   }
 
   addEventListener(evt, fn) { (this.listeners[evt] ||= []).push(fn); }
-  click() { (this.listeners.click || []).forEach((fn) => fn()); }
+  dispatch(evt) { (this.listeners[evt] || []).forEach((fn) => fn()); }
+  click() { this.dispatch('click'); }
 
   remove() {
     if (this.parentNode) {
@@ -244,6 +247,53 @@ test("the author's own classes survive rendering", () => {
   const classes = el.className.split(/\s+/);
   assert.ok(classes.includes('mb-4'));
   assert.ok(classes.includes('flex'));
+});
+
+test('the toast attribute swaps the translucent surface for an opaque, shadowed one', () => {
+  const el = makeAlert({ toast: '', type: 'success', message: 'm' });
+  const classes = el.className.split(/\s+/);
+  assert.ok(classes.includes('bg-base-100'));
+  assert.ok(classes.includes('shadow-lg'));
+  assert.ok(!classes.includes('bg-base-200/50'));
+  assert.ok(classes.includes('border-success/30'));
+});
+
+test('remove() plays the declared exit animation before detaching', () => {
+  const container = new FakeNode('div');
+  const el = makeAlert({ message: 'm', dismissible: '' });
+  container.appendChild(el);
+  el.dataset.animationOut = 'slide-out-right';
+
+  collect(el, isButton)[0].click();
+  assert.equal(el.removed, undefined);
+  assert.ok(String(el.style.animation).includes('slide-out-right'));
+  el.dispatch('animationend');
+  assert.equal(el.removed, true);
+  assert.equal(container.childNodes.length, 0);
+});
+
+test('a second remove() during the exit animation does not cut it short', () => {
+  const container = new FakeNode('div');
+  const el = makeAlert({ message: 'm', dismissible: '' });
+  container.appendChild(el);
+  el.dataset.animationOut = 'slide-out-right';
+
+  el.remove();
+  el.remove();
+  assert.equal(el.removed, undefined);
+  assert.equal(container.childNodes.length, 1);
+  el.dispatch('animationend');
+  assert.equal(el.removed, true);
+  assert.equal(container.childNodes.length, 0);
+});
+
+test('remove() without an exit animation detaches immediately', () => {
+  const container = new FakeNode('div');
+  const el = makeAlert({ message: 'm', dismissible: '' });
+  container.appendChild(el);
+  collect(el, isButton)[0].click();
+  assert.equal(el.removed, true);
+  assert.equal(container.childNodes.length, 0);
 });
 
 test('reconnecting does not render twice', () => {

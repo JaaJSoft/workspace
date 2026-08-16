@@ -26,8 +26,12 @@ def user_project_ids(user, *, role=None):
     Built as a UNION of two independently indexed queries for the same
     reason as ``calendar.queries.visible_calendar_ids``: an OR whose branch
     crosses a join defeats per-branch index use. The empty ``order_by()``
-    is required, ORDER BY is invalid inside a compound subquery. UNION also
-    dedups a project reachable through several of the user's groups.
+    is required on each branch (ORDER BY is invalid inside a compound
+    subquery) and on the combined queryset (a combined queryset falls back
+    to the first arm's ``Meta.ordering``; ``ProjectMember`` has none today,
+    but the fallback would break the single-column result set the moment it
+    grows one - see ``visible_calendar_ids``). UNION also dedups a project
+    reachable through several of the user's groups.
     """
     memberships = ProjectMember.objects.filter(user=user, left_at__isnull=True)
     if role is not None:
@@ -39,7 +43,7 @@ def user_project_ids(user, *, role=None):
         .order_by()
         .values_list("uuid", flat=True)
     )
-    return list(member_ids.union(group_ids))
+    return list(member_ids.union(group_ids).order_by())
 
 
 def due_open_tasks():

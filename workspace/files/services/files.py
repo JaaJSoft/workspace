@@ -93,9 +93,11 @@ class FileService:
         UNION querysets are terminal: no further ``filter()``/``annotate()``
         is possible. When the access filter must compose with other
         conditions in the same query, keep using ``accessible_files_q``.
-        The empty ``order_by()`` on each branch is required - ``File`` has a
-        default ``Meta.ordering`` and ORDER BY is invalid inside a compound
-        subquery.
+        The empty ``order_by()`` is required twice - ``File`` has a default
+        ``Meta.ordering``. On each branch because ORDER BY is invalid inside
+        a compound subquery, and on the combined queryset because a combined
+        queryset falls back to ``Meta.ordering``, whose columns aren't in the
+        single-column result set - DatabaseError at iteration.
         """
         live = {} if include_deleted else {"deleted_at__isnull": True}
         arms = [
@@ -104,7 +106,7 @@ class FileService:
             .values_list("pk", flat=True)
             for branch in FileService._access_branches(user)
         ]
-        return arms[0].union(*arms[1:])
+        return arms[0].union(*arms[1:]).order_by()
 
     @staticmethod
     def user_files_qs(user):

@@ -197,17 +197,5 @@ window.commentsComponent = function commentsComponent(listUrl, currentUserId, ca
       this.mentionStartPos = -1;
       this.mentionEl = null;
     },
-
-    formatDate(iso) {
-      const d = new Date(iso);
-      const now = new Date();
-      const diff = now - d;
-      if (diff < 60000) return 'just now';
-      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-      if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
-      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      return d.toLocaleDateString(undefined, { timeZone: tz });
-    },
   };
 };

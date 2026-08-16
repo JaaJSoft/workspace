@@ -1,3 +1,4 @@
+{% load ui_filters %}
 <div id="overview" class="w-full max-w-6xl mx-auto flex flex-col gap-4">
   <div class="stats stats-vertical sm:stats-horizontal bg-base-200 shadow-sm w-full">
     <div class="stat">
@@ -62,7 +63,7 @@
                 {% endif %}
               </p>
               <p class="text-xs text-base-content/50">
-                {% if ev.actor %}{{ ev.actor.username }} &middot; {% endif %}{{ ev.created_at|timesince }} ago{% if ev.from_status and ev.to_status %} &middot; {{ ev.from_status }} &rarr; {{ ev.to_status }}{% endif %}
+                {% if ev.actor %}{{ ev.actor.username }} &middot; {% endif %}{{ ev.created_at|time_ago }}{% if ev.from_status and ev.to_status %} &middot; {{ ev.from_status }} &rarr; {{ ev.to_status }}{% endif %}
               </p>
             </div>
           </li>

@@ -25,6 +25,7 @@ from workspace.chat.services.conversations import (
 )
 from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
+from workspace.common.dates import time_ago
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.ui.viewers import ViewerRegistry
 from workspace.users.services.settings import get_setting
@@ -131,23 +132,7 @@ def _build_conversation_context(user, conversation_uuids=None):
                 c.last_message_preview = f"{_display(c._last_message.author)}: {label}"
             else:
                 c.last_message_preview = f"{_display(c._last_message.author)}: "
-            diff = (now - c._last_message.created_at).total_seconds()
-            if diff < 60:
-                c.time_ago = "now"
-            elif diff < 3600:
-                c.time_ago = f"{int(diff // 60)}m"
-            elif diff < 86400:
-                c.time_ago = f"{int(diff // 3600)}h"
-            elif diff < 604800:
-                c.time_ago = f"{int(diff // 86400)}d"
-            elif diff < 31536000:
-                c.time_ago = timezone.localtime(c._last_message.created_at).strftime(
-                    "%b %d"
-                )
-            else:
-                c.time_ago = timezone.localtime(c._last_message.created_at).strftime(
-                    "%b '%y"
-                )
+            c.time_ago = time_ago(c._last_message.created_at, now=now)
         else:
             c.last_message_preview = "No messages yet"
             c.time_ago = ""

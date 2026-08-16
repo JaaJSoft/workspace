@@ -2,41 +2,57 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('./loader');
+const { loadScripts } = require('./loader');
 
-const ctx = loadScript('workspace/common/static/ui/js/avatar.js');
-const { _formatTimeAgo } = ctx;
+// _patchCardStatus reads the presence store and fills the status dot, label
+// and "last seen" text. The relative-time wording itself is pinned down in
+// timeago.test.js; here we cover the wiring: which statuses show a "last
+// seen" and which suppress it.
 
-test('reports anything under a minute as "just now"', () => {
-  assert.equal(_formatTimeAgo(0), 'just now');
-  assert.equal(_formatTimeAgo(1), 'just now');
-  assert.equal(_formatTimeAgo(59), 'just now');
+function patchWithStatus(status, lastSeen) {
+  const ctx = loadScripts(
+    [
+      'workspace/common/static/ui/js/timeago.js',
+      'workspace/common/static/ui/js/avatar.js',
+    ],
+    { Alpine: { store: () => ({ statusOf: () => status }) } },
+  );
+  const dot = { className: '' };
+  const label = { className: '', textContent: '' };
+  const ago = { textContent: 'stale' };
+  const el = {
+    dataset: { userId: '7', ...(lastSeen ? { lastSeen } : {}) },
+    querySelector: (sel) =>
+      ({ '[data-status-dot]': dot, '[data-status-label]': label, '[data-status-ago]': ago })[sel],
+  };
+  ctx._patchCardStatus({ querySelector: () => el });
+  return { dot, label, ago };
+}
+
+const minutesAgo = (m) => new Date(Date.now() - m * 60 * 1000).toISOString();
+
+test('offline status shows how long ago the user was last seen', () => {
+  const { label, ago } = patchWithStatus('offline', minutesAgo(5));
+  assert.equal(label.textContent, 'offline');
+  assert.equal(ago.textContent, '· 5m ago');
 });
 
-test('formats minutes, singular at exactly one', () => {
-  assert.equal(_formatTimeAgo(60), '1 minute ago');
-  assert.equal(_formatTimeAgo(119), '1 minute ago');
-  assert.equal(_formatTimeAgo(120), '2 minutes ago');
-  assert.equal(_formatTimeAgo(3599), '59 minutes ago');
+test('away status shows the last-seen time too', () => {
+  const { ago } = patchWithStatus('away', minutesAgo(90));
+  assert.equal(ago.textContent, '· 1h ago');
 });
 
-test('formats hours, singular at exactly one', () => {
-  assert.equal(_formatTimeAgo(3600), '1 hour ago');
-  assert.equal(_formatTimeAgo(7199), '1 hour ago');
-  assert.equal(_formatTimeAgo(7200), '2 hours ago');
-  assert.equal(_formatTimeAgo(86399), '23 hours ago');
+test('a last-seen under a minute is suppressed — it would contradict the status', () => {
+  const { ago } = patchWithStatus('offline', minutesAgo(0.5));
+  assert.equal(ago.textContent, '');
 });
 
-test('formats days, singular at exactly one', () => {
-  assert.equal(_formatTimeAgo(86400), '1 day ago');
-  assert.equal(_formatTimeAgo(172799), '1 day ago');
-  assert.equal(_formatTimeAgo(172800), '2 days ago');
-  assert.equal(_formatTimeAgo(8 * 86400), '8 days ago');
+test('online status never shows a last-seen', () => {
+  const { ago } = patchWithStatus('online', minutesAgo(5));
+  assert.equal(ago.textContent, '');
 });
 
-test('rounds down to the largest whole unit at each boundary', () => {
-  // 90 seconds -> 1 minute (not 1.5), 90 minutes -> 1 hour, 36 hours -> 1 day.
-  assert.equal(_formatTimeAgo(90), '1 minute ago');
-  assert.equal(_formatTimeAgo(90 * 60), '1 hour ago');
-  assert.equal(_formatTimeAgo(36 * 3600), '1 day ago');
+test('no last-seen data clears the field', () => {
+  const { ago } = patchWithStatus('offline', null);
+  assert.equal(ago.textContent, '');
 });

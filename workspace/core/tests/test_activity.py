@@ -776,8 +776,14 @@ class AnnotateTimeAgoTimezoneTests(TestCase):
         dj_timezone.deactivate()
 
     def test_month_label_uses_active_timezone(self):
+        from unittest.mock import patch
+
         # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
         ts = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
         dj_timezone.activate("Europe/Paris")
-        events = annotate_time_ago([{"timestamp": ts}])
+        # Freeze "now" in the same year so the label stays year-less
+        # regardless of when the test runs.
+        fixed_now = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
+        with patch("django.utils.timezone.now", return_value=fixed_now):
+            events = annotate_time_ago([{"timestamp": ts}])
         self.assertEqual(events[0]["time_ago"], "Feb 01")

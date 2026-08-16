@@ -6,6 +6,7 @@ Shared between the REST API views and the dashboard template views.
 from django.utils import timezone
 
 from workspace.common.cache import cached
+from workspace.common.dates import time_ago
 from workspace.core.activity_registry import activity_registry
 
 from .module_visibility import hidden_module_slugs
@@ -151,21 +152,7 @@ def annotate_time_ago(events):
     """Add a human-readable 'time_ago' field to each event dict in place."""
     now = timezone.now()
     for event in events:
-        ts = event.get("timestamp")
-        if not ts:
-            event["time_ago"] = ""
-            continue
-        diff = (now - ts).total_seconds()
-        if diff < 60:
-            event["time_ago"] = "now"
-        elif diff < 3600:
-            event["time_ago"] = f"{int(diff // 60)}m"
-        elif diff < 86400:
-            event["time_ago"] = f"{int(diff // 3600)}h"
-        elif diff < 604800:
-            event["time_ago"] = f"{int(diff // 86400)}d"
-        else:
-            event["time_ago"] = timezone.localtime(ts).strftime("%b %d")
+        event["time_ago"] = time_ago(event.get("timestamp"), now=now)
     return events
 
 

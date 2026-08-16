@@ -107,7 +107,7 @@
                   }"
                   x-text="status"></span>
             <template x-if="(status === 'offline' || status === 'away') && lastSeen">
-              <span class="text-base-content/40" x-text="(() => { let d = (Date.now() - new Date(lastSeen).getTime()) / 1000; if (d < 60) return ''; if (d < 3600) { let m = Math.floor(d/60); return '\u00b7 ' + m + ' minute' + (m>1?'s':'') + ' ago'; } if (d < 86400) { let h = Math.floor(d/3600); return '\u00b7 ' + h + ' hour' + (h>1?'s':'') + ' ago'; } let dy = Math.floor(d/86400); return '\u00b7 ' + dy + ' day' + (dy>1?'s':'') + ' ago'; })()"></span>
+              <span class="text-base-content/40" x-text="window.formatLastSeenAgo(lastSeen)"></span>
             </template>
           </span>
         </div>

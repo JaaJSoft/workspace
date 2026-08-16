@@ -20,38 +20,13 @@
     </select>
   </div>
   <hr class="border-base-300">
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Show labels in list</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-warning"
-      :checked="prefs.showLabels"
-      @change="update('showLabels', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Confirm before delete</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-warning"
-      :checked="prefs.confirmBeforeDelete"
-      @change="update('confirmBeforeDelete', $event.target.checked)">
-  </label>
+  {% include "ui/partials/pref_toggle.html" with label="Show labels in list" key="showLabels" accent="toggle-warning" %}
+  {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-warning" %}
   <hr class="border-base-300">
   <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">AI features</div>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Auto-classify new emails</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-warning"
-      :checked="ai.classify"
-      @change="saveAiFeature('classify', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Extract events and tasks</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-warning"
-      :checked="ai.extract"
-      @change="saveAiFeature('extract', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">AI writing assistance</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-warning"
-      :checked="ai.manual"
-      @change="saveAiFeature('manual', $event.target.checked)">
-  </label>
+  {% include "ui/partials/pref_toggle.html" with label="Auto-classify new emails" key="classify" state="ai.classify" handler="saveAiFeature" accent="toggle-warning" %}
+  {% include "ui/partials/pref_toggle.html" with label="Extract events and tasks" key="extract" state="ai.extract" handler="saveAiFeature" accent="toggle-warning" %}
+  {% include "ui/partials/pref_toggle.html" with label="AI writing assistance" key="manual" state="ai.manual" handler="saveAiFeature" accent="toggle-warning" %}
   <hr class="border-base-300">
   <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Notifications</div>
   <div>

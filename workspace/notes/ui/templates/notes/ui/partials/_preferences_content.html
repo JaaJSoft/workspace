@@ -1,34 +1,9 @@
 <div class="space-y-3">
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Show journal</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-success"
-      :checked="prefs.showJournal"
-      @change="update('showJournal', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Show tags</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-success"
-      :checked="prefs.showTags"
-      @change="update('showTags', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Compact note list</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-success"
-      :checked="prefs.compactList"
-      @change="update('compactList', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Show folders</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-success"
-      :checked="prefs.showFolders"
-      @change="update('showFolders', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Show group folders</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-success"
-      :checked="prefs.showGroupFolders"
-      @change="update('showGroupFolders', $event.target.checked)">
-  </label>
+  {% include "ui/partials/pref_toggle.html" with label="Show journal" key="showJournal" accent="toggle-success" %}
+  {% include "ui/partials/pref_toggle.html" with label="Show tags" key="showTags" accent="toggle-success" %}
+  {% include "ui/partials/pref_toggle.html" with label="Compact note list" key="compactList" accent="toggle-success" %}
+  {% include "ui/partials/pref_toggle.html" with label="Show folders" key="showFolders" accent="toggle-success" %}
+  {% include "ui/partials/pref_toggle.html" with label="Show group folders" key="showGroupFolders" accent="toggle-success" %}
   <hr class="border-base-300">
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Default view</label>
@@ -71,16 +46,6 @@
     </div>
   </div>
   <hr class="border-base-300">
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Confirm before delete</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-success"
-      :checked="prefs.confirmBeforeDelete"
-      @change="update('confirmBeforeDelete', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Show hidden items</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-success"
-      :checked="prefs.showHidden"
-      @change="update('showHidden', $event.target.checked)">
-  </label>
+  {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-success" %}
+  {% include "ui/partials/pref_toggle.html" with label="Show hidden items" key="showHidden" accent="toggle-success" %}
 </div>

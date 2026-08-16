@@ -105,15 +105,6 @@ test('autoGrow sizes the element to its content plus borders', () => {
   assert.equal(el.style.height, '102px');
 });
 
-test('formatDate buckets relative times', () => {
-  const { comp } = make();
-  const now = Date.now();
-  assert.equal(comp.formatDate(new Date(now - 30 * 1000).toISOString()), 'just now');
-  assert.equal(comp.formatDate(new Date(now - 5 * 60 * 1000).toISOString()), '5m ago');
-  assert.equal(comp.formatDate(new Date(now - 3 * 3600 * 1000).toISOString()), '3h ago');
-  assert.equal(comp.formatDate(new Date(now - 2 * 86400 * 1000).toISOString()), '2d ago');
-});
-
 // ── Mentions ─────────────────────────────────────────────────
 
 const USERS = [

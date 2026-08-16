@@ -1,3 +1,4 @@
+{% load ui_filters %}
 {% comment %}
 Activity timeline for the right properties panel.
 
@@ -80,7 +81,7 @@ Loaded by:
           {{ event.short_label|lower }}
         {% endif %}
       </p>
-      <time class="text-xs text-base-content/40">{{ event.created_at|timesince }} ago</time>
+      <time class="text-xs text-base-content/40">{{ event.created_at|time_ago }}</time>
     </div>
   </li>
   {% endfor %}

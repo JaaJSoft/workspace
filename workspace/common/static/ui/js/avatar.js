@@ -40,22 +40,8 @@ function _patchCardStatus(container) {
   }
   if (ago) {
     const lastSeen = el.dataset.lastSeen;
-    if (cfg.showAgo && lastSeen) {
-      const diff = (Date.now() - new Date(lastSeen).getTime()) / 1000;
-      // Skip "just now" — contradictory with away/offline status
-      ago.textContent = diff >= 60 ? '\u00b7 ' + _formatTimeAgo(diff) : '';
-    } else {
-      ago.textContent = '';
-    }
+    ago.textContent = cfg.showAgo && lastSeen ? window.formatLastSeenAgo(lastSeen) : '';
   }
-}
-
-function _formatTimeAgo(seconds) {
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) { const m = Math.floor(seconds / 60); return m + ' minute' + (m > 1 ? 's' : '') + ' ago'; }
-  if (seconds < 86400) { const h = Math.floor(seconds / 3600); return h + ' hour' + (h > 1 ? 's' : '') + ' ago'; }
-  const d = Math.floor(seconds / 86400);
-  return d + ' day' + (d > 1 ? 's' : '') + ' ago';
 }
 
 /* ── User card popover (global cache with 30s TTL) ────────────── */

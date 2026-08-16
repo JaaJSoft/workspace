@@ -26,7 +26,7 @@ Params:
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 text-xs">
             <span class="font-medium" x-text="comment.author.username"></span>
-            <span class="text-base-content/50" x-text="formatDate(comment.created_at)"></span>
+            <span class="text-base-content/50" x-text="window.formatTimeAgo(comment.created_at)"></span>
             <template x-if="comment.edited_at">
               <span class="text-base-content/40 italic">(edited)</span>
             </template>

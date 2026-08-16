@@ -1,4 +1,4 @@
-{% load file_filters %}
+{% load file_filters ui_filters %}
 {% comment %}
 Properties Content Partial
 ==========================
@@ -191,7 +191,7 @@ Context:
         <span>Views</span>
         <span class="font-medium text-base-content">{{ link.view_count }}</span>
         <span>Last access</span>
-        <span class="font-medium text-base-content">{% if link.last_accessed_at %}{{ link.last_accessed_at|timesince }} ago{% else %}Never{% endif %}</span>
+        <span class="font-medium text-base-content">{% if link.last_accessed_at %}{{ link.last_accessed_at|time_ago }}{% else %}Never{% endif %}</span>
         <span>Expires</span>
         <span class="font-medium text-base-content">{% if link.expires_at %}{{ link.expires_at|date:"M d, Y" }}{% else %}Permanent{% endif %}</span>
       </div>

@@ -40,19 +40,6 @@
     }
   },
 
-  timeAgo(dateStr) {
-    const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (seconds < 60) return 'just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return minutes + 'm ago';
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return hours + 'h ago';
-    const days = Math.floor(hours / 24);
-    if (days < 7) return days + 'd ago';
-    const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-    return new Date(dateStr).toLocaleDateString(undefined, { timeZone: tz });
-  },
-
   async clickItem(item) {
     if (!item.is_read) await $store.notifications.markRead(item.uuid);
     if (item.url) window.location.href = item.url;
@@ -200,7 +187,7 @@
             <p class="text-sm truncate" :class="item.is_read ? 'text-base-content/70' : 'font-medium'" x-text="item.title"></p>
             <p x-show="item.body" class="text-xs truncate" :class="item.is_read ? 'text-base-content/50' : 'text-base-content/60'" x-text="item.body"></p>
             <div class="flex items-center gap-2 mt-1">
-              <span class="text-xs" :class="item.is_read ? 'text-base-content/40' : 'text-primary'" x-text="timeAgo(item.created_at)"></span>
+              <span class="text-xs" :class="item.is_read ? 'text-base-content/40' : 'text-primary'" x-text="window.formatTimeAgo(item.created_at)"></span>
               <span x-show="item.priority === 'urgent' || item.priority === 'high'" class="badge badge-error badge-xs" x-text="item.priority"></span>
             </div>
           </div>

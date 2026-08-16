@@ -12,14 +12,17 @@ def visible_calendar_ids(user):
     the whole calendar table, which grows with the user count. UNION also
     dedups the edge case where a user subscribed to their own calendar
     (the join form needed ``.distinct()`` for that). The empty
-    ``order_by()`` is required on each branch - ``Calendar`` has a default
-    ``Meta.ordering`` and ORDER BY is invalid inside a compound subquery.
+    ``order_by()`` is required twice - ``Calendar`` has a default
+    ``Meta.ordering``. On each branch because ORDER BY is invalid inside a
+    compound subquery, and on the combined queryset because a combined
+    queryset falls back to ``Meta.ordering``, whose columns aren't in the
+    single-column result set - DatabaseError at iteration.
     """
     owned = (
         Calendar.objects.filter(owner=user).order_by().values_list("uuid", flat=True)
     )
     subscribed = Calendar.objects.filter(subscriptions__user=user).order_by()
-    return list(owned.union(subscribed.values_list("uuid", flat=True)))
+    return list(owned.union(subscribed.values_list("uuid", flat=True)).order_by())
 
 
 def member_event_ids(user):

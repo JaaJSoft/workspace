@@ -88,10 +88,13 @@ window.INLINE_ALERT_TYPES = {
     // slide out the same way. Alerts without one detach immediately.
     remove() {
       const exit = this.dataset.animationOut;
-      if (!exit || this._removing || !this.parentNode) {
+      if (!exit || !this.parentNode) {
         super.remove();
         return;
       }
+      // Already sliding out (auto-dismiss racing a manual ✕, a double
+      // click): let the running animation finish instead of detaching now.
+      if (this._removing) return;
       this._removing = true;
       this.style.animation = `${exit} 0.3s ease-in`;
       this.addEventListener('animationend', () => super.remove());

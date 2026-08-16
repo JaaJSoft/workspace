@@ -262,11 +262,26 @@ test('remove() plays the declared exit animation before detaching', () => {
   const container = new FakeNode('div');
   const el = makeAlert({ message: 'm', dismissible: '' });
   container.appendChild(el);
-  el.dataset.animationOut = 'slideOutRight';
+  el.dataset.animationOut = 'slide-out-right';
 
   collect(el, isButton)[0].click();
   assert.equal(el.removed, undefined);
-  assert.ok(String(el.style.animation).includes('slideOutRight'));
+  assert.ok(String(el.style.animation).includes('slide-out-right'));
+  el.dispatch('animationend');
+  assert.equal(el.removed, true);
+  assert.equal(container.childNodes.length, 0);
+});
+
+test('a second remove() during the exit animation does not cut it short', () => {
+  const container = new FakeNode('div');
+  const el = makeAlert({ message: 'm', dismissible: '' });
+  container.appendChild(el);
+  el.dataset.animationOut = 'slide-out-right';
+
+  el.remove();
+  el.remove();
+  assert.equal(el.removed, undefined);
+  assert.equal(container.childNodes.length, 1);
   el.dispatch('animationend');
   assert.equal(el.removed, true);
   assert.equal(container.childNodes.length, 0);

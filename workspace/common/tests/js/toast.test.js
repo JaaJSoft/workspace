@@ -201,7 +201,7 @@ test('the ✕ slides the toast out before removing it', () => {
   const el = AppAlert.show({ message: 'm', duration: 0 });
   buttons(el)[0].click();
   assert.equal(container.children.length, 1);
-  assert.ok(String(el.style.animation).includes('slideOutRight'));
+  assert.ok(String(el.style.animation).includes('slide-out-right'));
   el.dispatch('animationend');
   assert.equal(container.children.length, 0);
 });
@@ -230,7 +230,7 @@ test('auto-dismiss fires after the duration and removes the toast', () => {
   timers[0].fn();
   // Still in the DOM while the exit animation plays.
   assert.equal(container.children.length, 1);
-  assert.ok(String(el.style.animation).includes('slideOutRight'));
+  assert.ok(String(el.style.animation).includes('slide-out-right'));
   el.dispatch('animationend');
   assert.equal(container.children.length, 0);
 });
@@ -244,10 +244,22 @@ test('duration 0 disables auto-dismiss', () => {
 test('dismiss slides the toast out with the position-matched animation', () => {
   const { AppAlert, container } = makeEnv();
   const el = AppAlert.show({ message: 'm', position: 'top-center', duration: 0 });
-  assert.ok(String(el.style.animation).includes('slideInDown'));
+  assert.ok(String(el.style.animation).includes('slide-in-down'));
 
   AppAlert.dismiss(el);
-  assert.ok(String(el.style.animation).includes('slideOutUp'));
+  assert.ok(String(el.style.animation).includes('slide-out-up'));
+  el.dispatch('animationend');
+  assert.equal(container.children.length, 0);
+});
+
+test('a repeated dismiss while the toast slides out keeps the animation', () => {
+  const { AppAlert, container } = makeEnv();
+  const el = AppAlert.show({ message: 'm', duration: 0 });
+  AppAlert.dismiss(el);
+  // Auto-dismiss firing right after a manual ✕, or a double-click: the
+  // toast must stay attached until the exit animation finishes.
+  AppAlert.dismiss(el);
+  assert.equal(container.children.length, 1);
   el.dispatch('animationend');
   assert.equal(container.children.length, 0);
 });
@@ -286,7 +298,7 @@ test('an unknown position falls back to bottom-right', () => {
   const classes = container.className.split(/\s+/);
   assert.ok(classes.includes('bottom-4'));
   assert.ok(classes.includes('right-4'));
-  assert.ok(String(el.style.animation).includes('slideInRight'));
+  assert.ok(String(el.style.animation).includes('slide-in-right'));
 });
 
 test('clearAll empties the container immediately', () => {

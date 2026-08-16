@@ -1,0 +1,82 @@
+{% comment %}
+  Client-side templates for the optimistic message bubble - the temporary
+  own-message bubble shown between pressing send and the server-rendered
+  refresh. _injectOptimisticMessage() in chat/ui/static/chat/ui/js/messages.js
+  reads each <template> by id and fills the __TOKEN__ placeholders (values are
+  HTML-escaped by the JS before substitution).
+
+  This is the pending-state twin of message_group.html: keep the classes here
+  in lockstep with that partial when restyling the real bubble, minus the
+  pending-only additions (opacity-70 on the bubble, the loading spinner in
+  place of the timestamp).
+{% endcomment %}
+<template id="chat-optimistic-message">
+  <div class="msg-group msg-group-end flex gap-2 mb-3 flex-row-reverse" id="__ID__">
+    <div class="flex-shrink-0 w-8 mt-auto">__AVATAR__</div>
+    <div class="flex flex-col items-end gap-0.5 min-w-0 max-w-[75%]">
+      <div class="relative max-w-full">
+        <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm bg-info/15 text-base-content opacity-70">
+          __REPLY__
+          __BODY__
+          __FILES__
+        </div>
+      </div>
+      <div class="flex items-center gap-1 px-1">
+        <span class="loading loading-dots loading-xs text-base-content/40"></span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="chat-optimistic-reply">
+  <div class="flex gap-2 mb-1.5 rounded-lg px-2 py-1 bg-info/15">
+    <div class="w-0.5 flex-shrink-0 rounded-full bg-info"></div>
+    <div class="min-w-0 flex-1">
+      <span class="text-xs font-semibold text-info">__AUTHOR__</span>
+      <p class="text-xs text-base-content/70 truncate">__PREVIEW__</p>
+    </div>
+  </div>
+</template>
+
+<template id="chat-optimistic-body">
+  <div class="msg-body prose prose-sm max-w-none break-words">__BODY_HTML__</div>
+</template>
+
+{# __MT__ is either empty or ' mt-1.5' - top margin only when there is no body. #}
+<template id="chat-optimistic-files">
+  __SEPARATOR__
+  <div class="flex flex-col gap-1.5 mb-1.5__MT__">__ITEMS__</div>
+</template>
+
+<template id="chat-optimistic-separator">
+  <div class="border-t border-info/30 my-1.5"></div>
+</template>
+
+<template id="chat-optimistic-image">
+  <img src="__SRC__" alt="__NAME__" class="max-h-64 max-w-full rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity opacity-60" />
+</template>
+
+<template id="chat-optimistic-video">
+  <div class="relative max-h-64 max-w-full rounded-lg overflow-hidden opacity-60">
+    <video src="__SRC__" class="max-h-64 max-w-full rounded-lg object-contain" preload="metadata"></video>
+    <div class="absolute inset-0 flex items-center justify-center bg-black/20">
+      <div class="w-12 h-12 rounded-full bg-base-100/80 flex items-center justify-center">
+        <i data-lucide="play" class="w-6 h-6"></i>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="chat-optimistic-file">
+  <div class="flex items-center gap-0.5 min-w-0">
+    <div class="flex items-center gap-2 p-2 rounded-lg bg-info/15 min-w-0 flex-1">
+      <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
+      <span class="truncate text-xs font-medium">__NAME__</span>
+      __SIZE_CHIP__
+    </div>
+  </div>
+</template>
+
+<template id="chat-optimistic-file-size">
+  <span class="text-[0.65rem] opacity-60 flex-shrink-0">__SIZE__</span>
+</template>

@@ -2,7 +2,27 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const { loadScripts } = require('../../../common/tests/js/loader');
+
+// The bubble markup comes from the real partial, so the test exercises the
+// exact templates the browser clones from.
+const OPTIMISTIC_PARTIAL = fs.readFileSync(
+  path.resolve(
+    __dirname,
+    '../../ui/templates/chat/ui/partials/_optimistic_message.html',
+  ),
+  'utf8',
+);
+
+function parseTemplates(partialHtml) {
+  const templates = new Map();
+  for (const m of partialHtml.matchAll(/<template id="([^"]+)">([\s\S]*?)<\/template>/g)) {
+    templates.set(m[1], { innerHTML: m[2] });
+  }
+  return templates;
+}
 
 /**
  * Pin the optimistic-message lifecycle: sending injects a pending bubble
@@ -30,9 +50,11 @@ function buildDom() {
       }
     },
   };
+  const templates = parseTemplates(OPTIMISTIC_PARTIAL);
   const document = {
     getElementById(id) {
       if (id === 'messages-container') return container;
+      if (templates.has(id)) return templates.get(id);
       return injectedById.get(id) || null;
     },
   };

@@ -32,11 +32,11 @@
   };
 
   const SLIDE_ANIMATIONS = {
-    'top-right': { enter: 'slideInRight', exit: 'slideOutRight' },
-    'top-left': { enter: 'slideInLeft', exit: 'slideOutLeft' },
-    'bottom-right': { enter: 'slideInRight', exit: 'slideOutRight' },
-    'bottom-left': { enter: 'slideInLeft', exit: 'slideOutLeft' },
-    'top-center': { enter: 'slideInDown', exit: 'slideOutUp' }
+    'top-right': { enter: 'slide-in-right', exit: 'slide-out-right' },
+    'top-left': { enter: 'slide-in-left', exit: 'slide-out-left' },
+    'bottom-right': { enter: 'slide-in-right', exit: 'slide-out-right' },
+    'bottom-left': { enter: 'slide-in-left', exit: 'slide-out-left' },
+    'top-center': { enter: 'slide-in-down', exit: 'slide-out-up' }
   };
 
   function show(options) {

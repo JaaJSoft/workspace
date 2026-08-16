@@ -263,7 +263,7 @@ window.fileBrowser = function fileBrowser() {
         await window.fileActions.createFolder(name, this.currentFolder || null);
         this.refreshFolderBrowser();
       } catch (error) {
-        this.showAlert('error', error.message || 'Failed to create folder');
+        window.AppAlert.error(error.message || 'Failed to create folder');
       }
     },
 
@@ -271,7 +271,7 @@ window.fileBrowser = function fileBrowser() {
     async createFile(name, fileType, customExt) {
       const trimmedName = (name || '').trim();
       if (!trimmedName) {
-        this.showAlert('error', 'File name is required');
+        window.AppAlert.error('File name is required');
         return;
       }
 
@@ -287,7 +287,7 @@ window.fileBrowser = function fileBrowser() {
       if (fileType === 'custom') {
         extension = (customExt || '').trim().replace(/^\./, '');
         if (!extension) {
-          this.showAlert('error', 'Custom extension is required');
+          window.AppAlert.error('Custom extension is required');
           return;
         }
         mimeType = 'application/octet-stream';
@@ -339,10 +339,10 @@ window.fileBrowser = function fileBrowser() {
           } catch (error) {
             data = {};
           }
-          this.showAlert('error', data.detail || 'Failed to create file');
+          window.AppAlert.error(data.detail || 'Failed to create file');
         }
       } catch (error) {
-        this.showAlert('error', 'Failed to create file');
+        window.AppAlert.error('Failed to create file');
       }
     },
 
@@ -387,7 +387,7 @@ window.fileBrowser = function fileBrowser() {
           await this._uploadFile(file);
           uploaded++;
         } catch (err) {
-          this.showAlert('error', `Failed to upload ${file.name}${err.message ? ': ' + err.message : ''}`);
+          window.AppAlert.error(`Failed to upload ${file.name}${err.message ? ': ' + err.message : ''}`);
         }
 
         this.uploadCompleted++;
@@ -408,7 +408,7 @@ window.fileBrowser = function fileBrowser() {
       if (uploaded > 0) {
         this.refreshFolderBrowser();
         const msg = `Uploaded ${uploaded} file${uploaded > 1 ? 's' : ''}`;
-        setTimeout(() => this.showAlert('success', msg), 600);
+        setTimeout(() => window.AppAlert.success(msg), 600);
       }
 
       // Reset state
@@ -574,7 +574,7 @@ window.fileBrowser = function fileBrowser() {
         window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
         this.refreshFolderBrowser();
       } catch (error) {
-        this.showAlert('error', error.message || 'Failed to rename');
+        window.AppAlert.error(error.message || 'Failed to rename');
       } finally {
         this._stopLoading(uuid);
       }
@@ -593,10 +593,10 @@ window.fileBrowser = function fileBrowser() {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
-          this.showAlert('error', 'Failed to delete');
+          window.AppAlert.error('Failed to delete');
         }
       } catch (error) {
-        this.showAlert('error', 'Failed to delete');
+        window.AppAlert.error('Failed to delete');
       } finally {
         this._stopLoading(uuid);
       }
@@ -627,10 +627,10 @@ window.fileBrowser = function fileBrowser() {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
-          this.showAlert('error', 'Failed to restore');
+          window.AppAlert.error('Failed to restore');
         }
       } catch (error) {
-        this.showAlert('error', 'Failed to restore');
+        window.AppAlert.error('Failed to restore');
       } finally {
         this._stopLoading(uuid);
       }
@@ -661,10 +661,10 @@ window.fileBrowser = function fileBrowser() {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
-          this.showAlert('error', 'Failed to delete permanently');
+          window.AppAlert.error('Failed to delete permanently');
         }
       } catch (error) {
-        this.showAlert('error', 'Failed to delete permanently');
+        window.AppAlert.error('Failed to delete permanently');
       } finally {
         this._stopLoading(uuid);
       }
@@ -696,10 +696,10 @@ window.fileBrowser = function fileBrowser() {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
-          this.showAlert('error', 'Failed to clean trash');
+          window.AppAlert.error('Failed to clean trash');
         }
       } catch (error) {
-        this.showAlert('error', 'Failed to clean trash');
+        window.AppAlert.error('Failed to clean trash');
       } finally {
         this.cleaningTrash = false;
       }
@@ -725,9 +725,9 @@ window.fileBrowser = function fileBrowser() {
         } catch (error) {
           data = {};
         }
-        this.showAlert('error', data.detail || 'Failed to update favorites');
+        window.AppAlert.error(data.detail || 'Failed to update favorites');
       } catch (error) {
-        this.showAlert('error', 'Failed to update favorites');
+        window.AppAlert.error('Failed to update favorites');
       } finally {
         this._stopLoading(uuid);
       }
@@ -754,9 +754,9 @@ window.fileBrowser = function fileBrowser() {
         } catch (error) {
           data = {};
         }
-        this.showAlert('error', data.detail || 'Failed to update pin');
+        window.AppAlert.error(data.detail || 'Failed to update pin');
       } catch (error) {
-        this.showAlert('error', 'Failed to update pin');
+        window.AppAlert.error('Failed to update pin');
       } finally {
         this._stopLoading(uuid);
       }
@@ -798,9 +798,9 @@ window.fileBrowser = function fileBrowser() {
       }
 
       if (errorCount > 0) {
-        this.showAlert('warning', `Deleted ${successCount} items, ${errorCount} failed`);
+        window.AppAlert.warning(`Deleted ${successCount} items, ${errorCount} failed`);
       } else {
-        this.showAlert('success', `Deleted ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(`Deleted ${successCount} item${successCount > 1 ? 's' : ''}`);
       }
 
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
@@ -834,9 +834,9 @@ window.fileBrowser = function fileBrowser() {
 
       const action = add ? 'Added to' : 'Removed from';
       if (errorCount > 0) {
-        this.showAlert('warning', `${action} favorites: ${successCount} succeeded, ${errorCount} failed`);
+        window.AppAlert.warning(`${action} favorites: ${successCount} succeeded, ${errorCount} failed`);
       } else {
-        this.showAlert('success', `${action} favorites: ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(`${action} favorites: ${successCount} item${successCount > 1 ? 's' : ''}`);
       }
 
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
@@ -877,9 +877,9 @@ window.fileBrowser = function fileBrowser() {
       }
 
       if (errorCount > 0) {
-        this.showAlert('warning', `Restored ${successCount} items, ${errorCount} failed`);
+        window.AppAlert.warning(`Restored ${successCount} items, ${errorCount} failed`);
       } else {
-        this.showAlert('success', `Restored ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(`Restored ${successCount} item${successCount > 1 ? 's' : ''}`);
       }
 
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
@@ -921,9 +921,9 @@ window.fileBrowser = function fileBrowser() {
       }
 
       if (errorCount > 0) {
-        this.showAlert('warning', `Permanently deleted ${successCount} items, ${errorCount} failed`);
+        window.AppAlert.warning(`Permanently deleted ${successCount} items, ${errorCount} failed`);
       } else {
-        this.showAlert('success', `Permanently deleted ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(`Permanently deleted ${successCount} item${successCount > 1 ? 's' : ''}`);
       }
 
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
@@ -942,7 +942,7 @@ window.fileBrowser = function fileBrowser() {
           body: JSON.stringify({ uuids }),
         });
         if (!resp.ok) {
-          this.showAlert('error', 'Failed to download selected files');
+          window.AppAlert.error('Failed to download selected files');
           return;
         }
         const blob = await resp.blob();
@@ -955,7 +955,7 @@ window.fileBrowser = function fileBrowser() {
         a.remove();
         URL.revokeObjectURL(url);
       } catch (e) {
-        this.showAlert('error', 'Failed to download selected files');
+        window.AppAlert.error('Failed to download selected files');
       }
     },
 
@@ -984,9 +984,9 @@ window.fileBrowser = function fileBrowser() {
 
       const action = add ? 'Pinned' : 'Unpinned';
       if (errorCount > 0) {
-        this.showAlert('warning', `${action} ${successCount} items, ${errorCount} failed`);
+        window.AppAlert.warning(`${action} ${successCount} items, ${errorCount} failed`);
       } else {
-        this.showAlert('success', `${action} ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(`${action} ${successCount} item${successCount > 1 ? 's' : ''}`);
       }
 
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
@@ -1000,14 +1000,14 @@ window.fileBrowser = function fileBrowser() {
       if (!items || items.length === 0) return;
       window.fileClipboard.cut(items);
       const count = items.length;
-      this.showAlert('info', `${count} item${count > 1 ? 's' : ''} cut to clipboard`);
+      window.AppAlert.info(`${count} item${count > 1 ? 's' : ''} cut to clipboard`);
     },
 
     copyToClipboard(items) {
       if (!items || items.length === 0) return;
       window.fileClipboard.copy(items);
       const count = items.length;
-      this.showAlert('info', `${count} item${count > 1 ? 's' : ''} copied to clipboard`);
+      window.AppAlert.info(`${count} item${count > 1 ? 's' : ''} copied to clipboard`);
     },
 
     bulkCutToClipboard(uuids) {
@@ -1038,7 +1038,7 @@ window.fileBrowser = function fileBrowser() {
     async pasteFromClipboard() {
       const items = window.fileClipboard.getItems();
       if (!items || items.length === 0) {
-        this.showAlert('warning', 'Clipboard is empty');
+        window.AppAlert.warning('Clipboard is empty');
         return;
       }
 
@@ -1085,9 +1085,9 @@ window.fileBrowser = function fileBrowser() {
 
       const action = isCopy ? 'Copied' : 'Moved';
       if (errorCount > 0) {
-        this.showAlert('warning', `${action} ${successCount} items, ${errorCount} failed`);
+        window.AppAlert.warning(`${action} ${successCount} items, ${errorCount} failed`);
       } else {
-        this.showAlert('success', `${action} ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(`${action} ${successCount} item${successCount > 1 ? 's' : ''}`);
       }
 
       // Only clear clipboard on cut (move), keep it for copy
@@ -1121,11 +1121,11 @@ window.fileBrowser = function fileBrowser() {
         });
         if (!resp.ok) {
           const body = await resp.json().catch(() => ({}));
-          this.showAlert('error', body.detail || 'Extraction failed');
+          window.AppAlert.error(body.detail || 'Extraction failed');
           return;
         }
         const data = await resp.json();
-        this.showAlert('success', `Extracted ${data.files_created} item(s)`);
+        window.AppAlert.success(`Extracted ${data.files_created} item(s)`);
 
         // If the user is currently viewing the destination folder, refresh.
         // Normalise both sides to null so root (uuid=null) compares against
@@ -1136,7 +1136,7 @@ window.fileBrowser = function fileBrowser() {
           this.refreshFolderBrowser();
         }
       } catch (e) {
-        this.showAlert('error', 'Extraction failed');
+        window.AppAlert.error('Extraction failed');
       }
     },
 
@@ -1161,9 +1161,9 @@ window.fileBrowser = function fileBrowser() {
         } catch (error) {
           data = {};
         }
-        this.showAlert('error', data.detail || 'Failed to pin folder');
+        window.AppAlert.error(data.detail || 'Failed to pin folder');
       } catch (error) {
-        this.showAlert('error', 'Failed to pin folder');
+        window.AppAlert.error('Failed to pin folder');
       } finally {
         this._stopLoading(uuid);
       }
@@ -1210,7 +1210,7 @@ window.fileBrowser = function fileBrowser() {
       if (!this.selectedFile || this.selectedFile.uuid !== uuid) {
         const resp = await fetch(`/api/v1/files/${uuid}`);
         if (!resp.ok) {
-          this.showAlert('error', 'Failed to load tags');
+          window.AppAlert.error('Failed to load tags');
           return;
         }
         const data = await resp.json();
@@ -1235,18 +1235,6 @@ window.fileBrowser = function fileBrowser() {
       this.selectedFile = this._tagPickerRestore;
       this._tagPickerRestore = null;
       this.tagPickerName = '';
-    },
-
-    showAlert(type, message) {
-      if (window.AppAlert && typeof window.AppAlert.show === 'function') {
-        window.AppAlert.show({
-          type: type || 'info',
-          message: message || '',
-          duration: type === 'error' ? 8000 : 5000,
-        });
-        return;
-      }
-      console.warn('AppAlert is not available:', message);
     },
 
 
@@ -1276,7 +1264,7 @@ window.fileBrowser = function fileBrowser() {
       window.addEventListener('create-group-folder', (e) => {
         window.fileActions.createGroupFolder(e.detail.groupId, e.detail.groupName)
           .then(() => window.dispatchEvent(new CustomEvent('group-folders-changed')))
-          .catch((err) => this.showAlert('error', err.message || 'Failed to create group folder'));
+          .catch((err) => window.AppAlert.error(err.message || 'Failed to create group folder'));
       });
 
       // Tag chips are rendered server-side in the listing, so any tag edit

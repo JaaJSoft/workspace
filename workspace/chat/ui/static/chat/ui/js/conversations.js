@@ -488,7 +488,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       } catch (e) {
         conv.notification_level = previous;
         console.error('Failed to set notification level', e);
-        this.showAlert?.('error', 'Could not change the notification level');
+        window.AppAlert.error('Could not change the notification level');
       }
     },
 

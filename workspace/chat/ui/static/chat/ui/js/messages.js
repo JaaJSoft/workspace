@@ -380,13 +380,13 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         this._removeOptimisticMessage(tempId);
         this.botTyping = false;
         this.clearBotStep?.();
-        this.showAlert?.('error', 'Failed to send the voice message.');
+        window.AppAlert.error('Failed to send the voice message.');
         return false;
       } catch (e) {
         this._removeOptimisticMessage(tempId);
         this.botTyping = false;
         this.clearBotStep?.();
-        this.showAlert?.('error', 'Failed to send the voice message.');
+        window.AppAlert.error('Failed to send the voice message.');
         return false;
       }
     },

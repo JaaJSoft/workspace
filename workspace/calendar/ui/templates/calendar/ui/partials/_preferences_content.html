@@ -32,28 +32,8 @@
     </select>
   </div>
   <hr class="border-base-300">
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Show week numbers</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-accent"
-      :checked="prefs.weekNumbers"
-      @change="updatePref('weekNumbers', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Default to all day</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-accent"
-      :checked="prefs.defaultAllDay"
-      @change="updatePref('defaultAllDay', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Show declined events</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-accent"
-      :checked="prefs.showDeclined"
-      @change="updatePref('showDeclined', $event.target.checked)">
-  </label>
-  <label class="flex items-center justify-between gap-2 cursor-pointer">
-    <span class="text-sm">Poll vote notifications</span>
-    <input type="checkbox" class="toggle toggle-sm toggle-accent"
-      :checked="prefs.notifyPollVotes"
-      @change="updatePref('notifyPollVotes', $event.target.checked)">
-  </label>
+  {% include "ui/partials/pref_toggle.html" with label="Show week numbers" key="weekNumbers" accent="toggle-accent" handler="updatePref" %}
+  {% include "ui/partials/pref_toggle.html" with label="Default to all day" key="defaultAllDay" accent="toggle-accent" handler="updatePref" %}
+  {% include "ui/partials/pref_toggle.html" with label="Show declined events" key="showDeclined" accent="toggle-accent" handler="updatePref" %}
+  {% include "ui/partials/pref_toggle.html" with label="Poll vote notifications" key="notifyPollVotes" accent="toggle-accent" handler="updatePref" %}
 </div>

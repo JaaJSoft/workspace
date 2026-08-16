@@ -1,0 +1,29 @@
+{% comment %}
+One toggle row of a module preferences panel: label on the left, daisyUI
+toggle on the right. Use it instead of hand-rolling the label/input pair so
+row alignment and toggle sizing stay consistent across modules.
+
+Required context:
+- label: visible text of the row.
+- key: preference key, quoted into the handler call and into the default
+  :checked expression ("prefs.<key>"). Only omittable when both `state`
+  and `change` are given.
+- accent: the toggle's accent class, e.g. "toggle-info". Pass the complete
+  class name, never a bare color suffix - Tailwind's scanner keeps a class
+  only when it appears as a literal string, and the include site is where
+  it must appear.
+
+Optional context:
+- handler: function called as <handler>('<key>', $event.target.checked)
+  on change (default "update").
+- state: Alpine expression for :checked, for state that doesn't live under
+  "prefs." (e.g. "ai.classify").
+- change: full @change expression, for handlers that don't take the
+  (key, value) signature. Overrides `handler`.
+{% endcomment %}
+<label class="flex items-center justify-between gap-2 cursor-pointer">
+  <span class="text-sm">{{ label }}</span>
+  <input type="checkbox" class="toggle toggle-sm {{ accent }}"
+    :checked="{% if state %}{{ state }}{% else %}prefs.{{ key }}{% endif %}"
+    @change="{% if change %}{{ change }}{% else %}{% firstof handler 'update' %}('{{ key }}', $event.target.checked){% endif %}">
+</label>

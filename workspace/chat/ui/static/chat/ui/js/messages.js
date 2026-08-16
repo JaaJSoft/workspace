@@ -396,6 +396,22 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       return this.activeConversation.members.find(m => m.user.id === this.currentUserId)?.user;
     },
 
+    // The bubble markup lives in _optimistic_message.html (<template>
+    // elements rendered next to the messages container), not here: it is the
+    // pending-state twin of message_group.html and both get restyled
+    // together. Fills the template's __TOKEN__ placeholders in a single
+    // left-to-right pass, so a token-looking sequence inside a substituted
+    // value (user text is escaped, but stays user-controlled) is never
+    // itself substituted.
+    _optimisticTpl(templateId, values = {}) {
+      const tpl = document.getElementById(templateId);
+      if (!tpl) return '';
+      return tpl.innerHTML.replace(
+        /__([A-Z_]+?)__/g,
+        (token, name) => (Object.hasOwn(values, name) ? values[name] : token),
+      );
+    },
+
     _injectOptimisticMessage(tempId, body, replyInfo, files) {
       const container = document.getElementById(this._messagesContainerId());
       if (!container) return;
@@ -405,72 +421,48 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         ? window.userAvatarTag(user.id, user.username, { size: 'sm' })
         : '';
 
-      // Build body HTML with basic line breaks
+      // Body HTML with basic line breaks
       const bodyHtml = body ? escapeHtml(body).replace(/\n/g, '<br>') : '';
 
-      // Build reply context HTML
-      let replyHtml = '';
-      if (replyInfo) {
-        replyHtml = `
-          <div class="flex gap-2 mb-1.5 rounded-lg px-2 py-1 bg-info/15">
-            <div class="w-0.5 flex-shrink-0 rounded-full bg-info"></div>
-            <div class="min-w-0 flex-1">
-              <span class="text-xs font-semibold text-info">${escapeHtml(replyInfo.author)}</span>
-              <p class="text-xs text-base-content/70 truncate">${escapeHtml(replyInfo.body || '')}</p>
-            </div>
-          </div>`;
-      }
+      const replyHtml = replyInfo
+        ? this._optimisticTpl('chat-optimistic-reply', {
+            AUTHOR: escapeHtml(replyInfo.author),
+            PREVIEW: escapeHtml(replyInfo.body || ''),
+          })
+        : '';
 
-      // Build file previews
       let filesHtml = '';
       if (files && files.length > 0) {
         const items = files.map(f => {
           const name = escapeHtml(f.name);
           if (f.type && f.type.startsWith('image/') && f._preview) {
-            return `<img src="${f._preview}" alt="${name}" class="max-h-64 max-w-full rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity opacity-60" />`;
+            return this._optimisticTpl('chat-optimistic-image', { SRC: f._preview, NAME: name });
           }
           if (f.type && f.type.startsWith('video/') && f._preview) {
-            return `<div class="relative max-h-64 max-w-full rounded-lg overflow-hidden opacity-60">
-              <video src="${f._preview}" class="max-h-64 max-w-full rounded-lg object-contain" preload="metadata"></video>
-              <div class="absolute inset-0 flex items-center justify-center bg-black/20">
-                <div class="w-12 h-12 rounded-full bg-base-100/80 flex items-center justify-center">
-                  <i data-lucide="play" class="w-6 h-6"></i>
-                </div>
-              </div>
-            </div>`;
+            return this._optimisticTpl('chat-optimistic-video', { SRC: f._preview });
           }
-          const size = f.size ? formatFileSize(f.size) : '';
-          return `<div class="flex items-center gap-0.5 min-w-0">
-            <div class="flex items-center gap-2 p-2 rounded-lg bg-info/15 min-w-0 flex-1">
-              <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
-              <span class="truncate text-xs font-medium">${name}</span>
-              ${size ? `<span class="text-[0.65rem] opacity-60 flex-shrink-0">${size}</span>` : ''}
-            </div>
-          </div>`;
+          const sizeChip = f.size
+            ? this._optimisticTpl('chat-optimistic-file-size', { SIZE: formatFileSize(f.size) })
+            : '';
+          return this._optimisticTpl('chat-optimistic-file', { NAME: name, SIZE_CHIP: sizeChip });
         }).join('');
-        const separator = bodyHtml ? '<div class="border-t border-info/30 my-1.5"></div>' : '';
-        const mtClass = bodyHtml ? '' : ' mt-1.5';
-        filesHtml = `${separator}<div class="flex flex-col gap-1.5 mb-1.5${mtClass}">${items}</div>`;
+        filesHtml = this._optimisticTpl('chat-optimistic-files', {
+          SEPARATOR: bodyHtml ? this._optimisticTpl('chat-optimistic-separator') : '',
+          MT: bodyHtml ? '' : ' mt-1.5',
+          ITEMS: items,
+        });
       }
 
-      const html = `
-        <div class="msg-group msg-group-end flex gap-2 mb-3 flex-row-reverse" id="${tempId}">
-          <div class="flex-shrink-0 w-8 mt-auto">${avatarHtml}</div>
-          <div class="flex flex-col items-end gap-0.5 min-w-0 max-w-[75%]">
-            <div class="relative max-w-full">
-              <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm bg-info/15 text-base-content opacity-70">
-                ${replyHtml}
-                ${bodyHtml ? `<div class="msg-body prose prose-sm max-w-none break-words">${bodyHtml}</div>` : ''}
-                ${filesHtml}
-              </div>
-            </div>
-            <div class="flex items-center gap-1 px-1">
-              <span class="loading loading-dots loading-xs text-base-content/40"></span>
-            </div>
-          </div>
-        </div>`;
-
-      container.insertAdjacentHTML('beforeend', html);
+      const html = this._optimisticTpl('chat-optimistic-message', {
+        ID: tempId,
+        AVATAR: avatarHtml,
+        REPLY: replyHtml,
+        BODY: bodyHtml
+          ? this._optimisticTpl('chat-optimistic-body', { BODY_HTML: bodyHtml })
+          : '',
+        FILES: filesHtml,
+      });
+      if (html) container.insertAdjacentHTML('beforeend', html);
     },
 
     _removeOptimisticMessage(tempId) {

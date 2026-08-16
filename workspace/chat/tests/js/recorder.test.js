@@ -174,6 +174,45 @@ test('sendRecording sends the measured duration once per click', async () => {
   assert.deepStrictEqual(Array.from(sent), [0.4]);
 });
 
+test('a denied microphone permission surfaces a toast', async () => {
+  const alerts = [];
+  ctx.AppAlert = { error: (msg) => alerts.push(msg) };
+  ctx.navigator = {
+    mediaDevices: {
+      getUserMedia: async () => {
+        const err = new Error('denied');
+        err.name = 'NotAllowedError';
+        throw err;
+      },
+    },
+  };
+  const m = ctx.chatRecorderMixin();
+  m.recorderSupported = true;
+
+  await m.startRecording();
+
+  assert.deepStrictEqual(Array.from(alerts), ['Microphone access was denied.']);
+  assert.equal(m._startingRecording, false);
+});
+
+test('a recorder that fails to start surfaces a toast', async () => {
+  const alerts = [];
+  ctx.AppAlert = { error: (msg) => alerts.push(msg) };
+  ctx.navigator = {
+    mediaDevices: {
+      getUserMedia: async () => {
+        throw new TypeError('no MediaRecorder for this stream');
+      },
+    },
+  };
+  const m = ctx.chatRecorderMixin();
+  m.recorderSupported = true;
+
+  await m.startRecording();
+
+  assert.deepStrictEqual(Array.from(alerts), ['Recording could not start.']);
+});
+
 test('chatRecorderMixin exposes no getter', () => {
   // A `get` accessor would be flattened to a frozen value by the spread that
   // builds chatApp(), and would never recompute.

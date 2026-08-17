@@ -5,9 +5,9 @@
   (inline preference on, panel open) does not produce two nodes at one id.
 
   The root lives OUTSIDE #thread-message-list: "load older" prepends fetched
-  content into that list, so a root inside it would sink below the older
-  replies it prepends. root_groups is None on an older page, whose content is
-  prepended into a panel already showing the root.
+  content into the list's items wrapper, so a root inside it would sink below
+  the older replies it prepends. root_groups is None on an older page, whose
+  content is prepended into a panel already showing the root.
 {% endcomment %}
 {% if root_groups %}
   <div id="thread-root-message">
@@ -18,20 +18,33 @@
     {% endfor %}
   </div>
 {% endif %}
-{# data-conversation-uuid lets the panel verify the thread belongs to the conversation it sits in - a crafted ?thread= deep link can point anywhere the user is a member. #}
+{% comment %}
+  Merge targets for the alpine-ajax pipeline in messages.js (surface hooks
+  overridden by chatThreadPanel): a full load replaces #thread-root-message
+  and #thread-message-list; "load older" replaces #thread-message-list-state
+  and prepends into #thread-message-list-items. data-conversation-uuid also
+  lets the panel verify the thread belongs to the conversation it sits in - a
+  crafted ?thread= deep link can point anywhere the user is a member.
+{% endcomment %}
 <div id="thread-message-list"
-     data-has-more="{{ has_more|yesno:'true,false' }}"
-     data-conversation-uuid="{{ conversation_uuid }}"
-     {% if first_uuid %}data-first-uuid="{{ first_uuid }}"{% endif %}>
+     data-conversation-uuid="{{ conversation_uuid }}">
 
-  {% for group in groups %}
-    {% if group.type == 'date' %}
-      <div class="divider text-xs text-base-content/50 my-3">{{ group.datetime|localtime_tag:"date" }}</div>
-    {% elif group.type == 'messages' %}
-      {% include "chat/ui/partials/message_group.html" with group=group current_user=current_user pinned_message_ids=pinned_message_ids conversation_kind=conversation_kind quick_emojis=quick_emojis id_prefix="tmsg" hide_quote_for=root_uuid in_thread=True %}
-    {% elif group.type == 'system' %}
-      {% include "chat/ui/partials/_system_call.html" with message=group.message %}
-    {% endif %}
-  {% endfor %}
+  <div id="thread-message-list-state" hidden
+       data-conversation-uuid="{{ conversation_uuid }}"
+       data-has-more="{{ has_more|yesno:'true,false' }}"
+       {% if first_uuid %}data-first-uuid="{{ first_uuid }}"{% endif %}></div>
+
+  <div id="thread-message-list-items" x-merge="prepend"
+       data-conversation-uuid="{{ conversation_uuid }}">
+    {% for group in groups %}
+      {% if group.type == 'date' %}
+        <div class="divider text-xs text-base-content/50 my-3">{{ group.datetime|localtime_tag:"date" }}</div>
+      {% elif group.type == 'messages' %}
+        {% include "chat/ui/partials/message_group.html" with group=group current_user=current_user pinned_message_ids=pinned_message_ids conversation_kind=conversation_kind quick_emojis=quick_emojis id_prefix="tmsg" hide_quote_for=root_uuid in_thread=True %}
+      {% elif group.type == 'system' %}
+        {% include "chat/ui/partials/_system_call.html" with message=group.message %}
+      {% endif %}
+    {% endfor %}
+  </div>
 
 </div>

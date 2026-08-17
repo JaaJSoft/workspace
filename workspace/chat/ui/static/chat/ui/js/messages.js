@@ -19,6 +19,15 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // surface; the thread panel overrides all of them.
     _messagesContainerId() { return 'messages-container'; },
     _messageListId() { return 'message-list'; },
+    // Children the server partial renders inside the list: a state element
+    // carrying the pagination cursor and an items wrapper holding the message
+    // groups. Derived from _messageListId() so overriding surfaces get them
+    // for free.
+    _messageListStateId() { return `${this._messageListId()}-state`; },
+    _messageListItemsId() { return `${this._messageListId()}-items`; },
+    // Document ids a full load replaces. The thread panel adds the root
+    // message, which the server renders outside the paginated list.
+    _loadTargets() { return [this._messageListId()]; },
     _messageIdPrefix() { return 'msg'; },
     _messagesUrl(cursor) {
       const base = `/chat/${this.activeConversation.uuid}/messages`;
@@ -35,72 +44,69 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       return document.querySelectorAll(`[data-message-uuid="${uuid}"]`);
     },
 
-    // Whether this component's surface has been torn down while a fetch was
-    // in flight. The conversation-uuid guards below cannot catch it: two
-    // thread panels opened in quick succession share one conversation and one
-    // container id, so a late response for the first thread would land in the
-    // second one's panel. The thread panel flips this in destroy().
+    // Whether this component's surface has been torn down. A component can
+    // outlive its DOM for a moment (an awaited chain resuming after the
+    // panel was destroyed): issuing a request then would merge content into
+    // whatever NEW panel owns the ids by now, so every load below checks
+    // this before asking alpine-ajax for anything. The thread panel flips it
+    // in destroy(). Responses already in flight need no guard here:
+    // alpine-ajax resolved their target elements when the request was
+    // issued, and skips a target that has left the DOM.
     _surfaceGone() { return false; },
 
-    // Bumped at the start of every container-touching fetch below; each
-    // response only lands if no newer fetch started meanwhile. Covers what
-    // the two guards above cannot: overlapping refreshes of the SAME live
-    // surface (an SSE-triggered reload racing a reaction repaint), where the
-    // conversation is unchanged and nothing was torn down.
-    _fetchGeneration: 0,
+    // ── Server-rendered swaps (alpine-ajax) ──────────────────
+    // All three loads below go through $ajax: the server partial is merged
+    // into per-surface targets and Alpine initializes the swapped subtree
+    // itself. Overlapping requests need no generation token any more - for a
+    // given target element alpine-ajax only merges the most recently issued
+    // request, and a full reload replaces the list wholesale, orphaning any
+    // pending pagination merge aimed inside it. The one guard that stays on
+    // our side is _vetoStaleMerge below.
 
-    _staleFetch(gen, conversationUuid) {
-      return (
-        this._surfaceGone()
-        || gen !== this._fetchGeneration
-        || this.activeConversation?.uuid !== conversationUuid
-      );
+    // Bound to @ajax:merge on the surface's messages container. A response
+    // rendered for another conversation must not land in this one: the pane
+    // is NOT torn down on a conversation switch, so alpine-ajax's own
+    // bookkeeping (newest request per element wins, disconnected targets are
+    // skipped) cannot see the mismatch during the switch itself. The server
+    // stamps data-conversation-uuid on every mergeable element; content
+    // without a stamp is let through.
+    _vetoStaleMerge(event) {
+      const stamped = event.detail?.content?.getAttribute?.('data-conversation-uuid');
+      if (stamped && stamped !== this.activeConversation?.uuid) {
+        event.preventDefault();
+      }
     },
 
-    // ── Server-rendered HTML helpers ─────────────────────────
-    _initMessagesDom(container) {
-      // Initialize Alpine on dynamically injected HTML
-      if (typeof Alpine !== 'undefined') Alpine.initTree(container);
-      // Attach hover card listeners on @mention badges
-      this._initMentionCards(container);
+    // Bound to @ajax:missing on the surface's root element. alpine-ajax's
+    // default for a 2xx response that lacks the target id is to REMOVE the
+    // live target - a redirect to the login page would silently delete the
+    // list. Cancelling keeps it, and turns an error response into "nothing
+    // merged" instead of a thrown RenderError.
+    _onAjaxMissing(event) {
+      if (event.detail?.target?.closest?.(`#${this._messagesContainerId()}`)) {
+        event.preventDefault();
+      }
     },
 
-    _initMentionCards(container) {
-      // Mention badges have inline onmouseenter/onmouseleave handlers
-      // rendered by the server, so no JS init needed. This method exists
-      // as a hook point if additional init is ever required.
-    },
-
-    // `conversationId` is only the staleness guard - the fetch URL comes from
-    // _messagesUrl(), which reads the active conversation (or, on the thread
-    // panel, the thread root). Callers pass the uuid they expect to still be
-    // active when the response lands.
-    async loadMessages(conversationId) {
+    async loadMessages() {
+      if (this._surfaceGone()) return;
       this.loadingMessages = true;
-      const gen = ++this._fetchGeneration;
-      const container = document.getElementById(this._messagesContainerId());
-      if (container) container.innerHTML = ''; // safe: cleared to empty
+      // Drop the previous content so a conversation switch does not show the
+      // old conversation under the spinner. Only the items are cleared: the
+      // list element itself is a merge target and has to stay in the DOM.
+      document.getElementById(this._messageListItemsId())?.replaceChildren();
 
       try {
-        const resp = await fetch(
-          this._messagesUrl(null),
-          { credentials: 'same-origin' }
-        );
-        // Discard stale response if user already switched conversation, this
-        // surface was torn down, or a newer fetch started meanwhile
-        if (this._staleFetch(gen, conversationId)) return;
-        if (resp.ok) {
-          const html = await resp.text();
-          // Re-checked after the body read: it awaits too, and the switch can
-          // happen while the body is still streaming
-          if (this._staleFetch(gen, conversationId)) return;
-          if (container) {
-            container.innerHTML = html; // server-rendered trusted HTML
-            this._initMessagesDom(container);
-            this._readPaginationState();
-            // Scroll immediately after HTML injection, before images load
-            this.scrollToBottom();
-          }
+        const render = await this.$ajax(this._messagesUrl(null), {
+          targets: this._loadTargets(),
+          focus: false,
+        });
+        // A vetoed or superseded response merges nothing; leave the state
+        // and scroll position to the request that won.
+        if ((render || []).some(Boolean)) {
+          this._readPaginationState();
+          // Scroll immediately after the merge, before images load
+          this.scrollToBottom();
         }
       } catch (e) {
         console.error('Failed to load messages', e);
@@ -109,70 +115,38 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     _readPaginationState() {
-      const list = document.getElementById(this._messageListId());
-      if (!list) return;
-      this.hasMoreMessages = list.dataset.hasMore === 'true';
+      const state = document.getElementById(this._messageListStateId());
+      if (!state) return;
+      this.hasMoreMessages = state.dataset.hasMore === 'true';
     },
 
     async loadMoreMessages() {
       if (!this.activeConversation || !this.hasMoreMessages || this.loadingMoreMessages) return;
+      if (this._surfaceGone()) return;
+
+      const cursor = document.getElementById(this._messageListStateId())?.dataset.firstUuid;
+      if (!cursor) return;
 
       this.loadingMoreMessages = true;
-      const gen = ++this._fetchGeneration;
-      const list = document.getElementById(this._messageListId());
-      const firstUuid = list?.dataset.firstUuid;
-      if (!firstUuid) {
-        this.loadingMoreMessages = false;
-        return;
-      }
-
       const scrollContainer = this.$refs.messagesContainer;
       const prevScrollHeight = scrollContainer.scrollHeight;
-      // Race protection: if the user switches conversations while the
-      // page-up fetch is in flight, prepending older messages from the
-      // previous conversation into the new list would corrupt the view.
-      const targetUuid = this.activeConversation.uuid;
 
       try {
-        const resp = await fetch(
-          this._messagesUrl(firstUuid),
-          { credentials: 'same-origin' }
-        );
-        if (this._staleFetch(gen, targetUuid)) {
-          this.loadingMoreMessages = false;
-          return;
-        }
-        if (resp.ok) {
-          const html = await resp.text();
-          if (this._staleFetch(gen, targetUuid)) {
-            this.loadingMoreMessages = false;
-            return;
-          }
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, 'text/html');
-          const newList = doc.getElementById(this._messageListId());
-
-          if (newList && list) {
-            // Update pagination data from the new response
-            this.hasMoreMessages = newList.dataset.hasMore === 'true';
-            list.dataset.hasMore = newList.dataset.hasMore;
-            if (newList.dataset.firstUuid) {
-              list.dataset.firstUuid = newList.dataset.firstUuid;
-            }
-
-            // Prepend new content before existing content
-            const fragment = document.createDocumentFragment();
-            while (newList.firstChild) {
-              fragment.appendChild(newList.firstChild);
-            }
-            list.insertBefore(fragment, list.firstChild);
-            this._initMessagesDom(list);
-
-            // Maintain scroll position
-            this.$nextTick(() => {
-              scrollContainer.scrollTop = scrollContainer.scrollHeight - prevScrollHeight;
-            });
-          }
+        // Two targets: the state element is replaced (fresh cursor), and the
+        // older groups are prepended into the items wrapper - the partial
+        // carries x-merge="prepend" on it. Both live inside the list, so a
+        // full reload issued meanwhile replaces the list and orphans this
+        // request before it can prepend a stale page into fresh content.
+        const render = await this.$ajax(this._messagesUrl(cursor), {
+          targets: [this._messageListStateId(), this._messageListItemsId()],
+          focus: false,
+        });
+        if ((render || []).some(Boolean)) {
+          this._readPaginationState();
+          // Maintain scroll position
+          this.$nextTick(() => {
+            scrollContainer.scrollTop = scrollContainer.scrollHeight - prevScrollHeight;
+          });
         }
       } catch (e) {
         console.error('Failed to load more messages', e);
@@ -413,7 +387,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     _injectOptimisticMessage(tempId, body, replyInfo, files) {
-      const container = document.getElementById(this._messagesContainerId());
+      // Into the items wrapper, not the container: the next full-list merge
+      // is what replaces the optimistic bubble with the server-rendered
+      // message, and it only swaps content inside the list.
+      const container = document.getElementById(this._messageListItemsId());
       if (!container) return;
 
       const user = this._getCurrentUser();
@@ -471,30 +448,16 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     async _refreshCurrentMessages() {
-      // Reload server-rendered messages for the active conversation.
-      // Race protection: if the user switches conversations while the
-      // fetch is in flight, the response we get back is for the previous
-      // conversation; capture the target uuid up front and bail if the
-      // active conversation no longer matches when we're about to mutate.
-      if (!this.activeConversation) return;
-      const gen = ++this._fetchGeneration;
-      const container = document.getElementById(this._messagesContainerId());
-      const targetUuid = this.activeConversation.uuid;
+      // Reload the surface in place. Unlike loadMessages this never clears
+      // first: the replace merge swaps old content for new in one step, so
+      // the container cannot flash empty mid-refresh.
+      if (!this.activeConversation || this._surfaceGone()) return;
       try {
-        const resp = await fetch(
-          this._messagesUrl(null),
-          { credentials: 'same-origin' }
-        );
-        if (this._staleFetch(gen, targetUuid)) return;
-        if (resp.ok) {
-          const html = await resp.text();
-          if (this._staleFetch(gen, targetUuid)) return;
-          if (container) {
-            container.innerHTML = html;
-            this._initMessagesDom(container);
-            this._readPaginationState();
-          }
-        }
+        const render = await this.$ajax(this._messagesUrl(null), {
+          targets: this._loadTargets(),
+          focus: false,
+        });
+        if ((render || []).some(Boolean)) this._readPaginationState();
       } catch (e) {
         console.error('Failed to refresh messages', e);
       }

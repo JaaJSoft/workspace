@@ -5,16 +5,35 @@ const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');
 
 /**
- * Minimal DOM stub: container and list nodes looked up by id. innerHTML
- * assignment is recorded so the test can assert what was injected without a
- * real DOM.
+ * The load pipeline delegates the swap itself to alpine-ajax ($ajax): the
+ * server partial is merged into per-surface targets and stale overlapping
+ * requests are resolved by the library's per-target bookkeeping. What is
+ * OURS to pin here is the wiring around it: which URL and targets each load
+ * asks for, the pagination state read back after a merge, the scroll
+ * restore, the clear-before-load, and the two guards that stay on our side
+ * (_vetoStaleMerge and _onAjaxMissing).
  */
+
+function node(id, dataset = {}) {
+  return {
+    id,
+    dataset,
+    children: [],
+    replaceChildren() {
+      this.children = [];
+      this.cleared = (this.cleared || 0) + 1;
+    },
+  };
+}
+
 function buildDom() {
   const nodes = {
-    'messages-container': { innerHTML: '', id: 'messages-container' },
-    'message-list': { dataset: { hasMore: 'true', firstUuid: 'm0' } },
-    'thread-messages-container': { innerHTML: '', id: 'thread-messages-container' },
-    'thread-message-list': { dataset: { hasMore: 'false', firstUuid: 't0' } },
+    'message-list': node('message-list'),
+    'message-list-state': node('message-list-state', { hasMore: 'true', firstUuid: 'm0' }),
+    'message-list-items': node('message-list-items'),
+    'thread-message-list': node('thread-message-list'),
+    'thread-message-list-state': node('thread-message-list-state', { hasMore: 'false', firstUuid: 't0' }),
+    'thread-message-list-items': node('thread-message-list-items'),
   };
   return {
     nodes,
@@ -22,163 +41,251 @@ function buildDom() {
   };
 }
 
-/**
- * A response node the mixin can walk: loadMoreMessages parses the fetched HTML
- * and moves the returned list's children into the live list.
- *
- * The move is the load-bearing part of the stub. In a real DOM,
- * `fragment.appendChild(node)` DETACHES the node from its current parent, and
- * that detachment is what terminates the mixin's `while (newList.firstChild)`
- * loop. A stub whose appendChild only copies spins forever.
- */
-function listNode(id, { hasMore = 'false', firstUuid = '', children = [] } = {}) {
-  const node = {
-    id,
-    dataset: { hasMore, firstUuid },
-    children: [],
-    get firstChild() {
-      return this.children[0] || null;
-    },
-    insertBefore(fragment, ref) {
-      // splice at the reference's index, in one go: unshifting the children
-      // one by one would reverse them, so a page of several older messages
-      // would land newest-first and the stub would silently disagree with a
-      // real DOM.
-      const moved = fragment.children.splice(0);
-      for (const child of moved) child.parentNode = this;
-      const at = ref ? this.children.indexOf(ref) : this.children.length;
-      this.children.splice(at < 0 ? this.children.length : at, 0, ...moved);
-    },
-  };
-  for (const name of children) {
-    node.children.push({ name, parentNode: node });
-  }
-  return node;
-}
-
-function documentFragment() {
-  return {
-    children: [],
-    appendChild(child) {
-      const siblings = child.parentNode ? child.parentNode.children : null;
-      if (siblings) siblings.splice(siblings.indexOf(child), 1);
-      child.parentNode = this;
-      this.children.push(child);
-    },
-  };
-}
-
-const names = (node) => node.children.map((c) => c.name);
-
-function buildApp({ dom, html, urls, parsed = null, overrides = {} }) {
+function buildApp({ dom, overrides = {}, ajax } = {}) {
+  dom = dom || buildDom();
   const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/messages.js', {
-    document: { ...dom.document, createDocumentFragment: documentFragment },
-    Alpine: { initTree() {} },
-    DOMParser: class {
-      parseFromString() {
-        return { getElementById: (id) => (parsed && parsed.id === id ? parsed : null) };
-      }
-    },
-    fetch: async (url) => {
-      urls.push(url);
-      return { ok: true, text: async () => html };
-    },
+    document: dom.document,
   });
   const app = ctx.chatMessagesMixin();
+  const calls = [];
   Object.assign(app, {
     activeConversation: { uuid: 'c1' },
     $refs: {
-      messagesContainer: { scrollTop: 0, scrollHeight: 0, clientHeight: 0 },
+      messagesContainer: { scrollTop: 0, scrollHeight: 100, clientHeight: 0 },
     },
     $nextTick(fn) {
       if (fn) fn();
     },
+    // Default stub reports one merged element, the shape $ajax resolves
+    // with when the response actually landed.
+    $ajax: ajax || (async (url, options) => {
+      calls.push({ url, options });
+      return [dom.nodes[options.targets[0]]];
+    }),
     ...overrides,
   });
-  return app;
+  return { app, dom, calls };
 }
 
-test('loadMessages fills the main container from the conversation endpoint', async () => {
-  const dom = buildDom();
-  const urls = [];
-  const app = buildApp({ dom, html: '<p>hi</p>', urls });
-  await app.loadMessages('c1');
-  assert.equal(dom.nodes['messages-container'].innerHTML, '<p>hi</p>');
-  assert.deepStrictEqual(urls, ['/chat/c1/messages']);
+// ── Full load ──────────────────────────────────────────────
+
+test('loadMessages swaps the surface load targets from the conversation endpoint', async () => {
+  const { app, calls } = buildApp();
+  await app.loadMessages();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/chat/c1/messages');
+  assert.deepStrictEqual(Array.from(calls[0].options.targets), ['message-list']);
+  assert.equal(calls[0].options.focus, false, 'a swap must never steal focus');
+  assert.equal(app.loadingMessages, false);
 });
 
-test('loadMessages reads pagination state off the main list node', async () => {
-  const dom = buildDom();
-  const app = buildApp({ dom, html: '<p>hi</p>', urls: [] });
-  await app.loadMessages('c1');
+test('loadMessages reads pagination state off the state element after the merge', async () => {
+  const { app } = buildApp();
+  await app.loadMessages();
   assert.equal(app.hasMoreMessages, true);
 });
 
-test('loadMessages clears the container before injecting', async () => {
+test('loadMessages clears the items wrapper before requesting', async () => {
+  // A conversation switch must not show the previous conversation under the
+  // spinner - but only the items are cleared: the list element itself is the
+  // merge target and has to stay in the DOM.
   const dom = buildDom();
-  dom.nodes['messages-container'].innerHTML = '<p>stale</p>';
-  const app = buildApp({ dom, html: '<p>fresh</p>', urls: [] });
-  await app.loadMessages('c1');
-  assert.equal(dom.nodes['messages-container'].innerHTML, '<p>fresh</p>');
+  let clearedBeforeRequest = null;
+  const { app } = buildApp({
+    dom,
+    ajax: async () => {
+      clearedBeforeRequest = dom.nodes['message-list-items'].cleared === 1;
+      return [dom.nodes['message-list']];
+    },
+  });
+  await app.loadMessages();
+  assert.equal(clearedBeforeRequest, true);
 });
 
-test('_refreshCurrentMessages refetches through the surface hook, not a hard-coded url', async () => {
-  // Regression: it used the scoped container but a literal
+test('a load that merged nothing leaves pagination state and scroll alone', async () => {
+  // $ajax resolves with no merged element when the response was superseded
+  // by a newer request or refused by _vetoStaleMerge - the request that won
+  // owns the state.
+  let scrolled = 0;
+  const { app } = buildApp({ ajax: async () => [] });
+  app.hasMoreMessages = false;
+  app.scrollToBottom = () => { scrolled += 1; };
+  await app.loadMessages();
+  assert.equal(app.hasMoreMessages, false, 'state must not follow a dead response');
+  assert.equal(scrolled, 0);
+  assert.equal(app.loadingMessages, false);
+});
+
+test('a torn-down surface issues no request at all', async () => {
+  // A component can outlive its DOM for a moment (an awaited chain resuming
+  // after the panel was destroyed). A request issued then would merge into
+  // whatever NEW surface owns the target ids by now.
+  const { app, calls } = buildApp();
+  app._surfaceGone = () => true;
+  await app.loadMessages();
+  await app._refreshCurrentMessages();
+  app.hasMoreMessages = true;
+  await app.loadMoreMessages();
+  assert.deepStrictEqual(calls, []);
+});
+
+// ── Refresh ────────────────────────────────────────────────
+
+test('_refreshCurrentMessages refetches through the surface hooks, not hard-coded ids', async () => {
+  // Regression: it once used the scoped container but a literal
   // `/chat/<conv>/messages`, so a refresh on the thread panel injected the
-  // whole conversation into the panel's container.
-  const dom = buildDom();
-  const urls = [];
-  const app = buildApp({
-    dom,
-    html: '<p>thread</p>',
-    urls,
+  // whole conversation into the panel.
+  const { app, calls } = buildApp({
     overrides: {
-      _messagesContainerId: () => 'thread-messages-container',
+      _messageListId: () => 'thread-message-list',
+      _loadTargets() { return ['thread-root-message', 'thread-message-list']; },
       _messagesUrl: (cursor) =>
         `/chat/threads/r1/messages${cursor ? '?before=' + cursor : ''}`,
     },
   });
-
   await app._refreshCurrentMessages();
-
-  assert.deepStrictEqual(urls, ['/chat/threads/r1/messages']);
-  assert.equal(dom.nodes['thread-messages-container'].innerHTML, '<p>thread</p>');
-  assert.equal(
-    dom.nodes['messages-container'].innerHTML,
-    '',
-    'the main flow container must not be touched',
-  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/chat/threads/r1/messages');
+  assert.deepStrictEqual(Array.from(calls[0].options.targets), ['thread-root-message', 'thread-message-list']);
 });
 
-test('loadMoreMessages pages backwards from the list cursor and prepends', async () => {
+test('_refreshCurrentMessages never clears first, so the view cannot flash empty', async () => {
   const dom = buildDom();
-  const urls = [];
-  const live = listNode('message-list', {
-    hasMore: 'true',
-    firstUuid: 'm0',
-    children: ['existing'],
-  });
-  dom.nodes['message-list'] = live;
-  const app = buildApp({
+  const { app } = buildApp({ dom });
+  await app._refreshCurrentMessages();
+  assert.equal(dom.nodes['message-list-items'].cleared, undefined);
+});
+
+// ── Pagination ─────────────────────────────────────────────
+
+test('loadMoreMessages pages backwards from the state cursor into state + items', async () => {
+  const dom = buildDom();
+  const { app, calls } = buildApp({
     dom,
-    html: '<ignored/>',
-    urls,
-    parsed: listNode('message-list', {
-      hasMore: 'false',
-      firstUuid: 'm9',
-      children: ['older-1', 'older-2'],
-    }),
+    ajax: async (url, options) => {
+      calls.push({ url, options });
+      // The merge replaces the state element (fresh cursor) and prepends the
+      // older groups into the items wrapper.
+      dom.nodes['message-list-state'].dataset = { hasMore: 'false', firstUuid: 'm9' };
+      return [dom.nodes['message-list-state'], dom.nodes['message-list-items']];
+    },
   });
   app.hasMoreMessages = true;
 
   await app.loadMoreMessages();
 
-  assert.deepStrictEqual(urls, ['/chat/c1/messages?before=m0']);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/chat/c1/messages?before=m0');
   assert.deepStrictEqual(
-    names(live),
-    ['older-1', 'older-2', 'existing'],
-    'older messages prepend, oldest first',
+    Array.from(calls[0].options.targets),
+    ['message-list-state', 'message-list-items'],
   );
   assert.equal(app.hasMoreMessages, false, 'pagination state follows the response');
-  assert.equal(live.dataset.firstUuid, 'm9', 'the cursor advances to the new first message');
+  assert.equal(app.loadingMoreMessages, false);
+});
+
+test('loadMoreMessages restores the scroll position after the prepend', async () => {
+  const dom = buildDom();
+  const { app } = buildApp({
+    dom,
+    ajax: async () => {
+      app.$refs.messagesContainer.scrollHeight = 250; // grew by 150
+      return [dom.nodes['message-list-state'], dom.nodes['message-list-items']];
+    },
+  });
+  app.hasMoreMessages = true;
+  app.$refs.messagesContainer.scrollTop = 10;
+  app.$refs.messagesContainer.scrollHeight = 100;
+
+  await app.loadMoreMessages();
+
+  assert.equal(app.$refs.messagesContainer.scrollTop, 150,
+    'the viewport must stay on the message it was showing');
+});
+
+test('loadMoreMessages leaves the scroll alone when the merge was refused', async () => {
+  const { app } = buildApp({ ajax: async () => [] });
+  app.hasMoreMessages = true;
+  app.$refs.messagesContainer.scrollTop = 10;
+
+  await app.loadMoreMessages();
+
+  assert.equal(app.$refs.messagesContainer.scrollTop, 10);
+  assert.equal(app.loadingMoreMessages, false);
+});
+
+test('loadMoreMessages without a cursor issues no request', async () => {
+  const dom = buildDom();
+  delete dom.nodes['message-list-state'].dataset.firstUuid;
+  const { app, calls } = buildApp({ dom });
+  app.hasMoreMessages = true;
+  await app.loadMoreMessages();
+  assert.deepStrictEqual(calls, []);
+});
+
+// ── Stale-merge veto ───────────────────────────────────────
+
+function mergeEvent(attrs) {
+  return {
+    detail: {
+      content: { getAttribute: (name) => attrs[name] ?? null },
+    },
+    prevented: false,
+    preventDefault() { this.prevented = true; },
+  };
+}
+
+test('a merge stamped for another conversation is refused', () => {
+  // The pane is NOT torn down on a conversation switch, so alpine-ajax's own
+  // bookkeeping cannot tell a late response for the previous conversation
+  // from a fresh one - the server's data-conversation-uuid stamp can.
+  const { app } = buildApp();
+  const event = mergeEvent({ 'data-conversation-uuid': 'c2' });
+  app._vetoStaleMerge(event);
+  assert.equal(event.prevented, true);
+});
+
+test('a merge stamped for the active conversation goes through', () => {
+  const { app } = buildApp();
+  const event = mergeEvent({ 'data-conversation-uuid': 'c1' });
+  app._vetoStaleMerge(event);
+  assert.equal(event.prevented, false);
+});
+
+test('unstamped content is let through', () => {
+  // The thread root message carries no stamp; refusing it would strip the
+  // root from every thread load.
+  const { app } = buildApp();
+  const event = mergeEvent({});
+  app._vetoStaleMerge(event);
+  assert.equal(event.prevented, false);
+});
+
+// ── Missing-target guard ───────────────────────────────────
+
+test('a response lacking the target keeps the live list instead of removing it', () => {
+  // alpine-ajax's default for a 2xx response without the target id is to
+  // REMOVE the live element - a redirect to the login page would silently
+  // delete the list.
+  const { app } = buildApp();
+  const event = {
+    detail: { target: { closest: (sel) => (sel === '#messages-container' ? {} : null) } },
+    prevented: false,
+    preventDefault() { this.prevented = true; },
+  };
+  app._onAjaxMissing(event);
+  assert.equal(event.prevented, true);
+});
+
+test('the missing-target guard ignores targets outside this surface', () => {
+  // The event bubbles to the app root, which also sees misses from other
+  // alpine-ajax swaps (conversation list rows) that rely on the default.
+  const { app } = buildApp();
+  const event = {
+    detail: { target: { closest: () => null } },
+    prevented: false,
+    preventDefault() { this.prevented = true; },
+  };
+  app._onAjaxMissing(event);
+  assert.equal(event.prevented, false);
 });

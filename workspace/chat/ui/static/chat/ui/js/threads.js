@@ -128,13 +128,18 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
       const base = `/chat/threads/${this.threadRootUuid}/messages`;
       return cursor ? `${base}?before=${cursor}` : base;
     },
+    // A thread load also carries the root message, rendered outside the
+    // paginated list so "load older" cannot sink it below older replies.
+    _loadTargets() { return ['thread-root-message', this._messageListId()]; },
     // Writing in the panel with nothing quoted answers the thread itself.
     _replyTarget() { return this.replyingTo?.uuid || this.threadRootUuid; },
 
-    // Set by destroy(). The mixin's conversation-uuid staleness guards cannot
-    // catch a torn-down panel: opening thread B while thread A still loads
-    // keeps the same conversation and the same container id, so without this
-    // A's late response would be injected into B's panel.
+    // Set by destroy(). Responses in flight die with the panel's DOM
+    // (alpine-ajax skips targets that left the document), but this component
+    // can still be resumed by an awaited chain after teardown - opening
+    // thread B while thread A still loads keeps the same conversation and
+    // the same target ids, so a request issued by A's dead component would
+    // merge A's thread into B's panel. The flag stops it before it is sent.
     _dead: false,
     _surfaceGone() { return this._dead; },
 
@@ -163,7 +168,7 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
       // Take focus so the panel's own Escape binding is reachable from the
       // keyboard, which matters most on mobile where it covers the page.
       this.$nextTick(() => this.$el?.focus?.());
-      await this.loadMessages(this.activeConversation.uuid);
+      await this.loadMessages();
       // The root has to belong to the conversation the panel sits in. The
       // server enforces membership, not coherence: a crafted
       // /chat/<A>?thread=<root of B> deep link loads fine as long as the user

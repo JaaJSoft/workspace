@@ -76,6 +76,11 @@ test('the panel overrides every surface hook so it cannot touch the main flow', 
   assert.equal(panel._messageIdPrefix(), 'tmsg');
   assert.equal(panel._messagesUrl(null), '/chat/threads/r1/messages');
   assert.equal(panel._messagesUrl('t9'), '/chat/threads/r1/messages?before=t9');
+  assert.deepStrictEqual(
+    Array.from(panel._loadTargets()),
+    ['thread-root-message', 'thread-message-list'],
+    'a thread load also swaps the root, rendered outside the paginated list',
+  );
 });
 
 test('writing in the panel tells the main flow to repaint', async () => {
@@ -465,16 +470,14 @@ test('switching conversations closes the thread panel', async () => {
 
 // ── Stale responses and cross-surface reactions ────────────
 
-test('a late response for a destroyed panel is dropped, not injected', async () => {
-  // Open thread A, open thread B while A is still loading: both panels share
-  // one conversation and one container id, so the conversation-uuid guard
-  // cannot tell A's response from B's - only the destroy flag can.
-  let releaseA;
-  const slowResponse = new Promise((resolve) => {
-    releaseA = resolve;
-  });
-  const container = { innerHTML: 'contents of thread B', writes: 0 };
-  Object.defineProperty(container, 'html', {});
+test('a destroyed panel issues no request that could land in its successor', async () => {
+  // Open thread A, open thread B while A's component is still awaiting
+  // something: both panels share one conversation and one set of target ids,
+  // so a request issued by A's dead component would resolve those ids to B's
+  // fresh DOM and merge A's thread into B's panel. (A response already in
+  // flight when the panel dies is alpine-ajax's side of the bargain: its
+  // targets were resolved at request time and left the document with the
+  // panel.)
   const ctx = loadScripts(
     ['workspace/chat/ui/static/chat/ui/js/messages.js', 'workspace/chat/ui/static/chat/ui/js/threads.js'],
     {
@@ -482,15 +485,7 @@ test('a late response for a destroyed panel is dropped, not injected', async () 
       chatInputMixin: () => ({}),
       chatRecorderMixin: () => ({}),
       getCSRFToken: () => 'csrf-token',
-      document: {
-        querySelectorAll: () => [],
-        getElementById: (id) => (id === 'thread-messages-container' ? container : null),
-      },
-      fetch: async () => {
-        await slowResponse;
-        return { ok: true, text: async () => 'contents of thread A' };
-      },
-      Alpine: undefined,
+      document: { querySelectorAll: () => [], getElementById: () => null },
       CustomEvent: class {
         constructor(type) {
           this.type = type;
@@ -503,15 +498,20 @@ test('a late response for a destroyed panel is dropped, not injected', async () 
   const panelA = ctx.chatThreadPanel('rA');
   panelA.activeConversation = { uuid: 'c1' };
   panelA.scrollToBottom = () => {};
+  const requests = [];
+  panelA.$ajax = async (url) => {
+    requests.push(url);
+    return [];
+  };
 
-  const loading = panelA.loadMessages('c1');
   panelA.destroy();
-  container.innerHTML = 'contents of thread B';
-  releaseA();
-  await loading;
+  await panelA.loadMessages();
+  await panelA.refreshPanelOnly();
+  panelA.hasMoreMessages = true;
+  await panelA.loadMoreMessages();
 
-  assert.equal(container.innerHTML, 'contents of thread B',
-    "thread A's late response must not overwrite thread B's panel");
+  assert.deepStrictEqual(requests, [],
+    "thread A's dead component must not fetch into thread B's panel");
 });
 
 test('a reaction in the main flow tells the panel to repaint', async () => {
@@ -605,16 +605,13 @@ test('the edit shortcut resolves the panel surface prefix', () => {
   assert.deepStrictEqual(edited, ['m7']);
 });
 
-test('overlapping refreshes of one panel resolve to the newest response', async () => {
+test('overlapping panel loads and refreshes contend for the same targets', async () => {
   // A thread-reply reload and a reaction repaint can overlap on the same live
-  // panel: same component, same conversation, nothing torn down - only the
-  // fetch generation can tell the slower, older response to stand down.
-  let releaseFirst;
-  const firstGate = new Promise((resolve) => {
-    releaseFirst = resolve;
-  });
-  let call = 0;
-  const container = { innerHTML: '' };
+  // panel: same component, same conversation, nothing torn down. alpine-ajax
+  // arbitrates that race per target element - only the most recently issued
+  // request for an element is merged - which protects the panel only as long
+  // as every full swap the panel makes aims at the SAME target ids. This
+  // pins that structural precondition.
   const ctx = loadScripts(
     ['workspace/chat/ui/static/chat/ui/js/messages.js', 'workspace/chat/ui/static/chat/ui/js/threads.js'],
     {
@@ -624,17 +621,8 @@ test('overlapping refreshes of one panel resolve to the newest response', async 
       getCSRFToken: () => 'csrf-token',
       document: {
         querySelectorAll: () => [],
-        getElementById: (id) => (id === 'thread-messages-container' ? container : null),
+        getElementById: () => null,
       },
-      fetch: async () => {
-        call += 1;
-        if (call === 1) {
-          await firstGate;
-          return { ok: true, text: async () => 'OLD' };
-        }
-        return { ok: true, text: async () => 'NEW' };
-      },
-      Alpine: undefined,
       CustomEvent: class {},
       dispatchEvent: () => {},
     },
@@ -642,13 +630,18 @@ test('overlapping refreshes of one panel resolve to the newest response', async 
   const panel = ctx.chatThreadPanel('r1');
   panel.activeConversation = { uuid: 'c1' };
   panel.scrollToBottom = () => {};
+  const targeted = [];
+  panel.$ajax = async (url, options) => {
+    targeted.push(options.targets);
+    return [];
+  };
 
-  const slow = panel.loadMessages('c1');
+  await panel.loadMessages();
   await panel.refreshPanelOnly();
-  releaseFirst();
-  await slow;
 
-  assert.equal(container.innerHTML, 'NEW', 'the older response must not win');
+  assert.equal(targeted.length, 2);
+  assert.deepStrictEqual(targeted[0], targeted[1],
+    'load and refresh must contend for the same elements, or neither race is arbitrated');
 });
 
 test('a deep link to another conversation closes the panel instead of misleading', async () => {
@@ -670,8 +663,6 @@ test('a deep link to another conversation closes the panel instead of misleading
               ? { dataset: { conversationUuid: listConversation, hasMore: 'false' } }
               : null,
         },
-        fetch: async () => ({ ok: true, text: async () => '' }),
-        Alpine: undefined,
         CustomEvent: class {},
         dispatchEvent: () => {},
       },
@@ -679,6 +670,7 @@ test('a deep link to another conversation closes the panel instead of misleading
     const panel = ctx.chatThreadPanel('r1');
     panel.activeConversation = { uuid: 'c1' };
     panel.scrollToBottom = () => {};
+    panel.$ajax = async () => [];
     panel.$nextTick = () => {};
     panel.$el = null;
     panel.closed = 0;

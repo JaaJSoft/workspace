@@ -80,7 +80,7 @@ function chatRoomApp(currentUserId, conversationId) {
       window.addEventListener('pagehide', () => { if (this.inCall) this._leaveBeacon?.(); });
 
       // Load the conversation messages, then auto-join the call.
-      await this.loadMessages(this.roomConversationId);
+      await this.loadMessages();
       await this.startOrJoinCall();
       if (this.inCall) {
         this._startSpeakingMeter();

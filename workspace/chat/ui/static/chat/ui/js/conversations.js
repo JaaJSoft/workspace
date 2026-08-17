@@ -225,7 +225,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       // so that #messages-container exists in the DOM
       await this.$nextTick();
 
-      await this.loadMessages(conv.uuid);
+      await this.loadMessages();
 
       // Restore bot typing indicator if there's an active AI task. The
       // server-rendered flag covers a fresh load; the set covers the stream

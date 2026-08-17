@@ -26,8 +26,9 @@ function parseTemplates(partialHtml) {
 
 /**
  * Pin the optimistic-message lifecycle: sending injects a pending bubble
- * into the messages container immediately, and the bubble is removed once
- * the real server-rendered message replaces it (or the send fails).
+ * into the list's items wrapper immediately (inside the wrapper so the next
+ * full-list merge replaces it with the real server-rendered message), and
+ * the bubble is removed once that happens (or the send fails).
  *
  * The DOM stub captures the injected HTML as a string, so the assertions
  * check the observable markup (ids, classes, escaped content) rather than
@@ -53,7 +54,7 @@ function buildDom() {
   const templates = parseTemplates(OPTIMISTIC_PARTIAL);
   const document = {
     getElementById(id) {
-      if (id === 'messages-container') return container;
+      if (id === 'message-list-items') return container;
       if (templates.has(id)) return templates.get(id);
       return injectedById.get(id) || null;
     },

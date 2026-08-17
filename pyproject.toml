@@ -76,7 +76,7 @@ dev = [
     "oidc-provider-mock>=0.4.6",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
-    "ruff==0.16.2",
+    "ruff==0.16.3",
 ]
 
 [tool.ruff]

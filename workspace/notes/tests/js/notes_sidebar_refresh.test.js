@@ -21,6 +21,7 @@ function makeApp({ ajaxFails = false } = {}) {
     addEventListener: () => {},
     document: { getElementById: () => null },
     tagsMixin: () => ({}),
+    viewerPanelMixin: () => ({}),
   });
 
   const app = ctx.notesApp({});

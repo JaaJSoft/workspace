@@ -70,10 +70,11 @@ class ThreadMessagesViewTests(TestCase):
         self.client.force_login(self.alice)
         html = self.client.get(self.url).content.decode()
         # The reply answers the root, which the panel renders right above it.
-        # Repeating it as a quote on every reply is noise. The quote block is
-        # the anchor pointing at the quoted message; the root's own bubble
-        # legitimately stays on the page, so assert on the anchor.
-        self.assertNotIn(f'href="#tmsg-{self.root.uuid}"', html)
+        # Repeating it as a quote on every reply is noise. The quote is built
+        # client-side by the <chat-message-group> shell from the data-reply-*
+        # attributes; suppressing it means not emitting them. The root's own
+        # bubble legitimately stays on the page, so assert on the attribute.
+        self.assertNotIn(f'data-reply-uuid="{self.root.uuid}"', html)
 
     def test_the_panel_keeps_the_quote_when_a_reply_answers_another_reply(self):
         self._message(
@@ -83,7 +84,7 @@ class ThreadMessagesViewTests(TestCase):
         )
         self.client.force_login(self.alice)
         html = self.client.get(self.url).content.decode()
-        self.assertIn(f'href="#tmsg-{self.reply.uuid}"', html)
+        self.assertIn(f'data-reply-uuid="{self.reply.uuid}"', html)
 
     def test_the_main_flow_keeps_the_quote(self):
         self.client.force_login(self.alice)
@@ -93,7 +94,7 @@ class ThreadMessagesViewTests(TestCase):
         )
         self._message("an old-style inline reply", reply_to=self.root)
         html = self.client.get(flow_url).content.decode()
-        self.assertIn(f'href="#msg-{self.root.uuid}"', html)
+        self.assertIn(f'data-reply-uuid="{self.root.uuid}"', html)
 
     def test_a_malformed_cursor_still_shows_the_root(self):
         # A cursor that does not parse is ignored, so the response is the first
@@ -429,16 +430,18 @@ class QuoteIntoThreadTests(TestCase):
         ).content.decode()
 
     def test_a_quote_of_a_threaded_reply_carries_the_thread_root(self):
+        # The <chat-message-group> shell builds the quote's scrollToMessage
+        # call from these attributes; the root riding along is what makes the
+        # click open the thread panel.
         Message.objects.create(
             conversation=self.conversation,
             author=self.alice,
             body="quoting the threaded reply from the flow",
             reply_to=self.reply,
         )
-        self.assertIn(
-            f"scrollToMessage('{self.reply.uuid}', '{self.root.uuid}')",
-            self._flow_html(),
-        )
+        html = self._flow_html()
+        self.assertIn(f'data-reply-uuid="{self.reply.uuid}"', html)
+        self.assertIn(f'data-reply-thread-root="{self.root.uuid}"', html)
 
     def test_a_quote_of_a_main_flow_message_carries_none(self):
         Message.objects.create(
@@ -447,4 +450,6 @@ class QuoteIntoThreadTests(TestCase):
             body="quoting the root from the flow",
             reply_to=self.root,
         )
-        self.assertIn(f"scrollToMessage('{self.root.uuid}')", self._flow_html())
+        html = self._flow_html()
+        self.assertIn(f'data-reply-uuid="{self.root.uuid}"', html)
+        self.assertNotIn("data-reply-thread-root", html)

@@ -1,5 +1,6 @@
 {% if show %}
-<span class="inline-flex items-center gap-0.5 cursor-pointer relative"
+{# slot="footer": the <chat-message-group> shell moves this into the footer line #}
+<span slot="footer" class="inline-flex items-center gap-0.5 cursor-pointer relative"
       x-data="{ open: false, loaded: false, loading: false, above: true }"
       @click.stop="
         if (!open) { const rect = $el.getBoundingClientRect(); above = rect.top > 160; }

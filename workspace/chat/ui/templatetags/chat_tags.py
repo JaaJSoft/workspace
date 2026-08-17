@@ -35,6 +35,37 @@ def format_time(value):
     return local.strftime("%H:%M")
 
 
+@register.filter
+def shell_attachment_data(message):
+    """Attachment payload for the <chat-message-group> shell element.
+
+    Rendered with |json_script inside the bubble child of message_group.html;
+    the shell builds the media mosaic and file chips from it client-side.
+    Audio attachments are absent on purpose: they render server-side as
+    chatAudioPlayer components and ride along as data-part="audio" children.
+    """
+    return {
+        "media": [
+            {
+                "uuid": str(a.uuid),
+                "name": a.original_name,
+                "type": a.type,
+                "is_image": a.is_image,
+            }
+            for a in message.media_attachments
+        ],
+        "files": [
+            {
+                "uuid": str(a.uuid),
+                "name": a.original_name,
+                "type": a.type,
+                "size": a.size,
+            }
+            for a in message.file_attachments
+        ],
+    }
+
+
 @register.inclusion_tag("chat/ui/partials/_read_receipt.html")
 def render_read_receipt(message, conversation_kind):
     """Render read receipt indicator for own messages."""

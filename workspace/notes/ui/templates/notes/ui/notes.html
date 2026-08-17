@@ -73,10 +73,8 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
       </div>
     </div>
 
-    <!-- Sidebar content -->
-    <div class="flex-1 overflow-y-auto py-2 px-3" id="notes-sidebar" x-target="notes-sidebar">
-      {% include "notes/ui/partials/sidebar.html" %}
-    </div>
+    <!-- Sidebar content (the partial renders its own #notes-sidebar wrapper) -->
+    {% include "notes/ui/partials/sidebar.html" %}
 
     <!-- Help button -->
     <div class="px-3 pb-2">

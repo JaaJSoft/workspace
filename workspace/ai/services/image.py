@@ -275,12 +275,12 @@ def _edit_via_openai(client, image_file, prompt, size):
 
 def _edit_via_ollama(source_data, prompt):
     """Fallback: use Ollama native /api/generate with images param (img2img)."""
-    import httpx
+    import httpx2
 
     base_url = (settings.AI_IMAGE_BASE_URL or settings.AI_BASE_URL or "").rstrip("/")
     if base_url.endswith("/v1"):
         base_url = base_url[:-3]
-    resp = httpx.post(
+    resp = httpx2.post(
         f"{base_url}/api/generate",
         json={
             "model": settings.AI_IMAGE_MODEL,

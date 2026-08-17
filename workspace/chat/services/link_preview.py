@@ -3,7 +3,7 @@
 import re
 from urllib.parse import urlparse
 
-import httpx
+import httpx2
 from trafilatura.metadata import extract_metadata
 
 from workspace.ai.services.web import _HEADERS, _is_url_safe
@@ -37,7 +37,7 @@ def _fetch_html(url: str) -> str:
     if not _is_url_safe(url):
         raise ValueError("URL points to a private or internal address")
 
-    with httpx.Client(
+    with httpx2.Client(
         timeout=10,
         follow_redirects=True,
         headers=_HEADERS,

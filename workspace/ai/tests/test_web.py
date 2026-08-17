@@ -53,7 +53,7 @@ class IsUrlSafeTests(TestCase):
 
 @override_settings(SEARXNG_URL="http://searxng:8080")
 class SearchTests(TestCase):
-    @patch("workspace.ai.services.web.httpx.Client")
+    @patch("workspace.ai.services.web.httpx2.Client")
     def test_search_returns_results(self, mock_client_cls):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
@@ -79,14 +79,14 @@ class SearchTests(TestCase):
         results = search("test")
         self.assertEqual(results, [])
 
-    @patch("workspace.ai.services.web.httpx.Client")
+    @patch("workspace.ai.services.web.httpx2.Client")
     def test_search_handles_error(self, mock_client_cls):
-        import httpx
+        import httpx2
 
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.get.side_effect = httpx.ConnectError("Connection refused")
+        mock_client.get.side_effect = httpx2.ConnectError("Connection refused")
         mock_client_cls.return_value = mock_client
 
         results = search("failing query")
@@ -101,7 +101,7 @@ class FetchAndExtractTests(TestCase):
         self.assertIn("private", str(ctx.exception))
 
     @patch("workspace.ai.services.web.trafilatura.extract")
-    @patch("workspace.ai.services.web.httpx.Client")
+    @patch("workspace.ai.services.web.httpx2.Client")
     def test_extracts_content(self, mock_client_cls, mock_extract):
         mock_resp = MagicMock()
         mock_resp.text = "<html><body><p>Hello world</p></body></html>"
@@ -119,7 +119,7 @@ class FetchAndExtractTests(TestCase):
         mock_extract.assert_called_once()
 
     @patch("workspace.ai.services.web.trafilatura.extract")
-    @patch("workspace.ai.services.web.httpx.Client")
+    @patch("workspace.ai.services.web.httpx2.Client")
     def test_truncates_long_content(self, mock_client_cls, mock_extract):
         mock_resp = MagicMock()
         mock_resp.text = "<html><body>long</body></html>"
@@ -137,7 +137,7 @@ class FetchAndExtractTests(TestCase):
         self.assertTrue(text.endswith("[… truncated]"))
 
     @patch("workspace.ai.services.web.trafilatura.extract")
-    @patch("workspace.ai.services.web.httpx.Client")
+    @patch("workspace.ai.services.web.httpx2.Client")
     def test_fallback_when_trafilatura_returns_empty(
         self, mock_client_cls, mock_extract
     ):
@@ -155,7 +155,7 @@ class FetchAndExtractTests(TestCase):
 
         self.assertIn("Fallback text", text)
 
-    @patch("workspace.ai.services.web.httpx.Client")
+    @patch("workspace.ai.services.web.httpx2.Client")
     def test_rejects_oversized_response(self, mock_client_cls):
         mock_resp = MagicMock()
         mock_resp.content = b"x" * (3 * 1024 * 1024)  # 3 MB

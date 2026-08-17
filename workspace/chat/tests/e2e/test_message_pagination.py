@@ -75,6 +75,14 @@ class MessagePaginationTests(PlaywrightTestCase):
     # scroll-triggered load that Playwright's scroll-into-view sets off.
     SCROLLER = 'document.querySelector(\'div[x-ref="messagesContainer"]\')'
 
+    def _scroll_to_top(self):
+        # Opening a conversation scrolls to the bottom on a double $nextTick.
+        # Setting scrollTop before that has happened is a no-op assignment on
+        # an already-at-0 container: no scroll event fires and nothing loads.
+        # Wait for the initial scroll first, so the move to 0 is a real one.
+        self.page.wait_for_function(f"() => {self.SCROLLER}.scrollTop > 0")
+        self.page.evaluate(f"{self.SCROLLER}.scrollTop = 0")
+
     def test_scrolling_to_the_top_prepends_the_previous_page_in_order(self):
         self._open_conversation()
 
@@ -84,7 +92,7 @@ class MessagePaginationTests(PlaywrightTestCase):
         button = self.page.get_by_role("button", name="Load older messages")
         expect(button).to_be_visible()
 
-        self.page.evaluate(f"{self.SCROLLER}.scrollTop = 0")
+        self._scroll_to_top()
 
         expect(flow.get_by_text("pagination message 001")).to_be_attached()
         texts = self._bubble_texts()
@@ -107,7 +115,7 @@ class MessagePaginationTests(PlaywrightTestCase):
         ).to_be_visible()
 
         before_height = self.page.evaluate(f"{self.SCROLLER}.scrollHeight")
-        self.page.evaluate(f"{self.SCROLLER}.scrollTop = 0")
+        self._scroll_to_top()
         expect(
             self.page.locator("#messages-container").get_by_text(
                 "pagination message 001"

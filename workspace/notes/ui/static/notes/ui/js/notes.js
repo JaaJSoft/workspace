@@ -783,8 +783,9 @@ window.notesApp = function notesApp(config) {
             }
 
             // Dispose the mounted editor (and release its file lock) before
-            // the note it edits goes away.
-            this.clearViewerPanel();
+            // the note it edits goes away; a still-loading viewer must not
+            // mount once the note is deleted.
+            this.teardownViewerPanel();
 
             const resp = await fetch('/api/v1/files/' + this.selectedNote.uuid, {
                 method: 'DELETE',
@@ -962,7 +963,7 @@ window.notesApp = function notesApp(config) {
                         if (!resp.ok) return;
                         self.notes = self.notes.filter(function(n) { return n.uuid !== uuid; });
                         if (self.selectedNote && self.selectedNote.uuid === uuid) {
-                            self.clearViewerPanel();
+                            self.teardownViewerPanel();
                             self.selectedNote = null;
                             self.updateUrl();
                         }
@@ -1448,7 +1449,7 @@ window.notesApp = function notesApp(config) {
         },
 
         destroy() {
-            this.clearViewerPanel();
+            this.teardownViewerPanel();
         },
     };
 };

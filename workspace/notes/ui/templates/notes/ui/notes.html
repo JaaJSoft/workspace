@@ -35,6 +35,7 @@
 {% block drawer_attrs %}
 x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{ initial_file }}' })"
 @ajax:missing="_viewerMissing($event)"
+@ajax:merge="_viewerMerge($event)"
 {% endblock %}
 
 {% block drawer_sidebar %}

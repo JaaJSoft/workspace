@@ -114,3 +114,41 @@ class AttachmentViewerModalRaceTests(PlaywrightTestCase):
         # ...and A's viewer markup must not be in the modal - only B's.
         expect(modal.locator('[x-data^="textViewerMonaco"]')).to_have_count(0)
         expect(modal.locator(f'img[src*="{self.image_att.uuid}"]')).to_be_visible()
+
+    def test_a_response_landing_after_close_never_mounts_into_the_closed_modal(self):
+        self.login_as(self.user)
+        self.page.goto(f"{self.live_server_url}/chat")
+        self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
+
+        held = {}
+        self.page.route(
+            f"**/chat/view-attachment/{self.text_att.uuid}",
+            lambda route: held.setdefault("text", route),
+        )
+
+        deadline = time.monotonic() + 5
+        while "text" not in held and time.monotonic() < deadline:
+            self._open_viewer(self.text_att)
+            self.page.wait_for_timeout(100)
+        self.assertIn("text", held, "the viewer request must be in flight")
+
+        # Close the modal while the viewer request is still hanging.
+        dialog = self.page.locator('[x-data="chatAttachmentViewer()"] dialog')
+        self.page.locator(
+            '[x-data="chatAttachmentViewer()"] button[title="Close (ESC)"]'
+        ).click()
+        expect(dialog).to_have_js_property("open", False)
+
+        # The response lands only now, into a closed modal.
+        with self.page.expect_response(f"**/chat/view-attachment/{self.text_att.uuid}"):
+            held["text"].continue_()
+        # Give a (buggy) merge every chance to mount before asserting.
+        self.page.wait_for_timeout(300)
+
+        self.assertEqual(
+            self.page.evaluate("typeof window.textViewerMonaco"), "undefined"
+        )
+        self.assertEqual(
+            self.page.locator("#viewer-panel").evaluate("el => el.childElementCount"),
+            0,
+        )

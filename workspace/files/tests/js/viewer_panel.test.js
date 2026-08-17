@@ -149,3 +149,51 @@ test('clearViewerPanel disposes the viewer and keeps the anchor element', () => 
   assert.deepStrictEqual(Array.from(events), ['viewer-cleanup']);
   assert.deepStrictEqual(Array.from(panel.children), []);
 });
+
+test('teardown cancels the in-flight load: its completion leaves the flags alone', async () => {
+  const { host, events } = makeHost();
+
+  let resolveLoad;
+  host._ajaxResult = new Promise((resolve) => { resolveLoad = resolve; });
+  const load = host.loadViewerPanel('/files/view/aaa');
+  assert.equal(host.viewerLoading, true);
+
+  host.teardownViewerPanel();
+  assert.equal(host.viewerLoading, false);
+  // The teardown's own cleanup dispatch, on top of the load's.
+  assert.deepStrictEqual(Array.from(events), ['viewer-cleanup', 'ajax', 'viewer-cleanup']);
+
+  resolveLoad([]);
+  assert.equal(await load, false);
+  assert.equal(host.viewerLoading, false);
+  assert.equal(host.viewerError, null);
+});
+
+test('the merge guard refuses a response only for a canceled load', async () => {
+  const { host } = makeHost();
+
+  // An issued, still-active load merges normally.
+  host._ajaxResult = Promise.resolve([{}]);
+  await host.loadViewerPanel('/files/view/aaa');
+  let prevented = false;
+  const event = {
+    target: { id: 'viewer-panel' },
+    preventDefault() { prevented = true; },
+  };
+  host._viewerMerge(event);
+  assert.equal(prevented, false);
+
+  // After a cancel, the same load's late response must not mount.
+  host.cancelViewerLoad();
+  host._viewerMerge(event);
+  assert.equal(prevented, true);
+
+  // Merges for other targets bubbling through the same root pass through
+  // even while a viewer load stands canceled.
+  prevented = false;
+  host._viewerMerge({
+    target: { id: 'notes-sidebar' },
+    preventDefault() { prevented = true; },
+  });
+  assert.equal(prevented, false);
+});

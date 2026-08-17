@@ -1328,6 +1328,10 @@ window.notesApp = function notesApp(config) {
             // lazily-fetched children so they reload against the new tree.
             this._loadedChildren = {};
             this._loadFolderData();
+            // The fresh tree only carries root folders - re-fetch children of
+            // the folders the user had expanded (tracked in the URL), or their
+            // rows vanish until collapsed and expanded again.
+            await this._restoreExpandedFolders();
         },
 
         // ── Helpers ─────────────────────────────────────────

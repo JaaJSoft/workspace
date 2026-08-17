@@ -13,7 +13,7 @@ const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
 function makeApp({ ajaxFails = false } = {}) {
-  const calls = { ajax: [], folderLoads: 0 };
+  const calls = { ajax: [], folderLoads: 0, order: [] };
 
   const ctx = loadScript('workspace/notes/ui/static/notes/ui/js/notes.js', {
     fetch: () => Promise.resolve({ ok: false }),
@@ -25,7 +25,11 @@ function makeApp({ ajaxFails = false } = {}) {
 
   const app = ctx.notesApp({});
   app._loadedChildren = { 'folder-1': true };
-  app._loadFolderData = () => { calls.folderLoads++; };
+  app._loadFolderData = () => {
+    calls.folderLoads++;
+    calls.order.push('loadFolderData');
+  };
+  app._restoreExpandedFolders = async () => { calls.order.push('restoreExpanded'); };
   app.$ajax = async (url, options) => {
     calls.ajax.push({ url, options });
     if (ajaxFails) throw new Error('Target [#notes-sidebar] was not found in response');
@@ -61,6 +65,21 @@ test('refreshSidebar reloads the folder tree state after the swap', async () => 
   assert.equal(calls.folderLoads, 1, 'folder data is re-read from the new embedded JSON');
 });
 
+test('refreshSidebar restores expanded folders against the new tree', async () => {
+  // Regression: the fresh folder JSON only carries roots, so the children of
+  // expanded folders must be re-fetched after the reload - without it their
+  // rows vanish until the user collapses and expands them again.
+  const { app, calls } = makeApp();
+
+  await app.refreshSidebar();
+
+  assert.deepStrictEqual(
+    Array.from(calls.order),
+    ['loadFolderData', 'restoreExpanded'],
+    'expanded folders reload after (not before) the tree is replaced'
+  );
+});
+
 test('a failed refresh leaves the folder state untouched', async () => {
   const { app, calls } = makeApp({ ajaxFails: true });
 
@@ -68,4 +87,5 @@ test('a failed refresh leaves the folder state untouched', async () => {
 
   assert.deepStrictEqual({ ...app._loadedChildren }, { 'folder-1': true });
   assert.equal(calls.folderLoads, 0);
+  assert.deepStrictEqual(Array.from(calls.order), []);
 });

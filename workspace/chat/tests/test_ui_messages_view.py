@@ -44,25 +44,33 @@ class ConversationMessagesViewAttachmentTests(TestCase):
         )
 
     def test_all_attachments_render(self):
-        attachments = [
-            self._attach("a.png", "image/png", "image"),
-            self._attach("b.png", "image/png", "image"),
-            self._attach("c.mp4", "video/mp4", "video"),
-            self._attach("d.pdf", "application/pdf", "document"),
-        ]
+        # Attachments reach the page as the JSON payload the
+        # <chat-message-group> shell turns into the media mosaic and file
+        # chips (including the data-attachment-* attributes the viewer's
+        # prev/next navigation walks) - so assert every attachment is in the
+        # payload, sorted into the right bucket.
+        self._attach("a.png", "image/png", "image")
+        self._attach("b.png", "image/png", "image")
+        self._attach("c.mp4", "video/mp4", "video")
+        self._attach("d.pdf", "application/pdf", "document")
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode()
-        # Media embed a src URL; plain files only reference their uuid, so
-        # assert on the uuid to cover both shapes.
-        for att in attachments:
-            self.assertIn(str(att.uuid), html)
-        # The viewer's prev/next navigation walks these data attributes.
-        for att in attachments:
-            self.assertIn(f'data-attachment-uuid="{att.uuid}"', html)
+        for att in self.message.media_attachments:
+            self.assertIn(
+                f'{{"uuid": "{att.uuid}", "name": "{att.original_name}"', html
+            )
+        for att in self.message.file_attachments:
+            self.assertIn(
+                f'{{"uuid": "{att.uuid}", "name": "{att.original_name}"', html
+            )
+        self.assertEqual(len(self.message.media_attachments), 3)
+        self.assertEqual(len(self.message.file_attachments), 1)
 
     def test_single_image_renders(self):
         att = self._attach("solo.png", "image/png", "image")
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(f"/api/v1/chat/attachments/{att.uuid}", resp.content.decode())
+        html = resp.content.decode()
+        self.assertIn(f'"uuid": "{att.uuid}"', html)
+        self.assertIn('"is_image": true', html)

@@ -2,79 +2,65 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const fs = require('node:fs');
-const path = require('node:path');
-const { loadScripts } = require('../../../common/tests/js/loader');
-
-// The bubble markup comes from the real partial, so the test exercises the
-// exact templates the browser clones from.
-const OPTIMISTIC_PARTIAL = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '../../ui/templates/chat/ui/partials/_optimistic_message.html',
-  ),
-  'utf8',
-);
-
-function parseTemplates(partialHtml) {
-  const templates = new Map();
-  for (const m of partialHtml.matchAll(/<template id="([^"]+)">([\s\S]*?)<\/template>/g)) {
-    templates.set(m[1], { innerHTML: m[2] });
-  }
-  return templates;
-}
+const { loadScript, loadScripts, CUSTOM_ELEMENT_STUBS } = require('../../../common/tests/js/loader');
 
 /**
- * Pin the optimistic-message lifecycle: sending injects a pending bubble
- * into the list's items wrapper immediately (inside the wrapper so the next
- * full-list merge replaces it with the real server-rendered message), and
- * the bubble is removed once that happens (or the send fails).
+ * Pin the optimistic-message lifecycle contract between chatMessagesMixin and
+ * the <chat-message-group> shell element (message_shell.js): sending creates
+ * the element with `own` + `pending` set and its properties (body, replyInfo,
+ * pendingFiles) assigned BEFORE insertion into the list's items wrapper
+ * (inside the wrapper so the next full-list merge replaces it with the real
+ * server-rendered message), and the element is removed once that happens (or
+ * the send fails).
  *
- * The DOM stub captures the injected HTML as a string, so the assertions
- * check the observable markup (ids, classes, escaped content) rather than
- * a live tree.
+ * The element's rendered output cannot be exercised here - the node:vm
+ * loader has no DOM, so custom-element behaviour is out of reach (the loader
+ * says as much). That coverage lives in chat/tests/e2e/test_message_shell.py.
  */
 function buildDom() {
+  const byId = new Map();
   const inserted = [];
-  const injectedById = new Map();
   const container = {
-    insertAdjacentHTML(position, html) {
-      assert.equal(position, 'beforeend');
-      inserted.push(html);
-      const m = html.match(/id="([^"]+)"/);
-      if (m) {
-        const id = m[1];
-        injectedById.set(id, {
-          html,
-          remove() { injectedById.delete(id); },
-        });
-      }
+    appendChild(el) {
+      // Snapshot the state the element will see in connectedCallback: it
+      // reads attributes and properties once, on connect, so anything set
+      // after this call would be silently ignored.
+      inserted.push({
+        el,
+        atInsert: {
+          attrs: { ...el.attrs },
+          id: el.id,
+          body: el.body,
+          replyInfo: el.replyInfo,
+          pendingFiles: el.pendingFiles,
+        },
+      });
+      if (el.id) byId.set(el.id, el);
     },
   };
-  const templates = parseTemplates(OPTIMISTIC_PARTIAL);
   const document = {
+    createElement(tag) {
+      return {
+        tagName: tag.toUpperCase(),
+        attrs: {},
+        id: '',
+        setAttribute(name, value) { this.attrs[name] = String(value); },
+        remove() { byId.delete(this.id); },
+      };
+    },
     getElementById(id) {
       if (id === 'message-list-items') return container;
-      if (templates.has(id)) return templates.get(id);
-      return injectedById.get(id) || null;
+      return byId.get(id) || null;
     },
   };
-  return { document, inserted, injectedById };
+  return { document, inserted, byId };
 }
 
 function buildApp() {
   const dom = buildDom();
-  const ctx = loadScripts(
-    [
-      'workspace/common/static/ui/js/html.js',
-      'workspace/common/static/ui/js/filesize.js',
-      'workspace/chat/ui/static/chat/ui/js/messages.js',
-    ],
-    {
-      document: dom.document,
-      userAvatarTag: (userId, username) => `<user-avatar username="${username}"></user-avatar>`,
-    },
-  );
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/messages.js', {
+    document: dom.document,
+  });
   const app = ctx.chatMessagesMixin();
   app.activeConversation = {
     uuid: 'c1',
@@ -84,98 +70,64 @@ function buildApp() {
   return { app, ctx, ...dom };
 }
 
-test('a pending bubble is injected as an own-message group with a spinner', () => {
+test('sending creates a pending own <chat-message-group> in the items wrapper', () => {
   const { app, inserted } = buildApp();
   app._injectOptimisticMessage('_optimistic_1', 'hello there', null, null);
 
   assert.equal(inserted.length, 1);
-  const html = inserted[0];
-  assert.match(html, /id="_optimistic_1"/);
-  // Rendered as an own-message group, aligned right like the server partial
-  assert.match(html, /msg-group-end/);
-  assert.match(html, /flex-row-reverse/);
-  assert.match(html, /msg-bubble/);
-  // The sender's avatar rides along
-  assert.match(html, /<user-avatar username="alice">/);
-  // Pending state: a loading spinner where the timestamp normally sits
-  assert.match(html, /loading-dots/);
-  assert.match(html, /hello there/);
+  const { atInsert, el } = inserted[0];
+  assert.equal(el.tagName, 'CHAT-MESSAGE-GROUP');
+  assert.equal(atInsert.id, '_optimistic_1');
+  // Rendered as an own message with the pending extras (opacity + spinner)
+  assert.ok('own' in atInsert.attrs);
+  assert.ok('pending' in atInsert.attrs);
+  // The sender's identity drives the avatar column
+  assert.equal(atInsert.attrs['author-id'], '7');
+  assert.equal(atInsert.attrs['author-username'], 'alice');
+  assert.equal(atInsert.body, 'hello there');
 });
 
-test('the body is HTML-escaped and line breaks become <br>', () => {
+test('properties pass through raw - the shell renders them as text, not HTML', () => {
   const { app, inserted } = buildApp();
-  app._injectOptimisticMessage('_optimistic_2', '<b>bold</b>\nline2', null, null);
+  const files = [{ name: 'doc "final".pdf', type: 'application/pdf', size: 123456 }];
+  const reply = { uuid: 'm9', author: 'Bob <script>', body: 'original & text' };
+  app._injectOptimisticMessage('_optimistic_2', '<b>bold</b>\nline2', reply, files);
 
-  const html = inserted[0];
-  assert.ok(!html.includes('<b>bold</b>'));
-  assert.match(html, /&lt;b&gt;bold&lt;\/b&gt;<br>line2/);
+  const { atInsert } = inserted[0];
+  // No escaping at this layer: the element builds DOM via textContent, so
+  // pre-escaped strings here would render literal entities.
+  assert.equal(atInsert.body, '<b>bold</b>\nline2');
+  assert.deepEqual(atInsert.replyInfo, reply);
+  assert.deepEqual(atInsert.pendingFiles, files);
 });
 
-test('a body-less message renders no message body block', () => {
-  const { app, inserted } = buildApp();
-  app._injectOptimisticMessage('_optimistic_3', '', null, [
-    { name: 'doc.pdf', type: 'application/pdf', size: 2048 },
-  ]);
-
-  assert.ok(!inserted[0].includes('msg-body'));
+test('a missing items wrapper is a no-op, not a crash', () => {
+  const { app, inserted, document } = buildApp();
+  document.getElementById = () => null;
+  app._injectOptimisticMessage('_optimistic_3', 'hello', null, null);
+  assert.equal(inserted.length, 0);
 });
 
-test('the reply branch renders the quoted author and preview, escaped', () => {
-  const { app, inserted } = buildApp();
-  app._injectOptimisticMessage(
-    '_optimistic_4',
-    'my answer',
-    { uuid: 'm9', author: 'Bob <script>', body: 'original & text' },
-    null,
-  );
+test('the element is removed once the real message arrives', () => {
+  const { app, byId } = buildApp();
+  app._injectOptimisticMessage('_optimistic_4', 'bye', null, null);
+  assert.ok(byId.has('_optimistic_4'));
 
-  const html = inserted[0];
-  assert.match(html, /Bob &lt;script&gt;/);
-  assert.match(html, /original &amp; text/);
-  // The accent bar that visually marks a quote in the real bubble
-  assert.match(html, /bg-info/);
-});
-
-test('image and video attachments render previews, other files a name + size chip', () => {
-  const { app, ctx, inserted } = buildApp();
-  app._injectOptimisticMessage('_optimistic_5', 'caption', null, [
-    { name: 'photo.png', type: 'image/png', _preview: 'blob:img-1' },
-    { name: 'clip.mp4', type: 'video/mp4', _preview: 'blob:vid-1' },
-    { name: 'doc "final".pdf', type: 'application/pdf', size: 123456 },
-  ]);
-
-  const html = inserted[0];
-  // Image preview from the local object URL
-  assert.match(html, /<img src="blob:img-1"/);
-  // Video preview with the play overlay
-  assert.match(html, /<video src="blob:vid-1"/);
-  assert.match(html, /data-lucide="play"/);
-  // Generic file: escaped name + human-readable size
-  assert.match(html, /doc &quot;final&quot;\.pdf/);
-  assert.ok(html.includes(ctx.formatFileSize(123456)));
-  // With a body present, a separator sits between body and attachments
-  assert.match(html, /border-t/);
-});
-
-test('an image without a local preview falls back to the generic file row', () => {
-  const { app, inserted } = buildApp();
-  app._injectOptimisticMessage('_optimistic_6', '', null, [
-    { name: 'photo.png', type: 'image/png', size: 512 },
-  ]);
-
-  const html = inserted[0];
-  assert.ok(!html.includes('<img'));
-  assert.match(html, /photo\.png/);
-});
-
-test('the bubble is removed once the real message arrives', () => {
-  const { app, injectedById } = buildApp();
-  app._injectOptimisticMessage('_optimistic_7', 'bye', null, null);
-  assert.ok(injectedById.has('_optimistic_7'));
-
-  app._removeOptimisticMessage('_optimistic_7');
-  assert.ok(!injectedById.has('_optimistic_7'));
+  app._removeOptimisticMessage('_optimistic_4');
+  assert.ok(!byId.has('_optimistic_4'));
 
   // Removing an id that is no longer there is a no-op, not an error
-  app._removeOptimisticMessage('_optimistic_7');
+  app._removeOptimisticMessage('_optimistic_4');
+});
+
+test('message_shell.js defines the chat-message-group element', () => {
+  const defined = [];
+  loadScripts(['workspace/chat/ui/static/chat/ui/js/message_shell.js'], {
+    ...CUSTOM_ELEMENT_STUBS,
+    customElements: {
+      get: () => undefined,
+      define: (name) => defined.push(name),
+    },
+  });
+  assert.deepEqual(defined, ['chat-message-group']);
 });

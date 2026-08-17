@@ -370,76 +370,32 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       return this.activeConversation.members.find(m => m.user.id === this.currentUserId)?.user;
     },
 
-    // The bubble markup lives in _optimistic_message.html (<template>
-    // elements rendered next to the messages container), not here: it is the
-    // pending-state twin of message_group.html and both get restyled
-    // together. Fills the template's __TOKEN__ placeholders in a single
-    // left-to-right pass, so a token-looking sequence inside a substituted
-    // value (user text is escaped, but stays user-controlled) is never
-    // itself substituted.
-    _optimisticTpl(templateId, values = {}) {
-      const tpl = document.getElementById(templateId);
-      if (!tpl) return '';
-      return tpl.innerHTML.replace(
-        /__([A-Z_]+?)__/g,
-        (token, name) => (Object.hasOwn(values, name) ? values[name] : token),
-      );
-    },
-
+    // The bubble markup is built by the <chat-message-group> shell element
+    // (message_shell.js) - the same element message_group.html writes for
+    // server-rendered messages, here with its `pending` attribute (reduced
+    // opacity, spinner instead of the timestamp). Attributes and properties
+    // must all be set BEFORE insertion: the element reads them once, on
+    // connect.
     _injectOptimisticMessage(tempId, body, replyInfo, files) {
       // Into the items wrapper, not the container: the next full-list merge
-      // is what replaces the optimistic bubble with the server-rendered
+      // is what replaces the optimistic bubble with the real server-rendered
       // message, and it only swaps content inside the list.
       const container = document.getElementById(this._messageListItemsId());
       if (!container) return;
 
+      const group = document.createElement('chat-message-group');
+      group.id = tempId;
+      group.setAttribute('own', '');
+      group.setAttribute('pending', '');
       const user = this._getCurrentUser();
-      const avatarHtml = user
-        ? window.userAvatarTag(user.id, user.username, { size: 'sm' })
-        : '';
-
-      // Body HTML with basic line breaks
-      const bodyHtml = body ? escapeHtml(body).replace(/\n/g, '<br>') : '';
-
-      const replyHtml = replyInfo
-        ? this._optimisticTpl('chat-optimistic-reply', {
-            AUTHOR: escapeHtml(replyInfo.author),
-            PREVIEW: escapeHtml(replyInfo.body || ''),
-          })
-        : '';
-
-      let filesHtml = '';
-      if (files && files.length > 0) {
-        const items = files.map(f => {
-          const name = escapeHtml(f.name);
-          if (f.type && f.type.startsWith('image/') && f._preview) {
-            return this._optimisticTpl('chat-optimistic-image', { SRC: f._preview, NAME: name });
-          }
-          if (f.type && f.type.startsWith('video/') && f._preview) {
-            return this._optimisticTpl('chat-optimistic-video', { SRC: f._preview });
-          }
-          const sizeChip = f.size
-            ? this._optimisticTpl('chat-optimistic-file-size', { SIZE: formatFileSize(f.size) })
-            : '';
-          return this._optimisticTpl('chat-optimistic-file', { NAME: name, SIZE_CHIP: sizeChip });
-        }).join('');
-        filesHtml = this._optimisticTpl('chat-optimistic-files', {
-          SEPARATOR: bodyHtml ? this._optimisticTpl('chat-optimistic-separator') : '',
-          MT: bodyHtml ? '' : ' mt-1.5',
-          ITEMS: items,
-        });
+      if (user) {
+        group.setAttribute('author-id', user.id);
+        group.setAttribute('author-username', user.username);
       }
-
-      const html = this._optimisticTpl('chat-optimistic-message', {
-        ID: tempId,
-        AVATAR: avatarHtml,
-        REPLY: replyHtml,
-        BODY: bodyHtml
-          ? this._optimisticTpl('chat-optimistic-body', { BODY_HTML: bodyHtml })
-          : '',
-        FILES: filesHtml,
-      });
-      if (html) container.insertAdjacentHTML('beforeend', html);
+      group.body = body || '';
+      group.replyInfo = replyInfo || null;
+      group.pendingFiles = files || [];
+      container.appendChild(group);
     },
 
     _removeOptimisticMessage(tempId) {

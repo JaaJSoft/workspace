@@ -73,15 +73,26 @@ class MessagePaginationTests(PlaywrightTestCase):
     # the top is the trigger both tests use: it is the real user gesture, and
     # clicking the "Load older" button instead would race the very same
     # scroll-triggered load that Playwright's scroll-into-view sets off.
-    SCROLLER = 'document.querySelector(\'div[x-ref="messagesContainer"]\')'
+    SCROLLER = "document.querySelector('div[x-ref=\"messagesContainer\"]')"
 
     def _scroll_to_top(self):
-        # Opening a conversation scrolls to the bottom on a double $nextTick.
-        # Setting scrollTop before that has happened is a no-op assignment on
-        # an already-at-0 container: no scroll event fires and nothing loads.
-        # Wait for the initial scroll first, so the move to 0 is a real one.
-        self.page.wait_for_function(f"() => {self.SCROLLER}.scrollTop > 0")
-        self.page.evaluate(f"{self.SCROLLER}.scrollTop = 0")
+        # Opening a conversation scrolls to the bottom twice: right after the
+        # merge, then again behind markAsRead/loadPinnedMessages on a double
+        # $nextTick. A single scrollTop = 0 can therefore be a no-op
+        # assignment on a still-at-0 container (no scroll event fires,
+        # nothing loads) or be undone by the deferred scroll before the
+        # handler reads it. Re-assert the top every frame until the older
+        # page is actually merged in - deterministic whatever the ordering.
+        self.page.wait_for_function(
+            f"""() => {{
+              const oldest = document.querySelector(
+                '#message-list-items .msg-bubble[data-body="pagination message 001"]');
+              if (oldest) return true;
+              const el = {self.SCROLLER};
+              if (el) el.scrollTop = 0;
+              return false;
+            }}"""
+        )
 
     def test_scrolling_to_the_top_prepends_the_previous_page_in_order(self):
         self._open_conversation()

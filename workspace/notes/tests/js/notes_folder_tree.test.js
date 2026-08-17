@@ -19,6 +19,7 @@ function makeApp() {
     document: { getElementById: () => null },
     // Defined by files/ui/js/tags.js in the browser; irrelevant here.
     tagsMixin: () => ({}),
+    viewerPanelMixin: () => ({}),
   });
   return ctx.notesApp({});
 }

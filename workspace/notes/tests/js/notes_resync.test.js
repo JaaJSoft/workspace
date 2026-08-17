@@ -16,6 +16,7 @@ function makeApp(view) {
     addEventListener: () => {},
     document: { getElementById: () => null },
     tagsMixin: () => ({}),
+    viewerPanelMixin: () => ({}),
   });
 
   const calls = { sidebar: 0, urls: [] };

@@ -1,0 +1,71 @@
+// Shared loading logic for the hosts of the #viewer-panel element: the
+// files viewer modal, the chat attachment viewer modal and the notes
+// editor pane. Spread into the host component
+// (`...viewerPanelMixin()`) and bind `@ajax:missing="_viewerMissing($event)"`
+// on the component root.
+//
+// Loads go through alpine-ajax into the #viewer-panel element every viewer
+// response carries (see render_viewer_panel in workspace/files/ui/viewers.py),
+// so for that element only the most recently issued request merges: a slow
+// earlier response can neither paint its markup nor execute its scripts.
+// Viewer <script> elements execute in place inside the merged panel (fragment
+// parsing keeps them live, unlike innerHTML) and leave with the next swap.
+window.viewerPanelMixin = function viewerPanelMixin() {
+  return {
+    viewerLoading: false,
+    viewerError: null,
+    // Guards only the two reactive flags above. Content staleness is
+    // arbitrated by alpine-ajax (newest request per target wins); the token
+    // exists so a superseded load's completion cannot clear the spinner the
+    // winning load still owns.
+    _viewerStateSeq: 0,
+
+    _viewerPanelId() { return 'viewer-panel'; },
+
+    // Empty the panel after letting the mounted viewer dispose (Monaco and
+    // Crepe listen for viewer-cleanup). The panel element itself stays in
+    // the DOM: it is the id anchor the next merge replaces.
+    clearViewerPanel() {
+      window.dispatchEvent(new CustomEvent('viewer-cleanup'));
+      const panel = document.getElementById(this._viewerPanelId());
+      if (panel) panel.replaceChildren();
+    },
+
+    // Bound to @ajax:missing on the host component's root. alpine-ajax's default for
+    // a 2xx response that lacks the target id (login redirect, error page)
+    // is to REMOVE the live target; cancelling keeps the panel and turns the
+    // response into "nothing merged" instead of a thrown RenderError.
+    _viewerMissing(event) {
+      if (event.detail && event.detail.target
+          && event.detail.target.id === this._viewerPanelId()) {
+        event.preventDefault();
+      }
+    },
+
+    // Returns whether this load's response was merged into the panel.
+    async loadViewerPanel(url) {
+      const seq = ++this._viewerStateSeq;
+      this.clearViewerPanel();
+      this.viewerError = null;
+      this.viewerLoading = true;
+      let merged = false;
+      try {
+        const render = await this.$ajax(url, {
+          target: this._viewerPanelId(),
+          focus: false,
+        });
+        if (seq !== this._viewerStateSeq) return false;
+        merged = (render || []).some(Boolean);
+        if (!merged) {
+          // The guarded ajax:missing path above: nothing merged, panel kept.
+          this.viewerError = 'Failed to load viewer';
+        }
+      } catch (err) {
+        if (seq !== this._viewerStateSeq) return false;
+        this.viewerError = err.message || 'Failed to load viewer';
+      }
+      this.viewerLoading = false;
+      return merged;
+    },
+  };
+};

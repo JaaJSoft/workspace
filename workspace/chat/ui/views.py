@@ -617,6 +617,7 @@ def view_attachment(request, attachment_uuid):
         raise Http404
 
     from workspace.files.services.filetype import get_viewer_by_slug
+    from workspace.files.ui.viewers import render_viewer_panel
 
     # A pinned viewer wins; an unknown pin degrades to content-based
     # resolution rather than breaking the modal.
@@ -625,7 +626,9 @@ def view_attachment(request, attachment_uuid):
     )
     if not ViewerClass:
         return HttpResponse(
-            f'<div class="p-8 text-center text-error">No viewer available for {attachment.type}</div>',
+            render_viewer_panel(
+                f'<div class="p-8 text-center text-error">No viewer available for {attachment.type}</div>'
+            ),
             status=400,
         )
 
@@ -647,4 +650,4 @@ def view_attachment(request, attachment_uuid):
     viewer._content_url = f"/api/v1/chat/attachments/{attachment.uuid}"
     html = viewer.render(request)
 
-    return HttpResponse(html)
+    return HttpResponse(render_viewer_panel(html))

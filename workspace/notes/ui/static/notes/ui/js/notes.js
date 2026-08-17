@@ -1258,25 +1258,24 @@ window.notesApp = function notesApp(config) {
         // ── Sidebar refresh ──────────────────────────────────
 
         async refreshSidebar() {
-            const resp = await fetch('/notes', {
-                headers: { 'X-Alpine-Request': 'true' },
-            });
-            if (resp.ok) {
-                const html = await resp.text();
-                const container = document.getElementById('notes-sidebar');
-                if (container) {
-                    container.textContent = '';
-                    // Parse and insert safely
-                    const temp = document.createElement('template');
-                    temp.innerHTML = html;
-                    container.appendChild(temp.content);
-                    // Reload folder data from new embedded JSON
-                    this._loadedChildren = {};
-                    this._loadFolderData();
-                    // Re-init Lucide icons in the new HTML
-                    if (window.lucide) window.lucide.createIcons();
-                }
+            // $ajax rejects when the swap can't happen (network error, or an
+            // error response missing the target id); a failed refresh keeps
+            // the current sidebar, matching the old silent-failure behavior.
+            // Lucide icons in the merged subtree are re-rendered by the
+            // global observeLucideIcons() observer from base.html.
+            try {
+                await this.$ajax('/notes', { target: 'notes-sidebar', focus: false });
+            } catch (e) {
+                return;
             }
+            // The swap replaced the embedded folder JSON: re-read it and drop
+            // lazily-fetched children so they reload against the new tree.
+            this._loadedChildren = {};
+            this._loadFolderData();
+            // The fresh tree only carries root folders - re-fetch children of
+            // the folders the user had expanded (tracked in the URL), or their
+            // rows vanish until collapsed and expanded again.
+            await this._restoreExpandedFolders();
         },
 
         // ── Helpers ─────────────────────────────────────────

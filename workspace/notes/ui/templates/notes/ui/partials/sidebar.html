@@ -1,3 +1,13 @@
+{% comment %}
+Notes sidebar content (quick access, tags, folder trees).
+
+Refreshed in place via `$ajax('/notes', { target: 'notes-sidebar' })`, so the
+outer `<div id="notes-sidebar">` wrapper is rendered here (not in the parent
+template) - alpine-ajax needs the id in the response to merge it, and removes
+the target element outright when an OK response lacks it.
+{% endcomment %}
+<div class="flex-1 overflow-y-auto py-2 px-3" id="notes-sidebar" x-target="notes-sidebar">
+
 <!-- Embedded folder data for Alpine -->
 {{ folders|json_script:"notes-folders-data" }}
 {{ group_folders|json_script:"notes-group-folders-data" }}
@@ -102,4 +112,6 @@
       No group folders
     </li>
   </ul>
+</div>
+
 </div>

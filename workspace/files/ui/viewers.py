@@ -7,6 +7,21 @@ a specific type of file in the browser.
 
 from abc import ABC, abstractmethod
 
+# Stable id the viewer panel hosts (files viewer modal, chat attachment
+# viewer modal, notes editor pane) target with alpine-ajax. The client keeps an
+# element with this id mounted at all times; every viewer response replaces it.
+VIEWER_PANEL_ID = "viewer-panel"
+
+
+def render_viewer_panel(html: str) -> str:
+    """Wrap viewer markup in the id-bearing element alpine-ajax merges by.
+
+    ``display: contents`` keeps the wrapper out of layout, so the host
+    container's flex/overflow semantics apply to the viewer markup directly -
+    the wrapper exists only as a merge anchor.
+    """
+    return f'<div id="{VIEWER_PANEL_ID}" style="display: contents">{html}</div>'
+
 
 class ViewerRegistry:
     @classmethod

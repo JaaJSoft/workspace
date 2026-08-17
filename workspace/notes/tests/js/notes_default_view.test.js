@@ -21,6 +21,7 @@ function loadNotes() {
     // Defined by files/ui/js/tags.js in the browser; its contents are
     // irrelevant to view resolution.
     tagsMixin: () => ({}),
+    viewerPanelMixin: () => ({}),
   });
 }
 

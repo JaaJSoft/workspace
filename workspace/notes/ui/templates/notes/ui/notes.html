@@ -34,6 +34,8 @@
 
 {% block drawer_attrs %}
 x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{ initial_file }}' })"
+@ajax:missing="_viewerMissing($event)"
+@ajax:merge="_viewerMerge($event)"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -155,10 +157,20 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
 
     <!-- Editor Container -->
     <div class="flex-1 flex flex-col min-h-0">
-      <div x-show="selectedNote && loadingEditor" x-cloak class="flex-1 flex items-center justify-center">
+      <div x-show="selectedNote && viewerLoading" x-cloak class="flex-1 flex items-center justify-center">
         <span class="loading loading-spinner loading-lg"></span>
       </div>
-      <div x-ref="editorContainer" x-show="selectedNote && !loadingEditor" class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-200"></div>
+      <div x-show="selectedNote && !viewerLoading && !viewerError" class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-200">
+        {# #viewer-panel is the alpine-ajax merge anchor every /files/view/ response replaces (see viewer_panel.js). #}
+        <div id="viewer-panel" style="display: contents"></div>
+      </div>
+      <div x-show="selectedNote && viewerError" x-cloak class="flex-1 flex items-center justify-center p-8">
+        <div class="text-center">
+          <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
+          <p class="text-lg font-medium mb-2">Failed to load note</p>
+          <p class="text-sm text-base-content/60" x-text="viewerError"></p>
+        </div>
+      </div>
       <div x-show="!selectedNote" x-cloak class="flex items-center justify-center h-full text-base-content/30">
         <div class="text-center">
           <i data-lucide="notebook-pen" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
@@ -258,6 +270,7 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
 <script src="{% static 'files/ui/js/file_lock.js' %}"></script>
 <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
 <script src="{% static 'files/ui/js/tags.js' %}"></script>
+<script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
 <script src="{% static 'notes/ui/js/notes.js' %}"></script>
 <script src="{% static 'notes/ui/js/notes_graph.js' %}"></script>
 {% endblock %}

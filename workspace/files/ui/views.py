@@ -21,7 +21,7 @@ from ..models import (
     PinnedFolder,
     Tag,
 )
-from .viewers import ViewerRegistry
+from .viewers import ViewerRegistry, render_viewer_panel
 
 RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
 INITIAL_EVENTS_LIMIT = 15
@@ -716,14 +716,18 @@ def view_file(request, uuid):
     # Only files can be viewed
     if file_obj.node_type != File.NodeType.FILE:
         return HttpResponse(
-            '<div class="p-8 text-center text-error">This is a folder, not a file.</div>',
+            render_viewer_panel(
+                '<div class="p-8 text-center text-error">This is a folder, not a file.</div>'
+            ),
             status=400,
         )
 
     # Check if viewable
     if not file_obj.is_viewable():
         return HttpResponse(
-            f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>',
+            render_viewer_panel(
+                f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>'
+            ),
             status=400,
         )
 
@@ -735,7 +739,9 @@ def view_file(request, uuid):
 
     if not ViewerClass:
         return HttpResponse(
-            f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>',
+            render_viewer_panel(
+                f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>'
+            ),
             status=400,
         )
 
@@ -757,7 +763,7 @@ def view_file(request, uuid):
     viewer._lock_info = lock_info
     html = viewer.render(request)
 
-    return HttpResponse(html)
+    return HttpResponse(render_viewer_panel(html))
 
 
 @login_required

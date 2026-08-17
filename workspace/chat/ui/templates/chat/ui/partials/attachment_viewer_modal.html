@@ -1,6 +1,6 @@
 <!-- Chat Attachment Viewer Modal -->
-<div x-data="chatAttachmentViewer()">
-  <dialog x-ref="dialog" class="modal" @close="open = false">
+<div x-data="chatAttachmentViewer()" @ajax:missing="_viewerMissing($event)" @ajax:merge="_viewerMerge($event)">
+  <dialog x-ref="dialog" class="modal" @close="_onDialogClose()">
     <div class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col max-w-5xl relative">
       <!-- Actions (Top Right) -->
       <div class="absolute top-4 right-4 z-10 flex items-center gap-1">
@@ -36,21 +36,24 @@
         </div>
       </div>
 
-      <!-- Viewer Container -->
-      <div x-ref="viewerContainer" class="flex-1 overflow-auto bg-base-200"
-           x-show="!loading && !error"></div>
+      <!-- Viewer Container: #viewer-panel is the alpine-ajax merge anchor
+           every /chat/view-attachment/ response replaces (see viewer_panel.js). -->
+      <div class="flex-1 overflow-auto bg-base-200"
+           x-show="!viewerLoading && !viewerError">
+        <div id="viewer-panel" style="display: contents"></div>
+      </div>
 
       <!-- Loading -->
-      <div x-show="loading" class="flex-1 flex items-center justify-center" x-cloak>
+      <div x-show="viewerLoading" class="flex-1 flex items-center justify-center" x-cloak>
         <span class="loading loading-spinner loading-lg"></span>
       </div>
 
       <!-- Error -->
-      <div x-show="error" class="flex-1 flex items-center justify-center p-8" x-cloak>
+      <div x-show="viewerError" class="flex-1 flex items-center justify-center p-8" x-cloak>
         <div class="text-center">
           <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
           <p class="text-lg font-medium mb-2">Failed to load file</p>
-          <p class="text-sm text-base-content/60" x-text="error"></p>
+          <p class="text-sm text-base-content/60" x-text="viewerError"></p>
         </div>
       </div>
 
@@ -86,73 +89,26 @@
   <script>
     function chatAttachmentViewer() {
       return {
+        ...viewerPanelMixin(),
         open: false,
-        loading: false,
-        error: null,
         attachmentUuid: null,
         fileName: '',
         mimeType: '',
         downloadUrl: '',
-        loadedScripts: [],
 
         async openAttachment(uuid, name, mimeType) {
           this.attachmentUuid = uuid;
           this.fileName = name || 'File';
           this.mimeType = mimeType || '';
           this.downloadUrl = '/api/v1/chat/attachments/' + uuid;
-          this.error = null;
-
-          const container = this.$refs.viewerContainer;
-
-          // Dispatch cleanup event before removing DOM
-          window.dispatchEvent(new CustomEvent('viewer-cleanup'));
-
-          // Clear previous content and scripts
-          container.replaceChildren();
-          this.loadedScripts.forEach(function(s) { s.remove(); });
-          this.loadedScripts = [];
-
-          this.loading = true;
           this.open = true;
-          this.$refs.dialog.showModal();
-
-          try {
-            const response = await fetch('/chat/view-attachment/' + uuid);
-            if (!response.ok) {
-              throw new Error('Failed to load viewer: ' + response.status);
-            }
-
-            const rawHtml = await response.text();
-
-            // Parse HTML
-            const temp = document.createElement('template');
-            temp.innerHTML = rawHtml;
-
-            // Extract and re-execute scripts
-            const scriptEls = temp.content.querySelectorAll('script');
-            const scripts = [];
-            const self = this;
-            scriptEls.forEach(function(el) {
-              scripts.push(el.textContent);
-              el.remove();
-            });
-
-            scripts.forEach(function(scriptContent) {
-              const newScript = document.createElement('script');
-              newScript.textContent = scriptContent;
-              document.head.appendChild(newScript);
-              self.loadedScripts.push(newScript);
-            });
-
-            // Move content to container
-            while (temp.content.firstChild) {
-              container.appendChild(temp.content.firstChild);
-            }
-          } catch (err) {
-            this.error = err.message;
-          } finally {
-            this.loading = false;
+          // Gallery navigation re-opens over an already-open dialog: the
+          // current spec makes that a no-op, but older engines throw.
+          if (!this.$refs.dialog.open) {
+            this.$refs.dialog.showModal();
           }
+
+          await this.loadViewerPanel('/chat/view-attachment/' + uuid);
         },
 
         _getViewableAttachments() {
@@ -226,17 +182,21 @@
           }));
         },
 
-        close() {
-          window.dispatchEvent(new CustomEvent('viewer-cleanup'));
-          this.$refs.dialog.close();
+        // Every close path funnels here through the dialog's close event -
+        // the explicit button, Escape, and the backdrop form. Cancels any
+        // in-flight load so a late response cannot mount into the closed
+        // modal, then disposes and empties the panel.
+        _onDialogClose() {
           this.open = false;
+          this.teardownViewerPanel();
           this.attachmentUuid = null;
           this.fileName = '';
           this.mimeType = '';
-          this.error = null;
-          this.$refs.viewerContainer.replaceChildren();
-          this.loadedScripts.forEach(function(s) { s.remove(); });
-          this.loadedScripts = [];
+          this.viewerError = null;
+        },
+
+        close() {
+          this.$refs.dialog.close();
         },
 
         init() {

@@ -187,11 +187,10 @@ window.notesApp = function notesApp(config) {
         // Tags (from shared mixin)
         ...window.tagsMixin(),
 
-        // Editor
+        // Editor (viewerLoading / viewerError / loadViewerPanel come from
+        // the shared panel mixin; the viewer HTML merges into #viewer-panel)
+        ...window.viewerPanelMixin(),
         selectedNote: null,
-        loadingEditor: false,
-        _loadedScripts: [],
-        _loadGeneration: 0,
 
         // Available actions on the currently selected note — driven by
         // POST /api/v1/files/actions. Empty list = fail-safe (buttons disabled).
@@ -706,7 +705,7 @@ window.notesApp = function notesApp(config) {
             // Fetch available actions in parallel with the viewer — both are
             // independent HTTP calls, no sequential dependency.
             this._fetchActionsForSelected(note.uuid);
-            await this.loadViewer(note);
+            await this.loadViewerPanel('/files/view/' + note.uuid);
         },
 
         async selectNoteById(uuid) {
@@ -715,57 +714,6 @@ window.notesApp = function notesApp(config) {
             if (resp.ok) {
                 const note = await resp.json();
                 await this.selectNote(note);
-            }
-        },
-
-        async loadViewer(note) {
-            const container = this.$refs.editorContainer;
-            if (!container) return;
-
-            // Cleanup previous viewer
-            window.dispatchEvent(new CustomEvent('viewer-cleanup'));
-            container.replaceChildren();
-            this._loadedScripts.forEach(function(s) { s.remove(); });
-            this._loadedScripts = [];
-
-            const generation = ++this._loadGeneration;
-            this.loadingEditor = true;
-
-            try {
-                const resp = await fetch('/files/view/' + note.uuid);
-                if (generation !== this._loadGeneration) return;
-                if (!resp.ok) throw new Error('Failed to load viewer: ' + resp.status);
-
-                const rawHtml = await resp.text();
-                if (generation !== this._loadGeneration) return;
-
-                const temp = document.createElement('template');
-                temp.innerHTML = rawHtml;
-
-                const scriptEls = temp.content.querySelectorAll('script');
-                const scripts = [];
-                scriptEls.forEach(function(el) {
-                    scripts.push(el.textContent);
-                    el.remove();
-                });
-
-                scripts.forEach(function(scriptContent) {
-                    const newScript = document.createElement('script');
-                    newScript.textContent = scriptContent;
-                    document.head.appendChild(newScript);
-                    this._loadedScripts.push(newScript);
-                }.bind(this));
-
-                while (temp.content.firstChild) {
-                    container.appendChild(temp.content.firstChild);
-                }
-            } catch (err) {
-                if (generation !== this._loadGeneration) return;
-                container.textContent = err.message;
-            } finally {
-                if (generation === this._loadGeneration) {
-                    this.loadingEditor = false;
-                }
             }
         },
 
@@ -834,7 +782,10 @@ window.notesApp = function notesApp(config) {
                 if (!ok) return;
             }
 
-            window.dispatchEvent(new CustomEvent('viewer-cleanup'));
+            // Dispose the mounted editor (and release its file lock) before
+            // the note it edits goes away; a still-loading viewer must not
+            // mount once the note is deleted.
+            this.teardownViewerPanel();
 
             const resp = await fetch('/api/v1/files/' + this.selectedNote.uuid, {
                 method: 'DELETE',
@@ -844,10 +795,6 @@ window.notesApp = function notesApp(config) {
             if (resp.ok) {
                 const uuid = this.selectedNote.uuid;
                 this.notes = this.notes.filter(function(n) { return n.uuid !== uuid; });
-                const container = this.$refs.editorContainer;
-                if (container) container.replaceChildren();
-                this._loadedScripts.forEach(function(s) { s.remove(); });
-                this._loadedScripts = [];
                 this.selectedNote = null;
                 this.updateUrl();
             }
@@ -1016,10 +963,7 @@ window.notesApp = function notesApp(config) {
                         if (!resp.ok) return;
                         self.notes = self.notes.filter(function(n) { return n.uuid !== uuid; });
                         if (self.selectedNote && self.selectedNote.uuid === uuid) {
-                            const container = self.$refs.editorContainer;
-                            if (container) container.replaceChildren();
-                            self._loadedScripts.forEach(function(s) { s.remove(); });
-                            self._loadedScripts = [];
+                            self.teardownViewerPanel();
                             self.selectedNote = null;
                             self.updateUrl();
                         }
@@ -1504,9 +1448,7 @@ window.notesApp = function notesApp(config) {
         },
 
         destroy() {
-            window.dispatchEvent(new CustomEvent('viewer-cleanup'));
-            this._loadedScripts.forEach(function(s) { s.remove(); });
-            this._loadedScripts = [];
+            this.teardownViewerPanel();
         },
     };
 };

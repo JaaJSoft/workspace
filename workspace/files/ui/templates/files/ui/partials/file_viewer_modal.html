@@ -1,9 +1,9 @@
 <!-- File Viewer Modal -->
-<div x-data="fileViewerModal()">
+<div x-data="fileViewerModal()" @ajax:missing="_viewerMissing($event)" @ajax:merge="_viewerMerge($event)">
   <dialog
     x-ref="dialog"
     class="modal"
-    @close="open = false"
+    @close="_onDialogClose()"
   >
     <div
       class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col relative transition-[max-width] duration-200"
@@ -60,17 +60,18 @@
         </div>
       </div>
 
-      <!-- Viewer Container -->
+      <!-- Viewer Container: #viewer-panel is the alpine-ajax merge anchor
+           every /files/view/ response replaces (see viewer_panel.js). -->
       <div
-        x-ref="viewerContainer"
         class="flex-1 overflow-auto bg-base-200"
-        x-show="!loading && !error"
+        x-show="!viewerLoading && !viewerError"
       >
+        <div id="viewer-panel" style="display: contents"></div>
       </div>
 
       <!-- Loading State -->
       <div
-        x-show="loading"
+        x-show="viewerLoading"
         class="flex-1 flex items-center justify-center"
         x-cloak
       >
@@ -79,14 +80,14 @@
 
       <!-- Error State -->
       <div
-        x-show="error"
+        x-show="viewerError"
         class="flex-1 flex items-center justify-center p-8"
         x-cloak
       >
         <div class="text-center">
           <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
           <p class="text-lg font-medium mb-2">Failed to load file</p>
-          <p class="text-sm text-base-content/60" x-text="error"></p>
+          <p class="text-sm text-base-content/60" x-text="viewerError"></p>
         </div>
       </div>
 
@@ -125,13 +126,11 @@
       let _prefsSaveTimer = null;
 
       return {
+        ...viewerPanelMixin(),
         open: false,
-        loading: false,
-        error: null,
         fileUuid: null,
         fileName: '',
         fileType: '',
-        loadedScripts: [],
         expanded: false,
 
         _getViewableFiles() {
@@ -200,21 +199,12 @@
           this.fileUuid = uuid;
           this.fileName = name || 'File';
           this.fileType = fileType || '';
-          this.error = null;
-
-          const container = this.$refs.viewerContainer;
-
-          // Dispatch cleanup event before removing DOM (lets Monaco dispose)
-          window.dispatchEvent(new CustomEvent('viewer-cleanup'));
-
-          // Clear previous content and scripts
-          container.replaceChildren();
-          this.loadedScripts.forEach(script => script.remove());
-          this.loadedScripts = [];
-
-          this.loading = true;
           this.open = true;
-          this.$refs.dialog.showModal();
+          // Gallery navigation re-opens over an already-open dialog: the
+          // current spec makes that a no-op, but older engines throw.
+          if (!this.$refs.dialog.open) {
+            this.$refs.dialog.showModal();
+          }
 
           // Update URL with open parameter
           if (updateUrl) {
@@ -223,61 +213,24 @@
             window.history.pushState({}, '', url);
           }
 
-          try {
-            const response = await fetch(`/files/view/${uuid}`);
-            if (!response.ok) {
-              throw new Error('Failed to load viewer: ' + response.status);
-            }
-
-            const rawHtml = await response.text();
-
-            // Parse HTML with the DOM parser instead of regex
-            const temp = document.createElement('template');
-            temp.innerHTML = rawHtml;  // same-origin server response
-
-            // Extract and remove script elements from parsed DOM
-            const scriptEls = temp.content.querySelectorAll('script');
-            const scripts = [];
-            scriptEls.forEach(function(el) {
-              scripts.push(el.textContent);
-              el.remove();
-            });
-
-            // Execute scripts first
-            scripts.forEach(function(scriptContent) {
-              const newScript = document.createElement('script');
-              newScript.textContent = scriptContent;
-              document.head.appendChild(newScript);
-              this.loadedScripts.push(newScript);
-            }.bind(this));
-
-            // Move remaining children to container
-            while (temp.content.firstChild) {
-              container.appendChild(temp.content.firstChild);
-            }
-
-          } catch (err) {
-            this.error = err.message;
-          } finally {
-            this.loading = false;
-          }
+          await this.loadViewerPanel(`/files/view/${uuid}`);
         },
 
-        close() {
-          // Dispatch cleanup event before removing DOM (lets Monaco dispose)
-          window.dispatchEvent(new CustomEvent('viewer-cleanup'));
-
-          this.$refs.dialog.close();
+        // Every close path funnels here through the dialog's close event -
+        // the explicit button, Escape, and the backdrop form. Cancels any
+        // in-flight load so a late response cannot mount into the closed
+        // modal, then disposes and empties the panel.
+        _onDialogClose() {
           this.open = false;
+          this.teardownViewerPanel();
           this.fileUuid = null;
           this.fileName = '';
           this.fileType = '';
-          this.error = null;
-          // Clear viewer content
-          this.$refs.viewerContainer.replaceChildren();
-          // Clear loaded scripts
-          this.loadedScripts.forEach(script => script.remove());
-          this.loadedScripts = [];
+          this.viewerError = null;
+        },
+
+        close() {
+          this.$refs.dialog.close();
 
           // Remove open parameter from URL
           const url = new URL(window.location);
@@ -375,16 +328,7 @@
               await this._openFileFromUuid(fileUuid);
             } else if (!fileUuid && this.open) {
               // No open parameter but viewer is open - close it
-              window.dispatchEvent(new CustomEvent('viewer-cleanup'));
               this.$refs.dialog.close();
-              this.open = false;
-              this.fileUuid = null;
-              this.fileName = '';
-              this.fileType = '';
-              this.error = null;
-              this.$refs.viewerContainer.replaceChildren();
-              this.loadedScripts.forEach(script => script.remove());
-              this.loadedScripts = [];
             }
           };
           window.addEventListener('popstate', this._popStateHandler);

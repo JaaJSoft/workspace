@@ -11,7 +11,7 @@ Both APIs are free and keyless:
 
 import logging
 
-import httpx
+import httpx2
 
 from workspace.common.logging import scrub
 
@@ -73,7 +73,7 @@ def geocode(name: str) -> dict | None:
         return None
 
     try:
-        with httpx.Client(timeout=10, follow_redirects=True) as client:
+        with httpx2.Client(timeout=10, follow_redirects=True) as client:
             resp = client.get(
                 _GEOCODE_URL,
                 params={
@@ -84,7 +84,7 @@ def geocode(name: str) -> dict | None:
                 },
             )
             resp.raise_for_status()
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         logger.exception("Geocoding failed for place: %.80s", scrub(query))
         return None
 
@@ -115,7 +115,7 @@ def get_current_weather(name: str) -> dict | None:
         return None
 
     try:
-        with httpx.Client(timeout=10, follow_redirects=True) as client:
+        with httpx2.Client(timeout=10, follow_redirects=True) as client:
             resp = client.get(
                 _FORECAST_URL,
                 params={
@@ -128,7 +128,7 @@ def get_current_weather(name: str) -> dict | None:
                 },
             )
             resp.raise_for_status()
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         logger.exception("Forecast failed for place: %.80s", scrub(name))
         return None
 

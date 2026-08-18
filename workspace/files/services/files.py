@@ -436,6 +436,24 @@ class FileService:
         return file_obj
 
     @staticmethod
+    def replace_content_from(target, source, *, acting_user=None):
+        """Give *target* the bytes of *source*, streamed into a fresh blob.
+
+        Same contract as ``update_content``: size, type, hash and thumbnail
+        state follow the new content, the row keeps its identity.
+        """
+        from django.core.files.base import File as DjangoFile
+
+        with source.content.open("rb") as src:
+            return FileService.update_content(
+                target,
+                DjangoFile(src, name=target.name),
+                name=target.name,
+                mime_type=source.mime_type,
+                acting_user=acting_user,
+            )
+
+    @staticmethod
     def replace_content_storage(
         file_obj, *, storage_path, size, content_hash, acting_user=None
     ):
@@ -602,9 +620,9 @@ class FileService:
         )
 
     @staticmethod
-    def available_file_name(owner, parent, name):
+    def available_file_name(owner, parent, name, *, avoiding=()):
         """*name*, or the first free ``name (Copy N).ext`` variant in that folder."""
-        return _name_helpers.available_file_name(owner, parent, name)
+        return _name_helpers.available_file_name(owner, parent, name, avoiding=avoiding)
 
     @staticmethod
     def validate_move_target(file_obj, new_parent, user=None):

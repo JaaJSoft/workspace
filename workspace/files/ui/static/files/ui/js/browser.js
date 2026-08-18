@@ -460,7 +460,7 @@ window.fileBrowser = function fileBrowser() {
     // ('replace' | 'rename' | 'skip' | undefined = let the server reject).
     // Only the "ask" and "skip" preferences need to know about a collision
     // before the bytes go up; the other two are decided server-side.
-    async _decideNameCollisions(files) {
+    async _decideNameCollisions(files, { replaceLabel = 'Replace the existing file' } = {}) {
       const mode = window.getFilePrefs().nameCollision || 'ask';
       const decisions = new Map();
       if (mode === 'replace' || mode === 'keep_both') {
@@ -479,7 +479,7 @@ window.fileBrowser = function fileBrowser() {
           message: `A file named "${file.name}" already exists in this folder. What should happen to the new one?`,
           options: [
             { value: 'rename', label: 'Keep both (rename the new file)' },
-            { value: 'replace', label: 'Replace the existing file' },
+            { value: 'replace', label: replaceLabel },
             { value: 'skip', label: 'Skip this file' },
           ],
           value: 'rename',
@@ -504,6 +504,19 @@ window.fileBrowser = function fileBrowser() {
       } catch (_) {
         return new Set();
       }
+    },
+
+    _pasteSummary(verb, { done, replaced, renamed, skipped, failed }) {
+      const parts = [];
+      const items = (n) => `${n} item${n > 1 ? 's' : ''}`;
+      if (done) parts.push(`${verb} ${items(done)}`);
+      if (replaced) parts.push(`replaced ${replaced}`);
+      if (renamed) parts.push(`kept ${renamed} under a new name`);
+      if (skipped) parts.push(`skipped ${skipped}`);
+      if (failed) parts.push(`${failed} failed`);
+      if (!parts.length) return '';
+      const text = parts.join(', ');
+      return text.charAt(0).toUpperCase() + text.slice(1);
     },
 
     _uploadSummary({ created, replaced, renamed, skipped }) {
@@ -1140,14 +1153,14 @@ window.fileBrowser = function fileBrowser() {
     // Clipboard operations
     cutToClipboard(items) {
       if (!items || items.length === 0) return;
-      window.fileClipboard.cut(items);
+      window.fileClipboard.cut(this._tagSourceFolder(items));
       const count = items.length;
       window.AppAlert.info(`${count} item${count > 1 ? 's' : ''} cut to clipboard`);
     },
 
     copyToClipboard(items) {
       if (!items || items.length === 0) return;
-      window.fileClipboard.copy(items);
+      window.fileClipboard.copy(this._tagSourceFolder(items));
       const count = items.length;
       window.AppAlert.info(`${count} item${count > 1 ? 's' : ''} copied to clipboard`);
     },
@@ -1164,6 +1177,14 @@ window.fileBrowser = function fileBrowser() {
       const items = this._getItemsFromUuids(uuids);
       this.copyToClipboard(items);
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
+    },
+
+    // Paste needs to know where an item came from: pasting a copy back into
+    // its own folder is a plain duplicate ("name (Copy).ext"), not a
+    // collision worth a dialog.
+    _tagSourceFolder(items) {
+      const sourceFolder = this.currentFolder || null;
+      return items.map(item => ({ ...item, sourceFolder }));
     },
 
     _getItemsFromUuids(uuids) {
@@ -1184,52 +1205,73 @@ window.fileBrowser = function fileBrowser() {
         return;
       }
 
-      const itemUuids = items.map(i => i.uuid);
-      this._startLoading(...itemUuids);
       const isCopy = window.fileClipboard.isCopy();
       const targetFolderId = this.currentFolder || null;
-      let successCount = 0;
-      let errorCount = 0;
+
+      // Only a file landing in another folder can collide with a sibling:
+      // folders are never unique-checked, and a copy into its own folder is
+      // just a duplicate the server suffixes on its own.
+      const collidable = items.filter(
+        item => item.nodeType === 'file' && (item.sourceFolder || null) !== targetFolderId
+      );
+      const decisions = await this._decideNameCollisions(collidable, {
+        replaceLabel: isCopy
+          ? 'Replace the existing file'
+          : 'Replace the existing file (the moved one goes to the trash)',
+      });
+
+      const itemUuids = items.map(i => i.uuid);
+      this._startLoading(...itemUuids);
+      const outcome = { done: 0, replaced: 0, renamed: 0, skipped: 0, failed: 0 };
+      let firstError = '';
 
       for (const item of items) {
+        const onConflict = decisions.get(item);
+        if (onConflict === 'skip') {
+          outcome.skipped++;
+          continue;
+        }
+        const payload = { parent: targetFolderId };
+        if (onConflict) {
+          payload.on_conflict = onConflict;
+        } else if (collidable.includes(item)) {
+          // No collision at pre-check time. If one appears before the request
+          // lands, surface it rather than let the copy default silently rename.
+          payload.on_conflict = 'error';
+        }
         try {
-          let response;
-          if (isCopy) {
-            // Copy: duplicate the file/folder
-            response = await fetch(`/api/v1/files/${item.uuid}/copy`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-              },
-              body: JSON.stringify({ parent: targetFolderId })
-            });
+          const response = await fetch(
+            isCopy ? `/api/v1/files/${item.uuid}/copy` : `/api/v1/files/${item.uuid}`,
+            {
+              method: isCopy ? 'POST' : 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+              body: JSON.stringify(payload),
+            }
+          );
+          let body = {};
+          try { body = await response.json(); } catch (_) {}
+          if (!response.ok) {
+            outcome.failed++;
+            firstError = firstError || this._firstErrorMessage(body);
+          } else if (isCopy ? response.status === 200 : body.uuid && body.uuid !== item.uuid) {
+            // A copy answers 201 unless the existing file took the content;
+            // a move answers with the moved row unless another row took it.
+            outcome.replaced++;
+          } else if (onConflict && body.name && body.name !== item.name) {
+            outcome.renamed++;
           } else {
-            // Cut: move the file/folder
-            response = await fetch(`/api/v1/files/${item.uuid}`, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-              },
-              body: JSON.stringify({ parent: targetFolderId })
-            });
-          }
-          if (response.ok) {
-            successCount++;
-          } else {
-            errorCount++;
+            outcome.done++;
           }
         } catch (error) {
-          errorCount++;
+          outcome.failed++;
         }
       }
 
-      const action = isCopy ? 'Copied' : 'Moved';
-      if (errorCount > 0) {
-        window.AppAlert.warning(`${action} ${successCount} items, ${errorCount} failed`);
-      } else {
-        window.AppAlert.success(`${action} ${successCount} item${successCount > 1 ? 's' : ''}`);
+      const summary = this._pasteSummary(isCopy ? 'Copied' : 'Moved', outcome);
+      if (outcome.failed > 0) {
+        window.AppAlert.warning(firstError ? `${summary} - ${firstError}` : summary);
+      } else if (summary) {
+        window.AppAlert.success(summary);
       }
 
       // Only clear clipboard on cut (move), keep it for copy

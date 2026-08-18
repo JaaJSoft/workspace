@@ -518,25 +518,7 @@ class FileViewSet(
         instance = serializer.instance
         replaced = getattr(serializer, "replaced_existing", False)
         if replaced:
-            from workspace.files.sse_provider import push_file_event
-
-            push_file_event(
-                instance,
-                "file_updated",
-                request.user.username,
-                exclude_user_id=request.user.pk,
-            )
-            if instance.owner_id != request.user.pk:
-                notify(
-                    recipient=instance.owner,
-                    origin="files",
-                    title=f'{request.user.username} edited "{instance.name}"',
-                    url=f"/files/{instance.parent_id}"
-                    if instance.parent_id
-                    else "/files",
-                    actor=request.user,
-                    source=instance,
-                )
+            self._announce_replaced(instance)
         if instance.node_type == File.NodeType.FILE:
             data["duplicates"] = [
                 {
@@ -554,6 +536,31 @@ class FileViewSet(
             status=status.HTTP_200_OK if replaced else status.HTTP_201_CREATED,
             headers=self.get_success_headers(data),
         )
+
+    def _announce_replaced(self, instance):
+        """Tell live viewers and the owner that *instance* got new content."""
+        from workspace.files.sse_provider import push_file_event
+
+        push_file_event(
+            instance,
+            "file_updated",
+            self.request.user.username,
+            exclude_user_id=self.request.user.pk,
+        )
+        if instance.owner_id != self.request.user.pk:
+            notify(
+                recipient=instance.owner,
+                origin="files",
+                title=f'{self.request.user.username} edited "{instance.name}"',
+                url=f"/files/{instance.parent_id}" if instance.parent_id else "/files",
+                actor=self.request.user,
+                source=instance,
+            )
+
+    def perform_update(self, serializer):
+        serializer.save()
+        if getattr(serializer, "replaced_existing", False):
+            self._announce_replaced(serializer.instance)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())

@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.36.0 - Threads, SSO & Notifications
+
+### Highlights
+
+Conversations stay readable: side discussions now live in threads, and you decide how loud each conversation gets. Sign in with your company account through OpenID Connect, get notified when important mail lands, and see how each project is progressing on its new Analytics page.
+
+### Chat
+
+- Threads. Replying to a message opens the discussion in a side panel instead of pushing it into the main conversation. The original message shows how many replies it has, and only the people who took part in a thread see it as unread - a long side discussion no longer marks the whole conversation unread for everyone. Prefer the old behavior? A preference puts replies back in the main flow.
+- Per-conversation notification level. From the bell in the conversation header, choose to be notified for every message, only when you are mentioned, or never. A muted conversation still shows its new messages when you open it - it just stops interrupting you.
+- Assistant replies now notify you like any other message, including as push notifications on your phone.
+- Chat tells you when something fails: a denied microphone or camera permission, a call that is already full, a blocked pop-up, or a voice message that could not be sent now show a clear message.
+- Opening one attachment right after another always shows the one you clicked last.
+
+### AI Assistants
+
+- Give an agent goal a full mission brief. Beyond the objective, you can now spell out what "done" looks like, the constraints to respect while working, and when the assistant should report back. Everything is editable in one dialog - objective, brief, schedule and the assistant's own working notes - so you can steer a goal that drifts without stopping it and starting over.
+
+### Sign-in
+
+- Single sign-on with OpenID Connect. Connect your instance to your identity provider (Keycloak, Authentik, Authelia, Google Workspace, Microsoft Entra ID...) and sign in with your company account. The account is created on first login, keeps its display name in sync with the provider, and password changes happen there rather than in the app. Username and password sign-in keeps working alongside.
+
+### Mail
+
+- Get notified when mail arrives. Choose in your mail preferences to be notified for every incoming message, only when the AI classifier applies a label you flagged as important (Urgent, by default), or never. Opening the message clears the notification.
+
+### Notifications
+
+- Dashboard badges you can actually clear. The number on each tile now counts your unread notifications for that module and goes down as you deal with them - open the task, read the email, look at today's events - instead of staying stuck all day. Badges also update live while the dashboard is open.
+- Morning reminders. Each day you receive one notification listing your due and overdue tasks and one listing today's events. Dismiss them once you have seen them; they come back the next morning if a task is still due.
+- Notifications from the same module no longer overwrite each other on screen: a second chat notification used to silently replace the first before you had a chance to see it.
+
+### Projects
+
+- Analytics page. Every project has a new Analytics view in its sidebar to follow how the work is going: a week-by-week chart of tasks created versus tasks completed over the last three months, headline numbers on throughput, and a breakdown of open work by column, by assignee and by priority. It is built from the history your projects already keep, so it works right away on existing projects.
+
+### Notes
+
+- Create a note on your phone with a floating "new note" button, like in mail and calendar.
+
+### Interface
+
+- Relative times read the same everywhere: `just now`, `5m ago`, `2h ago`, `3d ago`, then the date after a week - the conversation list, the notifications menu and comments used to each show a different wording for the same moment.
+- Pop-up notifications inside the app now match the look of the rest of the interface.
+- The menus in the conversation pane have a little more breathing room between rows.
+
 ## 0.35.0 - Voice, Agents & Tags
 
 ### Highlights

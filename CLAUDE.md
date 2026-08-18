@@ -92,18 +92,19 @@ An agent working unattended has no one looking over its shoulder: the reviewer s
 2. Drive headless Chromium with Playwright, already in the `dev` dependency group (`uv run playwright install chromium` once). Log in through `/login`, navigate to the changed page, wait for the network to settle, then `page.screenshot(path=..., full_page=False)`. `scripts/screenshots.py` (`capture()`, `_dismiss_overlays()`, `CONTEXT_OPTIONS`) is the reference implementation to crib from - it pins the viewport, locale and timezone so captures don't depend on the host machine.
 3. **Look at each capture before attaching it.** A screenshot of a blank page, an error toast, or a modal that never opened proves the opposite of what the PR claims - and it is exactly what a naive script produces when a selector was wrong. Open the PNG (Read tool) and check it shows the feature working.
 
-**How to attach them** - GitHub offers no CLI upload for PR-body images, and committing PNGs into the PR pollutes the tree forever, so the images go on a dedicated orphan branch built from a throwaway repo (this never touches your worktree - do **not** use `git checkout --orphan` in it, cleaning that up wipes `.venv`, `db.sqlite3` and `.env`):
+**How to attach them** - GitHub offers no CLI upload for PR-body images, and committing PNGs into the PR pollutes the tree forever, so every screenshot goes on the shared orphan branch **`pr-assets`** (never merged, one directory per PR or issue). Add to it through a temporary worktree - never `git checkout pr-assets` in your working copy, and never `git checkout --orphan` there either (cleaning that up wipes `.venv`, `db.sqlite3` and `.env`):
 
 ```bash
 shots=/tmp/pr-shots            # write the captures here, outside the repo, so they never show up in git status
-tmp=$(mktemp -d) && cp "$shots"/*.png "$tmp"
-git -C "$tmp" init -q -b assets/<short-slug>                      # e.g. assets/issue-651-viewers
-git -C "$tmp" add . && git -C "$tmp" commit -qm "chore(assets): screenshots for #<issue or PR>"
-git -C "$tmp" push "$(git remote get-url origin)" HEAD:refs/heads/assets/<short-slug>
-rm -rf "$tmp"
+slug=issue-<n>                 # or pr-<n> when there is no issue
+git fetch -q origin pr-assets && git worktree add -q /tmp/pr-assets-wt origin/pr-assets
+mkdir -p /tmp/pr-assets-wt/$slug && cp "$shots"/*.png /tmp/pr-assets-wt/$slug/
+git -C /tmp/pr-assets-wt add . && git -C /tmp/pr-assets-wt commit -qm "chore(assets): screenshots for #<n>"
+git -C /tmp/pr-assets-wt push -q origin HEAD:pr-assets || { git -C /tmp/pr-assets-wt pull -q --rebase origin pr-assets && git -C /tmp/pr-assets-wt push -q origin HEAD:pr-assets; }
+git worktree remove --force /tmp/pr-assets-wt
 ```
 
-Then reference each image in the PR body as `https://raw.githubusercontent.com/<owner>/<repo>/assets/<short-slug>/<file>.png` (with `![caption](url)`, or `<img src=... width=...>` for side-by-side mobile shots), and end the section with the sentence: *"The images live on the orphan branch `assets/<short-slug>` so they stay out of this diff; delete that branch once the PR is reviewed."* Never commit the PNGs to the feature branch itself, and never link to a path under `docs/` or `.github/` on a feature-branch commit - the link dies when the branch is deleted after merge, and the file lands in `main` for nothing. If the screenshots are taken after the PR is opened, add them with `gh pr edit <n> --body-file`, keeping the rest of the body intact.
+The `|| pull --rebase` handles another agent having pushed to `pr-assets` in the meantime - directories never overlap, so the rebase is always clean. Then reference each image in the PR body as `https://raw.githubusercontent.com/<owner>/<repo>/pr-assets/<slug>/<file>.png` (with `![caption](url)`, or `<img src=... width=...>` for side-by-side mobile shots). Never commit the PNGs to the feature branch itself, and never link to a path under `docs/` or `.github/` on a feature-branch commit - the link dies when the branch is deleted after merge, and the file lands in `main` for nothing. If the screenshots are taken after the PR is opened, add them with `gh pr edit <n> --body-file`, keeping the rest of the body intact.
 
 ### Backward Compatibility
 

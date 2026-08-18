@@ -9,9 +9,14 @@ def user_vault_ids(user):
     A vault is reachable either by ownership or by holding a key wrap for
     it. Built as a UNION of two independently indexed queries for the same
     reason as ``calendar.queries.visible_calendar_ids``: an OR whose branch
-    crosses a join defeats per-branch index use. The empty ``order_by()`` is
-    required - ORDER BY is invalid inside a compound subquery - and the
-    UNION dedups a vault the user both owns and holds a wrap for.
+    crosses a join defeats per-branch index use, and the UNION dedups a
+    vault the user both owns and holds a wrap for.
+
+    All three empty ``order_by()`` calls are load-bearing: the two inner
+    ones because ORDER BY is invalid inside a compound subquery, the outer
+    one because ``union()`` hands the compound query back the model's
+    ``Meta.ordering`` - a sort on ``created_at``, which the compound query
+    does not select, and which the database therefore rejects.
     """
     owned = Vault.objects.filter(owner=user).order_by().values_list("uuid", flat=True)
     wrapped = (
@@ -19,7 +24,7 @@ def user_vault_ids(user):
         .order_by()
         .values_list("vault_id", flat=True)
     )
-    return list(owned.union(wrapped))
+    return list(owned.union(wrapped).order_by())
 
 
 def get_vault_role(user, vault):

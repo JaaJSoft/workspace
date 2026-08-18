@@ -15,6 +15,7 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 from workspace.common.logging import scrub
 from workspace.files.models import File, file_upload_path
 from workspace.files.services import FileService
+from workspace.files.services.content_hash import new_hasher
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class _StreamingWriteBuffer:
         self._flush_size = flush_size
         self._membuf = bytearray()
         self._total_size = 0
+        self._hasher = new_hasher()
         self._fd = None
         self._open()
 
@@ -61,6 +63,7 @@ class _StreamingWriteBuffer:
     def write(self, data):
         self._membuf.extend(data)
         self._total_size += len(data)
+        self._hasher.update(data)
         if len(self._membuf) >= self._flush_size:
             self._flush()
         return len(data)
@@ -86,6 +89,10 @@ class _StreamingWriteBuffer:
     @property
     def size(self):
         return self._total_size
+
+    @property
+    def content_hash(self):
+        return self._hasher.hexdigest()
 
     def finalize(self):
         """Flush remaining data, close, and move into place atomically."""
@@ -430,6 +437,7 @@ class FileResource(DAVNonCollection):
                 self._file,
                 storage_path=self._storage_path,
                 size=buf.size,
+                content_hash=buf.content_hash,
                 acting_user=self._user,
             )
 

@@ -11,6 +11,8 @@ import logging
 
 from django.db import transaction
 
+from workspace.common.logging import scrub
+
 from ..metrics import FILES_UPLOAD_BYTES
 from ..models import File, FileEvent
 from . import _content as _content_helpers
@@ -182,6 +184,7 @@ class FileService:
         pin, which the declared type can no longer reconstruct (a voice message
         is stored as ``video/webm``).
         """
+        from workspace.files.services.content_hash import hash_stream
         from workspace.files.services.detection import (
             detect_from_name,
             detect_from_stream,
@@ -194,8 +197,10 @@ class FileService:
 
         if content is not None:
             detection = detect_from_stream(content)
+            content_hash = hash_stream(content)
         else:
             detection = detect_from_name(name)
+            content_hash = ""
 
         # Magika reads a sparse ".md" as txt; honour the extension for the
         # stored label so notes stay discoverable (the notes browser and the
@@ -224,6 +229,7 @@ class FileService:
             category=detection.group or "unknown",
             viewer=viewer,
             size=size,
+            content_hash=content_hash,
             group=group,
         )
         if content is not None:
@@ -268,6 +274,7 @@ class FileService:
         acting_user=None,
     ):
         """Register a file that already exists on disk (used by sync)."""
+        from workspace.files.services.content_hash import hash_storage_file
         from workspace.files.services.detection import detect_from_name
 
         detection = detect_from_name(name)
@@ -285,6 +292,16 @@ class FileService:
             size=size,
         )
         file_obj.content.name = content_path
+        try:
+            file_obj.content_hash = hash_storage_file(
+                file_obj.content.storage, content_path
+            )
+        except OSError as e:
+            # The row is still worth registering; the backfill command
+            # picks the hash up later.
+            logger.warning(
+                "Cannot hash disk file %s: %s", scrub(content_path), scrub(e)
+            )
         file_obj.save()
         record_event(file_obj, acting_user, FileEvent.Action.CREATED)
         return file_obj
@@ -379,7 +396,8 @@ class FileService:
     def update_content(
         file_obj, content, *, name=None, mime_type=None, acting_user=None
     ):
-        """Replace a file's content, updating size and MIME type."""
+        """Replace a file's content, updating size, MIME type and hash."""
+        from workspace.files.services.content_hash import hash_stream
         from workspace.files.services.detection import (
             detect_from_stream,
             refine_with_name,
@@ -387,6 +405,7 @@ class FileService:
         from workspace.files.services.filetype import pin_viewer_for_upload
 
         detection = detect_from_stream(content)
+        file_obj.content_hash = hash_stream(content)
         file_obj.size = content.size
         file_obj.mime_type = mime_type or detection.mime_type
         # Honour the extension when Magika's content label is generic (a sparse
@@ -412,12 +431,19 @@ class FileService:
         return file_obj
 
     @staticmethod
-    def replace_content_storage(file_obj, *, storage_path, size, acting_user=None):
-        """Point *file_obj* at content already written to *storage_path*."""
+    def replace_content_storage(
+        file_obj, *, storage_path, size, content_hash, acting_user=None
+    ):
+        """Point *file_obj* at content already written to *storage_path*.
+
+        The caller streamed the bytes and is the only one that saw them, so it
+        also supplies their *content_hash*.
+        """
         from workspace.files.services.detection import detect_from_name
 
         detection = detect_from_name(file_obj.name)
         file_obj.size = size
+        file_obj.content_hash = content_hash
         file_obj.mime_type = detection.mime_type
         file_obj.type = detection.label
         file_obj.category = detection.group or "unknown"

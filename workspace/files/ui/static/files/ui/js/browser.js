@@ -377,6 +377,7 @@ window.fileBrowser = function fileBrowser() {
       }, 1000);
 
       let uploaded = 0;
+      const duplicated = [];
 
       for (const file of files) {
         this.uploadCurrentFile = file.name;
@@ -384,8 +385,11 @@ window.fileBrowser = function fileBrowser() {
         this._updateUploadToast();
 
         try {
-          await this._uploadFile(file);
+          const created = await this._uploadFile(file);
           uploaded++;
+          if (created.duplicates && created.duplicates.length) {
+            duplicated.push(created);
+          }
         } catch (err) {
           window.AppAlert.error(`Failed to upload ${file.name}${err.message ? ': ' + err.message : ''}`);
         }
@@ -403,12 +407,20 @@ window.fileBrowser = function fileBrowser() {
         this._uploadToastEl = null;
       }
 
+      // The server keeps every upload; the user decides about the ones that
+      // duplicate a file they already have.
+      for (const created of duplicated) {
+        if (await this._resolveDuplicateUpload(created)) uploaded--;
+      }
+
       // Refresh first, then show success toast after a short delay
       // so the Alpine AJAX refresh doesn't interfere with the toast
       if (uploaded > 0) {
         this.refreshFolderBrowser();
         const msg = `Uploaded ${uploaded} file${uploaded > 1 ? 's' : ''}`;
         setTimeout(() => window.AppAlert.success(msg), 600);
+      } else if (duplicated.length) {
+        this.refreshFolderBrowser();
       }
 
       // Reset state
@@ -443,7 +455,11 @@ window.fileBrowser = function fileBrowser() {
 
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
+            let created = {};
+            try {
+              created = JSON.parse(xhr.responseText);
+            } catch (_) {}
+            resolve(created);
           } else {
             let detail = 'Unknown error';
             try {
@@ -460,6 +476,34 @@ window.fileBrowser = function fileBrowser() {
         xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
         xhr.send(formData);
       });
+    },
+
+    // Ask whether to keep an upload whose content already exists in the
+    // user's files. Resolves true when the upload was discarded. Closing the
+    // dialog keeps both: the destructive choice is never the default.
+    async _resolveDuplicateUpload(created) {
+      const [first, ...rest] = created.duplicates;
+      const others = rest.length ? ` and ${rest.length} other file${rest.length > 1 ? 's' : ''}` : '';
+      const discard = await AppDialog.confirm({
+        title: 'Duplicate file',
+        message: `"${created.name}" has the same content as "${first.path}"${others}. Keep both, or discard the new upload?`,
+        okLabel: 'Discard upload',
+        cancelLabel: 'Keep both',
+        okClass: 'btn-warning',
+        icon: 'copy',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+      if (!discard) return false;
+      try {
+        const headers = { 'X-CSRFToken': getCSRFToken() };
+        const trashed = await fetch(`/api/v1/files/${created.uuid}`, { method: 'DELETE', headers });
+        if (!trashed.ok) throw new Error();
+        await fetch(`/api/v1/files/${created.uuid}/purge`, { method: 'DELETE', headers });
+        return true;
+      } catch (_) {
+        window.AppAlert.error(`Failed to discard ${created.name}`);
+        return false;
+      }
     },
 
     _updateUploadToast() {

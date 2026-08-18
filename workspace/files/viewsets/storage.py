@@ -1,11 +1,13 @@
 """Storage analysis endpoints for FileViewSet."""
 
+from django.http import Http404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.services.storage_analysis import CATEGORY_META, analyze_storage
 
@@ -60,7 +62,10 @@ class StorageMixin:
     )
     @action(detail=True, methods=["get"], url_path="storage")
     def storage(self, request, uuid=None):
-        folder, _perm = self._resolve_file_with_access(uuid)
+        folder_uuid = parse_uuid_or_none(uuid)
+        if folder_uuid is None:
+            raise Http404
+        folder, _perm = self._resolve_file_with_access(folder_uuid)
         if folder.node_type != File.NodeType.FOLDER:
             return Response(
                 {"detail": "Storage analysis applies to folders."},

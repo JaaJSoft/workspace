@@ -7,7 +7,7 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
 <div x-data="storageAnalysis()"
      @ajax:before="loading = true"
      @ajax:merged="loading = false; hasContent = true; syncScope()"
-     @ajax:error="loading = false; AppAlert.error('Failed to analyze storage')">
+     @ajax:error="loading = false; if (window.AppAlert) AppAlert.error('Failed to analyze storage')">
   <dialog x-ref="dialog" class="modal" @close="onClose()">
     <div class="modal-box max-w-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
       <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300">

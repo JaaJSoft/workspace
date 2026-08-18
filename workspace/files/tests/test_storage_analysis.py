@@ -12,6 +12,8 @@ from workspace.files.models import File
 from workspace.files.services import FilePermission
 from workspace.files.services.storage_analysis import (
     CATEGORY_SLICES,
+    DUPLICATE_COPIES_LIMIT,
+    DUPLICATE_GROUPS_LIMIT,
     StorageScope,
     analyze_storage,
     category_breakdown,
@@ -146,6 +148,13 @@ class AnalyzeStorageServiceTests(_TreeMixin, TestCase):
         )
         self.assertEqual(result["subfolders"][0]["size"], 1000)
 
+    def test_subfolder_sizes_follow_the_tree_owner_not_the_viewer(self):
+        # The service does not check access; whoever asks, the subtree is
+        # alice's, so the per-folder rows must add up to her total.
+        result = analyze_storage(self.bob, self.photos)
+        self.assertEqual(result["total_size"], 1600)
+        self.assertEqual(sum(e["size"] for e in result["subfolders"]), 1600)
+
     def test_largest_files_order_and_category_filter(self):
         result = analyze_storage(self.alice)
         self.assertEqual(
@@ -183,6 +192,32 @@ class AnalyzeStorageServiceTests(_TreeMixin, TestCase):
                 for g in duplicate_groups(StorageScope(self.alice, self.docs))
             ],
             ["h2"],
+        )
+
+    def test_duplicate_copies_are_capped_per_group_and_the_rest_counted(self):
+        for i in range(DUPLICATE_COPIES_LIMIT + 3):
+            _file(
+                self.alice, f"c{i:02d}", self.docs, size=10, category="text", hash="h3"
+            )
+        (group,) = [
+            g
+            for g in duplicate_groups(StorageScope(self.alice, self.docs))
+            if g["content_hash"] == "h3"
+        ]
+        self.assertEqual(group["copies"], DUPLICATE_COPIES_LIMIT + 3)
+        self.assertEqual(len(group["files"]), DUPLICATE_COPIES_LIMIT)
+        self.assertEqual(group["omitted"], 3)
+        self.assertEqual(group["files"][0]["name"], "c00")
+
+    def test_duplicates_truncated_flag(self):
+        for i in range(DUPLICATE_GROUPS_LIMIT):
+            _file(self.alice, f"p{i}", self.docs, size=10, hash=f"dup{i}")
+            _file(self.alice, f"q{i}", self.docs, size=10, hash=f"dup{i}")
+        result = analyze_storage(self.alice, self.docs)
+        self.assertEqual(len(result["duplicates"]), DUPLICATE_GROUPS_LIMIT)
+        self.assertTrue(result["duplicates_truncated"])
+        self.assertFalse(
+            analyze_storage(self.alice, self.photos)["duplicates_truncated"]
         )
 
     def test_group_root_reports_the_group_trash(self):
@@ -232,6 +267,11 @@ class StorageApiTests(_TreeMixin, APITestCase):
         resp = self.client.get(f"/api/v1/files/{self.a.uuid}/storage")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_malformed_uuid_is_a_404(self):
+        self.client.force_authenticate(self.alice)
+        resp = self.client.get("/api/v1/files/not-a-uuid/storage")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_other_users_folder_is_a_404(self):
         self.client.force_authenticate(self.bob)
         resp = self.client.get(f"/api/v1/files/{self.photos.uuid}/storage")
@@ -253,6 +293,14 @@ class StorageUiViewTests(_TreeMixin, TestCase):
         self.assertIn(f"/files/storage/{self.photos.uuid}", html)
         self.assertIn("?category=video", html)
         self.assertIn("c.mov", html)
+
+    def test_other_category_is_not_a_link(self):
+        for i, key in enumerate(["audio", "archive", "code", "font", "executable"]):
+            _file(self.alice, f"x{i}", None, size=10 - i, category=key)
+        self.client.force_login(self.alice)
+        html = self.client.get("/files/storage").content.decode()
+        self.assertIn("Other", html)
+        self.assertNotIn("?category=other", html)
 
     def test_folder_partial_links_back_to_the_parent(self):
         self.client.force_login(self.alice)

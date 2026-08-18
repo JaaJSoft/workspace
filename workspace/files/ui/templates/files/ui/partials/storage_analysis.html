@@ -67,7 +67,7 @@ Context (built by files.ui.views.storage):
     <div class="stat py-3">
       <div class="stat-figure text-warning"><i data-lucide="copy" class="w-6 h-6"></i></div>
       <div class="stat-title">Duplicates</div>
-      <div class="stat-value text-2xl">{{ analysis.duplicates|length }}</div>
+      <div class="stat-value text-2xl">{{ analysis.duplicates|length }}{% if analysis.duplicates_truncated %}+{% endif %}</div>
       <div class="stat-desc">{% if analysis.duplicates %}group{{ analysis.duplicates|length|pluralize }} of identical files{% else %}no identical files{% endif %}</div>
     </div>
   </div>
@@ -96,11 +96,11 @@ Context (built by files.ui.views.storage):
           </div>
         </div>
         <ul class="flex-1 w-full min-w-0 space-y-1 text-sm">
+          {% comment %}"Other" merges several categories, so it cannot filter the largest files: rendered as a plain row.{% endcomment %}
           {% for c in analysis.categories %}
           <li>
-            <a href="{{ base_url }}?category={{ c.key }}" x-target="storage-analysis"
-               class="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-base-300 transition-colors {% if active_category and active_category.key == c.key %}bg-base-300{% endif %}"
-               title="Show the largest {{ c.label|lower }}">
+            <a {% if c.key != 'other' %}href="{{ base_url }}?category={{ c.key }}" x-target="storage-analysis" title="Show the largest {{ c.label|lower }}"{% endif %}
+               class="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors {% if c.key != 'other' %}hover:bg-base-300{% endif %} {% if active_category and active_category.key == c.key %}bg-base-300{% endif %}">
               <svg viewBox="0 0 8 8" class="w-2.5 h-2.5 shrink-0 {{ c.css_class }}" aria-hidden="true"><circle cx="4" cy="4" r="4" fill="currentColor" /></svg>
               <span class="truncate">{{ c.label }}</span>
               <span class="ml-auto shrink-0 tabular-nums text-base-content/70 whitespace-nowrap">{{ c.size|filesizeformat }}</span>
@@ -121,11 +121,9 @@ Context (built by files.ui.views.storage):
       <ul class="flex flex-col gap-1 max-h-72 overflow-y-auto pr-1">
         {% for entry in analysis.subfolders %}
         <li>
-          {% if entry.uuid %}
-          <a href="/files/storage/{{ entry.uuid }}" x-target="storage-analysis" class="block rounded-lg px-2 py-1.5 hover:bg-base-300 transition-colors" title="Analyze {{ entry.name }}">
-          {% else %}
-          <div class="px-2 py-1.5">
-          {% endif %}
+          {% comment %}The loose-files row has no uuid: same element, no href, so it renders as a plain row.{% endcomment %}
+          <a {% if entry.uuid %}href="/files/storage/{{ entry.uuid }}" x-target="storage-analysis" title="Analyze {{ entry.name }}"{% endif %}
+             class="block rounded-lg px-2 py-1.5 transition-colors {% if entry.uuid %}hover:bg-base-300{% endif %}">
             <div class="flex items-baseline gap-2 text-sm">
               <i data-lucide="{{ entry.icon }}" class="w-3.5 h-3.5 self-center shrink-0 {{ entry.color }}"></i>
               <span class="truncate">{{ entry.name }}</span>
@@ -136,11 +134,7 @@ Context (built by files.ui.views.storage):
             <div class="h-1.5 mt-1.5 rounded-full bg-base-300 overflow-hidden">
               <div class="h-full rounded-full bg-primary/70" style="width: {{ entry.percent|unlocalize }}%"></div>
             </div>
-          {% if entry.uuid %}
           </a>
-          {% else %}
-          </div>
-          {% endif %}
         </li>
         {% empty %}
         <li class="text-sm text-base-content/50 italic">No sub-folders.</li>
@@ -206,6 +200,9 @@ Context (built by files.ui.views.storage):
             </button>
           </li>
           {% endfor %}
+          {% if group.omitted %}
+          <li class="text-xs text-base-content/50 pl-5">and {{ group.omitted }} more cop{{ group.omitted|pluralize:"y,ies" }}</li>
+          {% endif %}
         </ul>
       </li>
       {% empty %}

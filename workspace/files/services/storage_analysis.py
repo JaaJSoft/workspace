@@ -8,13 +8,25 @@ with the number of *folders* and result rows, never with the number of files.
 from dataclasses import dataclass
 
 from django.conf import settings
-from django.db.models import Count, Max, OuterRef, Q, Subquery, Sum, Value
-from django.db.models.functions import Coalesce, Concat
+from django.db.models import (
+    Count,
+    F,
+    Max,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    Window,
+)
+from django.db.models.functions import Coalesce, Concat, RowNumber
 
 from ..models import File
 
 LARGEST_FILES_LIMIT = 20
 DUPLICATE_GROUPS_LIMIT = 20
+# Copies listed per duplicate group; the rest is reported as a count.
+DUPLICATE_COPIES_LIMIT = 10
 # Slices kept in the category chart; everything past that folds into "Other".
 CATEGORY_SLICES = 6
 
@@ -74,6 +86,11 @@ class StorageScope:
         return self.folder.group if self.folder is not None else None
 
     @property
+    def owner(self):
+        """Owner of the personal tree being analysed (the folder's, not the viewer's)."""
+        return self.folder.owner if self.folder is not None else self.user
+
+    @property
     def is_root(self):
         return self.folder is None or (
             self.folder.group_id is not None and self.folder.parent_id is None
@@ -87,7 +104,7 @@ class StorageScope:
         q = Q(path__startswith=f"{path}/", deleted_at__isnull=True)
         if self.folder.group_id:
             return q & Q(group=self.folder.group)
-        return q & Q(owner=self.folder.owner, group__isnull=True)
+        return q & Q(owner=self.owner, group__isnull=True)
 
     def trash_q(self):
         if self.group is not None:
@@ -155,7 +172,7 @@ def subfolder_breakdown(scope):
     if scope.group is not None:
         descendants = descendants.filter(group=scope.group)
     else:
-        descendants = descendants.filter(owner=scope.user, group__isnull=True)
+        descendants = descendants.filter(owner=scope.owner, group__isnull=True)
     descendants = descendants.order_by().annotate(one=Value(1)).values("one")
 
     folders = (
@@ -242,6 +259,12 @@ def duplicate_groups(scope, *, limit=DUPLICATE_GROUPS_LIMIT):
     copies = (
         _files(scope)
         .filter(content_hash__in=list(by_hash))
+        .annotate(
+            rank=Window(
+                RowNumber(), partition_by=[F("content_hash")], order_by=["path"]
+            )
+        )
+        .filter(rank__lte=DUPLICATE_COPIES_LIMIT)
         .order_by("path")
         .only(
             "uuid", "name", "path", "size", "type", "category", "parent", "content_hash"
@@ -256,6 +279,7 @@ def duplicate_groups(scope, *, limit=DUPLICATE_GROUPS_LIMIT):
             "copies": g["copies"],
             "wasted": g["wasted"],
             "files": by_hash[g["content_hash"]],
+            "omitted": g["copies"] - len(by_hash[g["content_hash"]]),
         }
         for g in groups
     ]
@@ -278,6 +302,7 @@ def analyze_storage(user, folder=None, *, category=None):
         .order_by()
         .count()
     )
+    duplicates = duplicate_groups(scope)
     result = {
         "folder": (
             {
@@ -298,7 +323,8 @@ def analyze_storage(user, folder=None, *, category=None):
         "subfolders": subfolder_breakdown(scope),
         "largest_files": largest_files(scope, category=category),
         "largest_files_category": category or None,
-        "duplicates": duplicate_groups(scope),
+        "duplicates": duplicates,
+        "duplicates_truncated": len(duplicates) >= DUPLICATE_GROUPS_LIMIT,
         "trash": trash_summary(scope) if scope.is_root else None,
         "quota": settings.STORAGE_QUOTA_BYTES if folder is None else None,
     }

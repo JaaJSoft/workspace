@@ -12,7 +12,8 @@
 # workflows, so after an auto-rebuild commit the PR's checks must be re-run
 # manually. Create a repo secret FRONTEND_REBUILD_TOKEN (a PAT with contents
 # write) to make the rebuilt commit retrigger the full test suite
-# automatically.
+# automatically. It must exist twice: as an Actions secret for human PRs and
+# as a Dependabot secret for Dependabot PRs, which only see the latter.
 name: Frontend bundle
 
 on:

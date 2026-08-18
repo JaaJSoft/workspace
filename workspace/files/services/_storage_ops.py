@@ -17,6 +17,7 @@ from django.core.files.storage import default_storage
 from workspace.common.logging import scrub
 
 from ..models import File
+from .content_hash import hash_stream
 
 logger = logging.getLogger(__name__)
 
@@ -336,6 +337,9 @@ def copy_node(node, parent, owner, _sibling_names=None):
         with src:
             copied.content = DjangoFile(src, name=new_name)
             copied.size = node.size
+            # Same bytes, same digest; only legacy rows without one need
+            # the extra read.
+            copied.content_hash = node.content_hash or hash_stream(src)
             copied.save()
     else:
         copied.save()

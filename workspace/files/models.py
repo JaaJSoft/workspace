@@ -79,6 +79,13 @@ class File(models.Model):
     # the common case. Set when the content type alone cannot tell which
     # renderer applies, e.g. an audio-only MP4 container.
     viewer = models.CharField(max_length=32, blank=True, default="")
+    # SHA-256 hex digest of the blob, refreshed on every content write. Empty
+    # for folders and for rows registered before the hash existed (see the
+    # backfill_file_hashes command). Only used to spot duplicate uploads;
+    # rows never share a blob on the strength of it.
+    content_hash = models.CharField(
+        max_length=64, blank=True, default="", db_index=True
+    )
 
     has_thumbnail = models.BooleanField(default=False)
 

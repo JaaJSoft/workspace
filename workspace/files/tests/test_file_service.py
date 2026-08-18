@@ -343,6 +343,7 @@ class TestReplaceContentStorage(TestCase):
             f,
             storage_path="custom/path/note.md",
             size=4096,
+            content_hash="0" * 64,
         )
         f.refresh_from_db()
         self.assertEqual(f.size, 4096)
@@ -361,6 +362,7 @@ class TestReplaceContentStorage(TestCase):
             f,
             storage_path="custom/path/photo.png",
             size=10,
+            content_hash="0" * 64,
         )
         f.refresh_from_db()
         self.assertFalse(f.has_thumbnail)
@@ -377,6 +379,7 @@ class TestReplaceContentStorage(TestCase):
             f,
             storage_path="custom/path/doc.txt",
             size=2,
+            content_hash="0" * 64,
         )
         f.refresh_from_db()
         self.assertGreater(f.updated_at, original_updated_at)
@@ -391,6 +394,7 @@ class TestReplaceContentStorage(TestCase):
             f,
             storage_path="dav/streamed/doc.txt",
             size=11,
+            content_hash="0" * 64,
         )
         f.refresh_from_db()
         self.assertEqual(f.content.name, "dav/streamed/doc.txt")

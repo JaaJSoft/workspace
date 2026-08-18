@@ -25,6 +25,7 @@ from workspace.common.filters import CaseInsensitiveOrderingFilter
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.content_hash import find_duplicates
 from workspace.notifications.services.notifications import notify, notify_many
 
 from .models import File, FileShare
@@ -180,7 +181,14 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, "RECENT_FILES_MAX_LIMIT", 200)
         responses={
             201: OpenApiResponse(
                 response=FileSerializer,
-                description="Created file or folder.",
+                description=(
+                    "Created file or folder. For files the body also carries "
+                    "`duplicates`: live files with identical content in the "
+                    "same scope (the uploader's personal files, or the same "
+                    "group), each as {uuid, name, path, parent}. Empty when "
+                    "the content is new. The upload is stored either way; "
+                    "the client decides whether to keep it."
+                ),
             ),
         },
     ),
@@ -494,7 +502,28 @@ class FileViewSet(
                     {"group": "You are not a member of this group."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-        return super().create(request, *args, **kwargs)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        data = serializer.data
+        instance = serializer.instance
+        if instance.node_type == File.NodeType.FILE:
+            data["duplicates"] = [
+                {
+                    "uuid": str(dup.uuid),
+                    "name": dup.name,
+                    "path": dup.path,
+                    "parent": str(dup.parent_id) if dup.parent_id else None,
+                }
+                for dup in find_duplicates(instance).only(
+                    "uuid", "name", "path", "parent_id"
+                )
+            ]
+        return Response(
+            data,
+            status=status.HTTP_201_CREATED,
+            headers=self.get_success_headers(data),
+        )
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())

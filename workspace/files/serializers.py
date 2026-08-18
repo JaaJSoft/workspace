@@ -65,6 +65,7 @@ class FileSerializer(serializers.ModelSerializer):
             "size",
             "mime_type",
             "type",
+            "content_hash",
             "icon",
             "color",
             "owner",
@@ -90,6 +91,7 @@ class FileSerializer(serializers.ModelSerializer):
             "updated_at",
             "deleted_at",
             "size",
+            "content_hash",
             "path",
             "category",
             "is_favorite",
@@ -111,6 +113,9 @@ class FileSerializer(serializers.ModelSerializer):
                 "write_only": True,
             },
             "size": {"help_text": "File size in bytes."},
+            "content_hash": {
+                "help_text": "SHA-256 hex digest of the content. Empty for folders."
+            },
             "mime_type": {"help_text": "MIME type for file nodes."},
             "owner": {"help_text": "Owner user id."},
             "created_at": {"help_text": "Creation timestamp."},
@@ -311,7 +316,8 @@ class FileSerializer(serializers.ModelSerializer):
             else:
                 instance.content = uploaded
                 instance.size = None
-                instance.save(update_fields=["content", "size"])
+                instance.content_hash = ""
+                instance.save(update_fields=["content", "size", "content_hash"])
         elif explicit_mime_type is not None:
             instance.mime_type = explicit_mime_type
             instance.save(update_fields=["mime_type"])

@@ -507,7 +507,7 @@ class ContentReplacementResetsBudgetTests(ThumbnailFailureTestCase):
         record_failure(f, ValueError("boom"))
 
         FileService.replace_content_storage(
-            f, storage_path=f.content.name, size=f.size or 1
+            f, storage_path=f.content.name, size=f.size or 1, content_hash="0" * 64
         )
 
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())

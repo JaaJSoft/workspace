@@ -10,6 +10,21 @@ window.storageAnalysis = function storageAnalysis() {
         const detail = e.detail || {};
         this.open(detail.uuid || null, detail.name || 'All files');
       });
+      // ?storage=root|<uuid>[&storage_category=x] survives a reload: reopen
+      // the dialog on the same scope the user was looking at.
+      const params = new URLSearchParams(window.location.search);
+      const scope = params.get('storage');
+      if (scope) {
+        const uuid = scope === 'root' ? null : scope;
+        const category = params.get('storage_category');
+        this.$nextTick(() => {
+          this.scopeName = '';
+          this.currentUrl = uuid ? `/files/storage/${uuid}` : '/files/storage';
+          const dlg = this.$refs.dialog;
+          if (dlg && !dlg.open) dlg.showModal();
+          this.load(category ? `${this.currentUrl}?category=${encodeURIComponent(category)}` : this.currentUrl);
+        });
+      }
     },
 
     open(uuid, name) {
@@ -27,7 +42,31 @@ window.storageAnalysis = function storageAnalysis() {
 
     syncScope() {
       const swapped = document.getElementById('storage-analysis');
-      if (swapped && swapped.dataset.name) this.scopeName = swapped.dataset.name;
+      if (!swapped) return;
+      if (swapped.dataset.name) this.scopeName = swapped.dataset.name;
+      if (swapped.dataset.url) this.syncUrl(swapped.dataset.url);
+    },
+
+    // Mirror the analysed scope into the page URL (replaceState, so the
+    // folder browser's own history stack is left alone).
+    syncUrl(analysisUrl) {
+      const source = new URL(analysisUrl, window.location.origin);
+      const match = source.pathname.match(/^\/files\/storage(?:\/([0-9a-f-]{36}))?$/);
+      if (!match) return;
+      const url = new URL(window.location.href);
+      url.searchParams.set('storage', match[1] || 'root');
+      const category = source.searchParams.get('category');
+      if (category) url.searchParams.set('storage_category', category);
+      else url.searchParams.delete('storage_category');
+      window.history.replaceState(window.history.state, '', url.toString());
+    },
+
+    clearUrl() {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('storage')) return;
+      url.searchParams.delete('storage');
+      url.searchParams.delete('storage_category');
+      window.history.replaceState(window.history.state, '', url.toString());
     },
 
     reload() {
@@ -46,6 +85,7 @@ window.storageAnalysis = function storageAnalysis() {
     onClose() {
       const target = document.getElementById('storage-analysis');
       if (target) target.innerHTML = '';
+      this.clearUrl();
     },
 
     async trashFile(uuid, name) {

@@ -316,7 +316,8 @@ class FileSerializer(serializers.ModelSerializer):
             else:
                 instance.content = uploaded
                 instance.size = None
-                instance.save(update_fields=["content", "size"])
+                instance.content_hash = ""
+                instance.save(update_fields=["content", "size", "content_hash"])
         elif explicit_mime_type is not None:
             instance.mime_type = explicit_mime_type
             instance.save(update_fields=["mime_type"])

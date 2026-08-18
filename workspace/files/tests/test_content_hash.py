@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 from io import BytesIO, StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -12,6 +13,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from rest_framework.test import APITestCase
 
@@ -315,6 +317,18 @@ class UploadDuplicateApiTests(APITestCase):
         f.refresh_from_db()
         self.assertEqual(f.content_hash, _sha256(b"edited"))
 
+    def test_clearing_content_clears_the_hash(self):
+        f = FileService.create_file(
+            self.user, "note.txt", content=ContentFile(HELLO, name="note.txt")
+        )
+        response = self.client.patch(
+            f"/api/v1/files/{f.uuid}", {"content": None}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        f.refresh_from_db()
+        self.assertFalse(f.content)
+        self.assertEqual(f.content_hash, "")
+
     def test_folder_creation_has_no_duplicates_key(self):
         response = self.client.post(
             "/api/v1/files", {"name": "Docs", "node_type": "folder"}, format="json"
@@ -359,7 +373,54 @@ class BackfillFileHashesTests(TestCase):
         call_command("backfill_file_hashes", "--dry-run", stdout=out)
         f.refresh_from_db()
         self.assertEqual(f.content_hash, "")
-        self.assertIn("Updated: 1", out.getvalue())
+        self.assertIn("Would update: 1", out.getvalue())
+
+    def test_rejects_batch_size_below_one(self):
+        for value in ("0", "-1"):
+            with self.assertRaises(CommandError):
+                call_command("backfill_file_hashes", "--batch-size", value)
+
+    def test_rejects_negative_limit_and_honours_zero(self):
+        f = self._legacy_file("old.txt", HELLO)
+        with self.assertRaises(CommandError):
+            call_command("backfill_file_hashes", "--limit", "-1")
+        call_command("backfill_file_hashes", "--limit", "0", stdout=StringIO())
+        f.refresh_from_db()
+        self.assertEqual(f.content_hash, "")
+        call_command("backfill_file_hashes", "--limit", "1", stdout=StringIO())
+        f.refresh_from_db()
+        self.assertEqual(f.content_hash, HELLO_SHA256)
+
+    def test_blob_vanishing_after_the_existence_check_counts_as_missing(self):
+        self._legacy_file("gone.txt", HELLO)
+        later = self._legacy_file("still-there.txt", b"still")
+        with patch(
+            "workspace.files.management.commands.backfill_file_hashes.hash_storage_file",
+            side_effect=[FileNotFoundError("gone"), _sha256(b"still")],
+        ):
+            out = StringIO()
+            call_command("backfill_file_hashes", stdout=out)
+        later.refresh_from_db()
+        self.assertEqual(later.content_hash, _sha256(b"still"))
+        self.assertIn("Updated: 1, missing: 1", out.getvalue())
+
+    def test_does_not_overwrite_a_hash_written_meanwhile(self):
+        f = self._legacy_file("old.txt", HELLO)
+        original = File.objects.filter
+
+        def rewrite_then_filter(*args, **kwargs):
+            # A concurrent content write lands between hashing and the flush.
+            if kwargs.get("content_hash") == "" and "pk" in kwargs:
+                original(pk=f.pk).update(content_hash=_sha256(b"fresh"))
+                File.objects.filter = original
+            return original(*args, **kwargs)
+
+        out = StringIO()
+        with patch.object(File.objects, "filter", side_effect=rewrite_then_filter):
+            call_command("backfill_file_hashes", stdout=out)
+        f.refresh_from_db()
+        self.assertEqual(f.content_hash, _sha256(b"fresh"))
+        self.assertIn("Updated: 0", out.getvalue())
 
     def test_counts_missing_blobs(self):
         f = self._legacy_file("gone.txt", HELLO)

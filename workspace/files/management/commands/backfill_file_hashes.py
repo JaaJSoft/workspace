@@ -1,5 +1,6 @@
 from django.core.files.storage import default_storage
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 
 from workspace.files.models import File
 from workspace.files.services.content_hash import hash_storage_file
@@ -28,13 +29,17 @@ class Command(BaseCommand):
             "--batch-size",
             type=int,
             default=500,
-            help="Number of rows per bulk_update (one transaction per batch).",
+            help="Number of rows written per transaction.",
         )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         limit = options["limit"]
         batch_size = options["batch_size"]
+        if batch_size < 1:
+            raise CommandError("--batch-size must be at least 1.")
+        if limit is not None and limit < 0:
+            raise CommandError("--limit must not be negative.")
 
         queryset = (
             File.objects.filter(
@@ -45,12 +50,13 @@ class Command(BaseCommand):
             .exclude(content="")
             .order_by("uuid")
         )
-        if limit:
+        if limit is not None:
             queryset = queryset[:limit]
 
+        hashed = 0
         updated = 0
         missing = 0
-        to_update = []
+        batch = []
 
         for file_obj in queryset.iterator():
             file_path = file_obj.content.name
@@ -58,21 +64,42 @@ class Command(BaseCommand):
                 missing += 1
                 continue
 
-            file_obj.content_hash = hash_storage_file(default_storage, file_path)
-            updated += 1
+            try:
+                file_obj.content_hash = hash_storage_file(default_storage, file_path)
+            except OSError:
+                # The blob went away between the existence check and the read.
+                missing += 1
+                continue
+            hashed += 1
             if dry_run:
                 continue
 
-            to_update.append(file_obj)
-            if len(to_update) >= batch_size:
-                File.objects.bulk_update(to_update, ["content_hash"])
-                to_update = []
+            batch.append(file_obj)
+            if len(batch) >= batch_size:
+                updated += self._flush(batch)
+                batch = []
 
-        if to_update:
-            File.objects.bulk_update(to_update, ["content_hash"])
+        if batch:
+            updated += self._flush(batch)
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Backfill complete. Updated: {updated}, missing: {missing}."
-            )
-        )
+        if dry_run:
+            summary = f"Dry run. Would update: {hashed}, missing: {missing}."
+        else:
+            summary = f"Backfill complete. Updated: {updated}, missing: {missing}."
+        self.stdout.write(self.style.SUCCESS(summary))
+
+    @staticmethod
+    def _flush(batch):
+        """Write the hashes, skipping rows whose content changed meanwhile.
+
+        A write through FileService between our read and this flush stored a
+        fresher hash; the ``content_hash=""`` guard keeps it from being
+        overwritten with the digest of bytes that no longer exist.
+        """
+        written = 0
+        with transaction.atomic():
+            for file_obj in batch:
+                written += File.objects.filter(pk=file_obj.pk, content_hash="").update(
+                    content_hash=file_obj.content_hash
+                )
+        return written

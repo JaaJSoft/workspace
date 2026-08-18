@@ -498,7 +498,10 @@ window.fileBrowser = function fileBrowser() {
         const headers = { 'X-CSRFToken': getCSRFToken() };
         const trashed = await fetch(`/api/v1/files/${created.uuid}`, { method: 'DELETE', headers });
         if (!trashed.ok) throw new Error();
-        await fetch(`/api/v1/files/${created.uuid}/purge`, { method: 'DELETE', headers });
+        const purged = await fetch(`/api/v1/files/${created.uuid}/purge`, { method: 'DELETE', headers });
+        if (!purged.ok) {
+          window.AppAlert.warning(`${created.name} was moved to trash but could not be permanently discarded`);
+        }
         return true;
       } catch (_) {
         window.AppAlert.error(`Failed to discard ${created.name}`);

@@ -41,46 +41,59 @@ class Command(BaseCommand):
         if limit is not None and limit < 0:
             raise CommandError("--limit must not be negative.")
 
-        queryset = (
-            File.objects.filter(
-                content_hash="",
-                node_type=File.NodeType.FILE,
-                content__isnull=False,
-            )
-            .exclude(content="")
-            .order_by("uuid")
-        )
-        if limit is not None:
-            queryset = queryset[:limit]
+        queryset = File.objects.filter(
+            content_hash="",
+            node_type=File.NodeType.FILE,
+            content__isnull=False,
+        ).exclude(content="")
 
         hashed = 0
         updated = 0
         missing = 0
-        batch = []
+        seen = 0
 
-        for file_obj in queryset.iterator():
-            file_path = file_obj.content.name
-            if not default_storage.exists(file_path):
-                missing += 1
-                continue
+        # Keyset pagination, one fully materialised page at a time. A
+        # streaming iterator would keep a read cursor open on the connection
+        # while _flush() opens a write transaction; on SQLite that fails with
+        # "database is locked" (SQLITE_BUSY_SNAPSHOT, which busy_timeout does
+        # not cover) as soon as the running app commits anything meanwhile.
+        last_uuid = None
+        while True:
+            page_size = batch_size
+            if limit is not None:
+                page_size = min(page_size, limit - seen)
+                if page_size <= 0:
+                    break
+            page_qs = queryset.order_by("uuid")
+            if last_uuid is not None:
+                page_qs = page_qs.filter(uuid__gt=last_uuid)
+            page = list(page_qs[:page_size])
+            if not page:
+                break
+            seen += len(page)
+            last_uuid = page[-1].uuid
 
-            try:
-                file_obj.content_hash = hash_storage_file(default_storage, file_path)
-            except OSError:
-                # The blob went away between the existence check and the read.
-                missing += 1
-                continue
-            hashed += 1
-            if dry_run:
-                continue
+            batch = []
+            for file_obj in page:
+                file_path = file_obj.content.name
+                if not default_storage.exists(file_path):
+                    missing += 1
+                    continue
 
-            batch.append(file_obj)
-            if len(batch) >= batch_size:
+                try:
+                    file_obj.content_hash = hash_storage_file(
+                        default_storage, file_path
+                    )
+                except OSError:
+                    # The blob went away between the existence check and the read.
+                    missing += 1
+                    continue
+                hashed += 1
+                if not dry_run:
+                    batch.append(file_obj)
+
+            if batch:
                 updated += self._flush(batch)
-                batch = []
-
-        if batch:
-            updated += self._flush(batch)
 
         if dry_run:
             summary = f"Dry run. Would update: {hashed}, missing: {missing}."

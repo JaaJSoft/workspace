@@ -14,8 +14,8 @@
   "dependencies": {
     "@alpinejs/collapse": "3.16.0",
     "@imacrayon/alpine-ajax": "0.12.7",
-    "@milkdown/crepe": "7.21.2",
-    "@milkdown/plugin-slash": "7.21.2",
+    "@milkdown/crepe": "7.22.1",
+    "@milkdown/plugin-slash": "7.22.1",
     "alpinejs": "3.16.0",
     "codemirror": "6.0.2"
   },

@@ -258,8 +258,8 @@ class VaultEntryTests(TestCase):
         self.assertIsNone(entry.deleted_at)
 
     def test_blocks_deleting_a_folder_that_still_holds_entries(self):
-        """folder_id is plaintext but signed (design spec §3.5). A SET_NULL
-        would let the database rewrite signed data behind the client's back,
+        """folder_id is plaintext but signed. A SET_NULL would let the
+        database rewrite signed data behind the client's back,
         and the client would then flag a legitimate folder deletion as
         tampering. Emptying the folder is the API's job, with the entries
         re-signed client side.
@@ -308,7 +308,7 @@ class VaultEntryTests(TestCase):
     def test_deleting_the_account_still_purges_a_foldered_entry(self):
         """Account deletion is a GDPR requirement, and RESTRICT is exactly the
         kind of guard that can break it two cascade hops away from where it is
-        declared. Pinned here so PR 14 inherits a working baseline.
+        declared.
         """
         folder = VaultFolder.objects.create(
             vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
@@ -325,14 +325,14 @@ class VaultEntryTests(TestCase):
         entry.tags.add(tag)
         self.assertEqual(list(tag.entries.all()), [entry])
 
-    def test_accepts_a_tag_from_another_vault_today(self):
-        """Known limitation: attaching a tag from a different vault raises
-        nothing today. ``clean()`` cannot check the ``tags`` M2M because
-        Django only validates a many-to-many once the row exists, so
-        enforcement is deferred to the entry API (PR 7, design spec §9).
+    def test_does_not_block_a_tag_from_another_vault(self):
+        """Attaching a tag from another vault raises nothing at the model
+        level: ``clean()`` cannot check the ``tags`` M2M, since Django
+        validates a many-to-many only once the row exists. The rule belongs
+        to the entry API instead.
 
-        This pins the current permissive behavior so that PR 7 fails here
-        loudly instead of silently leaving the hole open.
+        Pinning the permissive behavior here means closing the hole cannot
+        happen quietly - it has to come back through this test.
         """
         other_vault = make_vault(self.user)
         outsider_tag = VaultTag.objects.create(
@@ -412,9 +412,9 @@ class EntryFieldTests(TestCase):
 
     def test_rejects_the_name_and_notes_field_ids(self):
         """`name` and `notes` derive the same associated data as
-        VaultEntry.encrypted_name/encrypted_notes (design spec §3.4); the
-        database constraint closes the permutation a unique(entry, field_id)
-        cannot, since the two ciphertexts live in different tables.
+        VaultEntry.encrypted_name/encrypted_notes; the database constraint
+        closes the permutation a unique(entry, field_id) cannot, since the
+        two ciphertexts live in different tables.
         """
         for reserved in ("name", "notes"):
             with self.assertRaises(IntegrityError), transaction.atomic():

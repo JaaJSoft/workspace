@@ -30,7 +30,7 @@ class AccountIdentity(models.Model):
     # 32 server-generated random bytes; the only crypto material the server
     # produces, and it is public.
     kdf_salt = models.TextField()
-    # Public keys and signatures carry a one-byte algorithm prefix (§3.2).
+    # Public keys and signatures carry a one-byte algorithm prefix.
     kex_public = models.TextField()
     sig_public = models.TextField()
     wrapped_kex_priv = models.TextField()
@@ -116,7 +116,8 @@ class VaultKeyWrap(models.Model):
         on_delete=models.CASCADE,
         related_name="vault_key_wraps",
     )
-    # Native HPKE output (enc || ciphertext); not the §3.3 wire format.
+    # Native HPKE output (enc || ciphertext), not the versioned header the
+    # other ciphertexts carry - here the agility lives in hpke_suite.
     wrapped_key = models.TextField()
     key_version = models.PositiveIntegerField(default=1)
     hpke_suite = models.JSONField(default=dict)
@@ -232,7 +233,7 @@ class VaultEntry(models.Model):
     type = models.CharField(
         max_length=32, choices=EntryType.choices, default=EntryType.LOGIN
     )
-    # RESTRICT, not SET_NULL: folder_id is plaintext but signed (§3.5), so a
+    # RESTRICT, not SET_NULL: folder_id is plaintext but signed, so a
     # database-side unlink would break metadata_sig and the client would read a
     # legitimate folder deletion as tampering. Not PROTECT either - that would
     # also refuse a whole-vault deletion, where the entries go with the vault.
@@ -314,10 +315,10 @@ class EntryField(models.Model):
                 name="unique_entry_field_id",
             ),
             # "name" and "notes" derive the same AEAD associated data as
-            # VaultEntry.encrypted_name/encrypted_notes (design spec
-            # §3.4), which live in another table and so escape the unique
-            # constraint above - a permutation between the two would still
-            # pass AEAD verification.
+            # VaultEntry.encrypted_name/encrypted_notes, which live in
+            # another table and so escape the unique constraint above - a
+            # permutation between the two would still pass AEAD
+            # verification.
             models.CheckConstraint(
                 condition=~models.Q(field_id__in=("name", "notes")),
                 name="entry_field_id_not_reserved",

@@ -25,8 +25,8 @@ def user_vault_ids(user):
 def get_vault_role(user, vault):
     """Return ``VaultRole.OWNER``, ``VaultRole.MEMBER`` or None.
 
-    Ownership wins over a key wrap. Until sharing ships, MEMBER is only
-    reachable through a wrap created by hand or by a migration.
+    Ownership wins over a key wrap: an owner who also holds a wrap for
+    their own vault is still an owner.
     """
     if vault.owner_id == user.pk:
         return VaultRole.OWNER

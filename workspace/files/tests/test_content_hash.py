@@ -14,7 +14,9 @@ from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
@@ -403,6 +405,27 @@ class BackfillFileHashesTests(TestCase):
         later.refresh_from_db()
         self.assertEqual(later.content_hash, _sha256(b"still"))
         self.assertIn("Updated: 1, missing: 1", out.getvalue())
+
+    def test_reads_candidates_in_closed_pages_never_across_a_flush(self):
+        # A streaming iterator keeps a read cursor open while _flush() opens
+        # a write transaction; on SQLite (WAL, BEGIN IMMEDIATE) that raises
+        # "database is locked" as soon as the app commits meanwhile. Pin the
+        # page-by-page shape: every candidate SELECT is bounded to the batch
+        # size and there are as many of them as pages, so no cursor outlives
+        # the page it belongs to.
+        for i in range(5):
+            self._legacy_file(f"f{i}.txt", f"data-{i}".encode())
+        with CaptureQueriesContext(connection) as ctx:
+            call_command("backfill_file_hashes", "--batch-size", "2", stdout=StringIO())
+        candidate_selects = [
+            q["sql"]
+            for q in ctx.captured_queries
+            if q["sql"].startswith("SELECT") and "content_hash" in q["sql"]
+        ]
+        # 5 rows in pages of 2: three full/partial pages plus the empty tail.
+        self.assertEqual(len(candidate_selects), 4)
+        self.assertTrue(all("LIMIT 2" in sql for sql in candidate_selects))
+        self.assertEqual(File.objects.filter(content_hash="").count(), 0)
 
     def test_does_not_overwrite_a_hash_written_meanwhile(self):
         f = self._legacy_file("old.txt", HELLO)

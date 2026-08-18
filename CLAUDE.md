@@ -80,6 +80,34 @@ PR descriptions must follow the structure of `.github/PULL_REQUEST_TEMPLATE.md` 
 - `Notes` only when there is real content: breaking changes, known limitations, deliberate follow-ups, review focus areas.
 - The PR is the project's public face: no internal tooling details, no self-congratulation, and (per the attribution rule above) nothing that reads as machine-generated.
 
+#### Screenshots are mandatory for any UI change
+
+An agent working unattended has no one looking over its shoulder: the reviewer sees the diff, not the running app. Any PR that touches what a user sees (templates, Tailwind/daisyUI classes, Alpine components, JS that changes rendering, new pages or dialogs) **must** carry screenshots of the real result in the `Screenshots` section - not a description of what it "should look like", not a Playwright test that passed. No screenshot means the change is unverified, and the reviewer will send it back. Pure backend PRs (models, services, API, Celery, tests, CI) drop the section entirely, as usual.
+
+**What to shoot:** the changed surface in its final state, at the desktop viewport (1280x900) and, when the layout is responsive, a mobile-width capture too. Before/after pairs when the PR fixes something visual. Both light and dark theme when the change involves colours or theming - the theme is a per-user setting, so switch it with `set_setting(user, 'core', 'theme', 'dark')` (or `PUT /api/v1/settings/core/theme`) between the two runs. Crop nothing that a reviewer would need to judge the surrounding layout.
+
+**How to produce them** (all steps run locally, no external tool):
+
+1. Boot the app on a free port with seeded data - the `seeding-demo-data` and `running-the-app` skills cover both (`demo` / `demo1234`, never port 8000).
+2. Drive headless Chromium with Playwright, already in the `dev` dependency group (`uv run playwright install chromium` once). Log in through `/login`, navigate to the changed page, wait for the network to settle, then `page.screenshot(path=..., full_page=False)`. `scripts/screenshots.py` (`capture()`, `_dismiss_overlays()`, `CONTEXT_OPTIONS`) is the reference implementation to crib from - it pins the viewport, locale and timezone so captures don't depend on the host machine.
+3. **Look at each capture before attaching it.** A screenshot of a blank page, an error toast, or a modal that never opened proves the opposite of what the PR claims - and it is exactly what a naive script produces when a selector was wrong. Open the PNG (Read tool) and check it shows the feature working.
+
+**How to attach them** - GitHub offers no CLI upload for PR-body images, and committing PNGs into the PR pollutes the tree forever, so every screenshot goes on the shared orphan branch **`pr-assets`** (never merged). It holds exactly one directory per pull request, named after the PR number - `pr-702/`, `pr-703/`, ... - nothing else: no issue numbers, no branch names, no free-form slugs. A flat, monotonically growing list is what makes it trivial to find a PR's captures a year later and to prune everything below a given number. That means the PR exists **before** the captures are pushed: open it first (`gh pr create` prints the URL, so the number is known), push the images under `pr-<n>/`, then add the links with `gh pr edit <n> --body-file`, keeping the rest of the body intact.
+
+Add to the branch through a temporary worktree - never `git checkout pr-assets` in your working copy, and never `git checkout --orphan` there either (cleaning that up wipes `.venv`, `db.sqlite3` and `.env`):
+
+```bash
+shots=/tmp/pr-shots            # write the captures here, outside the repo, so they never show up in git status
+n=<pr number>
+git fetch -q origin pr-assets && git worktree add -q /tmp/pr-assets-wt origin/pr-assets
+mkdir -p /tmp/pr-assets-wt/pr-$n && cp "$shots"/*.png /tmp/pr-assets-wt/pr-$n/
+git -C /tmp/pr-assets-wt add . && git -C /tmp/pr-assets-wt commit -qm "chore(assets): screenshots for #$n"
+git -C /tmp/pr-assets-wt push -q origin HEAD:pr-assets || { git -C /tmp/pr-assets-wt pull -q --rebase origin pr-assets && git -C /tmp/pr-assets-wt push -q origin HEAD:pr-assets; }
+git worktree remove --force /tmp/pr-assets-wt
+```
+
+The `|| pull --rebase` handles another agent having pushed to `pr-assets` in the meantime - directories never overlap, so the rebase is always clean. Reference each image in the PR body as `https://raw.githubusercontent.com/<owner>/<repo>/pr-assets/pr-<n>/<file>.png` (with `![caption](url)`, or `<img src=... width=...>` for side-by-side mobile shots). Never commit the PNGs to the feature branch itself, and never link to a path under `docs/` or `.github/` on a feature-branch commit - the link dies when the branch is deleted after merge, and the file lands in `main` for nothing.
+
 ### Backward Compatibility
 
 By default, do not preserve backward compatibility. In doubt, ask the user.

@@ -659,12 +659,12 @@ class ImageFailureGuidanceTests(TestCase):
             )
 
     def _rejection(self):
-        import httpx
+        import httpx2
         from openai import BadRequestError
 
-        request = httpx.Request("POST", "http://image-backend/v1/images/generations")
+        request = httpx2.Request("POST", "http://image-backend/v1/images/generations")
         return BadRequestError(
-            "prompt rejected", response=httpx.Response(400, request=request), body=None
+            "prompt rejected", response=httpx2.Response(400, request=request), body=None
         )
 
     def test_a_rejected_prompt_is_sent_back_for_a_rewrite(self):

@@ -5,7 +5,7 @@ import re
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
-import httpx
+import httpx2
 import trafilatura
 from django.conf import settings
 
@@ -66,7 +66,7 @@ def search(query: str, *, max_results: int = 5) -> list[dict]:
         return []
 
     try:
-        with httpx.Client(timeout=10, follow_redirects=True) as client:
+        with httpx2.Client(timeout=10, follow_redirects=True) as client:
             resp = client.get(
                 f"{base_url.rstrip('/')}/search",
                 params={
@@ -81,7 +81,7 @@ def search(query: str, *, max_results: int = 5) -> list[dict]:
                 },
             )
             resp.raise_for_status()
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         logger.exception("SearXNG search failed for query: %.80s", scrub(query))
         return []
 
@@ -109,7 +109,7 @@ def fetch_and_extract(url: str, *, max_chars: int = 6000) -> str:
         raise ValueError("URL points to a private or internal address")
 
     try:
-        with httpx.Client(
+        with httpx2.Client(
             timeout=15,
             follow_redirects=True,
             headers=_HEADERS,
@@ -117,7 +117,7 @@ def fetch_and_extract(url: str, *, max_chars: int = 6000) -> str:
         ) as client:
             resp = client.get(url)
             resp.raise_for_status()
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         raise ValueError(f"Failed to fetch URL: {exc}") from exc
 
     # Guard against huge responses (2 MB limit).

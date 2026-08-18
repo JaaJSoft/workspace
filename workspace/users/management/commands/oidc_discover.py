@@ -9,7 +9,7 @@ config-time helper only - the running app uses the explicit endpoints from the
 environment, so the boot never depends on the IdP being reachable.
 """
 
-import httpx
+import httpx2
 from django.core.management.base import BaseCommand, CommandError
 
 from workspace.common.logging import scrub
@@ -34,10 +34,10 @@ class Command(BaseCommand):
         url = issuer if issuer.endswith(WELL_KNOWN) else issuer + WELL_KNOWN
 
         try:
-            resp = httpx.get(url, timeout=10, follow_redirects=True)
+            resp = httpx2.get(url, timeout=10, follow_redirects=True)
             resp.raise_for_status()
             doc = resp.json()
-        except (httpx.HTTPError, ValueError) as exc:
+        except (httpx2.HTTPError, ValueError) as exc:
             raise CommandError(
                 f"Failed to fetch discovery document from {scrub(url)}: {exc}"
             ) from exc

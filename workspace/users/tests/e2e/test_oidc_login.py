@@ -17,7 +17,7 @@ Skipped unless ``E2E=1`` is set (see the base class docstring).
 
 from __future__ import annotations
 
-import httpx
+import httpx2
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 
@@ -111,7 +111,7 @@ class OidcLoginE2ETests(PlaywrightTestCase):
         Deliberately not driven through ``self.page.request``: this also runs
         from ``addCleanup``, which fires after the browser context is closed.
         """
-        response = httpx.put(
+        response = httpx2.put(
             f"{self.idp_url}/users/{sub}", json=claims, trust_env=False
         )
         self.assertEqual(response.status_code, 204, response.text)

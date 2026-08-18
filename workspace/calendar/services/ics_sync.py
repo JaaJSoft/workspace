@@ -3,7 +3,7 @@
 import logging
 from datetime import UTC, datetime
 
-import httpx
+import httpx2
 import icalendar
 from django.db import transaction
 from django.utils import timezone
@@ -111,7 +111,7 @@ def _fetch_feed(external_calendar):
     if external_calendar.last_etag:
         headers["If-None-Match"] = external_calendar.last_etag
 
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
+    with httpx2.Client(timeout=30, follow_redirects=True) as client:
         resp = client.get(external_calendar.url, headers=headers)
 
     if resp.status_code == 304:

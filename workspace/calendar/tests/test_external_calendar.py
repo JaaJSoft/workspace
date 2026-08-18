@@ -183,7 +183,7 @@ class SyncExternalCalendarTests(TestCase):
             url="https://example.com/feed.ics",
         )
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_creates_events(self, mock_httpx):
         _mock_httpx(mock_httpx, _mock_response(ICS_FEED, etag='"v1"'))
 
@@ -200,7 +200,7 @@ class SyncExternalCalendarTests(TestCase):
         self.assertEqual(self.ext.last_etag, '"v1"')
         self.assertEqual(self.ext.last_error, "")
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_updates_existing_events(self, mock_httpx):
         client = _mock_httpx(mock_httpx, _mock_response(ICS_FEED))
         sync_external_calendar(self.ext)
@@ -217,7 +217,7 @@ class SyncExternalCalendarTests(TestCase):
         self.assertEqual(event.title, "External Meeting (v2)")
         self.assertEqual(Event.objects.filter(calendar=self.calendar).count(), 2)
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_removes_deleted_events(self, mock_httpx):
         client = _mock_httpx(mock_httpx, _mock_response(ICS_FEED))
         sync_external_calendar(self.ext)
@@ -236,7 +236,7 @@ class SyncExternalCalendarTests(TestCase):
             Event.objects.filter(ical_uid="ext-event-1@example.com").exists()
         )
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_skips_on_304(self, mock_httpx):
         _mock_httpx(mock_httpx, _mock_response("", status_code=304))
 
@@ -248,7 +248,7 @@ class SyncExternalCalendarTests(TestCase):
         self.ext.refresh_from_db()
         self.assertIsNotNone(self.ext.last_synced_at)
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_all_day_event(self, mock_httpx):
         _mock_httpx(mock_httpx, _mock_response(ICS_ALL_DAY))
 
@@ -258,7 +258,7 @@ class SyncExternalCalendarTests(TestCase):
         self.assertTrue(event.all_day)
         self.assertEqual(event.title, "Holiday")
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_recurring_event(self, mock_httpx):
         _mock_httpx(mock_httpx, _mock_response(ICS_RECURRING))
 
@@ -272,7 +272,7 @@ class SyncExternalCalendarTests(TestCase):
         self.assertEqual(event.recurrence_end.day, 10)
         self.assertEqual(event.recurrence_end.month, 4)
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_parses_organizer_email(self, mock_httpx):
         _mock_httpx(mock_httpx, _mock_response(ICS_WITH_ORGANIZER))
 
@@ -281,7 +281,7 @@ class SyncExternalCalendarTests(TestCase):
         event = Event.objects.get(ical_uid="ext-organized@example.com")
         self.assertEqual(event.external_organizer, "boss@external.com")
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_without_organizer_defaults_to_empty(self, mock_httpx):
         _mock_httpx(mock_httpx, _mock_response(ICS_NO_ORGANIZER))
 
@@ -337,7 +337,7 @@ class SyncExternalCalendarTests(TestCase):
             2,
         )
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_recovers_from_concurrent_creation_via_update_or_create(
         self, mock_httpx
     ):
@@ -369,7 +369,7 @@ class SyncExternalCalendarTests(TestCase):
         self.assertEqual(events.count(), 1)
         self.assertEqual(events.first().title, "External Meeting")
 
-    @patch("workspace.calendar.services.ics_sync.httpx")
+    @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_skips_db_writes_when_event_unchanged(self, mock_httpx):
         # Feeds that don't emit ETag/Last-Modified return 200 on every
         # poll. Without the skip-if-unchanged guard, ``update_or_create``

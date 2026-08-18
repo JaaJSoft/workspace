@@ -1,7 +1,7 @@
 import base64
 from unittest.mock import MagicMock, patch
 
-import httpx
+import httpx2
 from django.test import SimpleTestCase, override_settings
 from openai import BadRequestError, InternalServerError, RateLimitError
 
@@ -27,8 +27,8 @@ def _empty_response():
 
 
 def _api_error(cls, status_code):
-    request = httpx.Request("POST", "http://image-backend/v1/images/generations")
-    response = httpx.Response(status_code, request=request)
+    request = httpx2.Request("POST", "http://image-backend/v1/images/generations")
+    response = httpx2.Response(status_code, request=request)
     return cls("backend said no", response=response, body=None)
 
 

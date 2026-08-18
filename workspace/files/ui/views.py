@@ -7,9 +7,11 @@ from django.shortcuts import render
 from django.utils.html import escape
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_viewer_by_slug
+from workspace.files.services.storage_analysis import CATEGORY_META, analyze_storage
 from workspace.users.services.settings import get_module_settings
 
 from ..models import (
@@ -551,6 +553,67 @@ def properties(request, uuid):
             "share_links": share_links,
             "can_tag": can_tag,
             "file_tags": file_tags,
+        },
+    )
+
+
+@login_required
+def storage(request, uuid=None):
+    """Storage analysis partial for a folder, or the personal root."""
+    folder = None
+    if uuid is not None:
+        folder = File.objects.filter(
+            uuid=uuid, deleted_at__isnull=True, node_type=File.NodeType.FOLDER
+        ).first()
+        if folder is None or FileService.get_permission(request.user, folder) is None:
+            raise Http404
+    category = request.GET.get("category") or None
+    if category is not None and category not in CATEGORY_META:
+        raise Http404
+
+    analysis = analyze_storage(request.user, folder, category=category)
+    chart = donut_chart(
+        [
+            {"label": c["label"], "value": c["size"], "css_class": c["css_class"]}
+            for c in analysis["categories"]
+        ]
+    )
+    if folder is None:
+        title = "All files"
+        parent_url = None
+    elif folder.group_id and folder.parent_id is None:
+        title = folder.name
+        parent_url = None
+    else:
+        title = folder.name
+        parent_url = (
+            f"/files/storage/{folder.parent_id}"
+            if folder.parent_id
+            else "/files/storage"
+        )
+    base_url = (
+        f"/files/storage/{folder.uuid}" if folder is not None else "/files/storage"
+    )
+    active_category = next(
+        (c for c in analysis["categories"] if c["key"] == category), None
+    )
+    quota = analysis["quota"]
+    quota_percent = (
+        min(100, round(100 * analysis["total_size"] / quota, 1)) if quota else None
+    )
+    return render(
+        request,
+        "files/ui/partials/storage_analysis.html",
+        {
+            "analysis": analysis,
+            "chart": chart,
+            "title": title,
+            "folder": folder,
+            "parent_url": parent_url,
+            "base_url": base_url,
+            "active_category": active_category,
+            "quota_percent": quota_percent,
+            "can_empty_trash": folder is None,
         },
     )
 

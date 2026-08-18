@@ -38,6 +38,7 @@ from .viewsets.events import EventsMixin
 from .viewsets.extract import ExtractMixin
 from .viewsets.favorites import FavoritesMixin
 from .viewsets.share import ShareMixin
+from .viewsets.storage import StorageMixin
 from .viewsets.sync import SyncMixin
 from .viewsets.trash import TrashMixin
 
@@ -239,6 +240,7 @@ class FileViewSet(
     FavoritesMixin,
     SyncMixin,
     ShareMixin,
+    StorageMixin,
     CommentsMixin,
     ActionsMixin,
     EventsMixin,

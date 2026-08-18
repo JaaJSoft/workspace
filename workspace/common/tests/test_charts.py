@@ -97,3 +97,36 @@ class ColumnChartTests(SimpleTestCase):
     def test_bar_tooltip_names_its_category_and_series(self):
         chart = column_chart(["Mar 03"], _series(name="Completed", values=(7,)))
         self.assertEqual(chart["bars"][0]["tooltip"], "Mar 03: 7 completed")
+
+
+class DonutChartTests(SimpleTestCase):
+    def test_arcs_cover_the_ring_in_order(self):
+        from workspace.common.charts import donut_chart
+
+        chart = donut_chart(
+            [
+                {"label": "A", "value": 3, "css_class": "text-primary"},
+                {"label": "B", "value": 1, "css_class": "text-secondary"},
+            ]
+        )
+        self.assertEqual([a["label"] for a in chart["arcs"]], ["A", "B"])
+        circumference = float(chart["arcs"][0]["dasharray"].split()[1])
+        lengths = [float(a["dasharray"].split()[0]) for a in chart["arcs"]]
+        # Each slice is its share of the ring minus the inter-slice gap.
+        self.assertAlmostEqual(lengths[0], circumference * 0.75 - 1.5, places=1)
+        self.assertAlmostEqual(lengths[1], circumference * 0.25 - 1.5, places=1)
+        # The second slice starts where the first one ends.
+        self.assertAlmostEqual(
+            -float(chart["arcs"][1]["dashoffset"]),
+            circumference * 0.75 + 0.75,
+            places=1,
+        )
+
+    def test_single_slice_has_no_gap_and_zero_total_draws_nothing(self):
+        from workspace.common.charts import donut_chart
+
+        one = donut_chart([{"label": "A", "value": 5, "css_class": "x"}])
+        length, circumference = one["arcs"][0]["dasharray"].split()
+        self.assertEqual(length, circumference)
+        empty = donut_chart([{"label": "A", "value": 0, "css_class": "x"}])
+        self.assertEqual(empty["arcs"][0]["dasharray"].split()[0], "0.00")

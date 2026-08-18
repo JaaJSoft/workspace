@@ -1,0 +1,25 @@
+{% comment %}
+Donut Chart
+===========
+Renders the geometry produced by workspace.common.charts.donut_chart as an
+inline SVG ring. The legend is the caller's business - the ring alone says
+nothing about identity, so always pair it with a labelled list.
+
+Parameters:
+-----------
+- chart: the dict returned by donut_chart()
+- aria_label: accessible description of what the chart shows
+- class: optional extra classes on the <svg> (sizing, e.g. "w-40 h-40")
+
+Slices are drawn as dashes on one circle, so their colour is the stroke:
+`currentColor` picks up the daisyUI text token in `css_class`, which is
+what makes the ring follow the theme.
+{% endcomment %}
+<svg viewBox="0 0 {{ chart.size }} {{ chart.size }}" class="{{ class|default:'w-40 h-40' }}" role="img" aria-label="{{ aria_label }}">
+  <circle cx="{{ chart.center }}" cy="{{ chart.center }}" r="{{ chart.radius }}" fill="none" stroke="currentColor" stroke-width="{{ chart.stroke }}" class="text-base-300" />
+  {% for arc in chart.arcs %}
+    <circle cx="{{ chart.center }}" cy="{{ chart.center }}" r="{{ chart.radius }}" fill="none" stroke="currentColor" stroke-width="{{ chart.stroke }}" class="{{ arc.css_class }}" stroke-dasharray="{{ arc.dasharray }}" stroke-dashoffset="{{ arc.dashoffset }}" transform="rotate(-90 {{ chart.center }} {{ chart.center }})">
+      <title>{{ arc.label }}</title>
+    </circle>
+  {% endfor %}
+</svg>

@@ -15,3 +15,17 @@ class PropertiesAction(BaseAction):
         if file_obj.deleted_at is not None:
             return False
         return permission is not None
+
+
+@ActionRegistry.register
+class AnalyzeStorageAction(BaseAction):
+    id = "analyze_storage"
+    label = "Analyze storage"
+    icon = "chart-pie"
+    category = ActionCategory.INFO
+    node_types = ("folder",)
+
+    def is_available(self, user, file_obj, *, permission):
+        if file_obj.deleted_at is not None:
+            return False
+        return permission is not None

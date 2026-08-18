@@ -174,6 +174,11 @@ window.contextMenu = function contextMenu() {
             detail: { uuid: nd.uuid, nodeType: nd.nodeType }
           }));
           break;
+        case 'analyze_storage':
+          window.dispatchEvent(new CustomEvent('open-storage-analysis', {
+            detail: { uuid: nd.uuid, name: nd.name }
+          }));
+          break;
         default:
           // All other actions dispatch file-action event
           window.dispatchEvent(new CustomEvent('file-action', {

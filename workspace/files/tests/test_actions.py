@@ -68,6 +68,7 @@ class ActionRegistryTests(TestCase):
             "paste_into",
             "extract",
             "properties",
+            "analyze_storage",
             "delete",
             "restore",
             "purge",

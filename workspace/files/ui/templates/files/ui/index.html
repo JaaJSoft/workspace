@@ -111,9 +111,10 @@
       </div>
     </div>
 
-    <!-- Help Button -->
+    <!-- Storage & Help -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="primary" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'All files' } }))" tooltip="Storage" %}
         {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="primary" onclick="document.getElementById('help-dialog').showModal()" tooltip="Help" %}
       </ul>
     </div>
@@ -260,6 +261,7 @@
 {% include 'files/ui/partials/file_viewer_modal.html' %}
 {% include "ui/partials/context_menu_panel.html" with items="files/ui/partials/context_menu.html" x_data="contextMenu()" open="isOpen" close="close()" x="position.x" y="position.y" width="w-64" %}
 {% include 'files/ui/partials/share_modal.html' %}
+{% include 'files/ui/partials/storage_dialog.html' %}
 
 <!-- Mobile preferences dialog -->
 <dialog id="files-prefs-dialog" class="modal" x-data="filePreferences()">
@@ -305,6 +307,7 @@
 <script src="{% static 'files/ui/js/pinned.js' %}"></script>
 <script src="{% static 'files/ui/js/context_menu.js' %}"></script>
 <script src="{% static 'files/ui/js/share_modal.js' %}"></script>
+<script src="{% static 'files/ui/js/storage.js' %}"></script>
 <script src="{% static 'ui/js/comments.js' %}"></script>
 
 {% endblock %}

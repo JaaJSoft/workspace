@@ -16,6 +16,15 @@ class FileLocked(APIException):
     default_code = "locked"
 
 
+def ensure_replaceable(user, target):
+    """Raise unless *user* may overwrite *target*'s content right now."""
+    permission = FileService.get_permission(user, target)
+    if permission is None or permission < FilePermission.WRITE:
+        raise PermissionDenied("You cannot replace the existing file.")
+    if target.is_locked() and target.locked_by_id != user.pk:
+        raise FileLocked()
+
+
 def _require_annotation(obj, name):
     """Fetch an annotation from *obj* or raise a loud error.
 
@@ -66,11 +75,12 @@ class FileSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
         help_text=(
-            "What to do on creation when a file with the same name already "
-            "exists in the folder: 'error' rejects the request (default), "
-            "'rename' stores the upload under a free 'name (Copy).ext' variant, "
-            "'replace' writes the content into the existing file and answers "
-            "200 with it."
+            "What to do when a file with the same name already exists in the "
+            "target folder, on creation or on a move (a request that changes "
+            "'parent'): 'error' rejects the request (default), 'rename' stores "
+            "the file under a free 'name (Copy).ext' variant, 'replace' writes "
+            "the content into the existing file and answers 200 with it - on a "
+            "move the moved file then goes to the trash."
         ),
     )
 
@@ -205,9 +215,12 @@ class FileSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        # Creation-only knob, never a model attribute: pop it before the
-        # ModelSerializer machinery sees it.
+        # A request knob, never a model attribute: pop it before the
+        # ModelSerializer machinery sees it. Only creation and moves honour
+        # it; a plain rename keeps rejecting collisions.
         on_conflict = attrs.pop("on_conflict", "error")
+        if self.instance is not None and "parent" not in attrs:
+            on_conflict = "error"
         if self.instance is not None:
             errors = {}
             initial_data = self.initial_data or {}
@@ -260,16 +273,26 @@ class FileSerializer(serializers.ModelSerializer):
                     owner, parent, name, exclude_pk=instance.pk if instance else None
                 )
                 if conflict is not None:
-                    if instance is None and on_conflict == "rename":
+                    if on_conflict == "rename":
+                        # A moved file is renamed before it leaves, so the
+                        # new name has to be free in its current folder too.
+                        avoiding = (instance.parent,) if instance else ()
                         attrs["name"] = FileService.available_file_name(
-                            owner, parent, name
+                            owner, parent, name, avoiding=avoiding
                         )
-                    elif instance is None and on_conflict == "replace":
-                        if attrs.get("content") is None:
+                    elif on_conflict == "replace":
+                        if instance is None and attrs.get("content") is None:
                             raise serializers.ValidationError(
                                 {
                                     "content": "Content is required to replace "
                                     "the existing file."
+                                }
+                            )
+                        if instance is not None and not instance.content:
+                            raise serializers.ValidationError(
+                                {
+                                    "content": "This file has no content to "
+                                    "replace the existing one with."
                                 }
                             )
                         self._replace_target = conflict
@@ -328,11 +351,7 @@ class FileSerializer(serializers.ModelSerializer):
         Sets ``replaced_existing`` so the view can answer 200 rather than 201.
         """
         user = self.context["request"].user
-        permission = FileService.get_permission(user, target)
-        if permission is None or permission < FilePermission.WRITE:
-            raise PermissionDenied("You cannot replace the existing file.")
-        if target.is_locked() and target.locked_by_id != user.pk:
-            raise FileLocked()
+        ensure_replaceable(user, target)
 
         instance = FileService.annotate_for_serializer(
             File.objects.filter(pk=target.pk), user
@@ -344,6 +363,24 @@ class FileSerializer(serializers.ModelSerializer):
             mime_type=validated_data.get("mime_type"),
             acting_user=user,
         )
+        self.replaced_existing = True
+        return instance
+
+    def _replace_on_move(self, moved, target):
+        """A move onto a same-name file: that file takes the moved one's content.
+
+        The moved row then goes to the trash rather than being deleted or
+        squeezed into the target's storage slot: trashed blobs stay where
+        they are, so it remains restorable in its original folder.
+        """
+        user = self.context["request"].user
+        ensure_replaceable(user, target)
+
+        instance = FileService.annotate_for_serializer(
+            File.objects.filter(pk=target.pk), user
+        ).first()
+        FileService.replace_content_from(instance, moved, acting_user=user)
+        FileService.soft_delete(moved, acting_user=user)
         self.replaced_existing = True
         return instance
 
@@ -367,6 +404,9 @@ class FileSerializer(serializers.ModelSerializer):
         # does both, and noops when the parent is unchanged.
         if "parent" in validated_data:
             new_parent = validated_data.pop("parent")
+            replace_target = getattr(self, "_replace_target", None)
+            if replace_target is not None:
+                return self._replace_on_move(instance, replace_target)
             FileService.move(instance, new_parent, acting_user=acting_user)
 
         instance = super().update(instance, validated_data)

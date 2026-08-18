@@ -40,9 +40,15 @@ def check_name_available(owner, parent, name, node_type, *, exclude_pk=None):
         raise ValueError("A file with the same name already exists in this folder.")
 
 
-def available_file_name(owner, parent, name):
-    """*name*, or the first free ``name (Copy N).ext`` variant in that folder."""
+def available_file_name(owner, parent, name, *, avoiding=()):
+    """*name*, or the first free ``name (Copy N).ext`` variant in that folder.
+
+    *avoiding* lists further folders whose names must not be reused either -
+    a file renamed before it moves must fit both its old and its new folder.
+    """
     taken = set(sibling_files(owner, parent).values_list("name", flat=True))
+    for other in avoiding:
+        taken.update(sibling_files(owner, other).values_list("name", flat=True))
     return unique_copy_name(name, File.NodeType.FILE, taken)
 
 

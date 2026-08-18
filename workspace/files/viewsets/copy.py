@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
-from workspace.files.serializers import FileSerializer
+from workspace.files.serializers import FileSerializer, ensure_replaceable
 from workspace.files.services import FilePermission, FileService
 
 
@@ -30,10 +30,28 @@ class CopyMixin:
                         "nullable": True,
                         "description": "Target parent folder UUID (null for root)",
                     },
+                    "on_conflict": {
+                        "type": "string",
+                        "enum": ["rename", "replace", "error"],
+                        "default": "rename",
+                        "description": (
+                            "What to do when the target folder already holds "
+                            "a file with the same name: 'rename' stores the "
+                            "copy as 'name (Copy).ext' (default, and always the "
+                            "case for folders and for a copy into the file's own "
+                            "folder), 'replace' writes the content into the "
+                            "existing file and answers 200 with it, 'error' "
+                            "rejects the request."
+                        ),
+                    },
                 },
             },
         },
         responses={
+            200: OpenApiResponse(
+                response=FileSerializer,
+                description="on_conflict='replace' matched an existing file: its content was replaced and it is returned instead.",
+            ),
             201: OpenApiResponse(
                 response=FileSerializer,
                 description="Copied file or folder.",
@@ -85,6 +103,42 @@ class CopyMixin:
                     {"detail": "Cannot copy folder into itself or its descendants."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+        on_conflict = request.data.get("on_conflict", "rename")
+        if on_conflict not in ("rename", "replace", "error"):
+            return Response(
+                {"on_conflict": "Must be one of: rename, replace, error."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if on_conflict != "rename" and file_obj.node_type == File.NodeType.FILE:
+            existing = FileService.find_name_conflict(
+                request.user, parent, file_obj.name, exclude_pk=file_obj.pk
+            )
+            if existing is not None and on_conflict == "error":
+                return Response(
+                    {
+                        "name": [
+                            "A file with the same name already exists in this folder."
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if existing is not None:
+                if not file_obj.content:
+                    return Response(
+                        {
+                            "detail": "This file has no content to replace the existing one with."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                ensure_replaceable(request.user, existing)
+                annotated = self.get_queryset().filter(pk=existing.pk).first()
+                FileService.replace_content_from(
+                    annotated, file_obj, acting_user=request.user
+                )
+                self._announce_replaced(annotated)
+                serializer = self.get_serializer(annotated)
+                return Response(serializer.data, status=status.HTTP_200_OK)
 
         # Perform the copy
         copied = FileService.copy(

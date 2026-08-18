@@ -1,19 +1,22 @@
 # Dockerfile
 # Stage 1: CSS builder (Tailwind + DaisyUI + Typography)
-# Runs npm + tailwindcss to produce workspace/common/static/css/app.css.
-# Always rebuilds in CI so a stale committed CSS file can never ship to prod.
+# Runs the frontend build project's CSS step to produce
+# workspace/common/static/css/app.css. Always rebuilds in CI so a stale
+# committed CSS file can never ship to prod. The JS bundles from the same
+# project are committed as-is; only the purged stylesheet depends on the
+# templates.
 FROM node:26-bookworm-slim AS css-builder
 
 WORKDIR /build
 
 # Install npm deps first (cache layer that survives template edits)
-COPY scripts/tailwind/package.json scripts/tailwind/package-lock.json ./scripts/tailwind/
-RUN cd scripts/tailwind && npm ci --omit=optional
+COPY scripts/frontend/package.json scripts/frontend/package-lock.json ./scripts/frontend/
+RUN cd scripts/frontend && npm ci --omit=optional --ignore-scripts
 
 # Then copy the inputs Tailwind scans (entry CSS, config, templates, JS)
-COPY scripts/tailwind/input.css scripts/tailwind/tailwind.config.js ./scripts/tailwind/
+COPY scripts/frontend/input.css scripts/frontend/tailwind.config.js ./scripts/frontend/
 COPY workspace/ ./workspace/
-RUN cd scripts/tailwind && npm run build:css
+RUN cd scripts/frontend && npm run build:css
 
 # Stage 2: Python builder
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder

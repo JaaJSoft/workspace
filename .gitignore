@@ -134,23 +134,11 @@ test_db.sqlite3*
 /scripts/package-lock.json
 .superpowers/
 
-# Tailwind build (scripts/tailwind/ holds package.json + tailwind.config.js;
-# the built CSS at workspace/common/static/css/app.css is committed so
-# a fresh clone has styles immediately - no `npm install` required for
-# devs who only touch Python)
-/scripts/tailwind/node_modules/
-
-# Milkdown editor build (scripts/editor/ holds package.json + milkdown-editor.js;
-# the built ESM bundle at workspace/files/ui/static/files/ui/js/vendor/milkdown/ is
-# committed so a fresh clone has the editor immediately - no `npm install` required
-# for devs who only touch Python)
-/scripts/editor/node_modules/
-
-# Alpine.js build (scripts/alpine/ holds package.json + alpine-bundle.js;
-# the built IIFE bundle at workspace/common/static/ui/js/vendor/alpine/ is
-# committed so a fresh clone runs Alpine immediately - no `npm install` required
-# for devs who only touch Python)
-/scripts/alpine/node_modules/
+# Frontend build (scripts/frontend/ holds the manifest and the entry files;
+# the built artifacts - app.css, the Alpine bundle, the Milkdown bundle and
+# theme - are committed so a fresh clone works immediately, no `npm install`
+# required for devs who only touch Python)
+/scripts/frontend/node_modules/
 
 # Screenshot capture asset cache (scripts/screenshots.py downloads the CDN
 # scripts here so captures are deterministic and work offline)

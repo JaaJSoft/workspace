@@ -1,0 +1,24 @@
+/* Stylesheet entry for the vendored markdown editor. Bundled by esbuild into
+   files/ui/static/files/ui/css/vendor/milkdown/theme.css, resolving every
+   import from node_modules so the versions follow the pinned @milkdown/crepe
+   and its ProseMirror/KaTeX dependencies. Only the KaTeX woff2 fonts are
+   emitted (every supported browser reads woff2), the woff/ttf fallbacks are
+   dropped. */
+
+/* Editor primitives crepe builds on. */
+@import "prosemirror-view/style/prosemirror.css";
+@import "prosemirror-gapcursor/style/gapcursor.css";
+@import "prosemirror-virtual-cursor/style/virtual-cursor.css";
+@import "prosemirror-tables/style/tables.css";
+@import "katex/dist/katex.min.css";
+
+/* Crepe feature styles - only the theme-agnostic "common" layer; the DaisyUI
+   bridge lives in files/ui/css/milkdown-overrides.css. */
+@import "@milkdown/crepe/theme/common/reset.css";
+@import "@milkdown/crepe/theme/common/block-edit.css";
+@import "@milkdown/crepe/theme/common/code-mirror.css";
+@import "@milkdown/crepe/theme/common/image-block.css";
+@import "@milkdown/crepe/theme/common/link-tooltip.css";
+@import "@milkdown/crepe/theme/common/list-item.css";
+@import "@milkdown/crepe/theme/common/placeholder.css";
+@import "@milkdown/crepe/theme/common/toolbar.css";

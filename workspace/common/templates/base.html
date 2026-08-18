@@ -11,13 +11,13 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
 
-  <!-- Tailwind + DaisyUI + Typography - locally built (see package.json,
-       tailwind.config.js, frontend/input.css). Replaces the Tailwind Play
+  <!-- Tailwind + DaisyUI + Typography - locally built (see scripts/frontend/:
+       tailwind.config.js, input.css). Replaces the Tailwind Play
        CDN which shipped a 140KB JIT compiler that re-ran on every page. -->
   <link href="{% static 'css/app.css' %}" rel="stylesheet" type="text/css"/>
   <link href="{% static 'ui/css/mentions.css' %}" rel="stylesheet" type="text/css"/>
 
-  <!-- Alpine.js + plugins - locally built (see scripts/alpine/). Alpine holds
+  <!-- Alpine.js + plugins - locally built (see scripts/frontend/). Alpine holds
        personal entries in its reactive state, so it must not come from
        an origin we don't control.
        Keep this tag deferred: it must run after the non-deferred end-of-body

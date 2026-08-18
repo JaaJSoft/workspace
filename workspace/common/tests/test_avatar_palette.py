@@ -59,7 +59,7 @@ def _rendered_rgb(class_name: str) -> tuple[int, int, int]:
     if rule is None:
         raise AssertionError(
             f"{class_name} is absent from {CSS_BUNDLE.name}; either the class was "
-            "renamed or Tailwind purged it (rebuild: cd scripts/tailwind && npm run build:css)"
+            "renamed or Tailwind purged it (rebuild: cd scripts/frontend && npm run build:css)"
         )
     colour = re.search(
         r"background-color:\s*rgb\(\s*(\d+)\s+(\d+)\s+(\d+)", rule.group(1)

@@ -14,7 +14,7 @@
  * bottom-right|bottom-left|top-center (default bottom-right; there is one
  * container, so the latest toast's position wins).
  *
- * The slide keyframes live in scripts/tailwind/input.css; <inline-alert>
+ * The slide keyframes live in scripts/frontend/input.css; <inline-alert>
  * plays the exit one declared in data-animation-out when it is removed.
  *
  * Django messages: toasts.html embeds them as JSON in #django-messages-data;

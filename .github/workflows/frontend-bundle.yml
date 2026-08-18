@@ -1,0 +1,80 @@
+# Rebuilds the vendored frontend assets (Alpine bundle, Milkdown editor bundle
+# and theme CSS, Tailwind stylesheet) when the build project changes -
+# typically a Dependabot bump of scripts/frontend/package.json. Without this,
+# a dependency PR would update the manifest but leave the committed artifacts
+# stale, so CI would silently keep testing the old code.
+#
+# Feature PRs that only touch templates are not rebuilt here on purpose: a
+# purged Tailwind rebuild would land a large app.css diff on an unrelated
+# branch. Those keep running `npm run build:css` by hand.
+#
+# Token note: pushes made with the default GITHUB_TOKEN do NOT retrigger CI
+# workflows, so after an auto-rebuild commit the PR's checks must be re-run
+# manually. Create a repo secret FRONTEND_REBUILD_TOKEN (a PAT with contents
+# write) to make the rebuilt commit retrigger the full test suite
+# automatically.
+name: Frontend bundle
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/frontend/**'
+      - 'workspace/common/static/ui/js/vendor/alpine/**'
+      - 'workspace/files/ui/static/files/ui/js/vendor/milkdown/**'
+      - 'workspace/files/ui/static/files/ui/css/vendor/milkdown/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    # Same-repo branches only: fork heads cannot be pushed to, and Dependabot
+    # branches live in this repo.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      # persist-credentials: false keeps the token out of .git/config, so the
+      # npm/esbuild/tailwind steps below never see credentials on disk.
+      # Combined with --ignore-scripts, a malicious install script in a bumped
+      # dependency can neither run nor find a token to exfiltrate.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Rebuild vendored assets
+        run: |
+          cd scripts/frontend
+          npm ci --ignore-scripts
+          npm run build
+
+      - name: Verify bundle integrity
+        run: node --test "workspace/common/tests/js/alpine_bundle.test.js" "workspace/common/tests/js/css_bundle.test.js" "workspace/files/tests/js/milkdown_bundle.test.js"
+
+      # The token is injected only here, after all dependency code has run.
+      - name: Commit and push if changed
+        env:
+          PUSH_TOKEN: ${{ secrets.FRONTEND_REBUILD_TOKEN || github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git add -A workspace/common/static/ui/js/vendor/alpine \
+            workspace/common/static/css/app.css \
+            workspace/files/ui/static/files/ui/js/vendor/milkdown \
+            workspace/files/ui/static/files/ui/css/vendor/milkdown
+          if git diff --cached --quiet; then
+            echo "Vendored assets already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build(frontend): rebuild vendored assets"
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"

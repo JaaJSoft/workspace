@@ -22,7 +22,7 @@ updates:
       interval: "daily"
 
   - package-ecosystem: "npm"
-    directory: "/scripts/editor" # Vendored Milkdown editor bundle
+    directory: "/scripts/frontend" # Vendored Alpine, Milkdown and Tailwind builds
     schedule:
       interval: "weekly"
     versioning-strategy: increase
@@ -32,16 +32,15 @@ updates:
       milkdown:
         patterns:
           - "@milkdown/*"
-
-  - package-ecosystem: "npm"
-    directory: "/scripts/alpine" # Vendored Alpine.js bundle
-    schedule:
-      interval: "weekly"
-    versioning-strategy: increase
-    groups:
       # Alpine core and its official plugins share a single version number and
       # must move together.
       alpine:
         patterns:
           - "alpinejs"
           - "@alpinejs/*"
+      # Tailwind and the plugins compiled into app.css move as a unit.
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
+          - "daisyui"

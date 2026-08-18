@@ -16,14 +16,11 @@ uv run coverage run manage.py test workspace.<module>     # with coverage
 uv run celery -A workspace worker -l info
 uv run celery -A workspace beat -l info
 
-# Vendored editor bundle (rebuild after bumping @milkdown/* in scripts/editor/package.json;
-# keep the @milkdown/crepe CSS pins in files/ui/index.html and notes/ui/notes.html in lockstep)
-cd scripts/editor && npm run build:editor
-
-# Vendored Alpine bundle (rebuild after bumping any dependency in
-# scripts/alpine/package.json, esbuild included; base.html loads the built
-# artifact, never a CDN)
-cd scripts/alpine && npm run build:alpine
+# Vendored frontend assets - Alpine bundle, Milkdown editor bundle + theme CSS,
+# Tailwind stylesheet (rebuild after bumping any dependency in
+# scripts/frontend/package.json; templates load the built artifacts, never a CDN)
+cd scripts/frontend && npm run build
+cd scripts/frontend && npm run build:css      # Tailwind only, after template/JS class changes
 ```
 
 ## Module Map

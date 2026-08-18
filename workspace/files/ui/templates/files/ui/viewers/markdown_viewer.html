@@ -234,7 +234,7 @@ window.markdownViewerCrepe = function() {
       _lock = window.fileLock(this.fileUuid, getCSRFToken);
 
       try {
-        // Vendored bundle (scripts/editor/): imported exactly once, here.
+        // Vendored bundle (scripts/frontend/): imported exactly once, here.
         // wikilink gets slashFactory/SlashProvider injected from the same
         // module instance so Milkdown/ProseMirror internals stay shared.
         const mod = await import('{% static "files/ui/js/vendor/milkdown/milkdown-editor.js" %}');

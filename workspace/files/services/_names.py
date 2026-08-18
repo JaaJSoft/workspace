@@ -1,6 +1,30 @@
 """Internal naming and validation helpers for the file service."""
 
 from ..models import File
+from ._storage_ops import unique_copy_name
+
+
+def sibling_files(owner, parent):
+    """Live files that share a namespace with a file *owner* puts in *parent*.
+
+    Names are unique per folder within a group, and per owner otherwise.
+    """
+    qs = File.objects.filter(
+        parent=parent,
+        node_type=File.NodeType.FILE,
+        deleted_at__isnull=True,
+    )
+    if parent and parent.group_id:
+        return qs.filter(group=parent.group)
+    return qs.filter(owner=owner)
+
+
+def find_name_conflict(owner, parent, name, *, exclude_pk=None):
+    """Return the live file already using *name* in that folder, or None."""
+    qs = sibling_files(owner, parent).filter(name__iexact=name)
+    if exclude_pk is not None:
+        qs = qs.exclude(pk=exclude_pk)
+    return qs.first()
 
 
 def check_name_available(owner, parent, name, node_type, *, exclude_pk=None):
@@ -12,22 +36,14 @@ def check_name_available(owner, parent, name, node_type, *, exclude_pk=None):
     """
     if node_type != File.NodeType.FILE:
         return
-
-    qs = File.objects.filter(
-        parent=parent,
-        node_type=File.NodeType.FILE,
-        name__iexact=name,
-        deleted_at__isnull=True,
-    )
-    if parent and parent.group_id:
-        qs = qs.filter(group=parent.group)
-    else:
-        qs = qs.filter(owner=owner)
-
-    if exclude_pk is not None:
-        qs = qs.exclude(pk=exclude_pk)
-    if qs.exists():
+    if find_name_conflict(owner, parent, name, exclude_pk=exclude_pk) is not None:
         raise ValueError("A file with the same name already exists in this folder.")
+
+
+def available_file_name(owner, parent, name):
+    """*name*, or the first free ``name (Copy N).ext`` variant in that folder."""
+    taken = set(sibling_files(owner, parent).values_list("name", flat=True))
+    return unique_copy_name(name, File.NodeType.FILE, taken)
 
 
 def validate_move_target(file_obj, new_parent, user=None):

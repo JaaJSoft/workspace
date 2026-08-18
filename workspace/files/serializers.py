@@ -2,11 +2,18 @@ from django.db import transaction
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
+from rest_framework.exceptions import APIException, PermissionDenied
 
 from workspace.common.services.mentions import render_comment_body
-from workspace.files.services import FileService
+from workspace.files.services import FilePermission, FileService
 
 from .models import File, FileComment
+
+
+class FileLocked(APIException):
+    status_code = 423
+    default_detail = "File is locked by another user."
+    default_code = "locked"
 
 
 def _require_annotation(obj, name):
@@ -53,6 +60,19 @@ class FileSerializer(serializers.ModelSerializer):
     has_children = serializers.SerializerMethodField(
         help_text="True when a folder contains child folders (folders only)."
     )
+    on_conflict = serializers.ChoiceField(
+        choices=["error", "rename", "replace"],
+        default="error",
+        write_only=True,
+        required=False,
+        help_text=(
+            "What to do on creation when a file with the same name already "
+            "exists in the folder: 'error' rejects the request (default), "
+            "'rename' stores the upload under a free 'name (Copy).ext' variant, "
+            "'replace' writes the content into the existing file and answers "
+            "200 with it."
+        ),
+    )
 
     class Meta:
         model = File
@@ -84,6 +104,7 @@ class FileSerializer(serializers.ModelSerializer):
             "is_shared",
             "tags",
             "has_children",
+            "on_conflict",
         ]
         read_only_fields = [
             "owner",
@@ -184,6 +205,9 @@ class FileSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        # Creation-only knob, never a model attribute: pop it before the
+        # ModelSerializer machinery sees it.
+        on_conflict = attrs.pop("on_conflict", "error")
         if self.instance is not None:
             errors = {}
             initial_data = self.initial_data or {}
@@ -232,16 +256,23 @@ class FileSerializer(serializers.ModelSerializer):
             )
             owner = instance.owner if instance else self.context["request"].user
             if name:
-                try:
-                    FileService.check_name_available(
-                        owner,
-                        parent,
-                        name,
-                        node_type,
-                        exclude_pk=instance.pk if instance else None,
-                    )
-                except ValueError as e:
-                    raise serializers.ValidationError({"name": e.args[0]}) from e
+                conflict = FileService.find_name_conflict(
+                    owner, parent, name, exclude_pk=instance.pk if instance else None
+                )
+                if conflict is not None:
+                    if instance is None and on_conflict == "rename":
+                        attrs["name"] = FileService.available_file_name(
+                            owner, parent, name
+                        )
+                    elif instance is None and on_conflict == "replace":
+                        self._replace_target = conflict
+                    else:
+                        raise serializers.ValidationError(
+                            {
+                                "name": "A file with the same name already "
+                                "exists in this folder."
+                            }
+                        )
 
         return super().validate(attrs)
 
@@ -249,6 +280,10 @@ class FileSerializer(serializers.ModelSerializer):
         owner = self.context["request"].user
         node_type = validated_data.get("node_type")
         group = validated_data.get("group")
+
+        replace_target = getattr(self, "_replace_target", None)
+        if replace_target is not None:
+            return self._replace_existing(replace_target, validated_data)
 
         if node_type == File.NodeType.FOLDER:
             instance = FileService.create_folder(
@@ -278,6 +313,36 @@ class FileSerializer(serializers.ModelSerializer):
         instance.is_pinned = False
         instance.is_shared = False
         instance.has_children = False
+        return instance
+
+    def _replace_existing(self, target, validated_data):
+        """Write the upload into the same-name file instead of a new row.
+
+        Sets ``replaced_existing`` so the view can answer 200 rather than 201.
+        """
+        user = self.context["request"].user
+        content = validated_data.get("content")
+        if content is None:
+            raise serializers.ValidationError(
+                {"content": "Content is required to replace the existing file."}
+            )
+        permission = FileService.get_permission(user, target)
+        if permission is None or permission < FilePermission.WRITE:
+            raise PermissionDenied("You cannot replace the existing file.")
+        if target.is_locked() and target.locked_by_id != user.pk:
+            raise FileLocked()
+
+        instance = FileService.annotate_for_serializer(
+            File.objects.filter(pk=target.pk), user
+        ).first()
+        FileService.update_content(
+            instance,
+            content,
+            name=instance.name,
+            mime_type=validated_data.get("mime_type"),
+            acting_user=user,
+        )
+        self.replaced_existing = True
         return instance
 
     @transaction.atomic

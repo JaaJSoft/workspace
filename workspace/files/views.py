@@ -179,6 +179,13 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, "RECENT_FILES_MAX_LIMIT", 200)
             ),
         ],
         responses={
+            200: OpenApiResponse(
+                response=FileSerializer,
+                description=(
+                    "on_conflict='replace' matched an existing file: its "
+                    "content was replaced and it is returned instead."
+                ),
+            ),
             201: OpenApiResponse(
                 response=FileSerializer,
                 description=(
@@ -507,6 +514,16 @@ class FileViewSet(
         self.perform_create(serializer)
         data = serializer.data
         instance = serializer.instance
+        replaced = getattr(serializer, "replaced_existing", False)
+        if replaced:
+            from workspace.files.sse_provider import push_file_event
+
+            push_file_event(
+                instance,
+                "file_updated",
+                request.user.username,
+                exclude_user_id=request.user.pk,
+            )
         if instance.node_type == File.NodeType.FILE:
             data["duplicates"] = [
                 {
@@ -521,7 +538,7 @@ class FileViewSet(
             ]
         return Response(
             data,
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_200_OK if replaced else status.HTTP_201_CREATED,
             headers=self.get_success_headers(data),
         )
 

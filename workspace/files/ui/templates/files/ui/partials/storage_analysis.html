@@ -118,13 +118,13 @@ Context (built by files.ui.views.storage):
         <i data-lucide="folder-tree" class="w-4 h-4 text-accent"></i>
         By folder
       </h5>
-      <ul class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+      <ul class="flex flex-col gap-1 max-h-72 overflow-y-auto pr-1">
         {% for entry in analysis.subfolders %}
         <li>
           {% if entry.uuid %}
-          <a href="/files/storage/{{ entry.uuid }}" x-target="storage-analysis" class="block rounded-lg px-1 -mx-1 hover:bg-base-300 transition-colors" title="Analyze {{ entry.name }}">
+          <a href="/files/storage/{{ entry.uuid }}" x-target="storage-analysis" class="block rounded-lg px-2 py-1.5 hover:bg-base-300 transition-colors" title="Analyze {{ entry.name }}">
           {% else %}
-          <div class="px-1 -mx-1">
+          <div class="px-2 py-1.5">
           {% endif %}
             <div class="flex items-baseline gap-2 text-sm">
               <i data-lucide="{{ entry.icon }}" class="w-3.5 h-3.5 self-center shrink-0 {{ entry.color }}"></i>
@@ -132,7 +132,7 @@ Context (built by files.ui.views.storage):
               <span class="ml-auto tabular-nums text-base-content/70 whitespace-nowrap">{{ entry.size|filesizeformat }}</span>
               <span class="w-14 text-right text-xs text-base-content/50 whitespace-nowrap">{{ entry.count }} file{{ entry.count|pluralize }}</span>
             </div>
-            <div class="h-1.5 mt-1 rounded-full bg-base-300 overflow-hidden">
+            <div class="h-1.5 mt-1.5 rounded-full bg-base-300 overflow-hidden">
               <div class="h-full rounded-full bg-primary/70" style="width: {{ entry.percent|unlocalize }}%"></div>
             </div>
           {% if entry.uuid %}

@@ -265,6 +265,13 @@ class FileSerializer(serializers.ModelSerializer):
                             owner, parent, name
                         )
                     elif instance is None and on_conflict == "replace":
+                        if attrs.get("content") is None:
+                            raise serializers.ValidationError(
+                                {
+                                    "content": "Content is required to replace "
+                                    "the existing file."
+                                }
+                            )
                         self._replace_target = conflict
                     else:
                         raise serializers.ValidationError(
@@ -321,11 +328,6 @@ class FileSerializer(serializers.ModelSerializer):
         Sets ``replaced_existing`` so the view can answer 200 rather than 201.
         """
         user = self.context["request"].user
-        content = validated_data.get("content")
-        if content is None:
-            raise serializers.ValidationError(
-                {"content": "Content is required to replace the existing file."}
-            )
         permission = FileService.get_permission(user, target)
         if permission is None or permission < FilePermission.WRITE:
             raise PermissionDenied("You cannot replace the existing file.")
@@ -337,7 +339,7 @@ class FileSerializer(serializers.ModelSerializer):
         ).first()
         FileService.update_content(
             instance,
-            content,
+            validated_data["content"],
             name=instance.name,
             mime_type=validated_data.get("mime_type"),
             acting_user=user,

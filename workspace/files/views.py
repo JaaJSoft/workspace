@@ -524,6 +524,17 @@ class FileViewSet(
                 request.user.username,
                 exclude_user_id=request.user.pk,
             )
+            if instance.owner_id != request.user.pk:
+                notify(
+                    recipient=instance.owner,
+                    origin="files",
+                    title=f'{request.user.username} edited "{instance.name}"',
+                    url=f"/files/{instance.parent_id}"
+                    if instance.parent_id
+                    else "/files",
+                    actor=request.user,
+                    source=instance,
+                )
         if instance.node_type == File.NodeType.FILE:
             data["duplicates"] = [
                 {

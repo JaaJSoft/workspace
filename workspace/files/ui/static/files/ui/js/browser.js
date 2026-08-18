@@ -394,11 +394,14 @@ window.fileBrowser = function fileBrowser() {
 
         try {
           const { status, body } = await this._uploadFile(file, onConflict);
-          if (status === 200) outcome.replaced++;
-          else if (body.name && body.name !== file.name) outcome.renamed++;
-          else outcome.created++;
-          if (body.duplicates && body.duplicates.length) {
-            duplicated.push(body);
+          let bucket = 'created';
+          if (status === 200) bucket = 'replaced';
+          else if (body.name && body.name !== file.name) bucket = 'renamed';
+          outcome[bucket]++;
+          // Only a row this request created can be discarded again; a
+          // replaced file is the user's existing file with new content.
+          if (bucket !== 'replaced' && body.duplicates && body.duplicates.length) {
+            duplicated.push({ body, bucket });
           }
         } catch (err) {
           if (err.nameCollision) {
@@ -425,8 +428,8 @@ window.fileBrowser = function fileBrowser() {
 
       // The server keeps every upload; the user decides about the ones that
       // duplicate a file they already have.
-      for (const created of duplicated) {
-        if (await this._resolveDuplicateUpload(created)) outcome.created--;
+      for (const { body, bucket } of duplicated) {
+        if (await this._resolveDuplicateUpload(body)) outcome[bucket]--;
       }
 
       // Refresh first, then show the summary toast after a short delay

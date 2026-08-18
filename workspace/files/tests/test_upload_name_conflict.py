@@ -13,6 +13,7 @@ from rest_framework.test import APITestCase
 from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.services._storage_ops import unique_copy_name
+from workspace.notifications.models import Notification
 
 User = get_user_model()
 
@@ -160,6 +161,39 @@ class UploadOnConflictApiTests(APITestCase):
         self.existing.refresh_from_db()
         with self.existing.content.open("rb") as fh:
             self.assertEqual(fh.read(), b"v1")
+
+    def test_replacing_a_teammates_file_notifies_its_owner(self):
+        group = Group.objects.create(name="Marketing")
+        self.user.groups.add(group)
+        self.other.groups.add(group)
+        root = FileService.create_folder(self.other, "Marketing Files", group=group)
+        theirs = FileService.create_file(
+            self.other,
+            "plan.txt",
+            parent=root,
+            content=ContentFile(b"v1", name="plan.txt"),
+        )
+        response = self.client.post(
+            "/api/v1/files",
+            {
+                "name": "plan.txt",
+                "node_type": "file",
+                "parent": str(root.uuid),
+                "content": SimpleUploadedFile("plan.txt", b"v2"),
+                "on_conflict": "replace",
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.data["uuid"], str(theirs.uuid))
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.other, title__contains="plan.txt"
+            ).exists()
+        )
+        # Replacing your own file is not news to you.
+        self._post(on_conflict="replace")
+        self.assertFalse(Notification.objects.filter(recipient=self.user).exists())
 
     def test_replace_without_content_is_rejected(self):
         response = self.client.post(

@@ -73,6 +73,15 @@ Context:
           <span class="text-base-content/40">({{ total_size|filesizeformat }})</span>
         {% endif %}
       </span>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square ml-auto hover:text-primary"
+        title="Analyze storage"
+        aria-label="Analyze storage"
+        onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}' } }))"
+      >
+        <i data-lucide="chart-pie" class="w-3.5 h-3.5"></i>
+      </button>
     </div>
     {% endif %}
     <div class="flex items-center gap-2 text-base-content/60">
@@ -107,19 +116,6 @@ Context:
       {% include "files/ui/partials/tag_manager.html" %}
     </div>
   </div>
-  {% endif %}
-
-  {% if file.node_type == 'folder' %}
-  <!-- Storage -->
-  <div class="divider my-0 text-xs text-base-content/40">Storage</div>
-  <button
-    type="button"
-    class="btn btn-ghost btn-xs gap-1"
-    onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}' } }))"
-  >
-    <i data-lucide="chart-pie" class="w-3 h-3"></i>
-    Analyze storage
-  </button>
   {% endif %}
 
   {% if file.node_type == 'folder' and is_owner %}

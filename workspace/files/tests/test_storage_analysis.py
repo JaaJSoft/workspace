@@ -131,7 +131,8 @@ class AnalyzeStorageServiceTests(_TreeMixin, TestCase):
         self.assertEqual(
             [e["name"] for e in entries], ["photos", "docs", "Files in this folder"]
         )
-        self.assertEqual(entries[0]["percent"], 100.0)
+        self.assertEqual(entries[0]["percent"], round(100 * 1600 / 1750, 1))
+        self.assertAlmostEqual(sum(e["percent"] for e in entries), 100.0, delta=0.2)
 
     def test_folder_scope_only_counts_its_subtree(self):
         result = analyze_storage(self.alice, self.photos)

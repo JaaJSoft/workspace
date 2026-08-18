@@ -133,7 +133,8 @@ def subfolder_breakdown(scope):
     """Direct child folders with their recursive size, largest first.
 
     Files sitting directly in the folder are reported as one extra entry
-    (``uuid`` None) so the rows add up to the folder total.
+    (``uuid`` None) so the rows add up to the folder total; ``percent`` is
+    each row's share of that total.
     """
     if scope.folder is None:
         children = File.objects.filter(
@@ -193,9 +194,9 @@ def subfolder_breakdown(scope):
             }
         )
     entries.sort(key=lambda e: e["size"], reverse=True)
-    top = entries[0]["size"] if entries else 0
+    total = sum(e["size"] for e in entries)
     for entry in entries:
-        entry["percent"] = round(100 * entry["size"] / top, 1) if top else 0.0
+        entry["percent"] = round(100 * entry["size"] / total, 1) if total else 0.0
     return entries
 
 

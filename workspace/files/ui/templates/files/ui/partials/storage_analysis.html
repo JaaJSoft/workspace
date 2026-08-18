@@ -87,7 +87,7 @@ Context (built by files.ui.views.storage):
         <i data-lucide="chart-pie" class="w-4 h-4 text-accent"></i>
         By category
       </h5>
-      <div class="flex flex-col sm:flex-row items-center gap-4">
+      <div class="flex flex-col items-center gap-4 min-w-0">
         <div class="relative shrink-0">
           {% include "ui/partials/donut_chart.html" with chart=chart aria_label="Share of the used space per file category" class="w-36 h-36" %}
           <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -95,7 +95,7 @@ Context (built by files.ui.views.storage):
             <span class="text-[10px] text-base-content/50 uppercase tracking-wider">used</span>
           </div>
         </div>
-        <ul class="flex-1 w-full space-y-1 text-sm">
+        <ul class="flex-1 w-full min-w-0 space-y-1 text-sm">
           {% for c in analysis.categories %}
           <li>
             <a href="{{ base_url }}?category={{ c.key }}" x-target="storage-analysis"
@@ -103,8 +103,8 @@ Context (built by files.ui.views.storage):
                title="Show the largest {{ c.label|lower }}">
               <svg viewBox="0 0 8 8" class="w-2.5 h-2.5 shrink-0 {{ c.css_class }}" aria-hidden="true"><circle cx="4" cy="4" r="4" fill="currentColor" /></svg>
               <span class="truncate">{{ c.label }}</span>
-              <span class="ml-auto tabular-nums text-base-content/70">{{ c.size|filesizeformat }}</span>
-              <span class="w-11 text-right tabular-nums text-xs text-base-content/50">{{ c.percent }}%</span>
+              <span class="ml-auto shrink-0 tabular-nums text-base-content/70 whitespace-nowrap">{{ c.size|filesizeformat }}</span>
+              <span class="w-11 shrink-0 text-right tabular-nums text-xs text-base-content/50">{{ c.percent }}%</span>
             </a>
           </li>
           {% endfor %}
@@ -130,6 +130,7 @@ Context (built by files.ui.views.storage):
               <i data-lucide="{{ entry.icon }}" class="w-3.5 h-3.5 self-center shrink-0 {{ entry.color }}"></i>
               <span class="truncate">{{ entry.name }}</span>
               <span class="ml-auto tabular-nums text-base-content/70 whitespace-nowrap">{{ entry.size|filesizeformat }}</span>
+              <span class="w-11 text-right tabular-nums text-xs text-base-content/50">{{ entry.percent }}%</span>
               <span class="w-14 text-right text-xs text-base-content/50 whitespace-nowrap">{{ entry.count }} file{{ entry.count|pluralize }}</span>
             </div>
             <div class="h-1.5 mt-1.5 rounded-full bg-base-300 overflow-hidden">

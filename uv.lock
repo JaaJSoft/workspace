@@ -637,16 +637,16 @@ wheels = [
 
 [[package]]
 name = "django"
-version = "6.0.7"
+version = "6.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asgiref" },
     { name = "sqlparse" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/89/55/664f24ff81c9ea19cb7dfc851afeae1f3c2390c7aee01d4ded68b5c1580d/django-6.0.7.tar.gz", hash = "sha256:2998503fc083124fb58037084bfa00de323c7c743f05f1b4284e77bff0ab8890", size = 10921299, upload-time = "2026-07-07T13:51:26.485Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e2/42/6cb20996733984c1f6661daeda3877990836c76c633c6c8879d39f7120eb/django-6.1.tar.gz", hash = "sha256:86a2aacd59b817e4d6ac2ebfe22356c58f66f7b24e503f71b7c2fead677ee48b", size = 11223034, upload-time = "2026-08-05T19:21:53.789Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ba/ec/1ce5334b6a2c52ce619c23a0be8d366a57a0e080ebb2d88266e5c849157c/django-6.0.7-py3-none-any.whl", hash = "sha256:a037427c2288443a8c02a1b02295a31c239663aa682bc50b1976afb7cf6a769e", size = 8373344, upload-time = "2026-07-07T13:51:20.007Z" },
+    { url = "https://files.pythonhosted.org/packages/91/9c/ce847620134cfab903e75690c498af73b46abbede2912ea89bd76d5c1e76/django-6.1-py3-none-any.whl", hash = "sha256:6c132cd980c9392b06807d4ca52d72530d631dc65a85d9dacede00a780cefbbe", size = 8417399, upload-time = "2026-08-05T19:21:47.285Z" },
 ]
 
 [[package]]
@@ -707,15 +707,15 @@ brotli = [
 
 [[package]]
 name = "django-prometheus"
-version = "2.5.0"
+version = "2.6.0.dev4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "prometheus-client" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7b/c7/dc39c4c19f7b35e827a486d08376de1fad31c50decb26c56e32668314f13/django_prometheus-2.5.0.tar.gz", hash = "sha256:4837b3c3734d8350880839ab8235aafd250b668c348e159d4aecc3cbefeee53e", size = 26465, upload-time = "2026-05-26T19:04:00.77Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/6f/842acaf2d5bbfc800fb0ae2ff33f50860bf89c5e764fbbd50e6af627badd/django_prometheus-2.6.0.dev4.tar.gz", hash = "sha256:20ea6e8c7682e487f86ee5b685af5ab1ed588b37e910b1d4159fcd74a2542eb8", size = 26650, upload-time = "2026-07-30T16:36:28.285Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5d/5d/6ec3083ba69545696c962ae505a0e52e280e7592d4c278c2f3803cabb688/django_prometheus-2.5.0-py2.py3-none-any.whl", hash = "sha256:f15efb526cd53f9cf12da72dc55506322f5566b017a819ff27be1da302303134", size = 31801, upload-time = "2026-05-26T19:03:59.505Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/e2/0c2f59a8747053413269895b476645f2ebcfa190a1c0165985c750e4c51a/django_prometheus-2.6.0.dev4-py2.py3-none-any.whl", hash = "sha256:bd27a5c390c4bc2a26ecd66bcd941106b45a8aac9e4bbbd74605ab2974de871b", size = 31935, upload-time = "2026-07-30T16:36:26.918Z" },
 ]
 
 [[package]]
@@ -2527,7 +2527,7 @@ requires-dist = [
     { name = "celery", specifier = ">=5.6.2" },
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "dj-database-url", specifier = ">=2.3.0" },
-    { name = "django", specifier = ">=6.0.7,<7.0" },
+    { name = "django", specifier = ">=6.1,<7.0" },
     { name = "django-daisy", specifier = "==2.0.7" },
     { name = "django-filter", specifier = "==26.1" },
     { name = "django-http-compression", extras = ["brotli"], specifier = ">=1.4.0" },

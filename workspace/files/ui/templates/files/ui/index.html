@@ -70,7 +70,6 @@
         {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?shared=1" icon="share-2" label="Shared with me" color="secondary" active=is_shared_view active_binding="activeView === 'shared'" onclick="setActiveView('shared')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="accent" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'All files' } }))" tooltip="Storage" %}
       </ul>
 
       <!-- Pinned Folders -->
@@ -112,9 +111,10 @@
       </div>
     </div>
 
-    <!-- Help Button -->
+    <!-- Storage & Help -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="primary" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'All files' } }))" tooltip="Storage" %}
         {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="primary" onclick="document.getElementById('help-dialog').showModal()" tooltip="Help" %}
       </ul>
     </div>

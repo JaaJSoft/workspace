@@ -70,6 +70,7 @@
         {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?shared=1" icon="share-2" label="Shared with me" color="secondary" active=is_shared_view active_binding="activeView === 'shared'" onclick="setActiveView('shared')" x_target="folder-browser" x_target_history="push" %}
+        {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="accent" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'All files' } }))" tooltip="Storage" %}
       </ul>
 
       <!-- Pinned Folders -->
@@ -260,6 +261,7 @@
 {% include 'files/ui/partials/file_viewer_modal.html' %}
 {% include "ui/partials/context_menu_panel.html" with items="files/ui/partials/context_menu.html" x_data="contextMenu()" open="isOpen" close="close()" x="position.x" y="position.y" width="w-64" %}
 {% include 'files/ui/partials/share_modal.html' %}
+{% include 'files/ui/partials/storage_dialog.html' %}
 
 <!-- Mobile preferences dialog -->
 <dialog id="files-prefs-dialog" class="modal" x-data="filePreferences()">
@@ -305,6 +307,7 @@
 <script src="{% static 'files/ui/js/pinned.js' %}"></script>
 <script src="{% static 'files/ui/js/context_menu.js' %}"></script>
 <script src="{% static 'files/ui/js/share_modal.js' %}"></script>
+<script src="{% static 'files/ui/js/storage.js' %}"></script>
 <script src="{% static 'ui/js/comments.js' %}"></script>
 
 {% endblock %}

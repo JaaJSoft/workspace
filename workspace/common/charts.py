@@ -79,3 +79,49 @@ def _axis_top(raw_max, gridlines):
 
 def _n(value):
     return f"{value:.2f}"
+
+
+_DONUT_SIZE = 100
+_DONUT_RADIUS = 40
+_DONUT_STROKE = 12
+# Gap between adjacent slices, in viewBox units along the ring.
+_DONUT_GAP = 1.5
+
+
+def donut_chart(slices):
+    """Pre-compute the ring geometry of a donut chart.
+
+    *slices* is a list of ``{"label", "value", "css_class"}``. Each slice comes
+    back with a ``dasharray``/``dashoffset`` pair for a ``<circle>`` whose
+    ``stroke`` is the slice colour; the template draws every slice on the same
+    circle and lets the dash pattern carve out its arc. Values are formatted
+    strings for the reason given in :func:`column_chart`.
+    """
+    circumference = 2 * math.pi * _DONUT_RADIUS
+    total = sum(s["value"] for s in slices)
+    arcs = []
+    offset = 0.0
+    for s in slices:
+        share = s["value"] / total if total else 0
+        length = circumference * share
+        gap = min(_DONUT_GAP, length / 2) if len(slices) > 1 else 0
+        arcs.append(
+            {
+                "label": s["label"],
+                "css_class": s["css_class"],
+                "dasharray": f"{_n(max(length - gap, 0))} {_n(circumference)}",
+                # SVG dashes start at 3 o'clock and run clockwise; the
+                # negative offset shifts each slice past the previous ones
+                # and the -90° rotation in the template moves the start
+                # to 12 o'clock.
+                "dashoffset": _n(-(offset + gap / 2)),
+            }
+        )
+        offset += length
+    return {
+        "size": _DONUT_SIZE,
+        "center": _n(_DONUT_SIZE / 2),
+        "radius": _n(_DONUT_RADIUS),
+        "stroke": _n(_DONUT_STROKE),
+        "arcs": arcs,
+    }

@@ -109,6 +109,19 @@ Context:
   </div>
   {% endif %}
 
+  {% if file.node_type == 'folder' %}
+  <!-- Storage -->
+  <div class="divider my-0 text-xs text-base-content/40">Storage</div>
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs gap-1"
+    onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}' } }))"
+  >
+    <i data-lucide="chart-pie" class="w-3 h-3"></i>
+    Analyze storage
+  </button>
+  {% endif %}
+
   {% if file.node_type == 'folder' and is_owner %}
   <!-- Customize Icon -->
   <div class="divider my-0 text-xs text-base-content/40">Customize Icon</div>

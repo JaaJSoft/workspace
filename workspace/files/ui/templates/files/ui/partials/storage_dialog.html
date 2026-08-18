@@ -1,0 +1,31 @@
+{% comment %}
+Storage analysis dialog. Opened by the `open-storage-analysis` window event
+(detail: { uuid, name } - uuid null for the personal root); the body is the
+storage_analysis partial, loaded and re-loaded through alpine-ajax.
+{% endcomment %}
+<div x-data="storageAnalysis()">
+  <dialog x-ref="dialog" class="modal" @close="onClose()">
+    <div class="modal-box max-w-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]"
+         @ajax:before="loading = true"
+         @ajax:merged="loading = false; syncScope()"
+         @ajax:error="loading = false; AppAlert.error('Failed to analyze storage')">
+      <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300">
+        <div class="bg-primary/10 rounded-lg p-2">
+          <i data-lucide="chart-pie" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div class="min-w-0">
+          <h3 class="font-bold text-lg">Storage</h3>
+          <p class="text-sm text-base-content/60 truncate" x-text="scopeName"></p>
+        </div>
+        <span x-show="loading" x-cloak class="loading loading-spinner loading-sm ml-2"></span>
+        <button type="button" class="btn btn-ghost btn-sm btn-square ml-auto" @click="close()" aria-label="Close">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="overflow-y-auto p-5 flex-1">
+        <div id="storage-analysis"></div>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+</div>

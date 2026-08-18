@@ -3,6 +3,7 @@ window.storageAnalysis = function storageAnalysis() {
     scopeName: '',
     currentUrl: null,
     loading: false,
+    hasContent: false,
     busy: false,
 
     init() {
@@ -29,6 +30,7 @@ window.storageAnalysis = function storageAnalysis() {
 
     open(uuid, name) {
       this.scopeName = name;
+      this.hasContent = false;
       this.currentUrl = uuid ? `/files/storage/${uuid}` : '/files/storage';
       const dlg = this.$refs.dialog;
       if (dlg && !dlg.open) dlg.showModal();
@@ -85,6 +87,7 @@ window.storageAnalysis = function storageAnalysis() {
     onClose() {
       const target = document.getElementById('storage-analysis');
       if (target) target.innerHTML = '';
+      this.hasContent = false;
       this.clearUrl();
     },
 

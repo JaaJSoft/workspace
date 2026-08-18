@@ -44,3 +44,11 @@ updates:
           - "tailwindcss"
           - "@tailwindcss/*"
           - "daisyui"
+    ignore:
+      # Tailwind 4 drops the tailwindcss CLI and the JS config, DaisyUI 5
+      # requires Tailwind 4: that migration is a project of its own, not a
+      # dependency bump.
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "daisyui"
+        update-types: ["version-update:semver-major"]

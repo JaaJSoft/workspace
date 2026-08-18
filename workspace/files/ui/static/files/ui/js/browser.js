@@ -491,7 +491,7 @@ window.fileBrowser = function fileBrowser() {
         cancelLabel: 'Keep both',
         okClass: 'btn-warning',
         icon: 'copy',
-        iconClass: 'bg-warning/10 text-warning',
+        iconClass: 'bg-primary/10 text-primary',
       });
       if (!discard) return false;
       try {

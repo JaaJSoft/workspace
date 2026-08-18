@@ -233,6 +233,11 @@ class FileService:
             group=group,
         )
         if content is not None:
+            # The blob path derives from content.name, not from the row's
+            # name. Storage allows overwrite, so an upload stored under a
+            # different row name would otherwise land on - and clobber - a
+            # sibling's blob.
+            content.name = name
             file_obj.content = content
         file_obj.save()
         if size:
@@ -588,6 +593,18 @@ class FileService:
             node_type,
             exclude_pk=exclude_pk,
         )
+
+    @staticmethod
+    def find_name_conflict(owner, parent, name, *, exclude_pk=None):
+        """Return the live file already using *name* in that folder, or None."""
+        return _name_helpers.find_name_conflict(
+            owner, parent, name, exclude_pk=exclude_pk
+        )
+
+    @staticmethod
+    def available_file_name(owner, parent, name):
+        """*name*, or the first free ``name (Copy N).ext`` variant in that folder."""
+        return _name_helpers.available_file_name(owner, parent, name)
 
     @staticmethod
     def validate_move_target(file_obj, new_parent, user=None):

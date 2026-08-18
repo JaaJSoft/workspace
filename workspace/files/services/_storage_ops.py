@@ -263,8 +263,12 @@ def move_file_storage(file_obj, new_parent, *, new_owner=None):
 
 
 def unique_copy_name(base_name, node_type, existing_names):
-    """Pick a unique name given a set of *existing_names*."""
-    if base_name not in existing_names:
+    """Pick a unique name given a set of *existing_names*.
+
+    Case-insensitive, like the name uniqueness rule it exists to satisfy.
+    """
+    taken = {name.casefold() for name in existing_names}
+    if base_name.casefold() not in taken:
         return base_name
 
     counter = 1
@@ -276,7 +280,7 @@ def unique_copy_name(base_name, node_type, existing_names):
         else:
             candidate = f"{base_name} ({suffix})"
 
-        if candidate not in existing_names:
+        if candidate.casefold() not in taken:
             return candidate
         counter += 1
 

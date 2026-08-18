@@ -22,6 +22,18 @@
   </div>
   <hr class="border-base-300">
   <div>
+    <label class="text-sm text-base-content/60 block mb-1">When a file with the same name exists</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="prefs.nameCollision"
+      @change="update('nameCollision', $event.target.value)">
+      <option value="ask">Ask me</option>
+      <option value="keep_both">Keep both</option>
+      <option value="replace">Replace the existing file</option>
+      <option value="skip">Skip the upload</option>
+    </select>
+  </div>
+  <hr class="border-base-300">
+  <div>
     <label class="text-sm text-base-content/60 block mb-1">Breadcrumb collapse after</label>
     <div class="flex items-center gap-2">
       <input type="range" min="2" max="8" step="1"

@@ -376,22 +376,41 @@ window.fileBrowser = function fileBrowser() {
         this._updateUploadToast();
       }, 1000);
 
-      let uploaded = 0;
+      const outcome = { created: 0, replaced: 0, renamed: 0, skipped: 0 };
       const duplicated = [];
+      const decisions = await this._decideNameCollisions(files);
 
       for (const file of files) {
         this.uploadCurrentFile = file.name;
         this.uploadBytePercent = 0;
         this._updateUploadToast();
 
+        const onConflict = decisions.get(file);
+        if (onConflict === 'skip') {
+          outcome.skipped++;
+          this.uploadCompleted++;
+          continue;
+        }
+
         try {
-          const created = await this._uploadFile(file);
-          uploaded++;
-          if (created.duplicates && created.duplicates.length) {
-            duplicated.push(created);
+          const { status, body } = await this._uploadFile(file, onConflict);
+          let bucket = 'created';
+          if (status === 200) bucket = 'replaced';
+          else if (body.name && body.name !== file.name) bucket = 'renamed';
+          outcome[bucket]++;
+          // Only a row this request created can be discarded again; a
+          // replaced file is the user's existing file with new content.
+          if (bucket !== 'replaced' && body.duplicates && body.duplicates.length) {
+            duplicated.push({ body, bucket });
           }
         } catch (err) {
-          window.AppAlert.error(`Failed to upload ${file.name}${err.message ? ': ' + err.message : ''}`);
+          if (err.nameCollision) {
+            // The pre-check missed it (or the folder changed under us): the
+            // server keeps the existing file, which is what "skip" means.
+            outcome.skipped++;
+          } else {
+            window.AppAlert.error(`Failed to upload ${file.name}${err.message ? ': ' + err.message : ''}`);
+          }
         }
 
         this.uploadCompleted++;
@@ -409,18 +428,20 @@ window.fileBrowser = function fileBrowser() {
 
       // The server keeps every upload; the user decides about the ones that
       // duplicate a file they already have.
-      for (const created of duplicated) {
-        if (await this._resolveDuplicateUpload(created)) uploaded--;
+      for (const { body, bucket } of duplicated) {
+        if (await this._resolveDuplicateUpload(body)) outcome[bucket]--;
       }
 
-      // Refresh first, then show success toast after a short delay
+      // Refresh first, then show the summary toast after a short delay
       // so the Alpine AJAX refresh doesn't interfere with the toast
-      if (uploaded > 0) {
+      const touched = outcome.created + outcome.replaced + outcome.renamed;
+      if (touched > 0 || duplicated.length) {
         this.refreshFolderBrowser();
-        const msg = `Uploaded ${uploaded} file${uploaded > 1 ? 's' : ''}`;
-        setTimeout(() => window.AppAlert.success(msg), 600);
-      } else if (duplicated.length) {
-        this.refreshFolderBrowser();
+      }
+      const summary = this._uploadSummary(outcome);
+      if (summary) {
+        const show = touched > 0 ? window.AppAlert.success : window.AppAlert.info;
+        setTimeout(() => show(summary), 600);
       }
 
       // Reset state
@@ -435,7 +456,69 @@ window.fileBrowser = function fileBrowser() {
       if (input) input.value = '';
     },
 
-    _uploadFile(file) {
+    // Map each file to what the server should do if its name is taken
+    // ('replace' | 'rename' | 'skip' | undefined = let the server reject).
+    // Only the "ask" and "skip" preferences need to know about a collision
+    // before the bytes go up; the other two are decided server-side.
+    async _decideNameCollisions(files) {
+      const mode = window.getFilePrefs().nameCollision || 'ask';
+      const decisions = new Map();
+      if (mode === 'replace' || mode === 'keep_both') {
+        for (const file of files) decisions.set(file, mode === 'replace' ? 'replace' : 'rename');
+        return decisions;
+      }
+      const taken = await this._siblingFileNames();
+      for (const file of files) {
+        if (!taken.has(file.name.toLowerCase())) continue;
+        if (mode === 'skip') {
+          decisions.set(file, 'skip');
+          continue;
+        }
+        const choice = await AppDialog.select({
+          title: 'File already exists',
+          message: `A file named "${file.name}" already exists in this folder. What should happen to the new one?`,
+          options: [
+            { value: 'rename', label: 'Keep both (rename the new file)' },
+            { value: 'replace', label: 'Replace the existing file' },
+            { value: 'skip', label: 'Skip this file' },
+          ],
+          value: 'rename',
+          okLabel: 'Continue',
+          icon: 'files',
+          iconClass: 'bg-primary/10 text-primary',
+        });
+        // Closing the dialog is the safe choice: the existing file stays.
+        decisions.set(file, choice || 'skip');
+      }
+      return decisions;
+    },
+
+    async _siblingFileNames() {
+      const params = new URLSearchParams({ node_type: 'file' });
+      if (this.currentFolder) params.set('parent', this.currentFolder);
+      try {
+        const response = await fetch(`/api/v1/files?${params}`, { headers: { Accept: 'application/json' } });
+        if (!response.ok) return new Set();
+        const rows = await response.json();
+        return new Set((Array.isArray(rows) ? rows : rows.results || []).map(f => f.name.toLowerCase()));
+      } catch (_) {
+        return new Set();
+      }
+    },
+
+    _uploadSummary({ created, replaced, renamed, skipped }) {
+      const parts = [];
+      const plural = (n) => (n > 1 ? 's' : '');
+      if (created) parts.push(`Uploaded ${created} file${plural(created)}`);
+      if (replaced) parts.push(`replaced ${replaced}`);
+      if (renamed) parts.push(`kept ${renamed} under a new name`);
+      if (skipped) parts.push(`skipped ${skipped}`);
+      if (!parts.length) return '';
+      const text = parts.join(', ');
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    },
+
+    _uploadFile(file, onConflict) {
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         const formData = new FormData();
@@ -444,6 +527,9 @@ window.fileBrowser = function fileBrowser() {
         formData.append('content', file);
         if (this.currentFolder) {
           formData.append('parent', this.currentFolder);
+        }
+        if (onConflict) {
+          formData.append('on_conflict', onConflict);
         }
 
         xhr.upload.onprogress = (e) => {
@@ -454,19 +540,16 @@ window.fileBrowser = function fileBrowser() {
         };
 
         xhr.onload = () => {
+          let body = {};
+          try {
+            body = JSON.parse(xhr.responseText);
+          } catch (_) {}
           if (xhr.status >= 200 && xhr.status < 300) {
-            let created = {};
-            try {
-              created = JSON.parse(xhr.responseText);
-            } catch (_) {}
-            resolve(created);
+            resolve({ status: xhr.status, body });
           } else {
-            let detail = 'Unknown error';
-            try {
-              const data = JSON.parse(xhr.responseText);
-              detail = data.detail || detail;
-            } catch (_) {}
-            reject(new Error(detail));
+            const error = new Error(this._firstErrorMessage(body));
+            error.nameCollision = xhr.status === 400 && Array.isArray(body.name);
+            reject(error);
           }
         };
 
@@ -476,6 +559,18 @@ window.fileBrowser = function fileBrowser() {
         xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
         xhr.send(formData);
       });
+    },
+
+    // DRF answers either {detail: "..."} or {field: ["..."]}; surface the
+    // first human-readable message from whichever shape came back.
+    _firstErrorMessage(body) {
+      if (!body || typeof body !== 'object') return 'Unknown error';
+      if (typeof body.detail === 'string') return body.detail;
+      for (const value of Object.values(body)) {
+        if (typeof value === 'string') return value;
+        if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+      }
+      return 'Unknown error';
     },
 
     // Ask whether to keep an upload whose content already exists in the

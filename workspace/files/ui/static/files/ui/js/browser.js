@@ -1232,7 +1232,13 @@ window.fileBrowser = function fileBrowser() {
           continue;
         }
         const payload = { parent: targetFolderId };
-        if (onConflict) payload.on_conflict = onConflict;
+        if (onConflict) {
+          payload.on_conflict = onConflict;
+        } else if (collidable.includes(item)) {
+          // No collision at pre-check time. If one appears before the request
+          // lands, surface it rather than let the copy default silently rename.
+          payload.on_conflict = 'error';
+        }
         try {
           const response = await fetch(
             isCopy ? `/api/v1/files/${item.uuid}/copy` : `/api/v1/files/${item.uuid}`,

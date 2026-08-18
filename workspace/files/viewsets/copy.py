@@ -132,7 +132,12 @@ class CopyMixin:
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 ensure_replaceable(request.user, existing)
-                annotated = self.get_queryset().filter(pk=existing.pk).first()
+                # get_queryset() only spans the user's own personal files;
+                # a teammate's file in a group folder needs the access-aware
+                # annotation instead.
+                annotated = FileService.annotate_for_serializer(
+                    File.objects.filter(pk=existing.pk), request.user
+                ).first()
                 FileService.replace_content_from(
                     annotated, file_obj, acting_user=request.user
                 )

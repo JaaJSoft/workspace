@@ -1,10 +1,35 @@
 name: Docker
 
+# Only paths that end up in the image (see .dockerignore) or drive the build
+# trigger a run. GitHub doesn't apply path filters to tag pushes, so releases
+# always build.
 on:
   push:
     branches: [main]
     tags: ['v*']
+    paths:
+      - '**'
+      - '!**.md'
+      - 'CHANGELOG.md'
+      - '!docs/**'
+      - '!LICENSE'
+      - '!.github/**'
+      - '.github/workflows/docker.yml'
+      - '!.claude/**'
+      - '!.gitignore'
+      - '!workspace/**/tests/**'
   pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+      - 'CHANGELOG.md'
+      - '!docs/**'
+      - '!LICENSE'
+      - '!.github/**'
+      - '.github/workflows/docker.yml'
+      - '!.claude/**'
+      - '!.gitignore'
+      - '!workspace/**/tests/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

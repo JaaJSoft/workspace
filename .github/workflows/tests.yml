@@ -1,10 +1,42 @@
 name: Run Tests
 
+# Docs-only changes (markdown, docs/, issue and PR templates, licence...)
+# never reach a test, so they don't trigger the suite. CHANGELOG.md is the
+# exception: core.changelog parses it at runtime and its tests read the real
+# file. Anything shipped only in the Docker image (Dockerfile, .dockerignore)
+# is covered by the Docker workflow instead. Order matters: a later positive
+# pattern re-includes a path a previous negative one excluded.
 on:
   push:
     branches: [ '*' ]
+    paths:
+      - '**'
+      - '!**.md'
+      - 'CHANGELOG.md'
+      - '!docs/**'
+      - '!LICENSE'
+      - '!.github/**'
+      - '.github/workflows/tests.yml'
+      - '!.claude/**'
+      - '!Dockerfile'
+      - '!.dockerignore'
+      - '!.gitignore'
+      - '!scripts/frontend/**'
   pull_request:
     branches: [ main ]
+    paths:
+      - '**'
+      - '!**.md'
+      - 'CHANGELOG.md'
+      - '!docs/**'
+      - '!LICENSE'
+      - '!.github/**'
+      - '.github/workflows/tests.yml'
+      - '!.claude/**'
+      - '!Dockerfile'
+      - '!.dockerignore'
+      - '!.gitignore'
+      - '!scripts/frontend/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,9 +46,53 @@ permissions:
   contents: read
 
 jobs:
+  # Detects which parts of the tree changed so jobs that only exercise a
+  # slice of it (ruff, JS unit tests, the davfs2 mount) can be skipped.
+  # The Django and E2E matrices always run: they load templates and read
+  # static assets, so nearly any non-doc change can affect them.
+  changes:
+    runs-on: ubuntu-latest
+    name: Detect changed areas
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      js: ${{ steps.filter.outputs.js }}
+      webdav: ${{ steps.filter.outputs.webdav }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            python:
+              - '**.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/tests.yml'
+            js:
+              - 'workspace/**.js'
+              - '.github/workflows/tests.yml'
+            # Everything the WebDAV server and its auth path import from,
+            # plus the shared dependency manifests.
+            webdav:
+              - 'workspace/files/**'
+              - 'workspace/common/**'
+              - 'workspace/users/**'
+              - 'workspace/core/**'
+              - 'workspace/settings/**'
+              - 'workspace/*.py'
+              - 'manage.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/tests.yml'
+
   lint:
     runs-on: ubuntu-latest
     name: Lint (ruff)
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -144,6 +220,8 @@ jobs:
   js:
     runs-on: ubuntu-latest
     name: JS unit tests
+    needs: changes
+    if: needs.changes.outputs.js == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -159,6 +237,8 @@ jobs:
   webdav-mount:
     runs-on: ubuntu-latest
     name: WebDAV (davfs2 mount)
+    needs: changes
+    if: needs.changes.outputs.webdav == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

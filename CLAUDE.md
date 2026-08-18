@@ -177,6 +177,8 @@ Tests run in parallel in CI with one job per module (see `.github/workflows/test
 
 **CI coverage floors** (`.github/workflows/tests.yml`): each module pins a `min_coverage` (45-95%). Lowering a threshold is forbidden by the workflow's own comment - raise it after adding coverage, never lower it.
 
+**CI only runs what a change can affect.** Every workflow carries a `paths` filter, so docs-only commits (`*.md` except `CHANGELOG.md`, `docs/`, issue/PR templates, `.claude/`) start no run at all, and the Docker/Trivy workflows skip anything `.dockerignore` keeps out of the image (tests, docs). Inside `tests.yml` a `changes` job (`dorny/paths-filter`) further gates the narrow jobs: `lint` needs a Python/`pyproject.toml`/`uv.lock` change, `js` a `workspace/**.js` change, `webdav-mount` a change under `files`/`common`/`users`/`core`/`settings` or the dependency manifests. The Django and E2E matrices always run once the workflow triggers - they render templates and read static assets, so almost any change can reach them. When a job grows a new dependency (e.g. the mount test starts importing from `mail`), extend its filter in the `changes` job; when in doubt, err on running the job.
+
 ### JS unit tests
 
 Frontend helpers are tested with Node's built-in test runner - no npm dependencies, no package.json:

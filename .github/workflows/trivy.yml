@@ -5,12 +5,37 @@
 
 name: trivy
 
+# Path filters mirror the Docker workflow: the scan runs against a fresh
+# image build, so only files that end up in it (see .dockerignore) matter.
+# The nightly schedule is unaffected by path filters.
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - '**'
+      - '!**.md'
+      - 'CHANGELOG.md'
+      - '!docs/**'
+      - '!LICENSE'
+      - '!.github/**'
+      - '.github/workflows/trivy.yml'
+      - '!.claude/**'
+      - '!.gitignore'
+      - '!workspace/**/tests/**'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ "main" ]
+    paths:
+      - '**'
+      - '!**.md'
+      - 'CHANGELOG.md'
+      - '!docs/**'
+      - '!LICENSE'
+      - '!.github/**'
+      - '.github/workflows/trivy.yml'
+      - '!.claude/**'
+      - '!.gitignore'
+      - '!workspace/**/tests/**'
   schedule:
     - cron: '38 23 * * *'
 

@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.db import IntegrityError
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -616,6 +617,63 @@ class GroupFolderViewSetTests(APITestCase):
         resp = self.client.patch(f"/api/v1/files/{child.uuid}", {"name": "renamed.txt"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["name"], "renamed.txt")
+
+
+class GroupRootsQueryTests(APITestCase):
+    """``GET /api/v1/files?group_roots=1`` lists the root folder of each
+    group the user belongs to - and only those."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="pass")
+        self.outsider = User.objects.create_user(username="outsider", password="pass")
+        self.marketing = Group.objects.create(name="Marketing")
+        self.no_folder = Group.objects.create(name="No folder yet")
+        self.other_group = Group.objects.create(name="Other")
+        self.alice.groups.add(self.marketing, self.no_folder)
+        self.outsider.groups.add(self.other_group)
+        self.marketing_root = File.objects.create(
+            owner=self.alice,
+            name="Marketing",
+            node_type=File.NodeType.FOLDER,
+            group=self.marketing,
+        )
+        File.objects.create(
+            owner=self.alice,
+            name="Campaigns",
+            node_type=File.NodeType.FOLDER,
+            group=self.marketing,
+            parent=self.marketing_root,
+        )
+        File.objects.create(
+            owner=self.outsider,
+            name="Other",
+            node_type=File.NodeType.FOLDER,
+            group=self.other_group,
+        )
+        File.objects.create(
+            owner=self.alice, name="Personal", node_type=File.NodeType.FOLDER
+        )
+
+    def test_lists_only_root_folders_of_own_groups(self):
+        self.client.force_authenticate(user=self.alice)
+        resp = self.client.get("/api/v1/files?group_roots=1")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [f["uuid"] for f in resp.data], [str(self.marketing_root.uuid)]
+        )
+        self.assertEqual(resp.data[0]["group"], self.marketing.id)
+
+    def test_false_value_keeps_the_personal_root_listing(self):
+        self.client.force_authenticate(user=self.alice)
+        resp = self.client.get("/api/v1/files?group_roots=false")
+        self.assertEqual([f["name"] for f in resp.data], ["Personal"])
+
+    def test_deleted_root_is_omitted(self):
+        self.marketing_root.deleted_at = timezone.now()
+        self.marketing_root.save(update_fields=["deleted_at"])
+        self.client.force_authenticate(user=self.alice)
+        resp = self.client.get("/api/v1/files?group_roots=1")
+        self.assertEqual(resp.data, [])
 
 
 class UserGroupsAPITests(APITestCase):

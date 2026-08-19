@@ -44,12 +44,12 @@
 
     async fetchSpaces() {
       try {
-        const res = await fetch('/api/v1/users/groups', { credentials: 'same-origin' });
+        const res = await fetch('/api/v1/files?group_roots=1', { credentials: 'same-origin' });
         if (!res.ok) return;
-        const groups = await res.json();
-        const groupSpaces = groups
-          .filter(g => g.folder_uuid)
-          .map(g => ({ key: 'group:' + g.id, name: g.folder_name, rootUuid: g.folder_uuid, groupId: g.id }));
+        const roots = await res.json();
+        const groupSpaces = roots
+          .map(f => ({ key: 'group:' + f.group, name: f.name, rootUuid: f.uuid, groupId: f.group }))
+          .sort((a, b) => a.name.localeCompare(b.name));
         this.spaces = [this.personalSpace, ...groupSpaces];
       } catch (e) { /* ignore */ }
     },

@@ -21,6 +21,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
+from workspace.common.booleans import is_truthy
 from workspace.common.filters import CaseInsensitiveOrderingFilter
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
@@ -82,6 +83,14 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, "RECENT_FILES_MAX_LIMIT", 200)
                 name="trashed",
                 type=OpenApiTypes.BOOL,
                 description="When true, return only items in trash.",
+            ),
+            OpenApiParameter(
+                name="groups",
+                type=OpenApiTypes.BOOL,
+                description=(
+                    "When true, return the root folder of every group the "
+                    "user belongs to (groups without a folder are omitted)."
+                ),
             ),
             OpenApiParameter(
                 name="recent_limit",
@@ -342,6 +351,9 @@ class FileViewSet(
             return False
         return str(value).lower() in {"1", "true", "yes"}
 
+    def _is_groups_query(self):
+        return is_truthy(self.request.query_params.get("groups"))
+
     def _is_descendants_query(self):
         return self.request.query_params.get("descendants", "").lower() in {"1", "true"}
 
@@ -418,6 +430,15 @@ class FileViewSet(
                 )
                 .distinct()
             )
+
+        if self.action == "list" and self._is_groups_query():
+            return FileService.annotate_for_serializer(
+                FileService.user_group_files_qs(self.request.user).filter(
+                    parent__isnull=True,
+                    node_type=File.NodeType.FOLDER,
+                ),
+                self.request.user,
+            ).annotate(user_share_permission=Subquery(user_share_subquery))
 
         # Resolve parent context: detect group from parent, resolve descendants
         parent_uuid = self.request.query_params.get("parent")

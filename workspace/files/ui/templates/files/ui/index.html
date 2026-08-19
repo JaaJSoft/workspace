@@ -65,7 +65,7 @@
         </span>
       </h3>
       <ul class="space-y-0.5">
-        {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" color="primary" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
+        {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="My Files" color="primary" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
@@ -114,7 +114,7 @@
     <!-- Storage & Help -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="primary" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'All files' } }))" tooltip="Storage" %}
+        {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="primary" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'My files' } }))" tooltip="Storage" %}
         {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="primary" onclick="document.getElementById('help-dialog').showModal()" tooltip="Help" %}
       </ul>
     </div>

@@ -3,6 +3,8 @@
   x-data="{
     open: false,
     mode: 'folder',
+    spaces: [{ key: 'personal', name: 'My Files', rootUuid: null }],
+    space: { key: 'personal', name: 'My Files', rootUuid: null },
     currentFolder: null,
     items: [],
     breadcrumbs: [],
@@ -21,6 +23,8 @@
         this.options = e.detail.options || {};
         this.mode = this.options.mode || 'folder';
         this._resolve = e.detail.resolve;
+        this.spaces = [this.personalSpace];
+        this.space = this.personalSpace;
         this.currentFolder = null;
         this.items = [];
         this.breadcrumbs = [];
@@ -30,9 +34,42 @@
         this.creatingFolder = false;
         this.showNewFolder = false;
         this.fetchItems(null);
+        this.fetchSpaces();
         this.$refs.pickerDialog.showModal();
         this.open = true;
       });
+    },
+
+    get personalSpace() { return this.spaces[0]; },
+
+    async fetchSpaces() {
+      try {
+        const res = await fetch('/api/v1/files?groups=1', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const roots = await res.json();
+        const groupSpaces = roots
+          .map(f => ({ key: 'group:' + f.group, name: f.name, rootUuid: f.uuid, groupId: f.group }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        this.spaces = [this.personalSpace, ...groupSpaces];
+      } catch (e) { /* ignore */ }
+    },
+
+    selectSpace(key) {
+      const next = this.spaces.find(sp => sp.key === key);
+      if (!next || next.key === this.space.key) return;
+      this.space = next;
+      this.search = '';
+      this.showNewFolder = false;
+      this.newFolderName = '';
+      this.breadcrumbs = [];
+      this.currentFolder = null;
+      this.fetchItems(next.rootUuid);
+    },
+
+    rootFolder() {
+      return this.space.rootUuid
+        ? { uuid: this.space.rootUuid, name: this.space.name }
+        : { uuid: null, name: 'My Files' };
     },
 
     get isFileMode() { return this.mode === 'file'; },
@@ -70,7 +107,8 @@
     async searchFiles(query) {
       this.loading = true;
       try {
-        const url = '/api/v1/files?node_type=file&search=' + encodeURIComponent(query);
+        let url = '/api/v1/files?node_type=file&search=' + encodeURIComponent(query);
+        if (this.space.groupId) url += '&group=' + this.space.groupId;
         const res = await fetch(url, { credentials: 'same-origin' });
         if (res.ok) {
           const data = await res.json();
@@ -84,7 +122,7 @@
       if (this._searchTimer) clearTimeout(this._searchTimer);
       const q = this.search.trim();
       if (!q) {
-        this.fetchItems(this.currentFolder?.uuid || null);
+        this.fetchItems(this.currentFolder?.uuid || this.space.rootUuid);
         return;
       }
       this._searchTimer = setTimeout(() => this.searchFiles(q), 300);
@@ -106,7 +144,7 @@
       if (index < 0) {
         this.breadcrumbs = [];
         this.currentFolder = null;
-        this.fetchItems(null);
+        this.fetchItems(this.space.rootUuid);
       } else {
         const target = this.breadcrumbs[index];
         this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
@@ -149,7 +187,8 @@
       this.creatingFolder = true;
       try {
         const body = { name, node_type: 'folder' };
-        if (this.currentFolder) body.parent = this.currentFolder.uuid;
+        const parentUuid = this.currentFolder?.uuid || this.space.rootUuid;
+        if (parentUuid) body.parent = parentUuid;
         const res = await fetch('/api/v1/files', {
           method: 'POST',
           credentials: 'same-origin',
@@ -162,7 +201,7 @@
         if (res.ok) {
           this.newFolderName = '';
           this.showNewFolder = false;
-          await this.fetchItems(this.currentFolder?.uuid || null);
+          await this.fetchItems(this.currentFolder?.uuid || this.space.rootUuid);
         } else {
           const err = await res.json().catch(() => ({}));
           alert(err.detail || err.name?.[0] || 'Failed to create folder');
@@ -179,7 +218,7 @@
       } else {
         const result = this.currentFolder
           ? { uuid: this.currentFolder.uuid, name: this.currentFolder.name }
-          : { uuid: null, name: 'Root' };
+          : this.rootFolder();
         this._close(result);
       }
     },
@@ -198,7 +237,7 @@
     },
 
     currentLocationLabel() {
-      return this.currentFolder ? this.currentFolder.name : 'Root';
+      return this.currentFolder ? this.currentFolder.name : this.rootFolder().name;
     }
   }"
   x-ref="pickerDialog"
@@ -214,6 +253,18 @@
         <h3 class="font-bold text-lg break-words" x-text="options.title || defaultTitle"></h3>
         <p class="text-sm text-base-content/60 break-words" x-text="options.message || defaultMessage"></p>
       </div>
+    </div>
+
+    <!-- Space selector (personal / group folders) - only when the user has group folders -->
+    <div x-show="spaces.length > 1" x-cloak class="mb-3">
+      <select class="select select-bordered select-sm w-full" @change="selectSpace($event.target.value)" aria-label="Location">
+        <option value="personal" :selected="space.key === 'personal'">My Files</option>
+        <optgroup label="Groups">
+          <template x-for="sp in spaces.slice(1)" :key="sp.key">
+            <option :value="sp.key" :selected="sp.key === space.key" x-text="sp.name"></option>
+          </template>
+        </optgroup>
+      </select>
     </div>
 
     <!-- Search (file mode only) -->
@@ -241,13 +292,19 @@
 
     <!-- Breadcrumbs -->
     <div x-show="!search" class="flex items-center gap-1 text-sm mb-3 px-1 flex-wrap min-h-[28px]">
+      <span x-show="space.rootUuid" x-cloak class="flex items-center gap-1 px-2 text-base-content/60">
+        <i data-lucide="users" class="w-3 h-3"></i>
+        Groups
+        <span class="text-base-content/40 ml-1">/</span>
+      </span>
       <button
         class="btn btn-ghost btn-xs gap-1"
         :class="{ 'font-bold': !currentFolder }"
         @click="navigateToBreadcrumb(-1)"
       >
-        <i data-lucide="home" class="w-3 h-3"></i>
-        Root
+        <span x-show="space.rootUuid" x-cloak class="flex"><i data-lucide="folder" class="w-3 h-3 text-warning"></i></span>
+        <span x-show="!space.rootUuid" class="flex"><i data-lucide="hard-drive" class="w-3 h-3"></i></span>
+        <span x-text="space.name"></span>
       </button>
       <template x-for="(crumb, i) in breadcrumbs" :key="crumb.uuid">
         <div class="flex items-center gap-1">

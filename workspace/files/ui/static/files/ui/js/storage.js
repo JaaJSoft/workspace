@@ -11,7 +11,7 @@ window.storageAnalysis = function storageAnalysis() {
     init() {
       window.addEventListener('open-storage-analysis', (e) => {
         const detail = e.detail || {};
-        this.open(detail.uuid || null, detail.name || 'All files');
+        this.open(detail.uuid || null, detail.name || 'My files');
       });
       // ?storage=root|<uuid>[&storage_category=x][&storage_q=y] survives a
       // reload: reopen the dialog on the same scope the user was looking at.

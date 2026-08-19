@@ -229,6 +229,40 @@ class AnalyzeStorageServiceTests(_TreeMixin, TestCase):
             analyze_storage(self.alice, self.photos)["duplicates_truncated"]
         )
 
+    def test_query_narrows_largest_files_to_matching_paths(self):
+        # Matches the path (folder names included), case-insensitively.
+        result = analyze_storage(self.alice, query="PHOTOS/")
+        self.assertEqual(
+            [f["name"] for f in result["largest_files"]], ["c.mov", "a.jpg", "b.jpg"]
+        )
+        self.assertTrue(all(f["matches"] for f in result["largest_files"]))
+        self.assertEqual(result["query"], "PHOTOS/")
+        # Category and query compose.
+        both = analyze_storage(self.alice, category="image", query="b.jpg")
+        self.assertEqual([f["name"] for f in both["largest_files"]], ["b.jpg"])
+        # Totals, categories and sub-folders describe the whole subtree.
+        self.assertEqual(both["total_size"], 1750)
+        self.assertEqual(len(both["subfolders"]), 3)
+
+    def test_query_keeps_duplicate_groups_with_a_matching_copy_but_lists_every_copy(
+        self,
+    ):
+        _file(self.alice, "f1", self.docs, size=20, category="text", hash="h2")
+        _file(self.alice, "f2", self.docs, size=20, category="text", hash="h2")
+        groups = duplicate_groups(StorageScope(self.alice, None), query="a.jpg")
+        self.assertEqual([g["content_hash"] for g in groups], ["h1"])
+        files = {f["name"]: f["matches"] for f in groups[0]["files"]}
+        self.assertEqual(files, {"a.jpg": True, "b.jpg": False})
+        self.assertEqual(
+            duplicate_groups(StorageScope(self.alice, None), query="zzz"), []
+        )
+
+    def test_query_is_trimmed_and_capped(self):
+        result = analyze_storage(self.alice, query="   ")
+        self.assertIsNone(result["query"])
+        long = "x" * 500
+        self.assertEqual(len(analyze_storage(self.alice, query=long)["query"]), 100)
+
     def test_group_root_reports_the_group_trash(self):
         group = Group.objects.create(name="team")
         self.alice.groups.add(group)
@@ -266,6 +300,17 @@ class StorageApiTests(_TreeMixin, APITestCase):
             {f["name"] for f in resp.data["largest_files"]}, {"a.jpg", "b.jpg"}
         )
 
+    def test_query_param(self):
+        self.client.force_authenticate(self.alice)
+        resp = self.client.get("/api/v1/files/storage?q=photos")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["query"], "photos")
+        self.assertEqual(
+            {f["name"] for f in resp.data["largest_files"]}, {"a.jpg", "b.jpg", "c.mov"}
+        )
+        too_long = self.client.get("/api/v1/files/storage?q=" + "x" * 101)
+        self.assertEqual(too_long.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_unknown_category_is_a_400(self):
         self.client.force_authenticate(self.alice)
         resp = self.client.get("/api/v1/files/storage?category=nope")
@@ -302,6 +347,21 @@ class StorageUiViewTests(_TreeMixin, TestCase):
         self.assertIn(f"/files/storage/{self.photos.uuid}", html)
         self.assertIn("?category=video", html)
         self.assertIn("c.mov", html)
+
+    def test_query_highlights_matches_and_travels_with_the_links(self):
+        self.client.force_login(self.alice)
+        html = self.client.get("/files/storage?q=photos").content.decode()
+        self.assertIn("<mark", html)
+        self.assertIn('data-query="photos"', html)
+        # Drill-down and category links keep the search.
+        self.assertIn(f'href="/files/storage/{self.photos.uuid}?q=photos"', html)
+        self.assertIn("?category=video&amp;q=photos", html)
+        # The largest-files list is narrowed, the sub-folder rows are not.
+        self.assertNotIn("d.pdf", html)
+        self.assertIn("docs", html)
+        # Markup in the search string is escaped, never rendered.
+        evil = self.client.get("/files/storage?q=%3Cscript%3E").content.decode()
+        self.assertNotIn("<script>", evil)
 
     def test_other_category_is_not_a_link(self):
         for i, key in enumerate(["audio", "archive", "code", "font", "executable"]):

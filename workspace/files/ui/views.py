@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
@@ -11,7 +13,11 @@ from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_viewer_by_slug
-from workspace.files.services.storage_analysis import CATEGORY_META, analyze_storage
+from workspace.files.services.storage_analysis import (
+    CATEGORY_META,
+    QUERY_MAX_LENGTH,
+    analyze_storage,
+)
 from workspace.users.services.settings import get_module_settings
 
 from ..models import (
@@ -570,8 +576,9 @@ def storage(request, uuid=None):
     category = request.GET.get("category") or None
     if category is not None and category not in CATEGORY_META:
         raise Http404
+    query = (request.GET.get("q") or "").strip()[:QUERY_MAX_LENGTH] or None
 
-    analysis = analyze_storage(request.user, folder, category=category)
+    analysis = analyze_storage(request.user, folder, category=category, query=query)
     chart = donut_chart(
         [
             {"label": c["label"], "value": c["size"], "css_class": c["css_class"]}
@@ -614,6 +621,8 @@ def storage(request, uuid=None):
             "active_category": active_category,
             "quota_percent": quota_percent,
             "can_empty_trash": folder is None,
+            "query_suffix": f"?q={quote(query)}" if query else "",
+            "query_param": f"&q={quote(query)}" if query else "",
         },
     )
 

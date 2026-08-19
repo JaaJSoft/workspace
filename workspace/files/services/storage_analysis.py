@@ -26,6 +26,8 @@ LARGEST_FILES_LIMIT = 20
 DUPLICATE_GROUPS_LIMIT = 20
 # Copies listed per duplicate group; the rest is reported as a count.
 DUPLICATE_COPIES_LIMIT = 10
+# Longest accepted search string (a path fragment, matched case-insensitively).
+QUERY_MAX_LENGTH = 100
 # Slices kept in the category chart; everything past that folds into "Other".
 CATEGORY_SLICES = 6
 
@@ -216,7 +218,7 @@ def subfolder_breakdown(scope):
     return entries
 
 
-def _file_entry(f):
+def _file_entry(f, query=None):
     return {
         "uuid": str(f.uuid),
         "name": f.name,
@@ -225,34 +227,50 @@ def _file_entry(f):
         "type": f.type,
         "category": f.category,
         "parent": str(f.parent_id) if f.parent_id else None,
+        "matches": bool(query) and query.lower() in (f.path or "").lower(),
     }
 
 
-def largest_files(scope, *, category=None, limit=LARGEST_FILES_LIMIT):
+def largest_files(scope, *, category=None, query=None, limit=LARGEST_FILES_LIMIT):
+    """Biggest files of the subtree, optionally narrowed to a category and
+    to paths containing *query* (case-insensitive)."""
     qs = _files(scope)
     if category:
         qs = qs.filter(category=category)
+    if query:
+        qs = qs.filter(path__icontains=query)
     qs = qs.order_by("-size", "name").only(
         "uuid", "name", "path", "size", "type", "category", "parent"
     )[:limit]
-    return [_file_entry(f) for f in qs]
+    return [_file_entry(f, query) for f in qs]
 
 
-def duplicate_groups(scope, *, limit=DUPLICATE_GROUPS_LIMIT):
+def duplicate_groups(scope, *, query=None, limit=DUPLICATE_GROUPS_LIMIT):
     """Same-content files (2+ live copies), by wasted bytes descending.
 
     Copies are matched on the content hash *and* the size: the size costs
     nothing to compare and rules out both a hash collision and a hash that
     went stale while the blob changed underneath it.
+
+    With *query*, only groups where at least one copy's path contains it
+    are kept - but every copy of such a group is still listed, so the user
+    can pick which one to keep.
     """
-    groups = list(
+    groups = (
         _files(scope)
         .exclude(content_hash="")
         .values("content_hash", "size")
         .annotate(copies=Count("pk"))
         .filter(copies__gt=1)
-        .annotate(wasted=F("size") * (F("copies") - 1))
-        .order_by("-wasted", "content_hash")[:limit]
+    )
+    if query:
+        groups = groups.annotate(
+            matching=Count("pk", filter=Q(path__icontains=query))
+        ).filter(matching__gt=0)
+    groups = list(
+        groups.annotate(wasted=F("size") * (F("copies") - 1)).order_by(
+            "-wasted", "content_hash"
+        )[:limit]
     )
     if not groups:
         return []
@@ -277,7 +295,7 @@ def duplicate_groups(scope, *, limit=DUPLICATE_GROUPS_LIMIT):
         )
     )
     for f in copies:
-        keys[(f.content_hash, f.size)].append(_file_entry(f))
+        keys[(f.content_hash, f.size)].append(_file_entry(f, query))
     return [
         {
             "content_hash": g["content_hash"],
@@ -295,12 +313,15 @@ def trash_summary(scope):
     return _totals(File.objects.filter(scope.trash_q(), node_type=File.NodeType.FILE))
 
 
-def analyze_storage(user, folder=None, *, category=None):
+def analyze_storage(user, folder=None, *, category=None, query=None):
     """Return the storage breakdown of *folder* (or the user's root).
 
     The caller is responsible for the access check on *folder*; the scope
-    only decides which rows belong to the subtree.
+    only decides which rows belong to the subtree. *category* and *query*
+    narrow the largest-files list (and *query* the duplicate groups); the
+    totals, categories and sub-folders always describe the whole subtree.
     """
+    query = (query or "").strip()[:QUERY_MAX_LENGTH] or None
     scope = StorageScope(user=user, folder=folder)
     totals = _totals(_files(scope))
     folder_count = (
@@ -308,7 +329,7 @@ def analyze_storage(user, folder=None, *, category=None):
         .order_by()
         .count()
     )
-    duplicates = duplicate_groups(scope)
+    duplicates = duplicate_groups(scope, query=query)
     result = {
         "folder": (
             {
@@ -327,8 +348,9 @@ def analyze_storage(user, folder=None, *, category=None):
         "folder_count": folder_count,
         "categories": category_breakdown(scope),
         "subfolders": subfolder_breakdown(scope),
-        "largest_files": largest_files(scope, category=category),
+        "largest_files": largest_files(scope, category=category, query=query),
         "largest_files_category": category or None,
+        "query": query,
         "duplicates": duplicates,
         "duplicates_truncated": len(duplicates) >= DUPLICATE_GROUPS_LIMIT,
         "trash": trash_summary(scope) if scope.is_root else None,

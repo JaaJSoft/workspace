@@ -3,8 +3,8 @@
   x-data="{
     open: false,
     mode: 'folder',
-    spaces: [{ key: 'personal', name: 'All Files', rootUuid: null }],
-    space: { key: 'personal', name: 'All Files', rootUuid: null },
+    spaces: [{ key: 'personal', name: 'My Files', rootUuid: null }],
+    space: { key: 'personal', name: 'My Files', rootUuid: null },
     currentFolder: null,
     items: [],
     breadcrumbs: [],
@@ -69,7 +69,7 @@
     rootFolder() {
       return this.space.rootUuid
         ? { uuid: this.space.rootUuid, name: this.space.name }
-        : { uuid: null, name: 'All Files' };
+        : { uuid: null, name: 'My Files' };
     },
 
     get isFileMode() { return this.mode === 'file'; },
@@ -258,7 +258,7 @@
     <!-- Space selector (personal / group folders) - only when the user has group folders -->
     <div x-show="spaces.length > 1" x-cloak class="mb-3">
       <select class="select select-bordered select-sm w-full" @change="selectSpace($event.target.value)" aria-label="Location">
-        <option value="personal" :selected="space.key === 'personal'">All Files</option>
+        <option value="personal" :selected="space.key === 'personal'">My Files</option>
         <optgroup label="Groups">
           <template x-for="sp in spaces.slice(1)" :key="sp.key">
             <option :value="sp.key" :selected="sp.key === space.key" x-text="sp.name"></option>

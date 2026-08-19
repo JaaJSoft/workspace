@@ -321,7 +321,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         empty_title = None
         empty_message = None
     else:
-        page_title = "All Files"
+        page_title = "My Files"
         current_view_url = "/files"
         empty_title = None
         empty_message = None
@@ -586,7 +586,7 @@ def storage(request, uuid=None):
         ]
     )
     if folder is None:
-        title = "All files"
+        title = "My files"
         parent_url = None
     elif folder.group_id and folder.parent_id is None:
         title = folder.name

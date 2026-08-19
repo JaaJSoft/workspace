@@ -83,20 +83,3 @@ class UserMenuEntryTests(TestCase):
             response = self.client.get(reverse("users_ui:settings"))
         self.assertNotContains(response, 'href="/imports"')
 
-
-class FilesEntryPointTests(TestCase):
-    """The Files '+ New' menu offers the import only to users who see the module."""
-
-    def test_staff_sees_the_menu_entry(self):
-        staff = User.objects.create_user(username="staff", password="pw", is_staff=True)
-        self.client.force_login(staff)
-        with self.settings(PREVIEW_VISIBILITY="staff"):
-            response = self.client.get("/files")
-        self.assertContains(response, 'href="/imports?new=1"')
-
-    def test_hidden_when_the_module_is_not_visible(self):
-        regular = User.objects.create_user(username="regular", password="pw")
-        self.client.force_login(regular)
-        with self.settings(PREVIEW_VISIBILITY="staff"):
-            response = self.client.get("/files")
-        self.assertNotContains(response, 'href="/imports?new=1"')

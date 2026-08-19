@@ -278,6 +278,29 @@ class AgainstOurOwnServerTests(TestCase):
         self.assertFalse(nested[0].is_dir)
         self.assertIsNotNone(nested[0].modified_at)
 
+    def test_names_with_percent_query_and_hash_round_trip(self):
+        """Entry ids are decoded names; the request URL must re-encode them
+        in full or a literal "%3A" (Logseq's ":" on disk), a "?" or a "#"
+        point at another resource - a 404 for a file that is right there."""
+        awkward = FileService.create_folder(self.remote_user, "100% sure")
+        # No non-ASCII name here: httpx2's WSGI transport hands PATH_INFO over
+        # as UTF-8 where WSGI expects latin-1, which trips WsgiDAV before our
+        # code runs - a test-transport artifact, not a server behaviour.
+        names = ["Spider-Man%3A Across.md", "what?.txt", "c#.md", "a & b+c.txt"]
+        for name in names:
+            FileService.create_file(
+                self.remote_user, name, awkward, content=ContentFile(name.encode())
+            )
+        source = self._source()
+        folder = {e.name: e for e in source.list_dir("/")}["100% sure"]
+        self.assertEqual(folder.id, "/100% sure")
+        entries = {e.name: e for e in source.list_dir(folder.id)}
+        self.assertEqual(set(entries), set(names))
+        for name in names:
+            self.assertEqual(entries[name].id, f"/100% sure/{name}")
+            with source.open(entries[name]) as stream:
+                self.assertEqual(stream.read(), name.encode())
+
     def test_streams_file_bytes(self):
         source = self._source()
         entry = next(iter(source.list_dir("/Documents")))

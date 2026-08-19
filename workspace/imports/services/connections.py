@@ -6,6 +6,7 @@ credentials - a connection row always describes something that worked.
 
 import logging
 
+from django.db import transaction
 from django.utils import timezone
 
 from workspace.common.logging import scrub
@@ -126,11 +127,21 @@ def delete_connection(connection):
     """Remove the connection and its job history. Refused while a job is
     live: cascading the delete under a running worker leaves it writing
     items for a job that no longer exists."""
-    if connection.jobs.filter(
-        status__in=[ImportJob.Status.PENDING, ImportJob.Status.RUNNING]
-    ).exists():
-        raise ConnectionBusy(
-            "An import is running on this connection - stop it before removing "
-            "the connection."
+    with transaction.atomic():
+        # Same row lock as create_job: a job cannot slip in between the check
+        # and the cascade.
+        locked = (
+            ImportConnection.objects.select_for_update()
+            .filter(pk=connection.pk)
+            .first()
         )
-    connection.delete()
+        if locked is None:
+            return
+        if locked.jobs.filter(
+            status__in=[ImportJob.Status.PENDING, ImportJob.Status.RUNNING]
+        ).exists():
+            raise ConnectionBusy(
+                "An import is running on this connection - stop it before removing "
+                "the connection."
+            )
+        locked.delete()

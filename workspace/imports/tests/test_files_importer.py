@@ -529,7 +529,11 @@ class SliceCutShortTests(ImporterTestCase):
         third attempt the entry is reported failed instead of fetched again,
         so a file too big for one slice cannot loop forever."""
         job = self._job()
-        job.stats = {"files": {"in_flight": {"id": "/readme.txt", "attempts": 2}}}
+        job.stats = {
+            "files": {
+                "in_flight": {"id": "/readme.txt", "fingerprint": "e1", "attempts": 2}
+            }
+        }
         job.save()
 
         self.assertIs(self._run(job), Outcome.DONE)
@@ -563,6 +567,43 @@ class SliceCutShortTests(ImporterTestCase):
             patch.object(ImportContext, "save_stats", spy),
         ):
             self.assertIs(self._run(job), Outcome.DONE)
-        self.assertIn({"id": "/readme.txt", "attempts": 1}, seen)  # size 9
-        self.assertIn({"id": "/Docs/report.pdf", "attempts": 1}, seen)  # size 5
-        self.assertNotIn({"id": "/Docs/Archive/old.txt", "attempts": 1}, seen)
+        ids = [m.get("id") for m in seen if m]
+        self.assertIn("/readme.txt", ids)  # size 9
+        self.assertIn("/Docs/report.pdf", ids)  # size 5
+        self.assertNotIn("/Docs/Archive/old.txt", ids)  # size 3
+
+    def test_a_new_remote_version_resets_the_attempt_count(self):
+        job = self._job()
+        job.stats = {
+            "files": {
+                "in_flight": {"id": "/readme.txt", "fingerprint": "old", "attempts": 2}
+            }
+        }
+        job.save()
+
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertIn("/readme.txt", self.provider.last_source.opened)
+        self.assertEqual(
+            ImportJobItem.objects.get(job=job, remote_id="/readme.txt").status,
+            ImportJobItem.Status.DONE,
+        )
+        self.assertNotIn("failed", job.stats["files"])
+
+    def test_the_file_and_its_done_record_commit_together(self):
+        """A crash between the write and the record must not leave a file the
+        next slice cannot recognise (it would be imported a second time)."""
+        job = self._job()
+        original = ImportContext.report_item
+
+        def crash_on_done(ctx, remote_id, status, **kwargs):
+            if status == ImportJobItem.Status.DONE:
+                raise RuntimeError("worker died")
+            return original(ctx, remote_id, status, **kwargs)
+
+        with patch.object(ImportContext, "report_item", crash_on_done):
+            with self.assertRaises(RuntimeError):
+                self._run(job)
+        self.assertFalse(
+            File.objects.filter(owner=self.user, node_type=File.NodeType.FILE).exists()
+        )
+        self.assertFalse(ImportJobItem.objects.filter(job=job).exists())

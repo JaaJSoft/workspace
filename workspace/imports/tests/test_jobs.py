@@ -246,7 +246,8 @@ class RunJobTests(JobsTestCase):
             self.assertIs(svc.run_job(job.pk), Outcome.PAUSED)
             job.refresh_from_db()
             self.assertEqual(
-                job.stats["files"]["in_flight"], {"id": "/b.txt", "attempts": 1}
+                job.stats["files"]["in_flight"],
+                {"id": "/b.txt", "fingerprint": "", "attempts": 1},
             )
             self.assertIs(svc.run_job(job.pk), Outcome.PAUSED)
             self.assertIs(svc.run_job(job.pk), Outcome.DONE)

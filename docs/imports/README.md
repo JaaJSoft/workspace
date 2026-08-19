@@ -1,6 +1,6 @@
 # Imports
 
-Bring files over from another cloud - a Nextcloud account or any WebDAV folder - into the Files module. Preview module.
+Bring files over from another cloud - a Nextcloud account or any WebDAV folder - into the Files module. The module is in preview: files are the only kind of data it moves so far.
 
 ## Features
 
@@ -27,11 +27,11 @@ Bring files over from another cloud - a Nextcloud account or any WebDAV folder -
 | `IMPORTS_MAX_CONSECUTIVE_ERRORS` | `20` | Consecutive remote failures after which a job gives up instead of burning through a dead connection one entry at a time |
 | `IMPORTS_JOB_RETENTION_DAYS` | `90` | Per-entry error reports of jobs finished longer ago than this are purged nightly. Successful entries are kept: they are what makes later runs incremental |
 | `IMPORTS_ALLOW_PRIVATE_NETWORKS` | `False` | Allow remote URLs on private networks (10/8, 172.16/12, 192.168/16, fc00::/7, carrier-grade NAT) |
-| `IMPORTS_ALLOWED_HOSTS` | empty | Hosts that skip the URL check entirely, comma-separated |
+| `IMPORTS_ALLOWED_HOSTS` | empty | Comma-separated host names that are trusted as they are: the address checks below are skipped for them (including the loopback and link-local refusals), only the scheme and the presence of a host are still validated |
 
 ## Remote URL safety
 
-The worker fetches whatever URL a connection carries, which makes an unchecked URL a server-side request forgery. Every URL is resolved and vetted when the connection is created, updated, tested or browsed, and again at the start of every job slice: loopback, link-local (cloud metadata), unspecified, multicast and reserved addresses are always refused, private networks unless `IMPORTS_ALLOW_PRIVATE_NETWORKS` is on. Redirects are never followed, and remote paths may not contain `.` or `..` segments.
+The worker fetches whatever URL a connection carries, which makes an unchecked URL a server-side request forgery. Every URL is resolved and vetted when the connection is created, updated, tested or browsed, and again at the start of every job slice: loopback, link-local (cloud metadata), unspecified, multicast and reserved addresses are always refused, private networks unless `IMPORTS_ALLOW_PRIVATE_NETWORKS` is on. A host listed in `IMPORTS_ALLOWED_HOSTS` is not resolved at all and bypasses every address refusal - list only hosts you would connect to yourself. Redirects are never followed, and remote paths may not contain `.` or `..` segments.
 
 Known limitation: the check and the HTTP client resolve the host separately, so a name that alternates between a public and a private answer (DNS rebinding) has a window between the check and the request. Re-checking every slice keeps it short; only pinning the resolved address at the transport level would close it.
 

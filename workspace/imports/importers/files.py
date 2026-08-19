@@ -13,7 +13,7 @@ from itertools import batched
 from django.conf import settings
 from django.core.exceptions import SuspiciousFileOperation, ValidationError
 from django.core.files.base import File as DjangoFile
-from django.db import DataError, IntegrityError
+from django.db import DataError, IntegrityError, transaction
 from django.template.defaultfilters import filesizeformat
 from rest_framework import serializers
 
@@ -270,7 +270,12 @@ class FilesImporter(Importer):
         """
         in_flight = ctx.stats.get("in_flight") or {}
         attempts = 1
-        if in_flight.get("id") == entry.id:
+        if (
+            in_flight.get("id") == entry.id
+            and in_flight.get("fingerprint", "") == entry.fingerprint
+        ):
+            # Same entry, same version: the previous attempt was cut short. A
+            # new version on the remote starts with a clean slate.
             attempts = in_flight.get("attempts", 0) + 1
         if attempts > _MAX_ENTRY_ATTEMPTS:
             ctx.stats.pop("in_flight", None)
@@ -283,7 +288,11 @@ class FilesImporter(Importer):
             )
             ctx.stat("failed")
             return True
-        ctx.stats["in_flight"] = {"id": entry.id, "attempts": attempts}
+        ctx.stats["in_flight"] = {
+            "id": entry.id,
+            "fingerprint": entry.fingerprint,
+            "attempts": attempts,
+        }
         if entry.size is None or entry.size >= _SPOOL_MAX_MEMORY:
             ctx.save_stats()
         return False
@@ -378,38 +387,42 @@ class FilesImporter(Importer):
             spool.seek(0)
             content = DjangoFile(spool, name=name)
             content.size = size
-            if existing is not None:
-                file_obj = FileService.update_content(
-                    existing,
-                    content,
-                    name=name,
-                    mime_type=mime_type or None,
-                    acting_user=ctx.owner,
-                )
-            else:
-                file_obj = FileService.create_file(
-                    ctx.owner,
-                    name,
-                    parent,
-                    content=content,
-                    mime_type=mime_type or None,
-                )
-                if entry.modified_at is not None:
-                    # Keep the source's modification date on a brand-new row
-                    # (nothing has cached it yet); auto_now only yields to a
-                    # queryset update. A replaced file keeps its fresh stamp so
-                    # ETags move forward.
-                    File.objects.filter(pk=file_obj.pk).update(
-                        updated_at=entry.modified_at
+            # The local file and the DONE record commit together: a worker
+            # dying between the two would leave a file the next slice cannot
+            # recognise and would import a second time.
+            with transaction.atomic():
+                if existing is not None:
+                    file_obj = FileService.update_content(
+                        existing,
+                        content,
+                        name=name,
+                        mime_type=mime_type or None,
+                        acting_user=ctx.owner,
                     )
-        ctx.report_item(
-            entry.id,
-            ImportJobItem.Status.DONE,
-            target_uuid=file_obj.uuid,
-            fingerprint=entry.fingerprint,
-        )
-        ctx.stat("files")
-        ctx.stat("bytes", size)
+                else:
+                    file_obj = FileService.create_file(
+                        ctx.owner,
+                        name,
+                        parent,
+                        content=content,
+                        mime_type=mime_type or None,
+                    )
+                    if entry.modified_at is not None:
+                        # Keep the source's modification date on a brand-new
+                        # row (nothing has cached it yet); auto_now only yields
+                        # to a queryset update. A replaced file keeps its fresh
+                        # stamp so ETags move forward.
+                        File.objects.filter(pk=file_obj.pk).update(
+                            updated_at=entry.modified_at
+                        )
+                ctx.stat("files")
+                ctx.stat("bytes", size)
+                ctx.report_item(
+                    entry.id,
+                    ImportJobItem.Status.DONE,
+                    target_uuid=file_obj.uuid,
+                    fingerprint=entry.fingerprint,
+                )
 
 
 def _storage_message(exc):

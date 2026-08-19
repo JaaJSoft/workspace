@@ -52,6 +52,13 @@ class ImportContext:
         self._last_push = None
         self._cancelled = False
         self._done = self._load_done()
+        # Entries this very job already completed, whatever their marker: a
+        # slice that pauses mid-directory must not copy them a second time.
+        self._done_here = set(
+            ImportJobItem.objects.filter(
+                job=self.job, kind=self.kind, status=ImportJobItem.Status.DONE
+            ).values_list("remote_id", flat=True)
+        )
         self.current = ""
 
     # -- progress ------------------------------------------------------
@@ -111,6 +118,8 @@ class ImportContext:
         return {rid: fp for rid, fp, target in rows if target in alive}
 
     def already_done(self, remote_id, fingerprint="") -> bool:
+        if remote_id in self._done_here:
+            return True
         return bool(fingerprint) and self._done.get(remote_id) == fingerprint
 
     def report_item(
@@ -127,8 +136,10 @@ class ImportContext:
                 "remote_etag": fingerprint,
             },
         )
-        if status == ImportJobItem.Status.DONE and fingerprint:
-            self._done[remote_id] = fingerprint
+        if status == ImportJobItem.Status.DONE:
+            self._done_here.add(remote_id)
+            if fingerprint:
+                self._done[remote_id] = fingerprint
         self.flush()
 
     # -- control -------------------------------------------------------

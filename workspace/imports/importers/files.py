@@ -11,7 +11,7 @@ import tempfile
 from itertools import batched
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import SuspiciousFileOperation, ValidationError
 from django.core.files.base import File as DjangoFile
 from django.db import DataError, IntegrityError
 from django.template.defaultfilters import filesizeformat
@@ -39,7 +39,14 @@ _SPOOL_MAX_MEMORY = 8 * 1024 * 1024
 _QUOTA_RECHECK_EVERY = 50
 _MAX_NAME_LENGTH = File._meta.get_field("name").max_length
 _MAX_MIME_LENGTH = File._meta.get_field("mime_type").max_length
-_STORAGE_ERRORS = (OSError, ValueError, DataError, IntegrityError, ValidationError)
+_STORAGE_ERRORS = (
+    OSError,
+    ValueError,
+    DataError,
+    IntegrityError,
+    ValidationError,
+    SuspiciousFileOperation,
+)
 
 
 class FilesImportOptionsSerializer(serializers.Serializer):
@@ -69,8 +76,10 @@ class FilesImportOptionsSerializer(serializers.Serializer):
 
 
 def safe_local_name(name: str) -> str:
-    """A remote name the files module will accept as a local one."""
-    cleaned = name.replace("/", "-").replace("\x00", "").strip() or "untitled"
+    """A remote name the files module (and Django's storage) will accept."""
+    cleaned = name.replace("/", "-").replace("\\", "-").replace("\x00", "").strip()
+    if cleaned in ("", ".", ".."):
+        cleaned = "untitled"
     return cleaned[:_MAX_NAME_LENGTH]
 
 

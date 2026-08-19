@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 # into a pause rather than a failure.
 _SOFT_LIMIT = settings.IMPORTS_BATCH_SECONDS + 5 * 60
 _HARD_LIMIT = settings.IMPORTS_BATCH_SECONDS + 10 * 60
+# Eager mode loops over slices in-process; a slice that makes no progress
+# (IMPORTS_BATCH_SECONDS misconfigured to 0) must not spin forever.
+_MAX_EAGER_SLICES = 10_000
 
 
 @shared_task(
@@ -31,14 +34,17 @@ def run_import_job(self, job_uuid):
     acceptable for development, and the reason the web UI never assumes the
     job is still pending when the create call returns.
     """
-    while True:
+    for _ in range(_MAX_EAGER_SLICES):
         result = jobs.run_job(job_uuid)
         if result is not Outcome.PAUSED:
             return {"status": result.value}
-        if self.request.is_eager:
-            continue
-        self.apply_async(args=[job_uuid], countdown=0)
-        return {"status": result.value}
+        if not self.request.is_eager:
+            self.apply_async(args=[job_uuid], countdown=0)
+            return {"status": result.value}
+    raise RuntimeError(
+        f"Import job {job_uuid} paused {_MAX_EAGER_SLICES} times in eager mode "
+        "without finishing - check IMPORTS_BATCH_SECONDS."
+    )
 
 
 @shared_task(name="imports.recover_stale_jobs", ignore_result=True)

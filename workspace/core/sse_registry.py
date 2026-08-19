@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -121,16 +122,30 @@ _MAILBOX_LOCK_TTL = 2
 
 @contextmanager
 def _mailbox_lock(slug, user_id):
+    """Best-effort mutex around one user's mailbox.
+
+    Waits up to the lock TTL for the current holder; past that the operation
+    proceeds anyway (a stuck holder must not stall the stream) with a warning.
+    Release is ownership-safe: a holder whose lock expired does not delete the
+    lock a later caller acquired.
+    """
     key = _MAILBOX_LOCK_KEY.format(slug=slug, user_id=user_id)
-    deadline = time.monotonic() + 0.25
-    acquired = cache.add(key, "1", _MAILBOX_LOCK_TTL)
+    token = uuid.uuid4().hex
+    deadline = time.monotonic() + _MAILBOX_LOCK_TTL
+    acquired = cache.add(key, token, _MAILBOX_LOCK_TTL)
     while not acquired and time.monotonic() < deadline:
         time.sleep(0.005)
-        acquired = cache.add(key, "1", _MAILBOX_LOCK_TTL)
+        acquired = cache.add(key, token, _MAILBOX_LOCK_TTL)
+    if not acquired:
+        logger.warning(
+            "SSE mailbox lock for %s/%s not acquired in time; proceeding unlocked",
+            slug,
+            scrub(user_id),
+        )
     try:
         yield
     finally:
-        if acquired:
+        if acquired and cache.get(key) == token:
             cache.delete(key)
 
 

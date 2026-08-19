@@ -39,11 +39,11 @@ class JobsApiTests(APITestCase):
             username="b",
         )
         self.client.force_authenticate(self.user)
-        self._enqueue = patch("workspace.imports.services.jobs._enqueue")
-        self.enqueue = self._enqueue.start()
+        enqueue_patch = patch("workspace.imports.services.jobs._enqueue")
+        self.enqueue = enqueue_patch.start()
+        self.addCleanup(enqueue_patch.stop)
 
     def tearDown(self):
-        self._enqueue.stop()
         self._media.disable()
         shutil.rmtree(self._tmpdir, ignore_errors=True)
         cache.clear()
@@ -157,14 +157,13 @@ class JobsApiTests(APITestCase):
         )
 
     def test_end_to_end_through_the_api_in_eager_mode(self):
-        self._enqueue.stop()
+        # Nested patch of the same target overrides setUp's mock for this block.
         with patch(
             "workspace.imports.services.jobs._enqueue",
             side_effect=lambda job: svc.run_job(job.pk),
         ):
             with self.captureOnCommitCallbacks(execute=True):
                 response = self._create()
-        self._enqueue.start()
         job = self.client.get(f"{BASE}/jobs/{response.json()['uuid']}").json()
         self.assertEqual(job["status"], "completed")
         self.assertEqual(job["stats"]["files"]["files"], 3)

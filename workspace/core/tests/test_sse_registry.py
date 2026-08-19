@@ -73,3 +73,24 @@ class UserEventMailboxTests(TestCase):
         with patch("workspace.core.sse_registry.notify_sse") as notify:
             push_user_event("x", 7, {"type": "a"})
         notify.assert_called_once_with("x", 7)
+
+    def test_an_expired_lock_is_not_released_on_behalf_of_the_next_holder(self):
+        from workspace.core.sse_registry import _MAILBOX_LOCK_KEY, _mailbox_lock
+
+        key = _MAILBOX_LOCK_KEY.format(slug="x", user_id=7)
+        with _mailbox_lock("x", 7):
+            # Simulate the TTL expiring and another caller taking the lock.
+            cache.set(key, "someone-else", 10)
+        self.assertEqual(cache.get(key), "someone-else")
+
+    def test_a_stuck_holder_does_not_stall_the_mailbox(self):
+        from workspace.core.sse_registry import (
+            _MAILBOX_LOCK_KEY,
+            drain_user_events,
+            push_user_event,
+        )
+
+        cache.set(_MAILBOX_LOCK_KEY.format(slug="x", user_id=7), "stuck", 60)
+        with patch("workspace.core.sse_registry._MAILBOX_LOCK_TTL", 0.02):
+            push_user_event("x", 7, {"type": "a"})
+            self.assertEqual(drain_user_events("x", 7), [{"type": "a"}])

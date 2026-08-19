@@ -389,3 +389,17 @@ class TaskTests(JobsTestCase):
         self.assertEqual(svc.summarize(job), "2 files, 1 unchanged, 1 failed")
         job.stats = {}
         self.assertEqual(svc.summarize(job), "Nothing to import.")
+
+
+class EagerLoopBoundTests(JobsTestCase):
+    def test_eager_loop_gives_up_loudly_when_no_slice_progresses(self):
+        with (
+            patch(
+                "workspace.imports.services.jobs.run_job", return_value=Outcome.PAUSED
+            ),
+            patch("workspace.imports.tasks._MAX_EAGER_SLICES", 3),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "paused 3 times"):
+                run_import_job.apply(
+                    args=["00000000-0000-0000-0000-000000000000"], throw=True
+                )

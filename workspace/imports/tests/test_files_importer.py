@@ -468,3 +468,35 @@ class CopyPhaseListingFailureTests(ImporterTestCase):
         self.assertIn("cannot list", item.error)
         self.assertEqual(job.stats["files"]["files"], 2)
         self.assertEqual(job.stats["files"]["failed"], 1)
+
+
+class NoMarkerResumeTests(ImporterTestCase):
+    def test_entries_without_marker_are_not_copied_twice_after_a_pause(self):
+        self.provider.tree["/"] = [
+            RemoteEntry(id="/a.txt", name="a.txt", is_dir=False),
+            RemoteEntry(id="/b.txt", name="b.txt", is_dir=False),
+        ]
+        job = self._job()
+        job.stats = {"files": {"planned": True}}
+
+        def out_of_time_after_first_file(ctx):
+            return bool(ctx.stats.get("files"))
+
+        with patch.object(ImportContext, "out_of_time", out_of_time_after_first_file):
+            self.assertIs(self._run(job), Outcome.PAUSED)
+        self.assertIs(self._run(job), Outcome.DONE)
+        names = sorted(
+            File.objects.filter(
+                owner=self.user, node_type=File.NodeType.FILE
+            ).values_list("name", flat=True)
+        )
+        self.assertEqual(names, ["a.txt", "b.txt"])
+
+    def test_dot_names_and_backslashes_are_made_safe(self):
+        from workspace.imports.importers.files import safe_local_name
+
+        self.assertEqual(safe_local_name("."), "untitled")
+        self.assertEqual(safe_local_name(".."), "untitled")
+        self.assertEqual(safe_local_name(" .. "), "untitled")
+        self.assertEqual(safe_local_name("a\\b"), "a-b")
+        self.assertEqual(safe_local_name("x" * 300), "x" * 255)

@@ -254,6 +254,14 @@ class FindDuplicatesTests(TestCase):
         new = FileService.create_file(self.user, "empty.txt")
         self.assertEqual(list(find_duplicates(new)), [])
 
+    def test_same_hash_but_different_size_is_not_a_duplicate(self):
+        # A hash collision, or a hash left stale by a blob rewrite, must not
+        # report a file of another size as the same content.
+        existing = self._upload(self.user, "a.txt")
+        File.objects.filter(pk=existing.pk).update(size=existing.size + 1)
+        new = self._upload(self.user, "b.txt")
+        self.assertEqual(list(find_duplicates(new)), [])
+
 
 class UploadDuplicateApiTests(APITestCase):
     def setUp(self):

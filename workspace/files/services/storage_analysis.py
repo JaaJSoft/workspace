@@ -11,7 +11,6 @@ from django.conf import settings
 from django.db.models import (
     Count,
     F,
-    Max,
     OuterRef,
     Q,
     Subquery,
@@ -240,28 +239,35 @@ def largest_files(scope, *, category=None, limit=LARGEST_FILES_LIMIT):
 
 
 def duplicate_groups(scope, *, limit=DUPLICATE_GROUPS_LIMIT):
-    """Same-content files (2+ live copies), by wasted bytes descending."""
+    """Same-content files (2+ live copies), by wasted bytes descending.
+
+    Copies are matched on the content hash *and* the size: the size costs
+    nothing to compare and rules out both a hash collision and a hash that
+    went stale while the blob changed underneath it.
+    """
     groups = list(
         _files(scope)
         .exclude(content_hash="")
-        .values("content_hash")
-        .annotate(
-            copies=Count("pk"),
-            biggest=Coalesce(Max("size"), 0),
-            wasted=Coalesce(Sum("size"), 0) - Coalesce(Max("size"), 0),
-        )
+        .values("content_hash", "size")
+        .annotate(copies=Count("pk"))
         .filter(copies__gt=1)
+        .annotate(wasted=F("size") * (F("copies") - 1))
         .order_by("-wasted", "content_hash")[:limit]
     )
     if not groups:
         return []
-    by_hash = {g["content_hash"]: [] for g in groups}
+    keys = {(g["content_hash"], g["size"]): [] for g in groups}
+    match = Q()
+    for content_hash, size in keys:
+        match |= Q(content_hash=content_hash, size=size)
     copies = (
         _files(scope)
-        .filter(content_hash__in=list(by_hash))
+        .filter(match)
         .annotate(
             rank=Window(
-                RowNumber(), partition_by=[F("content_hash")], order_by=["path"]
+                RowNumber(),
+                partition_by=[F("content_hash"), F("size")],
+                order_by=["path"],
             )
         )
         .filter(rank__lte=DUPLICATE_COPIES_LIMIT)
@@ -271,15 +277,15 @@ def duplicate_groups(scope, *, limit=DUPLICATE_GROUPS_LIMIT):
         )
     )
     for f in copies:
-        by_hash[f.content_hash].append(_file_entry(f))
+        keys[(f.content_hash, f.size)].append(_file_entry(f))
     return [
         {
             "content_hash": g["content_hash"],
-            "size": g["biggest"],
+            "size": g["size"] or 0,
             "copies": g["copies"],
-            "wasted": g["wasted"],
-            "files": by_hash[g["content_hash"]],
-            "omitted": g["copies"] - len(by_hash[g["content_hash"]]),
+            "wasted": g["wasted"] or 0,
+            "files": keys[(g["content_hash"], g["size"])],
+            "omitted": g["copies"] - len(keys[(g["content_hash"], g["size"])]),
         }
         for g in groups
     ]

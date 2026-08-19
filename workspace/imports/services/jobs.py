@@ -1,11 +1,13 @@
 """Job lifecycle: create (validated, enqueued), run in time slices, cancel,
-retry, purge."""
+retry, recover, purge."""
 
 import logging
 from datetime import timedelta
 
+from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -15,7 +17,7 @@ from workspace.notifications.services.notifications import notify
 
 from ..errors import ImportsError
 from ..importers.base import ImportContext, JobFailed, Outcome, importer_registry
-from ..models import ImportJob
+from ..models import ImportJob, ImportJobItem
 from . import progress
 from .connections import get_available_provider
 
@@ -34,6 +36,10 @@ class InvalidJobOptions(ImportsError):
 
 class JobAlreadyRunning(ImportsError):
     pass
+
+
+def lock_ttl_seconds():
+    return settings.IMPORTS_BATCH_SECONDS * 2
 
 
 # -- creation ------------------------------------------------------------
@@ -71,12 +77,18 @@ def create_job(owner, connection, kinds, options=None):
     if errors:
         raise InvalidJobOptions(errors)
 
-    if connection.jobs.exclude(status__in=ImportJob.TERMINAL_STATUSES).exists():
-        raise JobAlreadyRunning("An import is already running for this connection.")
-
-    job = ImportJob.objects.create(
-        connection=connection, kinds=ordered, options=validated
-    )
+    try:
+        # The partial unique constraint on (connection, live status) is the
+        # real guard; the atomic block keeps the IntegrityError from poisoning
+        # the caller's transaction.
+        with transaction.atomic():
+            job = ImportJob.objects.create(
+                connection=connection, kinds=ordered, options=validated
+            )
+    except IntegrityError as exc:
+        raise JobAlreadyRunning(
+            "An import is already running for this connection."
+        ) from exc
     transaction.on_commit(lambda: _enqueue(job))
     return job
 
@@ -99,7 +111,7 @@ def cancel_job(job):
     if not ended:
         ImportJob.objects.filter(pk=job.pk).update(cancel_requested_at=now)
     job.refresh_from_db()
-    progress.push_job_progress(job, force=True)
+    progress.push_job_progress(job)
     return job
 
 
@@ -112,47 +124,74 @@ def retry_job(job):
 
 
 def purge_old_jobs():
+    """Drop the per-entry error reports of old jobs. DONE items stay: they
+    are the memory that keeps later runs on the same connection incremental."""
     cutoff = timezone.now() - timedelta(days=settings.IMPORTS_JOB_RETENTION_DAYS)
-    deleted, _ = ImportJob.objects.filter(
-        status__in=ImportJob.TERMINAL_STATUSES, finished_at__lt=cutoff
-    ).delete()
+    deleted, _ = (
+        ImportJobItem.objects.filter(
+            job__status__in=ImportJob.TERMINAL_STATUSES, job__finished_at__lt=cutoff
+        )
+        .exclude(status=ImportJobItem.Status.DONE)
+        .delete()
+    )
     return deleted
+
+
+def recover_stale_jobs():
+    """Re-enqueue running jobs whose worker stopped reporting (killed, OOM,
+    deploy...). The advisory lock has expired by then, so the new delivery
+    picks the job up where the persisted stats left it."""
+    cutoff = timezone.now() - timedelta(seconds=lock_ttl_seconds())
+    stale = ImportJob.objects.filter(status=ImportJob.Status.RUNNING).filter(
+        Q(heartbeat_at__lt=cutoff) | Q(heartbeat_at__isnull=True, started_at__lt=cutoff)
+    )
+    recovered = 0
+    for job in stale:
+        logger.warning("Re-enqueueing stale import job %s", job.pk)
+        _enqueue(job)
+        recovered += 1
+    return recovered
 
 
 # -- execution -----------------------------------------------------------
 
 
-def run_job(job_uuid):
-    """Run one time slice of the job. Returns ``"done"``, ``"failed"``,
-    ``"cancelled"``, ``"paused"`` (call again) or ``"skipped"`` (nothing to do:
-    already finished, cancelled before it started, or running elsewhere)."""
+def run_job(job_uuid) -> Outcome:
+    """Run one time slice of the job. ``PAUSED`` means call again; ``SKIPPED``
+    means nothing to do (already finished, cancelled before it started, or
+    running elsewhere)."""
     job = (
         ImportJob.objects.select_related("connection__owner")
         .filter(pk=job_uuid)
         .first()
     )
     if job is None:
-        return "skipped"
+        return Outcome.SKIPPED
     if job.status == ImportJob.Status.PENDING:
+        now = timezone.now()
         claimed = ImportJob.objects.filter(
             pk=job.pk, status=ImportJob.Status.PENDING
-        ).update(status=ImportJob.Status.RUNNING, started_at=timezone.now())
+        ).update(status=ImportJob.Status.RUNNING, started_at=now, heartbeat_at=now)
         if not claimed:
-            return "skipped"
+            return Outcome.SKIPPED
         job.refresh_from_db()
-        progress.push_job_progress(job, force=True)
+        progress.push_job_progress(job)
     elif job.status != ImportJob.Status.RUNNING:
-        return "skipped"
+        return Outcome.SKIPPED
 
-    with task_lock(f"imports:job:{job.pk}", settings.IMPORTS_BATCH_SECONDS * 2) as held:
+    with task_lock(f"imports:job:{job.pk}", lock_ttl_seconds()) as held:
         if not held:
-            return "skipped"
+            return Outcome.SKIPPED
+        ImportJob.objects.filter(pk=job.pk).update(heartbeat_at=timezone.now())
         deadline = timezone.now() + timedelta(seconds=settings.IMPORTS_BATCH_SECONDS)
         try:
             outcome = _run_slice(job, deadline)
+        except SoftTimeLimitExceeded:
+            # One entry overran the slice; the next delivery resumes it.
+            outcome = Outcome.PAUSED
         except ImportsError as exc:
             _finish(job, ImportJob.Status.FAILED, error=exc.user_message)
-            return "failed"
+            return Outcome.FAILED
         except Exception:
             logger.exception("Import job %s crashed", job.pk)
             _finish(
@@ -160,16 +199,17 @@ def run_job(job_uuid):
                 ImportJob.Status.FAILED,
                 error="Unexpected error, see the server logs.",
             )
-            return "failed"
+            return Outcome.FAILED
 
     if outcome is Outcome.DONE:
         _finish(job, ImportJob.Status.COMPLETED)
-        return "done"
-    if outcome is Outcome.CANCELLED:
+    elif outcome is Outcome.CANCELLED:
         _finish(job, ImportJob.Status.CANCELLED)
-        return "cancelled"
-    ImportJob.objects.filter(pk=job.pk).update(stats=job.stats)
-    return "paused"
+    else:
+        ImportJob.objects.filter(pk=job.pk).update(
+            stats=job.stats, heartbeat_at=timezone.now()
+        )
+    return outcome
 
 
 def _run_slice(job, deadline):
@@ -180,7 +220,7 @@ def _run_slice(job, deadline):
         importer = importer_registry.get(kind)
         if importer is None:
             raise JobFailed(f"Nothing knows how to import {kind}.")
-        ctx = ImportContext(job, provider, kind, deadline=deadline)
+        ctx = ImportContext(job, provider, importer, deadline=deadline)
         outcome = importer.run(ctx)
         if outcome is not Outcome.DONE:
             return outcome
@@ -192,7 +232,7 @@ def _finish(job, status, *, error=""):
         status=status, error=error, finished_at=timezone.now(), stats=job.stats
     )
     job.refresh_from_db()
-    progress.push_job_progress(job, force=True)
+    progress.push_job_progress(job)
     _notify_owner(job)
 
 
@@ -200,13 +240,13 @@ def _notify_owner(job):
     label = job.connection.label
     if job.status == ImportJob.Status.COMPLETED:
         title = f"Import from {label} finished"
-        body = _summary(job)
+        body = summarize(job)
     elif job.status == ImportJob.Status.FAILED:
         title = f"Import from {label} failed"
         body = job.error
     else:
         title = f"Import from {label} cancelled"
-        body = _summary(job)
+        body = summarize(job)
     try:
         notify(
             recipient=job.connection.owner,
@@ -219,13 +259,13 @@ def _notify_owner(job):
         logger.exception("Could not notify about import job %s", scrub(str(job.pk)))
 
 
-def _summary(job):
-    parts = []
-    files = job.stats.get("files") or {}
-    if files.get("files"):
-        parts.append(f"{files['files']} files")
-    if files.get("skipped"):
-        parts.append(f"{files['skipped']} skipped")
-    if files.get("failed"):
-        parts.append(f"{files['failed']} failed")
-    return ", ".join(parts) or "Nothing to import."
+def summarize(job):
+    lines = []
+    for kind in job.kinds:
+        importer = importer_registry.get(kind)
+        if importer is None:
+            continue
+        line = importer.summarize(job.stats.get(kind) or {})
+        if line:
+            lines.append(line if len(job.kinds) == 1 else f"{kind}: {line}")
+    return " - ".join(lines) or "Nothing to import."

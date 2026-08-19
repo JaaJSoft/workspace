@@ -7,6 +7,7 @@ identifier cannot forge fake log lines (CWE-117, py/log-injection).
 
 from unittest.mock import MagicMock, patch
 
+from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.core import sse_registry
@@ -29,3 +30,46 @@ class NotifySseLogInjectionTests(TestCase):
         self.assertNotIn("\r", message)
         self.assertNotIn("\n", message)
         self.assertIn("42Forged log line", message)
+
+
+class UserEventMailboxTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_push_then_drain_round_trips_and_clears(self):
+        from workspace.core.sse_registry import drain_user_events, push_user_event
+
+        push_user_event("x", 7, {"type": "a", "n": 1})
+        push_user_event("x", 7, {"type": "a", "n": 2})
+        self.assertEqual(
+            drain_user_events("x", 7), [{"type": "a", "n": 1}, {"type": "a", "n": 2}]
+        )
+        self.assertEqual(drain_user_events("x", 7), [])
+
+    def test_mailboxes_are_per_slug_and_per_user(self):
+        from workspace.core.sse_registry import drain_user_events, push_user_event
+
+        push_user_event("x", 7, {"type": "a"})
+        self.assertEqual(drain_user_events("y", 7), [])
+        self.assertEqual(drain_user_events("x", 8), [])
+        self.assertEqual(len(drain_user_events("x", 7)), 1)
+
+    def test_supersedes_keeps_only_the_newest_payload_for_a_key(self):
+        from workspace.core.sse_registry import drain_user_events, push_user_event
+
+        push_user_event("x", 7, {"job": "1", "p": 10}, supersedes=("job", "1"))
+        push_user_event("x", 7, {"job": "2", "p": 0}, supersedes=("job", "2"))
+        push_user_event("x", 7, {"job": "1", "p": 90}, supersedes=("job", "1"))
+        self.assertEqual(
+            drain_user_events("x", 7), [{"job": "2", "p": 0}, {"job": "1", "p": 90}]
+        )
+
+    def test_push_wakes_the_stream(self):
+        from workspace.core.sse_registry import push_user_event
+
+        with patch("workspace.core.sse_registry.notify_sse") as notify:
+            push_user_event("x", 7, {"type": "a"})
+        notify.assert_called_once_with("x", 7)

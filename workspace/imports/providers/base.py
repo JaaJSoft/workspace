@@ -52,6 +52,17 @@ class RemoteEntry:
     etag: str = ""
     mime_type: str = ""
 
+    @property
+    def fingerprint(self) -> str:
+        """What identifies this version of the entry: the etag, else size and
+        mtime. Empty when the provider gives nothing - then the entry is never
+        considered already imported."""
+        if self.etag:
+            return self.etag
+        if self.size is not None and self.modified_at is not None:
+            return f"{self.size}:{self.modified_at.timestamp():.0f}"
+        return ""
+
     def as_dict(self):
         return {
             "id": self.id,

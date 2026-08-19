@@ -173,6 +173,12 @@ class WebDavFileSource:
         with _translate_transport_errors(self._host):
             with self._client.stream("GET", url) as response:
                 _raise_for_status(response, entry.id)
+                if response.status_code not in (200, 206):
+                    # Redirects are not followed on purpose; a 3xx body is
+                    # not the file.
+                    raise ProviderError(
+                        f"The server answered HTTP {response.status_code} instead of the file."
+                    )
                 yield io.BufferedReader(_ResponseStream(response.iter_raw()))
 
     # -- discovery -----------------------------------------------------

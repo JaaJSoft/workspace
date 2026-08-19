@@ -93,6 +93,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "imports.purge_old_jobs",
         "schedule": crontab(hour=3, minute=45),  # Every day at 3:45 AM
     },
+    "recover-stale-import-jobs": {
+        "task": "imports.recover_stale_jobs",
+        "schedule": 600.0,  # Every 10 minutes
+    },
     "purge-orphan-attachments": {
         "task": "chat.purge_orphan_attachments",
         "schedule": crontab(hour=4, minute=0),  # Every day at 4:00 AM

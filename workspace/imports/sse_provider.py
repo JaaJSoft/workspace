@@ -1,8 +1,6 @@
-from django.core.cache import cache
+from workspace.core.sse_registry import SSEProvider, drain_user_events
 
-from workspace.core.sse_registry import SSEProvider
-
-from .services.progress import PENDING_EVENTS_KEY
+from .services.progress import SLUG
 
 
 class ImportsSSEProvider(SSEProvider):
@@ -12,9 +10,7 @@ class ImportsSSEProvider(SSEProvider):
     def poll(self, cache_value):
         if cache_value is None:
             return []
-        key = PENDING_EVENTS_KEY.format(user_id=self.user.id)
-        events = cache.get(key, [])
-        if not events:
-            return []
-        cache.delete(key)
-        return [(event["type"], event, None) for event in events]
+        return [
+            (event["type"], event, None)
+            for event in drain_user_events(SLUG, self.user.id)
+        ]

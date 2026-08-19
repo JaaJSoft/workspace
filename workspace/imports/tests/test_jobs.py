@@ -5,16 +5,17 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from workspace.core.sse_registry import drain_user_events
 from workspace.files.models import File
 from workspace.imports.importers.base import Outcome
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
 from workspace.imports.services import jobs as svc
-from workspace.imports.services.progress import PENDING_EVENTS_KEY
 from workspace.imports.sse_provider import ImportsSSEProvider
-from workspace.imports.tasks import purge_old_jobs, run_import_job
+from workspace.imports.tasks import purge_old_jobs, recover_stale_jobs, run_import_job
 from workspace.notifications.models import Notification
 
 from .fakes import fake_provider
@@ -107,6 +108,21 @@ class CreateJobTests(JobsTestCase):
         with self.assertRaises(svc.JobAlreadyRunning):
             svc.create_job(self.user, self.conn, ["files"])
 
+    def test_the_guard_is_a_database_constraint_not_a_lookup(self):
+        ImportJob.objects.create(
+            connection=self.conn, kinds=["files"], status=ImportJob.Status.PENDING
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ImportJob.objects.create(
+                connection=self.conn, kinds=["files"], status=ImportJob.Status.RUNNING
+            )
+        ImportJob.objects.filter(connection=self.conn).update(
+            status=ImportJob.Status.FAILED
+        )
+        ImportJob.objects.create(
+            connection=self.conn, kinds=["files"], status=ImportJob.Status.RUNNING
+        )
+
 
 class RunJobTests(JobsTestCase):
     def _pending(self):
@@ -116,7 +132,7 @@ class RunJobTests(JobsTestCase):
 
     def test_runs_to_completion_and_notifies(self):
         job = self._pending()
-        self.assertEqual(svc.run_job(job.pk), "done")
+        self.assertIs(svc.run_job(job.pk), Outcome.DONE)
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.COMPLETED)
         self.assertIsNotNone(job.started_at)
@@ -133,19 +149,18 @@ class RunJobTests(JobsTestCase):
     def test_progress_events_reach_the_owner_mailbox(self):
         job = self._pending()
         svc.run_job(job.pk)
-        events = cache.get(PENDING_EVENTS_KEY.format(user_id=self.user.id))
-        self.assertEqual(len(events), 1)  # newest payload supersedes the older ones
-        self.assertEqual(events[0]["type"], "imports.job")
-        self.assertEqual(events[0]["status"], "completed")
         provider = ImportsSSEProvider(self.user, None)
         polled = provider.poll("dirty")
+        self.assertEqual(len(polled), 1)  # newest payload supersedes the older ones
         self.assertEqual(polled[0][0], "imports.job")
+        self.assertEqual(polled[0][1]["status"], "completed")
         self.assertEqual(provider.poll("dirty"), [])
+        self.assertEqual(drain_user_events("imports", self.user.id), [])
 
     def test_failed_job_records_the_reason(self):
         self.provider.fail_list.add("/")
         job = self._pending()
-        self.assertEqual(svc.run_job(job.pk), "failed")
+        self.assertIs(svc.run_job(job.pk), Outcome.FAILED)
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.FAILED)
         self.assertIn("Could not list '/'", job.error)
@@ -157,7 +172,7 @@ class RunJobTests(JobsTestCase):
             "workspace.imports.services.jobs._run_slice",
             side_effect=RuntimeError("boom"),
         ):
-            self.assertEqual(svc.run_job(job.pk), "failed")
+            self.assertIs(svc.run_job(job.pk), Outcome.FAILED)
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.FAILED)
         self.assertIn("Unexpected error", job.error)
@@ -166,30 +181,50 @@ class RunJobTests(JobsTestCase):
         job = self._pending()
         job.status = ImportJob.Status.COMPLETED
         job.save()
-        self.assertEqual(svc.run_job(job.pk), "skipped")
-        self.assertEqual(svc.run_job("00000000-0000-0000-0000-000000000000"), "skipped")
+        self.assertIs(svc.run_job(job.pk), Outcome.SKIPPED)
+        self.assertIs(
+            svc.run_job("00000000-0000-0000-0000-000000000000"), Outcome.SKIPPED
+        )
 
     def test_a_second_worker_is_turned_away_by_the_lock(self):
         job = self._pending()
         with patch("workspace.imports.services.jobs.task_lock") as lock:
             lock.return_value.__enter__.return_value = False
-            self.assertEqual(svc.run_job(job.pk), "skipped")
+            self.assertIs(svc.run_job(job.pk), Outcome.SKIPPED)
 
     def test_paused_slice_keeps_the_job_running_and_its_stats(self):
         job = self._pending()
         with override_settings(IMPORTS_BATCH_SECONDS=0):
-            self.assertEqual(svc.run_job(job.pk), "paused")
+            self.assertIs(svc.run_job(job.pk), Outcome.PAUSED)
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.RUNNING)
         self.assertEqual(job.stats["files"]["phase"], "listing")
-        self.assertEqual(svc.run_job(job.pk), "done")
+        self.assertIs(svc.run_job(job.pk), Outcome.DONE)
+
+    def test_heartbeat_is_stamped_while_running(self):
+        job = self._pending()
+        svc.run_job(job.pk)
+        job.refresh_from_db()
+        self.assertIsNotNone(job.heartbeat_at)
+
+    def test_soft_time_limit_pauses_instead_of_failing(self):
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        job = self._pending()
+        with patch(
+            "workspace.imports.services.jobs._run_slice",
+            side_effect=SoftTimeLimitExceeded(),
+        ):
+            self.assertIs(svc.run_job(job.pk), Outcome.PAUSED)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.RUNNING)
 
     def test_cancel_requested_ends_as_cancelled(self):
         job = self._pending()
         ImportJob.objects.filter(pk=job.pk).update(
             status=ImportJob.Status.RUNNING, cancel_requested_at=timezone.now()
         )
-        self.assertEqual(svc.run_job(job.pk), "cancelled")
+        self.assertIs(svc.run_job(job.pk), Outcome.CANCELLED)
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.CANCELLED)
         self.assertIn("cancelled", Notification.objects.get().title)
@@ -201,7 +236,7 @@ class CancelRetryPurgeTests(JobsTestCase):
         job = svc.cancel_job(job)
         self.assertEqual(job.status, ImportJob.Status.CANCELLED)
         self.assertIsNotNone(job.finished_at)
-        self.assertEqual(svc.run_job(job.pk), "skipped")
+        self.assertIs(svc.run_job(job.pk), Outcome.SKIPPED)
 
     def test_cancel_running_job_only_flags_it(self):
         job = ImportJob.objects.create(
@@ -246,15 +281,21 @@ class CancelRetryPurgeTests(JobsTestCase):
             svc.retry_job(done)
 
     @override_settings(IMPORTS_JOB_RETENTION_DAYS=30)
-    def test_purge_removes_old_terminal_jobs_and_their_items(self):
+    def test_purge_drops_old_error_reports_but_keeps_the_done_memory(self):
         old = ImportJob.objects.create(
             connection=self.conn,
             kinds=["files"],
             status=ImportJob.Status.COMPLETED,
             finished_at=timezone.now() - timedelta(days=31),
         )
-        ImportJobItem.objects.create(
+        kept = ImportJobItem.objects.create(
             job=old, kind="files", remote_id="/a", status=ImportJobItem.Status.DONE
+        )
+        ImportJobItem.objects.create(
+            job=old, kind="files", remote_id="/b", status=ImportJobItem.Status.FAILED
+        )
+        ImportJobItem.objects.create(
+            job=old, kind="files", remote_id="/c", status=ImportJobItem.Status.SKIPPED
         )
         recent = ImportJob.objects.create(
             connection=self.conn,
@@ -262,26 +303,64 @@ class CancelRetryPurgeTests(JobsTestCase):
             status=ImportJob.Status.COMPLETED,
             finished_at=timezone.now() - timedelta(days=2),
         )
-        running = ImportJob.objects.create(
+        ImportJobItem.objects.create(
+            job=recent, kind="files", remote_id="/d", status=ImportJobItem.Status.FAILED
+        )
+        self.assertEqual(purge_old_jobs.apply().result, {"deleted": 2})
+        self.assertEqual(ImportJob.objects.count(), 2)
+        self.assertEqual(
+            set(ImportJobItem.objects.values_list("remote_id", flat=True)), {"/a", "/d"}
+        )
+        self.assertTrue(ImportJobItem.objects.filter(pk=kept.pk).exists())
+
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_stale_running_jobs_are_re_enqueued(self):
+        stale = ImportJob.objects.create(
             connection=self.conn,
             kinds=["files"],
             status=ImportJob.Status.RUNNING,
-            finished_at=None,
+            started_at=timezone.now() - timedelta(hours=1),
+            heartbeat_at=timezone.now() - timedelta(minutes=30),
         )
-        self.assertEqual(
-            purge_old_jobs.apply().result, {"deleted": 2}
-        )  # job + its item
-        self.assertEqual(
-            set(ImportJob.objects.values_list("pk", flat=True)), {recent.pk, running.pk}
+        other_conn = ImportConnection.objects.create(
+            owner=self.user,
+            provider="fake",
+            label="Other",
+            base_url="https://y/dav",
+            username="b",
         )
-        self.assertFalse(ImportJobItem.objects.exists())
+        ImportJob.objects.create(
+            connection=other_conn,
+            kinds=["files"],
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now(),
+            heartbeat_at=timezone.now(),
+        )
+        with patch("workspace.imports.services.jobs._enqueue") as enqueue:
+            self.assertEqual(recover_stale_jobs.apply().result, {"recovered": 1})
+        enqueue.assert_called_once()
+        self.assertEqual(enqueue.call_args.args[0].pk, stale.pk)
+
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_a_recovered_job_resumes_and_finishes(self):
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            options={"files": {}},
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now() - timedelta(hours=1),
+            heartbeat_at=timezone.now() - timedelta(hours=1),
+        )
+        self.assertIs(svc.run_job(job.pk), Outcome.DONE)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
 
 
 class TaskTests(JobsTestCase):
     def test_eager_task_loops_over_paused_slices(self):
         with patch(
             "workspace.imports.services.jobs.run_job",
-            side_effect=["paused", "paused", "done"],
+            side_effect=[Outcome.PAUSED, Outcome.PAUSED, Outcome.DONE],
         ) as run:
             result = run_import_job.apply(
                 args=["00000000-0000-0000-0000-000000000000"]
@@ -291,7 +370,9 @@ class TaskTests(JobsTestCase):
 
     def test_worker_task_re_enqueues_itself_when_paused(self):
         with (
-            patch("workspace.imports.services.jobs.run_job", return_value="paused"),
+            patch(
+                "workspace.imports.services.jobs.run_job", return_value=Outcome.PAUSED
+            ),
             patch.object(run_import_job, "apply_async") as apply_async,
         ):
             # Bypass .apply() so the request is not flagged eager.
@@ -299,5 +380,12 @@ class TaskTests(JobsTestCase):
         self.assertEqual(result, {"status": "paused"})
         apply_async.assert_called_once()
 
-    def test_outcome_enum_round_trip(self):
-        self.assertEqual(Outcome("paused"), Outcome.PAUSED)
+    def test_summary_iterates_kinds_through_their_importer(self):
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            stats={"files": {"files": 2, "unchanged": 1, "failed": 1}},
+        )
+        self.assertEqual(svc.summarize(job), "2 files, 1 unchanged, 1 failed")
+        job.stats = {}
+        self.assertEqual(svc.summarize(job), "Nothing to import.")

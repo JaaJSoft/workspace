@@ -82,6 +82,10 @@ class ImporterTestCase(TestCase):
         cache.clear()
 
     def _job(self, **options):
+        # One live job per connection: the previous one is over by now.
+        ImportJob.objects.filter(connection=self.conn).update(
+            status=ImportJob.Status.COMPLETED
+        )
         return ImportJob.objects.create(
             connection=self.conn,
             kinds=["files"],
@@ -90,7 +94,7 @@ class ImporterTestCase(TestCase):
         )
 
     def _run(self, job, deadline=None):
-        ctx = ImportContext(job, self.provider, "files", deadline=deadline)
+        ctx = ImportContext(job, self.provider, self.importer, deadline=deadline)
         return self.importer.run(ctx)
 
     def _files(self):
@@ -133,6 +137,8 @@ class FilesImporterTests(ImporterTestCase):
         self.assertEqual(stats["phase"], "done")
         self.assertEqual(stats["total_files"], 3)
         self.assertEqual(stats["total_bytes"], 17)
+        self.assertNotIn("plan_stack", stats)
+        self.assertNotIn("copy_stack", stats)
         self.assertEqual(stats["files"], 3)
         self.assertEqual(stats["folders"], 3)  # root + Docs + Archive
         self.assertTrue(stats["planned"])
@@ -160,7 +166,7 @@ class FilesImporterTests(ImporterTestCase):
 
     def test_same_name_folders_are_reused(self):
         root = FileService.create_folder(self.user, "Nextcloud import")
-        FileService.create_folder(self.user, "docs", root)  # case-insensitive match
+        FileService.create_folder(self.user, "Docs", root)
         self._run(self._job())
         self.assertEqual(
             File.objects.filter(
@@ -213,7 +219,7 @@ class FilesImporterTests(ImporterTestCase):
         )
 
     def test_second_run_only_imports_what_changed(self):
-        self._run(self._job())
+        self._run(self._job(on_conflict="replace"))
         self.provider.tree["/"].append(
             RemoteEntry(id="/new.txt", name="new.txt", is_dir=False, etag="n1")
         )
@@ -223,15 +229,64 @@ class FilesImporterTests(ImporterTestCase):
         job = self._job(on_conflict="replace")
         self._run(job)
         self.assertEqual(job.stats["files"]["files"], 2)
+        self.assertEqual(job.stats["files"]["unchanged"], 2)
+        self.assertEqual(job.stats["files"]["total_files"], 4)
         self.assertEqual(
             sorted(self.provider.last_source.opened), ["/new.txt", "/readme.txt"]
         )
+
+    def test_a_job_with_other_options_does_not_inherit_the_done_list(self):
+        self._run(self._job())
+        other = FileService.create_folder(self.user, "Elsewhere")
+        job = self._job(destination=str(other.uuid), create_root_folder=False)
+        self._run(job)
+        self.assertEqual(job.stats["files"]["files"], 3)
+        self.assertEqual(
+            File.objects.filter(parent=other, node_type=File.NodeType.FILE).count(), 1
+        )
+
+    def test_a_locally_deleted_file_is_imported_again(self):
+        self._run(self._job())
+        gone = File.objects.get(owner=self.user, name="report.pdf")
+        FileService.soft_delete(gone)
+        job = self._job()
+        self._run(job)
+        self.assertEqual(job.stats["files"]["files"], 1)
+        self.assertEqual(self.provider.last_source.opened, ["/Docs/report.pdf"])
+
+    def test_entries_without_any_version_marker_are_always_fetched(self):
+        self.provider.tree["/"] = [
+            RemoteEntry(id="/blank.txt", name="blank.txt", is_dir=False)
+        ]
+        self._run(self._job(on_conflict="replace"))
+        job = self._job(on_conflict="replace")
+        self._run(job)
+        self.assertEqual(job.stats["files"]["files"], 1)
+
+    def test_size_and_mtime_stand_in_for_a_missing_etag(self):
+        entry = RemoteEntry(id="/x", name="x", is_dir=False, size=3, modified_at=MTIME)
+        self.assertEqual(entry.fingerprint, f"3:{MTIME.timestamp():.0f}")
+        self.assertEqual(
+            RemoteEntry(id="/x", name="x", is_dir=False, etag="e").fingerprint, "e"
+        )
+        self.assertEqual(RemoteEntry(id="/x", name="x", is_dir=False).fingerprint, "")
 
     def test_quota_is_checked_before_any_write(self):
         with override_settings(STORAGE_QUOTA_BYTES=10):
             with self.assertRaisesRegex(JobFailed, "Not enough space"):
                 self._run(self._job())
         self.assertFalse(File.objects.filter(owner=self.user).exists())
+
+    def test_quota_check_ignores_what_is_already_imported(self):
+        self._run(self._job())
+        self.provider.tree["/"].append(
+            RemoteEntry(id="/tiny.txt", name="tiny.txt", is_dir=False, size=1, etag="t")
+        )
+        used = FileService.storage_used(self.user)
+        with override_settings(STORAGE_QUOTA_BYTES=used + 100):
+            job = self._job()
+            self.assertIs(self._run(job), Outcome.DONE)
+        self.assertEqual(job.stats["files"]["files"], 1)
 
     def test_listing_failure_during_planning_fails_the_job(self):
         self.provider.fail_list.add("/Docs")
@@ -283,6 +338,116 @@ class FilesImporterTests(ImporterTestCase):
         # and running it once more is a no-op
         self.assertIs(self._run(job), Outcome.DONE)
         self.assertEqual(File.objects.filter(owner=self.user).count(), 6)
+
+    def test_names_the_files_module_refuses_are_recorded_per_entry(self):
+        self.provider.tree["/"] = [
+            RemoteEntry(id="/a%2Fb", name="a/b.txt", is_dir=False, etag="1"),
+            RemoteEntry(id="/long", name="x" * 300 + ".txt", is_dir=False, etag="2"),
+            RemoteEntry(
+                id="/mime",
+                name="weird.bin",
+                is_dir=False,
+                etag="3",
+                mime_type="application/" + "x" * 200,
+            ),
+        ]
+        job = self._job()
+        self.assertIs(self._run(job), Outcome.DONE)
+        names = sorted(
+            f.name
+            for f in File.objects.filter(owner=self.user, node_type=File.NodeType.FILE)
+        )
+        self.assertEqual(names, ["a-b.txt", "weird.bin", "x" * 255])
+        self.assertEqual(job.stats["files"]["files"], 3)
+        self.assertLessEqual(len(File.objects.get(name="weird.bin").mime_type), 100)
+
+    def test_storage_layer_errors_are_recorded_per_entry_and_the_job_goes_on(self):
+        job = self._job()
+        with patch(
+            "workspace.imports.importers.files.FileService.create_file",
+            side_effect=[ValueError("bad name"), *([FileService.create_file] * 0)],
+        ) as create:
+            create.side_effect = lambda *a, **kw: (_ for _ in ()).throw(
+                ValueError("bad name")
+            )
+            self.assertIs(self._run(job), Outcome.DONE)
+        self.assertEqual(job.stats["files"]["failed"], 3)
+        self.assertEqual(
+            ImportJobItem.objects.filter(
+                job=job, status=ImportJobItem.Status.FAILED
+            ).count(),
+            3,
+        )
+        self.assertIn(
+            "not accepted", ImportJobItem.objects.filter(job=job).first().error
+        )
+
+    def test_root_folder_name_is_sanitised(self):
+        self.conn.label = "Nextcloud/Home " + "x" * 300
+        self.conn.save()
+        job = self._job()
+        self.assertIs(self._run(job), Outcome.DONE)
+        root = File.objects.get(uuid=job.stats["files"]["root_folder"])
+        self.assertNotIn("/", root.name)
+        self.assertLessEqual(len(root.name), 255)
+        self.assertTrue(root.name.startswith("Nextcloud-Home"))
+
+    def test_replaced_file_keeps_a_fresh_modification_stamp(self):
+        root = FileService.create_folder(self.user, "Nextcloud import")
+        mine = FileService.create_file(
+            self.user, "readme.txt", root, content=ContentFile(b"mine")
+        )
+        before = mine.updated_at
+        self._run(self._job(on_conflict="replace"))
+        mine.refresh_from_db()
+        self.assertGreater(mine.updated_at, before)
+        self.assertNotEqual(mine.updated_at, MTIME)
+
+    def test_folders_are_matched_case_sensitively(self):
+        self.provider.tree["/"] = [
+            RemoteEntry(id="/Docs", name="Docs", is_dir=True),
+            RemoteEntry(id="/docs", name="docs", is_dir=True),
+        ]
+        self.provider.tree["/docs"] = [
+            RemoteEntry(id="/docs/x.txt", name="x.txt", is_dir=False, etag="x")
+        ]
+        self._run(self._job())
+        root = File.objects.get(owner=self.user, name="Nextcloud import")
+        names = sorted(
+            File.objects.filter(
+                parent=root, node_type=File.NodeType.FOLDER
+            ).values_list("name", flat=True)
+        )
+        self.assertEqual(names, ["Docs", "docs"])
+
+    def test_listing_phase_resumes_from_its_persisted_stack(self):
+        job = self._job()
+        calls = {"n": 0}
+        original = ImportContext.out_of_time
+
+        def out_of_time_after_two_listings(ctx):
+            return calls["n"] >= 2
+
+        def counting_list(source_self, entry_id):
+            calls["n"] += 1
+            yield from self.provider.tree.get(entry_id, [])
+
+        from workspace.imports.tests.fakes import FakeFileSource
+
+        with (
+            patch.object(FakeFileSource, "list_dir", counting_list),
+            patch.object(ImportContext, "out_of_time", out_of_time_after_two_listings),
+        ):
+            self.assertIs(self._run(job), Outcome.PAUSED)
+        self.assertIn("plan_stack", job.stats["files"])
+        self.assertEqual(
+            job.stats["files"]["total_files"], 2
+        )  # / and /Docs listed, /Docs/Archive pending
+        self.assertIs(original, ImportContext.out_of_time)
+
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertEqual(job.stats["files"]["total_files"], 3)
+        self.assertEqual(job.stats["files"]["files"], 3)
 
     def test_missing_destination_fails_the_job(self):
         job = self._job(

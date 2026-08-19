@@ -182,6 +182,15 @@ class ErrorTranslationTests(SimpleTestCase):
         with self.assertRaisesRegex(ProviderError, "not a WebDAV server"):
             list(source.list_dir("/"))
 
+    def test_redirect_on_get_is_not_the_file(self):
+        source = self._source(
+            lambda r: httpx2.Response(302, headers={"Location": "https://elsewhere/"})
+        )
+        entry = RemoteEntry(id="/a.txt", name="a.txt", is_dir=False)
+        with self.assertRaisesRegex(ProviderError, "HTTP 302"):
+            with source.open(entry):
+                pass
+
     def test_transport_errors_become_connection_failed(self):
         def handler(request):
             raise httpx2.ConnectError("boom")

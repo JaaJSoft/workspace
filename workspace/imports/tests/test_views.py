@@ -82,4 +82,3 @@ class UserMenuEntryTests(TestCase):
         with self.settings(PREVIEW_VISIBILITY="staff"):
             response = self.client.get(reverse("users_ui:settings"))
         self.assertNotContains(response, 'href="/imports"')
-

@@ -255,12 +255,19 @@ def _run_slice(job, deadline):
 
 
 def _finish(job, status, *, error=""):
-    ImportJob.objects.filter(pk=job.pk).update(
+    # CAS on RUNNING: a stop that ended the job while this worker was taken
+    # for dead must not be overwritten by the worker's own ending - the user
+    # asked for cancelled, cancelled it stays. The final stats are kept either
+    # way.
+    ended = ImportJob.objects.filter(pk=job.pk, status=ImportJob.Status.RUNNING).update(
         status=status, error=error, finished_at=timezone.now(), stats=job.stats
     )
+    if not ended:
+        ImportJob.objects.filter(pk=job.pk).update(stats=job.stats)
     job.refresh_from_db()
     progress.push_job_progress(job)
-    _notify_owner(job)
+    if ended:
+        _notify_owner(job)
 
 
 def _notify_owner(job):

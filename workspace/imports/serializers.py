@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import ImportConnection
+from .models import ImportConnection, ImportJob, ImportJobItem
 from .providers.base import KIND_FILES
 from .providers.registry import provider_registry
 
@@ -64,3 +64,58 @@ class ConnectionUpdateSerializer(serializers.Serializer):
 class BrowseQuerySerializer(serializers.Serializer):
     kind = serializers.ChoiceField(choices=[KIND_FILES], default=KIND_FILES)
     path = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class JobSerializer(serializers.ModelSerializer):
+    connection = serializers.UUIDField(source="connection_id")
+    connection_label = serializers.CharField(source="connection.label")
+
+    class Meta:
+        model = ImportJob
+        fields = [
+            "uuid",
+            "connection",
+            "connection_label",
+            "kinds",
+            "options",
+            "status",
+            "stats",
+            "error",
+            "cancel_requested_at",
+            "created_at",
+            "started_at",
+            "finished_at",
+        ]
+
+
+class JobCreateSerializer(serializers.Serializer):
+    connection = serializers.UUIDField()
+    kinds = serializers.ListField(
+        child=serializers.CharField(max_length=30), allow_empty=False
+    )
+    options = serializers.DictField(required=False, default=dict)
+
+
+class JobItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ImportJobItem
+        fields = [
+            "uuid",
+            "kind",
+            "remote_id",
+            "status",
+            "target_uuid",
+            "error",
+            "created_at",
+        ]
+
+
+class PageQuerySerializer(serializers.Serializer):
+    limit = serializers.IntegerField(min_value=1, max_value=500, default=100)
+    offset = serializers.IntegerField(min_value=0, default=0)
+
+
+class JobItemsQuerySerializer(PageQuerySerializer):
+    status = serializers.ChoiceField(
+        choices=ImportJobItem.Status.choices, required=False
+    )

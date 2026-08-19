@@ -1,6 +1,9 @@
 import logging
 import threading
+import time
+import uuid
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import orjson
@@ -102,3 +105,72 @@ def notify_sse(provider_slug: str, user_id: int):
         timezone.now().isoformat(),
         120,
     )
+
+
+# -- per-user event mailbox ---------------------------------------------------
+#
+# Providers that fan out discrete events (a file changed, an import progressed)
+# park them in a per-user list in the cache and wake the stream; the provider's
+# poll() drains the list. The short cache lock closes the read-modify-write
+# window between a pusher and the poller so neither drops the other's events.
+
+_MAILBOX_KEY = "sse:{slug}:mailbox:{user_id}"
+_MAILBOX_TTL = 300
+_MAILBOX_LOCK_KEY = "sse:{slug}:mailbox:{user_id}:lock"
+_MAILBOX_LOCK_TTL = 2
+
+
+@contextmanager
+def _mailbox_lock(slug, user_id):
+    """Best-effort mutex around one user's mailbox.
+
+    Waits up to the lock TTL for the current holder; past that the operation
+    proceeds anyway (a stuck holder must not stall the stream) with a warning.
+    Release is ownership-safe: a holder whose lock expired does not delete the
+    lock a later caller acquired.
+    """
+    key = _MAILBOX_LOCK_KEY.format(slug=slug, user_id=user_id)
+    token = uuid.uuid4().hex
+    deadline = time.monotonic() + _MAILBOX_LOCK_TTL
+    acquired = cache.add(key, token, _MAILBOX_LOCK_TTL)
+    while not acquired and time.monotonic() < deadline:
+        time.sleep(0.005)
+        acquired = cache.add(key, token, _MAILBOX_LOCK_TTL)
+    if not acquired:
+        logger.warning(
+            "SSE mailbox lock for %s/%s not acquired in time; proceeding unlocked",
+            slug,
+            scrub(user_id),
+        )
+    try:
+        yield
+    finally:
+        if acquired and cache.get(key) == token:
+            cache.delete(key)
+
+
+def push_user_event(slug, user_id, payload, *, supersedes=None):
+    """Queue *payload* for *user_id* on provider *slug* and wake the stream.
+
+    ``supersedes=(field, value)`` drops earlier queued payloads carrying the
+    same value - for progress-style events where only the newest matters.
+    """
+    key = _MAILBOX_KEY.format(slug=slug, user_id=user_id)
+    with _mailbox_lock(slug, user_id):
+        events = cache.get(key, [])
+        if supersedes is not None:
+            field, value = supersedes
+            events = [e for e in events if e.get(field) != value]
+        events.append(payload)
+        cache.set(key, events, _MAILBOX_TTL)
+    notify_sse(slug, user_id)
+
+
+def drain_user_events(slug, user_id):
+    """Return and clear the queued payloads for *user_id* on provider *slug*."""
+    key = _MAILBOX_KEY.format(slug=slug, user_id=user_id)
+    with _mailbox_lock(slug, user_id):
+        events = cache.get(key, [])
+        if events:
+            cache.delete(key)
+    return events

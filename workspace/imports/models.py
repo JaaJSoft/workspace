@@ -95,13 +95,13 @@ class ImportJob(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING
     )
-    # Compare-and-swap token claimed by the worker that owns the run; guards
-    # against duplicate task delivery (see workspace.common.celery_claim).
-    claim_token = models.CharField(max_length=64, blank=True, default="")
 
     stats = models.JSONField(default=dict, blank=True)
     error = models.TextField(blank=True, default="")
     cancel_requested_at = models.DateTimeField(null=True, blank=True)
+    # Stamped by the worker as it makes progress; a running job whose stamp
+    # goes stale has lost its worker and is picked up again by the beat.
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -109,6 +109,15 @@ class ImportJob(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            # One live job per connection; the service turns the violation
+            # into JobAlreadyRunning.
+            models.UniqueConstraint(
+                fields=["connection"],
+                condition=models.Q(status__in=["pending", "running"]),
+                name="importjob_one_active_per_conn",
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=["connection", "status", "-created_at"],
@@ -158,6 +167,10 @@ class ImportJobItem(models.Model):
         ]
         indexes = [
             models.Index(fields=["job", "status"], name="importjobitem_job_status"),
+            # The items endpoint pages a job's entries in creation order.
+            models.Index(
+                fields=["job", "created_at"], name="importjobitem_job_created"
+            ),
         ]
 
     def __str__(self):

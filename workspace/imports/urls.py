@@ -28,4 +28,25 @@ urlpatterns = [
         views.ConnectionBrowseView.as_view(),
         name="imports-connection-browse",
     ),
+    path("api/v1/imports/jobs", views.JobListView.as_view(), name="imports-jobs"),
+    path(
+        "api/v1/imports/jobs/<uuid:uuid>",
+        views.JobDetailView.as_view(),
+        name="imports-job-detail",
+    ),
+    path(
+        "api/v1/imports/jobs/<uuid:uuid>/items",
+        views.JobItemsView.as_view(),
+        name="imports-job-items",
+    ),
+    path(
+        "api/v1/imports/jobs/<uuid:uuid>/cancel",
+        views.JobCancelView.as_view(),
+        name="imports-job-cancel",
+    ),
+    path(
+        "api/v1/imports/jobs/<uuid:uuid>/retry",
+        views.JobRetryView.as_view(),
+        name="imports-job-retry",
+    ),
 ]

@@ -6,8 +6,10 @@ from io import BytesIO
 from workspace.imports.providers.base import (
     KIND_FILES,
     AuthenticationFailed,
+    ConnectionFailed,
     Provider,
     RemoteEntry,
+    RemoteNotFound,
 )
 from workspace.imports.providers.registry import provider_registry
 
@@ -15,19 +17,30 @@ from workspace.imports.providers.registry import provider_registry
 class FakeFileSource:
     ROOT_ID = "/"
 
-    def __init__(self, tree):
+    def __init__(self, tree, *, contents=None, fail_list=(), fail_open=()):
         self._tree = tree
+        self._contents = contents or {}
+        self.fail_list = set(fail_list)
+        self.fail_open = set(fail_open)
         self.closed = False
+        self.opened = []
 
     def close(self):
         self.closed = True
 
     def list_dir(self, entry_id):
+        if entry_id in self.fail_list:
+            raise ConnectionFailed(f"cannot list {entry_id}")
         yield from self._tree.get(entry_id, [])
 
     @contextmanager
     def open(self, entry):
-        yield BytesIO(b"content of " + entry.name.encode())
+        self.opened.append(entry.id)
+        if entry.id in self.fail_open:
+            raise RemoteNotFound(f"{entry.id} vanished")
+        yield BytesIO(
+            self._contents.get(entry.id, b"content of " + entry.name.encode())
+        )
 
 
 class FakeProvider(Provider):
@@ -42,6 +55,9 @@ class FakeProvider(Provider):
         self.valid_secret = "good"
         self.test_calls = 0
         self.last_source = None
+        self.contents = {}
+        self.fail_list = set()
+        self.fail_open = set()
         self.capabilities = {"kinds": ["files"], "quota_used": 42}
         self.tree = {
             "/": [
@@ -65,7 +81,12 @@ class FakeProvider(Provider):
         return dict(self.capabilities)
 
     def file_source(self, connection):
-        self.last_source = FakeFileSource(self.tree)
+        self.last_source = FakeFileSource(
+            self.tree,
+            contents=self.contents,
+            fail_list=self.fail_list,
+            fail_open=self.fail_open,
+        )
         return self.last_source
 
 

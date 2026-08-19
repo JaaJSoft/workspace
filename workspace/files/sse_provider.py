@@ -1,13 +1,10 @@
 import logging
 
-from django.core.cache import cache
-
-from workspace.core.sse_registry import SSEProvider, notify_sse
+from workspace.core.sse_registry import SSEProvider, drain_user_events, push_user_event
 
 logger = logging.getLogger(__name__)
 
-PENDING_EVENTS_KEY = "files:pending_events:{user_id}"
-PENDING_EVENTS_TTL = 300  # 5 min
+SLUG = "files"
 
 
 class FilesSSEProvider(SSEProvider):
@@ -17,12 +14,7 @@ class FilesSSEProvider(SSEProvider):
     def poll(self, cache_value):
         if cache_value is None:
             return []
-        key = PENDING_EVENTS_KEY.format(user_id=self.user.id)
-        raw = cache.get(key, [])
-        if not raw:
-            return []
-        cache.delete(key)
-        return [(ev["type"], ev, None) for ev in raw]
+        return [(ev["type"], ev, None) for ev in drain_user_events(SLUG, self.user.id)]
 
 
 def push_file_event(file_obj, event_type, actor_username, exclude_user_id=None):
@@ -45,8 +37,4 @@ def push_file_event(file_obj, event_type, actor_username, exclude_user_id=None):
     }
 
     for uid in user_ids:
-        key = PENDING_EVENTS_KEY.format(user_id=uid)
-        existing = cache.get(key, [])
-        existing.append(event)
-        cache.set(key, existing, PENDING_EVENTS_TTL)
-        notify_sse("files", uid)
+        push_user_event(SLUG, uid, event)

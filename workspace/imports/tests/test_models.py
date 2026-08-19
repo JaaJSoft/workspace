@@ -85,7 +85,9 @@ class ImportJobTests(TestCase):
             )
 
     def test_same_remote_entry_allowed_across_jobs(self):
-        first = ImportJob.objects.create(connection=self.conn, kinds=["files"])
+        first = ImportJob.objects.create(
+            connection=self.conn, kinds=["files"], status=ImportJob.Status.COMPLETED
+        )
         second = ImportJob.objects.create(connection=self.conn, kinds=["files"])
         for job in (first, second):
             ImportJobItem.objects.create(

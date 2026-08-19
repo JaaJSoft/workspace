@@ -131,7 +131,10 @@
   <!-- Connection dialog -->
   <dialog x-ref="connectionDialog" class="modal">
     <div class="modal-box max-w-lg">
-      <h3 class="font-bold text-lg mb-1" x-text="connEditing ? 'Edit connection' : 'Add a connection'"></h3>
+      <div class="flex items-center gap-3 mb-1">
+        <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-accent/10 text-accent"><i data-lucide="plug" class="w-5 h-5"></i></div>
+        <h3 class="font-bold text-lg" x-text="connEditing ? 'Edit connection' : 'Add a connection'"></h3>
+      </div>
       <p class="text-sm text-base-content/60 mb-4">Nothing is saved until the server has answered with these credentials.</p>
       <form class="space-y-3" @submit.prevent="saveConnection()">
         <div class="form-control" x-show="!connEditing">
@@ -180,7 +183,10 @@
   <!-- Wizard dialog -->
   <dialog x-ref="wizardDialog" class="modal">
     <div class="modal-box max-w-2xl">
-      <h3 class="font-bold text-lg mb-1">New import</h3>
+      <div class="flex items-center gap-3 mb-3">
+        <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary/10 text-primary"><i data-lucide="download-cloud" class="w-5 h-5"></i></div>
+        <h3 class="font-bold text-lg">New import</h3>
+      </div>
       <ul class="steps steps-horizontal w-full text-xs mb-4">
         <li class="step" :class="wizard.step >= 1 && 'step-primary'">Source</li>
         <li class="step" :class="wizard.step >= 2 && 'step-primary'">What</li>
@@ -307,7 +313,10 @@
   <!-- Errors dialog -->
   <dialog x-ref="errorsDialog" class="modal">
     <div class="modal-box max-w-2xl">
-      <h3 class="font-bold text-lg mb-1">Entries that could not be imported</h3>
+      <div class="flex items-center gap-3 mb-1">
+        <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-error/10 text-error"><i data-lucide="circle-alert" class="w-5 h-5"></i></div>
+        <h3 class="font-bold text-lg">Entries that could not be imported</h3>
+      </div>
       <p class="text-sm text-base-content/60 mb-3"><span x-text="errorsDialog.count"></span> failed. Retry the import to try them again.</p>
       <div x-show="errorsDialog.loading" class="py-6 text-center"><span class="loading loading-spinner"></span></div>
       <ul class="divide-y divide-base-300 max-h-96 overflow-y-auto text-sm" x-show="!errorsDialog.loading">

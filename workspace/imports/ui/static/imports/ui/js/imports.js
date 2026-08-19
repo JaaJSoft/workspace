@@ -263,6 +263,7 @@ window.importsApp = function importsApp() {
     async showErrors(job) {
       this.errorsDialog = { job, items: [], count: 0, loading: true };
       this.$refs.errorsDialog.showModal();
+      this.$nextTick(() => initLucideIcons());
       const res = await api(`/jobs/${job.uuid}/items?status=failed&limit=200`);
       this.errorsDialog.loading = false;
       if (res.ok) {

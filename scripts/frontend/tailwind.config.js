@@ -7,6 +7,9 @@ module.exports = {
   content: [
     '../../workspace/**/templates/**/*.html',
     '../../workspace/**/static/**/*.js',
+    // Minified vendored crypto: it carries no utility class, but the extractor
+    // finds class-shaped substrings in it and emits dead rules for them.
+    '!../../workspace/vault/ui/static/vault/ui/js/vendor/**',
   ],
   // DaisyUI semantic colors that the codebase interpolates at runtime
   // (audit identified 14 dynamic patterns: module.color, calendar.color,

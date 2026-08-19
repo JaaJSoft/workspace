@@ -1,0 +1,138 @@
+{
+  "aead": [
+    {
+      "ad": "v1|entry-field|0192f3a4-5b6c-7d8e-9f01-23456789abcd|password",
+      "expected_wire_b64": "AQEBAAEMAAECAwQFBgcICQoLL3e4b6CX8FW9_oUFDfT_p5rMtkgiX7U",
+      "id": "entry-field-password",
+      "iv_b64": "AAECAwQFBgcICQoL",
+      "kdf_id": 1,
+      "key_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "key_version": 1,
+      "plaintext": "hunter2"
+    },
+    {
+      "ad": "v1|account-kex-priv|0192f3a4-1111-7d8e-9f01-23456789abcd",
+      "expected_wire_b64": "AQEAAAAMAAECAwQFBgcICQoLWlG6XWu0BwmFkC5aqN4cAVwwLqss1AOu6GGHZXlQGegv",
+      "id": "account-kex-priv-wrap",
+      "iv_b64": "AAECAwQFBgcICQoL",
+      "kdf_id": 0,
+      "key_b64": "8b43Rnlqqx3tYCG03X00vdglUqDQHYaSZKynjYYDzuY",
+      "key_version": 0,
+      "plaintext": "private-key-bytes"
+    }
+  ],
+  "argon2id": [
+    {
+      "expected_amk_b64": "mLqx1iBP8IrVNOlwcQE1189A01WGBWyulIfG7lpJ8w4",
+      "id": "amk-from-password-and-secret-key",
+      "params": {
+        "algo": "argon2id",
+        "m": 65536,
+        "p": 2,
+        "t": 3,
+        "v": "1.3"
+      },
+      "password": "Tr0ub4dor&3",
+      "salt_b64": "oKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr8",
+      "secret_key_b64": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+    },
+    {
+      "expected_amk_b64": "VA1bgp7Wlo394is0Hl9qm1jdOUaRKkIlVbOwZv4WUDs",
+      "id": "nfc-decomposed-password-derives-the-same-amk",
+      "params": {
+        "algo": "argon2id",
+        "m": 65536,
+        "p": 2,
+        "t": 3,
+        "v": "1.3"
+      },
+      "password": "café",
+      "salt_b64": "oKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr8",
+      "secret_key_b64": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+    }
+  ],
+  "cbor": [
+    {
+      "expected_b64": "pGF2AWJ0cxsAAAGYnibOAGR0eXBlbmVudHJ5X21ldGFkYXRhZHV1aWR4JDAxOTJmM2E0LTViNmMtN2Q4ZS05ZjAxLTIzNDU2Nzg5YWJjZA",
+      "id": "entry-metadata",
+      "payload": {
+        "ts": 1755000000000,
+        "type": "entry_metadata",
+        "uuid": "0192f3a4-5b6c-7d8e-9f01-23456789abcd",
+        "v": 1
+      }
+    },
+    {
+      "expected_b64": "omFhAmJiYgE",
+      "id": "short-key-sorts-before-long-key",
+      "payload": {
+        "a": 2,
+        "bb": 1
+      }
+    },
+    {
+      "expected_b64": "omJ6egJiw6kB",
+      "id": "non-ascii-key-sorts-by-its-utf8-bytes",
+      "payload": {
+        "zz": 2,
+        "é": 1
+      }
+    },
+    {
+      "expected_b64": "o2F2AWRuYW1lZWNhZsOpZHR5cGVkdGVzdA",
+      "id": "nfc-normalises-a-decomposed-string-value",
+      "payload": {
+        "name": "café",
+        "type": "test",
+        "v": 1
+      }
+    }
+  ],
+  "ed25519": [
+    {
+      "expected_sig_b64": "Ab_pD_BxFNzIft9GWkCP9ZaLPIR5oxXnF1bAVNioBe0bNhxLHwNe9ZUJ4PhUg9ssZigFEjwNNQR_eWhXC8Vo3A0",
+      "id": "entry-metadata-signature",
+      "payload": {
+        "ts": 1755000000000,
+        "type": "entry_metadata",
+        "uuid": "0192f3a4-5b6c-7d8e-9f01-23456789abcd",
+        "v": 1
+      },
+      "pk_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+      "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
+    },
+    {
+      "expected_sig_b64": "Aej0b-mzMvunJfYItee89UGdR4Th7Qopuigr4fGJOsRCdNhBtRyPByCz6UmzXXCB-Xt7Wg0zvJBsAE5v9ARqvwM",
+      "id": "account-kex-pub-attestation",
+      "message_b64": "djF8YWNjb3VudC1rZXgtcHVifDAxOTJmM2E0LTExMTEtN2Q4ZS05ZjAxLTIzNDU2Nzg5YWJjZHxENnBvVHRLSVo3bF9TbW90N2wzNHpwZE9kcmNCamo4aW9jVFBKbmhYRHlB",
+      "pk_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+      "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
+    }
+  ],
+  "hkdf": [
+    {
+      "expected_b64": "8b43Rnlqqx3tYCG03X00vdglUqDQHYaSZKynjYYDzuY",
+      "id": "unwrap-key",
+      "ikm_b64": "mLqx1iBP8IrVNOlwcQE1189A01WGBWyulIfG7lpJ8w4",
+      "info": "v1|unwrap"
+    },
+    {
+      "expected_b64": "naqWXeFCRq8Lx5NRE4QBTUDTPxHhfkmcxHhH7hU4POs",
+      "id": "entry-key",
+      "ikm_b64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8",
+      "info": "v1|entry-key|0192f3a4-5b6c-7d8e-9f01-23456789abcd"
+    }
+  ],
+  "hpke": [
+    {
+      "expected_sealed_b64": "e06Qm75__kTEZaIgA31gjuNYl9Me-XLwf3SJLLD3PxOtKexYD34pj4J2f35PcuwBK6RMhBUv4msB15i_d6bQdv0YeHAvFlJV-HhtPoTORHE",
+      "id": "vault-key-self-wrap",
+      "info": "v1|vault-key|0192f3a4-2222-7d8e-9f01-23456789abcd|0192f3a4-1111-7d8e-9f01-23456789abcd",
+      "plaintext_b64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8",
+      "recipient_pk_b64": "D6poTtKIZ7l_Smot7l34zpdOdrcBjj8iocTPJnhXDyA",
+      "recipient_sk_b64": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI",
+      "sender_sk_b64": "ERERERERERERERERERERERERERERERERERERERERERE"
+    }
+  ],
+  "version": 1
+}

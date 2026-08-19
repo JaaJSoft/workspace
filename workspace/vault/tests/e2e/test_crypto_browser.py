@@ -199,7 +199,10 @@ class EngineChecks:
             async () => {
               try {
                 await crypto.subtle.importKey(
-                  'raw', new Uint8Array(32), 'Ed25519', false, ['verify']);
+                  'raw',
+                  Uint8Array.from('d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
+                    .match(/../g).map((byte) => parseInt(byte, 16))),
+                  'Ed25519', false, ['verify']);
                 return null;
               } catch (e) { return e.name; }
             }
@@ -231,7 +234,14 @@ class EngineChecks:
                 try { await fn(); out[name] = true; }
                 catch (e) { out[name] = `${e.name}: ${e.message}`; }
               };
-              const seed = new Uint8Array(32);
+              // A published key pair, not a run of zero bytes: WebKit validates
+              // the key material where other engines do not, and a degenerate
+              // seed makes the probe report a missing algorithm when what it
+              // actually found was an engine checking its inputs.
+              const hex = (text) => Uint8Array.from(
+                text.match(/../g).map((byte) => parseInt(byte, 16)));
+              const seed = hex('9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60');
+              const publicKey = hex('d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a');
               // The fixed PKCS#8 prelude the bundle prepends to a raw seed.
               const pkcs8 = new Uint8Array([
                 0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b,
@@ -264,7 +274,7 @@ class EngineChecks:
               });
 
               await probe('ed25519-import-public', () => crypto.subtle.importKey(
-                'raw', new Uint8Array(32), 'Ed25519', false, ['verify']));
+                'raw', publicKey, 'Ed25519', false, ['verify']));
 
               return out;
             }

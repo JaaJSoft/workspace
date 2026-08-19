@@ -202,11 +202,20 @@ window.importsApp = function importsApp() {
       let pct = 0;
       if (job.status === 'completed') pct = 100;
       else if (total > 0) pct = Math.min(100, Math.round((done / total) * 100));
-      return { done, total, pct, phase, stats: s };
+      // While listing, done/total both grow (unchanged entries are counted as
+      // they are seen), so a ratio would mislead - a retry would look almost
+      // finished before copying anything.
+      const determinate = total > 0 && phase !== 'listing';
+      return { done, total, pct, phase, determinate, stats: s };
+    },
+
+    isStopping(job) {
+      return this.isActive(job) && !!job.cancel_requested_at;
     },
 
     phaseLabel(job) {
       const p = this.progress(job);
+      if (this.isStopping(job)) return 'Stopping… what is already imported stays.';
       if (job.status === 'pending') return 'Waiting to start…';
       if (job.status === 'running' && p.phase === 'listing') return `Listing the remote folders… ${p.total} files found`;
       if (job.status === 'running') return `Copying… ${p.done} / ${p.total}`;
@@ -243,10 +252,15 @@ window.importsApp = function importsApp() {
 
     async refreshJob(uuid) {
       const { ok, data } = await api(`/jobs/${uuid}`);
-      if (!ok) return;
-      const idx = this.jobs.findIndex((j) => j.uuid === uuid);
-      if (idx === -1) this.jobs.unshift(data);
-      else this.jobs.splice(idx, 1, data);
+      if (ok) this.upsertJob(data);
+    },
+
+    // One card per job, whichever arrives first: a create/retry response or
+    // the refetch an SSE event triggered while that request was in flight.
+    upsertJob(job) {
+      const idx = this.jobs.findIndex((j) => j.uuid === job.uuid);
+      if (idx === -1) this.jobs.unshift(job);
+      else this.jobs.splice(idx, 1, job);
     },
 
     async refreshJobs() {
@@ -282,8 +296,11 @@ window.importsApp = function importsApp() {
     async retryJob(job) {
       const res = await api(`/jobs/${job.uuid}/retry`, { method: 'POST' });
       if (!res.ok) return AppAlert.error(errorMessage(res.data, 'Could not retry the import.'));
-      this.jobs.unshift(res.data);
+      this.upsertJob(res.data);
       AppAlert.success('Import restarted - only what failed or was never reached runs again.');
+      // In eager mode (development) the retry call returns once the import
+      // is over, with the job as it was created; refetch its real state.
+      await this.refreshJob(res.data.uuid);
     },
 
     async showErrors(job) {
@@ -522,7 +539,7 @@ window.importsApp = function importsApp() {
           w.error = errorMessage(res.data, 'The import could not be started.');
           return;
         }
-        this.jobs.unshift(res.data);
+        this.upsertJob(res.data);
         this.closeWizard();
         AppAlert.success('Import started. You can leave this page - you will be notified when it ends.');
         // In eager mode (development) the create call returns once the import

@@ -103,7 +103,10 @@
               </div>
             </div>
             <div class="flex gap-1 shrink-0">
-              <button type="button" class="btn btn-xs btn-ghost" x-show="isActive(job)" @click="cancelJob(job)">Stop</button>
+              <button type="button" class="btn btn-xs btn-ghost" x-show="isActive(job)" :disabled="isStopping(job)" @click="cancelJob(job)">
+                <span x-show="isStopping(job)" class="loading loading-spinner loading-xs"></span>
+                <span x-text="isStopping(job) ? 'Stopping' : 'Stop'"></span>
+              </button>
               <button type="button" class="btn btn-xs btn-ghost" x-show="job.status === 'failed' || job.status === 'cancelled'" @click="retryJob(job)">Retry</button>
               <button type="button" class="btn btn-xs btn-ghost" x-show="progress(job).stats.failed" @click="showErrors(job)" x-text="'Errors (' + progress(job).stats.failed + ')'"></button>
             </div>
@@ -111,10 +114,10 @@
 
           <template x-if="isActive(job)">
             <div class="mt-3">
-              <template x-if="progress(job).total > 0">
+              <template x-if="progress(job).determinate">
                 <progress class="progress progress-primary w-full" :value="progress(job).pct" max="100"></progress>
               </template>
-              <template x-if="progress(job).total === 0">
+              <template x-if="!progress(job).determinate">
                 <progress class="progress progress-primary w-full"></progress>
               </template>
               <div class="text-xs text-base-content/60 mt-1" x-text="phaseLabel(job)"></div>

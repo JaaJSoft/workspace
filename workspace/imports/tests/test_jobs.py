@@ -301,6 +301,37 @@ class CancelRetryPurgeTests(JobsTestCase):
         self.assertEqual(job.status, ImportJob.Status.RUNNING)
         self.assertIsNotNone(job.cancel_requested_at)
 
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_cancel_running_job_without_a_worker_ends_it_immediately(self):
+        """A running job whose heartbeat went stale has lost its worker (killed,
+        or the dev server restarted mid-import): nobody would ever read the
+        flag, so the stop takes effect right away."""
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now() - timedelta(hours=1),
+            heartbeat_at=timezone.now() - timedelta(minutes=30),
+        )
+        job = svc.cancel_job(job)
+        self.assertEqual(job.status, ImportJob.Status.CANCELLED)
+        self.assertIsNotNone(job.finished_at)
+        # ...and a later delivery for it does nothing.
+        self.assertIs(svc.run_job(job.pk), Outcome.SKIPPED)
+
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_cancel_running_job_with_a_live_worker_only_flags_it(self):
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now() - timedelta(hours=1),
+            heartbeat_at=timezone.now() - timedelta(seconds=30),
+        )
+        job = svc.cancel_job(job)
+        self.assertEqual(job.status, ImportJob.Status.RUNNING)
+        self.assertIsNotNone(job.cancel_requested_at)
+
     def test_cancel_finished_job_is_refused(self):
         job = ImportJob.objects.create(
             connection=self.conn, kinds=["files"], status=ImportJob.Status.COMPLETED

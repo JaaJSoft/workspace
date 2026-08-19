@@ -1,0 +1,44 @@
+# Advisories land against dependencies nobody touched, so this runs on a
+# schedule as well as on the pull requests that change the build project.
+# It lives outside tests.yml because that workflow excludes scripts/frontend
+# from its paths filter: a Dependabot bump there triggers no run of it at all,
+# which is precisely the change an audit most needs to see.
+#
+# Reports rather than gates, for now: jsPDF carries open advisories in every
+# published version, so a job that failed on them would be red on every run -
+# and a check that is always red is a check nobody reads. Advisories surface as
+# a warning annotation instead. Drop the `if` wrapper below the day that
+# dependency is resolved, and this starts gating for real.
+name: Dependency audit
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/frontend/package.json'
+      - 'scripts/frontend/package-lock.json'
+      - '.github/workflows/audit.yml'
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    name: Dependency audit
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Audit the vendored frontend dependencies
+        run: |
+          cd scripts/frontend
+          if npm audit --audit-level=high; then
+            echo "No advisory at high severity or above."
+          else
+            echo "::warning title=Dependency advisories::npm audit reported advisories at high severity or above - see the log above."
+          fi

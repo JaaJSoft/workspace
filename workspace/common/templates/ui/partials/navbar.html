@@ -259,6 +259,23 @@
               </a>
             </li>
 
+            {# Modules kept off the dashboard (tools, not apps) are reached from here. #}
+            {% for module in workspace_active_modules %}
+              {% if module.show_on_dashboard is False and module.url %}
+                <li class="{% if request.path == module.url %}disabled{% endif %}">
+                  <a
+                    href="{{ module.url }}"
+                    class="gap-3 {% if request.path != module.url %}hover:bg-{{ module.color }}/10 hover:text-{{ module.color }}{% endif %} transition-colors"
+                    {% if request.path == module.url %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
+                  >
+                    <i data-lucide="{{ module.icon }}" class="w-4 h-4"></i>
+                    <span class="font-medium">{{ module.name }}</span>
+                    {% if module.preview %}<span class="badge badge-xs badge-warning ml-auto">Preview</span>{% endif %}
+                  </a>
+                </li>
+              {% endif %}
+            {% endfor %}
+
             <!-- What's new -->
             <li>
               <button

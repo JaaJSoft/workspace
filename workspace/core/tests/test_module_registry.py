@@ -236,6 +236,12 @@ class ModulePreviewAndVisibilityTests(TestCase):
         )
         self.assertFalse(m.preview)
 
+    def test_module_info_shows_on_dashboard_by_default(self):
+        m = ModuleInfo(
+            name="X", slug="x", description="", icon="i", color="c", url="/x"
+        )
+        self.assertTrue(m.show_on_dashboard)
+
     def test_normalize_accepts_known_values(self):
         self.assertEqual(ModuleVisibility.normalize("admin"), "admin")
         self.assertEqual(ModuleVisibility.normalize("ALL"), "all")

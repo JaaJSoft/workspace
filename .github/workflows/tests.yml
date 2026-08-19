@@ -133,6 +133,8 @@ jobs:
             min_coverage: 95
           - module: files
             min_coverage: 65
+          - module: imports
+            min_coverage: 90
           - module: mail
             min_coverage: 55
           - module: notes

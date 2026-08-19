@@ -123,6 +123,10 @@ class UpdateAndTestConnectionTests(TestCase):
             [e.id for e in svc.browse_files(self.conn, "/alpha")], ["/alpha/deep.txt"]
         )
 
+    def test_browse_closes_the_source(self):
+        svc.browse_files(self.conn, "")
+        self.assertTrue(self.provider.last_source.closed)
+
     @override_settings(IMPORTS_ALLOWED_HOSTS=[])
     def test_browse_re_checks_the_url(self):
         with patch(

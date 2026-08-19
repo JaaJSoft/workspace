@@ -75,6 +75,9 @@ class FileSource(Protocol):
     def open(self, entry: RemoteEntry) -> AbstractContextManager[BinaryIO]:
         """Stream a file's bytes; the body is never buffered in full."""
 
+    def close(self) -> None:
+        """Release the underlying connection pool; the source is unusable after."""
+
 
 class Provider(ABC):
     slug: ClassVar[str]

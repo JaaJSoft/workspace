@@ -17,6 +17,10 @@ class FakeFileSource:
 
     def __init__(self, tree):
         self._tree = tree
+        self.closed = False
+
+    def close(self):
+        self.closed = True
 
     def list_dir(self, entry_id):
         yield from self._tree.get(entry_id, [])
@@ -37,6 +41,7 @@ class FakeProvider(Provider):
     def reset(self):
         self.valid_secret = "good"
         self.test_calls = 0
+        self.last_source = None
         self.capabilities = {"kinds": ["files"], "quota_used": 42}
         self.tree = {
             "/": [
@@ -60,7 +65,8 @@ class FakeProvider(Provider):
         return dict(self.capabilities)
 
     def file_source(self, connection):
-        return FakeFileSource(self.tree)
+        self.last_source = FakeFileSource(self.tree)
+        return self.last_source
 
 
 def fake_provider():

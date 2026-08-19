@@ -71,7 +71,9 @@ class NextcloudProvider(WebDavProvider):
             KeyError,
             TypeError,
         ) as exc:
-            logger.info("Nextcloud discovery skipped for %s: %s", scrub(root), exc)
+            logger.info(
+                "Nextcloud discovery skipped for %s: %s", scrub(root), scrub(str(exc))
+            )
             return {}
         version = data.get("version", {})
         return {

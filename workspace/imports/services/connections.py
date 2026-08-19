@@ -110,6 +110,9 @@ def browse_files(connection, entry_id):
     prov = get_available_provider(connection.provider)
     check_remote_url(connection.base_url)
     source = prov.file_source(connection)
-    entries = list(source.list_dir(entry_id or source.ROOT_ID))
+    try:
+        entries = list(source.list_dir(entry_id or source.ROOT_ID))
+    finally:
+        source.close()
     entries.sort(key=lambda e: (not e.is_dir, e.name.lower()))
     return entries

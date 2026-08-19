@@ -36,6 +36,10 @@ class RemoteUrlGuardTests(SimpleTestCase):
         with self.assertRaisesRegex(UnsafeUrl, "private network"):
             check_remote_url("https://192.168.1.10/remote.php/dav")
 
+    def test_carrier_grade_nat_counts_as_private(self):
+        with self.assertRaisesRegex(UnsafeUrl, "private network"):
+            check_remote_url("http://100.64.0.1/")
+
     @override_settings(IMPORTS_ALLOW_PRIVATE_NETWORKS=True)
     def test_private_networks_can_be_allowed(self):
         check_remote_url("https://192.168.1.10/remote.php/dav")

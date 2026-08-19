@@ -118,6 +118,15 @@ class WebDavFileSource:
         self._base_path = urlparse(connection.base_url).path.rstrip("/")
         self._host = urlparse(connection.base_url).hostname or connection.base_url
 
+    def close(self):
+        self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
+
     # -- paths ---------------------------------------------------------
 
     def _url_for(self, entry_id: str, *, collection=False) -> str:
@@ -265,7 +274,8 @@ class WebDavProvider(Provider):
 
     def test_connection(self, connection) -> dict:
         capabilities = {"kinds": sorted(self.kinds)}
-        capabilities.update(WebDavFileSource(connection).probe())
+        with WebDavFileSource(connection) as source:
+            capabilities.update(source.probe())
         return capabilities
 
     def file_source(self, connection):

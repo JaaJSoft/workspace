@@ -44,3 +44,17 @@ class ProviderRegistryTests(SimpleTestCase):
     def test_file_source_is_not_implemented_by_default(self):
         with self.assertRaises(NotImplementedError):
             _Stub().file_source(None)
+
+    def test_registering_while_iterating_available_does_not_break_the_snapshot(self):
+        reg = ProviderRegistry()
+
+        class _Registering(_Stub):
+            slug = "registering"
+
+            def is_available(self):
+                reg.register(_Stub())
+                return True
+
+        reg.register(_Registering())
+        self.assertEqual([p.slug for p in reg.available()], ["registering"])
+        self.assertEqual({p.slug for p in reg.all()}, {"registering", "stub"})

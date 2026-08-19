@@ -57,7 +57,10 @@ def _check_address(address, host):
         or address.is_reserved
     ):
         raise UnsafeUrl(f"'{host}' points to an address this server will not contact.")
-    if address.is_private and not settings.IMPORTS_ALLOW_PRIVATE_NETWORKS:
+    # Not-global rather than is_private: it also covers carrier-grade NAT
+    # (100.64/10) and other ranges that are routable inside a network but
+    # never on the Internet.
+    if not address.is_global and not settings.IMPORTS_ALLOW_PRIVATE_NETWORKS:
         raise UnsafeUrl(
             f"'{host}' is on a private network. Ask the administrator to allow "
             "private networks for imports if your previous cloud lives there."

@@ -275,6 +275,19 @@ class AgainstOurOwnServerTests(TestCase):
         with source.open(entry) as stream:
             self.assertEqual(stream.read(), b"hello import")
 
+    def test_test_connection_closes_its_client(self):
+        clients = []
+
+        def factory(conn, **kw):
+            client = build_client(conn, transport=self.transport, **kw)
+            clients.append(client)
+            return client
+
+        with patch("workspace.imports.providers.webdav.build_client", factory):
+            WebDavProvider().test_connection(self.conn)
+        self.assertEqual(len(clients), 1)
+        self.assertTrue(clients[0].is_closed)
+
     def test_probe_reports_quota(self):
         with patch(
             "workspace.imports.providers.webdav.build_client",

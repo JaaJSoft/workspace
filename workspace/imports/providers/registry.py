@@ -15,13 +15,17 @@ class ProviderRegistry:
             self._providers[provider.slug] = provider
 
     def get(self, slug: str) -> Provider | None:
-        return self._providers.get(slug)
+        with self._lock:
+            return self._providers.get(slug)
 
     def all(self) -> list[Provider]:
-        return list(self._providers.values())
+        with self._lock:
+            return list(self._providers.values())
 
     def available(self) -> list[Provider]:
-        return [p for p in self._providers.values() if p.is_available()]
+        # is_available() may do I/O-ish work (settings lookups); run it on a
+        # snapshot rather than under the lock.
+        return [p for p in self.all() if p.is_available()]
 
 
 provider_registry = ProviderRegistry()

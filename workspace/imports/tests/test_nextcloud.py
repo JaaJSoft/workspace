@@ -115,6 +115,19 @@ class DiscoveryTests(SimpleTestCase):
 
         self.assertEqual(self._discover(handler), {})
 
+    def test_logged_failure_text_is_scrubbed(self):
+        from unittest.mock import patch
+
+        def handler(request):
+            raise httpx2.ConnectError("line one\r\nFORGED line")
+
+        with patch(
+            "workspace.imports.providers.nextcloud.scrub", side_effect=lambda v: v
+        ) as scrub:
+            self._discover(handler)
+        scrubbed = [str(call.args[0]) for call in scrub.call_args_list]
+        self.assertTrue(any("Could not reach" in s for s in scrubbed), scrubbed)
+
 
 class TestConnectionTests(SimpleTestCase):
     def test_merges_webdav_probe_and_ocs_discovery(self):

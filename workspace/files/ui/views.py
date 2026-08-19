@@ -11,6 +11,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.core.services.module_visibility import is_module_slug_visible
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_viewer_by_slug
 from workspace.files.services.storage_analysis import (
@@ -405,6 +406,7 @@ def _build_context(request, folder=None, is_trash_view=False):
     return {
         "nodes": nodes,
         "current_folder": current_folder,
+        "imports_available": is_module_slug_visible(request.user, "imports"),
         "breadcrumbs": breadcrumbs,
         "folder_stats": folder_stats,
         "is_favorites_view": is_favorites_view,

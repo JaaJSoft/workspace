@@ -1,4 +1,5 @@
 {% extends 'base_with_navbar.html' %}
+{% load static %}
 
 {% block title %}Imports · Workspace{% endblock %}
 
@@ -9,53 +10,323 @@
 {% block main_class %}container mx-auto p-4 max-w-5xl{% endblock %}
 
 {% block content %}
-<div class="py-6">
-  <div class="mb-6">
-    <h1 class="text-2xl font-bold">Imports</h1>
-    <p class="text-base-content/60 text-sm mt-1">Bring your files over from another cloud - Nextcloud, any WebDAV host, and more to come.</p>
+{{ providers|json_script:"providers-data" }}
+{{ connections|json_script:"connections-data" }}
+{{ jobs|json_script:"jobs-data" }}
+{{ open_wizard|json_script:"open-wizard-data" }}
+{{ highlight_job|json_script:"highlight-job-data" }}
+
+<div class="py-6" x-data="importsApp()">
+  <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold">Imports</h1>
+      <p class="text-base-content/60 text-sm mt-1">Bring your files over from another cloud - Nextcloud, any WebDAV host, and more to come.</p>
+    </div>
+    <div class="flex gap-2">
+      <button type="button" class="btn btn-sm btn-ghost gap-1" @click="openConnectionDialog()">
+        <i data-lucide="plug" class="w-4 h-4"></i> Add connection
+      </button>
+      <button type="button" class="btn btn-sm btn-primary gap-1" @click="openWizard()" :disabled="connections.length === 0">
+        <i data-lucide="download-cloud" class="w-4 h-4"></i> New import
+      </button>
+    </div>
   </div>
 
+  <!-- Connections -->
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-3">Connections</h2>
-    {% if connections %}
-      <ul class="space-y-2">
-        {% for connection in connections %}
-          <li class="flex items-center gap-3 border border-base-300 rounded-lg p-3">
-            <i data-lucide="server" class="w-5 h-5 text-base-content/60"></i>
-            <div class="min-w-0 flex-1">
-              <div class="font-medium truncate">{{ connection.label }}</div>
-              <div class="text-xs text-base-content/60 truncate">{{ connection.provider }}{% if connection.base_url %} · {{ connection.base_url }}{% endif %}</div>
-            </div>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
+    <template x-if="connections.length === 0">
       <div class="border border-dashed border-base-300 rounded-lg p-8 text-center">
-        <i data-lucide="download-cloud" class="w-8 h-8 mx-auto text-base-content/40 mb-2"></i>
-        <p class="text-sm text-base-content/60">No connection yet. Connecting a Nextcloud or WebDAV account is coming in a future update.</p>
+        <i data-lucide="plug" class="w-8 h-8 mx-auto text-base-content/40 mb-2"></i>
+        <p class="text-sm text-base-content/60 mb-3">Connect the cloud you are leaving - a Nextcloud account or any WebDAV folder.</p>
+        <button type="button" class="btn btn-sm btn-primary" @click="openConnectionDialog()">Add a connection</button>
       </div>
-    {% endif %}
+    </template>
+    <ul class="grid gap-3 sm:grid-cols-2" x-show="connections.length > 0">
+      <template x-for="conn in connections" :key="conn.uuid">
+        <li class="border border-base-300 rounded-lg p-4 flex flex-col gap-2">
+          <div class="flex items-start gap-3">
+            <div class="rounded-lg bg-accent/10 p-2 shrink-0"><i data-lucide="server" class="w-5 h-5 text-accent"></i></div>
+            <div class="min-w-0 flex-1">
+              <div class="font-medium truncate" x-text="conn.label"></div>
+              <div class="text-xs text-base-content/60 truncate">
+                <span x-text="conn.provider_name"></span> · <span x-text="conn.username"></span>
+              </div>
+              <div class="text-xs text-base-content/50 truncate" x-text="conn.base_url"></div>
+            </div>
+          </div>
+          <div class="text-xs text-base-content/60 flex flex-wrap gap-x-3 gap-y-1">
+            <span x-show="quotaLabel(conn)" x-text="quotaLabel(conn)"></span>
+            <span x-show="conn.capabilities && conn.capabilities.server_version">Nextcloud <span x-text="conn.capabilities.server_version"></span></span>
+            <span x-show="conn.last_checked_at">Checked <span x-text="formatDate(conn.last_checked_at)"></span></span>
+          </div>
+          <template x-if="conn.last_error">
+            <inline-alert type="error" class="text-xs"><span x-text="conn.last_error"></span></inline-alert>
+          </template>
+          <div class="flex flex-wrap gap-1 mt-auto pt-1">
+            <button type="button" class="btn btn-xs btn-primary" @click="openWizard(conn)">Import from here</button>
+            <button type="button" class="btn btn-xs btn-ghost" @click="testConnection(conn)" :disabled="!!connBusy[conn.uuid]">
+              <span x-show="connBusy[conn.uuid]" class="loading loading-spinner loading-xs"></span> Test
+            </button>
+            <button type="button" class="btn btn-xs btn-ghost" @click="openConnectionDialog(conn)">Edit</button>
+            <button type="button" class="btn btn-xs btn-ghost text-error ml-auto" @click="deleteConnection(conn)">Remove</button>
+          </div>
+        </li>
+      </template>
+    </ul>
   </section>
 
+  <!-- Jobs -->
   <section>
     <h2 class="text-lg font-semibold mb-3">Imports</h2>
-    {% if jobs %}
-      <ul class="space-y-2">
-        {% for job in jobs %}
-          <li class="flex items-center gap-3 border border-base-300 rounded-lg p-3">
-            <div class="min-w-0 flex-1">
-              <div class="font-medium truncate">{{ job.connection.label }}</div>
-              <div class="text-xs text-base-content/60">{{ job.created_at|date:"DATETIME_FORMAT" }}</div>
-            </div>
-            <span class="badge badge-ghost">{{ job.get_status_display }}</span>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
+    <template x-if="jobs.length === 0">
       <div class="border border-dashed border-base-300 rounded-lg p-8 text-center">
         <p class="text-sm text-base-content/60">No import yet.</p>
       </div>
-    {% endif %}
+    </template>
+    <ul class="space-y-3" x-show="jobs.length > 0">
+      <template x-for="job in jobs" :key="job.uuid">
+        <li :id="'job-' + job.uuid" class="border rounded-lg p-4" :class="job.uuid === highlightJob ? 'border-primary' : 'border-base-300'">
+          <div class="flex items-start gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-medium truncate" x-text="job.connection_label"></span>
+                <span class="badge badge-sm" :class="statusClass(job.status)" x-text="job.status"></span>
+                <span class="text-xs text-base-content/50" x-text="formatDate(job.created_at)"></span>
+              </div>
+              <div class="text-xs text-base-content/60 mt-0.5">
+                <span x-show="job.options.files && job.options.files.source_path">From <code x-text="job.options.files.source_path"></code></span>
+                <span x-show="job.options.files && job.options.files.on_conflict"> · same-name files: <span x-text="job.options.files.on_conflict"></span></span>
+              </div>
+            </div>
+            <div class="flex gap-1 shrink-0">
+              <button type="button" class="btn btn-xs btn-ghost" x-show="isActive(job)" @click="cancelJob(job)">Stop</button>
+              <button type="button" class="btn btn-xs btn-ghost" x-show="job.status === 'failed' || job.status === 'cancelled'" @click="retryJob(job)">Retry</button>
+              <button type="button" class="btn btn-xs btn-ghost" x-show="progress(job).stats.failed" @click="showErrors(job)" x-text="'Errors (' + progress(job).stats.failed + ')'"></button>
+            </div>
+          </div>
+
+          <template x-if="isActive(job)">
+            <div class="mt-3">
+              <template x-if="progress(job).total > 0">
+                <progress class="progress progress-primary w-full" :value="progress(job).pct" max="100"></progress>
+              </template>
+              <template x-if="progress(job).total === 0">
+                <progress class="progress progress-primary w-full"></progress>
+              </template>
+              <div class="text-xs text-base-content/60 mt-1" x-text="phaseLabel(job)"></div>
+            </div>
+          </template>
+          <template x-if="!isActive(job)">
+            <div class="mt-2 text-sm">
+              <span x-text="summary(job)"></span>
+              <template x-if="job.error"><inline-alert type="error" class="mt-2 text-xs"><span x-text="job.error"></span></inline-alert></template>
+            </div>
+          </template>
+        </li>
+      </template>
+    </ul>
   </section>
+
+  <!-- Connection dialog -->
+  <dialog x-ref="connectionDialog" class="modal">
+    <div class="modal-box max-w-lg">
+      <h3 class="font-bold text-lg mb-1" x-text="connEditing ? 'Edit connection' : 'Add a connection'"></h3>
+      <p class="text-sm text-base-content/60 mb-4">Nothing is saved until the server has answered with these credentials.</p>
+      <form class="space-y-3" @submit.prevent="saveConnection()">
+        <div class="form-control" x-show="!connEditing">
+          <label class="label"><span class="label-text font-medium">Provider</span></label>
+          <select x-model="connForm.provider" class="select select-bordered select-sm w-full">
+            <template x-for="p in credentialProviders()" :key="p.slug">
+              <option :value="p.slug" x-text="p.name"></option>
+            </template>
+          </select>
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Name</span></label>
+          <input type="text" x-model="connForm.label" class="input input-bordered input-sm w-full" placeholder="e.g. My old Nextcloud" required />
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">URL</span></label>
+          <input type="url" x-model="connForm.base_url" class="input input-bordered input-sm w-full" placeholder="https://cloud.example.org" required />
+          <span class="label-text-alt text-base-content/60 mt-1" x-text="hint('url')"></span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium">Username</span></label>
+            <input type="text" x-model="connForm.username" class="input input-bordered input-sm w-full" autocomplete="off" required />
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium" x-text="connEditing ? 'New password (optional)' : 'Password'"></span></label>
+            <input type="password" x-model="connForm.secret" class="input input-bordered input-sm w-full" autocomplete="new-password" :required="!connEditing" />
+          </div>
+        </div>
+        <span class="label-text-alt text-base-content/60" x-text="hint('secret')"></span>
+        <template x-if="connError">
+          <inline-alert type="error"><span x-text="connError"></span></inline-alert>
+        </template>
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeConnectionDialog()">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm" :disabled="connSaving">
+            <span x-show="connSaving" class="loading loading-spinner loading-xs"></span>
+            <span x-text="connSaving ? 'Checking…' : (connEditing ? 'Save' : 'Connect')"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+  <!-- Wizard dialog -->
+  <dialog x-ref="wizardDialog" class="modal">
+    <div class="modal-box max-w-2xl">
+      <h3 class="font-bold text-lg mb-1">New import</h3>
+      <ul class="steps steps-horizontal w-full text-xs mb-4">
+        <li class="step" :class="wizard.step >= 1 && 'step-primary'">Source</li>
+        <li class="step" :class="wizard.step >= 2 && 'step-primary'">What</li>
+        <li class="step" :class="wizard.step >= 3 && 'step-primary'">Where</li>
+        <li class="step" :class="wizard.step >= 4 && 'step-primary'">Go</li>
+      </ul>
+
+      <!-- Step 1: connection -->
+      <div x-show="wizard.step === 1" class="space-y-2">
+        <p class="text-sm text-base-content/60">Which connection do you want to import from?</p>
+        <template x-for="conn in connections" :key="conn.uuid">
+          <label class="flex items-center gap-3 border rounded-lg p-3 cursor-pointer" :class="wizard.connection && wizard.connection.uuid === conn.uuid ? 'border-primary bg-primary/5' : 'border-base-300'">
+            <input type="radio" class="radio radio-sm radio-primary" name="wizard-connection" :checked="wizard.connection && wizard.connection.uuid === conn.uuid" @change="wizard.connection = conn" />
+            <div class="min-w-0">
+              <div class="font-medium truncate" x-text="conn.label"></div>
+              <div class="text-xs text-base-content/60 truncate"><span x-text="conn.provider_name"></span> · <span x-text="conn.base_url"></span></div>
+            </div>
+          </label>
+        </template>
+        <button type="button" class="btn btn-xs btn-ghost gap-1" @click="openConnectionDialog()"><i data-lucide="plus" class="w-3 h-3"></i> Add another connection</button>
+      </div>
+
+      <!-- Step 2: kinds -->
+      <div x-show="wizard.step === 2" class="space-y-2">
+        <p class="text-sm text-base-content/60">What should be brought over?</p>
+        <label class="flex items-center gap-3 border border-primary bg-primary/5 rounded-lg p-3">
+          <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" checked disabled />
+          <div>
+            <div class="font-medium">Files</div>
+            <div class="text-xs text-base-content/60">Folders and files, with their dates.</div>
+          </div>
+        </label>
+        <p class="text-xs text-base-content/50">Other kinds of data (calendars, contacts, boards…) will appear here as providers gain them.</p>
+      </div>
+
+      <!-- Step 3: options -->
+      <div x-show="wizard.step === 3" class="space-y-4">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm font-medium">Remote folder to import</span>
+            <code class="text-xs" x-text="wizard.options.files.source_path"></code>
+          </div>
+          <div class="border border-base-300 rounded-lg">
+            <div class="flex items-center gap-1 px-2 py-1.5 border-b border-base-300 text-xs overflow-x-auto">
+              <template x-for="(crumb, i) in browseCrumbs()" :key="crumb.path">
+                <span class="flex items-center gap-1 shrink-0">
+                  <span x-show="i > 0" class="text-base-content/40">/</span>
+                  <button type="button" class="link link-hover" @click="loadBrowse(crumb.path)" x-text="crumb.label"></button>
+                </span>
+              </template>
+              <span class="ml-auto flex items-center gap-1 shrink-0">
+                <span x-show="browse.loading" class="loading loading-spinner loading-xs"></span>
+                <button type="button" class="btn btn-xs btn-primary" @click="useCurrentFolderAsSource()" :disabled="wizard.options.files.source_path === browse.path">Use this folder</button>
+              </span>
+            </div>
+            <div class="max-h-56 overflow-y-auto">
+              <template x-if="browse.error">
+                <inline-alert type="error" class="m-2 text-xs"><span x-text="browse.error"></span></inline-alert>
+              </template>
+              <button type="button" class="w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 flex items-center gap-2" x-show="browse.path !== '/'" @click="browseUp()">
+                <i data-lucide="corner-left-up" class="w-4 h-4 text-base-content/50"></i> ..
+              </button>
+              <template x-for="entry in browse.entries" :key="entry.id">
+                <button type="button" class="w-full text-left px-3 py-1.5 text-sm flex items-center gap-2" :class="entry.is_dir ? 'hover:bg-base-200' : 'text-base-content/50 cursor-default'" @click="browseInto(entry)">
+                  <i :data-lucide="entry.is_dir ? 'folder' : 'file'" class="w-4 h-4 shrink-0" :class="entry.is_dir ? 'text-warning' : 'text-base-content/40'"></i>
+                  <span class="truncate" x-text="entry.name"></span>
+                  <span class="ml-auto text-xs text-base-content/40 shrink-0" x-show="!entry.is_dir && entry.size != null" x-text="formatSize(entry.size)"></span>
+                </button>
+              </template>
+              <p class="px-3 py-2 text-xs text-base-content/50" x-show="!browse.loading && !browse.error && browse.entries.length === 0">Empty folder.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium">Import into</span></label>
+            <button type="button" class="btn btn-sm btn-outline justify-start gap-2 font-normal" @click="pickDestination()">
+              <i data-lucide="folder-open" class="w-4 h-4"></i>
+              <span class="truncate" x-text="wizard.options.files.destination_name"></span>
+            </button>
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text font-medium">When a file with the same name exists</span></label>
+            <select x-model="wizard.options.files.on_conflict" class="select select-bordered select-sm w-full">
+              <option value="rename">Keep both (rename the imported one)</option>
+              <option value="skip">Keep mine (skip the imported one)</option>
+              <option value="replace">Replace mine with the imported one</option>
+            </select>
+          </div>
+        </div>
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" class="checkbox checkbox-sm mt-0.5" x-model="wizard.options.files.create_root_folder" />
+          <span class="text-sm">Put everything in a folder named <code x-text="rootFolderName()"></code><br><span class="text-xs text-base-content/60">Untick to merge the remote tree directly into the destination.</span></span>
+        </label>
+      </div>
+
+      <!-- Step 4: recap -->
+      <div x-show="wizard.step === 4" class="space-y-3">
+        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          <dt class="text-base-content/60">From</dt><dd><span x-text="wizard.connection && wizard.connection.label"></span> · <code x-text="wizard.options.files.source_path"></code></dd>
+          <dt class="text-base-content/60">Into</dt><dd><span x-text="wizard.options.files.destination_name"></span><span x-show="wizard.options.files.create_root_folder"> / <code x-text="rootFolderName()"></code></span></dd>
+          <dt class="text-base-content/60">Same name</dt><dd x-text="wizard.options.files.on_conflict"></dd>
+        </dl>
+        <p class="text-xs text-base-content/60">The import runs in the background: it first lists the remote folders and checks your storage quota, then copies. You can leave this page and you will be notified when it ends.</p>
+        <template x-if="wizard.error">
+          <inline-alert type="error"><span x-text="wizard.error"></span></inline-alert>
+        </template>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm mr-auto" @click="closeWizard()">Cancel</button>
+        <button type="button" class="btn btn-ghost btn-sm" x-show="wizard.step > 1" @click="prevStep()">Back</button>
+        <button type="button" class="btn btn-primary btn-sm" x-show="wizard.step < 4" @click="nextStep()" :disabled="!canContinue()">Continue</button>
+        <button type="button" class="btn btn-primary btn-sm" x-show="wizard.step === 4" @click="launch()" :disabled="wizard.launching">
+          <span x-show="wizard.launching" class="loading loading-spinner loading-xs"></span>
+          Start the import
+        </button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+  <!-- Errors dialog -->
+  <dialog x-ref="errorsDialog" class="modal">
+    <div class="modal-box max-w-2xl">
+      <h3 class="font-bold text-lg mb-1">Entries that could not be imported</h3>
+      <p class="text-sm text-base-content/60 mb-3"><span x-text="errorsDialog.count"></span> failed. Retry the import to try them again.</p>
+      <div x-show="errorsDialog.loading" class="py-6 text-center"><span class="loading loading-spinner"></span></div>
+      <ul class="divide-y divide-base-300 max-h-96 overflow-y-auto text-sm" x-show="!errorsDialog.loading">
+        <template x-for="item in errorsDialog.items" :key="item.uuid">
+          <li class="py-2">
+            <code class="text-xs break-all" x-text="item.remote_id"></code>
+            <div class="text-xs text-error" x-text="item.error"></div>
+          </li>
+        </template>
+      </ul>
+      <div class="modal-action">
+        <form method="dialog"><button class="btn btn-sm">Close</button></form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'imports/ui/js/imports.js' %}"></script>
 {% endblock %}

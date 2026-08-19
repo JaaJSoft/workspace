@@ -6,6 +6,7 @@ import tempfile
 
 from django.conf import settings
 from django.core.files.base import File as DjangoFile
+from django.template.defaultfilters import filesizeformat
 from rest_framework import serializers
 
 from workspace.common.logging import scrub
@@ -110,8 +111,8 @@ class FilesImporter(Importer):
         available = settings.STORAGE_QUOTA_BYTES - FileService.storage_used(ctx.owner)
         if incoming_bytes > available:
             raise JobFailed(
-                f"Not enough space: the import needs {_human(incoming_bytes)} "
-                f"but only {_human(max(available, 0))} are left."
+                f"Not enough space: the import needs {filesizeformat(incoming_bytes)} "
+                f"but only {filesizeformat(max(available, 0))} are left."
             )
 
     # -- copying phase -------------------------------------------------
@@ -273,11 +274,3 @@ class FilesImporter(Importer):
         )
         ctx.stat("files")
         ctx.stat("bytes", size)
-
-
-def _human(num_bytes):
-    value = float(num_bytes)
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if value < 1024 or unit == "TB":
-            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
-        value /= 1024

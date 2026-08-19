@@ -67,12 +67,12 @@ jobs:
         with:
           filters: |
             python:
-              - '**.py'
+              - '**/*.py'
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/tests.yml'
             js:
-              - 'workspace/**.js'
+              - 'workspace/**/*.js'
               - '.github/workflows/tests.yml'
             # Everything the WebDAV server and its auth path import from,
             # plus the shared dependency manifests.

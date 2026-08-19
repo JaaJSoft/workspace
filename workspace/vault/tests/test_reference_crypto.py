@@ -312,3 +312,58 @@ class HpkeTests(SimpleTestCase):
         )
         with self.assertRaises(OpenError):
             primitives.hpke_open(recipient_private, b"v1|vault-key|b|r", sealed)
+
+
+class CanonicalTypeTests(SimpleTestCase):
+    """The accepted types are closed, and match the browser's exactly."""
+
+    def test_a_byte_string_encodes_untagged(self):
+        self.assertEqual(
+            primitives.canonical_cbor({"v": 1, "k": b"\x01\x02\x03"}).hex(),
+            "a2616b43010203617601",
+        )
+
+    def test_a_type_with_no_agreed_encoding_is_refused(self):
+        for value in ({1, 2}, object(), 1.5):
+            with self.subTest(type(value).__name__):
+                with self.assertRaises(ValueError):
+                    primitives.canonical_cbor({"v": 1, "x": value})
+
+    def test_a_non_string_map_key_is_refused(self):
+        with self.assertRaises(ValueError):
+            primitives.canonical_cbor({1: "one"})
+
+    def test_associated_data_outside_ascii_is_refused(self):
+        with self.assertRaises(UnicodeEncodeError):
+            ad.entry_field_ad("0192f3a4-5b6c-7d8e-9f01-23456789abcd", "caf\u00e9")
+
+
+class AeadKeyLengthTests(SimpleTestCase):
+    def test_a_key_of_the_wrong_length_is_refused(self):
+        """AESGCM infers the variant from the key length, so a short key would
+        produce AES-128-GCM under a header still declaring AES-256-GCM.
+        """
+        for length in (16, 24, 31):
+            with self.subTest(length):
+                with self.assertRaises(ValueError):
+                    primitives.aead_seal(
+                        bytes(length),
+                        b"x",
+                        b"ad",
+                        iv=bytes(12),
+                        key_version=1,
+                        kdf_id=0x01,
+                    )
+
+
+class TruncatedCiphertextTests(SimpleTestCase):
+    def test_a_ciphertext_truncated_inside_its_iv_is_refused(self):
+        raw = wire.encode_ciphertext(
+            aead_id=wire.AEAD_AES_256_GCM,
+            kdf_id=wire.KDF_HKDF_SHA256,
+            key_version=1,
+            iv=bytes(12),
+            ciphertext=b"tag",
+        )
+        with self.assertRaises(ValueError):
+            wire.decode_ciphertext(raw[:8])

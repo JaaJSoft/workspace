@@ -14,12 +14,18 @@ const HEADER_LENGTH = 6;
 export class UnsupportedVersionError extends Error {}
 
 export function encodeCiphertext({ aeadId, kdfId, keyVersion, iv, ciphertext }) {
-  // Integer-ness is checked, not assumed: the two header bytes are written
-  // with >> and &, which silently truncate a float instead of failing, where
-  // the reference implementation raises. A version written as 1 when the caller
-  // meant 1.5 is a ciphertext nothing will ever open with the right key.
+  // Integer-ness is checked, not assumed: every header field is written into a
+  // byte array, which silently truncates a float or an out-of-range value
+  // instead of failing, where the reference implementation raises. A version
+  // written as 1 when the caller meant 1.5 is a ciphertext nothing will ever
+  // open with the right key.
   if (!Number.isInteger(keyVersion) || keyVersion < 0 || keyVersion > 0xffff) {
     throw new Error(`key_version ${keyVersion} does not fit in two bytes`);
+  }
+  for (const [name, id] of [['aead_id', aeadId], ['kdf_id', kdfId]]) {
+    if (!Number.isInteger(id) || id < 0 || id > 0xff) {
+      throw new Error(`${name} ${id} does not fit in one byte`);
+    }
   }
   const expected = IV_LENGTHS[aeadId];
   if (expected === undefined) throw new Error(`unknown aead_id ${aeadId}`);
@@ -44,6 +50,11 @@ export function decodeCiphertext(raw) {
   const ivLen = raw[5];
   if (IV_LENGTHS[aeadId] !== ivLen) {
     throw new Error(`iv_len ${ivLen} is inconsistent with aead_id ${aeadId}`);
+  }
+  // A truncated buffer would otherwise yield a short iv and an empty
+  // ciphertext, and only fail several frames later inside WebCrypto.
+  if (raw.length < HEADER_LENGTH + ivLen) {
+    throw new Error('ciphertext shorter than its declared iv');
   }
   return {
     formatVersion: raw[0],

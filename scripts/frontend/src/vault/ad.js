@@ -2,7 +2,16 @@
 // changing one breaks the decryption of everything already written with it,
 // and nothing fails until a user opens the entry. ASCII only, `|` separator,
 // lowercase RFC 4122 UUIDs, no trailing newline.
-const ascii = (text) => new TextEncoder().encode(text);
+const ascii = (text) => {
+  // The reference encodes these with a strict ASCII codec and raises on
+  // anything else. Field identifiers come from the user, so without this a
+  // custom field named `café` would build valid associated data in the browser
+  // and crash the implementation it is supposed to match.
+  if (/[^\x00-\x7f]/.test(text)) {
+    throw new Error(`associated data must be ASCII: ${text}`);
+  }
+  return new TextEncoder().encode(text);
+};
 const uuid = (value) => String(value).toLowerCase();
 
 export const RESERVED_FIELD_IDS = Object.freeze(['username', 'password', 'totp', 'uri']);

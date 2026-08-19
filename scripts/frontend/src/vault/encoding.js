@@ -16,12 +16,16 @@ export function fromBase64Url(text) {
 }
 
 export function randomBytes(length) {
-  // The CSPRNG is absent outside a secure context, where `crypto.subtle` does
-  // not exist either. Left unchecked the failure surfaces as an opaque
-  // TypeError from somewhere deep in a key derivation; named here, it says
-  // what is actually wrong with the deployment.
   if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
-    throw new Error('no CSPRNG available: the vault requires a secure context');
+    throw new Error('no CSPRNG available in this environment');
+  }
+  // getRandomValues is NOT restricted to secure contexts - crypto.subtle is.
+  // On a plain-HTTP origin the draw below would succeed and the deployment
+  // problem would only surface frames later, as an opaque TypeError from a key
+  // import. Checking it at the first call names it while there is still a
+  // stack worth reading.
+  if (!crypto.subtle) {
+    throw new Error('crypto.subtle is unavailable: the vault requires a secure context');
   }
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);

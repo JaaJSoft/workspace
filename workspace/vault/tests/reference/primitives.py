@@ -127,6 +127,9 @@ def hkdf(ikm: bytes, info: bytes, length: int = 32) -> bytes:
     return hkdf_with_salt(ikm, _HKDF_SALT, info, length)
 
 
+AEAD_KEY_LENGTH = 32
+
+
 def aead_seal(
     key: bytes,
     plaintext: bytes,
@@ -136,6 +139,12 @@ def aead_seal(
     key_version: int,
     kdf_id: int,
 ) -> bytes:
+    # AESGCM infers the variant from the key length, so a 16-byte key would
+    # quietly produce AES-128-GCM under a header still declaring AES-256-GCM.
+    if len(key) != AEAD_KEY_LENGTH:
+        raise ValueError(
+            f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
+        )
     ciphertext = AESGCM(key).encrypt(iv, plaintext, associated_data)
     return wire.encode_ciphertext(
         aead_id=wire.AEAD_AES_256_GCM,
@@ -147,6 +156,10 @@ def aead_seal(
 
 
 def aead_open(key: bytes, raw: bytes, associated_data: bytes) -> bytes:
+    if len(key) != AEAD_KEY_LENGTH:
+        raise ValueError(
+            f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
+        )
     decoded = wire.decode_ciphertext(raw)
     # An open failure is surfaced as-is. Never retried with another AD, never
     # returned as partial plaintext. Retrying turns the AD into an oracle.
@@ -236,8 +249,13 @@ def _canonicalise(value):
     Two spellings of the same accented text are different byte strings and
     would produce different signatures over what a user sees as one value, so
     normalisation is part of the encoding rather than the caller's problem.
+
+    The accepted types are closed on purpose, and match the browser's exactly:
+    anything else - a set, a datetime, an arbitrary object - has no encoding
+    both implementations agree on, and guessing one means signing bytes the
+    other would never produce.
     """
-    if isinstance(value, bool):
+    if value is None or isinstance(value, bool):
         return value
     if isinstance(value, float):
         raise ValueError("floats are forbidden in canonical CBOR")
@@ -250,9 +268,15 @@ def _canonicalise(value):
         return value
     if isinstance(value, str):
         return unicodedata.normalize("NFC", value)
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
     if isinstance(value, dict):
         out = {}
         for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError(
+                    f"canonical CBOR map keys must be strings, got {type(key).__name__}"
+                )
             normalised = _canonicalise(key)
             if normalised in out:
                 # The two keys are one key once normalised, and each
@@ -262,7 +286,7 @@ def _canonicalise(value):
         return out
     if isinstance(value, (list, tuple)):
         return [_canonicalise(item) for item in value]
-    return value
+    raise ValueError(f"unsupported type in canonical CBOR: {type(value).__name__}")
 
 
 def canonical_cbor(payload) -> bytes:

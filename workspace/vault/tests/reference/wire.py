@@ -63,6 +63,10 @@ def decode_ciphertext(raw: bytes) -> WireCiphertext:
     iv_len = raw[5]
     if IV_LENGTHS.get(aead_id) != iv_len:
         raise ValueError(f"iv_len {iv_len} is inconsistent with aead_id {aead_id:#04x}")
+    # A truncated buffer would otherwise yield a short iv and an empty
+    # ciphertext, and only fail later inside the AEAD.
+    if len(raw) < HEADER_LENGTH + iv_len:
+        raise ValueError("ciphertext shorter than its declared iv")
     return WireCiphertext(
         format_version=raw[0],
         aead_id=aead_id,

@@ -90,10 +90,22 @@ test('the PDF generator and the strength estimator stay off the main bundle', ()
   assert.doesNotMatch(src, /jspdf/i, 'the PDF generator leaked into the main bundle');
 });
 
-test('randomBytes names the deployment problem when the CSPRNG is absent', () => {
-  // Outside a secure context there is no crypto.getRandomValues and no
-  // crypto.subtle. Without this guard the first key derivation fails with an
-  // opaque TypeError instead of saying what is wrong.
+test('randomBytes names an insecure context, which is what a browser produces', () => {
+  // The realistic shape: getRandomValues is NOT restricted to secure contexts,
+  // so on a plain-HTTP origin it works and only crypto.subtle is missing. A
+  // guard that checked the CSPRNG alone would pass here and let the failure
+  // resurface later as an opaque TypeError from a key import.
+  const { loadScript } = require('../../../common/tests/js/loader');
+  const insecure = loadScript(BUNDLE_REPO_PATH, {
+    crypto: { getRandomValues: (bytes) => bytes },
+    TextEncoder: globalThis.TextEncoder,
+    btoa: globalThis.btoa,
+    atob: globalThis.atob,
+  });
+  assert.throws(() => insecure.VaultCrypto.randomBytes(32), /secure context/);
+});
+
+test('randomBytes reports a missing CSPRNG separately', () => {
   const { loadScript } = require('../../../common/tests/js/loader');
   const deprived = loadScript(BUNDLE_REPO_PATH, {
     crypto: undefined,
@@ -101,7 +113,7 @@ test('randomBytes names the deployment problem when the CSPRNG is absent', () =>
     btoa: globalThis.btoa,
     atob: globalThis.atob,
   });
-  assert.throws(() => deprived.VaultCrypto.randomBytes(32), /secure context/);
+  assert.throws(() => deprived.VaultCrypto.randomBytes(32), /no CSPRNG/);
 });
 
 test('randomBytes returns the length asked for, and draws each time', () => {

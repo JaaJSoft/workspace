@@ -8,9 +8,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { loadScript } = require('../../../common/tests/js/loader');
 
+const vm = require('node:vm');
+
 const REPO_ROOT = path.join(__dirname, '..', '..', '..', '..');
-const VECTORS = JSON.parse(
-  fs.readFileSync(path.join(REPO_ROOT, 'workspace', 'vault', 'tests', 'crypto_vectors.json'), 'utf8')
+const VECTORS_TEXT = fs.readFileSync(
+  path.join(REPO_ROOT, 'workspace', 'vault', 'tests', 'crypto_vectors.json'), 'utf8'
 );
 
 const ctx = loadScript(
@@ -21,8 +23,14 @@ const ctx = loadScript(
     TextDecoder: globalThis.TextDecoder,
     btoa: globalThis.btoa,
     atob: globalThis.atob,
+    __vectorsText: VECTORS_TEXT,
   }
 );
+
+// Parsed inside the vm, like the fuzz corpus: a value built in the test realm
+// carries the test realm's constructors, and a bundled library that branches
+// on one of them takes a different path there than it does on a page.
+const VECTORS = vm.runInContext('JSON.parse(__vectorsText)', ctx);
 const V = ctx.VaultCrypto;
 
 // Cross-realm gotcha: arrays built inside the vm carry that realm's
@@ -256,4 +264,60 @@ test('a key given as a view into a larger buffer still seals and opens', async (
   const sealed = await V.hpkeSeal(view, info, V.fromBase64Url(vector.plaintext_b64));
   const opened = await V.hpkeOpen(V.fromBase64Url(vector.recipient_sk_b64), info, sealed);
   assert.equal(b64(opened), vector.plaintext_b64);
+});
+
+test('a byte string encodes as the reference writes it, untagged', () => {
+  // cbor-x wraps byte strings in tag 64 by default and canonical CBOR admits
+  // no tags. Signed payloads carry raw identifiers and nonces, so this is the
+  // shape that would have diverged first.
+  assert.equal(
+    Buffer.from(V.canonicalCbor({ v: 1, k: Uint8Array.from([1, 2, 3]) })).toString('hex'),
+    'a2616b43010203617601'
+  );
+});
+
+test('a type with no agreed encoding is refused', () => {
+  for (const payload of [{ v: 1, d: new Date(0) }, { v: 1, s: new Set([1]) }, { v: 1, u: undefined }]) {
+    assert.throws(() => V.canonicalCbor(payload), /unsupported type/, JSON.stringify(payload));
+  }
+});
+
+test('a non-string map key is refused', () => {
+  const map = new Map([[1, 'one']]);
+  assert.throws(() => V.canonicalCbor({ v: 1, m: map }), /must be strings/);
+});
+
+test('associated data outside ASCII is refused', () => {
+  // Field identifiers come from the user, and the reference encodes them with
+  // a strict ASCII codec.
+  assert.throws(
+    () => V.AD.entryFieldAd('0192f3a4-5b6c-7d8e-9f01-23456789abcd', 'caf\u00e9'),
+    /must be ASCII/
+  );
+});
+
+test('an aead key of the wrong length is refused', async () => {
+  await assert.rejects(
+    () => V.seal(new Uint8Array(16), new Uint8Array(1), new Uint8Array(0), {
+      iv: new Uint8Array(12), keyVersion: 1, kdfId: 1,
+    }),
+    /32-byte key/
+  );
+});
+
+test('a fractional or oversized header id is refused', () => {
+  for (const overrides of [{ kdfId: 1.5 }, { kdfId: 256 }, { aeadId: 1.5 }]) {
+    assert.throws(() => V.encodeCiphertext({
+      aeadId: V.AEAD_AES_256_GCM, kdfId: V.KDF_HKDF_SHA256, keyVersion: 1,
+      iv: new Uint8Array(12), ciphertext: new Uint8Array(4), ...overrides,
+    }), /does not fit in one byte/, JSON.stringify(overrides));
+  }
+});
+
+test('a ciphertext truncated inside its iv is refused', () => {
+  const raw = V.encodeCiphertext({
+    aeadId: V.AEAD_AES_256_GCM, kdfId: V.KDF_HKDF_SHA256, keyVersion: 1,
+    iv: new Uint8Array(12), ciphertext: new Uint8Array(4),
+  });
+  assert.throws(() => V.decodeCiphertext(raw.slice(0, 8)), /shorter than its declared iv/);
 });

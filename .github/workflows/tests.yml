@@ -177,6 +177,13 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    # The official Playwright image ships Chromium and its system libraries,
+    # so the job skips `playwright install --with-deps` entirely. The image tag
+    # must match the playwright version pinned in uv.lock - the Python package
+    # only drives the browser build it was released with. core's
+    # test_ci_workflow pins the two together.
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.62.0-noble
     strategy:
       fail-fast: false
       matrix:
@@ -206,9 +213,6 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --frozen
-
-      - name: Install Playwright browsers
-        run: uv run playwright install --with-deps chromium
 
       - name: Run E2E tests
         env:

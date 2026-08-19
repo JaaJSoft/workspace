@@ -144,6 +144,22 @@ class OnboardingContextProcessorTests(TestCase):
         self.assertNotIn('href="None"', html)
         self.assertNotIn("goTo('None')", html)
 
+    def test_module_kept_off_the_dashboard_is_not_listed(self):
+        html = self._render_onboarding(
+            [
+                {
+                    "name": "Imports",
+                    "description": "Bring data over",
+                    "icon": "download-cloud",
+                    "color": "primary",
+                    "url": "/imports",
+                    "show_on_dashboard": False,
+                }
+            ]
+        )
+        self.assertNotIn("Bring data over", html)
+        self.assertNotIn('href="/imports"', html)
+
     def test_welcome_step_greets_user_by_first_name(self):
         self.user.first_name = "Alice"
         self.user.save(update_fields=["first_name"])

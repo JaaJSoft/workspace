@@ -17,6 +17,10 @@ class ModuleInfo:
     active: bool = True
     order: int = 0
     preview: bool = False
+    # False for modules that are real (page, search, commands, notifications)
+    # but have no place on the home dashboard or in onboarding - tools used
+    # once rather than apps lived in.
+    show_on_dashboard: bool = True
 
 
 class ModuleVisibility:

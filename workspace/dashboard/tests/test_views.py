@@ -20,7 +20,7 @@ from workspace.users.services.settings import set_setting
 User = get_user_model()
 
 
-def _mod(slug, active=True, preview=False):
+def _mod(slug, active=True, preview=False, show_on_dashboard=True):
     return ModuleInfo(
         name=slug.title(),
         slug=slug,
@@ -30,6 +30,7 @@ def _mod(slug, active=True, preview=False):
         url=f"/{slug}",
         active=active,
         preview=preview,
+        show_on_dashboard=show_on_dashboard,
     )
 
 
@@ -202,6 +203,22 @@ class BuildDashboardContextTests(TestCase):
         context = _build_dashboard_context(self.user)
         files_mod = context["modules"][0]
         self.assertTrue(files_mod["preview"])
+
+    @patch("workspace.dashboard.views.get_unread_badges")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_module_kept_off_the_dashboard_has_no_tile_and_no_hide_toggle(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [
+            _mod("files"),
+            _mod("imports", show_on_dashboard=False),
+        ]
+        mock_badges.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertEqual([m["slug"] for m in context["modules"]], ["files"])
+        self.assertEqual([a["slug"] for a in context["dashboard_apps"]], ["files"])
 
     @patch("workspace.dashboard.views.get_unread_badges")
     @patch("workspace.dashboard.views.visible_modules")

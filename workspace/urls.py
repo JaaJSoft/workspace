@@ -75,6 +75,7 @@ ui_urlpatterns = [
     path("mail", include("workspace.mail.ui.urls")),
     path("projects", include("workspace.projects.ui.urls")),
     path("vault", include("workspace.vault.ui.urls")),
+    path("imports", include("workspace.imports.ui.urls")),
 ]
 
 urlpatterns = [

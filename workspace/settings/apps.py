@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     "workspace.projects.ui",
     "workspace.vault",
     "workspace.vault.ui",
+    "workspace.imports",
+    "workspace.imports.ui",
     "workspace.dashboard",
     "workspace.users",
     "workspace.users.ui",

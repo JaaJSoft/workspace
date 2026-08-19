@@ -98,7 +98,7 @@ def _dashboard_modules(user):
     modules = []
     dashboard_apps = []
     for m in visible_modules(user):
-        if m.slug == "dashboard":
+        if m.slug == "dashboard" or not m.show_on_dashboard:
             continue
         dashboard_apps.append(
             {

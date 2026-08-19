@@ -57,7 +57,8 @@
         </p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {% for module in workspace_active_modules %}
-            {% if module.url %}
+            {% if module.show_on_dashboard is False %}
+            {% elif module.url %}
               <a href="{{ module.url }}"
                  @click.prevent="goTo('{{ module.url|escapejs }}')"
                  class="flex items-start gap-3 p-3 rounded-lg border border-base-300 hover:border-primary hover:bg-base-200 transition-colors">

@@ -9,7 +9,11 @@ from rest_framework.response import Response
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
-from workspace.files.services.storage_analysis import CATEGORY_META, analyze_storage
+from workspace.files.services.storage_analysis import (
+    CATEGORY_META,
+    QUERY_MAX_LENGTH,
+    analyze_storage,
+)
 
 _CATEGORY_PARAM = OpenApiParameter(
     name="category",
@@ -19,13 +23,30 @@ _CATEGORY_PARAM = OpenApiParameter(
 )
 
 
-def _category_param(request):
+_QUERY_PARAM = OpenApiParameter(
+    name="q",
+    type=OpenApiTypes.STR,
+    description=(
+        "Case-insensitive path fragment; narrows the largest-files list to "
+        "matching files and the duplicates to groups with a matching copy."
+    ),
+)
+
+
+def _filters(request):
+    """Return ``({"category", "query"}, error_response)`` from the query string."""
     category = request.query_params.get("category") or None
     if category is not None and category not in CATEGORY_META:
         return None, Response(
             {"detail": "Unknown category."}, status=status.HTTP_400_BAD_REQUEST
         )
-    return category, None
+    query = (request.query_params.get("q") or "").strip()
+    if len(query) > QUERY_MAX_LENGTH:
+        return None, Response(
+            {"detail": f"q must be at most {QUERY_MAX_LENGTH} characters."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return {"category": category, "query": query or None}, None
 
 
 class StorageMixin:
@@ -38,15 +59,15 @@ class StorageMixin:
             "files: per category, per top-level folder, largest files, "
             "duplicate groups and trash."
         ),
-        parameters=[_CATEGORY_PARAM],
+        parameters=[_CATEGORY_PARAM, _QUERY_PARAM],
         responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
     )
     @action(detail=False, methods=["get"], url_path="storage")
     def storage_root(self, request):
-        category, error = _category_param(request)
+        filters, error = _filters(request)
         if error is not None:
             return error
-        return Response(analyze_storage(request.user, None, category=category))
+        return Response(analyze_storage(request.user, None, **filters))
 
     @extend_schema(
         summary="Storage analysis of a folder",
@@ -54,7 +75,7 @@ class StorageMixin:
             "Same breakdown as the root analysis, scoped to one folder's "
             "subtree. A group root folder also reports the group's trash."
         ),
-        parameters=[_CATEGORY_PARAM],
+        parameters=[_CATEGORY_PARAM, _QUERY_PARAM],
         responses={
             200: OpenApiResponse(response=OpenApiTypes.OBJECT),
             400: OpenApiResponse(description="Not a folder."),
@@ -71,7 +92,7 @@ class StorageMixin:
                 {"detail": "Storage analysis applies to folders."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        category, error = _category_param(request)
+        filters, error = _filters(request)
         if error is not None:
             return error
-        return Response(analyze_storage(request.user, folder, category=category))
+        return Response(analyze_storage(request.user, folder, **filters))

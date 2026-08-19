@@ -10,7 +10,7 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
      @ajax:error="loading = false; if (window.AppAlert) AppAlert.error('Failed to analyze storage')">
   <dialog x-ref="dialog" class="modal" @close="onClose()">
     <div class="modal-box max-w-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-      <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300">
+      <div class="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-base-300">
         <div class="bg-primary/10 rounded-lg p-2">
           <i data-lucide="chart-pie" class="w-5 h-5 text-primary"></i>
         </div>
@@ -19,7 +19,14 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
           <p class="text-sm text-base-content/60 truncate" x-text="scopeName"></p>
         </div>
         <span x-show="loading" x-cloak class="loading loading-spinner loading-sm ml-2"></span>
-        <button type="button" class="btn btn-ghost btn-sm btn-square ml-auto" @click="close()" aria-label="Close">
+        <label class="input input-sm input-bordered flex items-center gap-2 ml-auto w-full sm:w-60 order-last sm:order-none" title="Filter the largest files and duplicates by path">
+          <i data-lucide="search" class="w-4 h-4 text-base-content/50 shrink-0"></i>
+          <input type="text" x-ref="searchInput" class="grow min-w-0" placeholder="Filter by name or path…" x-model="query" @input.debounce.300ms="search()" @keydown.escape.stop.prevent="clearSearch()" maxlength="100" aria-label="Filter the largest files and duplicates by path">
+          <button type="button" x-show="query" x-cloak class="btn btn-ghost btn-xs btn-square -mr-2" @click="clearSearch()" aria-label="Clear the filter">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </label>
+        <button type="button" class="btn btn-ghost btn-sm btn-square" @click="close()" aria-label="Close">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>

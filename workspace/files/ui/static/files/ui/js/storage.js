@@ -5,25 +5,31 @@ window.storageAnalysis = function storageAnalysis() {
     loading: false,
     hasContent: false,
     busy: false,
+    // Path filter typed in the header; mirrored to ?q= on the analysis URL.
+    query: '',
 
     init() {
       window.addEventListener('open-storage-analysis', (e) => {
         const detail = e.detail || {};
         this.open(detail.uuid || null, detail.name || 'All files');
       });
-      // ?storage=root|<uuid>[&storage_category=x] survives a reload: reopen
-      // the dialog on the same scope the user was looking at.
+      // ?storage=root|<uuid>[&storage_category=x][&storage_q=y] survives a
+      // reload: reopen the dialog on the same scope the user was looking at.
       const params = new URLSearchParams(window.location.search);
       const scope = params.get('storage');
       if (scope) {
         const uuid = scope === 'root' ? null : scope;
-        const category = params.get('storage_category');
         this.$nextTick(() => {
           this.scopeName = '';
+          this.query = params.get('storage_q') || '';
           this.currentUrl = uuid ? `/files/storage/${uuid}` : '/files/storage';
           const dlg = this.$refs.dialog;
           if (dlg && !dlg.open) dlg.showModal();
-          this.load(category ? `${this.currentUrl}?category=${encodeURIComponent(category)}` : this.currentUrl);
+          const url = new URL(this.currentUrl, window.location.origin);
+          const category = params.get('storage_category');
+          if (category) url.searchParams.set('category', category);
+          if (this.query) url.searchParams.set('q', this.query);
+          this.load(url.pathname + url.search);
         });
       }
     },
@@ -31,6 +37,7 @@ window.storageAnalysis = function storageAnalysis() {
     open(uuid, name) {
       this.scopeName = name;
       this.hasContent = false;
+      this.query = '';
       this.currentUrl = uuid ? `/files/storage/${uuid}` : '/files/storage';
       const dlg = this.$refs.dialog;
       if (dlg && !dlg.open) dlg.showModal();
@@ -46,7 +53,28 @@ window.storageAnalysis = function storageAnalysis() {
       const swapped = document.getElementById('storage-analysis');
       if (!swapped) return;
       if (swapped.dataset.name) this.scopeName = swapped.dataset.name;
+      // A link inside the partial (drill-down, category) may have changed
+      // the query the server applied; keep the box in step unless the user
+      // is typing, in which case their keystrokes win.
+      const typing = document.activeElement === this.$refs.searchInput;
+      if (!typing && (swapped.dataset.query || '') !== this.query) this.query = swapped.dataset.query || '';
       if (swapped.dataset.url) this.syncUrl(swapped.dataset.url);
+    },
+
+    // Re-run the current analysis with the header filter applied.
+    search() {
+      const swapped = document.getElementById('storage-analysis');
+      const url = new URL(swapped && swapped.dataset.url ? swapped.dataset.url : this.currentUrl, window.location.origin);
+      const query = this.query.trim();
+      if (query) url.searchParams.set('q', query);
+      else url.searchParams.delete('q');
+      this.load(url.pathname + url.search);
+    },
+
+    clearSearch() {
+      if (!this.query) return;
+      this.query = '';
+      this.search();
     },
 
     // Mirror the analysed scope into the page URL (replaceState, so the
@@ -60,6 +88,9 @@ window.storageAnalysis = function storageAnalysis() {
       const category = source.searchParams.get('category');
       if (category) url.searchParams.set('storage_category', category);
       else url.searchParams.delete('storage_category');
+      const query = source.searchParams.get('q');
+      if (query) url.searchParams.set('storage_q', query);
+      else url.searchParams.delete('storage_q');
       window.history.replaceState(window.history.state, '', url.toString());
     },
 
@@ -68,6 +99,7 @@ window.storageAnalysis = function storageAnalysis() {
       if (!url.searchParams.has('storage')) return;
       url.searchParams.delete('storage');
       url.searchParams.delete('storage_category');
+      url.searchParams.delete('storage_q');
       window.history.replaceState(window.history.state, '', url.toString());
     },
 

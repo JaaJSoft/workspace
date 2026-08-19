@@ -351,6 +351,23 @@ if FileService.can_access(user, file_obj):
     ...
 ```
 
+#### Vault - `workspace.vault.queries`
+
+```python
+from workspace.vault.models import VaultEntry
+from workspace.vault.queries import (
+    accessible_entries_q, get_vault_role, user_vault_ids, visible_folders, visible_tags,
+)
+
+vault_ids = user_vault_ids(user)              # vaults the user can open
+role = get_vault_role(user, vault)            # 'owner' | 'member' | None
+qs = VaultEntry.objects.filter(accessible_entries_q(user))  # does NOT filter deleted_at
+folders = visible_folders(user, vault)        # empty queryset when the vault is out of reach
+tags = visible_tags(user, vault)              # empty queryset when the vault is out of reach
+```
+
+`accessible_entries_q` does not filter `deleted_at` - the trash is a legitimate view, and the caller decides.
+
 ### User Settings - always go through `workspace.users.services.settings`
 
 Per-user preferences live in the `UserSetting(user, module, key, value)` model and are wrapped by service helpers that maintain a **5-minute cache** on reads and **invalidate that cache on every write**. Never touch `UserSetting.objects` directly from views, serializers, tasks, or other services - the cache will go stale and subsequent reads will silently return the previous value until the TTL expires or the process restarts.

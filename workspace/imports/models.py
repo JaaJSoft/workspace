@@ -167,6 +167,10 @@ class ImportJobItem(models.Model):
         ]
         indexes = [
             models.Index(fields=["job", "status"], name="importjobitem_job_status"),
+            # The items endpoint pages a job's entries in creation order.
+            models.Index(
+                fields=["job", "created_at"], name="importjobitem_job_created"
+            ),
         ]
 
     def __str__(self):

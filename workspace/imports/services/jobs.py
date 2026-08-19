@@ -148,6 +148,9 @@ def recover_stale_jobs():
     recovered = 0
     for job in stale:
         logger.warning("Re-enqueueing stale import job %s", job.pk)
+        # Refresh the stamp so the next scan leaves the job alone for one TTL
+        # while the new delivery makes its way to a worker.
+        ImportJob.objects.filter(pk=job.pk).update(heartbeat_at=timezone.now())
         _enqueue(job)
         recovered += 1
     return recovered

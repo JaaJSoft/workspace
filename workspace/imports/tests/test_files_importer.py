@@ -365,11 +365,8 @@ class FilesImporterTests(ImporterTestCase):
         job = self._job()
         with patch(
             "workspace.imports.importers.files.FileService.create_file",
-            side_effect=[ValueError("bad name"), *([FileService.create_file] * 0)],
-        ) as create:
-            create.side_effect = lambda *a, **kw: (_ for _ in ()).throw(
-                ValueError("bad name")
-            )
+            side_effect=ValueError("bad name"),
+        ):
             self.assertIs(self._run(job), Outcome.DONE)
         self.assertEqual(job.stats["files"]["failed"], 3)
         self.assertEqual(

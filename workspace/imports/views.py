@@ -16,6 +16,7 @@ from .serializers import (
     JobItemSerializer,
     JobItemsQuerySerializer,
     JobSerializer,
+    PageQuerySerializer,
 )
 from .services import connections as connections_service
 from .services import jobs as jobs_service
@@ -147,10 +148,20 @@ class ConnectionBrowseView(_ConnectionView):
 class JobListView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="List the user's import jobs, newest first")
+    @extend_schema(
+        summary="List the user's import jobs, newest first",
+        parameters=[PageQuerySerializer],
+    )
     def get(self, request):
-        qs = user_jobs_qs(request.user).select_related("connection")[:100]
-        return Response(JobSerializer(qs, many=True).data)
+        query = PageQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        params = query.validated_data
+        qs = user_jobs_qs(request.user).select_related("connection")
+        total = qs.count()
+        page = qs[params["offset"] : params["offset"] + params["limit"]]
+        return Response(
+            {"count": total, "results": JobSerializer(page, many=True).data}
+        )
 
     @extend_schema(
         summary="Create and start an import job", request=JobCreateSerializer

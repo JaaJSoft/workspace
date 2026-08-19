@@ -11,12 +11,12 @@ class ImportsConfig(AppConfig):
 
         from .importers.base import register_builtin_importers
         from .providers.registry import register_builtin_providers
-        from .sse_provider import ImportsSSEProvider
+        from .sse_provider import SLUG, ImportsSSEProvider
 
         register_builtin_providers()
         register_builtin_importers()
         sse_registry.register(
-            SSEProviderInfo(slug="imports", provider_cls=ImportsSSEProvider)
+            SSEProviderInfo(slug=SLUG, provider_cls=ImportsSSEProvider)
         )
 
         # A real module (page, commands, notifications) that is used once when

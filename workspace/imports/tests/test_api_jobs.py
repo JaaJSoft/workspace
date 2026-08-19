@@ -92,11 +92,29 @@ class JobsApiTests(APITestCase):
         mine = ImportJob.objects.create(connection=self.conn, kinds=["files"])
         theirs = ImportJob.objects.create(connection=self.theirs, kinds=["files"])
         listed = self.client.get(f"{BASE}/jobs").json()
-        self.assertEqual([j["uuid"] for j in listed], [str(mine.uuid)])
+        self.assertEqual(listed["count"], 1)
+        self.assertEqual([j["uuid"] for j in listed["results"]], [str(mine.uuid)])
         self.assertEqual(self.client.get(f"{BASE}/jobs/{mine.uuid}").status_code, 200)
         self.assertEqual(self.client.get(f"{BASE}/jobs/{theirs.uuid}").status_code, 404)
         self.assertEqual(
             self.client.post(f"{BASE}/jobs/{theirs.uuid}/cancel").status_code, 404
+        )
+
+    def test_jobs_list_is_paged_newest_first(self):
+        first = ImportJob.objects.create(
+            connection=self.conn, kinds=["files"], status=ImportJob.Status.COMPLETED
+        )
+        second = ImportJob.objects.create(
+            connection=self.conn, kinds=["files"], status=ImportJob.Status.FAILED
+        )
+        response = self.client.get(f"{BASE}/jobs", {"limit": 1})
+        self.assertEqual(response.json()["count"], 2)
+        self.assertEqual(
+            [j["uuid"] for j in response.json()["results"]], [str(second.uuid)]
+        )
+        response = self.client.get(f"{BASE}/jobs", {"limit": 1, "offset": 1})
+        self.assertEqual(
+            [j["uuid"] for j in response.json()["results"]], [str(first.uuid)]
         )
 
     def test_items_can_be_filtered_and_paged(self):

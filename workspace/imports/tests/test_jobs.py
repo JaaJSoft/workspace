@@ -340,6 +340,11 @@ class CancelRetryPurgeTests(JobsTestCase):
             self.assertEqual(recover_stale_jobs.apply().result, {"recovered": 1})
         enqueue.assert_called_once()
         self.assertEqual(enqueue.call_args.args[0].pk, stale.pk)
+        stale.refresh_from_db()
+        self.assertGreater(stale.heartbeat_at, timezone.now() - timedelta(minutes=1))
+        # and the next scan leaves it alone
+        with patch("workspace.imports.services.jobs._enqueue") as enqueue:
+            self.assertEqual(recover_stale_jobs.apply().result, {"recovered": 0})
 
     @override_settings(IMPORTS_BATCH_SECONDS=60)
     def test_a_recovered_job_resumes_and_finishes(self):

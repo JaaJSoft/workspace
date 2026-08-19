@@ -96,6 +96,7 @@ CELERY_BEAT_SCHEDULE = {
     "recover-stale-import-jobs": {
         "task": "imports.recover_stale_jobs",
         "schedule": 600.0,  # Every 10 minutes
+        "options": {"expires": 600.0},
     },
     "purge-orphan-attachments": {
         "task": "chat.purge_orphan_attachments",

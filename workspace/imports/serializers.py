@@ -110,9 +110,12 @@ class JobItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class JobItemsQuerySerializer(serializers.Serializer):
+class PageQuerySerializer(serializers.Serializer):
+    limit = serializers.IntegerField(min_value=1, max_value=500, default=100)
+    offset = serializers.IntegerField(min_value=0, default=0)
+
+
+class JobItemsQuerySerializer(PageQuerySerializer):
     status = serializers.ChoiceField(
         choices=ImportJobItem.Status.choices, required=False
     )
-    limit = serializers.IntegerField(min_value=1, max_value=500, default=100)
-    offset = serializers.IntegerField(min_value=0, default=0)

@@ -70,6 +70,13 @@ class ImportContext:
         self.stats["phase"] = phase
         self.flush(force=True)
 
+    def save_stats(self):
+        """Persist the stats (with a liveness stamp) right now, without the
+        progress push - for markers that must survive a dead worker."""
+        ImportJob.objects.filter(pk=self.job.pk).update(
+            stats=self.job.stats, heartbeat_at=timezone.now()
+        )
+
     def flush(self, force=False):
         """Persist stats (with a liveness stamp) and push progress, batched."""
         self._dirty += 1
@@ -77,9 +84,7 @@ class ImportContext:
             return
         self._dirty = 0
         now = timezone.now()
-        ImportJob.objects.filter(pk=self.job.pk).update(
-            stats=self.job.stats, heartbeat_at=now
-        )
+        self.save_stats()
         if (
             force
             or self._last_push is None

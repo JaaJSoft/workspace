@@ -83,3 +83,16 @@ test('wizard kinds come from the selected connection provider', () => {
   component.toggleKind('files');
   assert.deepStrictEqual(Array.from(component.wizard.kinds), ['photos']);
 });
+
+test('editing a connection only sends the fields that changed', () => {
+  const { ctx } = app();
+  const original = { label: 'Old', base_url: 'https://a', username: 'me' };
+  assert.deepStrictEqual(
+    { ...ctx.connectionChanges(original, { label: 'New', base_url: 'https://a', username: 'me', secret: '' }) },
+    { label: 'New' },
+  );
+  assert.deepStrictEqual(
+    { ...ctx.connectionChanges(original, { label: 'Old', base_url: 'https://b', username: 'me', secret: 'pw' }) },
+    { base_url: 'https://b', secret: 'pw' },
+  );
+});

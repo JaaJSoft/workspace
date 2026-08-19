@@ -10,7 +10,8 @@ IMPORTS_BATCH_SECONDS = int(os.getenv("IMPORTS_BATCH_SECONDS", "1200"))
 # Consecutive remote failures after which a job gives up instead of burning
 # through a dead connection one entry at a time.
 IMPORTS_MAX_CONSECUTIVE_ERRORS = int(os.getenv("IMPORTS_MAX_CONSECUTIVE_ERRORS", "20"))
-# Terminal jobs (and their per-entry items) older than this are purged.
+# Per-entry error reports of jobs finished longer ago than this are purged;
+# the job rows and their DONE items stay (they keep later runs incremental).
 IMPORTS_JOB_RETENTION_DAYS = int(os.getenv("IMPORTS_JOB_RETENTION_DAYS", "90"))
 IMPORTS_HTTP_TIMEOUT = int(os.getenv("IMPORTS_HTTP_TIMEOUT", "60"))
 # Remote URLs are vetted before the worker contacts them (SSRF guard): loopback

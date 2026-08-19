@@ -61,9 +61,32 @@ class ConnectionUpdateSerializer(serializers.Serializer):
     )
 
 
+class RemotePathField(serializers.CharField):
+    """A path inside the remote tree, normalised to ``/a/b`` (``/`` for the
+    root). Dot segments are refused: the HTTP client would collapse them and
+    the request could leave the DAV root the connection was vetted for."""
+
+    default_error_messages = {
+        "dot_segments": "The path must not contain '.' or '..' segments."
+    }
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("allow_blank", True)
+        kwargs.setdefault("default", "/")
+        super().__init__(**kwargs)
+
+    def to_internal_value(self, data):
+        value = super().to_internal_value(data)
+        segments = [s for s in value.split("/") if s]
+        if any(s in (".", "..") for s in segments):
+            self.fail("dot_segments")
+        return "/" + "/".join(segments) if segments else "/"
+
+
 class BrowseQuerySerializer(serializers.Serializer):
     kind = serializers.ChoiceField(choices=[KIND_FILES], default=KIND_FILES)
-    path = serializers.CharField(required=False, allow_blank=True, default="")
+    path = RemotePathField()
 
 
 class JobSerializer(serializers.ModelSerializer):

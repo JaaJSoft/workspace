@@ -10,7 +10,7 @@ import logging
 import posixpath
 from contextlib import contextmanager
 from email.utils import parsedate_to_datetime
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 from xml.etree import ElementTree
 
 import httpx2
@@ -132,7 +132,11 @@ class WebDavFileSource:
     def _url_for(self, entry_id: str, *, collection=False) -> str:
         # The client's base_url carries the DAV root; entry ids are relative
         # to it. A collection URL ends with "/" so servers don't 301 us.
-        path = entry_id.strip("/")
+        # Ids are decoded names, so they are percent-encoded here in full:
+        # handed over raw, a literal "%3A" in a name (Logseq writes those)
+        # would be taken for an escape, and "?" or "#" for a query or a
+        # fragment.
+        path = quote(entry_id.strip("/"), safe="/")
         url = "/" + path if path else "/"
         if collection and not url.endswith("/"):
             url += "/"

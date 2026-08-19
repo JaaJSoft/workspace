@@ -5,6 +5,11 @@ a server-side request forgery: loopback, link-local (cloud metadata) and, by
 default, private networks are refused after resolving the host. Self-hosters
 whose previous cloud lives on the LAN open it with IMPORTS_ALLOW_PRIVATE_NETWORKS
 or list the host in IMPORTS_ALLOWED_HOSTS.
+
+The check resolves the host itself and the HTTP client resolves it again, so
+a name that flips between two answers (DNS rebinding) is not caught by it -
+callers re-run it before every batch of requests to keep that window short,
+but only pinning the resolved address at the transport level would close it.
 """
 
 import socket

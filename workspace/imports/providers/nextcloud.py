@@ -35,10 +35,21 @@ class NextcloudProvider(WebDavProvider):
 
     def normalize_base_url(self, url: str, username: str) -> str:
         """Accept the instance URL the user copies from the address bar and
-        derive the per-user DAV root; leave a full DAV URL untouched."""
+        derive the per-user DAV root. A full DAV URL is kept, except that its
+        user segment follows the username: the files endpoint only serves the
+        authenticated user's own tree, so a stale segment after a username
+        change would just 404."""
         url = url.rstrip("/")
-        path = urlparse(url).path
-        if DAV_FILES_PREFIX in path or path.endswith(_LEGACY_DAV_PREFIX):
+        parsed = urlparse(url)
+        path = parsed.path
+        if DAV_FILES_PREFIX in path:
+            head, _, tail = path.partition(DAV_FILES_PREFIX)
+            _, _, rest = tail.partition("/")
+            new_path = f"{head}{DAV_FILES_PREFIX}{username}"
+            if rest:
+                new_path += f"/{rest}"
+            return parsed._replace(path=new_path).geturl()
+        if path.endswith(_LEGACY_DAV_PREFIX):
             return url
         return f"{url}{DAV_FILES_PREFIX}{username}"
 

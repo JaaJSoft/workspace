@@ -17,9 +17,10 @@ from workspace.notifications.services.notifications import notify
 
 from ..errors import ImportsError
 from ..importers.base import ImportContext, JobFailed, Outcome, importer_registry
-from ..models import ImportJob, ImportJobItem
+from ..models import ImportConnection, ImportJob, ImportJobItem
 from . import progress
 from .connections import get_available_provider
+from .url_guard import check_remote_url
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +81,15 @@ def create_job(owner, connection, kinds, options=None):
     try:
         # The partial unique constraint on (connection, live status) is the
         # real guard; the atomic block keeps the IntegrityError from poisoning
-        # the caller's transaction.
+        # the caller's transaction. The row lock serialises this with
+        # delete_connection, whose live-job check must not be overtaken.
         with transaction.atomic():
+            if not (
+                ImportConnection.objects.select_for_update()
+                .filter(pk=connection.pk)
+                .exists()
+            ):
+                raise InvalidJob("This connection no longer exists.")
             job = ImportJob.objects.create(
                 connection=connection, kinds=ordered, options=validated
             )
@@ -217,6 +225,10 @@ def run_job(job_uuid) -> Outcome:
 
 def _run_slice(job, deadline):
     provider = get_available_provider(job.connection.provider)
+    # Vetted again at every slice, not only when the connection was saved: the
+    # job may run hours later, and a host that resolved to a public address
+    # then may resolve to a private one now.
+    check_remote_url(job.connection.base_url)
     for kind in job.kinds:
         if job.stats.get(kind, {}).get("phase") == "done":
             continue

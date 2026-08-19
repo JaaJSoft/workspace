@@ -68,6 +68,18 @@ function emptyConnectionForm(provider) {
   return { provider: provider || '', label: '', base_url: '', username: '', secret: '' };
 }
 
+// Only what the user changed goes in the PATCH: the server re-checks the
+// credentials against the remote whenever the URL or username is sent, and a
+// plain rename should not need the old cloud to be up.
+function connectionChanges(original, form) {
+  const body = {};
+  for (const field of ['label', 'base_url', 'username']) {
+    if (!original || form[field] !== original[field]) body[field] = form[field];
+  }
+  if (form.secret) body.secret = form.secret;
+  return body;
+}
+
 function emptyWizard() {
   return {
     step: 1,
@@ -96,6 +108,7 @@ window.importsApp = function importsApp() {
 
     connForm: emptyConnectionForm(),
     connEditing: null,
+    connOriginal: null,
     connError: '',
     connSaving: false,
     connBusy: {},
@@ -293,9 +306,11 @@ window.importsApp = function importsApp() {
       this.connError = '';
       if (conn) {
         this.connEditing = conn.uuid;
+        this.connOriginal = conn;
         this.connForm = { provider: conn.provider, label: conn.label, base_url: conn.base_url, username: conn.username, secret: '' };
       } else {
         this.connEditing = null;
+        this.connOriginal = null;
         const first = this.credentialProviders()[0];
         this.connForm = emptyConnectionForm(first ? first.slug : '');
       }
@@ -313,8 +328,7 @@ window.importsApp = function importsApp() {
       try {
         let res;
         if (this.connEditing) {
-          const body = { label: this.connForm.label, base_url: this.connForm.base_url, username: this.connForm.username };
-          if (this.connForm.secret) body.secret = this.connForm.secret;
+          const body = connectionChanges(this.connOriginal, this.connForm);
           res = await api(`/connections/${this.connEditing}`, { method: 'PATCH', body });
         } else {
           res = await api('/connections', { method: 'POST', body: this.connForm });

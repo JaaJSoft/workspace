@@ -6,12 +6,13 @@ credentials - a connection row always describes something that worked.
 
 import logging
 
+from django.db import transaction
 from django.utils import timezone
 
 from workspace.common.logging import scrub
 
 from ..errors import ImportsError
-from ..models import ImportConnection
+from ..models import ImportConnection, ImportJob
 from ..providers.registry import provider_registry
 from .url_guard import check_remote_url
 
@@ -19,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 class UnknownProvider(ImportsError):
+    pass
+
+
+class ConnectionBusy(ImportsError):
     pass
 
 
@@ -116,3 +121,27 @@ def browse_files(connection, entry_id):
         source.close()
     entries.sort(key=lambda e: (not e.is_dir, e.name.lower()))
     return entries
+
+
+def delete_connection(connection):
+    """Remove the connection and its job history. Refused while a job is
+    live: cascading the delete under a running worker leaves it writing
+    items for a job that no longer exists."""
+    with transaction.atomic():
+        # Same row lock as create_job: a job cannot slip in between the check
+        # and the cascade.
+        locked = (
+            ImportConnection.objects.select_for_update()
+            .filter(pk=connection.pk)
+            .first()
+        )
+        if locked is None:
+            return
+        if locked.jobs.filter(
+            status__in=[ImportJob.Status.PENDING, ImportJob.Status.RUNNING]
+        ).exists():
+            raise ConnectionBusy(
+                "An import is running on this connection - stop it before removing "
+                "the connection."
+            )
+        locked.delete()

@@ -96,3 +96,39 @@ test('editing a connection only sends the fields that changed', () => {
     { base_url: 'https://b', secret: 'pw' },
   );
 });
+
+test('a requested stop shows as stopping until the worker ends the job', () => {
+  const { component } = app();
+  const job = { status: 'running', cancel_requested_at: '2026-08-19T10:00:00Z', stats: { files: { total_files: 10, files: 3, phase: 'copying' } } };
+  assert.equal(component.isStopping(job), true);
+  assert.match(component.phaseLabel(job), /^Stopping/);
+  assert.equal(component.isStopping({ status: 'cancelled', cancel_requested_at: '2026-08-19T10:00:00Z' }), false);
+  assert.equal(component.isStopping({ status: 'running', cancel_requested_at: null }), false);
+});
+
+test('the bar is indeterminate while listing, determinate once copying', () => {
+  const { component } = app();
+  const listing = { status: 'running', stats: { files: { phase: 'listing', total_files: 400, unchanged: 398 } } };
+  assert.equal(component.progress(listing).determinate, false);
+  const copying = { status: 'running', stats: { files: { phase: 'copying', total_files: 400, unchanged: 398 } } };
+  assert.equal(component.progress(copying).determinate, true);
+  assert.equal(component.progress(copying).pct, 100);
+  assert.equal(component.progress({ status: 'pending', stats: {} }).determinate, false);
+});
+
+test('a retry response does not duplicate a card an SSE refetch already inserted', async () => {
+  const fetchStub = (url, opts) => {
+    if (opts && opts.method === 'POST') {
+      return Promise.resolve({ ok: true, status: 201, json: async () => ({ uuid: 'new', status: 'pending', stats: {} }) });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ uuid: 'new', status: 'completed', stats: {} }) });
+  };
+  const { ctx, component } = app(fetchStub);
+  ctx.AppAlert = { success() {}, error() {} };
+  component.jobs = [{ uuid: 'old', status: 'failed' }];
+  // The SSE event beat the retry response: the new job is already listed.
+  await component.onJobEvent({ job: 'new' });
+  await component.retryJob({ uuid: 'old' });
+  assert.deepStrictEqual(component.jobs.map((j) => j.uuid), ['new', 'old']);
+  assert.equal(component.jobs[0].status, 'completed');
+});

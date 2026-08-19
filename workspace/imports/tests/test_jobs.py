@@ -301,6 +301,78 @@ class CancelRetryPurgeTests(JobsTestCase):
         self.assertEqual(job.status, ImportJob.Status.RUNNING)
         self.assertIsNotNone(job.cancel_requested_at)
 
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_cancel_running_job_without_a_worker_ends_it_immediately(self):
+        """A running job whose heartbeat went stale has lost its worker (killed,
+        or the dev server restarted mid-import): nobody would ever read the
+        flag, so the stop takes effect right away."""
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now() - timedelta(hours=1),
+            heartbeat_at=timezone.now() - timedelta(minutes=30),
+        )
+        job = svc.cancel_job(job)
+        self.assertEqual(job.status, ImportJob.Status.CANCELLED)
+        self.assertIsNotNone(job.finished_at)
+        # ...and a later delivery for it does nothing.
+        self.assertIs(svc.run_job(job.pk), Outcome.SKIPPED)
+
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_cancel_running_job_that_never_reported_ends_it_immediately(self):
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now() - timedelta(hours=1),
+            heartbeat_at=None,
+        )
+        job = svc.cancel_job(job)
+        self.assertEqual(job.status, ImportJob.Status.CANCELLED)
+        self.assertIsNotNone(job.finished_at)
+
+    def test_a_worker_finishing_after_a_stop_does_not_undo_the_cancellation(self):
+        """The worker was taken for dead and the stop ended the job; when it
+        turns out to be alive and completes its last entry, the user's
+        cancellation wins and no 'finished' notification goes out."""
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now(),
+            heartbeat_at=timezone.now(),
+        )
+
+        def cancelled_meanwhile(job_, deadline):
+            ImportJob.objects.filter(pk=job_.pk).update(
+                status=ImportJob.Status.CANCELLED,
+                cancel_requested_at=timezone.now(),
+                finished_at=timezone.now(),
+            )
+            job_.stats["files"] = {"files": 3}
+            return Outcome.DONE
+
+        with patch("workspace.imports.services.jobs._run_slice", cancelled_meanwhile):
+            svc.run_job(job.pk)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.CANCELLED)
+        self.assertEqual(job.stats["files"]["files"], 3)
+        self.assertFalse(Notification.objects.exists())
+
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_cancel_running_job_with_a_live_worker_only_flags_it(self):
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now() - timedelta(hours=1),
+            heartbeat_at=timezone.now() - timedelta(seconds=30),
+        )
+        job = svc.cancel_job(job)
+        self.assertEqual(job.status, ImportJob.Status.RUNNING)
+        self.assertIsNotNone(job.cancel_requested_at)
+
     def test_cancel_finished_job_is_refused(self):
         job = ImportJob.objects.create(
             connection=self.conn, kinds=["files"], status=ImportJob.Status.COMPLETED

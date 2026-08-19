@@ -111,10 +111,16 @@ def cancel_job(job):
     if job.is_terminal:
         raise InvalidJob("This import is already finished.")
     now = timezone.now()
-    # A pending job has no worker to notice the flag: end it right here. The
-    # CAS on status keeps a worker that starts at the same instant honest.
-    ended = ImportJob.objects.filter(pk=job.pk, status=ImportJob.Status.PENDING).update(
-        status=ImportJob.Status.CANCELLED, cancel_requested_at=now, finished_at=now
+    # A pending job, or a running one whose worker stopped reporting, has
+    # nobody to notice the flag: end it right here. The CAS on status keeps a
+    # worker that starts (or resumes) at the same instant honest - and a live
+    # worker mistaken for a dead one still sees the flag at its next entry.
+    ended = (
+        ImportJob.objects.filter(pk=job.pk)
+        .filter(Q(status=ImportJob.Status.PENDING) | _stale_running_q(now))
+        .update(
+            status=ImportJob.Status.CANCELLED, cancel_requested_at=now, finished_at=now
+        )
     )
     if not ended:
         ImportJob.objects.filter(pk=job.pk).update(cancel_requested_at=now)
@@ -145,14 +151,20 @@ def purge_old_jobs():
     return deleted
 
 
+def _stale_running_q(now):
+    """Running jobs whose worker has not reported for a lock TTL - it is gone
+    (killed, OOM, deploy, dev server restarted) and the job is orphaned."""
+    cutoff = now - timedelta(seconds=lock_ttl_seconds())
+    return Q(status=ImportJob.Status.RUNNING) & (
+        Q(heartbeat_at__lt=cutoff) | Q(heartbeat_at__isnull=True, started_at__lt=cutoff)
+    )
+
+
 def recover_stale_jobs():
     """Re-enqueue running jobs whose worker stopped reporting (killed, OOM,
     deploy...). The advisory lock has expired by then, so the new delivery
     picks the job up where the persisted stats left it."""
-    cutoff = timezone.now() - timedelta(seconds=lock_ttl_seconds())
-    stale = ImportJob.objects.filter(status=ImportJob.Status.RUNNING).filter(
-        Q(heartbeat_at__lt=cutoff) | Q(heartbeat_at__isnull=True, started_at__lt=cutoff)
-    )
+    stale = ImportJob.objects.filter(_stale_running_q(timezone.now()))
     recovered = 0
     for job in stale:
         logger.warning("Re-enqueueing stale import job %s", job.pk)
@@ -243,12 +255,19 @@ def _run_slice(job, deadline):
 
 
 def _finish(job, status, *, error=""):
-    ImportJob.objects.filter(pk=job.pk).update(
+    # CAS on RUNNING: a stop that ended the job while this worker was taken
+    # for dead must not be overwritten by the worker's own ending - the user
+    # asked for cancelled, cancelled it stays. The final stats are kept either
+    # way.
+    ended = ImportJob.objects.filter(pk=job.pk, status=ImportJob.Status.RUNNING).update(
         status=status, error=error, finished_at=timezone.now(), stats=job.stats
     )
+    if not ended:
+        ImportJob.objects.filter(pk=job.pk).update(stats=job.stats)
     job.refresh_from_db()
     progress.push_job_progress(job)
-    _notify_owner(job)
+    if ended:
+        _notify_owner(job)
 
 
 def _notify_owner(job):

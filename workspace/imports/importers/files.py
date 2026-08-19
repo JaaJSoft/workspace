@@ -37,7 +37,6 @@ ON_CONFLICT_REPLACE = "replace"
 # seekable stream (type detection, hashing and the storage write are three
 # passes). Small files stay in memory, bigger ones go through a temp file.
 _SPOOL_MAX_MEMORY = 8 * 1024 * 1024
-_QUOTA_RECHECK_EVERY = 50
 # A transfer cut short by the slice limit is retried once, then given up.
 _MAX_ENTRY_ATTEMPTS = 2
 _MAX_NAME_LENGTH = File._meta.get_field("name").max_length
@@ -128,9 +127,10 @@ class FilesImporter(Importer):
     # -- listing phase -------------------------------------------------
 
     def _plan(self, ctx, source):
-        """Count files and bytes so the UI has a total and the quota can be
-        checked before anything is written. Entries already imported count as
-        files but not as bytes: they will not be fetched."""
+        """Count files and bytes so the UI has a total and the import can be
+        refused before anything is written when it would not fit. Entries
+        already imported count as files but not as bytes: they will not be
+        fetched."""
         stack = ctx.stats.setdefault(
             "plan_stack", [ctx.options.get("source_path", "/")]
         )
@@ -174,6 +174,9 @@ class FilesImporter(Importer):
         return None
 
     def _check_quota(self, ctx, incoming_bytes):
+        # Up-front only: the writes themselves are bounded by the files
+        # module, this is what lets a hopeless import fail in seconds rather
+        # than after hours of copying.
         available = settings.STORAGE_QUOTA_BYTES - FileService.storage_used(ctx.owner)
         if incoming_bytes > available:
             raise JobFailed(
@@ -191,7 +194,6 @@ class FilesImporter(Importer):
             ]
         stack = ctx.stats["copy_stack"]
         consecutive_errors = 0
-        copied_since_quota_check = 0
         while stack:
             if stop := ctx.should_stop():
                 ctx.flush(force=True)
@@ -245,14 +247,6 @@ class FilesImporter(Importer):
                     continue
                 ctx.stats.pop("in_flight", None)
                 consecutive_errors = 0
-                copied_since_quota_check += 1
-                # The quota is only re-read every N files, so a burst of large
-                # files can overshoot it by up to N entries; the listing phase
-                # already vetted the whole import, this is a safety net against
-                # concurrent uploads.
-                if copied_since_quota_check >= _QUOTA_RECHECK_EVERY:
-                    copied_since_quota_check = 0
-                    self._check_quota(ctx, 0)
             # This directory's files are done; its subfolders take its place.
             stack.pop()
             stack.extend(subfolders)

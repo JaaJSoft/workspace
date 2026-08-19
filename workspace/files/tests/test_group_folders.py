@@ -619,8 +619,8 @@ class GroupFolderViewSetTests(APITestCase):
         self.assertEqual(resp.data["name"], "renamed.txt")
 
 
-class GroupRootsQueryTests(APITestCase):
-    """``GET /api/v1/files?group_roots=1`` lists the root folder of each
+class GroupsQueryTests(APITestCase):
+    """``GET /api/v1/files?groups=1`` lists the root folder of each
     group the user belongs to - and only those."""
 
     def setUp(self):
@@ -656,7 +656,7 @@ class GroupRootsQueryTests(APITestCase):
 
     def test_lists_only_root_folders_of_own_groups(self):
         self.client.force_authenticate(user=self.alice)
-        resp = self.client.get("/api/v1/files?group_roots=1")
+        resp = self.client.get("/api/v1/files?groups=1")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(
             [f["uuid"] for f in resp.data], [str(self.marketing_root.uuid)]
@@ -665,14 +665,14 @@ class GroupRootsQueryTests(APITestCase):
 
     def test_false_value_keeps_the_personal_root_listing(self):
         self.client.force_authenticate(user=self.alice)
-        resp = self.client.get("/api/v1/files?group_roots=false")
+        resp = self.client.get("/api/v1/files?groups=false")
         self.assertEqual([f["name"] for f in resp.data], ["Personal"])
 
     def test_deleted_root_is_omitted(self):
         self.marketing_root.deleted_at = timezone.now()
         self.marketing_root.save(update_fields=["deleted_at"])
         self.client.force_authenticate(user=self.alice)
-        resp = self.client.get("/api/v1/files?group_roots=1")
+        resp = self.client.get("/api/v1/files?groups=1")
         self.assertEqual(resp.data, [])
 
 

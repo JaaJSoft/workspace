@@ -85,7 +85,7 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, "RECENT_FILES_MAX_LIMIT", 200)
                 description="When true, return only items in trash.",
             ),
             OpenApiParameter(
-                name="group_roots",
+                name="groups",
                 type=OpenApiTypes.BOOL,
                 description=(
                     "When true, return the root folder of every group the "
@@ -351,8 +351,8 @@ class FileViewSet(
             return False
         return str(value).lower() in {"1", "true", "yes"}
 
-    def _is_group_roots_query(self):
-        return is_truthy(self.request.query_params.get("group_roots"))
+    def _is_groups_query(self):
+        return is_truthy(self.request.query_params.get("groups"))
 
     def _is_descendants_query(self):
         return self.request.query_params.get("descendants", "").lower() in {"1", "true"}
@@ -431,7 +431,7 @@ class FileViewSet(
                 .distinct()
             )
 
-        if self.action == "list" and self._is_group_roots_query():
+        if self.action == "list" and self._is_groups_query():
             return FileService.annotate_for_serializer(
                 FileService.user_group_files_qs(self.request.user).filter(
                     parent__isnull=True,

@@ -44,7 +44,7 @@
 
     async fetchSpaces() {
       try {
-        const res = await fetch('/api/v1/files?group_roots=1', { credentials: 'same-origin' });
+        const res = await fetch('/api/v1/files?groups=1', { credentials: 'same-origin' });
         if (!res.ok) return;
         const roots = await res.json();
         const groupSpaces = roots

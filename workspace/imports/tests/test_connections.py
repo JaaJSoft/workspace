@@ -135,3 +135,18 @@ class UpdateAndTestConnectionTests(TestCase):
         ):
             with self.assertRaises(UnsafeUrl):
                 svc.browse_files(self.conn, "")
+
+    def test_delete_is_refused_while_a_job_is_live(self):
+        from workspace.imports.models import ImportJob
+
+        job = ImportJob.objects.create(
+            connection=self.conn, kinds=["files"], status=ImportJob.Status.RUNNING
+        )
+        with self.assertRaises(svc.ConnectionBusy):
+            svc.delete_connection(self.conn)
+        self.assertTrue(ImportConnection.objects.filter(pk=self.conn.pk).exists())
+
+        job.status = ImportJob.Status.COMPLETED
+        job.save()
+        svc.delete_connection(self.conn)
+        self.assertFalse(ImportConnection.objects.filter(pk=self.conn.pk).exists())

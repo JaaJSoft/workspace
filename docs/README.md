@@ -14,6 +14,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 | [Projects](projects/) | Kanban boards with backlog, task references, labels, comments, activity |
 | [AI Assistants](ai/) | Configurable bots with tools, vision, memory, and scheduled messages |
 | [Notifications](notifications/) | In-app and Web Push notifications with priority and read tracking |
+| [Imports](imports/) | Bring files over from Nextcloud or any WebDAV host, in resumable background jobs |
 
 ## Deployment
 

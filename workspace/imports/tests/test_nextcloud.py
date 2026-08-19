@@ -33,6 +33,14 @@ class NormalizeBaseUrlTests(SimpleTestCase):
         url = "https://cloud.example.org/remote.php/dav/files/alice"
         self.assertEqual(self.provider.normalize_base_url(url + "/", "alice"), url)
 
+    def test_dav_url_follows_a_username_change(self):
+        self.assertEqual(
+            self.provider.normalize_base_url(
+                "https://cloud.example.org/remote.php/dav/files/alice/Photos", "bob"
+            ),
+            "https://cloud.example.org/remote.php/dav/files/bob/Photos",
+        )
+
     def test_legacy_webdav_url_is_kept(self):
         url = "https://cloud.example.org/remote.php/webdav"
         self.assertEqual(self.provider.normalize_base_url(url, "alice"), url)

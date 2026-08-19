@@ -116,12 +116,21 @@ Context (built by files.ui.views.storage):
     </section>
 
     <!-- By folder -->
-    <section class="rounded-box bg-base-200 p-4">
-      <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm">
+    {% comment %}
+    Side by side with "By category", this column must follow that one's height
+    rather than grow with the folder count: the section is taken out of the
+    flow (absolute in a relative cell) so the row is sized by the categories,
+    and the list fills whatever is left and scrolls. The cell's min-height
+    keeps a few folders visible when the category list is short. Stacked on
+    small screens, it is a plain block with a capped list.
+    {% endcomment %}
+    <div class="md:relative md:min-h-80">
+    <section class="rounded-box bg-base-200 p-4 md:absolute md:inset-0 md:flex md:flex-col">
+      <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm shrink-0">
         <i data-lucide="folder-tree" class="w-4 h-4 text-accent"></i>
         By folder
       </h5>
-      <ul class="flex flex-col gap-1 max-h-72 overflow-y-auto pr-1">
+      <ul class="flex flex-col gap-1 max-h-72 md:max-h-none md:flex-1 md:min-h-0 overflow-y-auto pr-1">
         {% for entry in analysis.subfolders %}
         <li>
           {% comment %}The loose-files row has no uuid: same element, no href, so it renders as a plain row.{% endcomment %}
@@ -144,6 +153,7 @@ Context (built by files.ui.views.storage):
         {% endfor %}
       </ul>
     </section>
+    </div>
   </div>
 
   <!-- Largest files -->

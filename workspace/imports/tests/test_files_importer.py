@@ -497,3 +497,72 @@ class NoMarkerResumeTests(ImporterTestCase):
         self.assertEqual(safe_local_name(" .. "), "untitled")
         self.assertEqual(safe_local_name("a\\b"), "a-b")
         self.assertEqual(safe_local_name("x" * 300), "x" * 255)
+
+
+class SliceCutShortTests(ImporterTestCase):
+    def test_a_listing_cut_short_leaves_no_partial_counts(self):
+        """A soft time limit in the middle of a directory must not persist
+        half of that directory's counts: the directory is relisted next time
+        and the counts would be added twice."""
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        from workspace.imports.tests.fakes import FakeFileSource
+
+        job = self._job()
+
+        def cut_list(source_self, entry_id):
+            entries = self.provider.tree.get(entry_id, [])
+            yield from entries[:2]  # "/" yields its folder and its file
+            raise SoftTimeLimitExceeded()
+
+        with patch.object(FakeFileSource, "list_dir", cut_list):
+            with self.assertRaises(SoftTimeLimitExceeded):
+                self._run(job)
+        self.assertEqual(job.stats["files"]["total_files"], 0)
+        self.assertEqual(job.stats["files"]["total_bytes"], 0)
+
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertEqual(job.stats["files"]["total_files"], 3)
+
+    def test_an_entry_cut_short_twice_is_given_up(self):
+        """The in-flight marker survives a slice the soft limit ended; on the
+        third attempt the entry is reported failed instead of fetched again,
+        so a file too big for one slice cannot loop forever."""
+        job = self._job()
+        job.stats = {"files": {"in_flight": {"id": "/readme.txt", "attempts": 2}}}
+        job.save()
+
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertNotIn("/readme.txt", self.provider.last_source.opened)
+        item = ImportJobItem.objects.get(job=job, remote_id="/readme.txt")
+        self.assertEqual(item.status, ImportJobItem.Status.FAILED)
+        self.assertIn("Gave up after 2 attempts", item.error)
+        self.assertEqual(job.stats["files"]["failed"], 1)
+        self.assertEqual(job.stats["files"]["files"], 2)
+        self.assertNotIn("in_flight", job.stats["files"])
+
+    def test_in_flight_marker_is_dropped_once_the_entry_is_handled(self):
+        job = self._job()
+        self.provider.fail_open.add("/Docs/report.pdf")
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertNotIn("in_flight", job.stats["files"])
+
+    def test_in_flight_marker_is_persisted_for_files_that_spool_to_disk(self):
+        from workspace.imports.importers import files as files_importer
+
+        job = self._job()
+        seen = []
+        original = ImportContext.save_stats
+
+        def spy(ctx):
+            seen.append(dict(ctx.stats.get("in_flight") or {}))
+            original(ctx)
+
+        with (
+            patch.object(files_importer, "_SPOOL_MAX_MEMORY", 5),
+            patch.object(ImportContext, "save_stats", spy),
+        ):
+            self.assertIs(self._run(job), Outcome.DONE)
+        self.assertIn({"id": "/readme.txt", "attempts": 1}, seen)  # size 9
+        self.assertIn({"id": "/Docs/report.pdf", "attempts": 1}, seen)  # size 5
+        self.assertNotIn({"id": "/Docs/Archive/old.txt", "attempts": 1}, seen)

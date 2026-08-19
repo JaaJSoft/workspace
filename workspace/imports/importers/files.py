@@ -24,6 +24,7 @@ from workspace.files.services._names import available_file_name, find_name_confl
 
 from ..models import ImportJobItem
 from ..providers.base import KIND_FILES, ProviderError
+from ..serializers import RemotePathField
 from .base import Importer, JobFailed, Outcome
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,8 @@ ON_CONFLICT_REPLACE = "replace"
 # passes). Small files stay in memory, bigger ones go through a temp file.
 _SPOOL_MAX_MEMORY = 8 * 1024 * 1024
 _QUOTA_RECHECK_EVERY = 50
+# A transfer cut short by the slice limit is retried once, then given up.
+_MAX_ENTRY_ATTEMPTS = 2
 _MAX_NAME_LENGTH = File._meta.get_field("name").max_length
 _MAX_MIME_LENGTH = File._meta.get_field("mime_type").max_length
 _STORAGE_ERRORS = (
@@ -50,7 +53,7 @@ _STORAGE_ERRORS = (
 
 
 class FilesImportOptionsSerializer(serializers.Serializer):
-    source_path = serializers.CharField(required=False, allow_blank=True, default="/")
+    source_path = RemotePathField()
     destination = serializers.UUIDField(required=False, allow_null=True, default=None)
     on_conflict = serializers.ChoiceField(
         choices=[ON_CONFLICT_SKIP, ON_CONFLICT_RENAME, ON_CONFLICT_REPLACE],
@@ -70,9 +73,6 @@ class FilesImportOptionsSerializer(serializers.Serializer):
         if not exists:
             raise serializers.ValidationError("Destination folder not found.")
         return str(value)
-
-    def validate_source_path(self, value):
-        return "/" + value.strip("/") if value.strip("/") else "/"
 
 
 def safe_local_name(name: str) -> str:
@@ -143,20 +143,27 @@ class FilesImporter(Importer):
                 return stop
             remote_dir = stack[-1]
             subdirs = []
+            # Counted locally and applied once the listing is complete: a
+            # slice cut in the middle of a directory (soft time limit, dead
+            # worker) relists it, and half-applied counts would be added twice.
+            files = unchanged = total_bytes = 0
             try:
                 for entry in source.list_dir(remote_dir):
                     if entry.is_dir:
                         subdirs.append(entry.id)
                     else:
-                        ctx.stat("total_files")
+                        files += 1
                         if ctx.already_done(entry.id, entry.fingerprint):
-                            ctx.stat("unchanged")
+                            unchanged += 1
                         else:
-                            ctx.stat("total_bytes", entry.size or 0)
+                            total_bytes += entry.size or 0
             except ProviderError as exc:
                 raise JobFailed(
                     f"Could not list '{remote_dir}': {exc.user_message}"
                 ) from exc
+            ctx.stat("total_files", files)
+            ctx.stat("unchanged", unchanged)
+            ctx.stat("total_bytes", total_bytes)
             stack.pop()
             stack.extend(subdirs)
             ctx.flush()
@@ -213,9 +220,12 @@ class FilesImporter(Importer):
                     ctx.flush(force=True)
                     return stop
                 ctx.current = entry.id
+                if self._gave_up_on(ctx, entry):
+                    continue
                 try:
                     self._import_file(ctx, source, entry, local_parent)
                 except (ProviderError, *_STORAGE_ERRORS) as exc:
+                    ctx.stats.pop("in_flight", None)
                     message = getattr(exc, "user_message", None) or _storage_message(
                         exc
                     )
@@ -233,8 +243,13 @@ class FilesImporter(Importer):
                     ctx.stat("failed")
                     consecutive_errors = self._bump_errors(ctx, consecutive_errors)
                     continue
+                ctx.stats.pop("in_flight", None)
                 consecutive_errors = 0
                 copied_since_quota_check += 1
+                # The quota is only re-read every N files, so a burst of large
+                # files can overshoot it by up to N entries; the listing phase
+                # already vetted the whole import, this is a safety net against
+                # concurrent uploads.
                 if copied_since_quota_check >= _QUOTA_RECHECK_EVERY:
                     copied_since_quota_check = 0
                     self._check_quota(ctx, 0)
@@ -246,6 +261,38 @@ class FilesImporter(Importer):
         ctx.stats.pop("copy_stack", None)
         ctx.flush(force=True)
         return Outcome.DONE
+
+    def _gave_up_on(self, ctx, entry):
+        """Remember which entry is being transferred, and give up on one that
+        keeps getting cut short.
+
+        The marker survives a slice the soft time limit ended mid-transfer
+        (the runner persists the stats); an entry found in flight at the next
+        attempt was never finished, and after ``_MAX_ENTRY_ATTEMPTS`` it is
+        reported failed instead of fetched again - otherwise a single file too
+        big for one slice would be re-downloaded from scratch every slice,
+        forever. The marker is written straight away for files the spool
+        would put on disk, so a killed worker leaves the same trace.
+        """
+        in_flight = ctx.stats.get("in_flight") or {}
+        attempts = 1
+        if in_flight.get("id") == entry.id:
+            attempts = in_flight.get("attempts", 0) + 1
+        if attempts > _MAX_ENTRY_ATTEMPTS:
+            ctx.stats.pop("in_flight", None)
+            ctx.report_item(
+                entry.id,
+                ImportJobItem.Status.FAILED,
+                error=f"Gave up after {attempts - 1} attempts: the transfer never "
+                "finished within one time slice.",
+                fingerprint=entry.fingerprint,
+            )
+            ctx.stat("failed")
+            return True
+        ctx.stats["in_flight"] = {"id": entry.id, "attempts": attempts}
+        if entry.size is None or entry.size >= _SPOOL_MAX_MEMORY:
+            ctx.save_stats()
+        return False
 
     def _bump_errors(self, ctx, consecutive_errors):
         consecutive_errors += 1

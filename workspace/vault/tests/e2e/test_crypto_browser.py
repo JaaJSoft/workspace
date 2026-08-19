@@ -7,8 +7,9 @@ Ed25519 in particular arrived late and unevenly - and `crypto.subtle` does not
 exist at all outside a secure context. Both are assumptions the Node suite
 cannot test, and both would surface as a user who simply cannot open a vault.
 
-Only Chromium is exercised here, because it is the only engine Playwright has
-installed on this machine. Firefox and WebKit remain unverified.
+Chromium, Firefox and WebKit are all exercised. An engine whose build lacks
+WebCrypto's secure curves skips with a message naming the missing primitive
+rather than reporting a defect in the bundle.
 """
 
 import json
@@ -159,12 +160,26 @@ class EngineChecks:
 
     @classmethod
     def setUpClass(cls):
+        from playwright.sync_api import sync_playwright
+
+        # Probed before anything is allocated. The base class starts the live
+        # server and the Playwright driver before it launches the browser, and
+        # unittest does not run tearDownClass after a setUpClass that raised -
+        # deciding to skip in there would leak a server thread and a driver
+        # process for the rest of the suite. Probing first also keeps a real
+        # failure, a port clash or a database error, from being relabelled as a
+        # missing browser.
         try:
-            super().setUpClass()
-        except Exception as exc:  # pragma: no cover - depends on the machine
-            raise unittest.SkipTest(
-                f"{cls.BROWSER_NAME} is not installed: {exc}"
-            ) from exc
+            with sync_playwright() as probe:
+                executable = pathlib.Path(
+                    getattr(probe, cls.BROWSER_NAME).executable_path
+                )
+            installed = executable.exists()
+        except Exception:  # pragma: no cover - depends on the machine
+            installed = False
+        if not installed:
+            raise unittest.SkipTest(f"{cls.BROWSER_NAME} is not installed")
+        super().setUpClass()
 
     def _load_bundle(self):
         self.page.goto(f"{self.live_server_url}/login")

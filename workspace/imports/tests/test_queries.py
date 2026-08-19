@@ -17,12 +17,8 @@ class AccessQueriesTests(TestCase):
         self.theirs = ImportConnection.objects.create(
             owner=self.bob, provider="webdav", label="theirs"
         )
-        self.my_job = ImportJob.objects.create(
-            owner=self.alice, connection=self.mine, kinds=["files"]
-        )
-        ImportJob.objects.create(
-            owner=self.bob, connection=self.theirs, kinds=["files"]
-        )
+        self.my_job = ImportJob.objects.create(connection=self.mine, kinds=["files"])
+        ImportJob.objects.create(connection=self.theirs, kinds=["files"])
 
     def test_connections_are_scoped_to_the_owner(self):
         self.assertEqual(list(user_connections_qs(self.alice)), [self.mine])

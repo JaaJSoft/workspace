@@ -40,9 +40,7 @@ class ImportConnectionTests(TestCase):
 
     def test_deleting_a_connection_removes_its_jobs_and_items(self):
         conn = _connection(self.user)
-        job = ImportJob.objects.create(
-            owner=self.user, connection=conn, kinds=["files"]
-        )
+        job = ImportJob.objects.create(connection=conn, kinds=["files"])
         ImportJobItem.objects.create(
             job=job, kind="files", remote_id="/a.txt", status=ImportJobItem.Status.DONE
         )
@@ -57,16 +55,12 @@ class ImportJobTests(TestCase):
         self.conn = _connection(self.user)
 
     def test_new_job_is_pending_and_not_terminal(self):
-        job = ImportJob.objects.create(
-            owner=self.user, connection=self.conn, kinds=["files"]
-        )
+        job = ImportJob.objects.create(connection=self.conn, kinds=["files"])
         self.assertEqual(job.status, ImportJob.Status.PENDING)
         self.assertFalse(job.is_terminal)
 
     def test_terminal_statuses(self):
-        job = ImportJob.objects.create(
-            owner=self.user, connection=self.conn, kinds=["files"]
-        )
+        job = ImportJob.objects.create(connection=self.conn, kinds=["files"])
         for status in (
             ImportJob.Status.COMPLETED,
             ImportJob.Status.FAILED,
@@ -78,9 +72,7 @@ class ImportJobTests(TestCase):
         self.assertFalse(job.is_terminal)
 
     def test_remote_entry_is_unique_per_job_and_kind(self):
-        job = ImportJob.objects.create(
-            owner=self.user, connection=self.conn, kinds=["files"]
-        )
+        job = ImportJob.objects.create(connection=self.conn, kinds=["files"])
         ImportJobItem.objects.create(
             job=job, kind="files", remote_id="/a.txt", status=ImportJobItem.Status.DONE
         )
@@ -93,12 +85,8 @@ class ImportJobTests(TestCase):
             )
 
     def test_same_remote_entry_allowed_across_jobs(self):
-        first = ImportJob.objects.create(
-            owner=self.user, connection=self.conn, kinds=["files"]
-        )
-        second = ImportJob.objects.create(
-            owner=self.user, connection=self.conn, kinds=["files"]
-        )
+        first = ImportJob.objects.create(connection=self.conn, kinds=["files"])
+        second = ImportJob.objects.create(connection=self.conn, kinds=["files"])
         for job in (first, second):
             ImportJobItem.objects.create(
                 job=job,

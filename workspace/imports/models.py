@@ -84,11 +84,7 @@ class ImportJob(models.Model):
     TERMINAL_STATUSES = frozenset({Status.COMPLETED, Status.FAILED, Status.CANCELLED})
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    owner = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="import_jobs",
-    )
+    # Ownership is the connection's: a job never outlives or outreaches it.
     connection = models.ForeignKey(
         ImportConnection, on_delete=models.CASCADE, related_name="jobs"
     )
@@ -115,7 +111,8 @@ class ImportJob(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(
-                fields=["owner", "status", "-created_at"], name="importjob_owner_status"
+                fields=["connection", "status", "-created_at"],
+                name="importjob_conn_status",
             ),
             # Serves the retention purge (terminal jobs by finished_at, no owner).
             models.Index(

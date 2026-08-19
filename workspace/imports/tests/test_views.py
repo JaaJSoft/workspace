@@ -33,8 +33,8 @@ class ImportsPageTests(TestCase):
         theirs = ImportConnection.objects.create(
             owner=other, provider="webdav", label="Bob cloud"
         )
-        ImportJob.objects.create(owner=self.user, connection=mine, kinds=["files"])
-        ImportJob.objects.create(owner=other, connection=theirs, kinds=["files"])
+        ImportJob.objects.create(connection=mine, kinds=["files"])
+        ImportJob.objects.create(connection=theirs, kinds=["files"])
 
         self.client.force_login(self.user)
         response = self.client.get(reverse("imports_ui:index"))

@@ -8,4 +8,4 @@ def user_connections_qs(user):
 
 def user_jobs_qs(user):
     """Import jobs the user owns."""
-    return ImportJob.objects.filter(owner=user)
+    return ImportJob.objects.filter(connection__owner=user)

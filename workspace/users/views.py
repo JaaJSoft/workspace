@@ -7,7 +7,7 @@ from django.contrib.auth import password_validation, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Q, Subquery
 from django.http import FileResponse, HttpResponse
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -811,12 +811,18 @@ class UserGroupsView(APIView):
             parent__isnull=True,
             deleted_at__isnull=True,
         )
-        groups = groups.annotate(has_folder=Exists(folder_subquery))
+        groups = groups.annotate(
+            has_folder=Exists(folder_subquery),
+            folder_uuid=Subquery(folder_subquery.values("uuid")[:1]),
+            folder_name=Subquery(folder_subquery.values("name")[:1]),
+        ).order_by("name")
         data = [
             {
                 "id": g.id,
                 "name": g.name,
                 "has_folder": g.has_folder,
+                "folder_uuid": str(g.folder_uuid) if g.folder_uuid else None,
+                "folder_name": g.folder_name,
             }
             for g in groups
         ]

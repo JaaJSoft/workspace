@@ -797,7 +797,7 @@ class UserGroupsTests(UserTestMixin, APITestCase):
         group = Group.objects.create(name="Team")
         self.user.groups.add(group)
         # Create a root folder for the group
-        File.objects.create(
+        folder = File.objects.create(
             owner=self.user,
             name="Team Folder",
             node_type=File.NodeType.FOLDER,
@@ -806,6 +806,15 @@ class UserGroupsTests(UserTestMixin, APITestCase):
         )
         resp = self.client.get(self.URL)
         self.assertTrue(resp.data[0]["has_folder"])
+        self.assertEqual(resp.data[0]["folder_uuid"], str(folder.uuid))
+        self.assertEqual(resp.data[0]["folder_name"], "Team Folder")
+
+    def test_folder_uuid_is_null_without_folder(self):
+        group = Group.objects.create(name="Team")
+        self.user.groups.add(group)
+        resp = self.client.get(self.URL)
+        self.assertIsNone(resp.data[0]["folder_uuid"])
+        self.assertIsNone(resp.data[0]["folder_name"])
 
     def test_does_not_return_other_users_groups(self):
         other = User.objects.create_user(username="other", password="pass")

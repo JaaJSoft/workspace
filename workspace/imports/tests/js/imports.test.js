@@ -2,11 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-function app() {
+function app(fetchStub) {
   const ctx = loadScript('workspace/imports/ui/static/imports/ui/js/imports.js', {
     document: { getElementById: () => null, addEventListener: () => {} },
     getCSRFToken: () => 'x',
     formatFileSize: (b) => `${b} B`,
+    fetch: fetchStub || (() => Promise.reject(new Error('no network in tests'))),
   });
   const component = ctx.importsApp();
   component.$nextTick = (fn) => fn();
@@ -51,4 +52,34 @@ test('errorMessage flattens DRF payloads', () => {
   assert.equal(ctx.errorMessage({ base_url: ['Enter a valid URL.'] }, 'x'), 'base_url: Enter a valid URL.');
   assert.equal(ctx.errorMessage({ options: { files: { on_conflict: ['bad'] } } }, 'x'), 'options.files.on_conflict: bad');
   assert.equal(ctx.errorMessage(null, 'fallback'), 'fallback');
+});
+
+test('refreshJob inserts an unknown job and updates a known one in place', async () => {
+  const calls = [];
+  const fetchStub = (url) => {
+    calls.push(url);
+    const uuid = url.split('/').pop();
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ uuid, status: 'completed' }) });
+  };
+  const { component } = app(fetchStub);
+  component.jobs = [{ uuid: 'a', status: 'running' }, { uuid: 'b', status: 'running' }];
+  await component.onJobEvent({ job: 'b' });
+  assert.deepStrictEqual(component.jobs.map((j) => `${j.uuid}:${j.status}`), ['a:running', 'b:completed']);
+  await component.onJobEvent({ job: 'c' });
+  assert.deepStrictEqual(component.jobs.map((j) => j.uuid), ['c', 'a', 'b']);
+  assert.deepStrictEqual(calls, ['/api/v1/imports/jobs/b', '/api/v1/imports/jobs/c']);
+});
+
+test('wizard kinds come from the selected connection provider', () => {
+  const { component } = app();
+  component.providers = [{ slug: 'fake', kinds: ['files', 'photos'] }];
+  component.wizard.connection = { provider: 'fake' };
+  const kinds = Array.from(component.wizardKinds()).map((k) => ({ ...k }));
+  assert.deepStrictEqual(kinds.map((k) => k.kind), ['files', 'photos']);
+  assert.equal(kinds[0].name, 'Files');
+  assert.equal(kinds[1].name, 'photos');
+  component.toggleKind('photos');
+  assert.deepStrictEqual(Array.from(component.wizard.kinds), ['files', 'photos']);
+  component.toggleKind('files');
+  assert.deepStrictEqual(Array.from(component.wizard.kinds), ['photos']);
 });

@@ -95,8 +95,8 @@
                 <span class="text-xs text-base-content/50" x-text="formatDate(job.created_at)"></span>
               </div>
               <div class="text-xs text-base-content/60 mt-0.5">
-                <span x-show="job.options.files && job.options.files.source_path">From <code x-text="job.options.files.source_path"></code></span>
-                <span x-show="job.options.files && job.options.files.on_conflict"> · same-name files: <span x-text="job.options.files.on_conflict"></span></span>
+                <span x-show="job.options?.files?.source_path">From <code x-text="job.options?.files?.source_path"></code></span>
+                <span x-show="job.options?.files?.on_conflict"> · same-name files: <span x-text="job.options?.files?.on_conflict"></span></span>
               </div>
             </div>
             <div class="flex gap-1 shrink-0">
@@ -212,13 +212,15 @@
       <!-- Step 2: kinds -->
       <div x-show="wizard.step === 2" class="space-y-2">
         <p class="text-sm text-base-content/60">What should be brought over?</p>
-        <label class="flex items-center gap-3 border border-primary bg-primary/5 rounded-lg p-3">
-          <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" checked disabled />
-          <div>
-            <div class="font-medium">Files</div>
-            <div class="text-xs text-base-content/60">Folders and files, with their dates.</div>
-          </div>
-        </label>
+        <template x-for="item in wizardKinds()" :key="item.kind">
+          <label class="flex items-center gap-3 border rounded-lg p-3 cursor-pointer" :class="wizard.kinds.includes(item.kind) ? 'border-primary bg-primary/5' : 'border-base-300'">
+            <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" :checked="wizard.kinds.includes(item.kind)" @change="toggleKind(item.kind)" />
+            <div>
+              <div class="font-medium" x-text="item.name"></div>
+              <div class="text-xs text-base-content/60" x-text="item.description"></div>
+            </div>
+          </label>
+        </template>
         <p class="text-xs text-base-content/50">Other kinds of data (calendars, contacts, boards…) will appear here as providers gain them.</p>
       </div>
 
@@ -319,6 +321,9 @@
       </div>
       <p class="text-sm text-base-content/60 mb-3"><span x-text="errorsDialog.count"></span> failed. Retry the import to try them again.</p>
       <div x-show="errorsDialog.loading" class="py-6 text-center"><span class="loading loading-spinner"></span></div>
+      <template x-if="errorsDialog.error">
+        <inline-alert type="error"><span x-text="errorsDialog.error"></span></inline-alert>
+      </template>
       <ul class="divide-y divide-base-300 max-h-96 overflow-y-auto text-sm" x-show="!errorsDialog.loading">
         <template x-for="item in errorsDialog.items" :key="item.uuid">
           <li class="py-2">

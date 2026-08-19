@@ -8,6 +8,11 @@ const IMPORTS_API = '/api/v1/imports';
 const ACTIVE_STATUSES = ['pending', 'running'];
 const JOBS_POLL_MS = 10000;
 
+// What each data kind means to the user; providers declare which ones they serve.
+const KIND_LABELS = {
+  files: { name: 'Files', description: 'Folders and files, with their dates.' },
+};
+
 // Copy shown next to the connection form, per provider.
 const PROVIDER_HINTS = {
   nextcloud: {
@@ -98,20 +103,26 @@ window.importsApp = function importsApp() {
     wizard: emptyWizard(),
     browse: { path: '/', entries: [], loading: false, error: '' },
 
-    errorsDialog: { job: null, items: [], count: 0, loading: false },
+    errorsDialog: { job: null, items: [], count: 0, loading: false, error: '' },
 
     _pollTimer: null,
+    _onJobEvent: null,
+    _onReconnect: null,
 
     init() {
       this.providers = readJson('providers-data', []);
       this.connections = readJson('connections-data', []);
       this.jobs = readJson('jobs-data', []);
       this.highlightJob = readJson('highlight-job-data', '');
-      window.addEventListener('sse:imports.job', (e) => this.onJobEvent(e.detail));
-      window.addEventListener('sse:reconnect', () => this.refreshJobs());
+      this._onJobEvent = (e) => this.onJobEvent(e.detail);
+      this._onReconnect = () => this.refreshJobs();
+      window.addEventListener('sse:imports.job', this._onJobEvent);
+      window.addEventListener('sse:reconnect', this._onReconnect);
       this._schedulePoll();
       if (readJson('open-wizard-data', false)) {
-        this.$nextTick(() => this.openWizard());
+        // ?new=1 from a command or a link: without a connection the wizard
+        // has nothing to offer, so start with the connection dialog.
+        this.$nextTick(() => (this.connections.length ? this.openWizard() : this.openConnectionDialog()));
       }
       if (this.highlightJob) {
         this.$nextTick(() => {
@@ -123,6 +134,8 @@ window.importsApp = function importsApp() {
 
     destroy() {
       if (this._pollTimer) clearTimeout(this._pollTimer);
+      window.removeEventListener('sse:imports.job', this._onJobEvent);
+      window.removeEventListener('sse:reconnect', this._onReconnect);
     },
 
     // -- helpers ----------------------------------------------------------
@@ -261,7 +274,7 @@ window.importsApp = function importsApp() {
     },
 
     async showErrors(job) {
-      this.errorsDialog = { job, items: [], count: 0, loading: true };
+      this.errorsDialog = { job, items: [], count: 0, loading: true, error: '' };
       this.$refs.errorsDialog.showModal();
       this.$nextTick(() => initLucideIcons());
       const res = await api(`/jobs/${job.uuid}/items?status=failed&limit=200`);
@@ -269,6 +282,8 @@ window.importsApp = function importsApp() {
       if (res.ok) {
         this.errorsDialog.items = res.data.results;
         this.errorsDialog.count = res.data.count;
+      } else {
+        this.errorsDialog.error = errorMessage(res.data, 'Could not load the report.');
       }
     },
 
@@ -378,7 +393,16 @@ window.importsApp = function importsApp() {
       const conn = this.wizard.connection;
       if (!conn) return [];
       const provider = this.providers.find((p) => p.slug === conn.provider);
-      return provider ? provider.kinds : [];
+      return (provider ? provider.kinds : []).map((kind) => ({
+        kind,
+        ...(KIND_LABELS[kind] || { name: kind, description: '' }),
+      }));
+    },
+
+    toggleKind(kind) {
+      const idx = this.wizard.kinds.indexOf(kind);
+      if (idx === -1) this.wizard.kinds.push(kind);
+      else this.wizard.kinds.splice(idx, 1);
     },
 
     canContinue() {

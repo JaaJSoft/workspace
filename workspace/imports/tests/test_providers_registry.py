@@ -21,9 +21,8 @@ class _Stub(Provider):
 
 class ProviderRegistryTests(SimpleTestCase):
     def test_builtin_providers_are_registered_at_startup(self):
-        self.assertEqual(
-            {p.slug for p in provider_registry.available()} >= {"webdav", "nextcloud"},
-            True,
+        self.assertLessEqual(
+            {"webdav", "nextcloud"}, {p.slug for p in provider_registry.available()}
         )
         self.assertEqual(
             provider_registry.get("nextcloud").describe()["auth"], "credentials"

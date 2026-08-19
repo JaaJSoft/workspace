@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .providers.base import ProviderError
+from .errors import ImportsError
 from .providers.registry import provider_registry
 from .queries import user_connections_qs
 from .serializers import (
@@ -14,11 +14,10 @@ from .serializers import (
     ConnectionUpdateSerializer,
 )
 from .services import connections as connections_service
-from .services.url_guard import UnsafeUrl
 
 
-def _bad_remote(exc):
-    return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+def _bad_remote(exc: ImportsError):
+    return Response({"detail": exc.user_message}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @extend_schema(tags=["Imports"])
@@ -50,7 +49,7 @@ class ConnectionListView(APIView):
             connection = connections_service.create_connection(
                 request.user, **ser.validated_data
             )
-        except (ProviderError, UnsafeUrl, connections_service.UnknownProvider) as exc:
+        except ImportsError as exc:
             return _bad_remote(exc)
         return Response(
             ConnectionSerializer(connection).data, status=status.HTTP_201_CREATED
@@ -86,7 +85,7 @@ class ConnectionDetailView(_ConnectionView):
             connection = connections_service.update_connection(
                 connection, **ser.validated_data
             )
-        except (ProviderError, UnsafeUrl, connections_service.UnknownProvider) as exc:
+        except ImportsError as exc:
             return _bad_remote(exc)
         return Response(ConnectionSerializer(connection).data)
 
@@ -108,7 +107,7 @@ class ConnectionTestView(_ConnectionView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         try:
             connection = connections_service.test_connection(connection)
-        except (ProviderError, UnsafeUrl, connections_service.UnknownProvider) as exc:
+        except ImportsError as exc:
             return _bad_remote(exc)
         return Response(ConnectionSerializer(connection).data)
 
@@ -129,7 +128,7 @@ class ConnectionBrowseView(_ConnectionView):
             entries = connections_service.browse_files(
                 connection, query.validated_data["path"]
             )
-        except (ProviderError, UnsafeUrl, connections_service.UnknownProvider) as exc:
+        except ImportsError as exc:
             return _bad_remote(exc)
         return Response(
             {

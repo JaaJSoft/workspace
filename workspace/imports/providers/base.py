@@ -14,11 +14,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import BinaryIO, ClassVar, Protocol
 
+from ..errors import ImportsError
+
 KIND_FILES = "files"
 
 
-class ProviderError(Exception):
-    """The remote could not be used. The message is safe to show to the user."""
+class ProviderError(ImportsError):
+    """The remote could not be used."""
 
 
 class ConnectionFailed(ProviderError):
@@ -69,11 +71,9 @@ class FileSource(Protocol):
 
     def list_dir(self, entry_id: str) -> Iterator[RemoteEntry]:
         """Yield the direct children of a directory - one level, never the tree."""
-        ...
 
     def open(self, entry: RemoteEntry) -> AbstractContextManager[BinaryIO]:
         """Stream a file's bytes; the body is never buffered in full."""
-        ...
 
 
 class Provider(ABC):

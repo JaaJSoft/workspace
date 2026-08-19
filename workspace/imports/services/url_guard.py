@@ -13,9 +13,11 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 
+from ..errors import ImportsError
 
-class UnsafeUrl(ValueError):
-    """The message is safe to show to the user."""
+
+class UnsafeUrl(ImportsError):
+    pass
 
 
 def check_remote_url(url: str) -> None:

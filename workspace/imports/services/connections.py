@@ -10,15 +10,15 @@ from django.utils import timezone
 
 from workspace.common.logging import scrub
 
+from ..errors import ImportsError
 from ..models import ImportConnection
-from ..providers.base import ProviderError
 from ..providers.registry import provider_registry
 from .url_guard import check_remote_url
 
 logger = logging.getLogger(__name__)
 
 
-class UnknownProvider(ValueError):
+class UnknownProvider(ImportsError):
     pass
 
 
@@ -87,14 +87,14 @@ def test_connection(connection):
     try:
         check_remote_url(connection.base_url)
         connection.capabilities = prov.test_connection(connection)
-    except (ProviderError, ValueError) as exc:
-        connection.last_error = str(exc)
+    except ImportsError as exc:
+        connection.last_error = exc.user_message
         connection.last_checked_at = timezone.now()
         connection.save(update_fields=["last_error", "last_checked_at", "updated_at"])
         logger.info(
             "Import connection %s failed its check: %s",
             connection.pk,
-            scrub(str(exc)),
+            scrub(exc.user_message),
         )
         raise
     connection.last_error = ""

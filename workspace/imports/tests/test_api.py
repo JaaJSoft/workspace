@@ -37,7 +37,7 @@ class ConnectionsApiTests(APITestCase):
         response = self.client.get(f"{BASE}/providers")
         self.assertEqual(response.status_code, 200)
         slugs = {p["slug"] for p in response.json()}
-        self.assertTrue({"webdav", "nextcloud", "fake"} <= slugs)
+        self.assertLessEqual({"webdav", "nextcloud", "fake"}, slugs)
         fake = next(p for p in response.json() if p["slug"] == "fake")
         self.assertEqual(
             fake,

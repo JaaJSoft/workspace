@@ -233,6 +233,7 @@ jobs:
           - mail
           - notes
           - users
+          - vault
     name: E2E (${{ matrix.module }})
     steps:
       - name: Checkout repository
@@ -272,6 +273,37 @@ jobs:
 
       - name: Run JS unit tests
         run: node --test "workspace/*/tests/js/**/*.test.js"
+
+  # Deliberately ungated by a paths filter: advisories land against
+  # dependencies we did not touch, so an audit that only runs when the
+  # manifest changes is an audit that never runs when it matters.
+  #
+  # Reports rather than gates, for now: jsPDF carries open advisories in every
+  # published version, so a job that failed on them would be red on every pull
+  # request from the first run - and a check that is always red is a check
+  # nobody reads. Advisories surface as a warning annotation instead. Drop the
+  # `if` wrapper below the day that dependency is resolved, and the job starts
+  # gating for real.
+  audit:
+    runs-on: ubuntu-latest
+    name: Dependency audit
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Audit the vendored frontend dependencies
+        run: |
+          cd scripts/frontend
+          if npm audit --audit-level=high; then
+            echo "No advisory at high severity or above."
+          else
+            echo "::warning title=Dependency advisories::npm audit reported advisories at high severity or above - see the log above."
+          fi
 
   webdav-mount:
     runs-on: ubuntu-latest

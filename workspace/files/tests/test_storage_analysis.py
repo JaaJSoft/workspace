@@ -194,6 +194,15 @@ class AnalyzeStorageServiceTests(_TreeMixin, TestCase):
             ["h2"],
         )
 
+    def test_same_hash_different_size_is_not_a_duplicate(self):
+        # A hash collision (or a stale hash on a rewritten blob) must not
+        # pair two files of different sizes.
+        _file(self.alice, "odd.jpg", self.docs, size=301, category="image", hash="h1")
+        groups = duplicate_groups(StorageScope(self.alice, None))
+        (h1,) = [g for g in groups if g["content_hash"] == "h1"]
+        self.assertEqual(h1["copies"], 2)
+        self.assertEqual({f["name"] for f in h1["files"]}, {"a.jpg", "b.jpg"})
+
     def test_duplicate_copies_are_capped_per_group_and_the_rest_counted(self):
         for i in range(DUPLICATE_COPIES_LIMIT + 3):
             _file(

@@ -41,6 +41,9 @@ def hash_storage_file(storage, name) -> str:
 def find_duplicates(file_obj):
     """Live files with the same content as *file_obj*, within its scope.
 
+    Matched on hash and size, so a hash collision or a stale hash never
+    turns two different files into "duplicates".
+
     The scope is the owner's personal files for a personal file and the
     group's files for a group file - never anyone else's, so a match cannot
     reveal what another user has uploaded.
@@ -49,6 +52,7 @@ def find_duplicates(file_obj):
         return File.objects.none()
     qs = File.objects.filter(
         content_hash=file_obj.content_hash,
+        size=file_obj.size,
         node_type=File.NodeType.FILE,
         deleted_at__isnull=True,
     ).exclude(pk=file_obj.pk)

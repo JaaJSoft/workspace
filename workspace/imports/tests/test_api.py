@@ -224,3 +224,38 @@ class ConnectionsApiTests(APITestCase):
             f"{BASE}/connections/{conn.uuid}/browse", {"kind": "photos"}
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_browse_refuses_dot_segments(self):
+        conn = svc.create_connection(
+            self.user,
+            provider="fake",
+            label="mine",
+            base_url="https://cloud.example.org",
+            username="a",
+            secret="good",
+        )
+        response = self.client.get(
+            f"{BASE}/connections/{conn.uuid}/browse", {"path": "/alpha/../../ocs"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("path", response.json())
+        self.assertIsNone(self.provider.last_source)
+
+    def test_delete_with_a_live_job_is_a_409(self):
+        from workspace.imports.models import ImportJob
+
+        conn = svc.create_connection(
+            self.user,
+            provider="fake",
+            label="mine",
+            base_url="https://cloud.example.org",
+            username="a",
+            secret="good",
+        )
+        ImportJob.objects.create(
+            connection=conn, kinds=["files"], status=ImportJob.Status.PENDING
+        )
+        response = self.client.delete(f"{BASE}/connections/{conn.uuid}")
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("stop it", response.json()["detail"])
+        self.assertTrue(ImportConnection.objects.filter(pk=conn.pk).exists())

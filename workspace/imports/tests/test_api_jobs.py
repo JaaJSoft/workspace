@@ -16,6 +16,7 @@ User = get_user_model()
 BASE = "/api/v1/imports"
 
 
+@override_settings(IMPORTS_ALLOWED_HOSTS=["x", "y"])
 class JobsApiTests(APITestCase):
     def setUp(self):
         self._tmpdir = tempfile.mkdtemp()

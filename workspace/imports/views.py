@@ -100,7 +100,12 @@ class ConnectionDetailView(_ConnectionView):
         connection = self._get(request, uuid)
         if connection is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        connection.delete()
+        try:
+            connections_service.delete_connection(connection)
+        except connections_service.ConnectionBusy as exc:
+            return Response(
+                {"detail": exc.user_message}, status=status.HTTP_409_CONFLICT
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -138,7 +143,7 @@ class ConnectionBrowseView(_ConnectionView):
             return _bad_remote(exc)
         return Response(
             {
-                "path": query.validated_data["path"] or "/",
+                "path": query.validated_data["path"],
                 "entries": [e.as_dict() for e in entries],
             }
         )

@@ -23,6 +23,7 @@ from .fakes import fake_provider
 User = get_user_model()
 
 
+@override_settings(IMPORTS_ALLOWED_HOSTS=["x", "y"])
 class JobsTestCase(TestCase):
     def setUp(self):
         self._tmpdir = tempfile.mkdtemp()
@@ -87,6 +88,13 @@ class CreateJobTests(JobsTestCase):
                 self.user, self.conn, ["files"], {"files": {"on_conflict": "explode"}}
             )
         self.assertIn("on_conflict", caught.exception.errors["files"])
+
+    def test_source_path_refuses_dot_segments(self):
+        with self.assertRaises(svc.InvalidJobOptions) as caught:
+            svc.create_job(
+                self.user, self.conn, ["files"], {"files": {"source_path": "/a/../b"}}
+            )
+        self.assertIn("source_path", caught.exception.errors["files"])
 
     def test_destination_must_be_the_users_folder(self):
         other = User.objects.create_user(username="bob", password="pw")
@@ -218,6 +226,52 @@ class RunJobTests(JobsTestCase):
             self.assertIs(svc.run_job(job.pk), Outcome.PAUSED)
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.RUNNING)
+
+    def test_a_transfer_that_never_fits_a_slice_ends_as_failed_entry(self):
+        """Before the attempts guard the runner paused and re-enqueued forever:
+        every slice restarted the same download and hit the soft limit again."""
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        from .fakes import FakeFileSource
+
+        original_open = FakeFileSource.open
+
+        def cut_open(source_self, entry):
+            if entry.id == "/b.txt":
+                raise SoftTimeLimitExceeded()
+            return original_open(source_self, entry)
+
+        job = self._pending()
+        with patch.object(FakeFileSource, "open", cut_open):
+            self.assertIs(svc.run_job(job.pk), Outcome.PAUSED)
+            job.refresh_from_db()
+            self.assertEqual(
+                job.stats["files"]["in_flight"], {"id": "/b.txt", "attempts": 1}
+            )
+            self.assertIs(svc.run_job(job.pk), Outcome.PAUSED)
+            self.assertIs(svc.run_job(job.pk), Outcome.DONE)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
+        self.assertEqual(job.stats["files"]["failed"], 1)
+        self.assertEqual(job.stats["files"]["files"], 2)
+        self.assertEqual(
+            ImportJobItem.objects.get(job=job, remote_id="/b.txt").status,
+            ImportJobItem.Status.FAILED,
+        )
+
+    @override_settings(IMPORTS_ALLOWED_HOSTS=[])
+    def test_every_slice_vets_the_remote_url_again(self):
+        """The URL was vetted when the connection was saved, but the worker
+        contacts it hours later: a host that now resolves to a forbidden
+        address fails the job instead of being fetched."""
+        ImportConnection.objects.filter(pk=self.conn.pk).update(
+            base_url="http://127.0.0.1/dav"
+        )
+        job = self._pending()
+        self.assertIs(svc.run_job(job.pk), Outcome.FAILED)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.FAILED)
+        self.assertIn("will not contact", job.error)
 
     def test_cancel_requested_ends_as_cancelled(self):
         job = self._pending()

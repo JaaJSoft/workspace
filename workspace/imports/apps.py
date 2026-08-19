@@ -8,6 +8,10 @@ class ImportsConfig(AppConfig):
     def ready(self):
         from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
 
+        from .providers.registry import register_builtin_providers
+
+        register_builtin_providers()
+
         # A real module (page, commands, notifications) that is used once when
         # arriving rather than lived in, so it stays off the home dashboard.
         registry.register(

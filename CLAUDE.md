@@ -17,10 +17,14 @@ uv run celery -A workspace worker -l info
 uv run celery -A workspace beat -l info
 
 # Vendored frontend assets - Alpine bundle, Milkdown editor bundle + theme CSS,
-# Tailwind stylesheet (rebuild after bumping any dependency in
-# scripts/frontend/package.json; templates load the built artifacts, never a CDN)
+# vault crypto bundles, Tailwind stylesheet (rebuild after bumping any
+# dependency in scripts/frontend/package.json; templates load the built
+# artifacts, never a CDN)
 cd scripts/frontend && npm run build
 cd scripts/frontend && npm run build:css      # Tailwind only, after template/JS class changes
+# Vault crypto only - the main bundle has a 75 KB gzipped budget enforced by
+# workspace/vault/tests/js/vault_bundle.test.js
+cd scripts/frontend && npm run build:vault && npm run build:vault-onboarding
 ```
 
 ## Module Map
@@ -201,6 +205,7 @@ assert.equal(ctx.isValidUuid('...'), true);
 - Only top-level `function`/`var` declarations and `window.X` assignments are reachable on the returned context; top-level `const`/`let` are not (global lexical scope). Test the public surface.
 - If a script touches `document`/`fetch` at load time, pass stubs: `loadScript(path, { document: stub })`.
 - **Cross-realm gotcha:** arrays/objects created inside the vm carry that realm's prototypes, so `assert.deepStrictEqual` fails its prototype check against test-side literals ("same structure but not reference-equal"). Normalize first: `Array.from(ctx.fn(...))` or `{ ...result }`.
+- **Cross-realm, the dangerous half:** it is not only assertions. A value built on the test side and passed *into* the vm carries the outer realm's prototypes, and a bundled library that branches on `constructor === Array` (or any other identity check against a built-in) then takes a different path than it would in a browser — same input, different output, silently. We hit this with `cbor-x`, which fell through to its iterator branch and emitted indefinite-length CBOR arrays that a browser encodes with a definite length; the suite reported 142 failures that did not exist in production. **When the test feeds data to the bundle, build that data inside the vm:** pass the JSON as a string through `extraGlobals` and parse it in the context (`vm.runInContext('JSON.parse(__text)', ctx)`), rather than parsing on the test side. If the output has to match a browser byte for byte, assert it in a real browser too — see `workspace/vault/tests/e2e/test_crypto_browser.py`.
 - CI runs these in the `js` job of `.github/workflows/tests.yml`.
 
 ## Backend Conventions

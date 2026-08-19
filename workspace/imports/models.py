@@ -95,9 +95,6 @@ class ImportJob(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING
     )
-    # Compare-and-swap token claimed by the worker that owns the run; guards
-    # against duplicate task delivery (see workspace.common.celery_claim).
-    claim_token = models.CharField(max_length=64, blank=True, default="")
 
     stats = models.JSONField(default=dict, blank=True)
     error = models.TextField(blank=True, default="")

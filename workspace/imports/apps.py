@@ -7,10 +7,17 @@ class ImportsConfig(AppConfig):
 
     def ready(self):
         from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
+        from workspace.core.sse_registry import SSEProviderInfo, sse_registry
 
+        from .importers.base import register_builtin_importers
         from .providers.registry import register_builtin_providers
+        from .sse_provider import ImportsSSEProvider
 
         register_builtin_providers()
+        register_builtin_importers()
+        sse_registry.register(
+            SSEProviderInfo(slug="imports", provider_cls=ImportsSSEProvider)
+        )
 
         # A real module (page, commands, notifications) that is used once when
         # arriving rather than lived in, so it stays off the home dashboard.

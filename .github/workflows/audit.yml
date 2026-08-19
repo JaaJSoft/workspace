@@ -1,14 +1,10 @@
-# Advisories land against dependencies nobody touched, so this runs on a
-# schedule as well as on the pull requests that change the build project.
-# It lives outside tests.yml because that workflow excludes scripts/frontend
-# from its paths filter: a Dependabot bump there triggers no run of it at all,
-# which is precisely the change an audit most needs to see.
+# npm advisories are invisible to the rest of CI: tests.yml filters out
+# scripts/frontend, and Trivy reads the image, which carries the built
+# artifacts and never the npm tree. The schedule matters as much as the pull
+# request trigger - an advisory lands without anyone touching the manifest.
 #
-# Reports rather than gates, for now: jsPDF carries open advisories in every
-# published version, so a job that failed on them would be red on every run -
-# and a check that is always red is a check nobody reads. Advisories surface as
-# a warning annotation instead. Drop the `if` wrapper below the day that
-# dependency is resolved, and this starts gating for real.
+# `dependencies` is bundled and runs in a signed-in user's browser, so an
+# advisory there fails the run. `devDependencies` never leaves CI: annotation.
 name: Dependency audit
 
 on:
@@ -21,10 +17,20 @@ on:
     - cron: '17 6 * * 1'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   audit:
     runs-on: ubuntu-latest
     name: Dependency audit
+    defaults:
+      run:
+        working-directory: scripts/frontend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -34,11 +40,13 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Audit the vendored frontend dependencies
+      - name: Report advisories across the whole tree
         run: |
-          cd scripts/frontend
           if npm audit --audit-level=high; then
             echo "No advisory at high severity or above."
           else
-            echo "::warning title=Dependency advisories::npm audit reported advisories at high severity or above - see the log above."
+            echo "::warning title=Build tooling advisories::advisories at high severity or above - see the log above"
           fi
+
+      - name: Fail on advisories in the bundled dependencies
+        run: npm audit --omit=dev --audit-level=high

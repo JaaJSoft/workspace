@@ -7,7 +7,11 @@ Parameters:
 -----------
 - href: URL for the link (optional if disabled; if omitted, renders a button)
 - icon: Lucide icon name (e.g., "folder", "clock", "trash-2")
-- icon_binding: Optional Alpine.js expression for dynamic icon names
+- icon_expr, icon_true, icon_false: two-state icon. icon_expr is an Alpine
+  expression; the icon_true icon is shown while it is truthy, icon_false
+  otherwise. Both icons are rendered statically and toggled with x-show
+  because a reactive :data-lucide binding cannot work: Lucide draws the
+  SVG once at hydration and never re-renders when the attribute changes.
 - label: Text label for the item
 - color: Optional DaisyUI color token (e.g., "primary", "warning", "error").
          Controls icon tint when inactive and highlight when active.
@@ -53,8 +57,9 @@ Usage Examples:
       {% endif %}
       {% if onclick %}@click="{{ onclick }}"{% endif %}
     >
-      {% if icon_binding %}
-        <i :data-lucide="{{ icon_binding|safe }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% if icon_expr %}
+        <i data-lucide="{{ icon_true }}" x-show="{{ icon_expr|safe }}" class="w-5 h-5 flex-shrink-0"></i>
+        <i data-lucide="{{ icon_false }}" x-show="!({{ icon_expr|safe }})" class="w-5 h-5 flex-shrink-0"></i>
       {% else %}
         <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
       {% endif %}
@@ -91,8 +96,9 @@ Usage Examples:
         aria-label="{{ aria_label }}"
       {% endif %}
     >
-      {% if icon_binding %}
-        <i :data-lucide="{{ icon_binding|safe }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% if icon_expr %}
+        <i data-lucide="{{ icon_true }}" x-show="{{ icon_expr|safe }}" class="w-5 h-5 flex-shrink-0"></i>
+        <i data-lucide="{{ icon_false }}" x-show="!({{ icon_expr|safe }})" class="w-5 h-5 flex-shrink-0"></i>
       {% else %}
         <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
       {% endif %}
@@ -129,8 +135,9 @@ Usage Examples:
         aria-label="{{ aria_label }}"
       {% endif %}
     >
-      {% if icon_binding %}
-        <i :data-lucide="{{ icon_binding|safe }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% if icon_expr %}
+        <i data-lucide="{{ icon_true }}" x-show="{{ icon_expr|safe }}" class="w-5 h-5 flex-shrink-0"></i>
+        <i data-lucide="{{ icon_false }}" x-show="!({{ icon_expr|safe }})" class="w-5 h-5 flex-shrink-0"></i>
       {% else %}
         <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
       {% endif %}

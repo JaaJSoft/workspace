@@ -214,7 +214,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     # Polling budget for davfs2's deferred upload on close().  CI runners
     # are slow enough that 15s is a comfortable upper bound; the
-    # ``delay_upload=0`` mount option keeps the typical wait under 1s.
+    # ``delay_upload 0`` config option keeps the typical wait under 1s.
     DB_POLL_TIMEOUT = 15.0
 
     @classmethod
@@ -228,6 +228,22 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
             )
         super().setUpClass()
         cls._tmp_root = Path(tempfile.mkdtemp(prefix="dav-mount-tests-"))
+        # davfs2 tuning.  mount.davfs silently *ignores* davfs2.conf
+        # keywords passed as ``-o`` options (its suboption parser drops
+        # unknown keys), so they must travel in a config file handed
+        # over with ``-o conf=`` — which is honoured even when the mount
+        # runs as root.
+        #   delay_upload 0 — upload on close() instead of after the
+        #                    default 10 s delay.  Without it every
+        #                    written file parks in the local cache for
+        #                    10 s before the PUT, which dominated this
+        #                    suite's runtime (~10 s per written file).
+        #   gui_optimize 0 — disable directory pre-fetch.
+        # ``use_locks`` stays at its default (enabled) on purpose:
+        # davfs2 then wraps every PUT in LOCK + UNLOCK, which is what
+        # exercises the LOCK Content-Type middleware in ``app.py``.
+        cls._davfs2_conf = cls._tmp_root / "davfs2.conf"
+        cls._davfs2_conf.write_text("delay_upload 0\ngui_optimize 0\n")
 
     @classmethod
     def tearDownClass(cls):
@@ -269,23 +285,11 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     def _mount(self):
         url = self._dav_url()
-        # Tuned mount options:
-        #   delay_upload=0   — push to server immediately on close()
-        #   cache_size=50    — default-ish (MiB).  ``cache_size=1`` looks
-        #                      attractive for "less stale data" but it
-        #                      breaks ``open(O_CREAT)`` outright (EIO):
-        #                      davfs2 needs room for the in-flight write
-        #                      cache file before the upload completes.
-        #   gui_optimize=0   — disable directory pre-fetch
-        #   use_locks=0      — disables davfs2's *persistent* lock-for-
-        #                      write-protection feature.  davfs2 still
-        #                      sends a LOCK + UNLOCK around every PUT
-        #                      (verified via syslog), so our wsgidav
-        #                      LOCK Content-Type middleware in
-        #                      ``app.py`` is exercised by every write
-        #                      test in this suite.
-        #   uid/gid          — remap ownership so the unprivileged test user
-        #                      can read/write files even when mount runs as root
+        # Only genuine mount.davfs suboptions belong here (uid/gid remap
+        # ownership so the unprivileged test user can read/write files
+        # even when the mount runs as root).  davfs2 *behaviour* tuning
+        # (delay_upload, gui_optimize, …) lives in the config file
+        # written by ``setUpClass`` — see the comment there.
         opts = ",".join(
             [
                 f"username={self.username}",
@@ -293,10 +297,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
                 f"gid={os.getegid()}",
                 "dir_mode=755",
                 "file_mode=644",
-                "delay_upload=0",
-                "cache_size=50",
-                "gui_optimize=0",
-                "use_locks=0",
+                f"conf={self._davfs2_conf}",
             ]
         )
         cmd = _sudo_prefix() + [

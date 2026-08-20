@@ -91,8 +91,9 @@ class OIDCIdentity(models.Model):
     """Links a Django user to an external OIDC identity (single provider).
 
     The presence of a row marks the user as managed by the identity provider:
-    the profile name is synced from the IdP on each login and local password
-    changes are disabled. ``sub`` is the provider's stable subject identifier.
+    the profile name is synced from the IdP on each login and the local
+    password is disabled (external clients authenticate with API tokens).
+    ``sub`` is the provider's stable subject identifier.
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)

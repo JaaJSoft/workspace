@@ -1,5 +1,8 @@
+import importlib
+
+from django.apps import apps as django_apps
 from django.conf import settings as dj_settings
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
 from django.test import TestCase, override_settings
@@ -256,6 +259,24 @@ class OidcIdentitySyncTests(TestCase):
         self.backend.update_user(user, {"email": "e2@corp.com", "sub": "sub-4"})
         self.assertTrue(is_oidc_managed(user))
 
+    def test_linking_disables_the_existing_local_password(self):
+        # A pre-SSO password left usable would keep opening /login, HTTP Basic
+        # and WebDAV while being impossible to change (the password-change
+        # UI/API are locked for linked accounts).
+        user = User.objects.create_user(
+            "haspw", email="haspw@corp.com", password="oldpass123"
+        )
+        self.backend.update_user(user, {"email": "haspw@corp.com", "sub": "sub-pw"})
+        user.refresh_from_db()
+        self.assertFalse(user.has_usable_password())
+        self.assertIsNone(authenticate(username="haspw", password="oldpass123"))
+
+    def test_create_user_has_no_usable_password(self):
+        user = self.backend.create_user(
+            {"preferred_username": "jitpw", "email": "jitpw@corp.com", "sub": "sub-jit"}
+        )
+        self.assertFalse(user.has_usable_password())
+
     def test_linked_subject_wins_over_the_email_match(self):
         # The address changed at the IdP. Matching on email alone would miss
         # the account, provision a second one, and then refuse the login on the
@@ -338,6 +359,33 @@ class OidcIdentitySyncTests(TestCase):
             )
         # The JIT user must be rolled back, not left orphaned.
         self.assertFalse(User.objects.filter(username="newbie").exists())
+
+
+class DisableLinkedPasswordsMigrationTests(TestCase):
+    """The data migration aligns pre-existing links with the new linking rule."""
+
+    def test_disables_passwords_of_linked_users_only(self):
+        linked = User.objects.create_user(
+            "miglinked", email="ml@corp.com", password="oldpass123"
+        )
+        OIDCIdentity.objects.create(user=linked, sub="sub-mig")
+        already_unusable = User.objects.create_user("migjit", email="mj@corp.com")
+        OIDCIdentity.objects.create(user=already_unusable, sub="sub-mig2")
+        plain = User.objects.create_user(
+            "migplain", email="mp@corp.com", password="keepme123"
+        )
+
+        migration = importlib.import_module(
+            "workspace.users.migrations.0009_disable_oidc_linked_passwords"
+        )
+        migration.disable_linked_passwords(django_apps, None)
+
+        linked.refresh_from_db()
+        already_unusable.refresh_from_db()
+        plain.refresh_from_db()
+        self.assertFalse(linked.has_usable_password())
+        self.assertFalse(already_unusable.has_usable_password())
+        self.assertTrue(plain.check_password("keepme123"))
 
 
 class OidcPasswordLockTests(TestCase):

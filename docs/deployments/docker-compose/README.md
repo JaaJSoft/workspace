@@ -85,6 +85,8 @@ All settings are configurable via environment variables or a `.env` file next to
 | `OIDC_ALLOWED_DOMAINS` | *(empty)* | Comma-separated email-domain allowlist for sign-up |
 | `OIDC_REQUIRE_EMAIL_VERIFIED` | *(empty)* | Set to `1` to require the `email_verified` claim |
 | `OIDC_USERNAME_CLAIM` | `preferred_username` | Claim used for the Django username |
+| `OIDC_GROUPS_CLAIM` | *(empty)* | Claim mirrored onto Django groups on each login (empty = no sync) |
+| `OIDC_GROUPS_ALLOWED` | *(empty)* | Comma-separated allowlist of group names to mirror |
 | `AI_API_KEY` | *(empty)* | OpenAI API key (or compatible provider). AI disabled if empty |
 | `AI_BASE_URL` | *(empty)* | Custom base URL for the LLM API (Ollama, LM Studio, etc.) |
 | `AI_MODEL` | `gpt-5` | Default LLM model for chat and tasks |

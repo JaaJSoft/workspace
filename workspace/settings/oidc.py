@@ -26,6 +26,11 @@ OIDC_PROVIDER_NAME = os.getenv("OIDC_PROVIDER_NAME", "OpenID")
 OIDC_ALLOWED_DOMAINS = [domain.lower() for domain in env_list("OIDC_ALLOWED_DOMAINS")]
 OIDC_REQUIRE_EMAIL_VERIFIED = env_bool("OIDC_REQUIRE_EMAIL_VERIFIED")
 OIDC_USERNAME_CLAIM = os.getenv("OIDC_USERNAME_CLAIM", "preferred_username")
+# Group sync is opt-in: name the claim to mirror (usually 'groups'; most IdPs
+# also need a matching scope added to OIDC_RP_SCOPES). Empty = no sync.
+OIDC_GROUPS_CLAIM = os.getenv("OIDC_GROUPS_CLAIM", "")
+# Optional allowlist of group names to mirror; empty = every claimed group.
+OIDC_GROUPS_ALLOWED = env_list("OIDC_GROUPS_ALLOWED")
 
 # RS*/ES* signing (our default RS256) requires a JWKS endpoint or the backend's
 # __init__ raises ImproperlyConfigured (verified against mozilla-django-oidc

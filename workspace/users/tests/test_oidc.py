@@ -3,6 +3,7 @@ import importlib
 from django.apps import apps as django_apps
 from django.conf import settings as dj_settings
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
 from django.test import TestCase, override_settings
@@ -359,6 +360,136 @@ class OidcIdentitySyncTests(TestCase):
             )
         # The JIT user must be rolled back, not left orphaned.
         self.assertFalse(User.objects.filter(username="newbie").exists())
+
+
+@override_settings(**OIDC_OP_SETTINGS, OIDC_GROUPS_CLAIM="groups")
+class GroupSyncTests(TestCase):
+    def setUp(self):
+        self.backend = WorkspaceOIDCBackend()
+        self.user = User.objects.create_user("grp", email="grp@corp.com")
+
+    @staticmethod
+    def claims(**overrides):
+        return {"sub": "sub-grp", "email": "grp@corp.com"} | overrides
+
+    def login(self, **overrides):
+        return self.backend.update_user(self.user, self.claims(**overrides))
+
+    def synced(self):
+        return OIDCIdentity.objects.get(user=self.user).synced_groups
+
+    def test_create_user_grants_claimed_groups(self):
+        user = self.backend.create_user(
+            {
+                "preferred_username": "newbie",
+                "email": "new@corp.com",
+                "sub": "sub-new",
+                "groups": ["dev", "ops"],
+            }
+        )
+        self.assertEqual(
+            set(user.groups.values_list("name", flat=True)), {"dev", "ops"}
+        )
+        # Query the row: user.oidc_identity is the instance cached when the
+        # link was created, which predates the sync.
+        self.assertEqual(
+            OIDCIdentity.objects.get(user=user).synced_groups, ["dev", "ops"]
+        )
+
+    def test_update_user_adds_new_groups_and_reuses_existing_rows(self):
+        existing = Group.objects.create(name="dev")
+        self.login(groups=["dev", "ops"])
+        self.assertEqual(
+            set(self.user.groups.values_list("name", flat=True)), {"dev", "ops"}
+        )
+        # The pre-existing row is joined, not duplicated.
+        self.assertEqual(Group.objects.filter(name="dev").count(), 1)
+        self.assertIn(existing, self.user.groups.all())
+
+    def test_dropped_group_is_detached_but_the_group_row_survives(self):
+        # Deleting the Group would soft-delete its files and remove its chat
+        # conversations - a stale IdP group only loses this member.
+        other = User.objects.create_user("other", email="other@corp.com")
+        self.login(groups=["dev", "ops"])
+        Group.objects.get(name="dev").user_set.add(other)
+
+        self.login(groups=["ops"])
+
+        self.assertEqual(set(self.user.groups.values_list("name", flat=True)), {"ops"})
+        self.assertTrue(Group.objects.filter(name="dev").exists())
+        self.assertIn(other, Group.objects.get(name="dev").user_set.all())
+        self.assertEqual(self.synced(), ["ops"])
+
+    def test_manually_granted_groups_are_never_revoked(self):
+        manual = Group.objects.create(name="local")
+        self.user.groups.add(manual)
+        self.login(groups=["dev"])
+        self.login(groups=[])  # empty list revokes every synced group
+        self.assertEqual(
+            set(self.user.groups.values_list("name", flat=True)), {"local"}
+        )
+        self.assertEqual(self.synced(), [])
+
+    def test_overlapping_manual_membership_survives_idp_revocation(self):
+        # The group was granted by hand before the IdP ever claimed it: the
+        # sync must not adopt that membership, so an IdP revocation later
+        # cannot strip it.
+        manual = Group.objects.create(name="dev")
+        self.user.groups.add(manual)
+        self.login(groups=["dev"])
+        self.login(groups=[])
+        self.assertIn(manual, self.user.groups.all())
+        self.assertEqual(self.synced(), [])
+
+    def test_absent_claim_leaves_memberships_untouched(self):
+        self.login(groups=["dev"])
+        self.login()  # no groups key at all: "unknown", not "no groups"
+        self.assertEqual(set(self.user.groups.values_list("name", flat=True)), {"dev"})
+        self.assertEqual(self.synced(), ["dev"])
+
+    @override_settings(OIDC_GROUPS_CLAIM="")
+    def test_sync_is_disabled_by_default(self):
+        self.login(groups=["dev"])
+        self.assertEqual(self.user.groups.count(), 0)
+        self.assertFalse(Group.objects.filter(name="dev").exists())
+
+    @override_settings(OIDC_GROUPS_CLAIM="roles")
+    def test_claim_name_is_configurable(self):
+        self.login(groups=["ignored"], roles=["admins"])
+        self.assertEqual(
+            set(self.user.groups.values_list("name", flat=True)), {"admins"}
+        )
+
+    @override_settings(OIDC_GROUPS_ALLOWED=["dev", "ops"])
+    def test_allowlist_filters_claimed_groups(self):
+        self.login(groups=["dev", "everyone", "authentik Admins"])
+        self.assertEqual(set(self.user.groups.values_list("name", flat=True)), {"dev"})
+        self.assertFalse(Group.objects.filter(name="everyone").exists())
+
+    def test_malformed_claim_is_ignored(self):
+        self.login(groups=["dev"])
+        self.login(groups={"not": "a list"})
+        self.login(groups=42)
+        self.assertEqual(set(self.user.groups.values_list("name", flat=True)), {"dev"})
+
+    def test_single_string_claim_counts_as_one_group(self):
+        self.login(groups="dev")
+        self.assertEqual(set(self.user.groups.values_list("name", flat=True)), {"dev"})
+
+    def test_entries_are_sanitized_deduped_and_truncated(self):
+        long_name = "x" * 200
+        self.login(groups=["dev", "dev", "  ", 42, None, f"  {long_name}  "])
+        names = set(self.user.groups.values_list("name", flat=True))
+        self.assertEqual(names, {"dev", "x" * 150})
+        self.assertEqual(self.synced(), ["dev", "x" * 150])
+
+    def test_sync_is_idempotent(self):
+        self.login(groups=["dev", "ops"])
+        self.login(groups=["dev", "ops"])
+        self.assertEqual(
+            set(self.user.groups.values_list("name", flat=True)), {"dev", "ops"}
+        )
+        self.assertEqual(self.synced(), ["dev", "ops"])
 
 
 class DisableLinkedPasswordsMigrationTests(TestCase):

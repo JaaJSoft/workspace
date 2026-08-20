@@ -2,7 +2,8 @@
 
 Subclasses mozilla-django-oidc's backend to add the project's provisioning
 rules: optional email-verified enforcement, an optional email-domain allowlist,
-and a human-readable Django username derived from a configurable claim.
+a human-readable Django username derived from a configurable claim, and an
+optional per-login mirror of the IdP's group claim onto Django groups.
 
 The backend is only wired into AUTHENTICATION_BACKENDS when OIDC is configured
 (see settings.OIDC_ENABLED) because OIDCAuthenticationBackend.__init__ reads the
@@ -13,6 +14,7 @@ import logging
 import re
 
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
 from mozilla_django_oidc.auth import OIDCAuthenticationBackend
@@ -96,6 +98,7 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
             user.last_name = str(claims.get("family_name") or "")[:150]
             user.save(update_fields=["first_name", "last_name"])
             self._link_identity(user, claims)
+            self._sync_groups(user, claims)
         logger.info("OIDC JIT-provisioned user %s", scrub(username))
         return user
 
@@ -124,6 +127,7 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
             fields.append("last_name")
         if fields:
             user.save(update_fields=fields)
+        self._sync_groups(user, claims)
         return user
 
     def _link_identity(self, user, claims):
@@ -175,6 +179,85 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
                 "Disabled local password for OIDC-linked user %s",
                 scrub(user.get_username()),
             )
+
+    def _sync_groups(self, user, claims):
+        """Mirror the IdP's group claim onto Django groups, by delta.
+
+        Opt-in through OIDC_GROUPS_CLAIM (empty = disabled). An absent claim
+        means "unknown", not "no groups": a provider that omits it on some
+        response never strips access. Only memberships this sync granted -
+        recorded on the identity - are ever revoked, so manually granted
+        Django groups survive; a claimed group the user already belonged to
+        stays unrecorded, so it counts as manual too. Group rows are created
+        on demand but never
+        deleted: deleting a Group soft-deletes its files and removes its
+        chat conversations, so a stale IdP group is only detached from the
+        user. Membership writes cascade through the m2m signal into chat's
+        conversation resync; that is intended.
+        """
+        claim_name = settings.OIDC_GROUPS_CLAIM
+        if not claim_name or claim_name not in claims:
+            return
+        raw = claims[claim_name]
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list):
+            logger.warning(
+                "OIDC group sync skipped: claim %s is not a list", scrub(claim_name)
+            )
+            return
+        # Group.name is capped at 150 chars; truncate rather than crash on an
+        # IdP that exceeds it.
+        names = [
+            str(item).strip()[:150]
+            for item in raw
+            if isinstance(item, str) and item.strip()
+        ]
+        allowed = settings.OIDC_GROUPS_ALLOWED
+        if allowed:
+            names = [name for name in names if name in allowed]
+        current = list(dict.fromkeys(names))
+
+        from ..models import OIDCIdentity
+
+        with transaction.atomic():
+            # Lock the identity row so concurrent logins serialize their
+            # deltas instead of both applying one computed from the same
+            # synced_groups snapshot.
+            identity = OIDCIdentity.objects.select_for_update().get(user=user)
+            previous = [g for g in identity.synced_groups if isinstance(g, str)]
+            prev_set = set(previous)
+            to_add = [name for name in current if name not in prev_set]
+            to_remove = [name for name in previous if name not in set(current)]
+
+            granted = []
+            if to_add:
+                # A claimed group the user already belongs to was granted
+                # manually: leave it unrecorded so a later IdP revocation
+                # cannot strip it.
+                already_member = set(
+                    user.groups.filter(name__in=to_add).values_list("name", flat=True)
+                )
+                granted = [name for name in to_add if name not in already_member]
+                if granted:
+                    user.groups.add(
+                        *(Group.objects.get_or_create(name=name)[0] for name in granted)
+                    )
+            if to_remove:
+                user.groups.remove(*Group.objects.filter(name__in=to_remove))
+
+            owned = prev_set | set(granted)
+            recorded = [name for name in current if name in owned]
+            if recorded != previous:
+                identity.synced_groups = recorded
+                identity.save(update_fields=["synced_groups"])
+            if granted or to_remove:
+                logger.info(
+                    "OIDC group sync for %s: +%d -%d",
+                    scrub(user.get_username()),
+                    len(granted),
+                    len(to_remove),
+                )
 
     def _generate_username(self, claims):
         """Build a unique, sanitized username from the configured claim.

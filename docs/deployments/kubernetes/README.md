@@ -102,6 +102,8 @@ kubectl apply -f ingress.yaml
 | `OIDC_ALLOWED_DOMAINS` | Comma-separated email-domain allowlist for sign-up |
 | `OIDC_REQUIRE_EMAIL_VERIFIED` | Set to `1` to require the `email_verified` claim |
 | `OIDC_USERNAME_CLAIM` | Claim used for the Django username |
+| `OIDC_GROUPS_CLAIM` | Claim mirrored onto Django groups on each login (empty = no sync) |
+| `OIDC_GROUPS_ALLOWED` | Comma-separated allowlist of group names to mirror |
 | `AI_API_KEY`             | OpenAI API key (or compatible provider). AI disabled if empty |
 | `AI_BASE_URL`            | Custom base URL for the LLM API (Ollama, LM Studio, etc.) |
 | `AI_IMAGE_BASE_URL`      | Custom base URL for image generation (falls back to `AI_BASE_URL`) |

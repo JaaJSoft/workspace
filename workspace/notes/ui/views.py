@@ -149,8 +149,7 @@ def index(request):
     if request.headers.get("X-Alpine-Request"):
         return render(request, "notes/ui/partials/sidebar.html", context)
 
-    view = request.GET.get("view", "all")
-    if view not in (
+    allowed_views = (
         "all",
         "favorites",
         "recent",
@@ -159,8 +158,15 @@ def index(request):
         "tag",
         "group_folder",
         "graph",
-    ):
-        view = "all"
+    )
+    view = request.GET.get("view")
+    if view not in allowed_views:
+        # No (or bogus) view in the URL: fall back to the saved default-view
+        # preference. The template always passes initial_view to notesApp(),
+        # so the pref has to be resolved here - client-side it would only
+        # apply when no view is passed at all.
+        default_view = notes_prefs.get("defaultView")
+        view = default_view if default_view in allowed_views else "all"
     context["initial_view"] = view
     context["initial_id"] = request.GET.get("folder") or request.GET.get("tag") or ""
     context["initial_file"] = request.GET.get("file", "")

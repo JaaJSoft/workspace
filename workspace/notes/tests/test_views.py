@@ -42,6 +42,25 @@ class NotesIndexViewTests(TestCase):
         resp = self.client.get("/notes")
         self.assertEqual(resp.content.decode().count('id="notes-sidebar"'), 1)
 
+    def test_saved_default_view_applies_when_the_url_has_no_view(self):
+        # The template always passes initial_view to notesApp(), so the
+        # defaultView preference has to be resolved server-side - the JS
+        # fallback only fires when no view is passed at all.
+        set_setting(self.user, "notes", "preferences", {"defaultView": "recent"})
+        resp = self.client.get("/notes")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["initial_view"], "recent")
+
+    def test_url_view_wins_over_the_saved_default_view(self):
+        set_setting(self.user, "notes", "preferences", {"defaultView": "recent"})
+        resp = self.client.get("/notes?view=graph")
+        self.assertEqual(resp.context["initial_view"], "graph")
+
+    def test_bogus_saved_default_view_falls_back_to_all(self):
+        set_setting(self.user, "notes", "preferences", {"defaultView": "bogus"})
+        resp = self.client.get("/notes")
+        self.assertEqual(resp.context["initial_view"], "all")
+
     def test_full_page_embeds_the_stored_prefs_for_the_first_paint(self):
         # notes.js seeds its cache synchronously from this json_script -
         # without it the first Alpine paint falls back to the defaults and

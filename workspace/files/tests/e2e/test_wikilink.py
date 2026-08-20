@@ -75,6 +75,22 @@ class WikilinkEditorTests(PlaywrightTestCase):
         expect(editor).to_be_visible(timeout=20000)
         return editor
 
+    def _type_awaiting_search(self, text, query):
+        """Type into the editor and block until the search response for the
+        final query has landed.
+
+        Every keystroke fires its own ``/api/v1/files?search=`` request and
+        only the last one's result is rendered (the generation guard in
+        wikilink_autocomplete.js drops the rest), so asserting on an item
+        right after typing races that round-trip on contended CI runners.
+        The 20s ceiling matches the editor-mount wait in ``_open_editor``.
+        """
+        with self.page.expect_response(
+            lambda r: "/api/v1/files" in r.url and f"search={query}" in r.url,
+            timeout=20000,
+        ):
+            self.page.keyboard.type(text)
+
     def test_menu_hidden_before_trigger(self):
         # Regression: on open, before any "[[" is typed, the popup must stay
         # hidden. SlashProvider only writes data-show="false" on its first
@@ -96,7 +112,7 @@ class WikilinkEditorTests(PlaywrightTestCase):
         editor = self._open_editor()
         editor.click()
         self.page.keyboard.press("Control+End")
-        self.page.keyboard.type("[[beta")
+        self._type_awaiting_search("[[beta", "beta")
         item = self.page.locator(
             '[data-testid="wikilink-item"]', has_text="Beta Target"
         )
@@ -106,7 +122,7 @@ class WikilinkEditorTests(PlaywrightTestCase):
         editor = self._open_editor()
         editor.click()
         self.page.keyboard.press("Control+End")
-        self.page.keyboard.type("[[beta")
+        self._type_awaiting_search("[[beta", "beta")
         item = self.page.locator(
             '[data-testid="wikilink-item"]', has_text="Beta Target"
         )
@@ -136,7 +152,7 @@ class WikilinkEditorTests(PlaywrightTestCase):
         )
 
         # Re-open, narrow to Beta, Enter inserts the link.
-        self.page.keyboard.type("beta")
+        self._type_awaiting_search("beta", "beta")
         expect(
             self.page.locator('[data-testid="wikilink-item"]', has_text="Beta Target")
         ).to_be_visible(timeout=5000)
@@ -150,7 +166,7 @@ class WikilinkEditorTests(PlaywrightTestCase):
         editor.click()
         self.page.keyboard.press("Control+End")
         # Populate the menu with a real result first.
-        self.page.keyboard.type("[[beta")
+        self._type_awaiting_search("[[beta", "beta")
         expect(
             self.page.locator('[data-testid="wikilink-item"]', has_text="Beta Target")
         ).to_be_visible(timeout=5000)

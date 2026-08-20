@@ -303,3 +303,14 @@ def summarize(job):
         if line:
             lines.append(line if len(job.kinds) == 1 else f"{kind}: {line}")
     return " - ".join(lines) or "Nothing to import."
+
+
+def failed_job_count(since):
+    """Number of jobs that failed since *since*.
+
+    Filters on ``finished_at`` (stamped when the job turns terminal), not
+    ``created_at``: a long-running job that fails today is today's failure.
+    """
+    return ImportJob.objects.filter(
+        status=ImportJob.Status.FAILED, finished_at__gte=since
+    ).count()

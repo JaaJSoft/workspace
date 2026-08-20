@@ -4,6 +4,7 @@ from .base import DEBUG, TESTING
 
 INSTALLED_APPS = [
     "unfold",
+    "unfold.contrib.filters",
     "django.contrib.admin",
     "django.contrib.humanize",
     "django.contrib.auth",

@@ -232,3 +232,30 @@ def _count_to_end(start, frequency, interval, count, tzid=""):
             pass
     rule = du_rrule(freq, interval=interval, dtstart=dtstart, count=count)
     return rule[count - 1].astimezone(UTC)
+
+
+def external_calendars_with_errors():
+    """Active external calendars whose last sync recorded an error."""
+    from workspace.calendar.models_external import ExternalCalendar
+
+    return ExternalCalendar.objects.filter(is_active=True).exclude(last_error="")
+
+
+def queue_external_calendar_syncs(externals):
+    """Queue a background sync for the active feeds in *externals*.
+
+    Returns the number of syncs queued. Manual dispatches carry no claim
+    token (see ``calendar.sync_external_calendar``).
+    """
+    from workspace.calendar.tasks import sync_external_calendar_task
+
+    count = 0
+    for ext in externals.filter(is_active=True):
+        sync_external_calendar_task.delay(str(ext.uuid))
+        count += 1
+    return count
+
+
+def clear_sync_errors(externals):
+    """Blank ``last_error`` on *externals*; returns the number of rows updated."""
+    return externals.exclude(last_error="").update(last_error="")

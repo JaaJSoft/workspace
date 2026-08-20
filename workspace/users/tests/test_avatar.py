@@ -30,6 +30,35 @@ class HasAvatarTests(TestCase):
         self.assertTrue(avatar_service.has_avatar(self.user))
 
 
+class SaveAvatarCenteredTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="alice", password="pass")
+
+    def _make_image(self, size):
+        buf = BytesIO()
+        img = Image.new("RGB", size, color="blue")
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return buf
+
+    @patch("workspace.users.services.avatar.process_and_save_avatar")
+    def test_landscape_image_is_center_cropped_to_a_square(self, mock_process):
+        image_file = self._make_image((200, 100))
+
+        avatar_service.save_avatar_centered(self.user, image_file)
+
+        mock_process.assert_called_once_with(self.user, image_file, 50, 0, 100, 100)
+
+    @patch("workspace.users.services.avatar.process_and_save_avatar")
+    def test_portrait_image_is_center_cropped_to_a_square(self, mock_process):
+        image_file = self._make_image((100, 300))
+
+        avatar_service.save_avatar_centered(self.user, image_file)
+
+        mock_process.assert_called_once_with(self.user, image_file, 0, 100, 100, 100)
+
+
 class ProcessAndSaveAvatarTests(TestCase):
     def setUp(self):
         cache.clear()

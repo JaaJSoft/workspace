@@ -716,9 +716,15 @@ class UsageStatsCacheTests(TestCase):
     delegates to the registry and memoizes the result for a short TTL.
     """
 
+    # LocMemCache is process-global and NOT reset between TestCase runs; clear
+    # it both ways so stats cached by earlier tests (via pk reuse) don't serve
+    # these asserts, and ours don't leak into later tests.
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
     def tearDown(self):
-        # LocMemCache is process-global and NOT reset between TestCase runs;
-        # clear it so cached stats don't leak into later tests via pk reuse.
         from django.core.cache import cache
 
         cache.clear()

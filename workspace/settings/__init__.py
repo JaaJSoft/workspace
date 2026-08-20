@@ -17,6 +17,7 @@ that needs a value from another one imports it explicitly, so nothing depends
 on this file's sequence.
 """
 
+from .admin import *  # noqa: F403
 from .ai import *  # noqa: F403
 from .api import *  # noqa: F403
 from .apps import *  # noqa: F403

@@ -187,7 +187,9 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
         means "unknown", not "no groups": a provider that omits it on some
         response never strips access. Only memberships this sync granted -
         recorded on the identity - are ever revoked, so manually granted
-        Django groups survive. Group rows are created on demand but never
+        Django groups survive; a claimed group the user already belonged to
+        stays unrecorded, so it counts as manual too. Group rows are created
+        on demand but never
         deleted: deleting a Group soft-deletes its files and removes its
         chat conversations, so a stale IdP group is only detached from the
         user. Membership writes cascade through the m2m signal into chat's
@@ -219,23 +221,41 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
         from ..models import OIDCIdentity
 
         with transaction.atomic():
-            identity = OIDCIdentity.objects.get(user=user)
+            # Lock the identity row so concurrent logins serialize their
+            # deltas instead of both applying one computed from the same
+            # synced_groups snapshot.
+            identity = OIDCIdentity.objects.select_for_update().get(user=user)
             previous = [g for g in identity.synced_groups if isinstance(g, str)]
-            to_add = [name for name in current if name not in set(previous)]
+            prev_set = set(previous)
+            to_add = [name for name in current if name not in prev_set]
             to_remove = [name for name in previous if name not in set(current)]
 
+            granted = []
             if to_add:
-                groups = [Group.objects.get_or_create(name=name)[0] for name in to_add]
-                user.groups.add(*groups)
+                # A claimed group the user already belongs to was granted
+                # manually: leave it unrecorded so a later IdP revocation
+                # cannot strip it.
+                already_member = set(
+                    user.groups.filter(name__in=to_add).values_list("name", flat=True)
+                )
+                granted = [name for name in to_add if name not in already_member]
+                if granted:
+                    user.groups.add(
+                        *(Group.objects.get_or_create(name=name)[0] for name in granted)
+                    )
             if to_remove:
                 user.groups.remove(*Group.objects.filter(name__in=to_remove))
-            if current != previous:
-                identity.synced_groups = current
+
+            owned = prev_set | set(granted)
+            recorded = [name for name in current if name in owned]
+            if recorded != previous:
+                identity.synced_groups = recorded
                 identity.save(update_fields=["synced_groups"])
+            if granted or to_remove:
                 logger.info(
                     "OIDC group sync for %s: +%d -%d",
                     scrub(user.get_username()),
-                    len(to_add),
+                    len(granted),
                     len(to_remove),
                 )
 

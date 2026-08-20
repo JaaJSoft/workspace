@@ -430,6 +430,17 @@ class GroupSyncTests(TestCase):
         )
         self.assertEqual(self.synced(), [])
 
+    def test_overlapping_manual_membership_survives_idp_revocation(self):
+        # The group was granted by hand before the IdP ever claimed it: the
+        # sync must not adopt that membership, so an IdP revocation later
+        # cannot strip it.
+        manual = Group.objects.create(name="dev")
+        self.user.groups.add(manual)
+        self.login(groups=["dev"])
+        self.login(groups=[])
+        self.assertIn(manual, self.user.groups.all())
+        self.assertEqual(self.synced(), [])
+
     def test_absent_claim_leaves_memberships_untouched(self):
         self.login(groups=["dev"])
         self.login()  # no groups key at all: "unknown", not "no groups"

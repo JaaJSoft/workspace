@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.37.0 - Imports & Storage
+
+### Highlights
+
+Moving in just got easy: connect your old cloud and watch your files arrive, with live progress and a retry for anything that fails. Once they're in, the new storage analysis shows exactly where your space goes - largest files, duplicates and all - and uploads finally ask what to do when a file with the same name already exists.
+
+### Imports
+
+- Bring your files over from another cloud. The new Imports page connects to your Nextcloud or any WebDAV server, lets you pick what to import and where it should land, and shows the transfer progressing live. You can leave the page and come back at any point, stop a running import, and retry just the files that failed - a notification tells you when everything is done.
+
+### Files
+
+- See what takes up space. The new Storage view - from the sidebar, or "Analyze storage" on any folder - breaks usage down by file type and by sub-folder (each one drillable), lists your largest files, and groups duplicate files ranked by how much space they waste. At the top of your tree it also shows your quota and how much the trash holds, with an "Empty trash" shortcut right there.
+- Duplicates are detected by their actual content, not just their name - two copies of the same file count as duplicates even after one was renamed.
+- You decide what happens to a name clash. Uploading, copying or moving a file into a folder that already has one with the same name now asks: Replace, Keep both, or Skip. A new file preference lets you make that choice once for good, and the end-of-upload summary tells you what happened ("Uploaded 3 files, replaced 1, skipped 1"). Previously this failed with an unhelpful "Unknown error".
+- The folder picker can now browse group folders, so you can save and move things directly into a shared space.
+
+### Administration
+
+- The admin area is now a real operations console: it opens on a system health dashboard showing what needs attention - sync errors, failed background work - with direct links to the affected items, common recovery gestures (resync an account, retry failed thumbnails) are one-click actions, and every list gained proper search and filters. All in a fresh new look.
+
+### Fixes
+
+- Collapsing or expanding the sidebar updates its icon immediately, and Files, Notes and Chat no longer flicker at page load.
+- Icons that reflect a changing state now redraw the moment the state changes.
+- The module tiles on the dashboard are properly centered.
+
 ## 0.36.0 - Threads, SSO & Notifications
 
 ### Highlights

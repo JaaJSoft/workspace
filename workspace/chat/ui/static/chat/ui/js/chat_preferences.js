@@ -4,16 +4,17 @@ window._chatPrefsDefaults = {
     compactMessageView: false,
     showThreadRepliesInline: false,
 };
-window._chatPrefsCache = { ...window._chatPrefsDefaults };
-
-window._chatPrefsReady = fetch('/api/v1/settings/chat/preferences', { credentials: 'same-origin' })
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-        if (data && data.value && typeof data.value === 'object') {
-            window._chatPrefsCache = { ...window._chatPrefsDefaults, ...data.value };
-        }
-    })
-    .catch(function() {});
+// Initial prefs are embedded server-side via |json_script (index.html and
+// room.html). Reading them synchronously means the first Alpine paint
+// already has the right density flags - no reshuffle once a fetch lands.
+(function bootChatPrefs() {
+    let initial = {};
+    const el = document.getElementById('chat-prefs-data');
+    if (el) {
+        try { initial = JSON.parse(el.textContent) || {}; } catch (e) { initial = {}; }
+    }
+    window._chatPrefsCache = { ...window._chatPrefsDefaults, ...initial };
+})();
 
 // Helper to update a single chat preference from anywhere. Mutates the cache,
 // persists via the same endpoint as `chatPreferences()._saveRemote`, and
@@ -41,9 +42,7 @@ window.chatPreferences = function chatPreferences() {
             return el ? JSON.parse(el.textContent) : true;
         })(),
 
-        async init() {
-            await window._chatPrefsReady;
-            this.prefs = { ...window._chatPrefsCache };
+        init() {
             window.addEventListener('chat:preferences-changed', function(e) {
                 this.prefs = { ...e.detail };
             }.bind(this));

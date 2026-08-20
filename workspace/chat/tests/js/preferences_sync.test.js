@@ -7,9 +7,8 @@ const { loadScript } = require('../../../common/tests/js/loader');
 /**
  * Load chat_preferences.js with fetch and the event bus stubbed.
  *
- * The script fires a fetch at load time to hydrate the cache, so `fetch` has
- * to exist before the module body runs; `calls` therefore records that first
- * hydration GET too, and the tests look at the PUTs only.
+ * The cache hydrates synchronously from the server-embedded json_script
+ * (absent here, so defaults apply); the tests look at the PUTs only.
  */
 function load({ putResolves = true, putOk = true } = {}) {
   const calls = [];

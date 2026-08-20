@@ -13,17 +13,17 @@ window._notesPrefsDefaults = {
     defaultFolderUuid: null,
     journalFolderUuid: null,
 };
-window._notesPrefsCache = { ...window._notesPrefsDefaults };
-
-// Eagerly fetch prefs so they're ready before Alpine init
-window._notesPrefsReady = fetch('/api/v1/settings/notes/preferences', { credentials: 'same-origin' })
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-        if (data && data.value && typeof data.value === 'object') {
-            window._notesPrefsCache = { ...window._notesPrefsDefaults, ...data.value };
-        }
-    })
-    .catch(function() {});
+// Initial prefs are embedded server-side via |json_script (see notes.html).
+// Reading them synchronously means the first Alpine paint already has the
+// right sections and view - no reshuffle once a fetch lands.
+(function bootNotesPrefs() {
+    let initial = {};
+    const el = document.getElementById('notes-prefs-data');
+    if (el) {
+        try { initial = JSON.parse(el.textContent) || {}; } catch (e) { initial = {}; }
+    }
+    window._notesPrefsCache = { ...window._notesPrefsDefaults, ...initial };
+})();
 
 window.notesPreferences = function notesPreferences() {
     const API_URL = '/api/v1/settings/notes/preferences';
@@ -35,8 +35,6 @@ window.notesPreferences = function notesPreferences() {
         journalFolderName: '',
 
         async init() {
-            await window._notesPrefsReady;
-            this.prefs = { ...window._notesPrefsCache };
             window.addEventListener('notes:preferences-changed', function(e) {
                 this.prefs = { ...e.detail };
                 this._loadFolderNames();
@@ -139,9 +137,7 @@ window.notesPreferences = function notesPreferences() {
 window.notesApp = function notesApp(config) {
     config = config || {};
     const prefs = window._notesPrefsCache;
-    // `let`: init() reassigns this once the prefs fetch resolves (the
-    // component is created before _notesPrefsReady settles).
-    let initialView = config.view || prefs.defaultView || 'all';
+    const initialView = config.view || prefs.defaultView || 'all';
     const titleMap = { all: 'My Notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal', graph: 'Graph' };
 
     return {
@@ -202,18 +198,6 @@ window.notesApp = function notesApp(config) {
 
             // Load folder data from embedded JSON
             this._loadFolderData();
-
-            // Wait for preferences to be loaded
-            await window._notesPrefsReady;
-            this.notePrefs = { ...window._notesPrefsCache };
-
-            // Resolve initial view: URL param takes priority, then saved pref
-            const savedPrefs = window._notesPrefsCache;
-            if (!config.view && savedPrefs.defaultView && savedPrefs.defaultView !== 'all') {
-                initialView = savedPrefs.defaultView;
-                this.activeView = initialView;
-                this.viewTitle = titleMap[initialView] || 'My Notes';
-            }
 
             // Listen for sidebar refresh events
             window.addEventListener('tags-changed', this.refreshSidebar.bind(this));

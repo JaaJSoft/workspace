@@ -107,3 +107,21 @@ class ChatIndexPreferencesUITests(TestCase):
         # Both compact toggles must be wired.
         self.assertContains(resp, "compactConversationList")
         self.assertContains(resp, "compactMessageView")
+
+    def test_chat_index_embeds_the_stored_prefs_for_the_first_paint(self):
+        # chat_preferences.js seeds its cache synchronously from this
+        # json_script - without it the first Alpine paint falls back to the
+        # defaults and reshuffles once a fetch lands.
+        set_setting(self.user, "chat", "preferences", {"compactMessageView": True})
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse("chat_ui:index"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="chat-prefs-data"')
+        self.assertEqual(resp.context["chat_prefs"], {"compactMessageView": True})
+
+    def test_a_non_dict_stored_pref_falls_back_to_an_empty_dict(self):
+        set_setting(self.user, "chat", "preferences", "garbage")
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse("chat_ui:index"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["chat_prefs"], {})

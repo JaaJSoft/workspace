@@ -16,10 +16,9 @@ function chatApp(currentUserId) {
     // subsequent toggleCollapse() calls.
     sidebarMounted: false,
 
-    // Reactive copy of chat preferences. Seeded synchronously from the
-    // global cache so the first Alpine paint already has the right
-    // density flags, then re-hydrated in init() once _chatPrefsReady
-    // resolves (in case the cache was still falling back to defaults).
+    // Reactive copy of chat preferences. The global cache is seeded
+    // synchronously from the server-embedded json_script, so the first
+    // Alpine paint already has the right density flags.
     chatPrefs: { ...window._chatPrefsCache },
 
     // ── Compose chatApp from domain mixins ──────────────────
@@ -88,12 +87,8 @@ function chatApp(currentUserId) {
       // Apply the user's call-sound preference to the audio engine.
       this._initCallSounds?.();
 
-      // Hydrate chat preferences from the server once the initial fetch
-      // resolved, and keep listening for cross-component updates fired
-      // by the preferences popover/dialog.
-      window._chatPrefsReady.then(() => {
-        this.chatPrefs = { ...window._chatPrefsCache };
-      });
+      // Keep listening for cross-component updates fired by the
+      // preferences popover/dialog.
       window.addEventListener('chat:preferences-changed', (e) => {
         this.chatPrefs = { ...e.detail };
       });

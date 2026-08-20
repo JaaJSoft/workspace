@@ -103,6 +103,10 @@ class OIDCIdentity(models.Model):
         related_name="oidc_identity",
     )
     sub = models.CharField(max_length=255, unique=True)
+    # Group names granted from the IdP's groups claim on the last login. Only
+    # these memberships may be revoked by the sync - manually granted Django
+    # groups are never touched.
+    synced_groups = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

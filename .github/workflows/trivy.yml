@@ -5,39 +5,15 @@
 
 name: trivy
 
-# Path filters mirror the Docker workflow: the scan runs against a fresh
-# image build, so only files that end up in it (see .dockerignore) matter.
-# The nightly schedule is unaffected by path filters.
+# Nightly only. Per-commit scanning already happens in the Docker workflow
+# (same severity filter, same SARIF upload) against the image it builds and
+# ships, so running it here too just rebuilt the image a second time on every
+# push/PR. The schedule is what this workflow is for: catching CVEs published
+# between two commits, against a fresh build that picks up new Debian patches.
 on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - '**'
-      - '!**.md'
-      - 'CHANGELOG.md'
-      - '!docs/**'
-      - '!LICENSE'
-      - '!.github/**'
-      - '.github/workflows/trivy.yml'
-      - '!.claude/**'
-      - '!.gitignore'
-      - '!workspace/**/tests/**'
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ "main" ]
-    paths:
-      - '**'
-      - '!**.md'
-      - 'CHANGELOG.md'
-      - '!docs/**'
-      - '!LICENSE'
-      - '!.github/**'
-      - '.github/workflows/trivy.yml'
-      - '!.claude/**'
-      - '!.gitignore'
-      - '!workspace/**/tests/**'
   schedule:
     - cron: '38 23 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -56,17 +32,20 @@ jobs:
 
       - name: Build an image from Dockerfile
         run: |
-          docker build -t docker.io/my-organization/my-app:${{ github.sha }} .
+          docker build -t workspace:nightly-scan .
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
-          image-ref: 'docker.io/my-organization/my-app:${{ github.sha }}'
+          image-ref: 'workspace:nightly-scan'
           format: 'template'
           template: '@/contrib/sarif.tpl'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
+        env:
+          # Persist the vuln DB across runs so we don't hit GHCR rate limits.
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db,public.ecr.aws/aquasecurity/trivy-db
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4.37.7

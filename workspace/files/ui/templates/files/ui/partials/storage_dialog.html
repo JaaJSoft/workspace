@@ -14,7 +14,7 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
         <div class="bg-primary/10 rounded-lg p-2">
           <i data-lucide="chart-pie" class="w-5 h-5 text-primary"></i>
         </div>
-        <div class="min-w-0">
+        <div class="min-w-0 pr-8 sm:pr-0">
           <h3 class="font-bold text-lg">Storage</h3>
           <p class="text-sm text-base-content/60 truncate" x-text="scopeName"></p>
         </div>
@@ -26,7 +26,8 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
             <i data-lucide="x" class="w-3.5 h-3.5"></i>
           </button>
         </label>
-        <button type="button" class="btn btn-ghost btn-sm btn-square ml-auto sm:ml-0" @click="close()" aria-label="Close">
+        {# Corner-anchored on mobile (the wrapped header row is taller than the button); in-flow after the search on sm+. #}
+        <button type="button" class="btn btn-ghost btn-sm btn-square absolute right-3 top-3 sm:static" @click="close()" aria-label="Close">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>

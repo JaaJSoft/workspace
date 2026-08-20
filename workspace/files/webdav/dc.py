@@ -7,6 +7,8 @@ import threading
 import time
 
 from django.contrib.auth import authenticate
+from knox.auth import TokenAuthentication as KnoxTokenAuthentication
+from rest_framework.exceptions import AuthenticationFailed
 from wsgidav.dc.base_dc import BaseDomainController
 
 _auth_cache = {}
@@ -17,6 +19,9 @@ _CACHE_KEY_SECRET = os.urandom(32)
 
 class DjangoBasicDomainController(BaseDomainController):
     """Authenticate WebDAV requests via Django's ``authenticate()``.
+
+    The Basic password may also be a Knox API token - the only credential
+    OIDC-managed accounts (no usable local password) can present.
 
     Results are cached for ``_AUTH_TTL`` seconds to avoid running the
     full authentication backend (bcrypt hash + DB query) on every HTTP
@@ -45,6 +50,8 @@ class DjangoBasicDomainController(BaseDomainController):
                 return True
 
         user = authenticate(username=user_name, password=password)
+        if user is None:
+            user = _api_token_user(user_name, password)
         if user is None or not user.is_active:
             return False
 
@@ -52,6 +59,25 @@ class DjangoBasicDomainController(BaseDomainController):
             _auth_cache[cache_key] = (user, time.monotonic())
         environ["workspace.user"] = user
         return True
+
+
+def _api_token_user(user_name, password):
+    """Resolve *password* as a Knox API token owned by *user_name*.
+
+    Basic auth is the only scheme WebDAV clients speak, and OIDC-managed
+    accounts have no usable local password - an API token in the password
+    field is their way in. The username must still match the token's
+    owner, so a leaked token cannot be presented under another identity.
+    """
+    try:
+        user, _token = KnoxTokenAuthentication().authenticate_credentials(
+            password.encode()
+        )
+    except AuthenticationFailed:
+        return None
+    if user.get_username() != user_name:
+        return None
+    return user
 
 
 def _cache_key(user_name, password):

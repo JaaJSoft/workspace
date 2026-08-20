@@ -3,11 +3,13 @@
 import base64
 import io
 import os
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
+from knox.models import AuthToken
 
 from workspace.files.models import File
 from workspace.files.services import FileService
@@ -121,6 +123,44 @@ class DomainControllerTests(TestCase):
         self.assertFalse(
             self.dc.basic_auth_user("Workspace", "davdc", "wrong", environ)
         )
+
+    def test_basic_auth_api_token_as_password(self):
+        _, token = AuthToken.objects.create(self.user)
+        environ = {}
+        self.assertTrue(self.dc.basic_auth_user("Workspace", "davdc", token, environ))
+        self.assertEqual(environ["workspace.user"], self.user)
+
+    def test_basic_auth_api_token_for_user_without_usable_password(self):
+        # The OIDC scenario: no usable local password, a token is the only
+        # credential such an account can present over Basic auth.
+        sso_user = User.objects.create_user(username="ssodav", email="sso@test.com")
+        self.assertFalse(sso_user.has_usable_password())
+        _, token = AuthToken.objects.create(sso_user)
+        environ = {}
+        self.assertTrue(self.dc.basic_auth_user("Workspace", "ssodav", token, environ))
+        self.assertEqual(environ["workspace.user"], sso_user)
+
+    def test_basic_auth_api_token_with_wrong_username(self):
+        other = User.objects.create_user(
+            username="otherdav", email="other@test.com", password="pw12345"
+        )
+        _, token = AuthToken.objects.create(other)
+        self.assertFalse(self.dc.basic_auth_user("Workspace", "davdc", token, {}))
+
+    def test_basic_auth_expired_api_token(self):
+        _, token = AuthToken.objects.create(self.user, timedelta(seconds=-1))
+        self.assertFalse(self.dc.basic_auth_user("Workspace", "davdc", token, {}))
+
+    def test_basic_auth_revoked_api_token(self):
+        instance, token = AuthToken.objects.create(self.user)
+        instance.delete()
+        self.assertFalse(self.dc.basic_auth_user("Workspace", "davdc", token, {}))
+
+    def test_basic_auth_api_token_inactive_user(self):
+        _, token = AuthToken.objects.create(self.user)
+        self.user.is_active = False
+        self.user.save()
+        self.assertFalse(self.dc.basic_auth_user("Workspace", "davdc", token, {}))
 
 
 # ── Provider ──────────────────────────────────────────────────────────

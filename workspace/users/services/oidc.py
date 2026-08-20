@@ -134,6 +134,12 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
         or a ``sub`` already bound to a different account, is refused - so the
         stored subject is a real anti-takeover check (e.g. against a recycled
         email address), not just a passive marker.
+
+        Linking also disables the local password: from here on the IdP is the
+        only interactive way in, and a pre-existing password left usable would
+        keep working on /login, HTTP Basic and WebDAV while being impossible
+        to change (the password-change UI/API are locked for linked accounts).
+        External clients use API tokens instead.
         """
         from ..models import OIDCIdentity
 
@@ -161,6 +167,14 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
             raise SuspiciousOperation("OIDC subject already linked to another account")
 
         OIDCIdentity.objects.create(user=user, sub=sub)
+
+        if user.has_usable_password():
+            user.set_unusable_password()
+            user.save(update_fields=["password"])
+            logger.info(
+                "Disabled local password for OIDC-linked user %s",
+                scrub(user.get_username()),
+            )
 
     def _generate_username(self, claims):
         """Build a unique, sanitized username from the configured claim.

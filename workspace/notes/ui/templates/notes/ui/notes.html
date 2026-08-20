@@ -75,7 +75,7 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
     <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0 hidden lg:block">
-        {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="success" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="success" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
       </ul>
       <ul class="menu p-0 lg:hidden">
         {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="success" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" %}

@@ -13,7 +13,7 @@ from .models import (
     PollVote,
 )
 from .models_external import ExternalCalendar
-from .tasks import sync_external_calendar_task
+from .services.ics_sync import clear_sync_errors, queue_external_calendar_syncs
 
 
 class ExternalCalendarInline(StackedInline):
@@ -160,10 +160,7 @@ class ExternalCalendarAdmin(ModelAdmin):
 
     @admin.action(description="Sync now")
     def sync_now(self, request, queryset):
-        count = 0
-        for ext in queryset.filter(is_active=True):
-            sync_external_calendar_task.delay(str(ext.uuid))
-            count += 1
+        count = queue_external_calendar_syncs(queryset)
         self.message_user(
             request,
             f"Sync queued for {count} active external calendar(s).",
@@ -172,7 +169,7 @@ class ExternalCalendarAdmin(ModelAdmin):
 
     @admin.action(description="Clear last error")
     def clear_error(self, request, queryset):
-        count = queryset.exclude(last_error="").update(last_error="")
+        count = clear_sync_errors(queryset)
         self.message_user(
             request, f"Error cleared on {count} row(s).", messages.SUCCESS
         )

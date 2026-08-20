@@ -24,41 +24,33 @@ def _last_24h():
 
 
 def mail_sync_error_count(request):
-    from workspace.mail.models import MailAccount
+    from workspace.mail.services.imap_sync import accounts_with_sync_errors
 
-    return (
-        MailAccount.objects.filter(is_active=True).exclude(last_sync_error="").count()
-    )
+    return accounts_with_sync_errors().count()
 
 
 def external_calendar_error_count(request):
-    from workspace.calendar.models_external import ExternalCalendar
+    from workspace.calendar.services.ics_sync import external_calendars_with_errors
 
-    return (
-        ExternalCalendar.objects.filter(is_active=True).exclude(last_error="").count()
-    )
+    return external_calendars_with_errors().count()
 
 
 def failed_ai_task_count(request):
-    from workspace.ai.models import AITask
+    from workspace.ai.services.ai_task import failed_task_count
 
-    return AITask.objects.filter(
-        status=AITask.Status.FAILED, created_at__gte=_last_24h()
-    ).count()
+    return failed_task_count(_last_24h())
 
 
 def thumbnail_failure_count(request):
-    from workspace.files.models import ThumbnailFailure
+    from workspace.files.services.thumbnails.failures import parked_count
 
-    return ThumbnailFailure.objects.count()
+    return parked_count()
 
 
 def failed_import_job_count(request):
-    from workspace.imports.models import ImportJob
+    from workspace.imports.services.jobs import failed_job_count
 
-    return ImportJob.objects.filter(
-        status=ImportJob.Status.FAILED, created_at__gte=_last_24h()
-    ).count()
+    return failed_job_count(_last_24h())
 
 
 # Sidebar badge wrappers: unfold renders any non-empty badge value - a count

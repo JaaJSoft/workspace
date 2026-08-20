@@ -535,3 +535,26 @@ class EagerLoopBoundTests(JobsTestCase):
                 run_import_job.apply(
                     args=["00000000-0000-0000-0000-000000000000"], throw=True
                 )
+
+
+class FailedJobCountTests(TestCase):
+    def test_counts_failed_jobs_inside_the_window_only(self):
+        user = get_user_model().objects.create_user(username="jobcount", password="pw")
+        conn = ImportConnection.objects.create(
+            owner=user, provider="webdav", label="NC"
+        )
+        ImportJob.objects.create(
+            connection=conn, status=ImportJob.Status.FAILED, kinds=["files"]
+        )
+        old = ImportJob.objects.create(
+            connection=conn, status=ImportJob.Status.FAILED, kinds=["files"]
+        )
+        ImportJob.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(hours=25)
+        )
+        ImportJob.objects.create(
+            connection=conn, status=ImportJob.Status.COMPLETED, kinds=["files"]
+        )
+
+        since = timezone.now() - timedelta(hours=24)
+        self.assertEqual(svc.failed_job_count(since), 1)

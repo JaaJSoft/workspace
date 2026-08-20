@@ -76,3 +76,12 @@ def ai_task_lifecycle(task_id, *, log_label):
         ai_task.completed_at = timezone.now()
         ai_task.save()
         notify_sse("ai", ai_task.owner_id)
+
+
+def failed_task_count(since):
+    """Number of tasks that failed since *since*."""
+    from workspace.ai.models import AITask
+
+    return AITask.objects.filter(
+        status=AITask.Status.FAILED, created_at__gte=since
+    ).count()

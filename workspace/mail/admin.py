@@ -13,7 +13,8 @@ from .models import (
     MailRule,
     MailRuleLog,
 )
-from .tasks import sync_single_account
+from .services.imap_sync import queue_account_syncs
+from .services.rules.management import set_rules_enabled
 
 
 @admin.register(MailAccount)
@@ -46,10 +47,7 @@ class MailAccountAdmin(ModelAdmin):
 
     @admin.action(description="Sync now")
     def sync_now(self, request, queryset):
-        count = 0
-        for account in queryset.filter(is_active=True):
-            sync_single_account.delay(str(account.uuid))
-            count += 1
+        count = queue_account_syncs(queryset)
         self.message_user(
             request,
             f"Sync queued for {count} active account(s).",
@@ -170,12 +168,12 @@ class MailRuleAdmin(ModelAdmin):
 
     @admin.action(description="Enable selected rules")
     def enable_rules(self, request, queryset):
-        count = queryset.update(is_enabled=True)
+        count = set_rules_enabled(queryset, True)
         self.message_user(request, f"{count} rule(s) enabled.", messages.SUCCESS)
 
     @admin.action(description="Disable selected rules")
     def disable_rules(self, request, queryset):
-        count = queryset.update(is_enabled=False)
+        count = set_rules_enabled(queryset, False)
         self.message_user(request, f"{count} rule(s) disabled.", messages.SUCCESS)
 
 

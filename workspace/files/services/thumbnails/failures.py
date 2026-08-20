@@ -79,3 +79,21 @@ def clear_all_failures():
     """
     deleted, _ = ThumbnailFailure.objects.all().delete()
     return deleted
+
+
+def parked_count():
+    """Number of files currently parked (one failure row per file)."""
+    return ThumbnailFailure.objects.count()
+
+
+def retry_failures(failures):
+    """Unpark the files behind *failures* (a queryset) and queue a generation pass.
+
+    Returns the number of files unparked.
+    """
+    from workspace.files.tasks import generate_thumbnails
+
+    count = failures.count()
+    failures.delete()
+    generate_thumbnails.delay()
+    return count

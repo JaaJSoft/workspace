@@ -10,7 +10,7 @@ from .models import (
     PinnedFolder,
     ThumbnailFailure,
 )
-from .tasks import generate_thumbnails
+from .services.thumbnails.failures import retry_failures
 
 
 @admin.register(FileComment)
@@ -88,9 +88,7 @@ class ThumbnailFailureAdmin(ModelAdmin):
 
     @admin.action(description="Retry thumbnail generation", permissions=["delete"])
     def retry_thumbnails(self, request, queryset):
-        count = queryset.count()
-        queryset.delete()
-        generate_thumbnails.delay()
+        count = retry_failures(queryset)
         self.message_user(
             request,
             f"Unparked {count} file(s); thumbnail generation queued.",

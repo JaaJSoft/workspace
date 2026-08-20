@@ -534,3 +534,26 @@ def sync_account(account):
     account.last_sync_at = dj_timezone.now()
     account.last_sync_error = "Some folders failed to sync." if error_occurred else ""
     account.save(update_fields=["last_sync_at", "last_sync_error", "updated_at"])
+
+
+def accounts_with_sync_errors():
+    """Active accounts whose last sync recorded an error."""
+    from workspace.mail.models import MailAccount
+
+    return MailAccount.objects.filter(is_active=True).exclude(last_sync_error="")
+
+
+def queue_account_syncs(accounts):
+    """Queue a background sync for the active accounts in *accounts*.
+
+    Returns the number of syncs queued. Manual dispatches carry no claim
+    token: there is no dispatcher window to pin against (see
+    ``mail.sync_account``).
+    """
+    from workspace.mail.tasks import sync_single_account
+
+    count = 0
+    for account in accounts.filter(is_active=True):
+        sync_single_account.delay(str(account.uuid))
+        count += 1
+    return count

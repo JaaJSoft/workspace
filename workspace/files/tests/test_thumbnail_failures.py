@@ -687,3 +687,19 @@ class RetryFailedEndpointTests(ThumbnailFailureAPITestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
         delay.assert_called_once_with(retry_failed=False)
+
+
+class ParkedCountTests(TestCase):
+    def test_counts_one_row_per_parked_file(self):
+        from workspace.files.models import File
+        from workspace.files.services.thumbnails.failures import parked_count
+
+        user = User.objects.create_user(username="parkedcount", password="pw")
+        f = File.objects.create(
+            owner=user, name="broken.jpg", node_type=File.NodeType.FILE
+        )
+        self.assertEqual(parked_count(), 0)
+        ThumbnailFailure.objects.create(
+            file=f, attempts=1, last_attempt_at=timezone.now()
+        )
+        self.assertEqual(parked_count(), 1)

@@ -49,6 +49,23 @@ def process_and_save_avatar(
     logger.info("Avatar saved for user %s", user.id)
 
 
+def save_avatar_centered(user, image_file) -> None:
+    """Save *image_file* as the user's avatar, center-cropped to a square.
+
+    The crop rectangle is computed on the EXIF-transposed dimensions so a
+    rotated photo is centered on what the user actually sees.
+    """
+    from PIL import Image, ImageOps
+
+    with Image.open(image_file) as img:
+        width, height = ImageOps.exif_transpose(img).size
+    side = min(width, height)
+    image_file.seek(0)
+    process_and_save_avatar(
+        user, image_file, (width - side) // 2, (height - side) // 2, side, side
+    )
+
+
 def delete_avatar(user) -> None:
     """Delete the user's avatar file and clear the setting flag."""
     path = get_avatar_path(user.id)

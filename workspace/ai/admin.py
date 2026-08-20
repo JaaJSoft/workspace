@@ -9,6 +9,7 @@ from workspace.users.services.avatar import (
     delete_avatar,
     get_avatar_path,
     has_avatar,
+    save_avatar_centered,
 )
 
 from .models import AITask, BotProfile, ConversationSummary
@@ -92,36 +93,7 @@ class BotProfileAdmin(ModelAdmin):
         if form.cleaned_data.get("delete_avatar"):
             delete_avatar(obj.user)
         elif form.cleaned_data.get("avatar"):
-            self._save_avatar(obj.user, form.cleaned_data["avatar"])
-
-    @staticmethod
-    def _save_avatar(user, image_file):
-        from io import BytesIO
-
-        from PIL import Image, ImageOps
-
-        from workspace.common.services.image import save_image
-        from workspace.users.services.settings import set_setting
-
-        img = Image.open(image_file)
-        img = ImageOps.exif_transpose(img)
-
-        # Auto center-crop to square
-        w, h = img.size
-        side = min(w, h)
-        left = (w - side) // 2
-        top = (h - side) // 2
-        img = img.crop((left, top, left + side, top + side))
-
-        img = img.convert("RGB")
-        img = img.resize((256, 256), Image.LANCZOS)
-
-        buf = BytesIO()
-        img.save(buf, format="WEBP", quality=85)
-
-        path = get_avatar_path(user.id)
-        save_image(path, buf.getvalue())
-        set_setting(user, "profile", "has_avatar", True)
+            save_avatar_centered(obj.user, form.cleaned_data["avatar"])
 
 
 @admin.register(ConversationSummary)

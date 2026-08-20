@@ -3,7 +3,7 @@
 from .base import DEBUG, TESTING
 
 INSTALLED_APPS = [
-    "django_daisy",
+    "unfold",
     "django.contrib.admin",
     "django.contrib.humanize",
     "django.contrib.auth",

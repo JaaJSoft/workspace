@@ -650,18 +650,6 @@ wheels = [
 ]
 
 [[package]]
-name = "django-daisy"
-version = "2.0.7"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/9c/1e/387acf32a4cc95c6e78c2eb554577ad9e4f4a79f5c1d3c2933802a0f5fe6/django_daisy-2.0.7.tar.gz", hash = "sha256:8eedb34f0fbde4ef76da739ef157b94f8ede2ac808717db6507d0fb835caecaa", size = 2538029, upload-time = "2025-12-17T19:30:05.456Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b8/81/da68ffc803efa2317d24b90cd544c8cf19cb6b98e11c19aec28c0f8c77a0/django_daisy-2.0.7-py3-none-any.whl", hash = "sha256:c45807701de9995f6d28a8a985261e3951918e4d8f269f04f61607ded7cdc897", size = 2370271, upload-time = "2025-12-17T19:30:03.472Z" },
-]
-
-[[package]]
 name = "django-debug-toolbar"
 version = "7.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -742,6 +730,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/45/8d/14c8e67495f0e01fd26929c34d2fbebd910c20f9f3dcc268fadb93a009ec/django_rest_knox-5.1.0.tar.gz", hash = "sha256:78307dce32858679fe96afb06c4ab2d4fe0ed085c7a739a7ccc03a14dea2b37b", size = 20973, upload-time = "2026-07-12T12:02:34.482Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1d/20/188535a919c642a20fef171571e5b3470c3323c4be952602e709a0790edf/django_rest_knox-5.1.0-py3-none-any.whl", hash = "sha256:7dad21e91091db07796ea96f559fd2e1f67b8d42748d4e140d2fa7a0319538e7", size = 16044, upload-time = "2026-07-12T12:02:33.249Z" },
+]
+
+[[package]]
+name = "django-unfold"
+version = "0.104.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/41/0685cfdad4cf77a571e48227c78a9b8ae6d15679c2e9c9e724142a26cc3a/django_unfold-0.104.1.tar.gz", hash = "sha256:13b52e8100f2d844568cf08a2057cacd3686bc1083e0e491d05fc688025c966f", size = 1126154, upload-time = "2026-08-12T07:43:46.027Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/37/25/d9165c8b4e1deb37d0ac68bfe837c59a4ddb895f5df8b9c97b4bd433ab23/django_unfold-0.104.1-py3-none-any.whl", hash = "sha256:4eece526e1e80f5133632acae260cc53ab2f52020ff9f64bb98d9c9c738d9888", size = 1254159, upload-time = "2026-08-12T07:43:44.565Z" },
 ]
 
 [[package]]
@@ -2477,12 +2477,12 @@ dependencies = [
     { name = "cryptography" },
     { name = "dj-database-url" },
     { name = "django" },
-    { name = "django-daisy" },
     { name = "django-filter" },
     { name = "django-http-compression", extra = ["brotli"] },
     { name = "django-prometheus" },
     { name = "django-redis" },
     { name = "django-rest-knox" },
+    { name = "django-unfold" },
     { name = "djangorestframework" },
     { name = "drf-orjson-renderer" },
     { name = "drf-spectacular" },
@@ -2528,12 +2528,12 @@ requires-dist = [
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "dj-database-url", specifier = ">=2.3.0" },
     { name = "django", specifier = ">=6.1,<7.0" },
-    { name = "django-daisy", specifier = "==2.0.7" },
     { name = "django-filter", specifier = "==26.1" },
     { name = "django-http-compression", extras = ["brotli"], specifier = ">=1.4.0" },
     { name = "django-prometheus", specifier = ">=2.5.0" },
     { name = "django-redis", specifier = ">=7.0.0" },
     { name = "django-rest-knox", specifier = ">=5.1.0" },
+    { name = "django-unfold", specifier = ">=0.104.1" },
     { name = "djangorestframework", specifier = "==3.18.0" },
     { name = "drf-orjson-renderer", specifier = ">=1.7.0" },
     { name = "drf-spectacular", specifier = "==0.30.0" },

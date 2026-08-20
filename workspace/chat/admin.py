@@ -1,4 +1,5 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin, StackedInline, TabularInline
 
 from .models import (
     Conversation,
@@ -11,13 +12,13 @@ from .models import (
 )
 
 
-class ConversationMemberInline(admin.TabularInline):
+class ConversationMemberInline(TabularInline):
     model = ConversationMember
     extra = 0
     readonly_fields = ("uuid", "joined_at")
 
 
-class ConversationSummaryInline(admin.StackedInline):
+class ConversationSummaryInline(StackedInline):
     from workspace.ai.models import ConversationSummary
 
     model = ConversationSummary
@@ -29,21 +30,21 @@ class ConversationSummaryInline(admin.StackedInline):
 
 
 @admin.register(Conversation)
-class ConversationAdmin(admin.ModelAdmin):
+class ConversationAdmin(ModelAdmin):
     list_display = ("uuid", "kind", "title", "created_by", "created_at", "updated_at")
     list_filter = ("kind",)
     search_fields = ("title", "description", "created_by__username")
     inlines = [ConversationMemberInline, ConversationSummaryInline]
 
 
-class MessageAttachmentInline(admin.TabularInline):
+class MessageAttachmentInline(TabularInline):
     model = MessageAttachment
     extra = 0
     readonly_fields = ("uuid", "original_name", "mime_type", "size", "created_at")
 
 
 @admin.register(Message)
-class MessageAdmin(admin.ModelAdmin):
+class MessageAdmin(ModelAdmin):
     list_display = (
         "uuid",
         "conversation",
@@ -58,7 +59,7 @@ class MessageAdmin(admin.ModelAdmin):
 
 
 @admin.register(MessageAttachment)
-class MessageAttachmentAdmin(admin.ModelAdmin):
+class MessageAttachmentAdmin(ModelAdmin):
     list_display = (
         "uuid",
         "message",
@@ -71,13 +72,13 @@ class MessageAttachmentAdmin(admin.ModelAdmin):
 
 
 @admin.register(Reaction)
-class ReactionAdmin(admin.ModelAdmin):
+class ReactionAdmin(ModelAdmin):
     list_display = ("uuid", "message", "user", "emoji", "created_at")
     search_fields = ("emoji", "user__username")
 
 
 @admin.register(ConversationMember)
-class ConversationMemberAdmin(admin.ModelAdmin):
+class ConversationMemberAdmin(ModelAdmin):
     list_display = (
         "uuid",
         "conversation",
@@ -92,14 +93,14 @@ class ConversationMemberAdmin(admin.ModelAdmin):
 
 
 @admin.register(PinnedMessage)
-class PinnedMessageAdmin(admin.ModelAdmin):
+class PinnedMessageAdmin(ModelAdmin):
     list_display = ("uuid", "conversation", "message", "pinned_by", "created_at")
     search_fields = ("pinned_by__username", "conversation__title")
     raw_id_fields = ("conversation", "message", "pinned_by")
 
 
 @admin.register(PinnedConversation)
-class PinnedConversationAdmin(admin.ModelAdmin):
+class PinnedConversationAdmin(ModelAdmin):
     list_display = ("uuid", "owner", "conversation", "position", "created_at")
     search_fields = ("owner__username", "conversation__title")
     raw_id_fields = ("owner", "conversation")

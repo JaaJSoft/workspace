@@ -1,11 +1,12 @@
 from django.contrib import admin, messages
+from unfold.admin import ModelAdmin
 
 from .models import Notification, PushSubscription
 from .services.notifications import notify
 
 
 @admin.register(Notification)
-class NotificationAdmin(admin.ModelAdmin):
+class NotificationAdmin(ModelAdmin):
     list_display = ("title", "recipient", "origin", "priority", "read_at", "created_at")
     list_filter = ("origin", "priority", "read_at")
     search_fields = ("title", "body", "recipient__username")
@@ -15,7 +16,7 @@ class NotificationAdmin(admin.ModelAdmin):
 
 
 @admin.register(PushSubscription)
-class PushSubscriptionAdmin(admin.ModelAdmin):
+class PushSubscriptionAdmin(ModelAdmin):
     list_display = ("user", "endpoint", "created_at")
     search_fields = ("user__username", "endpoint")
     raw_id_fields = ("user",)

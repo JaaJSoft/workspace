@@ -5,7 +5,7 @@ User = get_user_model()
 
 
 class AdminChangeListTests(TestCase):
-    """The django-daisy change list must render under the installed Django."""
+    """The themed admin change lists must render under the installed Django."""
 
     def setUp(self):
         self.admin = User.objects.create_superuser(

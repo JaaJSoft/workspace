@@ -1,4 +1,5 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin, StackedInline, TabularInline
 
 from .models import (
     Calendar,
@@ -13,26 +14,26 @@ from .models import (
 from .models_external import ExternalCalendar
 
 
-class ExternalCalendarInline(admin.StackedInline):
+class ExternalCalendarInline(StackedInline):
     model = ExternalCalendar
     extra = 0
     readonly_fields = ("last_synced_at", "last_etag", "last_error")
 
 
 @admin.register(Calendar)
-class CalendarAdmin(admin.ModelAdmin):
+class CalendarAdmin(ModelAdmin):
     list_display = ("name", "owner", "color", "created_at")
     search_fields = ("name",)
     inlines = [ExternalCalendarInline]
 
 
-class EventMemberInline(admin.TabularInline):
+class EventMemberInline(TabularInline):
     model = EventMember
     extra = 0
 
 
 @admin.register(Event)
-class EventAdmin(admin.ModelAdmin):
+class EventAdmin(ModelAdmin):
     list_display = (
         "title",
         "calendar",
@@ -56,35 +57,35 @@ class EventAdmin(admin.ModelAdmin):
 
 
 @admin.register(EventMember)
-class EventMemberAdmin(admin.ModelAdmin):
+class EventMemberAdmin(ModelAdmin):
     list_display = ("event", "user", "status", "created_at")
     list_filter = ("status",)
 
 
 @admin.register(CalendarSubscription)
-class CalendarSubscriptionAdmin(admin.ModelAdmin):
+class CalendarSubscriptionAdmin(ModelAdmin):
     list_display = ("user", "calendar", "created_at")
 
 
-class PollSlotInline(admin.TabularInline):
+class PollSlotInline(TabularInline):
     model = PollSlot
     extra = 0
 
 
-class PollVoteInline(admin.TabularInline):
+class PollVoteInline(TabularInline):
     model = PollVote
     extra = 0
     raw_id_fields = ["user"]
 
 
-class PollInviteeInline(admin.TabularInline):
+class PollInviteeInline(TabularInline):
     model = PollInvitee
     extra = 0
     raw_id_fields = ["user"]
 
 
 @admin.register(Poll)
-class PollAdmin(admin.ModelAdmin):
+class PollAdmin(ModelAdmin):
     list_display = ["title", "created_by", "status", "created_at"]
     list_filter = ["status"]
     search_fields = ["title"]
@@ -93,20 +94,20 @@ class PollAdmin(admin.ModelAdmin):
 
 
 @admin.register(PollVote)
-class PollVoteAdmin(admin.ModelAdmin):
+class PollVoteAdmin(ModelAdmin):
     list_display = ["slot", "user", "guest_name", "choice", "created_at"]
     list_filter = ["choice"]
     raw_id_fields = ["user", "slot"]
 
 
 @admin.register(PollInvitee)
-class PollInviteeAdmin(admin.ModelAdmin):
+class PollInviteeAdmin(ModelAdmin):
     list_display = ["poll", "user", "created_at"]
     raw_id_fields = ["user", "poll"]
 
 
 @admin.register(ExternalCalendar)
-class ExternalCalendarAdmin(admin.ModelAdmin):
+class ExternalCalendarAdmin(ModelAdmin):
     list_display = ("calendar", "url", "is_active", "last_synced_at", "last_error")
     list_filter = ("is_active",)
     search_fields = ("calendar__name", "url")

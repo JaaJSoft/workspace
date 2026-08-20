@@ -1,4 +1,5 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin, TabularInline
 
 from .models import (
     MailAccount,
@@ -11,7 +12,7 @@ from .models import (
 
 
 @admin.register(MailAccount)
-class MailAccountAdmin(admin.ModelAdmin):
+class MailAccountAdmin(ModelAdmin):
     list_display = (
         "email",
         "owner",
@@ -25,7 +26,7 @@ class MailAccountAdmin(admin.ModelAdmin):
 
 
 @admin.register(MailFolder)
-class MailFolderAdmin(admin.ModelAdmin):
+class MailFolderAdmin(ModelAdmin):
     list_display = (
         "display_name",
         "account",
@@ -37,13 +38,13 @@ class MailFolderAdmin(admin.ModelAdmin):
     search_fields = ("name", "display_name")
 
 
-class MailAttachmentInline(admin.TabularInline):
+class MailAttachmentInline(TabularInline):
     model = MailAttachment
     extra = 0
 
 
 @admin.register(MailMessage)
-class MailMessageAdmin(admin.ModelAdmin):
+class MailMessageAdmin(ModelAdmin):
     list_display = ("subject", "account", "folder", "date", "is_read", "is_starred")
     list_filter = ("is_read", "is_starred", "is_draft")
     search_fields = ("subject", "snippet")
@@ -51,12 +52,12 @@ class MailMessageAdmin(admin.ModelAdmin):
 
 
 @admin.register(MailAttachment)
-class MailAttachmentAdmin(admin.ModelAdmin):
+class MailAttachmentAdmin(ModelAdmin):
     list_display = ("filename", "message", "content_type", "size", "is_inline")
 
 
 @admin.register(MailRule)
-class MailRuleAdmin(admin.ModelAdmin):
+class MailRuleAdmin(ModelAdmin):
     list_display = (
         "name",
         "account",
@@ -71,7 +72,7 @@ class MailRuleAdmin(admin.ModelAdmin):
 
 
 @admin.register(MailRuleLog)
-class MailRuleLogAdmin(admin.ModelAdmin):
+class MailRuleLogAdmin(ModelAdmin):
     list_display = ("uuid", "rule_name_snapshot", "message", "created_at")
     readonly_fields = (
         "rule",

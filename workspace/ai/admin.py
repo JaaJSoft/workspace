@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib import admin
 from django.utils.html import format_html
+from unfold.admin import ModelAdmin
 
 from workspace.users.services.avatar import (
     delete_avatar,
@@ -28,7 +29,7 @@ class BotProfileForm(forms.ModelForm):
 
 
 @admin.register(BotProfile)
-class BotProfileAdmin(admin.ModelAdmin):
+class BotProfileAdmin(ModelAdmin):
     form = BotProfileForm
     list_display = [
         "user",
@@ -121,7 +122,7 @@ class BotProfileAdmin(admin.ModelAdmin):
 
 
 @admin.register(ConversationSummary)
-class ConversationSummaryAdmin(admin.ModelAdmin):
+class ConversationSummaryAdmin(ModelAdmin):
     list_display = ("conversation", "up_to", "content_preview", "updated_at")
     search_fields = ("conversation__title", "content")
     readonly_fields = ("conversation", "up_to", "content", "updated_at")
@@ -135,7 +136,7 @@ class ConversationSummaryAdmin(admin.ModelAdmin):
 
 
 @admin.register(AITask)
-class AITaskAdmin(admin.ModelAdmin):
+class AITaskAdmin(ModelAdmin):
     list_display = [
         "uuid",
         "task_type",

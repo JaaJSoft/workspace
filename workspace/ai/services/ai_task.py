@@ -79,9 +79,13 @@ def ai_task_lifecycle(task_id, *, log_label):
 
 
 def failed_task_count(since):
-    """Number of tasks that failed since *since*."""
+    """Number of tasks that failed since *since*.
+
+    Filters on ``completed_at`` (stamped when the task turns FAILED), not
+    ``created_at``: a long-queued task that fails today is today's failure.
+    """
     from workspace.ai.models import AITask
 
     return AITask.objects.filter(
-        status=AITask.Status.FAILED, created_at__gte=since
+        status=AITask.Status.FAILED, completed_at__gte=since
     ).count()

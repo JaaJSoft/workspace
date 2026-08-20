@@ -84,14 +84,16 @@ def dashboard_callback(request, context):
             "icon": "alternate_email",
             "description": "active accounts whose last sync failed",
             "value": mail_sync_error_count(request),
-            "url": reverse("admin:mail_mailaccount_changelist"),
+            "url": reverse("admin:mail_mailaccount_changelist")
+            + "?sync=error&is_active__exact=1",
         },
         {
             "title": "Calendar sync errors",
             "icon": "cloud_sync",
             "description": "external calendars whose last sync failed",
             "value": external_calendar_error_count(request),
-            "url": reverse("admin:calendar_externalcalendar_changelist"),
+            "url": reverse("admin:calendar_externalcalendar_changelist")
+            + "?sync=error&is_active__exact=1",
         },
         {
             "title": "Failed AI tasks",

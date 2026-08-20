@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from workspace.calendar.models import Calendar
 from workspace.calendar.models_external import ExternalCalendar
@@ -26,6 +27,11 @@ class CalendarAdminTests(TestCase):
             url="https://feeds.test/off.ics",
             is_active=False,
         )
+        cls.ext_ok = ExternalCalendar.objects.create(
+            calendar=Calendar.objects.create(name="OK", owner=cls.admin),
+            url="https://feeds.test/ok.ics",
+            last_synced_at=timezone.now(),
+        )
 
     def setUp(self):
         self.client.force_login(self.admin)
@@ -36,6 +42,16 @@ class CalendarAdminTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "broken.ics")
+
+    def test_sync_health_filter_partitions_the_change_list(self):
+        url = reverse("admin:calendar_externalcalendar_changelist")
+        response = self.client.get(url, {"sync": "error"})
+        self.assertContains(response, "broken.ics")
+        self.assertNotContains(response, "ok.ics")
+
+        response = self.client.get(url, {"sync": "ok"})
+        self.assertContains(response, "ok.ics")
+        self.assertNotContains(response, "broken.ics")
 
     def test_sync_now_queues_active_feeds_only(self):
         with patch(

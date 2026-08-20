@@ -66,23 +66,37 @@ class MailAdminTests(TestCase):
         self.assertEqual(response.status_code, 302)
         delay.assert_called_once_with(str(self.account_ok.uuid))
 
-    def test_rule_actions_toggle_is_enabled(self):
+    def test_rule_actions_toggle_is_enabled_and_stamp_updated_at(self):
         rule = MailRule.objects.create(
             account=self.account_ok, name="Newsletters", is_enabled=False
         )
         url = reverse("admin:mail_mailrule_changelist")
 
+        stamp = rule.updated_at
         self.client.post(
             url, {"action": "enable_rules", "_selected_action": [str(rule.uuid)]}
         )
         rule.refresh_from_db()
         self.assertTrue(rule.is_enabled)
+        self.assertGreater(rule.updated_at, stamp)
 
+        stamp = rule.updated_at
         self.client.post(
             url, {"action": "disable_rules", "_selected_action": [str(rule.uuid)]}
         )
         rule.refresh_from_db()
         self.assertFalse(rule.is_enabled)
+        self.assertGreater(rule.updated_at, stamp)
+
+    def test_sync_health_filter_partitions_the_change_list(self):
+        url = reverse("admin:mail_mailaccount_changelist")
+        response = self.client.get(url, {"sync": "error"})
+        self.assertContains(response, "bad@test.com")
+        self.assertNotContains(response, "ok@test.com")
+
+        response = self.client.get(url, {"sync": "ok"})
+        self.assertContains(response, "ok@test.com")
+        self.assertNotContains(response, "bad@test.com")
 
     def test_label_change_list_renders(self):
         MailLabel.objects.create(account=self.account_ok, name="Invoices")

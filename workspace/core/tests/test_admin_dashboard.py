@@ -90,13 +90,25 @@ class HealthCountTests(TestCase):
         )
         self.assertEqual(external_calendar_error_count(None), 1)
 
-    def test_failed_ai_tasks_window_is_24_hours(self):
-        AITask.objects.create(owner=self.user, task_type="chat", status="failed")
-        old = AITask.objects.create(owner=self.user, task_type="chat", status="failed")
-        AITask.objects.filter(pk=old.pk).update(
-            created_at=timezone.now() - timedelta(hours=25)
+    def test_failed_ai_tasks_window_is_on_the_failure_time(self):
+        AITask.objects.create(
+            owner=self.user,
+            task_type="chat",
+            status="failed",
+            completed_at=timezone.now(),
         )
-        AITask.objects.create(owner=self.user, task_type="chat", status="completed")
+        AITask.objects.create(
+            owner=self.user,
+            task_type="chat",
+            status="failed",
+            completed_at=timezone.now() - timedelta(hours=25),
+        )
+        AITask.objects.create(
+            owner=self.user,
+            task_type="chat",
+            status="completed",
+            completed_at=timezone.now(),
+        )
         self.assertEqual(failed_ai_task_count(None), 1)
 
     def test_thumbnail_failures_are_counted(self):
@@ -108,18 +120,21 @@ class HealthCountTests(TestCase):
         )
         self.assertEqual(thumbnail_failure_count(None), 1)
 
-    def test_failed_import_jobs_window_is_24_hours(self):
+    def test_failed_import_jobs_window_is_on_the_failure_time(self):
         conn = ImportConnection.objects.create(
             owner=self.user, provider="webdav", label="NC"
         )
         ImportJob.objects.create(
-            connection=conn, status=ImportJob.Status.FAILED, kinds=["files"]
+            connection=conn,
+            status=ImportJob.Status.FAILED,
+            kinds=["files"],
+            finished_at=timezone.now(),
         )
-        old = ImportJob.objects.create(
-            connection=conn, status=ImportJob.Status.FAILED, kinds=["files"]
-        )
-        ImportJob.objects.filter(pk=old.pk).update(
-            created_at=timezone.now() - timedelta(hours=25)
+        ImportJob.objects.create(
+            connection=conn,
+            status=ImportJob.Status.FAILED,
+            kinds=["files"],
+            finished_at=timezone.now() - timedelta(hours=25),
         )
         self.assertEqual(failed_import_job_count(None), 1)
 
@@ -144,6 +159,21 @@ class DashboardCallbackTests(TestCase):
         self.assertEqual(by_title["Mail sync errors"]["tone"], "danger")
         self.assertEqual(by_title["Parked thumbnails"]["value"], 0)
         self.assertEqual(by_title["Parked thumbnails"]["tone"], "success")
+
+    def test_cards_link_to_the_error_filtered_change_lists(self):
+        request = RequestFactory().get("/admin/")
+        request.user = self.admin
+
+        by_title = {
+            card["title"]: card["url"]
+            for card in dashboard_callback(request, {})["health_cards"]
+        }
+        self.assertIn("?sync=error&is_active__exact=1", by_title["Mail sync errors"])
+        self.assertIn(
+            "?sync=error&is_active__exact=1", by_title["Calendar sync errors"]
+        )
+        self.assertIn("?status__exact=failed", by_title["Failed AI tasks"])
+        self.assertIn("?status__exact=failed", by_title["Failed imports"])
 
     def test_admin_index_renders_the_cards(self):
         self.client.force_login(self.admin)

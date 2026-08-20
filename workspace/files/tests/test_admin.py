@@ -31,7 +31,14 @@ class FilesAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "broken.jpg")
 
-    def test_retry_action_unparks_and_queues_generation(self):
+    def test_retry_action_unparks_the_selection_only(self):
+        other_file = File.objects.create(
+            owner=self.admin, name="also-broken.jpg", node_type=File.NodeType.FILE
+        )
+        other_failure = ThumbnailFailure.objects.create(
+            file=other_file, attempts=1, last_attempt_at=timezone.now()
+        )
+
         with patch("workspace.files.tasks.generate_thumbnails.delay") as delay:
             response = self.client.post(
                 reverse("admin:files_thumbnailfailure_changelist"),
@@ -41,7 +48,7 @@ class FilesAdminTests(TestCase):
                 },
             )
         self.assertEqual(response.status_code, 302)
-        self.assertFalse(ThumbnailFailure.objects.exists())
+        self.assertQuerySetEqual(ThumbnailFailure.objects.all(), [other_failure])
         delay.assert_called_once()
 
     def test_failure_rows_cannot_be_added_by_hand(self):

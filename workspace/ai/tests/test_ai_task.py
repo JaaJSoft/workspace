@@ -11,17 +11,26 @@ User = get_user_model()
 
 
 class FailedTaskCountTests(TestCase):
-    def test_counts_failed_tasks_inside_the_window_only(self):
+    def test_counts_tasks_that_failed_inside_the_window_only(self):
         user = User.objects.create_user(username="counter", password="pw")
-        AITask.objects.create(owner=user, task_type="chat", status=AITask.Status.FAILED)
-        old = AITask.objects.create(
-            owner=user, task_type="chat", status=AITask.Status.FAILED
+        AITask.objects.create(
+            owner=user,
+            task_type="chat",
+            status=AITask.Status.FAILED,
+            completed_at=timezone.now(),
         )
-        AITask.objects.filter(pk=old.pk).update(
-            created_at=timezone.now() - timedelta(hours=25)
+        # Failed long ago: outside the window even though the row still exists.
+        AITask.objects.create(
+            owner=user,
+            task_type="chat",
+            status=AITask.Status.FAILED,
+            completed_at=timezone.now() - timedelta(hours=25),
         )
         AITask.objects.create(
-            owner=user, task_type="chat", status=AITask.Status.COMPLETED
+            owner=user,
+            task_type="chat",
+            status=AITask.Status.COMPLETED,
+            completed_at=timezone.now(),
         )
 
         since = timezone.now() - timedelta(hours=24)

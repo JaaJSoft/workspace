@@ -17,6 +17,25 @@ from .services.imap_sync import queue_account_syncs
 from .services.rules.management import set_rules_enabled
 
 
+class SyncHealthFilter(admin.SimpleListFilter):
+    """Partition accounts the way the ``sync_health`` column colors them."""
+
+    title = "sync health"
+    parameter_name = "sync"
+
+    def lookups(self, request, model_admin):
+        return [("error", "Error"), ("ok", "OK"), ("never", "Never synced")]
+
+    def queryset(self, request, queryset):
+        if self.value() == "error":
+            return queryset.exclude(last_sync_error="")
+        if self.value() == "ok":
+            return queryset.filter(last_sync_error="", last_sync_at__isnull=False)
+        if self.value() == "never":
+            return queryset.filter(last_sync_error="", last_sync_at__isnull=True)
+        return queryset
+
+
 @admin.register(MailAccount)
 class MailAccountAdmin(ModelAdmin):
     list_display = (
@@ -28,7 +47,7 @@ class MailAccountAdmin(ModelAdmin):
         "last_sync_at",
         "created_at",
     )
-    list_filter = ("is_active", "auth_method")
+    list_filter = ("is_active", "auth_method", SyncHealthFilter)
     list_select_related = ("owner",)
     search_fields = ("email", "display_name", "owner__username")
     autocomplete_fields = ("owner",)

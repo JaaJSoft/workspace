@@ -131,6 +131,25 @@ class PollInviteeAdmin(ModelAdmin):
     autocomplete_fields = ["user", "poll"]
 
 
+class SyncHealthFilter(admin.SimpleListFilter):
+    """Partition feeds the way the ``sync_health`` column colors them."""
+
+    title = "sync health"
+    parameter_name = "sync"
+
+    def lookups(self, request, model_admin):
+        return [("error", "Error"), ("ok", "OK"), ("never", "Never synced")]
+
+    def queryset(self, request, queryset):
+        if self.value() == "error":
+            return queryset.exclude(last_error="")
+        if self.value() == "ok":
+            return queryset.filter(last_error="", last_synced_at__isnull=False)
+        if self.value() == "never":
+            return queryset.filter(last_error="", last_synced_at__isnull=True)
+        return queryset
+
+
 @admin.register(ExternalCalendar)
 class ExternalCalendarAdmin(ModelAdmin):
     list_display = (
@@ -141,7 +160,7 @@ class ExternalCalendarAdmin(ModelAdmin):
         "last_synced_at",
         "last_error",
     )
-    list_filter = ("is_active",)
+    list_filter = ("is_active", SyncHealthFilter)
     list_select_related = ("calendar",)
     search_fields = ("calendar__name", "url")
     readonly_fields = ("last_synced_at", "last_etag", "last_error")

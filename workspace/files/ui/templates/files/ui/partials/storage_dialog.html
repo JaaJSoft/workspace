@@ -9,7 +9,7 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
      @ajax:merged="loading = false; hasContent = true; syncScope()"
      @ajax:error="loading = false; if (window.AppAlert) AppAlert.error('Failed to analyze storage')">
   <dialog x-ref="dialog" class="modal" @close="onClose()">
-    <div class="modal-box max-w-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+    <div class="modal-box max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
       <div class="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-base-300">
         <div class="bg-primary/10 rounded-lg p-2">
           <i data-lucide="chart-pie" class="w-5 h-5 text-primary"></i>
@@ -40,7 +40,7 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
             <div class="h-4 w-40 rounded bg-base-300"></div>
             <div class="h-3 w-24 rounded bg-base-300 ml-auto"></div>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-base-300 rounded-box overflow-hidden">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-base-300 rounded-box overflow-hidden">
             <div class="bg-base-200 p-4 space-y-2"><div class="h-3 w-12 rounded bg-base-300"></div><div class="h-6 w-24 rounded bg-base-300"></div></div>
             <div class="bg-base-200 p-4 space-y-2"><div class="h-3 w-16 rounded bg-base-300"></div><div class="h-6 w-20 rounded bg-base-300"></div></div>
             <div class="bg-base-200 p-4 space-y-2"><div class="h-3 w-20 rounded bg-base-300"></div><div class="h-6 w-10 rounded bg-base-300"></div></div>

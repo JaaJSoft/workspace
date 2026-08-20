@@ -89,8 +89,18 @@ function initLucideIconsInElement(element) {
 
 /**
  * Observer-based Lucide initialization.
- * Watches for DOM changes and automatically initializes new Lucide icons.
- * Only processes newly added nodes (not a full DOM rescan).
+ * Watches for DOM changes and automatically renders Lucide icons: newly
+ * added `<i data-lucide>` nodes, and existing icons whose `data-lucide`
+ * value changes in place (a reactive Alpine `:data-lucide` binding only
+ * rewrites the attribute on the already-drawn svg - without this the drawn
+ * paths silently freeze on their initial state).
+ *
+ * Renders are scoped: each changed element queues its parent container and
+ * a debounced `createIcons({ root: container })` re-renders every
+ * `[data-lucide]` element inside - including already-hydrated svgs, which
+ * Lucide rebuilds from the current attribute value. (Lucide has no
+ * per-node API: an unknown option like `nodes` is ignored and would fall
+ * back to a full-document scan.)
  *
  * @param {HTMLElement} root - The root element to observe (default: document.body)
  * @returns {Function} A function to disconnect the observer
@@ -100,32 +110,58 @@ function observeLucideIcons(root = document.body) {
     return () => {};
   }
 
+  let stale = new Set();
   let pending = null;
 
   const observer = new MutationObserver((mutations) => {
-    const icons = [];
     for (const mutation of mutations) {
+      if (mutation.type === 'attributes') {
+        const el = mutation.target;
+        const name = el.getAttribute('data-lucide');
+        // Re-hydration re-sets data-lucide to the value it already has
+        // (Lucide copies it onto the created svg, Alpine re-binds it); the
+        // old-value comparison is what breaks that re-processing cycle.
+        if (name === null || name === mutation.oldValue) continue;
+        if (mutation.oldValue && el instanceof SVGElement) {
+          // Lucide merges the stale svg's classes into its replacement, so
+          // the old icon-name class would pile up across re-renders.
+          el.classList.remove(`lucide-${mutation.oldValue}`);
+        }
+        if (el.parentElement) stale.add(el.parentElement);
+        continue;
+      }
       for (const node of mutation.addedNodes) {
         if (node.nodeType !== 1) continue;
         // Skip SVG elements — Lucide copies data-lucide onto created <svg>,
         // so without this check we'd re-process them in an infinite loop.
         if (node instanceof SVGElement) continue;
-        if (node.hasAttribute?.('data-lucide')) icons.push(node);
-        const nested = node.querySelectorAll?.('[data-lucide]:not(svg)');
-        if (nested) icons.push(...nested);
+        if (node.hasAttribute?.('data-lucide') || node.querySelector?.('[data-lucide]:not(svg)')) {
+          // querySelectorAll(root) never matches the root itself, so an
+          // icon placeholder needs its parent as the render container.
+          stale.add(node.parentElement ?? node);
+        }
       }
     }
-    if (!icons.length) return;
+    if (!stale.size || pending) return;
 
-    // Debounce: batch multiple rapid mutations into one createIcons call
-    if (pending) cancelAnimationFrame(pending);
+    // Debounce: batch multiple rapid mutations into one render pass
     pending = requestAnimationFrame(() => {
-      lucide.createIcons({ nodes: icons });
+      const containers = stale;
+      stale = new Set();
       pending = null;
+      for (const container of containers) {
+        if (container.isConnected) lucide.createIcons({ root: container });
+      }
     });
   });
 
-  observer.observe(root, { childList: true, subtree: true });
+  observer.observe(root, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['data-lucide'],
+    attributeOldValue: true,
+  });
   return () => observer.disconnect();
 }
 

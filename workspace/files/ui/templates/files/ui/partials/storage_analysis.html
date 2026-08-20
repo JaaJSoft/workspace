@@ -40,14 +40,14 @@ Context (built by files.ui.views.storage):
   </div>
 
   <!-- Stat tiles -->
-  <div class="stats stats-vertical sm:stats-horizontal bg-base-200 w-full shadow-sm">
+  <div class="stats stats-vertical md:stats-horizontal bg-base-200 w-full shadow-sm">
     <div class="stat py-3">
       <div class="stat-figure text-primary"><i data-lucide="hard-drive" class="w-6 h-6"></i></div>
       <div class="stat-title">Used</div>
       <div class="stat-value text-2xl">{{ analysis.total_size|filesizeformat }}</div>
       {% if analysis.quota %}
       <div class="stat-desc">
-        <div class="flex items-center gap-2 mt-1">
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
           <progress class="progress {% if quota_percent >= 90 %}progress-error{% elif quota_percent >= 70 %}progress-warning{% else %}progress-primary{% endif %} w-24 h-1.5" value="{{ quota_percent|unlocalize }}" max="100"></progress>
           <span>{{ quota_percent }}% of {{ analysis.quota|filesizeformat }}</span>
         </div>
@@ -59,7 +59,7 @@ Context (built by files.ui.views.storage):
       <div class="stat-figure text-error"><i data-lucide="trash-2" class="w-6 h-6"></i></div>
       <div class="stat-title">In trash</div>
       <div class="stat-value text-2xl">{{ analysis.trash.size|filesizeformat }}</div>
-      <div class="stat-desc flex items-center gap-2">
+      <div class="stat-desc flex flex-wrap items-center gap-x-2 gap-y-1">
         <span>{{ analysis.trash.count }} file{{ analysis.trash.count|pluralize }}</span>
         {% if can_empty_trash and analysis.trash.count %}
         <button type="button" class="btn btn-error btn-outline btn-xs" @click="emptyTrash()" :disabled="busy">Empty trash</button>

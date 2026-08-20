@@ -13,6 +13,8 @@ UNFOLD = {
     "SITE_HEADER": "Workspace",
     "SITE_SUBHEADER": "Administration",
     "SITE_SYMBOL": "workspaces",
+    "ENVIRONMENT": "workspace.core.services.admin_dashboard.environment_callback",
+    "DASHBOARD_CALLBACK": "workspace.core.services.admin_dashboard.dashboard_callback",
     "COMMAND": {
         "search_models": True,
     },
@@ -68,6 +70,7 @@ UNFOLD = {
                         "title": "Thumbnail failures",
                         "icon": "broken_image",
                         "link": reverse_lazy("admin:files_thumbnailfailure_changelist"),
+                        "badge": "workspace.core.services.admin_dashboard.thumbnail_failure_badge",
                     },
                 ],
             },
@@ -100,6 +103,7 @@ UNFOLD = {
                         "title": "Accounts",
                         "icon": "alternate_email",
                         "link": reverse_lazy("admin:mail_mailaccount_changelist"),
+                        "badge": "workspace.core.services.admin_dashboard.mail_sync_error_badge",
                     },
                     {
                         "title": "Messages",
@@ -138,6 +142,7 @@ UNFOLD = {
                         "link": reverse_lazy(
                             "admin:calendar_externalcalendar_changelist"
                         ),
+                        "badge": "workspace.core.services.admin_dashboard.external_calendar_error_badge",
                     },
                     {
                         "title": "Polls",
@@ -154,6 +159,7 @@ UNFOLD = {
                         "title": "Tasks",
                         "icon": "neurology",
                         "link": reverse_lazy("admin:ai_aitask_changelist"),
+                        "badge": "workspace.core.services.admin_dashboard.failed_ai_task_badge",
                     },
                     {
                         "title": "Bot profiles",
@@ -164,6 +170,62 @@ UNFOLD = {
                         "title": "Conversation summaries",
                         "icon": "summarize",
                         "link": reverse_lazy("admin:ai_conversationsummary_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": "Projects",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Projects",
+                        "icon": "view_kanban",
+                        "link": reverse_lazy("admin:projects_project_changelist"),
+                    },
+                    {
+                        "title": "Tasks",
+                        "icon": "task_alt",
+                        "link": reverse_lazy("admin:projects_task_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": "Imports",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Connections",
+                        "icon": "cloud_download",
+                        "link": reverse_lazy(
+                            "admin:imports_importconnection_changelist"
+                        ),
+                    },
+                    {
+                        "title": "Jobs",
+                        "icon": "sync",
+                        "link": reverse_lazy("admin:imports_importjob_changelist"),
+                        "badge": "workspace.core.services.admin_dashboard.failed_import_job_badge",
+                    },
+                ],
+            },
+            {
+                "title": "Vault",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Vaults",
+                        "icon": "lock",
+                        "link": reverse_lazy("admin:vault_vault_changelist"),
+                    },
+                    {
+                        "title": "Entries",
+                        "icon": "password",
+                        "link": reverse_lazy("admin:vault_vaultentry_changelist"),
+                    },
+                    {
+                        "title": "Identities",
+                        "icon": "fingerprint",
+                        "link": reverse_lazy("admin:vault_accountidentity_changelist"),
                     },
                 ],
             },

@@ -14,22 +14,25 @@ from .models import APITokenLabel, UserPresence, UserSetting
 class UserPresenceAdmin(ModelAdmin):
     list_display = ("user", "last_seen", "last_activity", "manual_status")
     list_filter = ("last_seen", "manual_status")
+    list_select_related = ("user",)
     search_fields = ("user__username", "user__email")
-    raw_id_fields = ("user",)
+    autocomplete_fields = ("user",)
 
 
 @admin.register(UserSetting)
 class UserSettingAdmin(ModelAdmin):
     list_display = ("user", "module", "key", "value", "updated_at")
     list_filter = ("module",)
+    list_select_related = ("user",)
     search_fields = ("user__username", "key")
-    raw_id_fields = ("user",)
+    autocomplete_fields = ("user",)
     readonly_fields = ("uuid", "created_at", "updated_at")
 
 
 @admin.register(APITokenLabel)
 class APITokenLabelAdmin(ModelAdmin):
     list_display = ("name", "auth_token")
+    list_select_related = ("auth_token",)
     search_fields = ("name",)
     raw_id_fields = ("auth_token",)
     readonly_fields = ("uuid",)
@@ -50,6 +53,12 @@ class UserAdmin(DjangoUserAdmin, ModelAdmin):
     form = UserChangeForm
     add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm
+    list_display = (
+        *DjangoUserAdmin.list_display,
+        "is_active",
+        "last_login",
+        "date_joined",
+    )
 
 
 @admin.register(Group)

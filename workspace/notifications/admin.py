@@ -9,8 +9,9 @@ from .services.notifications import notify
 class NotificationAdmin(ModelAdmin):
     list_display = ("title", "recipient", "origin", "priority", "read_at", "created_at")
     list_filter = ("origin", "priority", "read_at")
+    list_select_related = ("recipient",)
     search_fields = ("title", "body", "recipient__username")
-    raw_id_fields = ("recipient", "actor")
+    autocomplete_fields = ("recipient", "actor")
     readonly_fields = ("uuid", "created_at")
     date_hierarchy = "created_at"
 
@@ -18,8 +19,9 @@ class NotificationAdmin(ModelAdmin):
 @admin.register(PushSubscription)
 class PushSubscriptionAdmin(ModelAdmin):
     list_display = ("user", "endpoint", "created_at")
+    list_select_related = ("user",)
     search_fields = ("user__username", "endpoint")
-    raw_id_fields = ("user",)
+    autocomplete_fields = ("user",)
     readonly_fields = ("uuid", "created_at")
     actions = ["send_test_push"]
 

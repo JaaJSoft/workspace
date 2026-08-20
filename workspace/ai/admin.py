@@ -2,6 +2,8 @@ from django import forms
 from django.contrib import admin
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
+from unfold.contrib.filters.admin import RangeDateTimeFilter
+from unfold.decorators import display
 
 from workspace.users.services.avatar import (
     delete_avatar,
@@ -47,7 +49,8 @@ class BotProfileAdmin(ModelAdmin):
         "user__last_name",
         "description",
     ]
-    raw_id_fields = ["user", "created_by"]
+    list_select_related = ["user", "created_by"]
+    autocomplete_fields = ["user", "created_by"]
     readonly_fields = ["created_at", "avatar_preview"]
     filter_horizontal = ["allowed_users", "allowed_groups"]
 
@@ -124,9 +127,9 @@ class BotProfileAdmin(ModelAdmin):
 @admin.register(ConversationSummary)
 class ConversationSummaryAdmin(ModelAdmin):
     list_display = ("conversation", "up_to", "content_preview", "updated_at")
+    list_select_related = ("conversation",)
     search_fields = ("conversation__title", "content")
     readonly_fields = ("conversation", "up_to", "content", "updated_at")
-    raw_id_fields = ()
 
     @admin.display(description="Summary")
     def content_preview(self, obj):
@@ -134,13 +137,22 @@ class ConversationSummaryAdmin(ModelAdmin):
             return "—"
         return obj.content[:120] + "…" if len(obj.content) > 120 else obj.content
 
+    # Summaries are produced and refreshed by the summarizer task; a
+    # hand-edited row would desync from `up_to`. Deletion stays open - the
+    # next pass rebuilds it.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(AITask)
 class AITaskAdmin(ModelAdmin):
     list_display = [
         "uuid",
         "task_type",
-        "status",
+        "status_badge",
         "owner",
         "model_used",
         "prompt_tokens",
@@ -148,8 +160,27 @@ class AITaskAdmin(ModelAdmin):
         "created_at",
         "completed_at",
     ]
-    list_filter = ["task_type", "status", "model_used"]
+    list_filter = [
+        "task_type",
+        "status",
+        "model_used",
+        ("created_at", RangeDateTimeFilter),
+    ]
+    list_filter_submit = True
+    list_select_related = ["owner"]
     search_fields = ["uuid", "owner__username", "result", "error"]
-    raw_id_fields = ["owner", "chat_message"]
+    autocomplete_fields = ["owner", "chat_message"]
     readonly_fields = ["uuid", "created_at", "raw_messages"]
     date_hierarchy = "created_at"
+
+    @display(
+        description="Status",
+        label={
+            AITask.Status.PENDING: "info",
+            AITask.Status.PROCESSING: "warning",
+            AITask.Status.COMPLETED: "success",
+            AITask.Status.FAILED: "danger",
+        },
+    )
+    def status_badge(self, obj):
+        return obj.status

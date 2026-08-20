@@ -36,6 +36,12 @@ def _user_chat_groups(user):
     return [{"id": g.pk, "name": g.name} for g in user.groups.order_by("name")]
 
 
+def _chat_prefs(user):
+    """Chat preferences shaped for json_script, guarded against non-dict values."""
+    prefs = get_setting(user, "chat", "preferences", default={})
+    return prefs if isinstance(prefs, dict) else {}
+
+
 def _build_conversation_context(user, conversation_uuids=None):
     """Build conversation list with display data for templates.
 
@@ -171,6 +177,7 @@ def chat_view(request, conversation_uuid=None):
             "call_sounds_enabled": get_setting(
                 request.user, "chat", "call_sounds", default=True
             ),
+            "chat_prefs": _chat_prefs(request.user),
             "chat_groups": _user_chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
@@ -233,6 +240,7 @@ def chat_room_view(request, conversation_uuid):
             "call_sounds_enabled": get_setting(
                 request.user, "chat", "call_sounds", default=True
             ),
+            "chat_prefs": _chat_prefs(request.user),
             "current_user_id": request.user.id,
             "chat_groups": _user_chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,

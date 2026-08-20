@@ -152,7 +152,10 @@ x-data="chatApp({{ user.id }})"
           </button>
         </label>
       </div>
-      <div class="flex-1 overflow-y-auto py-4 px-3">
+      {% comment %}The cloak wrapper stays outside the #conversation-list swap
+      target so alpine-ajax refreshes never re-hide the list; "invisible" keeps
+      its space reserved while Alpine boots.{% endcomment %}
+      <div class="flex-1 overflow-y-auto py-4 px-3" x-cloak="invisible">
         {% include "chat/ui/partials/conversation_list.html" %}
       </div>
     </div>
@@ -227,6 +230,9 @@ x-data="chatApp({{ user.id }})"
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+<!-- Initial preferences embedded server-side so JS doesn't need to fetch
+     /api/v1/settings/chat/preferences on page load. -->
+{{ chat_prefs|json_script:"chat-prefs-data" }}
 <script src="{% static 'chat/ui/js/chat_preferences.js' %}"></script>
 <script src="{% static 'chat/ui/js/conversations.js' %}"></script>
 <script src="{% static 'chat/ui/js/message_shell.js' %}"></script>

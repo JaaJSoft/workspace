@@ -143,7 +143,7 @@ def _ensure_default_folders(user):
 @login_required
 @ensure_csrf_cookie
 def index(request):
-    _ensure_default_folders(request.user)
+    notes_prefs, _ = _ensure_default_folders(request.user)
     context = _sidebar_context(request.user)
 
     if request.headers.get("X-Alpine-Request"):
@@ -164,5 +164,6 @@ def index(request):
     context["initial_view"] = view
     context["initial_id"] = request.GET.get("folder") or request.GET.get("tag") or ""
     context["initial_file"] = request.GET.get("file", "")
+    context["notes_prefs"] = notes_prefs
 
     return render(request, "notes/ui/notes.html", context)

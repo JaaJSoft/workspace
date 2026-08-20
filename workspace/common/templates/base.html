@@ -54,8 +54,16 @@
   <meta name="theme-color" content="#111827"/>
 
   <style>
-    [x-cloak] {
+    [x-cloak]:not([x-cloak="invisible"]) {
       display: none !important;
+    }
+
+    /* x-cloak="invisible" hides the raw pre-Alpine state like x-cloak, but
+       keeps the element's box in the layout so surrounding elements (sidebar
+       widths, flex siblings) don't jump when Alpine uncloaks it. Alpine
+       removes the attribute regardless of its value. */
+    [x-cloak="invisible"] {
+      visibility: hidden !important;
     }
 
     /* <inline-alert> styles itself when ui/js/inline_alert.js (end of body)

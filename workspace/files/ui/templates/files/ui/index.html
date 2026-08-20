@@ -54,8 +54,10 @@
       </div>
     </div>
 
-    <!-- Quick Access -->
-    <div class="flex-1 overflow-y-auto py-2" :class="collapsed ? 'px-2' : 'px-3'">
+    <!-- Quick Access. The cloak wrapper stays outside the swap targets inside
+         (group-folders-section, pinned list) so alpine-ajax refreshes never
+         re-hide them; "invisible" keeps the space reserved while Alpine boots. -->
+    <div class="flex-1 overflow-y-auto py-2" :class="collapsed ? 'px-2' : 'px-3'" x-cloak="invisible">
       <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
           :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-1 opacity-100'"
           :aria-hidden="collapsed">

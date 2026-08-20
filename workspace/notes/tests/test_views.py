@@ -1,5 +1,8 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
+
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -8,6 +11,9 @@ class NotesIndexViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="iv", password="p")
         self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
 
     def test_graph_view_is_preserved(self):
         # Reloading (F5) on the graph view must restore it, not fall back to
@@ -35,3 +41,13 @@ class NotesIndexViewTests(TestCase):
         # template would produce duplicate ids and break the swap targeting.
         resp = self.client.get("/notes")
         self.assertEqual(resp.content.decode().count('id="notes-sidebar"'), 1)
+
+    def test_full_page_embeds_the_stored_prefs_for_the_first_paint(self):
+        # notes.js seeds its cache synchronously from this json_script -
+        # without it the first Alpine paint falls back to the defaults and
+        # reshuffles once a fetch lands.
+        set_setting(self.user, "notes", "preferences", {"showTags": False})
+        resp = self.client.get("/notes")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="notes-prefs-data"')
+        self.assertEqual(resp.context["notes_prefs"]["showTags"], False)

@@ -62,8 +62,13 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
       </div>
     </div>
 
-    <!-- Sidebar content (the partial renders its own #notes-sidebar wrapper) -->
-    {% include "notes/ui/partials/sidebar.html" %}
+    <!-- Sidebar content (the partial renders its own #notes-sidebar wrapper).
+         The cloak wrapper stays outside the alpine-ajax swap target so refreshes
+         never re-hide the sidebar; "invisible" keeps its space reserved while
+         Alpine boots instead of collapsing the aside. -->
+    <div class="flex-1 min-h-0 flex flex-col" x-cloak="invisible">
+      {% include "notes/ui/partials/sidebar.html" %}
+    </div>
 
     <!-- Help button -->
     <div class="px-3 pb-2">
@@ -253,6 +258,9 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
 {% endblock %}
 
 {% block extra_scripts %}
+<!-- Initial preferences embedded server-side so JS doesn't need to fetch
+     /api/v1/settings/notes/preferences on page load. -->
+{{ notes_prefs|json_script:"notes-prefs-data" }}
 <script src="{% static 'ui/js/icon_picker.js' %}"></script>
 <script src="{% static 'files/ui/js/file_lock.js' %}"></script>
 <script src="{% static 'files/ui/js/file_actions.js' %}"></script>

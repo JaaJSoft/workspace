@@ -1,5 +1,11 @@
 from django.contrib import admin
+from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.contrib.auth.models import Group, User
+from knox.admin import AuthTokenAdmin as KnoxAuthTokenAdmin
+from knox.models import AuthToken
 from unfold.admin import ModelAdmin
+from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
 from .models import APITokenLabel, UserPresence, UserSetting
 
@@ -27,3 +33,30 @@ class APITokenLabelAdmin(ModelAdmin):
     search_fields = ("name",)
     raw_id_fields = ("auth_token",)
     readonly_fields = ("uuid",)
+
+
+# The User, Group and knox AuthToken admins are registered by their own apps
+# on the plain django.contrib.admin.ModelAdmin, which unfold leaves unstyled.
+# Re-register them on unfold bases; this module loads after those apps
+# (INSTALLED_APPS order drives admin autodiscovery), so the unregister calls
+# are safe.
+admin.site.unregister(User)
+admin.site.unregister(Group)
+admin.site.unregister(AuthToken)
+
+
+@admin.register(User)
+class UserAdmin(DjangoUserAdmin, ModelAdmin):
+    form = UserChangeForm
+    add_form = UserCreationForm
+    change_password_form = AdminPasswordChangeForm
+
+
+@admin.register(Group)
+class GroupAdmin(DjangoGroupAdmin, ModelAdmin):
+    pass
+
+
+@admin.register(AuthToken)
+class AuthTokenAdmin(KnoxAuthTokenAdmin, ModelAdmin):
+    pass

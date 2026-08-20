@@ -40,6 +40,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `mail` | IMAP/SMTP, OAuth2 providers, labels, autodiscover |
 | `notes` | Markdown notes built on the files module |
 | `notifications` | Web push, in-app notifications |
+| `projects` | Projects and kanban boards: tasks, statuses, members, comments, task references |
 | `users` | User model, settings, profile, activity feed |
 | `vault` | End-to-end encrypted password vault (preview) |
 
@@ -350,6 +351,26 @@ perm = FileService.get_permission(user, file_obj)
 if FileService.can_access(user, file_obj):
     ...
 ```
+
+#### Projects - `workspace.projects.queries`
+
+```python
+from workspace.projects.queries import get_project_role, project_users, user_project_ids
+
+# Projects the user can access (active membership OR attached auth.Group):
+project_ids = user_project_ids(user)
+
+# Admin-only narrowing (group access never grants admin):
+admin_ids = user_project_ids(user, role='admin')
+
+# Single-project role check - returns 'admin', 'member', or None:
+role = get_project_role(user, project)
+
+# Reverse direction - all users who can access a project (members + group members):
+users = project_users(project)
+```
+
+Task-level queries filter with `project_id__in=user_project_ids(user)` - see `tasks_due_between` / `assigned_open_tasks` in the same module for the canonical pattern (they also exclude archived projects and done statuses).
 
 #### Vault - `workspace.vault.queries`
 

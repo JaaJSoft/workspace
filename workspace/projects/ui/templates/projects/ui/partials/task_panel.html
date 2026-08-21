@@ -398,17 +398,20 @@
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Linked tasks</h3>
       <ul class="flex flex-col gap-1.5 mb-2" x-show="links.length" x-cloak>
         <template x-for="link in links" :key="link.uuid">
+          {# items-baseline, not items-center: the smaller label and mono #}
+          {# reference would paint high against the text-sm title; the #}
+          {# remove button opts back out via self-center. #}
           <li
-            class="flex items-center gap-2 min-w-0 rounded-lg border border-base-300/60 bg-base-200/40 px-2.5 py-1.5"
+            class="flex items-baseline gap-2 min-w-0 rounded-lg border border-base-300/60 bg-base-200/40 px-2.5 py-1.5"
           >
             <span class="text-xs text-base-content/60 shrink-0" x-text="link.label"></span>
             <a
               :href="link.task.url"
-              class="group flex items-center gap-2 min-w-0"
+              class="group flex items-baseline gap-2 min-w-0"
               @click.prevent="openLinkedTask(link.task)"
             >
               <span
-                class="badge badge-ghost badge-sm font-mono shrink-0"
+                class="font-mono text-xs text-base-content/50 shrink-0"
                 x-text="link.task.reference"
               ></span>
               <span
@@ -419,7 +422,7 @@
             </a>
             <button
               type="button"
-              class="btn btn-ghost btn-xs btn-square ml-auto shrink-0"
+              class="btn btn-ghost btn-xs btn-square ml-auto self-center shrink-0"
               x-show="can('link')"
               @click="removeLink(link.uuid)"
               aria-label="Remove link"
@@ -483,11 +486,11 @@
                   <li class="w-full min-w-0">
                     <button
                       type="button"
-                      class="flex w-full min-w-0 items-center gap-2 rounded"
+                      class="flex w-full min-w-0 items-baseline gap-2 rounded"
                       @click="addLink(result)"
                     >
                       <span
-                        class="badge badge-ghost badge-sm font-mono shrink-0"
+                        class="font-mono text-xs text-base-content/50 shrink-0"
                         x-text="result.reference"
                       ></span>
                       <span class="text-sm min-w-0 truncate" x-text="result.title"></span>

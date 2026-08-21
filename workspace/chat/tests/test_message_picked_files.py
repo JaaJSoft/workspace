@@ -14,7 +14,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.chat.models import Conversation, ConversationMember, MessageAttachment
-from workspace.files.models import File, FileShare
+from workspace.files.models import FileShare
 from workspace.files.services import FileService
 
 User = get_user_model()

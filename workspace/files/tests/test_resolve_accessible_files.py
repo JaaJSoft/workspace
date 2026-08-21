@@ -67,9 +67,7 @@ class ResolveAccessibleFilesTests(TestCase):
         owned = self._make_file(self.user)
         owned.deleted_at = timezone.now()
         owned.save(update_fields=["deleted_at"])
-        self.assertIsNone(
-            FileService.resolve_accessible_files(self.user, [owned.uuid])
-        )
+        self.assertIsNone(FileService.resolve_accessible_files(self.user, [owned.uuid]))
 
     def test_folder_returns_none(self):
         folder = FileService.create_folder(self.user, "Stuff")

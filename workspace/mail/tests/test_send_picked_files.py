@@ -67,9 +67,7 @@ class SendPickedFilesTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         server.sendmail.assert_called_once()
         outgoing = message_from_string(server.sendmail.call_args[0][2])
-        parts = [
-            p for p in outgoing.walk() if p.get_filename() == "report.txt"
-        ]
+        parts = [p for p in outgoing.walk() if p.get_filename() == "report.txt"]
         self.assertEqual(len(parts), 1)
         self.assertEqual(parts[0].get_payload(decode=True), b"quarterly numbers")
 

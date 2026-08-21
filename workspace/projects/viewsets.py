@@ -12,7 +12,6 @@ from rest_framework.response import Response
 
 from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
-
 from workspace.files.services import FileService
 
 from .models import (
@@ -813,7 +812,5 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         if link is None:
             raise Http404
         link.delete()
-        record_task_event(
-            self.task, type=TaskEvent.Type.DETACHED, actor=request.user
-        )
+        record_task_event(self.task, type=TaskEvent.Type.DETACHED, actor=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)

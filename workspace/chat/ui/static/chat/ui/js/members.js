@@ -93,6 +93,8 @@ window.chatMembersMixin = function chatMembersMixin() {
         message: 'This will permanently delete all messages and media in this conversation. This cannot be undone.',
         okLabel: 'Clear all',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
 
@@ -125,6 +127,8 @@ window.chatMembersMixin = function chatMembersMixin() {
         message: 'Are you sure you want to leave this conversation?',
         okLabel: 'Leave',
         okClass: 'btn-error',
+        icon: 'log-out',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
 
@@ -258,6 +262,8 @@ window.chatMembersMixin = function chatMembersMixin() {
         message: `Remove ${name} from this group?`,
         okLabel: 'Remove',
         okClass: 'btn-error',
+        icon: 'user-minus',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
 
@@ -369,6 +375,8 @@ window.chatMembersMixin = function chatMembersMixin() {
         message: 'Remove the group avatar?',
         okLabel: 'Remove',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
 

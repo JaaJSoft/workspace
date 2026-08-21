@@ -497,6 +497,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         message: 'Are you sure you want to delete this message?',
         okLabel: 'Delete',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
 

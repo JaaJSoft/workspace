@@ -248,7 +248,9 @@ window.fileBrowser = function fileBrowser() {
           title: `Delete ${nodeType}?`,
           message: `Move "${name}" to trash?${nodeType === 'folder' ? ' This will also move all contents.' : ''}`,
           okLabel: 'Move to trash',
-          okClass: 'btn-error'
+          okClass: 'btn-error',
+          icon: 'trash-2',
+          iconClass: 'bg-error/10 text-error'
         });
         if (!confirmed) return;
       }
@@ -762,7 +764,9 @@ window.fileBrowser = function fileBrowser() {
         title: `Restore ${nodeType}?`,
         message: `Restore "${name}" from trash?`,
         okLabel: 'Restore',
-        okClass: 'btn-primary'
+        okClass: 'btn-primary',
+        icon: 'rotate-ccw',
+        iconClass: 'bg-primary/10 text-primary'
       });
       if (confirmed) {
         this.restoreItem(uuid);
@@ -796,7 +800,9 @@ window.fileBrowser = function fileBrowser() {
         title: `Delete ${nodeType} permanently?`,
         message: `This will permanently delete "${name}" and cannot be undone.`,
         okLabel: 'Delete permanently',
-        okClass: 'btn-error'
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error'
       });
       if (confirmed) {
         this.purgeItem(uuid);
@@ -830,7 +836,9 @@ window.fileBrowser = function fileBrowser() {
         title: 'Empty trash?',
         message: 'This will permanently delete all items in trash and cannot be undone.',
         okLabel: 'Empty trash',
-        okClass: 'btn-error'
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error'
       });
       if (confirmed) {
         this.cleanTrash(true);
@@ -924,10 +932,12 @@ window.fileBrowser = function fileBrowser() {
       if (window.getFilePrefs().confirmBeforeDelete) {
         const count = uuids.length;
         const confirmed = await AppDialog.confirm({
-          title: 'Delete Items',
-          message: `Are you sure you want to delete ${count} item${count > 1 ? 's' : ''}? They will be moved to trash.`,
-          confirmText: 'Delete',
-          confirmClass: 'btn-error'
+          title: `Delete ${count} item${count > 1 ? 's' : ''}?`,
+          message: `Move ${count} item${count > 1 ? 's' : ''} to trash? Folders will also move all their contents.`,
+          okLabel: 'Move to trash',
+          okClass: 'btn-error',
+          icon: 'trash-2',
+          iconClass: 'bg-error/10 text-error'
         });
         if (!confirmed) return;
       }
@@ -1007,7 +1017,9 @@ window.fileBrowser = function fileBrowser() {
         title: 'Restore items?',
         message: `Restore ${count} item${count > 1 ? 's' : ''} from trash?`,
         okLabel: 'Restore',
-        okClass: 'btn-primary'
+        okClass: 'btn-primary',
+        icon: 'rotate-ccw',
+        iconClass: 'bg-primary/10 text-primary'
       });
       if (!confirmed) return;
 
@@ -1051,7 +1063,9 @@ window.fileBrowser = function fileBrowser() {
         title: 'Delete permanently?',
         message: `This will permanently delete ${count} item${count > 1 ? 's' : ''} and cannot be undone.`,
         okLabel: 'Delete permanently',
-        okClass: 'btn-error'
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error'
       });
       if (!confirmed) return;
 

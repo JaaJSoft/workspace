@@ -274,6 +274,8 @@ window.chatBotMixin = function chatBotMixin() {
         message: `Delete memory "${mem.key}"?`,
         okLabel: 'Delete',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
       const resp = await fetch(`/api/v1/ai/memories/${mem.id}`, {
@@ -404,6 +406,8 @@ window.chatBotMixin = function chatBotMixin() {
         message: `Stop the goal "${goal.title}"? The bot will no longer work on it.`,
         okLabel: 'Stop',
         okClass: 'btn-error',
+        icon: 'octagon-x',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
       try {
@@ -492,6 +496,8 @@ window.chatBotMixin = function chatBotMixin() {
         message: 'Delete this scheduled message?',
         okLabel: 'Delete',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
       try {

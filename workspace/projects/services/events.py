@@ -1,7 +1,16 @@
 from ..models import TaskEvent, TaskStatus
 
 
-def record_task_event(task, *, type, actor=None, from_status=None, to_status=None):
+def record_task_event(
+    task,
+    *,
+    type,
+    actor=None,
+    from_status=None,
+    to_status=None,
+    from_value="",
+    to_value="",
+):
     """Insert one TaskEvent row, snapshotting the task title and status names."""
     return TaskEvent.objects.create(
         project=task.project,
@@ -12,6 +21,8 @@ def record_task_event(task, *, type, actor=None, from_status=None, to_status=Non
         type=type,
         from_status=from_status.name if from_status is not None else "",
         to_status=to_status.name if to_status is not None else "",
+        from_value=from_value,
+        to_value=to_value,
     )
 
 
@@ -52,9 +63,17 @@ def serialize_task_event(ev):
     description = ev.task_title
     if ev.task_number is not None:
         description = f"{ev.project.key}-{ev.task_number} · {ev.task_title}"
+    label = ev.short_label
+    if ev.type == TaskEvent.Type.ESTIMATED:
+        if ev.from_value and ev.to_value:
+            label = f"Estimate changed: {ev.from_value} → {ev.to_value}"
+        elif ev.to_value:
+            label = f"Estimate set to {ev.to_value}"
+        elif ev.from_value:
+            label = "Estimate removed"
     return {
         "icon": ev.icon,
-        "label": ev.short_label,
+        "label": label,
         "description": description,
         "timestamp": ev.created_at,
         "url": url,

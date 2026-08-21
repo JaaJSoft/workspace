@@ -293,3 +293,35 @@ class ProjectKeyApiTests(ProjectTestMixin, APITestCase):
             resp = self._patch(self.admin, {"key": other.key})
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.data["key"], ["Another project already uses this key."])
+
+
+class ProjectEstimateUnitApiTests(ProjectTestMixin, APITestCase):
+    def _patch(self, payload):
+        self.client.force_authenticate(self.admin)
+        return self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}", payload, format="json"
+        )
+
+    def test_defaults_to_disabled(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get(f"/api/v1/projects/{self.project.uuid}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["estimate_unit"], "")
+
+    def test_admin_picks_a_unit(self):
+        resp = self._patch({"estimate_unit": "points"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.estimate_unit, "points")
+
+    def test_blank_disables_estimation(self):
+        self.project.estimate_unit = "hours"
+        self.project.save(update_fields=["estimate_unit"])
+        resp = self._patch({"estimate_unit": ""})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.estimate_unit, "")
+
+    def test_unknown_unit_is_rejected(self):
+        resp = self._patch({"estimate_unit": "days"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

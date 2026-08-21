@@ -174,6 +174,36 @@ test('projectSettingsGeneral.save sends null for the always-visible preset', asy
   assert.strictEqual(body.done_retention_days, null);
 });
 
+test('projectSettingsGeneral.init reads the estimate unit', () => {
+  const c = generalWithData({
+    name: 'P', description: '', key: 'P1', done_retention_days: null,
+    estimate_unit: 'hours',
+  });
+  c.init();
+  assert.equal(c.estimateUnit, 'hours');
+});
+
+test('projectSettingsGeneral.init maps a missing estimate unit to disabled', () => {
+  const c = generalWithData({
+    name: 'P', description: '', key: 'P1', done_retention_days: null,
+  });
+  c.init();
+  assert.equal(c.estimateUnit, '');
+});
+
+test('projectSettingsGeneral.save sends the estimate unit', async () => {
+  let captured = null;
+  const c = generalWithFetch(async (url, options) => {
+    captured = { url, options };
+    return { ok: true };
+  });
+  c.name = 'P';
+  c.key = 'P1';
+  c.estimateUnit = 'points';
+  await c.save();
+  assert.equal(JSON.parse(captured.options.body).estimate_unit, 'points');
+});
+
 // Alpine treats destroy() as a lifecycle hook and auto-invokes it when the
 // element leaves the DOM (e.g. an alpine-ajax view swap). An action named
 // destroy() therefore fires on navigation - the delete-project dialog used

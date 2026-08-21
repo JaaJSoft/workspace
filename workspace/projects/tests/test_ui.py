@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -726,3 +727,109 @@ class BoardLabelSelectorTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(self.board(), 'x-show="labels.length"')
         self.client.force_login(self.admin)
         self.assertNotContains(self.board(), 'x-show="labels.length"')
+
+
+class BoardEstimateTotalsTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.todo = self.project.statuses.get(name="To do")
+        self.project.estimate_unit = "points"
+        self.project.save(update_fields=["estimate_unit"])
+        self.board_url = f"/projects/{self.project.uuid}/board"
+
+    def _todo_column(self, resp):
+        return next(c for c in resp.context["columns"] if c["status"] == self.todo)
+
+    def test_column_total_sums_the_estimates(self):
+        create_task(
+            self.project,
+            self.admin,
+            title="a",
+            status=self.todo,
+            estimate=Decimal("2"),
+        )
+        create_task(
+            self.project,
+            self.admin,
+            title="b",
+            status=self.todo,
+            estimate=Decimal("3.5"),
+        )
+        create_task(self.project, self.admin, title="c", status=self.todo)
+        self.client.force_login(self.member)
+        resp = self.client.get(self.board_url)
+        self.assertEqual(self._todo_column(resp)["estimate_total"], Decimal("5.5"))
+
+    def test_total_follows_the_active_filters(self):
+        create_task(
+            self.project,
+            self.admin,
+            title="a",
+            status=self.todo,
+            estimate=Decimal("2"),
+            priority="high",
+        )
+        create_task(
+            self.project,
+            self.admin,
+            title="b",
+            status=self.todo,
+            estimate=Decimal("3"),
+        )
+        self.client.force_login(self.member)
+        resp = self.client.get(self.board_url, {"priority": "high"})
+        self.assertEqual(self._todo_column(resp)["estimate_total"], Decimal("2"))
+
+    def test_label_filter_does_not_double_count(self):
+        # Repeated label filters join the same task once per matching label;
+        # the total must not sum the duplicated rows.
+        bug = self.project.labels.create(name="bug")
+        ui = self.project.labels.create(name="ui")
+        task = create_task(
+            self.project,
+            self.admin,
+            title="a",
+            status=self.todo,
+            estimate=Decimal("3"),
+        )
+        task.labels.set([bug, ui])
+        self.client.force_login(self.member)
+        resp = self.client.get(self.board_url, {"label": [str(bug.uuid), str(ui.uuid)]})
+        self.assertEqual(self._todo_column(resp)["estimate_total"], Decimal("3"))
+
+    def test_totals_zero_when_estimation_is_disabled(self):
+        self.project.estimate_unit = ""
+        self.project.save(update_fields=["estimate_unit"])
+        create_task(
+            self.project,
+            self.admin,
+            title="a",
+            status=self.todo,
+            estimate=Decimal("2"),
+        )
+        self.client.force_login(self.member)
+        resp = self.client.get(self.board_url)
+        self.assertEqual(self._todo_column(resp)["estimate_total"], 0)
+
+
+class BacklogEstimateTotalTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def test_backlog_total_sums_the_estimates(self):
+        self.project.estimate_unit = "hours"
+        self.project.save(update_fields=["estimate_unit"])
+        create_task(self.project, self.admin, title="a", estimate=Decimal("1.5"))
+        create_task(self.project, self.admin, title="b", estimate=Decimal("2"))
+        create_task(self.project, self.admin, title="c")
+        self.client.force_login(self.member)
+        resp = self.client.get(f"/projects/{self.project.uuid}/backlog")
+        self.assertEqual(resp.context["estimate_total"], Decimal("3.5"))
+
+
+class SettingsEstimateUnitContextTests(
+    SettingsCleanupMixin, ProjectTestMixin, TestCase
+):
+    def test_project_data_carries_the_unit(self):
+        self.project.estimate_unit = "points"
+        self.project.save(update_fields=["estimate_unit"])
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertEqual(resp.context["project_data"]["estimate_unit"], "points")

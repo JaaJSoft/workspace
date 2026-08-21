@@ -24,6 +24,7 @@ function fieldAction(field) {
     title: 'edit',
     description: 'edit',
     priority: 'edit',
+    estimate: 'edit',
     status: 'move',
     due_date: 'set_due',
     assignees: 'assign',
@@ -80,6 +81,7 @@ function emptyTaskForm() {
     status: '',
     priority: 'medium',
     due_date: '',
+    estimate: '',
     assignees: [],
     labels: [],
   };
@@ -742,6 +744,8 @@ function projectBoard(config) {
             status: this.form.status,
             priority: this.form.priority,
             due_date: this.form.due_date || null,
+            // '' means unestimated; '0' is a real estimate, hence no ||.
+            estimate: this.form.estimate === '' ? null : this.form.estimate,
             assignees: this.form.assignees,
             labels: this.form.labels,
           }),
@@ -770,6 +774,7 @@ function taskPanel() {
       status: '',
       priority: 'medium',
       due_date: '',
+      estimate: '',
       assignees: [],
       labels: [],
     },

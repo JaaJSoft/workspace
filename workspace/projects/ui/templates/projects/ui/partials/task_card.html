@@ -20,6 +20,7 @@
     {% endif %}
     <div class="flex items-center gap-2 text-xs text-base-content/60">
       {% include "projects/ui/partials/_priority_badge.html" %}
+      {% include "projects/ui/partials/_estimate_badge.html" %}
       {% if task.due_date %}
         <span
           class="flex items-center gap-1 {% if task.due_date < today %}text-error font-medium{% endif %}"

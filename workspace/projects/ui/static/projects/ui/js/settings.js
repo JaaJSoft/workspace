@@ -66,6 +66,8 @@ function projectSettingsGeneral(config) {
     key: '',
     // Select model: preset day count as a string, '' = always visible.
     doneRetentionDays: '',
+    // Select model: 'points' | 'hours', '' = estimation disabled.
+    estimateUnit: '',
     saving: false,
     saved: false,
     error: '',
@@ -80,6 +82,7 @@ function projectSettingsGeneral(config) {
       this.key = data.key;
       this.doneRetentionDays =
         data.done_retention_days == null ? '' : String(data.done_retention_days);
+      this.estimateUnit = data.estimate_unit || '';
     },
 
     retentionIndex() {
@@ -110,6 +113,7 @@ function projectSettingsGeneral(config) {
           key: normalizeProjectKey(this.key),
           done_retention_days:
             this.doneRetentionDays === '' ? null : Number(this.doneRetentionDays),
+          estimate_unit: this.estimateUnit,
         };
         const resp = await fetch(config.apiBase, {
           method: 'PATCH',

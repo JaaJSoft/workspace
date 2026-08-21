@@ -10,6 +10,10 @@ class Project(models.Model):
         PERSONAL = "personal", "Personal"
         KANBAN = "kanban", "Kanban"
 
+    class EstimateUnit(models.TextChoices):
+        POINTS = "points", "Story points"
+        HOURS = "hours", "Hours"
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
@@ -21,6 +25,12 @@ class Project(models.Model):
     # Days a completed task stays on the board's done columns; null = forever.
     # Board-only display filter: hidden tasks stay in counts, search and links.
     done_retention_days = models.PositiveIntegerField(null=True, blank=True)
+    # Unit task estimates are expressed in; empty = estimation disabled and
+    # no estimate UI anywhere. Switching units keeps the stored numbers and
+    # reinterprets them - they are not convertible.
+    estimate_unit = models.CharField(
+        max_length=6, choices=EstimateUnit.choices, blank=True, default=""
+    )
     # Every attached group grants its members plain member access; admin
     # rights only ever come from a ProjectMember row.
     groups = models.ManyToManyField(
@@ -174,6 +184,11 @@ class Task(models.Model):
         max_length=6, choices=Priority.choices, default=Priority.MEDIUM
     )
     due_date = models.DateField(null=True, blank=True)
+    # Effort in the project's estimate_unit (points or hours); null = not
+    # estimated. One decimal covers half-points and half-hours.
+    estimate = models.DecimalField(
+        max_digits=6, decimal_places=1, null=True, blank=True
+    )
     assignees = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,
@@ -258,6 +273,7 @@ class TaskEvent(models.Model):
         COMPLETED = "completed", "Completed"
         DELETED = "deleted", "Deleted"
         COMMENTED = "commented", "Commented"
+        ESTIMATED = "estimate", "Estimated"
 
     _ICONS = {
         Type.CREATED: "plus",
@@ -266,6 +282,7 @@ class TaskEvent(models.Model):
         Type.COMPLETED: "circle-check",
         Type.DELETED: "trash-2",
         Type.COMMENTED: "message-square",
+        Type.ESTIMATED: "ruler",
     }
     _LABELS = {
         Type.CREATED: "Task created",
@@ -274,6 +291,7 @@ class TaskEvent(models.Model):
         Type.COMPLETED: "Task completed",
         Type.DELETED: "Task deleted",
         Type.COMMENTED: "Comment added",
+        Type.ESTIMATED: "Estimate changed",
     }
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
@@ -306,6 +324,11 @@ class TaskEvent(models.Model):
     # deletable, a FK would rewrite history.
     from_status = models.CharField(max_length=100, blank=True, default="")
     to_status = models.CharField(max_length=100, blank=True, default="")
+    # Old/new snapshots for scalar field changes (estimate today), as display
+    # strings; empty when the side was unset. Same survive-the-task rationale
+    # as the status name snapshots above.
+    from_value = models.CharField(max_length=32, blank=True, default="")
+    to_value = models.CharField(max_length=32, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

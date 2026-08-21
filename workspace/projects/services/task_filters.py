@@ -33,7 +33,7 @@ PRIORITY_RANK = Case(
 )
 
 ORDERABLE_FIELDS = frozenset(
-    {"position", "priority", "due_date", "created_at", "updated_at"}
+    {"position", "priority", "due_date", "estimate", "created_at", "updated_at"}
 )
 
 TASK_FILTER_FIELDS = (

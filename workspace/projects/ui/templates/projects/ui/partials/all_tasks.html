@@ -13,6 +13,9 @@
       >
         <span class="flex-1">Task</span>
         <span class="w-28 hidden sm:block shrink-0">Status</span>
+        {% if project.estimate_unit %}
+          <span class="w-14 hidden sm:block shrink-0 text-right">Est.</span>
+        {% endif %}
         <span class="w-24 hidden sm:block shrink-0">Priority</span>
         <span class="w-24 hidden md:block shrink-0">Due</span>
         <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>

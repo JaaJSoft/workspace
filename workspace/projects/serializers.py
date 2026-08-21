@@ -23,6 +23,10 @@ class ProjectSerializer(serializers.ModelSerializer):
     done_retention_days = serializers.IntegerField(
         required=False, allow_null=True, min_value=1, max_value=365
     )
+    # allow_blank: "" is the "estimation disabled" state, not a missing value.
+    estimate_unit = serializers.ChoiceField(
+        choices=Project.EstimateUnit.choices, required=False, allow_blank=True
+    )
     my_role = serializers.SerializerMethodField()
 
     class Meta:
@@ -35,6 +39,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "type",
             "groups",
             "done_retention_days",
+            "estimate_unit",
             "archived_at",
             "my_role",
             "created_at",
@@ -167,6 +172,9 @@ class TaskSerializer(serializers.ModelSerializer):
     )
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
     reference = serializers.SerializerMethodField()
+    estimate = serializers.DecimalField(
+        max_digits=6, decimal_places=1, required=False, allow_null=True, min_value=0
+    )
 
     class Meta:
         model = Task
@@ -178,6 +186,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "status_category",
             "priority",
             "due_date",
+            "estimate",
             "assignees",
             "labels",
             "position",

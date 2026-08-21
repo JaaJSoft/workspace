@@ -6,6 +6,16 @@
    The default ~15px scrollbar is carved out of the dropdown's content box,
    squeezing the rows and making the dropdown visibly wider than its input. */
 @layer components {
+  /* Scrollable control rows (filter pills, chip rows): hide the scrollbar
+     entirely - the row still scrolls by touch/wheel. Sub-pixel rounding can
+     make such rows overflow by 1px when a child toggles visible, which
+     would otherwise flash a scrollbar into view. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
   .thin-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: oklch(var(--bc) / 0.15) transparent;

@@ -43,6 +43,8 @@ Kanban boards for tracking tasks, solo or as a team. Drag & drop cards between c
 ### [AI Assistants](docs/ai/)
 Configurable chat bots with system prompts, vision, function calling, extended thinking, image generation, and bot memory. Works with OpenAI API or any compatible provider (Ollama, LM Studio, etc.).
 
+![AI Assistants](docs/images/ai_1.png)
+
 ### And more
 - **[Notifications](docs/notifications/)** - In-app + Web Push (VAPID), priority levels, read tracking
 - **Dashboard** - Storage stats, recent files, conversation and event insights

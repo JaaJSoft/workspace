@@ -4,6 +4,8 @@ Kanban boards for tracking tasks, solo or as a team.
 
 ![Board view](../images/projects_1.png)
 
+![Task panel](../images/projects_2.png)
+
 ## Features
 
 - **Personal project** - Every user gets a private project out of the box, ready to use without any setup

@@ -135,9 +135,13 @@ def seed(username, password):
     context["photos_uuid"] = _seed_files(alex, sam, design_team, now)
     _seed_notes(alex, now)
     context["conversation_uuid"] = _seed_chat(alex, sam, jordan, now)
+    context["bot_conversation_uuid"] = _seed_ai(alex, now)
     _seed_calendar(alex, sam, jordan, now)
     _seed_mail(alex, now)
-    context["project_uuid"] = _seed_projects(alex, sam, jordan, now)
+    context["project_uuid"], context["task_uuid"] = _seed_projects(
+        alex, sam, jordan, now
+    )
+    _seed_notifications(alex, sam, jordan, now)
     return context
 
 
@@ -329,6 +333,68 @@ def _seed_chat(alex, sam, jordan, now):
     return str(group.uuid)
 
 
+def _seed_ai(alex, now):
+    from django.contrib.auth.models import User
+
+    from workspace.ai.models import BotProfile
+    from workspace.chat.models import Conversation, Message
+    from workspace.chat.services.conversations import get_or_create_dm
+    from workspace.chat.services.rendering import render_message_body
+    from workspace.users.services.avatar import process_and_save_avatar
+
+    nova = User.objects.create_user(
+        username="nova",
+        email="nova@workspace.dev",
+        first_name="Nova",
+    )
+    png = _avatar_png("N", (139, 92, 246))  # violet
+    process_and_save_avatar(nova, io.BytesIO(png), 0, 0, AVATAR_SIZE, AVATAR_SIZE)
+    BotProfile.objects.create(
+        user=nova,
+        is_public=True,
+        description="General-purpose assistant for the whole workspace.",
+        system_prompt="You are Nova, a helpful workspace assistant.",
+    )
+
+    dm = get_or_create_dm(alex, nova)
+    thread = [
+        (alex, "Where does the website redesign stand? Give me a quick recap.", 47),
+        (
+            nova,
+            "Here's where **Website Redesign** stands right now:\n\n"
+            "- **In progress** — the new landing page hero (Sam) and the blog "
+            "migration (Jordan)\n"
+            "- **Up next** — the mobile navigation fix is *urgent* and due "
+            "tomorrow\n"
+            "- **Done** — the performance audit and the new color palette\n\n"
+            "The board is on track for the release on Friday. 🚀",
+            46,
+        ),
+        (alex, "Great. Draft a short announcement for the launch, please.", 43),
+        (
+            nova,
+            "Here's a first draft:\n\n"
+            "> Our website just got a fresh coat of paint 🎨 — a faster, "
+            "cleaner site with a brand-new look, redesigned from the ground "
+            "up. Take a look and tell us what you think!\n\n"
+            "Want a longer version for the blog as well?",
+            42,
+        ),
+    ]
+    last = None
+    for author, body, minutes_ago in thread:
+        msg = Message.objects.create(
+            conversation=dm,
+            author=author,
+            body=body,
+            body_html=render_message_body(body),
+        )
+        last = now - timedelta(minutes=minutes_ago)
+        _backdate(msg, last)
+    Conversation.objects.filter(pk=dm.pk).update(updated_at=last)
+    return str(dm.uuid)
+
+
 def _seed_calendar(alex, sam, jordan, now):
     from workspace.calendar.models import Calendar, Event, EventMember
 
@@ -506,7 +572,7 @@ def _seed_mail(alex, now):
 
 
 def _seed_projects(alex, sam, jordan, now):
-    from workspace.projects.models import Label, ProjectMember
+    from workspace.projects.models import Label, Project, ProjectMember, TaskComment
     from workspace.projects.services.projects import create_project
     from workspace.projects.services.tasks import create_task
 
@@ -515,6 +581,8 @@ def _seed_projects(alex, sam, jordan, now):
         name="Website Redesign",
         description="Q3 marketing site overhaul",
     )
+    project.estimate_unit = Project.EstimateUnit.POINTS
+    project.save(update_fields=["estimate_unit"])
     ProjectMember.objects.create(project=project, user=sam)
     ProjectMember.objects.create(project=project, user=jordan)
 
@@ -528,29 +596,149 @@ def _seed_projects(alex, sam, jordan, now):
             ("Content", "accent"),
         ]
     }
+    hero_description = (
+        "Full-bleed hero with the new palette and a single, focused CTA.\n\n"
+        "## Acceptance criteria\n\n"
+        "- Headline and CTA follow the new styleguide\n"
+        "- LCP stays under 2s on mobile\n"
+        "- Light and dark theme variants\n"
+    )
     tasks = [
-        ("Design new landing page hero", "In progress", "high", 3, [sam], ["Design"]),
-        ("Migrate blog articles", "In progress", "medium", None, [jordan], ["Content"]),
-        ("Fix mobile navigation overlap", "To do", "urgent", 1, [alex], ["Bug"]),
-        ("Set up newsletter signup API", "To do", "medium", None, [sam], ["Backend"]),
-        ("Write pricing page copy", "To do", "low", None, [], ["Content"]),
-        ("Audit current site performance", "Done", "medium", None, [alex], []),
-        ("Pick a new color palette", "Done", "low", None, [sam], ["Design"]),
-        ("Dark mode support", "Backlog", "low", None, [], ["Design"]),
-        ("Customer testimonials section", "Backlog", "medium", None, [], ["Content"]),
+        (
+            "Design new landing page hero",
+            "In progress",
+            "high",
+            3,
+            5,
+            [sam],
+            ["Design"],
+        ),
+        (
+            "Migrate blog articles",
+            "In progress",
+            "medium",
+            None,
+            3,
+            [jordan],
+            ["Content"],
+        ),
+        ("Fix mobile navigation overlap", "To do", "urgent", 1, 2, [alex], ["Bug"]),
+        (
+            "Set up newsletter signup API",
+            "To do",
+            "medium",
+            None,
+            3,
+            [sam],
+            ["Backend"],
+        ),
+        ("Write pricing page copy", "To do", "low", None, 1, [], ["Content"]),
+        ("Audit current site performance", "Done", "medium", None, 8, [alex], []),
+        ("Pick a new color palette", "Done", "low", None, 2, [sam], ["Design"]),
+        ("Dark mode support", "Backlog", "low", None, 5, [], ["Design"]),
+        (
+            "Customer testimonials section",
+            "Backlog",
+            "medium",
+            None,
+            None,
+            [],
+            ["Content"],
+        ),
     ]
-    for title, status, priority, due_days, assignees, task_labels in tasks:
-        create_task(
+    hero = None
+    for title, status, priority, due_days, estimate, assignees, task_labels in tasks:
+        task = create_task(
             project,
             alex,
             title=title,
+            description=hero_description if title.startswith("Design new") else "",
             status=statuses[status],
             priority=priority,
             due_date=(now + timedelta(days=due_days)).date() if due_days else None,
+            estimate=estimate,
             assignees=assignees,
             labels=[labels[name] for name in task_labels],
         )
-    return str(project.uuid)
+        if hero is None:
+            hero = task
+
+    # Comment thread for the task-panel capture.
+    for author, body, hours_ago in [
+        (sam, "First iteration is on staging — used the deeper indigo.", 6),
+        (jordan, "Looks sharp. Can we A/B the headline before launch?", 3),
+    ]:
+        comment = TaskComment.objects.create(task=hero, author=author, body=body)
+        _backdate(comment, now - timedelta(hours=hours_ago))
+
+    return str(project.uuid), str(hero.uuid)
+
+
+def _seed_notifications(alex, sam, jordan, now):
+    # Rows are created directly instead of going through notify(): the
+    # service also queues a Celery push task and publishes SSE, neither of
+    # which exists in the throwaway environment. Icons/colors still come
+    # from the module registry so they match what notify() would produce.
+    from workspace.core.module_registry import registry
+    from workspace.notifications.models import Notification
+
+    entries = [
+        (
+            "chat",
+            sam,
+            "Sam Rivera mentioned you in Design Team",
+            "Agreed. Can we try the indigo variant for the buttons?",
+            "/chat",
+            "normal",
+            None,
+            timedelta(minutes=25),
+        ),
+        (
+            "calendar",
+            jordan,
+            "Invitation: Design review",
+            "Wednesday 14:00 · Walk through the new landing page",
+            "/calendar",
+            "normal",
+            None,
+            timedelta(hours=2),
+        ),
+        (
+            "projects",
+            sam,
+            "Sam Rivera assigned you WR-3",
+            "Fix mobile navigation overlap — due tomorrow",
+            "/projects",
+            "high",
+            None,
+            timedelta(hours=4),
+        ),
+        (
+            "files",
+            sam,
+            "Sam Rivera shared Brand assets with you",
+            "2 files · styleguide.md, banner.png",
+            "/files",
+            "normal",
+            now - timedelta(hours=20),
+            timedelta(days=1),
+        ),
+    ]
+    for origin, actor, title, body, url, priority, read_at, age in entries:
+        module = registry.get(origin)
+        notif = Notification.objects.create(
+            recipient=alex,
+            origin=origin,
+            icon=module.icon if module else "bell",
+            color=module.color if module else "",
+            title=title,
+            body=body,
+            url=url,
+            actor=actor,
+            priority=priority,
+            read_at=read_at,
+        )
+        _backdate(notif, now - age)
 
 
 # ---------------------------------------------------------------------------
@@ -597,6 +785,13 @@ def _open_first_note(page):
     page.wait_for_timeout(1500)
 
 
+def _open_notifications(page):
+    page.click('button[title="Notifications"]')
+    # Park the cursor so no list item is captured hovered.
+    page.mouse.move(5, 5)
+    page.wait_for_timeout(1500)
+
+
 SHOTS = [
     {"name": "home", "path": "/"},
     {
@@ -616,4 +811,11 @@ SHOTS = [
     {"name": "mail_1", "path": "/mail", "prep": _open_first_mail},
     {"name": "notes_1", "path": "/notes", "prep": _open_first_note},
     {"name": "projects_1", "path": "/projects/{project_uuid}/board"},
+    {
+        "name": "projects_2",
+        "path": "/projects/{project_uuid}/board?task={task_uuid}",
+        "settle_ms": 2500,
+    },
+    {"name": "ai_1", "path": "/chat/{bot_conversation_uuid}"},
+    {"name": "notifications_1", "path": "/", "prep": _open_notifications},
 ]

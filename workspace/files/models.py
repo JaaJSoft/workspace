@@ -212,6 +212,11 @@ class File(models.Model):
     def save(self, *args, **kwargs):
         if "/" in self.name:
             raise ValueError("File and folder names must not contain '/'.")
+        # '.'/'..' would resolve to a parent directory in every storage path
+        # built from ``path``, letting a rename or delete escape the node's
+        # own directory.
+        if self.name in (".", ".."):
+            raise ValueError("File and folder names must not be '.' or '..'.")
 
         old_data = None
         if self.pk:

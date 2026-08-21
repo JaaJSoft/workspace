@@ -109,6 +109,16 @@ def _remove_empty_parents(dir_path):
 def _delete_folder_storage(node):
     try:
         storage_path = folder_storage_path(node)
+        # Fail closed on '.'/'..' components: they resolve to an ancestor
+        # directory, and rmtree there would take unrelated data with it.
+        # File.save() rejects such names, but a legacy or hand-edited row
+        # must not be able to widen the blast radius.
+        if any(part in (".", "..") for part in storage_path.split("/")):
+            logger.warning(
+                "Refusing to remove folder directory with unsafe path: %s",
+                scrub(storage_path),
+            )
+            return
         full_path = default_storage.path(storage_path)
         # rmtree, not rmdir: descendant rows are deleted before the folder in
         # the cascade, but the directory may still hold orphaned entries the

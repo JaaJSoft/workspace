@@ -11,6 +11,7 @@ import shutil
 import tempfile
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
@@ -76,6 +77,43 @@ class HardDeleteStorageTests(TestCase):
 
             self.assertFalse(os.path.exists(sub_dir))
             self.assertTrue(os.path.isdir(os.path.join(self._user_root(), "Docs")))
+
+    def test_purge_group_folder_removes_directory(self):
+        with self.settings(MEDIA_ROOT=self.media_root):
+            group = Group.objects.create(name="Team")
+            folder = FileService.create_folder(self.user, "Team", group=group)
+            group_dir = os.path.join(self.media_root, "files", "groups", "Team")
+            self.assertTrue(os.path.isdir(group_dir))
+
+            FileService.soft_delete(folder, acting_user=self.user)
+            FileService.hard_delete(folder, acting_user=self.user)
+
+            self.assertFalse(os.path.exists(group_dir))
+
+    def test_dot_names_are_rejected_at_save(self):
+        for name in (".", ".."):
+            with self.assertRaises(ValueError):
+                FileService.create_folder(self.user, name)
+
+    def test_purge_refuses_dot_dot_path_components(self):
+        # A row named '.' or '..' (legacy data, hand-edited DB) resolves to an
+        # ancestor directory; the cleanup must fail closed instead of running
+        # rmtree there and taking unrelated data with it.
+        with self.settings(MEDIA_ROOT=self.media_root):
+            keep = FileService.create_folder(self.user, "Keep")
+            keep_dir = os.path.join(self._user_root(), "Keep")
+
+            for evil_name in (".", ".."):
+                folder = FileService.create_folder(self.user, "Evil")
+                # Bypass File.save() validation, as corrupt data would.
+                File.objects.filter(pk=folder.pk).update(name=evil_name, path=evil_name)
+                folder.refresh_from_db()
+
+                FileService.hard_delete(folder, acting_user=self.user)
+
+                self.assertTrue(os.path.isdir(keep_dir))
+                self.assertTrue(os.path.isdir(self._user_root()))
+            self.assertTrue(File.objects.filter(pk=keep.pk).exists())
 
     def test_purged_folder_does_not_reappear_after_sync(self):
         # The user-visible symptom: purge the folder, hit refresh, it's back.

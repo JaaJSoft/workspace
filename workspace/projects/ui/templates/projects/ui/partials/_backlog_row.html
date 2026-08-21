@@ -1,22 +1,21 @@
 {# Column widths must stay in sync with the header rows in backlog.html and all_tasks.html. #}
-<li class="flex items-center gap-3 px-3 py-2 hover:bg-base-200/60 select-none {% if writable and not row_readonly %}cursor-grab{% endif %}"
-    :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
-    x-show="taskVisible($el.dataset)"
-    data-task-uuid="{{ task.uuid }}"
-    data-search="{{ project.key|lower }}-{{ task.number }} {{ task.title|lower }} {% for label in task.labels.all %}{{ label.name|lower }} {% endfor %}"
-    data-priority="{{ task.priority }}"
-    data-assignees="{% for assignee in task.assignees.all %}{{ assignee.pk }} {% endfor %}"
-    data-labels="{% for label in task.labels.all %}{{ label.uuid }} {% endfor %}"
-    {% if show_status %}data-status="{{ task.status_id }}"{% endif %}
-    {% if writable and not row_readonly %}draggable="true"{% endif %}
-    @dragstart="onDragStart($event, '{{ task.uuid }}')"
-    @dragend="onDragEnd()"
-    @click="openTask('{{ task.uuid }}')">
+<li
+  class="flex items-center gap-3 px-3 py-2 hover:bg-base-200/60 select-none {% if writable and not row_readonly %}cursor-grab{% endif %}"
+  :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
+  x-show="taskVisible($el.dataset)"
+  data-task-uuid="{{ task.uuid }}"
+  data-search="{{ project.key|lower }}-{{ task.number }} {{ task.title|lower }} {% for label in task.labels.all %}{{ label.name|lower }} {% endfor %}"
+  data-priority="{{ task.priority }}"
+  data-assignees="{% for assignee in task.assignees.all %}{{ assignee.pk }} {% endfor %}"
+  data-labels="{% for label in task.labels.all %}{{ label.uuid }} {% endfor %}"
+  {% if show_status %}data-status="{{ task.status_id }}"{% endif %}
+  {% if writable and not row_readonly %}draggable="true"{% endif %}
+  @dragstart="onDragStart($event, '{{ task.uuid }}')"
+  @dragend="onDragEnd()"
+  @click="openTask('{{ task.uuid }}')"
+>
   {% if writable and not row_readonly %}
-    <input type="checkbox" class="checkbox checkbox-sm shrink-0" @click.stop
-           aria-label="Select task"
-           :checked="isSelected('{{ task.uuid }}')"
-           @change="toggleSelect('{{ task.uuid }}')">
+    <input type="checkbox" class="checkbox checkbox-sm shrink-0" @click.stop aria-label="Select task" :checked="isSelected('{{ task.uuid }}')" @change="toggleSelect('{{ task.uuid }}')" />
   {% endif %}
   <span class="flex-1 min-w-0 flex items-center gap-2">
     <span class="text-xs font-mono text-base-content/50 shrink-0">{{ project.key }}-{{ task.number }}</span>
@@ -52,8 +51,7 @@
     {% endfor %}
   </span>
   {% if writable and not row_readonly %}
-    <button class="btn btn-ghost btn-sm btn-square shrink-0" title="Send to board"
-            @click.stop="sendToBoard('{{ task.uuid }}')">
+    <button class="btn btn-ghost btn-sm btn-square shrink-0" title="Send to board" @click.stop="sendToBoard('{{ task.uuid }}')">
       <i data-lucide="arrow-right-circle" class="w-5 h-5"></i>
     </button>
   {% endif %}

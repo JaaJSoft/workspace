@@ -2,86 +2,93 @@
 <!-- Markdown WYSIWYG Editor with Milkdown Crepe -->
 <style>
   .wikilink-menu {
-    position: absolute; z-index: 50; min-width: 14rem; max-width: 22rem;
-    background: var(--fallback-b1, oklch(var(--b1))); color: inherit;
+    position: absolute;
+    z-index: 50;
+    min-width: 14rem;
+    max-width: 22rem;
+    background: var(--fallback-b1, oklch(var(--b1)));
+    color: inherit;
     border: 1px solid var(--fallback-b3, oklch(var(--b3)));
-    border-radius: 0.5rem; box-shadow: 0 4px 16px rgba(0,0,0,.18);
-    padding: 0.25rem; font-size: 0.875rem; max-height: 16rem; overflow-y: auto;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+    padding: 0.25rem;
+    font-size: 0.875rem;
+    max-height: 16rem;
+    overflow-y: auto;
   }
+
   .wikilink-item {
-    padding: 0.35rem 0.6rem; border-radius: 0.375rem; cursor: pointer;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding: 0.35rem 0.6rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .wikilink-item.is-active, .wikilink-item:hover { background: var(--fallback-b2, oklch(var(--b2))); }
-  .wikilink-empty, .wikilink-error { padding: 0.35rem 0.6rem; opacity: 0.6; }
+
+  .wikilink-item.is-active,
+  .wikilink-item:hover {
+    background: var(--fallback-b2, oklch(var(--b2)));
+  }
+
+  .wikilink-empty,
+  .wikilink-error {
+    padding: 0.35rem 0.6rem;
+    opacity: 0.6;
+  }
+
   /* Force the dismissed state hidden: beats the provider's inline display so
      Escape hides immediately (provider.hide() only repaints on next update). */
-  .wikilink-menu[data-show="false"] { display: none !important; }
+  .wikilink-menu[data-show="false"] {
+    display: none !important;
+  }
 </style>
-<div class="flex flex-col h-full"
-     x-data="markdownViewerCrepe()"
-     x-init="initEditor()"
-     @viewer-cleanup.window="dispose()">
+<div class="flex flex-col h-full" x-data="markdownViewerCrepe()" x-init="initEditor()" @viewer-cleanup.window="dispose()">
 
   <!-- Toolbar -->
   <div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-base-100 border-b border-base-300">
     <div class="flex items-center gap-2 min-w-0">
       <span class="badge badge-sm badge-ghost font-mono">markdown</span>
       {% if can_edit %}
-      <!-- Modified -->
-      <span x-show="saveStatus === 'modified'" x-cloak
-            class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
-        <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
-        Modified
-      </span>
-      <!-- Saving -->
-      <span x-show="saveStatus === 'saving'" x-cloak
-            class="flex items-center gap-1 text-base-content/60 text-xs whitespace-nowrap">
-        <span class="loading loading-spinner loading-xs"></span>
-        Saving...
-      </span>
-      <!-- Saved -->
-      <span x-show="saveStatus === 'saved'" x-cloak
-            class="flex items-center gap-1 text-success text-xs whitespace-nowrap"
-            x-transition:leave="transition ease-in duration-300"
-            x-transition:leave-start="opacity-100"
-            x-transition:leave-end="opacity-0">
-        <i data-lucide="check" class="w-3.5 h-3.5"></i>
-        Saved
-      </span>
-      <!-- Error -->
-      <span x-show="saveStatus === 'error'" x-cloak
-            class="flex items-center gap-1 text-error text-xs whitespace-nowrap">
-        <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-        Save failed
-      </span>
+        <!-- Modified -->
+        <span x-show="saveStatus === 'modified'" x-cloak class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
+          <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
+          Modified
+        </span>
+        <!-- Saving -->
+        <span x-show="saveStatus === 'saving'" x-cloak class="flex items-center gap-1 text-base-content/60 text-xs whitespace-nowrap">
+          <span class="loading loading-spinner loading-xs"></span>
+          Saving...
+        </span>
+        <!-- Saved -->
+        <span x-show="saveStatus === 'saved'" x-cloak class="flex items-center gap-1 text-success text-xs whitespace-nowrap" x-transition:leave="transition ease-in duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i>
+          Saved
+        </span>
+        <!-- Error -->
+        <span x-show="saveStatus === 'error'" x-cloak class="flex items-center gap-1 text-error text-xs whitespace-nowrap">
+          <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+          Save failed
+        </span>
       {% endif %}
     </div>
     {% if can_edit %}
-    <div class="flex items-center gap-0.5">
-      <!-- Retry (only on error) -->
-      <button x-show="saveStatus === 'error'" x-cloak
-              type="button"
-              class="btn btn-error btn-xs"
-              @click="save()">
-        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-        Retry
-      </button>
-      <!-- Save -->
-      <button type="button"
-              class="btn btn-ghost btn-xs"
-              :disabled="!isDirty || saveStatus === 'saving'"
-              @click="save()"
-              title="Save (Ctrl+S)">
-        <i data-lucide="save" class="w-3.5 h-3.5"></i>
-      </button>
-    </div>
+      <div class="flex items-center gap-0.5">
+        <!-- Retry (only on error) -->
+        <button x-show="saveStatus === 'error'" x-cloak type="button" class="btn btn-error btn-xs" @click="save()">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          Retry
+        </button>
+        <!-- Save -->
+        <button type="button" class="btn btn-ghost btn-xs" :disabled="!isDirty || saveStatus === 'saving'" @click="save()" title="Save (Ctrl+S)">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
     {% endif %}
   </div>
 
   <!-- Lock banner -->
-  <div x-show="lockOwner" x-cloak
-       class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-warning-content text-sm">
+  <div x-show="lockOwner" x-cloak class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-warning-content text-sm">
     <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
     <span class="flex-1"><strong x-text="lockOwner"></strong> is editing this file</span>
     <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">Force unlock</button>
@@ -102,300 +109,312 @@
   </div>
 
   <!-- Milkdown Crepe Container -->
-  <div x-ref="crepeContainer"
-       x-show="!loading && !error"
-       class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-100"
-       x-cloak></div>
+  <div x-ref="crepeContainer" x-show="!loading && !error" class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-100" x-cloak>
+  </div>
 </div>
 
 <script>
-window.markdownViewerCrepe = function() {
-  // Keep complex objects OUT of Alpine's reactive scope
-  let _crepe = null;
-  let _keydownHandler = null;
-  let _container = null;
-  let _lock = null;
-  let _savedFadeTimer = null;
-  let _listenerAttached = false;
-  let _debounceTimer = null;
-  let _intervalTimer = null;
-  let _beforeUnloadHandler = null;
-  let _noteLinkOver = null;
-  let _noteLinkOut = null;
+  window.markdownViewerCrepe = function() {
+    // Keep complex objects OUT of Alpine's reactive scope
+    let _crepe = null;
+    let _keydownHandler = null;
+    let _container = null;
+    let _lock = null;
+    let _savedFadeTimer = null;
+    let _listenerAttached = false;
+    let _debounceTimer = null;
+    let _intervalTimer = null;
+    let _beforeUnloadHandler = null;
+    let _noteLinkOver = null;
+    let _noteLinkOut = null;
 
-  function getCSRFToken() {
-    const match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
-    return match ? match.split('=')[1] : '';
-  }
-
-  async function _searchNotes(query) {
-    const base = '/api/v1/files?type=markdown';
-    const url = query
-      ? base + '&search=' + encodeURIComponent(query)
-      : base + '&recent=1&recent_limit=8';
-    const resp = await fetch(url, { credentials: 'same-origin' });
-    if (!resp.ok) throw new Error('search failed: ' + resp.status);
-    const data = await resp.json();
-    return (Array.isArray(data) ? data : []).slice(0, 8).map(function(f) {
-      return {
-        uuid: f.uuid,
-        name: (f.name || '').replace(/\.md$/i, ''),  // drop the .md for display
-        path: f.path || '',
-      };
-    });
-  }
-
-  function _clearAutosave() {
-    if (_debounceTimer) {
-      clearTimeout(_debounceTimer);
-      _debounceTimer = null;
+    function getCSRFToken() {
+      const match = document.cookie.split('; ').find(function(row) {
+        return row.startsWith('csrftoken=');
+      });
+      return match ? match.split('=')[1] : '';
     }
-    if (_intervalTimer) {
-      clearInterval(_intervalTimer);
-      _intervalTimer = null;
-    }
-  }
 
-  function _scheduleAutosave(self) {
-    // Debounce: reset 2s timer on every change
-    if (_debounceTimer) clearTimeout(_debounceTimer);
-    _debounceTimer = setTimeout(function() {
-      _debounceTimer = null;
-      if (self.isDirty && self.saveStatus !== 'saving') self.save();
-    }, 2000);
-
-    // Safety interval: start 30s timer if not already running
-    if (!_intervalTimer) {
-      _intervalTimer = setInterval(function() {
-        if (self.isDirty && self.saveStatus !== 'saving') {
-          self.save();
-        }
-      }, 30000);
-    }
-  }
-
-  function _attachEditHandlers(self, container) {
-    if (!_listenerAttached) {
-      _listenerAttached = true;
-      _crepe.on(function(listener) {
-        listener.markdownUpdated(function(md) {
-          const dirty = md !== self.originalContent;
-          self.isDirty = dirty;
-          if (dirty) {
-            self.setSaveStatus('modified');
-            _scheduleAutosave(self);
-          } else if (self.saveStatus === 'error' || self.saveStatus === 'modified') {
-            self.setSaveStatus(null);
-          }
-        });
+    async function _searchNotes(query) {
+      const base = '/api/v1/files?type=markdown';
+      const url = query ?
+        base + '&search=' + encodeURIComponent(query) :
+        base + '&recent=1&recent_limit=8';
+      const resp = await fetch(url, {
+        credentials: 'same-origin'
+      });
+      if (!resp.ok) throw new Error('search failed: ' + resp.status);
+      const data = await resp.json();
+      return (Array.isArray(data) ? data : []).slice(0, 8).map(function(f) {
+        return {
+          uuid: f.uuid,
+          name: (f.name || '').replace(/\.md$/i, ''), // drop the .md for display
+          path: f.path || '',
+        };
       });
     }
-    if (!_keydownHandler) {
-      _keydownHandler = function(e) {
-        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-          e.preventDefault();
-          self.save();
-        }
-      };
-      container.addEventListener('keydown', _keydownHandler, true);
+
+    function _clearAutosave() {
+      if (_debounceTimer) {
+        clearTimeout(_debounceTimer);
+        _debounceTimer = null;
+      }
+      if (_intervalTimer) {
+        clearInterval(_intervalTimer);
+        _intervalTimer = null;
+      }
     }
-  }
 
-  return {
-    canEdit: {{ can_edit|yesno:'true,false' }},
-    isDirty: false,
-    saveStatus: null, // null | 'modified' | 'saving' | 'saved' | 'error'
-    loading: true,
-    error: null,
-    originalContent: '{{ content|escapejs }}',
-    fileUuid: '{{ file.uuid }}',
-    fileName: '{{ file.name }}',
-    lockOwner: {% if lock_info %}'{{ lock_info.locked_by_username|escapejs }}'{% else %}null{% endif %},
+    function _scheduleAutosave(self) {
+      // Debounce: reset 2s timer on every change
+      if (_debounceTimer) clearTimeout(_debounceTimer);
+      _debounceTimer = setTimeout(function() {
+        _debounceTimer = null;
+        if (self.isDirty && self.saveStatus !== 'saving') self.save();
+      }, 2000);
 
-    setSaveStatus(status) {
-      if (_savedFadeTimer) {
-        clearTimeout(_savedFadeTimer);
-        _savedFadeTimer = null;
+      // Safety interval: start 30s timer if not already running
+      if (!_intervalTimer) {
+        _intervalTimer = setInterval(function() {
+          if (self.isDirty && self.saveStatus !== 'saving') {
+            self.save();
+          }
+        }, 30000);
       }
-      this.saveStatus = status;
-      if (status === 'saved') {
-        const self = this;
-        _savedFadeTimer = setTimeout(function() {
-          if (self.saveStatus === 'saved') self.saveStatus = null;
-          _savedFadeTimer = null;
-        }, 2000);
-      }
-    },
+    }
 
-    async initEditor() {
-      const container = this.$refs.crepeContainer;
-      const self = this;
-      _container = container;
-      _lock = window.fileLock(this.fileUuid, getCSRFToken);
-
-      try {
-        // Vendored bundle (scripts/frontend/): imported exactly once, here.
-        // wikilink gets slashFactory/SlashProvider injected from the same
-        // module instance so Milkdown/ProseMirror internals stay shared.
-        const mod = await import('{% static "files/ui/js/vendor/milkdown/milkdown-editor.js" %}');
-        const Crepe = mod.Crepe;
-        const wikilink = await import('{% static "files/ui/js/wikilink_autocomplete.js" %}');
-
-        _crepe = new Crepe({ root: container, defaultValue: self.originalContent });
-        wikilink.createWikilinkSlash({
-          search: _searchNotes,
-          slashFactory: mod.slashFactory,
-          SlashProvider: mod.SlashProvider,
-        })(_crepe.editor);
-        await _crepe.create();
-
-        if (!self.canEdit || self.lockOwner) {
-          _crepe.setReadonly(true);
-        }
-
-        self.originalContent = _crepe.getMarkdown();
-
-        if (self.canEdit && !self.lockOwner) {
-          _attachEditHandlers(self, container);
-        }
-
-        self.loading = false;
-
-        // Note card popover on internal note links (desktop only). Delegated
-        // because Milkdown recreates the <a> nodes on every edit.
-        if (window.matchMedia && window.matchMedia('(hover: hover)').matches
-            && window._noteCardShow && window._noteCardScheduleHide
-            && window.noteCardFileUuidFromHref) {
-          _noteLinkOver = function(e) {
-            const a = e.target.closest && e.target.closest('a[href*="file="]');
-            if (!a) return;
-            const uuid = window.noteCardFileUuidFromHref(a.getAttribute('href'));
-            if (uuid) window._noteCardShow(a, uuid);
-          };
-          _noteLinkOut = function(e) {
-            const a = e.target.closest && e.target.closest('a[href*="file="]');
-            if (!a) return;
-            // Ignore moves that stay inside the same link.
-            if (e.relatedTarget && a.contains(e.relatedTarget)) return;
-            window._noteCardScheduleHide();
-          };
-          container.addEventListener('mouseover', _noteLinkOver);
-          container.addEventListener('mouseout', _noteLinkOut);
-        }
-
-        if (self.canEdit) {
-          _beforeUnloadHandler = function(e) {
-            if (self.isDirty) e.preventDefault();
-          };
-          window.addEventListener('beforeunload', _beforeUnloadHandler);
-
-          _lock.acquire(self, {
-            onLocked: function() {
-              _clearAutosave();
-              if (_crepe) {
-                if (self.isDirty) {
-                  // Attempt one final save before going readonly
-                  self.save({ force: true }).then(function() {
-                    if (_crepe) _crepe.setReadonly(true);
-                    if (self.saveStatus === 'error' && window.AppAlert) {
-                      window.AppAlert.warning('Unsaved changes could not be saved — another user locked the file.');
-                    }
-                  });
-                } else {
-                  _crepe.setReadonly(true);
-                }
-              }
-            },
-            onAcquired: function() {
-              if (_crepe) {
-                _crepe.setReadonly(false);
-                _attachEditHandlers(self, container);
-              }
-            },
+    function _attachEditHandlers(self, container) {
+      if (!_listenerAttached) {
+        _listenerAttached = true;
+        _crepe.on(function(listener) {
+          listener.markdownUpdated(function(md) {
+            const dirty = md !== self.originalContent;
+            self.isDirty = dirty;
+            if (dirty) {
+              self.setSaveStatus('modified');
+              _scheduleAutosave(self);
+            } else if (self.saveStatus === 'error' || self.saveStatus === 'modified') {
+              self.setSaveStatus(null);
+            }
           });
-        }
-      } catch (err) {
-        console.error('Failed to load Milkdown:', err);
-        self.error = err.message || 'Failed to load editor';
-        self.loading = false;
-      }
-    },
-
-    forceUnlock() {
-      const self = this;
-      _lock.forceUnlock(self, {
-        onAcquired: function() {
-          if (_crepe) {
-            _crepe.setReadonly(false);
-            _attachEditHandlers(self, _container);
-          }
-        },
-      });
-    },
-
-    async save(opts) {
-      const force = opts && opts.force;
-      if (!_crepe || this.saveStatus === 'saving' || !this.isDirty) return;
-      if (!force && this.lockOwner) return;
-      this.setSaveStatus('saving');
-
-      try {
-        const content = _crepe.getMarkdown();
-        const blob = new Blob([content], { type: 'text/markdown' });
-        const formData = new FormData();
-        formData.append('content', blob, this.fileName || 'file.md');
-
-        const response = await fetch('/api/v1/files/' + this.fileUuid, {
-          method: 'PATCH',
-          headers: { 'X-CSRFToken': getCSRFToken() },
-          body: formData,
         });
+      }
+      if (!_keydownHandler) {
+        _keydownHandler = function(e) {
+          if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            self.save();
+          }
+        };
+        container.addEventListener('keydown', _keydownHandler, true);
+      }
+    }
 
-        if (!response.ok) throw new Error('Failed to save');
+    return {
+      canEdit: {{ can_edit|yesno:'true,false' }},
+      isDirty: false,
+      saveStatus: null, // null | 'modified' | 'saving' | 'saved' | 'error'
+      loading: true,
+      error: null,
+      originalContent: '{{ content|escapejs }}',
+      fileUuid: '{{ file.uuid }}',
+      fileName: '{{ file.name }}',
+      lockOwner: {% if lock_info %} '{{ lock_info.locked_by_username|escapejs }}'
+      {% else %}null{% endif %},
 
-        this.originalContent = content;
-        this.isDirty = false;
-        this.setSaveStatus('saved');
-        _clearAutosave();
-      } catch (error) {
-        console.error('Failed to save:', error);
-        this.setSaveStatus('error');
-        // Clear debounce but keep the safety interval running for auto-retry.
-        if (_debounceTimer) {
-          clearTimeout(_debounceTimer);
-          _debounceTimer = null;
+      setSaveStatus(status) {
+        if (_savedFadeTimer) {
+          clearTimeout(_savedFadeTimer);
+          _savedFadeTimer = null;
         }
-      }
-    },
+        this.saveStatus = status;
+        if (status === 'saved') {
+          const self = this;
+          _savedFadeTimer = setTimeout(function() {
+            if (self.saveStatus === 'saved') self.saveStatus = null;
+            _savedFadeTimer = null;
+          }, 2000);
+        }
+      },
 
-    dispose() {
-      if (_savedFadeTimer) {
-        clearTimeout(_savedFadeTimer);
-        _savedFadeTimer = null;
-      }
-      _listenerAttached = false;
-      _clearAutosave();
-      if (_beforeUnloadHandler) {
-        window.removeEventListener('beforeunload', _beforeUnloadHandler);
-        _beforeUnloadHandler = null;
-      }
-      if (_lock) _lock.dispose();
-      if (_container) {
-        if (_noteLinkOver) _container.removeEventListener('mouseover', _noteLinkOver);
-        if (_noteLinkOut) _container.removeEventListener('mouseout', _noteLinkOut);
-        _noteLinkOver = null;
-        _noteLinkOut = null;
-      }
-      if (_keydownHandler && _container) {
-        _container.removeEventListener('keydown', _keydownHandler, true);
-        _keydownHandler = null;
-        _container = null;
-      }
-      if (_crepe) {
-        _crepe.destroy();
-        _crepe = null;
-      }
-    },
+      async initEditor() {
+        const container = this.$refs.crepeContainer;
+        const self = this;
+        _container = container;
+        _lock = window.fileLock(this.fileUuid, getCSRFToken);
+
+        try {
+          // Vendored bundle (scripts/frontend/): imported exactly once, here.
+          // wikilink gets slashFactory/SlashProvider injected from the same
+          // module instance so Milkdown/ProseMirror internals stay shared.
+          const mod = await import('{% static "files/ui/js/vendor/milkdown/milkdown-editor.js" %}');
+          const Crepe = mod.Crepe;
+          const wikilink = await import('{% static "files/ui/js/wikilink_autocomplete.js" %}');
+
+          _crepe = new Crepe({
+            root: container,
+            defaultValue: self.originalContent
+          });
+          wikilink.createWikilinkSlash({
+            search: _searchNotes,
+            slashFactory: mod.slashFactory,
+            SlashProvider: mod.SlashProvider,
+          })(_crepe.editor);
+          await _crepe.create();
+
+          if (!self.canEdit || self.lockOwner) {
+            _crepe.setReadonly(true);
+          }
+
+          self.originalContent = _crepe.getMarkdown();
+
+          if (self.canEdit && !self.lockOwner) {
+            _attachEditHandlers(self, container);
+          }
+
+          self.loading = false;
+
+          // Note card popover on internal note links (desktop only). Delegated
+          // because Milkdown recreates the <a> nodes on every edit.
+          if (window.matchMedia && window.matchMedia('(hover: hover)').matches &&
+            window._noteCardShow && window._noteCardScheduleHide &&
+            window.noteCardFileUuidFromHref) {
+            _noteLinkOver = function(e) {
+              const a = e.target.closest && e.target.closest('a[href*="file="]');
+              if (!a) return;
+              const uuid = window.noteCardFileUuidFromHref(a.getAttribute('href'));
+              if (uuid) window._noteCardShow(a, uuid);
+            };
+            _noteLinkOut = function(e) {
+              const a = e.target.closest && e.target.closest('a[href*="file="]');
+              if (!a) return;
+              // Ignore moves that stay inside the same link.
+              if (e.relatedTarget && a.contains(e.relatedTarget)) return;
+              window._noteCardScheduleHide();
+            };
+            container.addEventListener('mouseover', _noteLinkOver);
+            container.addEventListener('mouseout', _noteLinkOut);
+          }
+
+          if (self.canEdit) {
+            _beforeUnloadHandler = function(e) {
+              if (self.isDirty) e.preventDefault();
+            };
+            window.addEventListener('beforeunload', _beforeUnloadHandler);
+
+            _lock.acquire(self, {
+              onLocked: function() {
+                _clearAutosave();
+                if (_crepe) {
+                  if (self.isDirty) {
+                    // Attempt one final save before going readonly
+                    self.save({
+                      force: true
+                    }).then(function() {
+                      if (_crepe) _crepe.setReadonly(true);
+                      if (self.saveStatus === 'error' && window.AppAlert) {
+                        window.AppAlert.warning('Unsaved changes could not be saved — another user locked the file.');
+                      }
+                    });
+                  } else {
+                    _crepe.setReadonly(true);
+                  }
+                }
+              },
+              onAcquired: function() {
+                if (_crepe) {
+                  _crepe.setReadonly(false);
+                  _attachEditHandlers(self, container);
+                }
+              },
+            });
+          }
+        } catch (err) {
+          console.error('Failed to load Milkdown:', err);
+          self.error = err.message || 'Failed to load editor';
+          self.loading = false;
+        }
+      },
+
+      forceUnlock() {
+        const self = this;
+        _lock.forceUnlock(self, {
+          onAcquired: function() {
+            if (_crepe) {
+              _crepe.setReadonly(false);
+              _attachEditHandlers(self, _container);
+            }
+          },
+        });
+      },
+
+      async save(opts) {
+        const force = opts && opts.force;
+        if (!_crepe || this.saveStatus === 'saving' || !this.isDirty) return;
+        if (!force && this.lockOwner) return;
+        this.setSaveStatus('saving');
+
+        try {
+          const content = _crepe.getMarkdown();
+          const blob = new Blob([content], {
+            type: 'text/markdown'
+          });
+          const formData = new FormData();
+          formData.append('content', blob, this.fileName || 'file.md');
+
+          const response = await fetch('/api/v1/files/' + this.fileUuid, {
+            method: 'PATCH',
+            headers: {
+              'X-CSRFToken': getCSRFToken()
+            },
+            body: formData,
+          });
+
+          if (!response.ok) throw new Error('Failed to save');
+
+          this.originalContent = content;
+          this.isDirty = false;
+          this.setSaveStatus('saved');
+          _clearAutosave();
+        } catch (error) {
+          console.error('Failed to save:', error);
+          this.setSaveStatus('error');
+          // Clear debounce but keep the safety interval running for auto-retry.
+          if (_debounceTimer) {
+            clearTimeout(_debounceTimer);
+            _debounceTimer = null;
+          }
+        }
+      },
+
+      dispose() {
+        if (_savedFadeTimer) {
+          clearTimeout(_savedFadeTimer);
+          _savedFadeTimer = null;
+        }
+        _listenerAttached = false;
+        _clearAutosave();
+        if (_beforeUnloadHandler) {
+          window.removeEventListener('beforeunload', _beforeUnloadHandler);
+          _beforeUnloadHandler = null;
+        }
+        if (_lock) _lock.dispose();
+        if (_container) {
+          if (_noteLinkOver) _container.removeEventListener('mouseover', _noteLinkOver);
+          if (_noteLinkOut) _container.removeEventListener('mouseout', _noteLinkOut);
+          _noteLinkOver = null;
+          _noteLinkOut = null;
+        }
+        if (_keydownHandler && _container) {
+          _container.removeEventListener('keydown', _keydownHandler, true);
+          _keydownHandler = null;
+          _container = null;
+        }
+        if (_crepe) {
+          _crepe.destroy();
+          _crepe = null;
+        }
+      },
+    };
   };
-};
 </script>

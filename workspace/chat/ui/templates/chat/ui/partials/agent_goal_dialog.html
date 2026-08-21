@@ -20,56 +20,43 @@
     <div class="px-5 py-4 space-y-3 overflow-y-auto">
       <label class="form-control">
         <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1">Title</span>
-        <input type="text" class="input input-bordered input-sm w-full" maxlength="200"
-               x-model="goalEditor.title" placeholder="Short label for the goal">
+        <input type="text" class="input input-bordered input-sm w-full" maxlength="200" x-model="goalEditor.title" placeholder="Short label for the goal" />
       </label>
 
       <label class="form-control">
         <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1">Objective</span>
-        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="3"
-                  x-model="goalEditor.goal"
-                  placeholder="What the bot should accomplish or track"></textarea>
+        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="3" x-model="goalEditor.goal" placeholder="What the bot should accomplish or track"></textarea>
       </label>
 
       <label class="form-control">
         <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1">Definition of done</span>
-        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="2"
-                  x-model="goalEditor.success_criteria"
-                  placeholder="How the bot knows the goal is achieved and can close it"></textarea>
+        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="2" x-model="goalEditor.success_criteria" placeholder="How the bot knows the goal is achieved and can close it"></textarea>
       </label>
 
       <label class="form-control">
         <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1">Constraints &amp; preferences</span>
-        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="2"
-                  x-model="goalEditor.constraints"
-                  placeholder="Rules to respect: budget, sources to use or avoid, tone, what not to do"></textarea>
+        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="2" x-model="goalEditor.constraints" placeholder="Rules to respect: budget, sources to use or avoid, tone, what not to do"></textarea>
       </label>
 
       <label class="form-control">
         <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1">When to contact me</span>
-        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="2"
-                  x-model="goalEditor.reporting"
-                  placeholder="e.g. only for a listing under 900€, plus a recap every Sunday"></textarea>
+        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="2" x-model="goalEditor.reporting" placeholder="e.g. only for a listing under 900€, plus a recap every Sunday"></textarea>
       </label>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label class="form-control">
           <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1">Next check-in</span>
-          <input type="datetime-local" class="input input-bordered input-sm w-full"
-                 x-model="goalEditor.next_check_at">
+          <input type="datetime-local" class="input input-bordered input-sm w-full" x-model="goalEditor.next_check_at" />
         </label>
         <label class="form-control">
           <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1">Deadline</span>
-          <input type="datetime-local" class="input input-bordered input-sm w-full"
-                 x-model="goalEditor.deadline">
+          <input type="datetime-local" class="input input-bordered input-sm w-full" x-model="goalEditor.deadline" />
         </label>
       </div>
 
       <label class="form-control">
         <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1">Bot's working notes</span>
-        <textarea class="textarea textarea-bordered textarea-sm w-full font-mono text-xs" rows="5"
-                  x-model="goalEditor.notes"
-                  placeholder="Empty until the first check-in"></textarea>
+        <textarea class="textarea textarea-bordered textarea-sm w-full font-mono text-xs" rows="5" x-model="goalEditor.notes" placeholder="Empty until the first check-in"></textarea>
         <span class="text-[0.65rem] text-base-content/40 pt-1">
           The bot's only memory between check-ins. Edit it to correct something it got wrong.
         </span>
@@ -96,5 +83,7 @@
       </button>
     </div>
   </div>
-  <form method="dialog" class="modal-backdrop"><button @click="closeGoalEditor()">close</button></form>
+  <form method="dialog" class="modal-backdrop">
+    <button @click="closeGoalEditor()">close</button>
+  </form>
 </dialog>

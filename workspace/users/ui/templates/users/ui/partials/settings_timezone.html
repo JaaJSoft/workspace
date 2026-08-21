@@ -6,9 +6,7 @@
         <i data-lucide="globe" class="w-5 h-5"></i>
         Timezone
       </h2>
-      <p class="text-sm text-base-content/60 mt-1">
-        Dates and times across the app are shown in this timezone.
-      </p>
+      <p class="text-sm text-base-content/60 mt-1">Dates and times across the app are shown in this timezone.</p>
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <select class="select select-bordered w-full max-w-xs" x-model="tz" @change="save()">
           <template x-for="z in zones" :key="z">
@@ -61,8 +59,13 @@
         };
         fetch('/api/v1/settings/core/timezone', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ value: this.tz }),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+          },
+          body: JSON.stringify({
+            value: this.tz
+          }),
         }).then((resp) => {
           if (!resp.ok) revert();
         }).catch(revert);

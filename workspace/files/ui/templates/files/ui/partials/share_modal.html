@@ -35,25 +35,15 @@
 
           <!-- Share entries -->
           <template x-for="entry in displayList" :key="entry.id">
-            <div
-              class="flex items-center gap-2 p-2 rounded-lg group"
-              :class="entry._removed ? 'bg-error/5 opacity-50' : 'hover:bg-base-200'"
-            >
+            <div class="flex items-center gap-2 p-2 rounded-lg group" :class="entry._removed ? 'bg-error/5 opacity-50' : 'hover:bg-base-200'">
               <user-avatar :user-id="entry.id" :username="entry.username" size="sm" presence card></user-avatar>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate" :class="entry._removed ? 'line-through' : ''" x-text="entry.username"></div>
-                <div
-                  class="text-xs text-base-content/60 truncate"
-                  x-show="entry.first_name || entry.last_name"
-                  x-text="((entry.first_name || '') + ' ' + (entry.last_name || '')).trim()"
-                ></div>
+                <div class="text-xs text-base-content/60 truncate" x-show="entry.first_name || entry.last_name" x-text="((entry.first_name || '') + ' ' + (entry.last_name || '')).trim()">
+                </div>
               </div>
               <template x-if="!entry._removed">
-                <select
-                  class="select select-xs select-bordered w-24"
-                  :value="entry.permission || 'ro'"
-                  @change="stagePermissionChange(entry.id, $event.target.value, entry._pending)"
-                >
+                <select class="select select-xs select-bordered w-24" :value="entry.permission || 'ro'" @change="stagePermissionChange(entry.id, $event.target.value, entry._pending)">
                   <option value="ro">Read only</option>
                   <option value="rw">Read & write</option>
                 </select>
@@ -62,20 +52,10 @@
                 <span class="badge badge-sm badge-info">New</span>
               </template>
               <template x-if="entry._removed">
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-xs"
-                  title="Undo removal"
-                  @click="undoRemove(entry.id)"
-                >Undo</button>
+                <button type="button" class="btn btn-ghost btn-xs" title="Undo removal" @click="undoRemove(entry.id)">Undo</button>
               </template>
               <template x-if="!entry._removed">
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-xs btn-square text-error"
-                  title="Remove access"
-                  @click="stageRemove(entry.id)"
-                >&times;</button>
+                <button type="button" class="btn btn-ghost btn-xs btn-square text-error" title="Remove access" @click="stageRemove(entry.id)">&times;</button>
               </template>
             </div>
           </template>
@@ -141,12 +121,7 @@
         </template>
 
         <!-- Create button -->
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs gap-1 mt-2"
-          x-show="!showLinkForm"
-          @click="showLinkForm = true"
-        >
+        <button type="button" class="btn btn-ghost btn-xs gap-1 mt-2" x-show="!showLinkForm" @click="showLinkForm = true">
           <i data-lucide="plus" class="w-3.5 h-3.5"></i>
           Create link
         </button>
@@ -155,17 +130,14 @@
       <!-- Footer -->
       <div class="modal-action">
         <button type="button" class="btn btn-sm btn-ghost" @click="closeModal()">Cancel</button>
-        <button
-          type="button"
-          class="btn btn-sm btn-primary"
-          :disabled="!hasChanges || saving"
-          @click="save()"
-        >
+        <button type="button" class="btn btn-sm btn-primary" :disabled="!hasChanges || saving" @click="save()">
           <span x-show="saving" class="loading loading-spinner loading-xs"></span>
           <span x-text="saving ? 'Saving...' : 'Save'"></span>
         </button>
       </div>
     </div>
-    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
   </dialog>
 </div>

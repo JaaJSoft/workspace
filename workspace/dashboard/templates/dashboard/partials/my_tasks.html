@@ -1,7 +1,4 @@
-<section
-  id="dashboard-tasks"
-  class="max-w-4xl mx-auto w-full{% if not show_my_tasks %} hidden{% endif %}"
->
+<section id="dashboard-tasks" class="max-w-4xl mx-auto w-full{% if not show_my_tasks %} hidden{% endif %}">
   {% if show_my_tasks %}
     <div class="card bg-base-100 shadow border border-base-300">
       <div class="card-body gap-3 p-4 sm:p-6 relative">
@@ -20,10 +17,7 @@
           <ul class="divide-y divide-base-200">
             {% for task in tasks %}
               <li>
-                <a
-                  href="/projects/{{ task.project_id }}?task={{ task.uuid }}"
-                  class="flex items-center gap-3 py-1.5 group"
-                >
+                <a href="/projects/{{ task.project_id }}?task={{ task.uuid }}" class="flex items-center gap-3 py-1.5 group">
                   <span class="text-xs font-mono text-base-content/50 flex-shrink-0 w-14 truncate">{{ task.reference }}</span>
                   <span class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline">{{ task.title }}</span>
                   <span class="text-xs text-base-content/50 truncate hidden sm:block max-w-28">{{ task.project.name }}</span>

@@ -10,44 +10,20 @@
   <!-- Search input -->
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">
     <i data-lucide="search" class="w-3.5 h-3.5 opacity-50"></i>
-    <input
-      type="text"
-      x-ref="searchInput"
-      x-model="searchQuery"
-      @input.debounce.300ms="searchMessages()"
-      @keydown="handleSearchKeydown($event)"
-      @keydown.escape="closeSearchPanel()"
-      class="grow"
-      placeholder="Search..."
-    />
-    <span
-      x-show="searchQuery"
-      class="btn btn-ghost btn-xs btn-square"
-      @click="searchQuery = ''; searchMessages()"
-    >
+    <input type="text" x-ref="searchInput" x-model="searchQuery" @input.debounce.300ms="searchMessages()" @keydown="handleSearchKeydown($event)" @keydown.escape="closeSearchPanel()" class="grow" placeholder="Search..." />
+    <span x-show="searchQuery" class="btn btn-ghost btn-xs btn-square" @click="searchQuery = ''; searchMessages()">
       <i data-lucide="x" class="w-3 h-3"></i>
     </span>
   </label>
 
   <!-- Filter toggle -->
   <div class="flex items-center gap-2">
-    <button
-      class="btn btn-xs btn-ghost gap-1"
-      :class="searchFiltersExpanded ? 'btn-active' : ''"
-      @click="searchFiltersExpanded = !searchFiltersExpanded"
-    >
+    <button class="btn btn-xs btn-ghost gap-1" :class="searchFiltersExpanded ? 'btn-active' : ''" @click="searchFiltersExpanded = !searchFiltersExpanded">
       <i data-lucide="sliders-horizontal" class="w-3 h-3"></i>
       Filters
-      <span
-        x-show="hasActiveSearchFilters()"
-        class="badge badge-xs badge-primary"
-      ></span>
+      <span x-show="hasActiveSearchFilters()" class="badge badge-xs badge-primary"></span>
     </button>
-    <button
-      x-show="hasActiveSearchFilters()"
-      class="btn btn-xs btn-ghost text-error gap-1"
-      @click="clearSearchFilters()"
-    >
+    <button x-show="hasActiveSearchFilters()" class="btn btn-xs btn-ghost text-error gap-1" @click="clearSearchFilters()">
       <i data-lucide="x" class="w-3 h-3"></i>
       Clear
     </button>
@@ -67,11 +43,7 @@
     <!-- Sender filter -->
     <div>
       <label class="text-xs font-medium text-base-content/60 mb-1 block">Sender</label>
-      <select
-        class="select select-xs select-bordered w-full"
-        x-model="searchFilterAuthor"
-        @change="searchMessages()"
-      >
+      <select class="select select-xs select-bordered w-full" x-model="searchFilterAuthor" @change="searchMessages()">
         <option value="">Anyone</option>
         <template x-for="m in (activeConversation?.members || [])" :key="m.user.id">
           <option :value="m.user.id" x-text="memberDisplayName(m)"></option>
@@ -82,11 +54,7 @@
     <!-- Date filter -->
     <div>
       <label class="text-xs font-medium text-base-content/60 mb-1 block">Date</label>
-      <select
-        class="select select-xs select-bordered w-full"
-        x-model="searchFilterDateRange"
-        @change="searchMessages()"
-      >
+      <select class="select select-xs select-bordered w-full" x-model="searchFilterDateRange" @change="searchMessages()">
         <option value="">Any time</option>
         <option value="today">Today</option>
         <option value="7d">Last 7 days</option>
@@ -94,24 +62,9 @@
         <option value="custom">Custom range</option>
       </select>
       <!-- Custom date inputs -->
-      <div
-        x-show="searchFilterDateRange === 'custom'"
-        class="flex gap-2 mt-1"
-      >
-        <input
-          type="date"
-          class="input input-xs input-bordered flex-1"
-          x-model="searchFilterDateFrom"
-          @change="searchMessages()"
-          placeholder="From"
-        />
-        <input
-          type="date"
-          class="input input-xs input-bordered flex-1"
-          x-model="searchFilterDateTo"
-          @change="searchMessages()"
-          placeholder="To"
-        />
+      <div x-show="searchFilterDateRange === 'custom'" class="flex gap-2 mt-1">
+        <input type="date" class="input input-xs input-bordered flex-1" x-model="searchFilterDateFrom" @change="searchMessages()" placeholder="From" />
+        <input type="date" class="input input-xs input-bordered flex-1" x-model="searchFilterDateTo" @change="searchMessages()" placeholder="To" />
       </div>
     </div>
 
@@ -119,19 +72,11 @@
     <div>
       <label class="text-xs font-medium text-base-content/60 mb-1 block">Attachments</label>
       <div class="flex gap-1">
-        <button
-          class="btn btn-xs gap-1"
-          :class="searchFilterHasFiles ? 'btn-primary' : 'btn-ghost'"
-          @click="searchFilterHasFiles = !searchFilterHasFiles; if (searchFilterHasFiles) searchFilterHasImages = false; searchMessages()"
-        >
+        <button class="btn btn-xs gap-1" :class="searchFilterHasFiles ? 'btn-primary' : 'btn-ghost'" @click="searchFilterHasFiles = !searchFilterHasFiles; if (searchFilterHasFiles) searchFilterHasImages = false; searchMessages()">
           <i data-lucide="paperclip" class="w-3 h-3"></i>
           Has files
         </button>
-        <button
-          class="btn btn-xs gap-1"
-          :class="searchFilterHasImages ? 'btn-primary' : 'btn-ghost'"
-          @click="searchFilterHasImages = !searchFilterHasImages; if (searchFilterHasImages) searchFilterHasFiles = false; searchMessages()"
-        >
+        <button class="btn btn-xs gap-1" :class="searchFilterHasImages ? 'btn-primary' : 'btn-ghost'" @click="searchFilterHasImages = !searchFilterHasImages; if (searchFilterHasImages) searchFilterHasFiles = false; searchMessages()">
           <i data-lucide="image" class="w-3 h-3"></i>
           Has images
         </button>
@@ -145,10 +90,7 @@
   </div>
 
   <!-- Result count -->
-  <div
-    x-show="!searchLoading && (searchQuery.trim().length >= 2 || hasActiveSearchFilters()) && searchResults.length > 0"
-    class="text-xs text-base-content/50"
-  >
+  <div x-show="!searchLoading && (searchQuery.trim().length >= 2 || hasActiveSearchFilters()) && searchResults.length > 0" class="text-xs text-base-content/50">
     <span x-text="searchResults.length"></span> result<span x-show="searchResults.length !== 1">s</span>
   </div>
 
@@ -169,28 +111,20 @@
         {% comment %}body_html is server-rendered and sanitized, so it is
         highlighted unescaped - escaping it here would print the markup
         instead of rendering it.{% endcomment %}
-        <div
-          class="text-xs text-base-content/70 line-clamp-3 break-words msg-body"
-          x-html="highlightMatch(result.body_html, searchQuery, { escape: false })"
-        ></div>
+        <div class="text-xs text-base-content/70 line-clamp-3 break-words msg-body" x-html="highlightMatch(result.body_html, searchQuery, { escape: false })">
+        </div>
       </div>
     </template>
   </div>
 
   <!-- Empty state: no results -->
-  <div
-    x-show="!searchLoading && (searchQuery.trim().length >= 2 || hasActiveSearchFilters()) && searchResults.length === 0"
-    class="text-center py-6"
-  >
+  <div x-show="!searchLoading && (searchQuery.trim().length >= 2 || hasActiveSearchFilters()) && searchResults.length === 0" class="text-center py-6">
     <i data-lucide="search-x" class="w-8 h-8 mx-auto text-base-content/20 mb-2"></i>
     <p class="text-sm text-base-content/40">No messages found</p>
   </div>
 
   <!-- Empty state: prompt -->
-  <div
-    x-show="!searchLoading && searchQuery.trim().length < 2 && !hasActiveSearchFilters()"
-    class="text-center py-6"
-  >
+  <div x-show="!searchLoading && searchQuery.trim().length < 2 && !hasActiveSearchFilters()" class="text-center py-6">
     <i data-lucide="search" class="w-8 h-8 mx-auto text-base-content/20 mb-2"></i>
     <p class="text-sm text-base-content/40">Type at least 2 characters or use filters</p>
   </div>

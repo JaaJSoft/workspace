@@ -66,8 +66,7 @@
                   <template x-if="token.expiry">
                     <span>
                       <span>&middot;</span>
-                      <span :class="new Date(token.expiry) < new Date() ? 'text-error' : ''"
-                            x-text="'Expires ' + new Date(token.expiry).toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"></span>
+                      <span :class="new Date(token.expiry) < new Date() ? 'text-error' : ''" x-text="'Expires ' + new Date(token.expiry).toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"></span>
                     </span>
                   </template>
                   <template x-if="!token.expiry">
@@ -120,7 +119,9 @@
         </button>
       </div>
     </div>
-    <form method="dialog" class="modal-backdrop"><button @click="closeCreateDialog()">close</button></form>
+    <form method="dialog" class="modal-backdrop">
+      <button @click="closeCreateDialog()">close</button>
+    </form>
   </dialog>
 
   <!-- Token Created Dialog (show token once) -->
@@ -188,13 +189,18 @@
       async createToken() {
         this.creating = true;
         const csrfToken = getCSRFToken();
-        const body = { name: this.newName };
+        const body = {
+          name: this.newName
+        };
         if (this.newExpiry) body.expiry_days = parseInt(this.newExpiry);
 
         try {
           const res = await fetch('/api/v1/auth/tokens', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
             body: JSON.stringify(body),
           });
           const data = await res.json();
@@ -205,7 +211,9 @@
             this.newName = '';
             this.newExpiry = '';
             this.$refs.tokenCreatedDialog.showModal();
-            this.$nextTick(() => lucide.createIcons({ nodes: [this.$refs.tokenCreatedDialog] }));
+            this.$nextTick(() => lucide.createIcons({
+              nodes: [this.$refs.tokenCreatedDialog]
+            }));
             await this.fetchTokens();
           } else {
             const msgs = data.errors || ['Failed to create token.'];
@@ -234,7 +242,9 @@
         try {
           const res = await fetch('/api/v1/auth/tokens/' + token.id, {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': csrfToken },
+            headers: {
+              'X-CSRFToken': csrfToken
+            },
           });
           if (res.ok) {
             this.tokens = this.tokens.filter(t => t.id !== token.id);
@@ -251,10 +261,17 @@
         try {
           await navigator.clipboard.writeText(this.createdToken);
           this.copied = true;
-          setTimeout(() => { this.copied = false; }, 2000);
+          setTimeout(() => {
+            this.copied = false;
+          }, 2000);
         } catch (e) {
           const el = this.$refs.tokenCreatedDialog.querySelector('code');
-          if (el) { const range = document.createRange(); range.selectNodeContents(el); window.getSelection().removeAllRanges(); window.getSelection().addRange(range); }
+          if (el) {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+          }
         }
       },
 

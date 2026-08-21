@@ -23,15 +23,15 @@ Context (built by files.ui.views.storage):
   <!-- Scope header -->
   <div class="flex items-center gap-2 min-w-0">
     {% if parent_url %}
-    <a href="{{ parent_url }}{{ query_suffix }}" x-target="storage-analysis" class="btn btn-ghost btn-xs btn-square" title="Up one level" aria-label="Analyze the parent folder">
-      <i data-lucide="arrow-up" class="w-4 h-4"></i>
-    </a>
+      <a href="{{ parent_url }}{{ query_suffix }}" x-target="storage-analysis" class="btn btn-ghost btn-xs btn-square" title="Up one level" aria-label="Analyze the parent folder">
+        <i data-lucide="arrow-up" class="w-4 h-4"></i>
+      </a>
     {% endif %}
     <i data-lucide="{% if folder %}{{ folder.icon|default:'folder' }}{% else %}hard-drive{% endif %}" class="w-5 h-5 shrink-0 {% if folder %}{{ folder.color|default:'text-warning' }}{% else %}text-primary{% endif %}"></i>
     <div class="min-w-0">
       <h4 class="font-semibold truncate">{{ title }}</h4>
       {% if folder %}
-      <p class="text-xs text-base-content/50 font-mono truncate">/{{ folder.path }}</p>
+        <p class="text-xs text-base-content/50 font-mono truncate">/{{ folder.path }}</p>
       {% endif %}
     </div>
     <span class="ml-auto text-xs text-base-content/50 whitespace-nowrap">
@@ -42,33 +42,39 @@ Context (built by files.ui.views.storage):
   <!-- Stat tiles -->
   <div class="stats stats-vertical md:stats-horizontal bg-base-200 w-full shadow-sm">
     <div class="stat py-3">
-      <div class="stat-figure text-primary"><i data-lucide="hard-drive" class="w-6 h-6"></i></div>
+      <div class="stat-figure text-primary">
+        <i data-lucide="hard-drive" class="w-6 h-6"></i>
+      </div>
       <div class="stat-title">Used</div>
       <div class="stat-value text-2xl">{{ analysis.total_size|filesizeformat }}</div>
       {% if analysis.quota %}
-      <div class="stat-desc">
-        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-          <progress class="progress {% if quota_percent >= 90 %}progress-error{% elif quota_percent >= 70 %}progress-warning{% else %}progress-primary{% endif %} w-24 h-1.5" value="{{ quota_percent|unlocalize }}" max="100"></progress>
-          <span>{{ quota_percent }}% of {{ analysis.quota|filesizeformat }}</span>
+        <div class="stat-desc">
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+            <progress class="progress {% if quota_percent >= 90 %}progress-error{% elif quota_percent >= 70 %}progress-warning{% else %}progress-primary{% endif %} w-24 h-1.5" value="{{ quota_percent|unlocalize }}" max="100"></progress>
+            <span>{{ quota_percent }}% of {{ analysis.quota|filesizeformat }}</span>
+          </div>
         </div>
-      </div>
       {% endif %}
     </div>
     {% if analysis.trash %}
-    <div class="stat py-3">
-      <div class="stat-figure text-error"><i data-lucide="trash-2" class="w-6 h-6"></i></div>
-      <div class="stat-title">In trash</div>
-      <div class="stat-value text-2xl">{{ analysis.trash.size|filesizeformat }}</div>
-      <div class="stat-desc flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span>{{ analysis.trash.count }} file{{ analysis.trash.count|pluralize }}</span>
-        {% if can_empty_trash and analysis.trash.count %}
-        <button type="button" class="btn btn-error btn-outline btn-xs" @click="emptyTrash()" :disabled="busy">Empty trash</button>
-        {% endif %}
+      <div class="stat py-3">
+        <div class="stat-figure text-error">
+          <i data-lucide="trash-2" class="w-6 h-6"></i>
+        </div>
+        <div class="stat-title">In trash</div>
+        <div class="stat-value text-2xl">{{ analysis.trash.size|filesizeformat }}</div>
+        <div class="stat-desc flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>{{ analysis.trash.count }} file{{ analysis.trash.count|pluralize }}</span>
+          {% if can_empty_trash and analysis.trash.count %}
+            <button type="button" class="btn btn-error btn-outline btn-xs" @click="emptyTrash()" :disabled="busy">Empty trash</button>
+          {% endif %}
+        </div>
       </div>
-    </div>
     {% endif %}
     <div class="stat py-3">
-      <div class="stat-figure text-warning"><i data-lucide="copy" class="w-6 h-6"></i></div>
+      <div class="stat-figure text-warning">
+        <i data-lucide="copy" class="w-6 h-6"></i>
+      </div>
       <div class="stat-title">Duplicates</div>
       <div class="stat-value text-2xl">{{ analysis.duplicates|length }}{% if analysis.duplicates_truncated %}+{% endif %}</div>
       <div class="stat-desc">{% if analysis.duplicates %}group{{ analysis.duplicates|length|pluralize }} of identical files{% else %}no identical files{% endif %}</div>
@@ -76,162 +82,174 @@ Context (built by files.ui.views.storage):
   </div>
 
   {% if not analysis.file_count %}
-  <div class="rounded-box bg-base-200 p-8 text-center">
-    <i data-lucide="chart-pie" class="w-10 h-10 mx-auto text-base-content/30"></i>
-    <h5 class="font-semibold mt-3">Nothing to analyze</h5>
-    <p class="text-sm text-base-content/60 mt-1">This location holds no files yet.</p>
-  </div>
+    <div class="rounded-box bg-base-200 p-8 text-center">
+      <i data-lucide="chart-pie" class="w-10 h-10 mx-auto text-base-content/30"></i>
+      <h5 class="font-semibold mt-3">Nothing to analyze</h5>
+      <p class="text-sm text-base-content/60 mt-1">This location holds no files yet.</p>
+    </div>
   {% else %}
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <!-- By category -->
-    <section class="rounded-box bg-base-200 p-4">
-      <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm">
-        <i data-lucide="chart-pie" class="w-4 h-4 text-accent"></i>
-        By category
-      </h5>
-      <div class="flex flex-col items-center gap-4 min-w-0">
-        <div class="relative shrink-0">
-          {% include "ui/partials/donut_chart.html" with chart=chart aria_label="Share of the used space per file category" class="w-36 h-36" %}
-          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span class="text-sm font-semibold leading-tight">{{ analysis.total_size|filesizeformat }}</span>
-            <span class="text-[10px] text-base-content/50 uppercase tracking-wider">used</span>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- By category -->
+      <section class="rounded-box bg-base-200 p-4">
+        <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm">
+          <i data-lucide="chart-pie" class="w-4 h-4 text-accent"></i>
+          By category
+        </h5>
+        <div class="flex flex-col items-center gap-4 min-w-0">
+          <div class="relative shrink-0">
+            {% include "ui/partials/donut_chart.html" with chart=chart aria_label="Share of the used space per file category" class="w-36 h-36" %}
+            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span class="text-sm font-semibold leading-tight">{{ analysis.total_size|filesizeformat }}</span>
+              <span class="text-[10px] text-base-content/50 uppercase tracking-wider">used</span>
+            </div>
           </div>
+          <ul class="flex-1 w-full min-w-0 space-y-1 text-sm">
+            {% comment %}"Other" merges several categories, so it cannot filter the largest files: rendered as a plain row.{% endcomment %}
+            {% for c in analysis.categories %}
+              <li>
+                <a
+                  {% if c.key != 'other' %}href="{{ base_url }}?category={{ c.key }}{{ query_param }}" x-target="storage-analysis" title="Show the largest {{ c.label|lower }}"{% endif %}
+                  class="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors {% if c.key != 'other' %}hover:bg-base-300{% endif %} {% if active_category and active_category.key == c.key %}bg-base-300{% endif %}"
+                >
+                  <svg viewBox="0 0 8 8" class="w-2.5 h-2.5 shrink-0 {{ c.css_class }}" aria-hidden="true">
+                    <circle cx="4" cy="4" r="4" fill="currentColor" />
+                  </svg>
+                  <span class="truncate">{{ c.label }}</span>
+                  <span class="ml-auto shrink-0 tabular-nums text-base-content/70 whitespace-nowrap">{{ c.size|filesizeformat }}</span>
+                  <span class="w-11 shrink-0 text-right tabular-nums text-xs text-base-content/50">{{ c.percent }}%</span>
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
         </div>
-        <ul class="flex-1 w-full min-w-0 space-y-1 text-sm">
-          {% comment %}"Other" merges several categories, so it cannot filter the largest files: rendered as a plain row.{% endcomment %}
-          {% for c in analysis.categories %}
-          <li>
-            <a {% if c.key != 'other' %}href="{{ base_url }}?category={{ c.key }}{{ query_param }}" x-target="storage-analysis" title="Show the largest {{ c.label|lower }}"{% endif %}
-               class="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors {% if c.key != 'other' %}hover:bg-base-300{% endif %} {% if active_category and active_category.key == c.key %}bg-base-300{% endif %}">
-              <svg viewBox="0 0 8 8" class="w-2.5 h-2.5 shrink-0 {{ c.css_class }}" aria-hidden="true"><circle cx="4" cy="4" r="4" fill="currentColor" /></svg>
-              <span class="truncate">{{ c.label }}</span>
-              <span class="ml-auto shrink-0 tabular-nums text-base-content/70 whitespace-nowrap">{{ c.size|filesizeformat }}</span>
-              <span class="w-11 shrink-0 text-right tabular-nums text-xs text-base-content/50">{{ c.percent }}%</span>
-            </a>
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-    </section>
+      </section>
 
-    <!-- By folder -->
-    {% comment %}
+      <!-- By folder -->
+      {% comment %}
     Side by side with "By category", this column must follow that one's height
     rather than grow with the folder count: the section is taken out of the
     flow (absolute in a relative cell) so the row is sized by the categories,
     and the list fills whatever is left and scrolls. The cell's min-height
     keeps a few folders visible when the category list is short. Stacked on
     small screens, it is a plain block with a capped list.
-    {% endcomment %}
-    <div class="md:relative md:min-h-80">
-    <section class="rounded-box bg-base-200 p-4 md:absolute md:inset-0 md:flex md:flex-col">
-      <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm shrink-0">
-        <i data-lucide="folder-tree" class="w-4 h-4 text-accent"></i>
-        By folder
-      </h5>
-      <ul class="flex flex-col gap-1 max-h-72 md:max-h-none md:flex-1 md:min-h-0 overflow-y-auto pr-1">
-        {% for entry in analysis.subfolders %}
-        <li>
-          {% comment %}The loose-files row has no uuid: same element, no href, so it renders as a plain row.{% endcomment %}
-          <a {% if entry.uuid %}href="/files/storage/{{ entry.uuid }}{{ query_suffix }}" x-target="storage-analysis" title="Analyze {{ entry.name }}"{% endif %}
-             class="block rounded-lg px-2 py-1.5 transition-colors {% if entry.uuid %}hover:bg-base-300{% endif %}">
-            <div class="flex items-baseline gap-2 text-sm">
-              <i data-lucide="{{ entry.icon }}" class="w-3.5 h-3.5 self-center shrink-0 {{ entry.color }}"></i>
-              <span class="truncate">{{ entry.name }}</span>
-              <span class="ml-auto tabular-nums text-base-content/70 whitespace-nowrap">{{ entry.size|filesizeformat }}</span>
-              <span class="w-11 text-right tabular-nums text-xs text-base-content/50">{{ entry.percent }}%</span>
-              <span class="w-14 text-right text-xs text-base-content/50 whitespace-nowrap">{{ entry.count }} file{{ entry.count|pluralize }}</span>
-            </div>
-            <div class="h-1.5 mt-1.5 rounded-full bg-base-300 overflow-hidden">
-              <div class="h-full rounded-full bg-primary/70" style="width: {{ entry.percent|unlocalize }}%"></div>
-            </div>
-          </a>
-        </li>
-        {% empty %}
-        <li class="text-sm text-base-content/50 italic">No sub-folders.</li>
-        {% endfor %}
-      </ul>
-    </section>
+      {% endcomment %}
+      <div class="md:relative md:min-h-80">
+        <section class="rounded-box bg-base-200 p-4 md:absolute md:inset-0 md:flex md:flex-col">
+          <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm shrink-0">
+            <i data-lucide="folder-tree" class="w-4 h-4 text-accent"></i>
+            By folder
+          </h5>
+          <ul class="flex flex-col gap-1 max-h-72 md:max-h-none md:flex-1 md:min-h-0 overflow-y-auto pr-1">
+            {% for entry in analysis.subfolders %}
+              <li>
+                {% comment %}The loose-files row has no uuid: same element, no href, so it renders as a plain row.{% endcomment %}
+                <a
+                  {% if entry.uuid %}href="/files/storage/{{ entry.uuid }}{{ query_suffix }}" x-target="storage-analysis" title="Analyze {{ entry.name }}"{% endif %}
+                  class="block rounded-lg px-2 py-1.5 transition-colors {% if entry.uuid %}hover:bg-base-300{% endif %}"
+                >
+                  <div class="flex items-baseline gap-2 text-sm">
+                    <i data-lucide="{{ entry.icon }}" class="w-3.5 h-3.5 self-center shrink-0 {{ entry.color }}"></i>
+                    <span class="truncate">{{ entry.name }}</span>
+                    <span class="ml-auto tabular-nums text-base-content/70 whitespace-nowrap">{{ entry.size|filesizeformat }}</span>
+                    <span class="w-11 text-right tabular-nums text-xs text-base-content/50">{{ entry.percent }}%</span>
+                    <span class="w-14 text-right text-xs text-base-content/50 whitespace-nowrap">{{ entry.count }} file{{ entry.count|pluralize }}</span>
+                  </div>
+                  <div class="h-1.5 mt-1.5 rounded-full bg-base-300 overflow-hidden">
+                    <div class="h-full rounded-full bg-primary/70" style="width: {{ entry.percent|unlocalize }}%"></div>
+                  </div>
+                </a>
+              </li>
+            {% empty %}
+              <li class="text-sm text-base-content/50 italic">No sub-folders.</li>
+            {% endfor %}
+          </ul>
+        </section>
+      </div>
     </div>
-  </div>
 
-  <!-- Largest files -->
-  <section class="rounded-box bg-base-200 p-4">
-    <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm">
-      <i data-lucide="arrow-down-wide-narrow" class="w-4 h-4 text-accent"></i>
-      Largest files
-      {% if active_category %}
-      <span class="badge badge-sm gap-1 {{ active_category.css_class }} border-current bg-transparent">
-        <i data-lucide="{{ active_category.icon }}" class="w-3 h-3"></i>
-        {{ active_category.label }}
-      </span>
-      <a href="{{ base_url }}{{ query_suffix }}" x-target="storage-analysis" class="btn btn-ghost btn-xs" title="Show every category">Clear</a>
-      {% endif %}
-      {% if analysis.query %}
-      <span class="badge badge-sm badge-ghost gap-1 font-normal max-w-[14rem]" title="Paths containing “{{ analysis.query }}”">
-        <i data-lucide="search" class="w-3 h-3 shrink-0"></i>
-        <span class="truncate">{{ analysis.query }}</span>
-      </span>
-      <span class="text-xs text-base-content/50 font-normal">{{ analysis.largest_files|length }} match{{ analysis.largest_files|length|pluralize:"es" }}</span>
-      {% endif %}
-    </h5>
-    <ul class="divide-y divide-base-300">
-      {% for f in analysis.largest_files %}
-      <li class="flex items-center gap-3 py-1.5 text-sm">
-        <i data-lucide="{{ f.type|type_to_icon }}" class="w-4 h-4 shrink-0 {{ f.type|type_to_color }}"></i>
-        <div class="flex-1 min-w-0">
-          <a href="/files{% if f.parent %}/{{ f.parent }}{% endif %}?open={{ f.uuid }}" x-target.push="folder-browser" @click="close()" class="truncate block hover:text-primary" title="Open {{ f.name }}">{{ f.name }}</a>
-          <p class="text-xs text-base-content/50 font-mono truncate">/{{ f.path|highlight:analysis.query }}</p>
-        </div>
-        <span class="tabular-nums whitespace-nowrap">{{ f.size|filesizeformat }}</span>
-        <button type="button" class="btn btn-ghost btn-xs btn-square text-error" title="Move to trash" @click="trashFile('{{ f.uuid }}', '{{ f.name|escapejs }}')" :disabled="busy">
-          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-        </button>
-      </li>
-      {% empty %}
-      <li class="text-sm text-base-content/50 italic py-2">No files{% if active_category %} in this category{% endif %}{% if analysis.query %} matching “{{ analysis.query }}”{% endif %}.</li>
-      {% endfor %}
-    </ul>
-  </section>
-
-  <!-- Duplicates -->
-  <section class="rounded-box bg-base-200 p-4">
-    <h5 class="font-semibold mb-1 flex items-center gap-2 text-sm">
-      <i data-lucide="copy" class="w-4 h-4 text-accent"></i>
-      Duplicates
-    </h5>
-    <p class="text-xs text-base-content/50 mb-3">
-      Files with identical content, largest waste first. Keep one copy and trash the others to reclaim the space.
-      {% if analysis.query %}Showing groups with a copy matching “{{ analysis.query }}”; every copy of those groups is listed.{% endif %}
-    </p>
-    <ul class="space-y-3">
-      {% for group in analysis.duplicates %}
-      <li class="rounded-lg bg-base-100/60 p-3">
-        <div class="flex items-center gap-2 text-sm mb-2">
-          <span class="badge badge-warning badge-sm">{{ group.copies }} copies</span>
-          <span class="text-base-content/70">{{ group.size|filesizeformat }} each</span>
-          <span class="ml-auto font-medium tabular-nums">{{ group.wasted|filesizeformat }} wasted</span>
-        </div>
-        <ul class="space-y-1">
-          {% for f in group.files %}
-          <li class="flex items-center gap-2 text-sm">
-            <i data-lucide="{{ f.type|type_to_icon }}" class="w-3.5 h-3.5 shrink-0 {{ f.type|type_to_color }}"></i>
-            <a href="/files{% if f.parent %}/{{ f.parent }}{% endif %}?open={{ f.uuid }}" x-target.push="folder-browser" @click="close()" class="font-mono text-xs truncate hover:text-primary {% if analysis.query and not f.matches %}text-base-content/50{% endif %}" title="Open {{ f.name }}">/{{ f.path|highlight:analysis.query }}</a>
-            <button type="button" class="btn btn-ghost btn-xs btn-square text-error ml-auto" title="Move to trash" @click="trashFile('{{ f.uuid }}', '{{ f.name|escapejs }}')" :disabled="busy">
+    <!-- Largest files -->
+    <section class="rounded-box bg-base-200 p-4">
+      <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm">
+        <i data-lucide="arrow-down-wide-narrow" class="w-4 h-4 text-accent"></i>
+        Largest files
+        {% if active_category %}
+          <span class="badge badge-sm gap-1 {{ active_category.css_class }} border-current bg-transparent">
+            <i data-lucide="{{ active_category.icon }}" class="w-3 h-3"></i>
+            {{ active_category.label }}
+          </span>
+          <a href="{{ base_url }}{{ query_suffix }}" x-target="storage-analysis" class="btn btn-ghost btn-xs" title="Show every category">Clear</a>
+        {% endif %}
+        {% if analysis.query %}
+          <span class="badge badge-sm badge-ghost gap-1 font-normal max-w-[14rem]" title="Paths containing “{{ analysis.query }}”">
+            <i data-lucide="search" class="w-3 h-3 shrink-0"></i>
+            <span class="truncate">{{ analysis.query }}</span>
+          </span>
+          <span class="text-xs text-base-content/50 font-normal">{{ analysis.largest_files|length }} match{{ analysis.largest_files|length|pluralize:"es" }}</span>
+        {% endif %}
+      </h5>
+      <ul class="divide-y divide-base-300">
+        {% for f in analysis.largest_files %}
+          <li class="flex items-center gap-3 py-1.5 text-sm">
+            <i data-lucide="{{ f.type|type_to_icon }}" class="w-4 h-4 shrink-0 {{ f.type|type_to_color }}"></i>
+            <div class="flex-1 min-w-0">
+              <a href="/files{% if f.parent %}/{{ f.parent }}{% endif %}?open={{ f.uuid }}" x-target.push="folder-browser" @click="close()" class="truncate block hover:text-primary" title="Open {{ f.name }}">{{ f.name }}</a>
+              <p class="text-xs text-base-content/50 font-mono truncate">/{{ f.path|highlight:analysis.query }}</p>
+            </div>
+            <span class="tabular-nums whitespace-nowrap">{{ f.size|filesizeformat }}</span>
+            <button type="button" class="btn btn-ghost btn-xs btn-square text-error" title="Move to trash" @click="trashFile('{{ f.uuid }}', '{{ f.name|escapejs }}')" :disabled="busy">
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
             </button>
           </li>
-          {% endfor %}
-          {% if group.omitted %}
-          <li class="text-xs text-base-content/50 pl-5">and {{ group.omitted }} more cop{{ group.omitted|pluralize:"y,ies" }}</li>
-          {% endif %}
-        </ul>
-      </li>
-      {% empty %}
-      <li class="text-sm text-base-content/50 italic">No identical files found{% if analysis.query %} matching “{{ analysis.query }}”{% endif %}.</li>
-      {% endfor %}
-    </ul>
-  </section>
+        {% empty %}
+          <li class="text-sm text-base-content/50 italic py-2">No files{% if active_category %} in this category{% endif %}{% if analysis.query %} matching “{{ analysis.query }}”{% endif %}.</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <!-- Duplicates -->
+    <section class="rounded-box bg-base-200 p-4">
+      <h5 class="font-semibold mb-1 flex items-center gap-2 text-sm">
+        <i data-lucide="copy" class="w-4 h-4 text-accent"></i>
+        Duplicates
+      </h5>
+      <p class="text-xs text-base-content/50 mb-3">
+        Files with identical content, largest waste first. Keep one copy and trash the others to reclaim the space.
+        {% if analysis.query %}Showing groups with a copy matching “{{ analysis.query }}”; every copy of those groups is listed.{% endif %}
+      </p>
+      <ul class="space-y-3">
+        {% for group in analysis.duplicates %}
+          <li class="rounded-lg bg-base-100/60 p-3">
+            <div class="flex items-center gap-2 text-sm mb-2">
+              <span class="badge badge-warning badge-sm">{{ group.copies }} copies</span>
+              <span class="text-base-content/70">{{ group.size|filesizeformat }} each</span>
+              <span class="ml-auto font-medium tabular-nums">{{ group.wasted|filesizeformat }} wasted</span>
+            </div>
+            <ul class="space-y-1">
+              {% for f in group.files %}
+                <li class="flex items-center gap-2 text-sm">
+                  <i data-lucide="{{ f.type|type_to_icon }}" class="w-3.5 h-3.5 shrink-0 {{ f.type|type_to_color }}"></i>
+                  <a
+                    href="/files{% if f.parent %}/{{ f.parent }}{% endif %}?open={{ f.uuid }}"
+                    x-target.push="folder-browser"
+                    @click="close()"
+                    class="font-mono text-xs truncate hover:text-primary {% if analysis.query and not f.matches %}text-base-content/50{% endif %}"
+                    title="Open {{ f.name }}"
+                  >/{{ f.path|highlight:analysis.query }}</a>
+                  <button type="button" class="btn btn-ghost btn-xs btn-square text-error ml-auto" title="Move to trash" @click="trashFile('{{ f.uuid }}', '{{ f.name|escapejs }}')" :disabled="busy">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                </li>
+              {% endfor %}
+              {% if group.omitted %}
+                <li class="text-xs text-base-content/50 pl-5">and {{ group.omitted }} more cop{{ group.omitted|pluralize:"y,ies" }}</li>
+              {% endif %}
+            </ul>
+          </li>
+        {% empty %}
+          <li class="text-sm text-base-content/50 italic">No identical files found{% if analysis.query %} matching “{{ analysis.query }}”{% endif %}.</li>
+        {% endfor %}
+      </ul>
+    </section>
   {% endif %}
 </div>

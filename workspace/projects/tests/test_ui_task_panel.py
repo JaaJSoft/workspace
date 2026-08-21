@@ -1,3 +1,4 @@
+import re
 import uuid as uuid_module
 
 from django.test import TestCase
@@ -71,10 +72,16 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, "Delete task")
         # Inverse of the archived case: every control is writable, so the
         # template must not emit a single server-side disabled attribute
-        # ("disabled>"; the comment form's client-side :disabled binding
-        # is always present and intentionally not matched).
-        self.assertNotContains(resp, "disabled>")
+        # (a bare "disabled" closing the tag; the comment form's client-side
+        # :disabled binding is always present and intentionally not matched).
+        self.assertEqual(self._count_disabled(resp), 0)
         self.assertContains(resp, "Add a comment...")
+
+    @staticmethod
+    def _count_disabled(resp):
+        # Server-side disabled attributes closing a tag ("disabled>" or
+        # "disabled />" on self-closed void tags), format-agnostic.
+        return len(re.findall(r"\sdisabled\s*/?>", resp.content.decode()))
 
     def test_archived_project_renders_read_only(self):
         self.project.archived_at = timezone.now()
@@ -87,8 +94,7 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         # control must be disabled: the status, priority and due-date fields.
         # Assignees and labels render as chips whose remove controls and
         # selectors are omitted entirely, so they carry no disabled attribute.
-        expected_disabled = 3
-        self.assertContains(resp, "disabled>", count=expected_disabled)
+        self.assertEqual(self._count_disabled(resp), 3)
         # The comment form is gated on the "comment" action, absent when archived.
         self.assertNotContains(resp, "Add a comment...")
 

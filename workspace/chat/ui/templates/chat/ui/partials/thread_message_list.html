@@ -26,16 +26,12 @@
   lets the panel verify the thread belongs to the conversation it sits in - a
   crafted ?thread= deep link can point anywhere the user is a member.
 {% endcomment %}
-<div id="thread-message-list"
-     data-conversation-uuid="{{ conversation_uuid }}">
+<div id="thread-message-list" data-conversation-uuid="{{ conversation_uuid }}">
 
-  <div id="thread-message-list-state" hidden
-       data-conversation-uuid="{{ conversation_uuid }}"
-       data-has-more="{{ has_more|yesno:'true,false' }}"
-       {% if first_uuid %}data-first-uuid="{{ first_uuid }}"{% endif %}></div>
+  <div id="thread-message-list-state" hidden data-conversation-uuid="{{ conversation_uuid }}" data-has-more="{{ has_more|yesno:'true,false' }}" {% if first_uuid %}data-first-uuid="{{ first_uuid }}"{% endif %}>
+  </div>
 
-  <div id="thread-message-list-items" x-merge="prepend"
-       data-conversation-uuid="{{ conversation_uuid }}">
+  <div id="thread-message-list-items" x-merge="prepend" data-conversation-uuid="{{ conversation_uuid }}">
     {% for group in groups %}
       {% if group.type == 'date' %}
         <div class="divider text-xs text-base-content/50 my-3">{{ group.datetime|localtime_tag:"date" }}</div>

@@ -18,4 +18,20 @@
     {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="content" %}
     {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs collapse=True collapse_after=3 separator="slash" %}
 {% endcomment %}
-{% if separator == "slash" %}{% with sep_class="bc-sep-slash" %}{% include "ui/partials/_breadcrumbs_inner.html" %}{% endwith %}{% elif separator == "dot" %}{% with sep_class="bc-sep-dot" %}{% include "ui/partials/_breadcrumbs_inner.html" %}{% endwith %}{% elif separator == "arrow" %}{% with sep_class="bc-sep-arrow" %}{% include "ui/partials/_breadcrumbs_inner.html" %}{% endwith %}{% else %}{% with sep_class="" %}{% include "ui/partials/_breadcrumbs_inner.html" %}{% endwith %}{% endif %}
+{% if separator == "slash" %}
+  {% with sep_class="bc-sep-slash" %}
+    {% include "ui/partials/_breadcrumbs_inner.html" %}
+  {% endwith %}
+{% elif separator == "dot" %}
+  {% with sep_class="bc-sep-dot" %}
+    {% include "ui/partials/_breadcrumbs_inner.html" %}
+  {% endwith %}
+{% elif separator == "arrow" %}
+  {% with sep_class="bc-sep-arrow" %}
+    {% include "ui/partials/_breadcrumbs_inner.html" %}
+  {% endwith %}
+{% else %}
+  {% with sep_class="" %}
+    {% include "ui/partials/_breadcrumbs_inner.html" %}
+  {% endwith %}
+{% endif %}

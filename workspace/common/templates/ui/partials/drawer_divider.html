@@ -15,11 +15,11 @@ Usage Examples:
 {% endcomment %}
 
 {% if label %}
-<li class="menu-title" x-show="!collapsed">
-  <span class="text-xs text-base-content/50 {{ class }}">{{ label }}</span>
-</li>
+  <li class="menu-title" x-show="!collapsed">
+    <span class="text-xs text-base-content/50 {{ class }}">{{ label }}</span>
+  </li>
 {% else %}
-<li>
-  <hr class="my-2 border-base-300 {{ class }}" />
-</li>
+  <li>
+    <hr class="my-2 border-base-300 {{ class }}" />
+  </li>
 {% endif %}

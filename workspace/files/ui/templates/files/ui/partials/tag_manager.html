@@ -9,16 +9,10 @@
       <template x-for="tag in allTags" :key="tag.uuid">
         <li>
           <label class="gap-3 rounded flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              class="checkbox checkbox-xs flex-shrink-0"
-              :checked="fileHasTag(tag.uuid)"
-              @change="toggleFileTag(tag)"
-            >
+            <input type="checkbox" class="checkbox checkbox-xs flex-shrink-0" :checked="fileHasTag(tag.uuid)" @change="toggleFileTag(tag)" />
             <i :data-lucide="tag.icon || 'tag'" class="w-4 h-4 flex-shrink-0" :class="tag.color ? '' : 'text-base-content/50'" :style="tag.color ? 'color: ' + tag.color : ''"></i>
             <span class="truncate" x-text="tag.name"></span>
-            <button type="button" class="ml-auto opacity-0 group-hover:opacity-100 hover:!opacity-100 p-0.5"
-                    @click.prevent.stop="showTagModal(tag)" title="Edit tag">
+            <button type="button" class="ml-auto opacity-0 group-hover:opacity-100 hover:!opacity-100 p-0.5" @click.prevent.stop="showTagModal(tag)" title="Edit tag">
               <i data-lucide="pencil" class="w-3 h-3"></i>
             </button>
           </label>
@@ -26,7 +20,7 @@
       </template>
     </ul>
     <div x-show="allTags.length === 0" class="px-2 py-1.5 text-xs text-base-content/40">No tags yet</div>
-    <hr class="my-1 border-base-300">
+    <hr class="my-1 border-base-300" />
     <ul class="menu menu-sm p-0">
       <li>
         <button type="button" class="gap-3 rounded" @click="showTagModal()">

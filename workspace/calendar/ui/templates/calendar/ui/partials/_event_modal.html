@@ -1,10 +1,7 @@
 {# Event Create/Edit modal and Scope dialog (this/future/all) for recurring events. #}
 {# Included from index.html inside the main content block. #}
 <!-- Event Create/Edit Modal -->
-<dialog class="modal"
-        :class="showModal && 'modal-open'"
-        @click.self="!showScopeDialog && closeModal()"
-        @keydown.escape.window="showModal && !showScopeDialog && closeModal()">
+<dialog class="modal" :class="showModal && 'modal-open'" @click.self="!showScopeDialog && closeModal()" @keydown.escape.window="showModal && !showScopeDialog && closeModal()">
   <div class="modal-box w-11/12 max-w-lg">
     <div class="flex items-center justify-between mb-4">
       <h3 class="font-bold text-lg" x-text="modalMode === 'create' ? 'New event' : 'Edit event'"></h3>
@@ -36,13 +33,11 @@
       <div class="grid grid-cols-2 gap-2">
         <label class="form-control">
           <div class="label"><span class="label-text">Start</span></div>
-          <input :type="form.all_day ? 'date' : 'datetime-local'" class="input input-bordered input-sm w-full"
-                 x-model="form.start" required />
+          <input :type="form.all_day ? 'date' : 'datetime-local'" class="input input-bordered input-sm w-full" x-model="form.start" required />
         </label>
         <label class="form-control">
           <div class="label"><span class="label-text">End</span></div>
-          <input :type="form.all_day ? 'date' : 'datetime-local'" class="input input-bordered input-sm w-full"
-                 x-model="form.end" :min="form.start" />
+          <input :type="form.all_day ? 'date' : 'datetime-local'" class="input input-bordered input-sm w-full" x-model="form.end" :min="form.start" />
         </label>
       </div>
       <!-- Duration shortcuts -->
@@ -50,18 +45,16 @@
         <template x-if="!form.all_day">
           <div class="flex flex-wrap gap-1">
             <template x-for="d in [{l:'30m',m:30},{l:'1h',m:60},{l:'1h30',m:90},{l:'2h',m:120},{l:'3h',m:180}]" :key="d.m">
-              <button type="button" class="badge badge-sm cursor-pointer hover:badge-primary transition-colors"
-                      :class="activeDuration() === d.m ? 'badge-primary' : 'badge-outline'"
-                      @click="applyDuration(d.m)" x-text="d.l"></button>
+              <button type="button" class="badge badge-sm cursor-pointer hover:badge-primary transition-colors" :class="activeDuration() === d.m ? 'badge-primary' : 'badge-outline'" @click="applyDuration(d.m)" x-text="d.l">
+              </button>
             </template>
           </div>
         </template>
         <template x-if="form.all_day">
           <div class="flex flex-wrap gap-1">
             <template x-for="d in [{l:'1 day',m:1},{l:'2 days',m:2},{l:'3 days',m:3},{l:'1 week',m:7}]" :key="d.m">
-              <button type="button" class="badge badge-sm cursor-pointer hover:badge-primary transition-colors"
-                      :class="activeDuration() === d.m * 1440 ? 'badge-primary' : 'badge-outline'"
-                      @click="applyDuration(d.m * 1440)" x-text="d.l"></button>
+              <button type="button" class="badge badge-sm cursor-pointer hover:badge-primary transition-colors" :class="activeDuration() === d.m * 1440 ? 'badge-primary' : 'badge-outline'" @click="applyDuration(d.m * 1440)" x-text="d.l">
+              </button>
             </template>
           </div>
         </template>
@@ -73,17 +66,13 @@
           <span class="label-text flex items-center gap-2 text-sm font-medium">
             <i data-lucide="repeat" class="w-4 h-4 opacity-60"></i> Repeat
           </span>
-          <input type="checkbox" class="toggle toggle-sm toggle-primary"
-                 :checked="form.recurrence_frequency !== null"
-                 @change="toggleRecurrence()" />
+          <input type="checkbox" class="toggle toggle-sm toggle-primary" :checked="form.recurrence_frequency !== null" @change="toggleRecurrence()" />
         </label>
         <div x-show="form.recurrence_frequency !== null" x-transition>
           <div class="pt-1 space-y-3">
             <div class="flex items-center gap-2">
               <span class="text-sm text-base-content/70 w-10 flex-shrink-0">Every</span>
-              <input type="number" min="1" max="365"
-                     class="input input-bordered input-sm w-16 text-center"
-                     x-model.number="form.recurrence_interval" />
+              <input type="number" min="1" max="365" class="input input-bordered input-sm w-16 text-center" x-model.number="form.recurrence_interval" />
               <select class="select select-bordered select-sm flex-1" x-model="form.recurrence_frequency">
                 <option value="daily" x-text="form.recurrence_interval > 1 ? 'days' : 'day'"></option>
                 <option value="weekly" x-text="form.recurrence_interval > 1 ? 'weeks' : 'week'"></option>
@@ -93,8 +82,7 @@
             </div>
             <div class="flex items-center gap-2">
               <span class="text-sm text-base-content/70 w-10 flex-shrink-0">Until</span>
-              <input type="date" class="input input-bordered input-sm flex-1"
-                     x-model="form.recurrence_end" placeholder="No end date" />
+              <input type="date" class="input input-bordered input-sm flex-1" x-model="form.recurrence_end" placeholder="No end date" />
             </div>
           </div>
         </div>
@@ -132,9 +120,7 @@
 </dialog>
 
 <!-- Scope Dialog (for recurring event edit/delete) -->
-<dialog class="modal" :class="showScopeDialog && 'modal-open'"
-        @click.self="resolveScopeDialog(null)"
-        @keydown.escape.window="showScopeDialog && resolveScopeDialog(null)">
+<dialog class="modal" :class="showScopeDialog && 'modal-open'" @click.self="resolveScopeDialog(null)" @keydown.escape.window="showScopeDialog && resolveScopeDialog(null)">
   <div class="modal-box w-11/12 max-w-xs">
     <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
       <i data-lucide="repeat" class="w-5 h-5 text-accent"></i>

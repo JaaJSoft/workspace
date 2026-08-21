@@ -4,14 +4,14 @@
 {% block title %}Files - Workspace{% endblock %}
 
 {% block extra_head %}
-<!-- Milkdown Crepe editor styles (ProseMirror, KaTeX, crepe common theme) - vendored, built by scripts/frontend -->
-<link rel="stylesheet" href="{% static 'files/ui/css/vendor/milkdown/theme.css' %}">
-<!-- Milkdown Crepe - DaisyUI theme bridge + custom rules (cursor, table, latex) -->
-<link rel="stylesheet" href="{% static 'files/ui/css/milkdown-overrides.css' %}">
+  <!-- Milkdown Crepe editor styles (ProseMirror, KaTeX, crepe common theme) - vendored, built by scripts/frontend -->
+  <link rel="stylesheet" href="{% static 'files/ui/css/vendor/milkdown/theme.css' %}" />
+  <!-- Milkdown Crepe - DaisyUI theme bridge + custom rules (cursor, table, latex) -->
+  <link rel="stylesheet" href="{% static 'files/ui/css/milkdown-overrides.css' %}" />
 {% endblock %}
 
 {% block navbar %}
-{% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+  {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
 
 {% block drawer_class %}drawer-open{% endblock %}
@@ -20,296 +20,295 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_sidebar %}
-<div class="drawer-side z-40 h-full" x-data="sidebarCollapse()">
-  <label for="files-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+  <div class="drawer-side z-40 h-full" x-data="sidebarCollapse()">
+    <label for="files-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
-  <!-- Sidebar -->
-  <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
-         :class="collapsed ? 'w-16' : 'w-72'">
-    <!-- Sidebar header -->
-    <div class="border-b border-base-300 py-3 px-3">
-      <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
-        <h2 class="text-xl font-semibold flex items-center" :class="collapsed ? 'justify-center' : 'gap-2 pl-2'">
-          <i data-lucide="hard-drive" class="w-6 h-6 text-primary" :title="collapsed ? 'Files' : ''"></i>
-          <span x-show="!collapsed" x-transition>Files</span>
-        </h2>
-        <div class="dropdown dropdown-end" x-data="filePreferences()" x-show="!collapsed" x-transition>
-          <button
-            type="button"
-            tabindex="0"
-            class="btn btn-ghost btn-sm btn-square mr-1 hover:text-primary"
-            aria-label="Settings"
-            title="Settings"
-          >
-            <i data-lucide="settings" class="w-4 h-4"></i>
-          </button>
-          <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1">
-            <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-              <i data-lucide="settings" class="w-4 h-4 text-primary"></i>
-              Preferences
-            </h4>
-            {% include "files/ui/partials/_preferences_content.html" %}
+    <!-- Sidebar -->
+    <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300" :class="collapsed ? 'w-16' : 'w-72'">
+      <!-- Sidebar header -->
+      <div class="border-b border-base-300 py-3 px-3">
+        <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
+          <h2 class="text-xl font-semibold flex items-center" :class="collapsed ? 'justify-center' : 'gap-2 pl-2'">
+            <i data-lucide="hard-drive" class="w-6 h-6 text-primary" :title="collapsed ? 'Files' : ''"></i>
+            <span x-show="!collapsed" x-transition>Files</span>
+          </h2>
+          <div class="dropdown dropdown-end" x-data="filePreferences()" x-show="!collapsed" x-transition>
+            <button type="button" tabindex="0" class="btn btn-ghost btn-sm btn-square mr-1 hover:text-primary" aria-label="Settings" title="Settings">
+              <i data-lucide="settings" class="w-4 h-4"></i>
+            </button>
+            <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1">
+              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                <i data-lucide="settings" class="w-4 h-4 text-primary"></i>
+                Preferences
+              </h4>
+              {% include "files/ui/partials/_preferences_content.html" %}
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Quick Access. The cloak wrapper stays outside the swap targets inside
+      <!-- Quick Access. The cloak wrapper stays outside the swap targets inside
          (group-folders-section, pinned list) so alpine-ajax refreshes never
          re-hide them; "invisible" keeps the space reserved while Alpine boots. -->
-    <div class="flex-1 overflow-y-auto py-2" :class="collapsed ? 'px-2' : 'px-3'" x-cloak="invisible">
-      <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
-          :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-1 opacity-100'"
-          :aria-hidden="collapsed">
-        <span class="flex items-center gap-2">
-          <i data-lucide="zap" class="w-3 h-3"></i>
-          Quick Access
-        </span>
-      </h3>
-      <ul class="space-y-0.5">
-        {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="My Files" color="primary" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with href="/files?shared=1" icon="share-2" label="Shared with me" color="secondary" active=is_shared_view active_binding="activeView === 'shared'" onclick="setActiveView('shared')" x_target="folder-browser" x_target_history="push" %}
-      </ul>
-
-      <!-- Pinned Folders -->
-      <div id="pinned-folders-section" x-data="pinnedFoldersSection()" x-show="showPinned" x-transition>
-        <hr class="my-2 border-base-300" x-show="!collapsed">
-        <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider"
-            x-show="!collapsed"
-            x-transition>
-          <span class="flex items-center gap-2 mb-1">
-            <i data-lucide="pin" class="w-3 h-3"></i>
-            Pinned
+      <div class="flex-1 overflow-y-auto py-2" :class="collapsed ? 'px-2' : 'px-3'" x-cloak="invisible">
+        <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200" :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-1 opacity-100'" :aria-hidden="collapsed">
+          <span class="flex items-center gap-2">
+            <i data-lucide="zap" class="w-3 h-3"></i>
+            Quick Access
           </span>
         </h3>
-        <!-- Collapsed: thin separator -->
-        <hr class="my-1 border-base-300" x-show="collapsed && pinnedCount > 0">
-        <!-- Drop zone -->
-        <div
-          @dragover.prevent="onDragOver($event)"
-          @dragenter.prevent="onDragEnter($event)"
-          @dragleave="onDragLeave($event)"
-          @drop.prevent="onDrop($event)"
-          :class="dragOver ? 'bg-primary/10 ring-2 ring-primary/40 ring-inset rounded-lg scale-[1.02]' : ''"
-          class="transition-all duration-200"
-        >
-          {% include 'files/ui/partials/pinned_folders.html' %}
-          <!-- Drop hint when dragging (expanded only) -->
-          <div x-show="dragOver && !collapsed" x-cloak x-transition
-               class="text-xs text-primary font-medium text-center py-4 border-2 border-dashed border-primary/40 rounded-lg mt-2 bg-primary/5">
-            <i data-lucide="pin" class="w-4 h-4 inline-block mb-1"></i>
-            <br>
-            Drop to pin folder
+        <ul class="space-y-0.5">
+          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="My Files" color="primary" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
+          {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
+          {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
+          {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
+          {% include "ui/partials/drawer_item.html" with href="/files?shared=1" icon="share-2" label="Shared with me" color="secondary" active=is_shared_view active_binding="activeView === 'shared'" onclick="setActiveView('shared')" x_target="folder-browser" x_target_history="push" %}
+        </ul>
+
+        <!-- Pinned Folders -->
+        <div id="pinned-folders-section" x-data="pinnedFoldersSection()" x-show="showPinned" x-transition>
+          <hr class="my-2 border-base-300" x-show="!collapsed" />
+          <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider" x-show="!collapsed" x-transition>
+            <span class="flex items-center gap-2 mb-1">
+              <i data-lucide="pin" class="w-3 h-3"></i>
+              Pinned
+            </span>
+          </h3>
+          <!-- Collapsed: thin separator -->
+          <hr class="my-1 border-base-300" x-show="collapsed && pinnedCount > 0" />
+          <!-- Drop zone -->
+          <div
+            @dragover.prevent="onDragOver($event)"
+            @dragenter.prevent="onDragEnter($event)"
+            @dragleave="onDragLeave($event)"
+            @drop.prevent="onDrop($event)"
+            :class="dragOver ? 'bg-primary/10 ring-2 ring-primary/40 ring-inset rounded-lg scale-[1.02]' : ''"
+            class="transition-all duration-200"
+          >
+            {% include 'files/ui/partials/pinned_folders.html' %}
+            <!-- Drop hint when dragging (expanded only) -->
+            <div x-show="dragOver && !collapsed" x-cloak x-transition class="text-xs text-primary font-medium text-center py-4 border-2 border-dashed border-primary/40 rounded-lg mt-2 bg-primary/5">
+              <i data-lucide="pin" class="w-4 h-4 inline-block mb-1"></i>
+              <br />
+              Drop to pin folder
+            </div>
           </div>
         </div>
+
+        <!-- Group Folders -->
+        <div x-show="showGroups" x-transition>{% include 'files/ui/partials/group_folders_section.html' %}</div>
       </div>
 
-      <!-- Group Folders -->
-      <div x-show="showGroups" x-transition>
-        {% include 'files/ui/partials/group_folders_section.html' %}
+      <!-- Storage & Help -->
+      <div class="px-3 pb-2">
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="primary" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'My files' } }))" tooltip="Storage" %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="primary" onclick="document.getElementById('help-dialog').showModal()" tooltip="Help" %}
+        </ul>
       </div>
-    </div>
 
-    <!-- Storage & Help -->
-    <div class="px-3 pb-2">
-      <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="primary" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'My files' } }))" tooltip="Storage" %}
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="primary" onclick="document.getElementById('help-dialog').showModal()" tooltip="Help" %}
-      </ul>
-    </div>
-
-    <!-- Bottom action: settings on mobile, collapse on desktop -->
-    <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0 hidden lg:block">
-        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="primary" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
-      </ul>
-      <ul class="menu p-0 lg:hidden">
-        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="primary" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip="Preferences" %}
-      </ul>
-    </div>
-  </aside>
-</div>
+      <!-- Bottom action: settings on mobile, collapse on desktop -->
+      <div class="border-t border-base-300 py-4 px-3">
+        <ul class="menu p-0 hidden lg:block">
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="primary" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+        </ul>
+        <ul class="menu p-0 lg:hidden">
+          {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="primary" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip="Preferences" %}
+        </ul>
+      </div>
+    </aside>
+  </div>
 {% endblock %}
 
 {% block content %}
-<div x-data="fileBrowser()" class="h-full flex flex-col"
-     @ajax:error="AppAlert.error('Failed to refresh items')">
-  <!-- Persistent nav links for Alpine AJAX navigation (outside #folder-browser so they survive replacements) -->
-  <a id="folder-nav-push" class="hidden" x-target.push="folder-browser"></a>
-  <a id="folder-nav-replace" class="hidden" x-target.replace="folder-browser"></a>
-  <div class="flex-1 flex min-h-0 relative">
-    <!-- Folder browser (replaced on navigation) -->
-    <div class="flex-1 flex flex-col min-w-0">
-      {% partialdef folder-browser inline %}
-      <div class="h-full flex flex-col" id="folder-browser" data-folder="{{ current_folder.uuid|default:'' }}" data-view-url="{{ current_view_url }}" data-parent-url="{{ parent_url|default:'' }}" data-sidebar-active="{{ sidebar_active }}" x-init="$nextTick(() => { window.folderNav.onNavigate($el.dataset.viewUrl); window.dispatchEvent(new CustomEvent('folder-browser-replaced', { detail: { viewUrl: $el.dataset.viewUrl } })); })">
+  <div x-data="fileBrowser()" class="h-full flex flex-col" @ajax:error="AppAlert.error('Failed to refresh items')">
+    <!-- Persistent nav links for Alpine AJAX navigation (outside #folder-browser so they survive replacements) -->
+    <a id="folder-nav-push" class="hidden" x-target.push="folder-browser"></a>
+    <a id="folder-nav-replace" class="hidden" x-target.replace="folder-browser"></a>
+    <div class="flex-1 flex min-h-0 relative">
+      <!-- Folder browser (replaced on navigation) -->
+      <div class="flex-1 flex flex-col min-w-0">
+        {% partialdef folder-browser inline %}
+          <div
+            class="h-full flex flex-col"
+            id="folder-browser"
+            data-folder="{{ current_folder.uuid|default:'' }}"
+            data-view-url="{{ current_view_url }}"
+            data-parent-url="{{ parent_url|default:'' }}"
+            data-sidebar-active="{{ sidebar_active }}"
+            x-init="$nextTick(() => { window.folderNav.onNavigate($el.dataset.viewUrl); window.dispatchEvent(new CustomEvent('folder-browser-replaced', { detail: { viewUrl: $el.dataset.viewUrl } })); })"
+          >
 
-        <!-- Top Header Bar -->
-        <div class="bg-base-100 border-b border-base-300 p-4 lg:p-6">
-          <!-- Header with breadcrumb, title and actions on same line -->
-          <div class="flex items-start gap-3">
-            <!-- Left: Breadcrumb and Title -->
-            <div class="flex-1 min-w-0">
-              <!-- Breadcrumb row with action button aligned -->
-              <div class="flex items-center justify-between gap-4 mb-1">
-                <div class="flex items-center gap-2 min-w-0">
-                  <div class="join" x-data="navButtons()">
-                    <button type="button"
-                      class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
-                      :class="canGoBack ? 'text-base-content' : 'text-base-content/20'"
-                      title="Back (Alt+Left)" :disabled="!canGoBack" @click="window.folderNav.back()">
-                      <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                    </button>
-                    <button type="button"
-                      class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
-                      :class="canGoForward ? 'text-base-content' : 'text-base-content/20'"
-                      title="Forward (Alt+Right)" :disabled="!canGoForward" @click="window.folderNav.forward()">
-                      <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                    </button>
-                    <button type="button"
-                      class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
-                      :class="parentUrl ? 'text-base-content' : 'text-base-content/20'"
-                      title="Up (Alt+Up)" :disabled="!parentUrl" @click="navigateUp()">
-                      <i data-lucide="arrow-up" class="w-4 h-4"></i>
-                    </button>
-                    <button type="button" class="btn btn-ghost btn-sm btn-square join-item"
-                      title="Sync & refresh" aria-label="Sync and refresh folder"
-                      @click="syncAndRefreshFolderBrowser()">
-                      <i data-lucide="rotate-cw" class="w-4 h-4"></i>
-                    </button>
+            <!-- Top Header Bar -->
+            <div class="bg-base-100 border-b border-base-300 p-4 lg:p-6">
+              <!-- Header with breadcrumb, title and actions on same line -->
+              <div class="flex items-start gap-3">
+                <!-- Left: Breadcrumb and Title -->
+                <div class="flex-1 min-w-0">
+                  <!-- Breadcrumb row with action button aligned -->
+                  <div class="flex items-center justify-between gap-4 mb-1">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <div class="join" x-data="navButtons()">
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
+                          :class="canGoBack ? 'text-base-content' : 'text-base-content/20'"
+                          title="Back (Alt+Left)"
+                          :disabled="!canGoBack"
+                          @click="window.folderNav.back()"
+                        >
+                          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
+                          :class="canGoForward ? 'text-base-content' : 'text-base-content/20'"
+                          title="Forward (Alt+Right)"
+                          :disabled="!canGoForward"
+                          @click="window.folderNav.forward()"
+                        >
+                          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
+                          :class="parentUrl ? 'text-base-content' : 'text-base-content/20'"
+                          title="Up (Alt+Up)"
+                          :disabled="!parentUrl"
+                          @click="navigateUp()"
+                        >
+                          <i data-lucide="arrow-up" class="w-4 h-4"></i>
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-sm btn-square join-item" title="Sync & refresh" aria-label="Sync and refresh folder" @click="syncAndRefreshFolderBrowser()">
+                          <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                        </button>
+                      </div>
+                      {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs collapse=True collapse_after=breadcrumb_collapse x_target="folder-browser" x_target_history="push" %}
+                    </div>
+
+                    {% if is_trash_view %}
+                      <div class="flex-shrink-0">
+                        <button type="button" class="btn btn-error btn-sm gap-2" @click="confirmCleanTrash()" :disabled="cleaningTrash">
+                          <span x-show="cleaningTrash" class="loading loading-spinner loading-xs"></span>
+                          <i x-show="!cleaningTrash" data-lucide="trash-2" class="w-4 h-4"></i>
+                          <span class="hidden sm:inline">Empty trash</span>
+                        </button>
+                      </div>
+                    {% elif not is_shared_view and not is_recent_view %}
+                      <!-- Action button with dropdown -->
+                      <div class="dropdown dropdown-end flex-shrink-0">
+                        <button tabindex="0" class="btn btn-primary btn-sm gap-2">
+                          <i data-lucide="plus" class="w-4 h-4"></i>
+                          <span class="hidden sm:inline">New</span>
+                          <i data-lucide="chevron-down" class="w-3 h-3 hidden sm:inline opacity-70"></i>
+                        </button>
+                        {% include 'files/ui/partials/new_menu.html' %}
+                      </div>
+                    {% endif %}
                   </div>
-                  {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs collapse=True collapse_after=breadcrumb_collapse x_target="folder-browser" x_target_history="push" %}
-                </div>
 
-                {% if is_trash_view %}
-                <div class="flex-shrink-0">
-                  <button type="button" class="btn btn-error btn-sm gap-2" @click="confirmCleanTrash()" :disabled="cleaningTrash">
-                    <span x-show="cleaningTrash" class="loading loading-spinner loading-xs"></span>
-                    <i x-show="!cleaningTrash" data-lucide="trash-2" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Empty trash</span>
-                  </button>
+                  <!-- Title below breadcrumb -->
+                  <h1 class="text-2xl font-bold text-base-content">{{ page_title }}</h1>
                 </div>
-                {% elif not is_shared_view and not is_recent_view %}
-                <!-- Action button with dropdown -->
-                <div class="dropdown dropdown-end flex-shrink-0">
-                  <button tabindex="0" class="btn btn-primary btn-sm gap-2">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">New</span>
-                    <i data-lucide="chevron-down" class="w-3 h-3 hidden sm:inline opacity-70"></i>
-                  </button>
-                  {% include 'files/ui/partials/new_menu.html' %}
-                </div>
-                {% endif %}
               </div>
+            </div>
 
-              <!-- Title below breadcrumb -->
-              <h1 class="text-2xl font-bold text-base-content">{{ page_title }}</h1>
+            <!-- Main Content Area with Table -->
+            <div class="flex-1 overflow-hidden flex flex-col bg-base-200/30 relative" @dragenter="onFileDragEnter($event)" @dragover="onFileDragOver($event)" @dragleave="onFileDragLeave($event)" @drop.prevent="onFileDrop($event)">
+              <!-- Drop zone overlay -->
+              <div x-show="dropZoneActive" x-cloak x-transition.opacity class="absolute inset-0 z-50 bg-base-100/90 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg flex items-center justify-center pointer-events-none">
+                <div class="text-center">
+                  <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-3 text-primary"></i>
+                  <p class="text-lg font-semibold text-primary">Drop files to upload</p>
+                  <p class="text-sm text-base-content/60">Files will be added to the current folder</p>
+                </div>
+              </div>
+              {% comment %}Group folders are shown in the sidebar{% endcomment %}
+              {% include 'files/ui/partials/folder_content.html' with nodes=nodes folder_stats=folder_stats empty_title=empty_title empty_message=empty_message %}
             </div>
           </div>
-        </div>
-
-        <!-- Main Content Area with Table -->
-        <div class="flex-1 overflow-hidden flex flex-col bg-base-200/30 relative"
-             @dragenter="onFileDragEnter($event)"
-             @dragover="onFileDragOver($event)"
-             @dragleave="onFileDragLeave($event)"
-             @drop.prevent="onFileDrop($event)">
-          <!-- Drop zone overlay -->
-          <div x-show="dropZoneActive" x-cloak x-transition.opacity
-               class="absolute inset-0 z-50 bg-base-100/90 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg flex items-center justify-center pointer-events-none">
-            <div class="text-center">
-              <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-3 text-primary"></i>
-              <p class="text-lg font-semibold text-primary">Drop files to upload</p>
-              <p class="text-sm text-base-content/60">Files will be added to the current folder</p>
-            </div>
-          </div>
-          {% comment %}Group folders are shown in the sidebar{% endcomment %}
-          {% include 'files/ui/partials/folder_content.html' with nodes=nodes folder_stats=folder_stats empty_title=empty_title empty_message=empty_message %}
-        </div>
+        {% endpartialdef %}
       </div>
-      {% endpartialdef %}
-    </div>
 
-    <!-- Properties sidebar: full-coverage overlay on mobile, in-flow 320 px panel on md+.
+      <!-- Properties sidebar: full-coverage overlay on mobile, in-flow 320 px panel on md+.
          Mobile width comes from ``inset-0`` (the browser derives it from left:0/right:0),
          which is more robust than ``max-md:w-full`` — the Tailwind CDN's handling of
          responsive width utilities + Alpine x-transition can leave the panel sized to
          its content (~306 px) on some runtimes. Mobile slides in via opacity; desktop
          keeps the original width animation. -->
-    <div id="properties-sidebar"
-         x-show="showPropertiesPanel" x-cloak
-         x-transition:enter="max-md:transition-opacity max-md:duration-150 md:transition-[width] md:ease-out md:duration-200"
-         x-transition:enter-start="max-md:opacity-0 md:!w-0"
-         x-transition:enter-end="max-md:opacity-100 md:!w-80"
-         x-transition:leave="max-md:transition-opacity max-md:duration-100 md:transition-[width] md:ease-in md:duration-150"
-         x-transition:leave-start="max-md:opacity-100 md:!w-80"
-         x-transition:leave-end="max-md:opacity-0 md:!w-0"
-         class="max-md:absolute max-md:inset-0 max-md:z-30 md:w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden">
-      <div class="md:w-80 flex-1 overflow-y-auto">
-        {% include "files/ui/partials/properties_panel.html" %}
+      <div
+        id="properties-sidebar"
+        x-show="showPropertiesPanel"
+        x-cloak
+        x-transition:enter="max-md:transition-opacity max-md:duration-150 md:transition-[width] md:ease-out md:duration-200"
+        x-transition:enter-start="max-md:opacity-0 md:!w-0"
+        x-transition:enter-end="max-md:opacity-100 md:!w-80"
+        x-transition:leave="max-md:transition-opacity max-md:duration-100 md:transition-[width] md:ease-in md:duration-150"
+        x-transition:leave-start="max-md:opacity-100 md:!w-80"
+        x-transition:leave-end="max-md:opacity-0 md:!w-0"
+        class="max-md:absolute max-md:inset-0 max-md:z-30 md:w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
+      >
+        <div class="md:w-80 flex-1 overflow-y-auto">{% include "files/ui/partials/properties_panel.html" %}</div>
       </div>
     </div>
+
+    {# Inside the fileBrowser() scope: binds tagModal state from tagsMixin #}
+    {% include 'files/ui/partials/tag_dialog.html' %}
+    {% include 'files/ui/partials/tag_picker_dialog.html' %}
   </div>
 
-  {# Inside the fileBrowser() scope: binds tagModal state from tagsMixin #}
-  {% include 'files/ui/partials/tag_dialog.html' %}
-  {% include 'files/ui/partials/tag_picker_dialog.html' %}
-</div>
+  {% include 'files/ui/partials/dialogs.html' %}
+  {% include 'files/ui/partials/group_folder_dialog.html' %}
+  {% include 'files/ui/partials/file_viewer_modal.html' %}
+  {% include "ui/partials/context_menu_panel.html" with items="files/ui/partials/context_menu.html" x_data="contextMenu()" open="isOpen" close="close()" x="position.x" y="position.y" width="w-64" %}
+  {% include 'files/ui/partials/share_modal.html' %}
+  {% include 'files/ui/partials/storage_dialog.html' %}
 
-{% include 'files/ui/partials/dialogs.html' %}
-{% include 'files/ui/partials/group_folder_dialog.html' %}
-{% include 'files/ui/partials/file_viewer_modal.html' %}
-{% include "ui/partials/context_menu_panel.html" with items="files/ui/partials/context_menu.html" x_data="contextMenu()" open="isOpen" close="close()" x="position.x" y="position.y" width="w-64" %}
-{% include 'files/ui/partials/share_modal.html' %}
-{% include 'files/ui/partials/storage_dialog.html' %}
-
-<!-- Mobile preferences dialog -->
-<dialog id="files-prefs-dialog" class="modal" x-data="filePreferences()">
-  <div class="modal-box">
-    <h3 class="font-bold text-lg flex items-center gap-2">
-      <i data-lucide="settings" class="w-5 h-5 text-primary"></i>
-      Preferences
-    </h3>
-    <div class="mt-4">
-      {% include "files/ui/partials/_preferences_content.html" %}
+  <!-- Mobile preferences dialog -->
+  <dialog id="files-prefs-dialog" class="modal" x-data="filePreferences()">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i data-lucide="settings" class="w-5 h-5 text-primary"></i>
+        Preferences
+      </h3>
+      <div class="mt-4">{% include "files/ui/partials/_preferences_content.html" %}</div>
+      <div class="modal-action">
+        <form method="dialog">
+          <button class="btn btn-sm">Close</button>
+        </form>
+      </div>
     </div>
-    <div class="modal-action">
-      <form method="dialog">
-        <button class="btn btn-sm">Close</button>
-      </form>
-    </div>
-  </div>
-  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- Initial preferences embedded server-side so JS doesn't need to fetch
+  <!-- Initial preferences embedded server-side so JS doesn't need to fetch
      /api/v1/settings/files/{preferences,viewer} on page load (which would
      404 on first visit and surface as a console error). -->
-{{ file_prefs|json_script:"file-prefs-data" }}
-{{ viewer_prefs|json_script:"viewer-prefs-data" }}
+  {{ file_prefs|json_script:"file-prefs-data" }}
+  {{ viewer_prefs|json_script:"viewer-prefs-data" }}
 
-<!-- Monaco Editor for text/code viewing and editing -->
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  <!-- Monaco Editor for text/code viewing and editing -->
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 
-<!-- File locking (must load before viewers) -->
-<script src="{% static 'files/ui/js/file_lock.js' %}"></script>
+  <!-- File locking (must load before viewers) -->
+  <script src="{% static 'files/ui/js/file_lock.js' %}"></script>
 
-<!-- File actions (shared) & browser -->
-<script src="{% static 'files/ui/js/file_actions.js' %}"></script>
-<script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
-<script src="{% static 'files/ui/js/core.js' %}"></script>
-<script src="{% static 'files/ui/js/preferences.js' %}"></script>
-<script src="{% static 'files/ui/js/tags.js' %}"></script>
-<script src="{% static 'files/ui/js/browser.js' %}"></script>
-<script src="{% static 'files/ui/js/table.js' %}"></script>
-<script src="{% static 'files/ui/js/pinned.js' %}"></script>
-<script src="{% static 'files/ui/js/context_menu.js' %}"></script>
-<script src="{% static 'files/ui/js/share_modal.js' %}"></script>
-<script src="{% static 'files/ui/js/storage.js' %}"></script>
-<script src="{% static 'ui/js/comments.js' %}"></script>
+  <!-- File actions (shared) & browser -->
+  <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
+  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/core.js' %}"></script>
+  <script src="{% static 'files/ui/js/preferences.js' %}"></script>
+  <script src="{% static 'files/ui/js/tags.js' %}"></script>
+  <script src="{% static 'files/ui/js/browser.js' %}"></script>
+  <script src="{% static 'files/ui/js/table.js' %}"></script>
+  <script src="{% static 'files/ui/js/pinned.js' %}"></script>
+  <script src="{% static 'files/ui/js/context_menu.js' %}"></script>
+  <script src="{% static 'files/ui/js/share_modal.js' %}"></script>
+  <script src="{% static 'files/ui/js/storage.js' %}"></script>
+  <script src="{% static 'ui/js/comments.js' %}"></script>
 
 {% endblock %}

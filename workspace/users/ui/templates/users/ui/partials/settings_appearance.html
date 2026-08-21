@@ -17,19 +17,11 @@
         <div class="flex items-center gap-2 mb-2">
           <i data-lucide="sun" class="w-4 h-4 text-warning"></i>
           <h3 class="font-semibold text-sm uppercase tracking-wide text-base-content/70">Light theme</h3>
-          <span
-            x-show="currentTheme === lightTheme"
-            class="badge badge-xs badge-success"
-          >Active</span>
+          <span x-show="currentTheme === lightTheme" class="badge badge-xs badge-success">Active</span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           <template x-for="t in lightThemes" :key="t.id">
-            <button
-              type="button"
-              @click="selectTheme(t.id, 'light')"
-              class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]"
-              :class="lightTheme === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'"
-            >
+            <button type="button" @click="selectTheme(t.id, 'light')" class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]" :class="lightTheme === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'">
               <div class="flex gap-1 mb-2" :data-theme="t.id">
                 <div class="rounded-full w-4 h-4 bg-primary"></div>
                 <div class="rounded-full w-4 h-4 bg-secondary"></div>
@@ -47,19 +39,11 @@
         <div class="flex items-center gap-2 mb-2">
           <i data-lucide="moon" class="w-4 h-4 text-info"></i>
           <h3 class="font-semibold text-sm uppercase tracking-wide text-base-content/70">Dark theme</h3>
-          <span
-            x-show="currentTheme === darkTheme"
-            class="badge badge-xs badge-success"
-          >Active</span>
+          <span x-show="currentTheme === darkTheme" class="badge badge-xs badge-success">Active</span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           <template x-for="t in darkThemes" :key="t.id">
-            <button
-              type="button"
-              @click="selectTheme(t.id, 'dark')"
-              class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]"
-              :class="darkTheme === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'"
-            >
+            <button type="button" @click="selectTheme(t.id, 'dark')" class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]" :class="darkTheme === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'">
               <div class="flex gap-1 mb-2" :data-theme="t.id">
                 <div class="rounded-full w-4 h-4 bg-primary"></div>
                 <div class="rounded-full w-4 h-4 bg-secondary"></div>
@@ -83,36 +67,86 @@
       currentTheme: html.getAttribute('data-theme') || 'light',
       lightTheme: html.getAttribute('data-light-theme') || 'light',
       darkTheme: html.getAttribute('data-dark-theme') || 'dark',
-      lightThemes: [
-        { id: 'light',     label: 'Light' },
-        { id: 'cupcake',   label: 'Cupcake' },
-        { id: 'bumblebee', label: 'Bumblebee' },
-        { id: 'emerald',   label: 'Emerald' },
-        { id: 'corporate', label: 'Corporate' },
-        { id: 'retro',     label: 'Retro' },
-        { id: 'valentine', label: 'Valentine' },
-        { id: 'garden',    label: 'Garden' },
-        { id: 'pastel',    label: 'Pastel' },
-        { id: 'lemonade',  label: 'Lemonade' },
-        { id: 'autumn',    label: 'Autumn' },
-        { id: 'winter',    label: 'Winter' },
-        { id: 'nord',      label: 'Nord' },
-      ],
-      darkThemes: [
-        { id: 'dark',      label: 'Dark' },
-        { id: 'synthwave', label: 'Synthwave' },
-        { id: 'halloween', label: 'Halloween' },
-        { id: 'forest',    label: 'Forest' },
-        { id: 'aqua',      label: 'Aqua' },
-        { id: 'black',     label: 'Black' },
-        { id: 'luxury',    label: 'Luxury' },
-        { id: 'dracula',   label: 'Dracula' },
-        { id: 'business',  label: 'Business' },
-        { id: 'night',     label: 'Night' },
-        { id: 'coffee',    label: 'Coffee' },
-        { id: 'dim',       label: 'Dim' },
-        { id: 'sunset',    label: 'Sunset' },
-      ],
+      lightThemes: [{
+        id: 'light',
+        label: 'Light'
+      }, {
+        id: 'cupcake',
+        label: 'Cupcake'
+      }, {
+        id: 'bumblebee',
+        label: 'Bumblebee'
+      }, {
+        id: 'emerald',
+        label: 'Emerald'
+      }, {
+        id: 'corporate',
+        label: 'Corporate'
+      }, {
+        id: 'retro',
+        label: 'Retro'
+      }, {
+        id: 'valentine',
+        label: 'Valentine'
+      }, {
+        id: 'garden',
+        label: 'Garden'
+      }, {
+        id: 'pastel',
+        label: 'Pastel'
+      }, {
+        id: 'lemonade',
+        label: 'Lemonade'
+      }, {
+        id: 'autumn',
+        label: 'Autumn'
+      }, {
+        id: 'winter',
+        label: 'Winter'
+      }, {
+        id: 'nord',
+        label: 'Nord'
+      }, ],
+      darkThemes: [{
+        id: 'dark',
+        label: 'Dark'
+      }, {
+        id: 'synthwave',
+        label: 'Synthwave'
+      }, {
+        id: 'halloween',
+        label: 'Halloween'
+      }, {
+        id: 'forest',
+        label: 'Forest'
+      }, {
+        id: 'aqua',
+        label: 'Aqua'
+      }, {
+        id: 'black',
+        label: 'Black'
+      }, {
+        id: 'luxury',
+        label: 'Luxury'
+      }, {
+        id: 'dracula',
+        label: 'Dracula'
+      }, {
+        id: 'business',
+        label: 'Business'
+      }, {
+        id: 'night',
+        label: 'Night'
+      }, {
+        id: 'coffee',
+        label: 'Coffee'
+      }, {
+        id: 'dim',
+        label: 'Dim'
+      }, {
+        id: 'sunset',
+        label: 'Sunset'
+      }, ],
       selectTheme(id, kind) {
         if (kind === 'light') {
           this.lightTheme = id;

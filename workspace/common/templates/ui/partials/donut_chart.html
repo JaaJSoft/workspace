@@ -19,7 +19,7 @@ what makes the ring follow the theme.
   <circle cx="{{ chart.center }}" cy="{{ chart.center }}" r="{{ chart.radius }}" fill="none" stroke="currentColor" stroke-width="{{ chart.stroke }}" class="text-base-300" />
   {% for arc in chart.arcs %}
     <circle cx="{{ chart.center }}" cy="{{ chart.center }}" r="{{ chart.radius }}" fill="none" stroke="currentColor" stroke-width="{{ chart.stroke }}" class="{{ arc.css_class }}" stroke-dasharray="{{ arc.dasharray }}" stroke-dashoffset="{{ arc.dashoffset }}" transform="rotate(-90 {{ chart.center }} {{ chart.center }})">
-      <title>{{ arc.label }}</title>
+    <title>{{ arc.label }}</title>
     </circle>
   {% endfor %}
 </svg>

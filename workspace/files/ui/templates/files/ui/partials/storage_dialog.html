@@ -4,10 +4,7 @@ Storage analysis dialog. Opened by the `open-storage-analysis` window event
 storage_analysis partial, loaded and re-loaded through alpine-ajax.
 {% endcomment %}
 {# `$ajax()` fires its lifecycle events on the component root, so the listeners sit here rather than on the modal box. #}
-<div x-data="storageAnalysis()"
-     @ajax:before="loading = true"
-     @ajax:merged="loading = false; hasContent = true; syncScope()"
-     @ajax:error="loading = false; if (window.AppAlert) AppAlert.error('Failed to analyze storage')">
+<div x-data="storageAnalysis()" @ajax:before="loading = true" @ajax:merged="loading = false; hasContent = true; syncScope()" @ajax:error="loading = false; if (window.AppAlert) AppAlert.error('Failed to analyze storage')">
   <dialog x-ref="dialog" class="modal" @close="onClose()">
     <div class="modal-box max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
       <div class="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-base-300">
@@ -21,7 +18,17 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
         <span x-show="loading" x-cloak class="loading loading-spinner loading-sm ml-2"></span>
         <label class="input input-sm input-bordered flex items-center gap-2 ml-auto w-full sm:w-60 order-last sm:order-none" title="Filter the largest files and duplicates by path">
           <i data-lucide="search" class="w-4 h-4 text-base-content/50 shrink-0"></i>
-          <input type="text" x-ref="searchInput" class="grow min-w-0" placeholder="Filter by name or path…" x-model="query" @input.debounce.300ms="search()" @keydown.escape.stop.prevent="clearSearch()" maxlength="100" aria-label="Filter the largest files and duplicates by path">
+          <input
+            type="text"
+            x-ref="searchInput"
+            class="grow min-w-0"
+            placeholder="Filter by name or path…"
+            x-model="query"
+            @input.debounce.300ms="search()"
+            @keydown.escape.stop.prevent="clearSearch()"
+            maxlength="100"
+            aria-label="Filter the largest files and duplicates by path"
+          />
           <button type="button" x-show="query" x-cloak class="btn btn-ghost btn-xs btn-square -mr-2" @click="clearSearch()" aria-label="Clear the filter">
             <i data-lucide="x" class="w-3.5 h-3.5"></i>
           </button>
@@ -42,27 +49,47 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
             <div class="h-3 w-24 rounded bg-base-300 ml-auto"></div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-px bg-base-300 rounded-box overflow-hidden">
-            <div class="bg-base-200 p-4 space-y-2"><div class="h-3 w-12 rounded bg-base-300"></div><div class="h-6 w-24 rounded bg-base-300"></div></div>
-            <div class="bg-base-200 p-4 space-y-2"><div class="h-3 w-16 rounded bg-base-300"></div><div class="h-6 w-20 rounded bg-base-300"></div></div>
-            <div class="bg-base-200 p-4 space-y-2"><div class="h-3 w-20 rounded bg-base-300"></div><div class="h-6 w-10 rounded bg-base-300"></div></div>
+            <div class="bg-base-200 p-4 space-y-2">
+              <div class="h-3 w-12 rounded bg-base-300"></div>
+              <div class="h-6 w-24 rounded bg-base-300"></div>
+            </div>
+            <div class="bg-base-200 p-4 space-y-2">
+              <div class="h-3 w-16 rounded bg-base-300"></div>
+              <div class="h-6 w-20 rounded bg-base-300"></div>
+            </div>
+            <div class="bg-base-200 p-4 space-y-2">
+              <div class="h-3 w-20 rounded bg-base-300"></div>
+              <div class="h-6 w-10 rounded bg-base-300"></div>
+            </div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="rounded-box bg-base-200 p-4 flex flex-col items-center gap-4">
               <div class="h-4 w-28 rounded bg-base-300 self-start"></div>
               <div class="w-36 h-36 rounded-full border-[14px] border-base-300"></div>
-              <div class="w-full space-y-2"><div class="h-3 rounded bg-base-300"></div><div class="h-3 rounded bg-base-300 w-5/6"></div><div class="h-3 rounded bg-base-300 w-2/3"></div></div>
+              <div class="w-full space-y-2">
+                <div class="h-3 rounded bg-base-300"></div>
+                <div class="h-3 rounded bg-base-300 w-5/6"></div>
+                <div class="h-3 rounded bg-base-300 w-2/3"></div>
+              </div>
             </div>
             <div class="rounded-box bg-base-200 p-4 space-y-4">
               <div class="h-4 w-24 rounded bg-base-300"></div>
               {% for _ in "1234" %}
-              <div class="space-y-1.5"><div class="h-3 w-3/5 rounded bg-base-300"></div><div class="h-1.5 rounded-full bg-base-300"></div></div>
+                <div class="space-y-1.5">
+                  <div class="h-3 w-3/5 rounded bg-base-300"></div>
+                  <div class="h-1.5 rounded-full bg-base-300"></div>
+                </div>
               {% endfor %}
             </div>
           </div>
           <div class="rounded-box bg-base-200 p-4 space-y-3">
             <div class="h-4 w-28 rounded bg-base-300"></div>
             {% for _ in "12345" %}
-            <div class="flex items-center gap-3"><div class="w-4 h-4 rounded bg-base-300"></div><div class="h-3 flex-1 rounded bg-base-300"></div><div class="h-3 w-12 rounded bg-base-300"></div></div>
+              <div class="flex items-center gap-3">
+                <div class="w-4 h-4 rounded bg-base-300"></div>
+                <div class="h-3 flex-1 rounded bg-base-300"></div>
+                <div class="h-3 w-12 rounded bg-base-300"></div>
+              </div>
             {% endfor %}
           </div>
           <p class="text-center text-xs text-base-content/50">Measuring what takes up space…</p>
@@ -70,6 +97,8 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
         <div id="storage-analysis"></div>
       </div>
     </div>
-    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
   </dialog>
 </div>

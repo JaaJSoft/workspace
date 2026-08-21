@@ -8,6 +8,6 @@
     class="input input-bordered input-sm w-full pl-9"
     @input.debounce.400ms="$nextTick(() => { $refs.activitySearchLink.click() })"
     @keydown.escape="searchOpen = false; activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click())"
-  >
+  />
   <a x-ref="activitySearchLink" :href="feedUrl" x-target="{{ activity_prefix }}" class="hidden"></a>
 </div>

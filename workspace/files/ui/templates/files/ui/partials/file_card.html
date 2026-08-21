@@ -4,19 +4,19 @@
     <div class="min-w-0 flex-1">
       <div class="font-semibold text-sm truncate">{{ file.name }}</div>
       {% with tags=file.file_tags.all %}
-      {% if tags %}
-      <div class="flex flex-wrap gap-1 mt-1">
-        {% for ft in tags %}
-        <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
-        {% endfor %}
-      </div>
-      {% endif %}
+        {% if tags %}
+          <div class="flex flex-wrap gap-1 mt-1">
+            {% for ft in tags %}
+              <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+            {% endfor %}
+          </div>
+        {% endif %}
       {% endwith %}
     </div>
   </div>
 
   {% if first_line %}
-  <p class="text-xs text-base-content/60 mb-3 line-clamp-2">{{ first_line }}</p>
+    <p class="text-xs text-base-content/60 mb-3 line-clamp-2">{{ first_line }}</p>
   {% endif %}
 
   <div class="flex gap-1.5">

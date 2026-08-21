@@ -27,10 +27,7 @@ entry and is written out below.
 <template x-if="nodeData && !isBackgroundMenu">
   <ul class="menu menu-sm p-0">
     <template x-for="(action, idx) in nodeData.actions" :key="action.id">
-      <li
-        x-show="action.id !== 'paste_into' || hasClipboardItems"
-        :class="idx > 0 && action.category !== nodeData.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
-      >
+      <li x-show="action.id !== 'paste_into' || hasClipboardItems" :class="idx > 0 && action.category !== nodeData.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''">
         {% comment %}Download and open-in-new-tab need a real link to carry the
         download attribute / target. In bulk mode they fall back to the button
         so the click goes through the /bulk-download endpoint instead.{% endcomment %}

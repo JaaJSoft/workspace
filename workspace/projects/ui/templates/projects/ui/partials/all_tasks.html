@@ -18,8 +18,7 @@
           {% include "projects/ui/partials/_backlog_row.html" with row_readonly=True show_status=True %}
         {% endfor %}
       </ul>
-      <div x-show="filtersActive() && allTasksVisibleCount() === 0" x-cloak
-           class="px-3 py-8 text-center text-sm text-base-content/60">
+      <div x-show="filtersActive() && allTasksVisibleCount() === 0" x-cloak class="px-3 py-8 text-center text-sm text-base-content/60">
         No tasks match the current filters.
       </div>
     </div>

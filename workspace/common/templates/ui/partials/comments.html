@@ -79,39 +79,34 @@ Params:
   </div>
 
   {% if can_comment %}
-  <div class="pt-2 mt-2 border-t border-base-300 space-y-2">
-    {# Collapsed single line at rest; opens on focus and stays open while #}
-    {# it has content so the Send button doesn't shift under the cursor. #}
-    <div class="relative">
-      {% include "ui/partials/mention_dropdown.html" with field="new" %}
-      <textarea
-        class="textarea textarea-bordered textarea-sm w-full leading-snug transition-[min-height] duration-150"
-        :class="composerFocused || newBody.trim() ? 'min-h-20' : 'min-h-0'"
-        rows="1"
-        placeholder="Add a comment..."
-        x-ref="composer"
-        x-model="newBody"
-        @focus="composerFocused = true"
-        @blur="composerFocused = false; closeMentionDropdown(); if (!newBody.trim()) $el.style.height = ''"
-        @input="autoGrow($el); handleMentionInput($el, 'new')"
-        @keydown="handleMentionKeydown($event)"
-        @keydown.ctrl.enter="addComment()"
-        @keydown.meta.enter="addComment()"
-        @keydown.escape="closeMentionDropdown()"
-      ></textarea>
+    <div class="pt-2 mt-2 border-t border-base-300 space-y-2">
+      {# Collapsed single line at rest; opens on focus and stays open while #}
+      {# it has content so the Send button doesn't shift under the cursor. #}
+      <div class="relative">
+        {% include "ui/partials/mention_dropdown.html" with field="new" %}
+        <textarea
+          class="textarea textarea-bordered textarea-sm w-full leading-snug transition-[min-height] duration-150"
+          :class="composerFocused || newBody.trim() ? 'min-h-20' : 'min-h-0'"
+          rows="1"
+          placeholder="Add a comment..."
+          x-ref="composer"
+          x-model="newBody"
+          @focus="composerFocused = true"
+          @blur="composerFocused = false; closeMentionDropdown(); if (!newBody.trim()) $el.style.height = ''"
+          @input="autoGrow($el); handleMentionInput($el, 'new')"
+          @keydown="handleMentionKeydown($event)"
+          @keydown.ctrl.enter="addComment()"
+          @keydown.meta.enter="addComment()"
+          @keydown.escape="closeMentionDropdown()"
+        ></textarea>
+      </div>
+      <div class="flex justify-end">
+        <button type="button" class="btn btn-primary btn-xs gap-1" :disabled="!newBody.trim() || sending" @click="addComment()">
+          <i data-lucide="send" class="w-3 h-3" x-show="!sending"></i>
+          <span class="loading loading-spinner loading-xs" x-show="sending"></span>
+          Send
+        </button>
+      </div>
     </div>
-    <div class="flex justify-end">
-      <button
-        type="button"
-        class="btn btn-primary btn-xs gap-1"
-        :disabled="!newBody.trim() || sending"
-        @click="addComment()"
-      >
-        <i data-lucide="send" class="w-3 h-3" x-show="!sending"></i>
-        <span class="loading loading-spinner loading-xs" x-show="sending"></span>
-        Send
-      </button>
-    </div>
-  </div>
   {% endif %}
 </div>

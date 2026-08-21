@@ -1,63 +1,62 @@
 <!-- Profile Tab -->
 <div x-show="tab === 'profile'" x-cloak>
   <div x-data="avatarUploadForm()">
-  <div class="card bg-base-100 border border-base-300 shadow-sm">
-    <div class="card-body">
-      <h2 class="card-title text-lg gap-2">
-        <i data-lucide="camera" class="w-5 h-5"></i>
-        Profile Picture
-      </h2>
+    <div class="card bg-base-100 border border-base-300 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-lg gap-2">
+          <i data-lucide="camera" class="w-5 h-5"></i>
+          Profile Picture
+        </h2>
 
-      <p class="text-sm text-base-content/60 mt-1">Upload a photo to personalize your account. The image will be cropped to a square.</p>
+        <p class="text-sm text-base-content/60 mt-1">Upload a photo to personalize your account. The image will be cropped to a square.</p>
 
-      <!-- Feedback -->
-      <div x-ref="avatarFeedback"></div>
+        <!-- Feedback -->
+        <div x-ref="avatarFeedback"></div>
 
-      <!-- Current avatar preview -->
-      <div class="flex items-center gap-6 mt-4">
-        <div class="avatar" :class="hasAvatar ? '' : 'placeholder'">
-          <div class="w-24 h-24 rounded-full ring-2 ring-base-300 ring-offset-2 ring-offset-base-100"
-               :class="hasAvatar ? '' : userAvatarColorClass({{ request.user.id }}) + ' text-white text-3xl'">
-            <img x-show="hasAvatar" :src="avatarPreviewUrl" alt="Avatar" class="rounded-full object-cover" x-ref="avatarPreview" />
-            <span x-show="!hasAvatar">{{ request.user.username|slice:":1"|upper }}</span>
+        <!-- Current avatar preview -->
+        <div class="flex items-center gap-6 mt-4">
+          <div class="avatar" :class="hasAvatar ? '' : 'placeholder'">
+            <div class="w-24 h-24 rounded-full ring-2 ring-base-300 ring-offset-2 ring-offset-base-100" :class="hasAvatar ? '' : userAvatarColorClass({{ request.user.id }}) + ' text-white text-3xl'">
+              <img x-show="hasAvatar" :src="avatarPreviewUrl" alt="Avatar" class="rounded-full object-cover" x-ref="avatarPreview" />
+              <span x-show="!hasAvatar">{{ request.user.username|slice:":1"|upper }}</span>
+            </div>
+          </div>
+          <div class="flex flex-col gap-2">
+            <button type="button" @click="$refs.avatarInput.click()" class="btn btn-primary btn-sm gap-2">
+              <i data-lucide="upload" class="w-4 h-4"></i>
+              Upload Photo
+            </button>
+            <button x-show="hasAvatar" type="button" @click="removeAvatar()" class="btn btn-ghost btn-sm text-error gap-2" :disabled="loading">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              Remove
+            </button>
+            <p class="text-xs text-base-content/40">JPEG, PNG, WebP or GIF. Max 10 MB.</p>
           </div>
         </div>
-        <div class="flex flex-col gap-2">
-          <button type="button" @click="$refs.avatarInput.click()" class="btn btn-primary btn-sm gap-2">
-            <i data-lucide="upload" class="w-4 h-4"></i>
-            Upload Photo
+
+        <input type="file" x-ref="avatarInput" @change="onFileSelect($event)" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" />
+      </div>
+    </div>
+
+    <!-- Crop dialog -->
+    <dialog x-ref="cropDialog" class="modal">
+      <div class="modal-box max-w-lg">
+        <h3 class="font-bold text-lg mb-4">Crop your photo</h3>
+        <div class="w-full" style="max-height: 400px;">
+          <img x-ref="cropImage" alt="" style="display: block; max-width: 100%;" />
+        </div>
+        <div class="modal-action">
+          <button type="button" @click="cancelCrop()" class="btn btn-ghost btn-sm">Cancel</button>
+          <button type="button" @click="confirmCrop()" class="btn btn-primary btn-sm gap-2" :disabled="loading">
+            <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+            <span x-text="loading ? 'Uploading...' : 'Confirm'"></span>
           </button>
-          <button x-show="hasAvatar" type="button" @click="removeAvatar()" class="btn btn-ghost btn-sm text-error gap-2" :disabled="loading">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-            Remove
-          </button>
-          <p class="text-xs text-base-content/40">JPEG, PNG, WebP or GIF. Max 10 MB.</p>
         </div>
       </div>
-
-      <input type="file" x-ref="avatarInput" @change="onFileSelect($event)" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" />
-    </div>
-  </div>
-
-  <!-- Crop dialog -->
-  <dialog x-ref="cropDialog" class="modal">
-    <div class="modal-box max-w-lg">
-      <h3 class="font-bold text-lg mb-4">Crop your photo</h3>
-      <div class="w-full" style="max-height: 400px;">
-        <img x-ref="cropImage" style="display: block; max-width: 100%;" />
-      </div>
-      <div class="modal-action">
-        <button type="button" @click="cancelCrop()" class="btn btn-ghost btn-sm">Cancel</button>
-        <button type="button" @click="confirmCrop()" class="btn btn-primary btn-sm gap-2" :disabled="loading">
-          <span x-show="loading" class="loading loading-spinner loading-sm"></span>
-          <span x-text="loading ? 'Uploading...' : 'Confirm'"></span>
-        </button>
-      </div>
-    </div>
-    <form method="dialog" class="modal-backdrop">
-      <button @click="cancelCrop()">close</button>
-    </form>
-  </dialog>
+      <form method="dialog" class="modal-backdrop">
+        <button @click="cancelCrop()">close</button>
+      </form>
+    </dialog>
   </div>
 
   <!-- Bio & Role -->
@@ -73,29 +72,14 @@
       <!-- Role -->
       <div class="form-control mt-3">
         <label class="label"><span class="label-text font-medium">Role</span></label>
-        <input
-          type="text"
-          x-model="role"
-          maxlength="50"
-          placeholder="ex: Lead Backend, Designer..."
-          class="input input-bordered input-sm w-full max-w-md"
-          @blur="saveField('role', role)"
-          @keydown.enter="$event.target.blur()"
-        />
+        <input type="text" x-model="role" maxlength="50" placeholder="ex: Lead Backend, Designer..." class="input input-bordered input-sm w-full max-w-md" @blur="saveField('role', role)" @keydown.enter="$event.target.blur()" />
         <label class="label"><span class="label-text-alt text-base-content/40">Displayed below your name on your profile.</span></label>
       </div>
 
       <!-- Bio -->
       <div class="form-control mt-2">
         <label class="label"><span class="label-text font-medium">Bio</span></label>
-        <textarea
-          x-model="bio"
-          maxlength="200"
-          rows="3"
-          placeholder="A few words about yourself..."
-          class="textarea textarea-bordered w-full max-w-md text-sm"
-          @blur="saveField('bio', bio)"
-        ></textarea>
+        <textarea x-model="bio" maxlength="200" rows="3" placeholder="A few words about yourself..." class="textarea textarea-bordered w-full max-w-md text-sm" @blur="saveField('bio', bio)"></textarea>
         <label class="label">
           <span class="label-text-alt text-base-content/40">Visible on your public profile.</span>
           <span class="label-text-alt" :class="bio.length > 180 ? 'text-warning' : 'text-base-content/40'" x-text="bio.length + ' / 200'"></span>
@@ -119,14 +103,14 @@
       <!-- Preset grid -->
       <div class="grid grid-cols-4 sm:grid-cols-8 gap-2 mt-4">
         {% for pid, p in banner_palettes.items %}
-        <button
-          type="button"
-          @click="selectPreset('{{ pid }}')"
-          class="h-10 rounded-lg border-2 transition-all hover:scale-105 cursor-pointer"
-          :class="currentId === '{{ pid }}' ? 'border-primary ring-2 ring-primary/30' : 'border-base-300'"
-          style="background: linear-gradient(135deg, {{ p.from }}, {{ p.via }}, {{ p.to }})"
-          title="{{ p.label }}"
-        ></button>
+          <button
+            type="button"
+            @click="selectPreset('{{ pid }}')"
+            class="h-10 rounded-lg border-2 transition-all hover:scale-105 cursor-pointer"
+            :class="currentId === '{{ pid }}' ? 'border-primary ring-2 ring-primary/30' : 'border-base-300'"
+            style="background: linear-gradient(135deg, {{ p.from }}, {{ p.via }}, {{ p.to }})"
+            title="{{ p.label }}"
+          ></button>
         {% endfor %}
       </div>
 
@@ -136,12 +120,7 @@
           <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
           <span x-text="showCustom ? 'Hide custom' : 'Custom colors'"></span>
         </button>
-        <button
-          type="button"
-          x-show="currentId !== null"
-          @click="resetPalette()"
-          class="btn btn-ghost btn-xs gap-1 text-base-content/50"
-        >
+        <button type="button" x-show="currentId !== null" @click="resetPalette()" class="btn btn-ghost btn-xs gap-1 text-base-content/50">
           <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
           Reset to default
         </button>
@@ -167,7 +146,8 @@
           </label>
         </div>
         <!-- Live preview -->
-        <div class="h-10 rounded-lg" :style="'background: linear-gradient(135deg, ' + customFrom + ', ' + customVia + ', ' + customTo + ')'"></div>
+        <div class="h-10 rounded-lg" :style="'background: linear-gradient(135deg, ' + customFrom + ', ' + customVia + ', ' + customTo + ')'">
+        </div>
         <button type="button" @click="saveCustom()" class="btn btn-primary btn-sm gap-2">
           <i data-lucide="check" class="w-4 h-4"></i>
           Apply custom colors
@@ -244,7 +224,9 @@
         try {
           const res = await fetch('/api/v1/users/me/avatar', {
             method: 'POST',
-            headers: { 'X-CSRFToken': csrfToken },
+            headers: {
+              'X-CSRFToken': csrfToken
+            },
             body: formData,
           });
           const result = await res.json();
@@ -279,7 +261,9 @@
         try {
           const res = await fetch('/api/v1/users/me/avatar', {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': csrfToken },
+            headers: {
+              'X-CSRFToken': csrfToken
+            },
           });
           const result = await res.json();
           if (res.ok) {
@@ -318,8 +302,13 @@
         try {
           const res = await fetch('/api/v1/settings/profile/' + key, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ value: value || null }),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+              value: value || null
+            }),
           });
           if (res.ok) {
             this.showFeedback('success', key.charAt(0).toUpperCase() + key.slice(1) + ' saved.');
@@ -363,7 +352,11 @@
       },
       async saveCustom() {
         this.currentId = '__custom';
-        await this._save({ from: this.customFrom, via: this.customVia, to: this.customTo });
+        await this._save({
+          from: this.customFrom,
+          via: this.customVia,
+          to: this.customTo
+        });
       },
       async resetPalette() {
         this.currentId = null;
@@ -372,7 +365,9 @@
         try {
           await fetch('/api/v1/settings/profile/banner_palette', {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': csrfToken },
+            headers: {
+              'X-CSRFToken': csrfToken
+            },
           });
           this.showFeedback('success', 'Banner reset to default.');
         } catch (e) {
@@ -384,8 +379,13 @@
         try {
           const res = await fetch('/api/v1/settings/profile/banner_palette', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ value }),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+              value
+            }),
           });
           if (res.ok) {
             this.showFeedback('success', 'Banner palette saved.');

@@ -11,52 +11,27 @@
   <div class="flex flex-col items-center text-center gap-2">
     <!-- Clickable group avatar (upload on click) -->
     <div class="relative group/avatar mb-2" :class="activeConversation.kind === 'group' ? 'cursor-pointer' : ''">
-      <div class="scale-150">
-        {% include "chat/ui/partials/_conversation_avatar.html" with conv="activeConversation" %}
-      </div>
+      <div class="scale-150">{% include "chat/ui/partials/_conversation_avatar.html" with conv="activeConversation" %}</div>
       <!-- Camera overlay for group conversations -->
       <template x-if="activeConversation.kind === 'group'">
-        <div
-          class="absolute inset-0 scale-150 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity"
-          @click="$refs.groupAvatarInput.click()"
-          title="Change group avatar"
-        >
+        <div class="absolute inset-0 scale-150 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity" @click="$refs.groupAvatarInput.click()" title="Change group avatar">
           <i data-lucide="camera" class="w-4 h-4 text-white"></i>
         </div>
       </template>
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        class="hidden"
-        x-ref="groupAvatarInput"
-        @change="uploadGroupAvatar($el)"
-      />
+      <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" x-ref="groupAvatarInput" @change="uploadGroupAvatar($el)" />
     </div>
     <!-- Remove avatar button -->
-    <button
-      x-show="activeConversation.kind === 'group' && activeConversation.has_avatar"
-      class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
-      @click="removeGroupAvatar()"
-    >
+    <button x-show="activeConversation.kind === 'group' && activeConversation.has_avatar" class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10" @click="removeGroupAvatar()">
       <i data-lucide="trash-2" class="w-3 h-3"></i>
       Remove avatar
     </button>
     <div class="flex items-center gap-1.5">
       <h3 class="font-bold text-base" x-text="conversationName(activeConversation)"></h3>
-      <button
-        x-show="activeConversation.kind === 'group'"
-        class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100"
-        @click="renameConversation()"
-        title="Rename group"
-      >
+      <button x-show="activeConversation.kind === 'group'" class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100" @click="renameConversation()" title="Rename group">
         <i data-lucide="pencil" class="w-3 h-3"></i>
       </button>
     </div>
-    <span
-      class="badge badge-sm"
-      :class="activeConversation.kind === 'dm' ? 'badge-ghost' : 'badge-info badge-outline'"
-      x-text="activeConversation.kind === 'dm' ? 'Direct message' : 'Group'"
-    ></span>
+    <span class="badge badge-sm" :class="activeConversation.kind === 'dm' ? 'badge-ghost' : 'badge-info badge-outline'" x-text="activeConversation.kind === 'dm' ? 'Direct message' : 'Group'"></span>
   </div>
 
   <!-- Details -->
@@ -78,19 +53,11 @@
     <div x-show="activeConversation.description" class="flex items-start gap-2 text-base-content/60">
       <i data-lucide="align-left" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
       <span x-text="activeConversation.description" class="whitespace-pre-line break-words flex-1"></span>
-      <button
-        class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100 flex-shrink-0"
-        @click="editDescription()"
-        title="Edit description"
-      >
+      <button class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100 flex-shrink-0" @click="editDescription()" title="Edit description">
         <i data-lucide="pencil" class="w-3 h-3"></i>
       </button>
     </div>
-    <button
-      x-show="!activeConversation.description"
-      class="btn btn-ghost btn-xs gap-1 text-base-content/50"
-      @click="editDescription()"
-    >
+    <button x-show="!activeConversation.description" class="btn btn-ghost btn-xs gap-1 text-base-content/50" @click="editDescription()">
       <i data-lucide="align-left" class="w-3 h-3"></i>
       Add description
     </button>
@@ -98,26 +65,15 @@
 
   <!-- Actions -->
   <div class="flex flex-wrap gap-1.5">
-    <button
-      class="btn btn-ghost btn-xs gap-1"
-      @click="copyConversationLink()"
-      :title="_linkCopied ? 'Copied!' : 'Copy link'"
-    >
+    <button class="btn btn-ghost btn-xs gap-1" @click="copyConversationLink()" :title="_linkCopied ? 'Copied!' : 'Copy link'">
       <i :data-lucide="_linkCopied ? 'check' : 'link'" class="w-3 h-3"></i>
       <span x-text="_linkCopied ? 'Copied!' : 'Copy link'"></span>
     </button>
-    <button
-      class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
-      @click="clearConversation()"
-    >
+    <button class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10" @click="clearConversation()">
       <i data-lucide="trash-2" class="w-3 h-3"></i>
       Clear
     </button>
-    <button
-      x-show="!isGroupLinkedConversation()"
-      class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
-      @click="leaveConversation()"
-    >
+    <button x-show="!isGroupLinkedConversation()" class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10" @click="leaveConversation()">
       <i data-lucide="log-out" class="w-3 h-3"></i>
       Leave
     </button>
@@ -132,11 +88,7 @@
   <!-- Members list -->
   <ul class="space-y-1">
     <!-- Add members row -->
-    <li
-      x-show="activeConversation.kind === 'group' && !isGroupLinkedConversation()"
-      class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
-      @click="addMembersToConversation()"
-    >
+    <li x-show="activeConversation.kind === 'group' && !isGroupLinkedConversation()" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer" @click="addMembersToConversation()">
       <div class="w-8 h-8 rounded-full border-2 border-dashed border-base-content/20 flex items-center justify-center flex-shrink-0">
         <i data-lucide="plus" class="w-3.5 h-3.5 text-base-content/40"></i>
       </div>
@@ -148,25 +100,13 @@
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">
             <span class="text-sm font-medium truncate" x-text="memberDisplayName(member)"></span>
-            <span
-              x-show="member.user.id === currentUserId"
-              class="badge badge-ghost badge-sm"
-            >you</span>
-            <span
-              x-show="member.user.id === activeConversation.created_by_id"
-              class="badge badge-info badge-sm badge-outline"
-            >creator</span>
+            <span x-show="member.user.id === currentUserId" class="badge badge-ghost badge-sm">you</span>
+            <span x-show="member.user.id === activeConversation.created_by_id" class="badge badge-info badge-sm badge-outline">creator</span>
           </div>
-          <p
-            class="text-xs text-base-content/50 truncate"
-            x-show="memberDisplayName(member) !== member.user.username"
-            x-text="'@' + member.user.username"
-          ></p>
-          <p
-            class="text-[0.65rem] text-base-content/40 truncate"
-            x-show="member.last_read_at && member.user.id !== currentUserId"
-            x-html="'Read <time datetime=&quot;' + member.last_read_at + '&quot; data-localtime=&quot;smart&quot;></time>'"
-          ></p>
+          <p class="text-xs text-base-content/50 truncate" x-show="memberDisplayName(member) !== member.user.username" x-text="'@' + member.user.username">
+          </p>
+          <p class="text-[0.65rem] text-base-content/40 truncate" x-show="member.last_read_at && member.user.id !== currentUserId" x-html="'Read <time datetime=&quot;' + member.last_read_at + '&quot; data-localtime=&quot;smart&quot;></time>'">
+          </p>
         </div>
         <!-- Remove button (visible to creator, not on self) -->
         <button
@@ -190,21 +130,17 @@
   <template x-if="pinnedMessages.length > 0">
     <ul class="space-y-1">
       <template x-for="pin in pinnedMessages" :key="pin.uuid">
-        <li class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
-            @click="scrollToMessage(pin.message_uuid)">
+        <li class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer" @click="scrollToMessage(pin.message_uuid)">
           <i data-lucide="pin" class="w-3.5 h-3.5 text-warning flex-shrink-0 mt-0.5"></i>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1">
               <span class="text-xs font-semibold truncate" x-text="((pin.message_author?.first_name || '') + ' ' + (pin.message_author?.last_name || '')).trim() || pin.message_author?.username || 'Unknown'"></span>
             </div>
             <p class="text-xs text-base-content/70 truncate" x-text="pin.message_body"></p>
-            <p class="text-[0.65rem] text-base-content/40" x-text="'Pinned by ' + (((pin.pinned_by?.first_name || '') + ' ' + (pin.pinned_by?.last_name || '')).trim() || pin.pinned_by?.username || 'Unknown')"></p>
+            <p class="text-[0.65rem] text-base-content/40" x-text="'Pinned by ' + (((pin.pinned_by?.first_name || '') + ' ' + (pin.pinned_by?.last_name || '')).trim() || pin.pinned_by?.username || 'Unknown')">
+            </p>
           </div>
-          <button
-            class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-error transition-opacity flex-shrink-0"
-            @click.stop="unpinMessage(pin.message_uuid)"
-            title="Unpin"
-          >
+          <button class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-error transition-opacity flex-shrink-0" @click.stop="unpinMessage(pin.message_uuid)" title="Unpin">
             <i data-lucide="pin-off" class="w-3 h-3"></i>
           </button>
         </li>
@@ -249,16 +185,14 @@
     <div>
       <div class="grid grid-cols-3 gap-1">
         <template x-for="item in conversationMedia.filter(m => (m.is_image || m.is_video) && !m.is_audio)" :key="item.uuid">
-          <div class="group/media relative aspect-square rounded overflow-hidden cursor-pointer bg-base-300"
-               @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })"
-               :title="item.original_name">
+          <div class="group/media relative aspect-square rounded overflow-hidden cursor-pointer bg-base-300" @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })" :title="item.original_name">
             <template x-if="item.is_image">
-              <img :src="item.url" :alt="item.original_name"
-                   class="w-full h-full object-cover" loading="lazy" />
+              <img :src="item.url" alt="" :alt="item.original_name" class="w-full h-full object-cover" loading="lazy" />
             </template>
             <template x-if="item.is_video">
               <div class="w-full h-full relative">
-                <video :src="item.url" class="w-full h-full object-cover" preload="metadata"></video>
+                <video :src="item.url" class="w-full h-full object-cover" preload="metadata">
+                </video>
                 <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <i data-lucide="play" class="w-6 h-6 text-white drop-shadow-lg"></i>
                 </div>
@@ -279,8 +213,7 @@
       <template x-if="mediaFilter === 'all'">
         <ul class="mt-2 space-y-1">
           <template x-for="item in conversationMedia.filter(m => m.is_audio || (!m.is_image && !m.is_video))" :key="item.uuid">
-            <li class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
-                @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })">
+            <li class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer" @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })">
               <i data-lucide="file" class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"></i>
               <div class="flex-1 min-w-0">
                 <p class="text-xs truncate" x-text="item.original_name"></p>
@@ -297,8 +230,7 @@
   <template x-if="!loadingMedia && conversationMedia.length > 0 && mediaFilter === 'files'">
     <ul class="space-y-1">
       <template x-for="item in conversationMedia" :key="item.uuid">
-        <li class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
-            @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })">
+        <li class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer" @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })">
           <i data-lucide="file" class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"></i>
           <div class="flex-1 min-w-0">
             <p class="text-xs truncate" x-text="item.original_name"></p>
@@ -311,8 +243,7 @@
 
   <!-- Empty state -->
   <template x-if="!loadingMedia && conversationMedia.length === 0">
-    <p class="text-xs text-base-content/40 text-center py-2"
-       x-text="mediaFilter === 'images' ? 'No media shared yet' : mediaFilter === 'files' ? 'No files shared yet' : 'No media shared yet'">
+    <p class="text-xs text-base-content/40 text-center py-2" x-text="mediaFilter === 'images' ? 'No media shared yet' : mediaFilter === 'files' ? 'No files shared yet' : 'No media shared yet'">
     </p>
   </template>
 
@@ -371,10 +302,8 @@
             <div class="flex items-center gap-2">
               <span class="text-xs w-20 truncate" x-text="entry.username"></span>
               <div class="flex-1 bg-base-300 rounded-full h-2 overflow-hidden">
-                <div
-                  class="bg-primary h-full rounded-full transition-all"
-                  :style="`width: ${Math.round(entry.count / conversationStats.message_count * 100)}%`"
-                ></div>
+                <div class="bg-primary h-full rounded-full transition-all" :style="`width: ${Math.round(entry.count / conversationStats.message_count * 100)}%`">
+                </div>
               </div>
               <span class="text-xs text-base-content/50 w-8 text-right" x-text="entry.count"></span>
             </div>
@@ -400,12 +329,7 @@
       <!-- Search -->
       <div x-show="!loadingBotMemories && botMemories.length > 3" class="relative">
         <i data-lucide="search" class="w-3.5 h-3.5 text-base-content/40 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-        <input
-          type="text"
-          class="input input-xs input-bordered w-full pl-7 pr-7"
-          placeholder="Search memories..."
-          x-model.debounce.200ms="memorySearch"
-        />
+        <input type="text" class="input input-xs input-bordered w-full pl-7 pr-7" placeholder="Search memories..." x-model.debounce.200ms="memorySearch" />
         <button x-show="memorySearch" @click="memorySearch = ''" class="btn btn-ghost btn-xs btn-square absolute right-0.5 top-1/2 -translate-y-1/2">
           <i data-lucide="x" class="w-3 h-3"></i>
         </button>
@@ -488,7 +412,8 @@
                 <p x-show="goal.constraints" class="text-[0.65rem] text-base-content/50 break-words line-clamp-2">
                   Constraints: <span x-text="goal.constraints"></span>
                 </p>
-                <p x-show="goal.notes" class="text-[0.65rem] text-base-content/50 break-words line-clamp-2 mt-0.5 italic" x-text="goal.notes"></p>
+                <p x-show="goal.notes" class="text-[0.65rem] text-base-content/50 break-words line-clamp-2 mt-0.5 italic" x-text="goal.notes">
+                </p>
                 <div class="flex items-center gap-1 mt-0.5">
                   <span class="badge badge-xs" :class="goal.status === 'paused' ? 'badge-ghost' : 'badge-warning badge-outline'" x-text="goal.status === 'paused' ? 'Paused' : 'Active'"></span>
                   <span x-show="goal.check_count > 0" class="text-[0.65rem] text-base-content/40" x-text="`${goal.check_count} check-in${goal.check_count > 1 ? 's' : ''}`"></span>
@@ -502,9 +427,7 @@
               </div>
               <!-- Actions -->
               <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0">
-                <button class="btn btn-ghost btn-xs btn-square" @click="toggleGoalPause(goal)"
-                        :title="goal.status === 'paused' ? 'Resume' : 'Pause'"
-                        :aria-label="goal.status === 'paused' ? 'Resume goal' : 'Pause goal'">
+                <button class="btn btn-ghost btn-xs btn-square" @click="toggleGoalPause(goal)" :title="goal.status === 'paused' ? 'Resume' : 'Pause'" :aria-label="goal.status === 'paused' ? 'Resume goal' : 'Pause goal'">
                   <i :data-lucide="goal.status === 'paused' ? 'play' : 'pause'" class="w-3 h-3"></i>
                 </button>
                 <button class="btn btn-ghost btn-xs btn-square" @click="editGoal(goal)" title="Edit" aria-label="Edit goal">
@@ -576,7 +499,7 @@
   <div class="modal-box max-w-lg">
     <h3 class="font-bold text-lg mb-4">Crop your photo</h3>
     <div class="w-full" style="max-height: 400px;">
-      <img x-ref="cropperImage" style="display: block; max-width: 100%;" />
+      <img x-ref="cropperImage" alt="" style="display: block; max-width: 100%;" />
     </div>
     <div class="modal-action">
       <button type="button" @click="cancelAvatarCrop()" class="btn btn-ghost btn-sm">Cancel</button>

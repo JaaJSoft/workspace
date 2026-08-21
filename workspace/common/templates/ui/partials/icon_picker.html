@@ -13,13 +13,7 @@ Optional: colors, selectedColor, selectColor(), saving, saved.
     <label class="text-xs text-base-content/60 mb-1.5 block">Icon</label>
     <div class="flex flex-wrap gap-1" x-ref="iconGrid">
       <template x-for="icon in icons" :key="icon">
-        <button
-          type="button"
-          class="btn btn-xs btn-square"
-          :class="selectedIcon === icon ? 'btn-primary' : 'btn-ghost'"
-          @click="selectIcon(icon)"
-          :title="icon"
-        >
+        <button type="button" class="btn btn-xs btn-square" :class="selectedIcon === icon ? 'btn-primary' : 'btn-ghost'" @click="selectIcon(icon)" :title="icon">
           <i :data-lucide="icon" class="w-3.5 h-3.5 pointer-events-none"></i>
         </button>
       </template>
@@ -31,13 +25,7 @@ Optional: colors, selectedColor, selectColor(), saving, saved.
     <label class="text-xs text-base-content/60 mb-1.5 block">Color</label>
     <div class="flex flex-wrap gap-1" x-ref="colorGrid">
       <template x-for="color in (colors || [])" :key="color.class">
-        <button
-          type="button"
-          class="btn btn-xs btn-square btn-ghost"
-          :class="selectedColor === color.class ? 'ring-2 ring-primary ring-offset-1' : ''"
-          @click="selectColor(color.class)"
-          :title="color.name"
-        >
+        <button type="button" class="btn btn-xs btn-square btn-ghost" :class="selectedColor === color.class ? 'ring-2 ring-primary ring-offset-1' : ''" @click="selectColor(color.class)" :title="color.name">
           <i data-lucide="circle" class="w-3.5 h-3.5 fill-current pointer-events-none" :class="color.class"></i>
         </button>
       </template>

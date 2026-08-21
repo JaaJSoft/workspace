@@ -23,7 +23,8 @@
           </div>
           <div class="font-semibold text-2xl mt-1">{{ usage_stats.files.total_size|default:"0"|filesizeformat }}</div>
           <div class="w-full bg-base-300 rounded-full h-2 mt-2">
-            <div class="bg-primary rounded-full h-2 transition-all duration-700" x-ref="settingsStorageBar" style="width: 0%"></div>
+            <div class="bg-primary rounded-full h-2 transition-all duration-700" x-ref="settingsStorageBar" style="width: 0%">
+            </div>
           </div>
           <div class="text-xs text-base-content/50 mt-1">{{ usage_stats.files.total_size|default:"0"|filesizeformat }} / {{ storage_quota|filesizeformat }}</div>
         </div>
@@ -112,7 +113,10 @@
         this.$nextTick(() => {
           this.$el.querySelectorAll('[data-count]').forEach(el => {
             const target = parseInt(el.dataset.count) || 0;
-            if (target === 0) { el.textContent = '0'; return; }
+            if (target === 0) {
+              el.textContent = '0';
+              return;
+            }
             this._countUp(el, target, 600);
           });
           const bar = this.$refs.settingsStorageBar;
@@ -120,12 +124,15 @@
             const used = {{ usage_stats.files.total_size|default:"0" }};
             const quota = {{ storage_quota }};
             const pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
-            requestAnimationFrame(() => { bar.style.width = pct + '%'; });
+            requestAnimationFrame(() => {
+              bar.style.width = pct + '%';
+            });
           }
         });
       },
       _countUp(el, target, duration) {
         const start = performance.now();
+
         function tick(now) {
           const progress = Math.min((now - start) / duration, 1);
           const eased = 1 - Math.pow(1 - progress, 3);

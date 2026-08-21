@@ -1,5 +1,4 @@
-<dialog x-ref="newConvDialog" class="modal" @keydown.escape="$refs.newConvDialog.close()"
-        @chat-new-conv-group-selected.window="addSelectedGroup($event.detail.group)">
+<dialog x-ref="newConvDialog" class="modal" @keydown.escape="$refs.newConvDialog.close()" @chat-new-conv-group-selected.window="addSelectedGroup($event.detail.group)">
   <div class="modal-box max-w-md p-0 flex flex-col overflow-visible">
     <!-- Header -->
     <div class="flex items-center justify-between px-5 pt-5 pb-2">
@@ -23,10 +22,7 @@
           <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">To</span>
         </label>
         <div class="relative">
-          <div
-            class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-info/50 transition-colors cursor-text"
-            @click="$refs.userSearchInput.focus()"
-          >
+          <div class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-info/50 transition-colors cursor-text" @click="$refs.userSearchInput.focus()">
             <!-- Selected user chips -->
             <template x-for="u in selectedUsers" :key="u.id">
               {% include "ui/partials/user_chip.html" with user_id_expr="u.id" username_expr="u.username" remove_expr="removeSelectedUser(u.id)" %}
@@ -49,12 +45,7 @@
           </div>
 
           <!-- Dropdown results -->
-          <div
-            x-show="userSearchShowDropdown && userSearchResults.length > 0"
-            x-cloak
-            @click.outside="userSearchShowDropdown = false"
-            class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
-          >
+          <div x-show="userSearchShowDropdown && userSearchResults.length > 0" x-cloak @click.outside="userSearchShowDropdown = false" class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
             <ul class="menu menu-sm p-1">
               <template x-for="(user, idx) in userSearchResults" :key="user.id">
                 <li>
@@ -69,11 +60,7 @@
                     <user-avatar :user-id="user.id" :username="user.username" size="xs" presence></user-avatar>
                     <div class="flex flex-col items-start">
                       <span class="font-medium text-sm" x-text="user.username"></span>
-                      <span
-                        class="text-xs text-base-content/60"
-                        x-show="user.first_name || user.last_name"
-                        x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"
-                      ></span>
+                      <span class="text-xs text-base-content/60" x-show="user.first_name || user.last_name" x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"></span>
                     </div>
                   </button>
                 </li>
@@ -87,9 +74,7 @@
             x-cloak
             @click.outside="userSearchShowDropdown = false"
             class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
-          >
-            No users found
-          </div>
+          >No users found</div>
         </div>
       </div>
 
@@ -118,22 +103,13 @@
           <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">Group name</span>
           <span class="label-text-alt text-xs text-base-content/40">Optional</span>
         </label>
-        <input
-          type="text"
-          class="input input-sm input-bordered w-full"
-          placeholder="e.g. Project Team"
-          x-model="newConvTitle"
-        />
+        <input type="text" class="input input-sm input-bordered w-full" placeholder="e.g. Project Team" x-model="newConvTitle" />
       </div>
 
       <!-- Actions -->
       <div class="flex justify-end gap-2 pt-1">
         <button class="btn btn-ghost btn-sm" @click="$refs.newConvDialog.close()">Cancel</button>
-        <button
-          class="btn btn-info btn-sm gap-1.5"
-          @click="createConversation()"
-          :disabled="(newConvMode === 'groups' ? selectedGroups.length === 0 : selectedUsers.length === 0) || creatingConversation"
-        >
+        <button class="btn btn-info btn-sm gap-1.5" @click="createConversation()" :disabled="(newConvMode === 'groups' ? selectedGroups.length === 0 : selectedUsers.length === 0) || creatingConversation">
           <template x-if="!creatingConversation">
             <span class="flex items-center gap-1.5">
               <i data-lucide="message-circle-plus" class="w-4 h-4"></i>

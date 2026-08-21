@@ -1,5 +1,4 @@
-<div class="h-full flex flex-col min-w-0 bg-base-100"
-     :style="!activeConversation && !pendingInitialConvUuid && isMobile() ? 'display:none!important' : ''">
+<div class="h-full flex flex-col min-w-0 bg-base-100" :style="!activeConversation && !pendingInitialConvUuid && isMobile() ? 'display:none!important' : ''">
 
   <!-- Empty state -->
   <template x-if="!activeConversation && !pendingInitialConvUuid">
@@ -11,10 +10,7 @@
       <!-- Conversation header -->
       <div class="px-4 py-2.5 border-b border-base-300 flex items-center gap-3 bg-base-100">
         <!-- Back button (mobile) -->
-        <button
-          class="btn btn-ghost btn-sm btn-square lg:hidden"
-          @click="activeConversation = null; history.pushState({}, '', '/chat')"
-        >
+        <button class="btn btn-ghost btn-sm btn-square lg:hidden" @click="activeConversation = null; history.pushState({}, '', '/chat')">
           <i data-lucide="arrow-left" class="w-5 h-5"></i>
         </button>
 
@@ -23,31 +19,21 @@
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5 min-w-0">
             <h3 class="font-semibold text-sm truncate" x-text="conversationName(activeConversation)"></h3>
-            <span x-show="titleRegeneratingUuid === activeConversation.uuid" x-cloak
-                  class="loading loading-spinner loading-xs text-secondary flex-shrink-0"
-                  title="Regenerating title..."></span>
+            <span x-show="titleRegeneratingUuid === activeConversation.uuid" x-cloak class="loading loading-spinner loading-xs text-secondary flex-shrink-0" title="Regenerating title..."></span>
           </div>
           <p class="text-xs text-base-content/60 truncate">
             <span x-text="membersList(activeConversation)"></span>
             <template x-if="activeConversation.description">
               <span>
                 -
-                <button
-                  class="inline-flex align-middle opacity-50 hover:opacity-100"
-                  @click="editDescription()"
-                  :title="'Edit description'"
-                >
+                <button class="inline-flex align-middle opacity-50 hover:opacity-100" @click="editDescription()" :title="'Edit description'">
                   <i data-lucide="align-left" class="w-2.5 h-2.5"></i>
                 </button>
                 <span x-text="activeConversation.description"></span>
               </span>
             </template>
             <template x-if="!activeConversation.description">
-              <button
-                class="inline-flex align-middle opacity-50 hover:opacity-100 ml-1"
-                @click="editDescription()"
-                title="Add description"
-              >
+              <button class="inline-flex align-middle opacity-50 hover:opacity-100 ml-1" @click="editDescription()" title="Add description">
                 <i data-lucide="align-left" class="w-2.5 h-2.5"></i>
               </button>
             </template>
@@ -56,61 +42,37 @@
 
         <!-- Header actions -->
         <div class="flex items-center gap-0.5">
-          <button
-            x-show="!isBotConversation(activeConversation)"
-            class="btn btn-ghost btn-sm btn-square"
-            @click="openCallRoom()"
-            :disabled="inCall || joiningCall"
-            title="Start or join a call"
-          >
+          <button x-show="!isBotConversation(activeConversation)" class="btn btn-ghost btn-sm btn-square" @click="openCallRoom()" :disabled="inCall || joiningCall" title="Start or join a call">
             <i data-lucide="phone" class="w-4 h-4"></i>
           </button>
-          <button
-            class="btn btn-ghost btn-sm btn-square"
-            :class="showSearchPanel ? 'bg-base-200' : ''"
-            @click="toggleSearchPanel()"
-            title="Search in conversation (Ctrl+F)"
-          >
+          <button class="btn btn-ghost btn-sm btn-square" :class="showSearchPanel ? 'bg-base-200' : ''" @click="toggleSearchPanel()" title="Search in conversation (Ctrl+F)">
             <i data-lucide="search" class="w-4 h-4"></i>
           </button>
           <div class="dropdown dropdown-end">
-            <button
-              tabindex="0"
-              class="btn btn-ghost btn-sm btn-square"
-              :class="notificationLevel() !== 'all' ? 'text-warning' : ''"
-              :title="'Notifications: ' + notificationLevelLabel()"
-            >
+            <button tabindex="0" class="btn btn-ghost btn-sm btn-square" :class="notificationLevel() !== 'all' ? 'text-warning' : ''" :title="'Notifications: ' + notificationLevelLabel()">
               <i x-show="notificationLevel() === 'all'" data-lucide="bell" class="w-4 h-4"></i>
               <i x-show="notificationLevel() === 'mentions'" data-lucide="at-sign" class="w-4 h-4"></i>
               <i x-show="notificationLevel() === 'none'" data-lucide="bell-off" class="w-4 h-4"></i>
             </button>
             <ul tabindex="0" class="dropdown-content menu menu-sm gap-1 bg-base-100 border border-base-300 rounded-box shadow-lg w-56 mt-2 z-50">
               <li>
-                <a @click="document.activeElement.blur(); setNotificationLevel('all')"
-                   :class="notificationLevel() === 'all' ? 'active' : ''">
+                <a @click="document.activeElement.blur(); setNotificationLevel('all')" :class="notificationLevel() === 'all' ? 'active' : ''">
                   <i data-lucide="bell" class="w-4 h-4"></i> All messages
                 </a>
               </li>
               <li>
-                <a @click="document.activeElement.blur(); setNotificationLevel('mentions')"
-                   :class="notificationLevel() === 'mentions' ? 'active' : ''">
+                <a @click="document.activeElement.blur(); setNotificationLevel('mentions')" :class="notificationLevel() === 'mentions' ? 'active' : ''">
                   <i data-lucide="at-sign" class="w-4 h-4"></i> Mentions only
                 </a>
               </li>
               <li>
-                <a @click="document.activeElement.blur(); setNotificationLevel('none')"
-                   :class="notificationLevel() === 'none' ? 'active' : ''">
+                <a @click="document.activeElement.blur(); setNotificationLevel('none')" :class="notificationLevel() === 'none' ? 'active' : ''">
                   <i data-lucide="bell-off" class="w-4 h-4"></i> Nothing
                 </a>
               </li>
             </ul>
           </div>
-          <button
-            class="btn btn-ghost btn-sm btn-square"
-            :class="showInfoPanel ? 'bg-base-200' : ''"
-            @click="toggleInfoPanel()"
-            title="Conversation info (Alt+I)"
-          >
+          <button class="btn btn-ghost btn-sm btn-square" :class="showInfoPanel ? 'bg-base-200' : ''" @click="toggleInfoPanel()" title="Conversation info (Alt+I)">
             <i data-lucide="info" class="w-4 h-4"></i>
           </button>
         </div>
@@ -123,8 +85,7 @@
         <div class="flex-1 flex flex-col min-w-0 relative">
           <!-- Join banner: this conversation has an active call you have not
                joined yet. Click Join to open the dedicated voice room. -->
-          <div x-show="callBannerVisible()" x-cloak
-               class="px-4 py-2 border-b border-base-300 flex items-center gap-3 bg-base-200">
+          <div x-show="callBannerVisible()" x-cloak class="px-4 py-2 border-b border-base-300 flex items-center gap-3 bg-base-200">
             <i data-lucide="phone" class="w-4 h-4 text-info flex-shrink-0"></i>
             <div class="flex items-center gap-2 flex-1 min-w-0">
               <span class="text-sm" x-text="'Call in progress' + (callParticipants.length ? ' - ' + callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '') : '')"></span>
@@ -132,9 +93,7 @@
             </div>
           </div>
           <!-- Pinned messages banner -->
-          <div x-show="pinnedMessages.length > 0" x-cloak
-               class="px-4 py-2 bg-warning/10 border-b border-warning/20 flex items-center gap-2 cursor-pointer hover:bg-warning/15 transition-colors"
-               @click="openInfoPanel({ scrollTo: 'pinned-messages-section' })">
+          <div x-show="pinnedMessages.length > 0" x-cloak class="px-4 py-2 bg-warning/10 border-b border-warning/20 flex items-center gap-2 cursor-pointer hover:bg-warning/15 transition-colors" @click="openInfoPanel({ scrollTo: 'pinned-messages-section' })">
             <i data-lucide="pin" class="w-4 h-4 text-warning flex-shrink-0"></i>
             <span class="text-sm truncate flex-1" x-text="pinnedMessages[0]?.message_body || 'Pinned message'"></span>
             <span x-show="pinnedMessages.length > 1" class="badge badge-warning badge-sm" x-text="pinnedMessages.length + ' pins'"></span>
@@ -153,11 +112,7 @@
           >
             <!-- Load more -->
             <div x-show="hasMoreMessages" class="flex justify-center py-2">
-              <button
-                class="btn btn-ghost btn-xs"
-                @click="loadMoreMessages()"
-                :disabled="loadingMoreMessages"
-              >
+              <button class="btn btn-ghost btn-xs" @click="loadMoreMessages()" :disabled="loadingMoreMessages">
                 <span x-show="!loadingMoreMessages">Load older messages</span>
                 <span x-show="loadingMoreMessages" class="loading loading-spinner loading-xs"></span>
               </button>
@@ -177,11 +132,7 @@
             </div>
 
             <!-- Bot typing indicator -->
-            <div x-show="botTyping" x-cloak
-                 x-transition:enter="transition ease-out duration-300"
-                 x-transition:enter-start="opacity-0 translate-y-2"
-                 x-transition:enter-end="opacity-100 translate-y-0"
-                 class="flex items-center gap-2 mb-3">
+            <div x-show="botTyping" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" class="flex items-center gap-2 mb-3">
               <!-- Bot avatar -->
               <div class="flex-shrink-0 w-8" x-html="botTypingAvatar()"></div>
               <!-- Content column + cancel -->
@@ -197,17 +148,17 @@
                      arguments. The running/done marker is added here rather
                      than server-side so the fragment stays identical to the
                      one the finished message renders. -->
-                <div class="ai-thinking-bubble rounded-2xl min-w-0 max-w-full"
-                     :class="botSteps.length ? 'px-3 py-2' : 'px-8 py-3.5 min-w-[9rem]'">
+                <div class="ai-thinking-bubble rounded-2xl min-w-0 max-w-full" :class="botSteps.length ? 'px-3 py-2' : 'px-8 py-3.5 min-w-[9rem]'">
                   <div class="flex flex-col gap-1 min-w-0">
-                    <div x-show="botSteps.length" x-cloak
-                         class="flex flex-col gap-1 text-xs text-base-content/50 min-w-0">
+                    <div x-show="botSteps.length" x-cloak class="flex flex-col gap-1 text-xs text-base-content/50 min-w-0">
                       <template x-for="(step, index) in botSteps" :key="index">
-                        <div class="flex items-start gap-1.5 min-w-0"
-                             :class="index === botSteps.length - 1 ? 'ai-step-running text-base-content/70' : ''"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0"
-                             x-transition:enter-end="opacity-100">
+                        <div
+                          class="flex items-start gap-1.5 min-w-0"
+                          :class="index === botSteps.length - 1 ? 'ai-step-running text-base-content/70' : ''"
+                          x-transition:enter="transition ease-out duration-200"
+                          x-transition:enter-start="opacity-0"
+                          x-transition:enter-end="opacity-100"
+                        >
                           <!-- One fixed slot for both markers: a running row and a
                                done row must not shift the text column. x-show sits
                                on the check's wrapper because Lucide swaps the <i>
@@ -229,8 +180,7 @@
                     </div>
                   </div>
                 </div>
-                <button class="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-error opacity-0 group-hover:opacity-100 transition-opacity"
-                        @click="cancelBotResponse()" title="Cancel">
+                <button class="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-error opacity-0 group-hover:opacity-100 transition-opacity" @click="cancelBotResponse()" title="Cancel">
                   <i data-lucide="x" class="w-3.5 h-3.5"></i>
                 </button>
               </div>
@@ -238,8 +188,7 @@
           </div>
 
           <!-- Drag-drop overlay -->
-          <div x-show="isDraggingOver" x-cloak
-               class="absolute inset-0 z-50 flex items-center justify-center bg-base-100/80 border-2 border-dashed border-info rounded-xl pointer-events-none">
+          <div x-show="isDraggingOver" x-cloak class="absolute inset-0 z-50 flex items-center justify-center bg-base-100/80 border-2 border-dashed border-info rounded-xl pointer-events-none">
             <div class="text-center">
               <i data-lucide="upload" class="w-8 h-8 text-info mx-auto mb-2"></i>
               <p class="text-sm font-medium text-info">Drop files to attach</p>
@@ -247,14 +196,17 @@
           </div>
 
           <!-- User typing indicator -->
-          <div x-show="activeTypingUsers().length > 0" x-cloak
-               x-transition:enter="transition ease-out duration-200"
-               x-transition:enter-start="opacity-0 translate-y-1"
-               x-transition:enter-end="opacity-100 translate-y-0"
-               x-transition:leave="transition ease-in duration-150"
-               x-transition:leave-start="opacity-100 translate-y-0"
-               x-transition:leave-end="opacity-0 translate-y-1"
-               class="flex items-center gap-2 px-4 h-6">
+          <div
+            x-show="activeTypingUsers().length > 0"
+            x-cloak
+            x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 translate-y-1"
+            x-transition:enter-end="opacity-100 translate-y-0"
+            x-transition:leave="transition ease-in duration-150"
+            x-transition:leave-start="opacity-100 translate-y-0"
+            x-transition:leave-end="opacity-0 translate-y-1"
+            class="flex items-center gap-2 px-4 h-6"
+          >
             <div class="flex items-center gap-0.5">
               <span class="w-1.5 h-1.5 rounded-full bg-base-content/40 animate-bounce [animation-delay:0ms]"></span>
               <span class="w-1.5 h-1.5 rounded-full bg-base-content/40 animate-bounce [animation-delay:150ms]"></span>
@@ -264,11 +216,13 @@
           </div>
 
           {% include "chat/ui/partials/_composer.html" %}
-        </div><!-- /messages column -->
+        </div>
+        <!-- /messages column -->
 
         <!-- Info panel -->
         <div
-          x-show="showInfoPanel" x-cloak
+          x-show="showInfoPanel"
+          x-cloak
           x-transition:enter="transition-[width] ease-out duration-200"
           x-transition:enter-start="!w-0"
           x-transition:enter-end="!w-72"
@@ -277,14 +231,13 @@
           x-transition:leave-end="!w-0"
           class="{% if overlay_panels %}hidden{% else %}hidden lg:flex{% endif %} w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
         >
-          <div class="w-72 flex-1 overflow-y-auto">
-            {% include "chat/ui/partials/info_panel.html" %}
-          </div>
+          <div class="w-72 flex-1 overflow-y-auto">{% include "chat/ui/partials/info_panel.html" %}</div>
         </div>
 
         <!-- Search panel -->
         <div
-          x-show="showSearchPanel" x-cloak
+          x-show="showSearchPanel"
+          x-cloak
           x-transition:enter="transition-[width] ease-out duration-200"
           x-transition:enter-start="!w-0"
           x-transition:enter-end="!w-72"
@@ -293,9 +246,7 @@
           x-transition:leave-end="!w-0"
           class="{% if overlay_panels %}hidden{% else %}hidden lg:flex{% endif %} w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
         >
-          <div class="w-72 flex-1 overflow-y-auto">
-            {% include "chat/ui/partials/search_panel.html" %}
-          </div>
+          <div class="w-72 flex-1 overflow-y-auto">{% include "chat/ui/partials/search_panel.html" %}</div>
         </div>
 
         {% comment %}
@@ -318,17 +269,17 @@
           presence, so there is no width to animate between.
         {% endcomment %}
         <template x-if="openThreadRoot">
-          <div data-testid="thread-panel"
-               class="absolute inset-0 z-30 flex flex-col overflow-hidden bg-base-100
-                      {% if not overlay_panels %}lg:static lg:inset-auto lg:z-auto lg:w-96 lg:border-l lg:border-base-300{% endif %}">
+          <div data-testid="thread-panel" class="absolute inset-0 z-30 flex flex-col overflow-hidden bg-base-100 {% if not overlay_panels %}lg:static lg:inset-auto lg:z-auto lg:w-96 lg:border-l lg:border-base-300{% endif %}">
             {% include "chat/ui/partials/thread_panel.html" %}
           </div>
         </template>
-      </div><!-- /content area -->
+      </div>
+      <!-- /content area -->
 
       <!-- Mobile info panel (full-screen overlay) -->
       <div
-        x-show="showInfoPanel" x-cloak
+        x-show="showInfoPanel"
+        x-cloak
         x-transition:enter="transition ease-out duration-200"
         x-transition:enter-start="translate-x-full"
         x-transition:enter-end="translate-x-0"
@@ -337,13 +288,12 @@
         x-transition:leave-end="translate-x-full"
         class="{% if overlay_panels %}absolute{% else %}lg:hidden absolute{% endif %} inset-0 z-30 bg-base-100 flex flex-col overflow-y-auto"
         data-testid="info-panel-overlay"
-      >
-        {% include "chat/ui/partials/info_panel.html" %}
-      </div>
+      >{% include "chat/ui/partials/info_panel.html" %}</div>
 
       <!-- Mobile search panel (full-screen overlay) -->
       <div
-        x-show="showSearchPanel" x-cloak
+        x-show="showSearchPanel"
+        x-cloak
         x-transition:enter="transition ease-out duration-200"
         x-transition:enter-start="translate-x-full"
         x-transition:enter-end="translate-x-0"
@@ -352,30 +302,27 @@
         x-transition:leave-end="translate-x-full"
         class="{% if overlay_panels %}absolute{% else %}lg:hidden absolute{% endif %} inset-0 z-30 bg-base-100 flex flex-col overflow-y-auto"
         data-testid="search-panel-overlay"
-      >
-        {% include "chat/ui/partials/search_panel.html" %}
-      </div>
+      >{% include "chat/ui/partials/search_panel.html" %}</div>
     </div>
   </template>
 </div>
 
 <!-- Singleton emoji picker -->
-<div x-show="emojiPickerVisible" x-cloak
-     class="fixed z-[100]"
-     :style="`left:${emojiPickerX}px; top:${emojiPickerY}px`"
-     @click.outside="closeEmojiPicker()">
+<div x-show="emojiPickerVisible" x-cloak class="fixed z-[100]" :style="`left:${emojiPickerX}px; top:${emojiPickerY}px`" @click.outside="closeEmojiPicker()">
   <emoji-picker x-ref="emojiPicker"></emoji-picker>
 </div>
 
 <!-- Context menu -->
 <div id="conv-context-menu">
-{% include "ui/partials/context_menu_panel.html" with items="chat/ui/partials/conversation_context_menu.html" open="ctxMenu.open" close="ctxMenu.open = false" x="ctxMenu.x" y="ctxMenu.y" %}
+  {% include "ui/partials/context_menu_panel.html" with items="chat/ui/partials/conversation_context_menu.html" open="ctxMenu.open" close="ctxMenu.open = false" x="ctxMenu.x" y="ctxMenu.y" %}
 </div>
 
 <!-- New conversation dialog -->
 {% include "chat/ui/partials/new_conversation_dialog.html" %}
 {% include "chat/ui/partials/add_member_dialog.html" %}
-{% if ai_enabled %}{% include "chat/ui/partials/agent_goal_dialog.html" %}{% endif %}
+{% if ai_enabled %}
+  {% include "chat/ui/partials/agent_goal_dialog.html" %}
+{% endif %}
 {% include "chat/ui/partials/help_dialog.html" %}
 
 <!-- Preferences dialog (mobile) -->
@@ -404,9 +351,7 @@
       <i data-lucide="activity" class="w-4 h-4 text-info"></i>
       Connection diagnostic
     </h3>
-    <p class="text-sm text-base-content/60 mb-4">
-      Checks your microphone, network, and a test call through the server.
-    </p>
+    <p class="text-sm text-base-content/60 mb-4">Checks your microphone, network, and a test call through the server.</p>
 
     <ul class="space-y-3">
       <template x-for="step in diagSteps" :key="step.key">
@@ -430,17 +375,12 @@
 
     <!-- Live audio stage: only after the loopback passes -->
     <div x-show="diagLive" x-cloak class="mt-4 pt-3 border-t border-base-300 space-y-2">
-      <p class="text-xs text-base-content/60">
-        Speak - the bar should move (audio sent through the test connection).
-      </p>
+      <p class="text-xs text-base-content/60">Speak - the bar should move (audio sent through the test connection).</p>
       <div class="h-3 w-full rounded-full bg-base-300 overflow-hidden">
-        <div class="h-full bg-info transition-[width] duration-75"
-             :style="'width: ' + diagLevel + '%'"></div>
+        <div class="h-full bg-info transition-[width] duration-75" :style="'width: ' + diagLevel + '%'"></div>
       </div>
       <div class="flex items-center justify-between gap-2">
-        <button type="button" class="btn btn-xs"
-                :class="diagMonitor ? 'btn-info' : 'btn-ghost'"
-                @click="_diagToggleMonitor()">
+        <button type="button" class="btn btn-xs" :class="diagMonitor ? 'btn-info' : 'btn-ghost'" @click="_diagToggleMonitor()">
           <i data-lucide="headphones" class="w-3.5 h-3.5"></i>
           <span x-text="diagMonitor ? 'Stop hearing myself' : 'Hear myself'"></span>
         </button>
@@ -461,102 +401,97 @@
 
 <!-- Bot picker dialog -->
 {% if ai_enabled %}
-<dialog :class="{'modal-open': showBotPicker}" class="modal">
-  <div class="modal-box max-w-sm p-0 flex flex-col">
-    <div class="flex items-center justify-between px-5 pt-5 pb-2">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="sparkles" class="w-5 h-5 text-secondary"></i>
-        Start AI Chat
-      </h3>
-      <button class="btn btn-ghost btn-sm btn-square" @click="showBotPicker = false">
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </div>
-    <div class="px-5 pb-1" x-show="availableBots.length > 5">
-      <label class="input input-bordered input-sm flex items-center gap-2 w-full">
-        <i data-lucide="search" class="w-4 h-4 opacity-50"></i>
-        <input type="text" class="grow" placeholder="Filter bots…"
-               x-model="botFilter"
-               @keydown.escape.prevent="botFilter = ''"
-               x-ref="botFilterInput">
-      </label>
-    </div>
-    <div class="px-5 pb-5 space-y-2 overflow-y-auto max-h-80">
-      <template x-for="bot in availableBots.filter(b => {
+  <dialog :class="{'modal-open': showBotPicker}" class="modal">
+    <div class="modal-box max-w-sm p-0 flex flex-col">
+      <div class="flex items-center justify-between px-5 pt-5 pb-2">
+        <h3 class="font-bold text-lg flex items-center gap-2">
+          <i data-lucide="sparkles" class="w-5 h-5 text-secondary"></i>
+          Start AI Chat
+        </h3>
+        <button class="btn btn-ghost btn-sm btn-square" @click="showBotPicker = false">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="px-5 pb-1" x-show="availableBots.length > 5">
+        <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+          <i data-lucide="search" class="w-4 h-4 opacity-50"></i>
+          <input type="text" class="grow" placeholder="Filter bots…" x-model="botFilter" @keydown.escape.prevent="botFilter = ''" x-ref="botFilterInput" />
+        </label>
+      </div>
+      <div class="px-5 pb-5 space-y-2 overflow-y-auto max-h-80">
+        <template
+          x-for="bot in availableBots.filter(b => {
         if (!botFilter) return true;
         const q = botFilter.toLowerCase();
         return (b.display_name && b.display_name.toLowerCase().includes(q))
             || (b.description && b.description.toLowerCase().includes(q));
-      })" :key="bot.user_id">
-        <button class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors text-left"
-                @click="startBotConversation(bot)">
-          <div class="avatar" :class="{ 'placeholder': !bot.avatar_url }">
-            <template x-if="bot.avatar_url">
-              <div class="w-10 rounded-full">
-                <img :src="bot.avatar_url" :alt="bot.display_name">
-              </div>
-            </template>
-            <template x-if="!bot.avatar_url">
-              <div class="bg-secondary text-secondary-content w-10 rounded-full">
-                <i data-lucide="bot" class="w-5 h-5"></i>
-              </div>
-            </template>
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="font-medium text-sm" x-text="bot.display_name"></div>
-            <div class="text-xs text-base-content/50 truncate" x-text="bot.description"></div>
-          </div>
-        </button>
-      </template>
-      <div x-show="availableBots.length === 0" class="text-center text-sm text-base-content/50 py-4">
-        No AI bots available.
-      </div>
-      <div x-show="availableBots.length > 0 && botFilter && availableBots.filter(b => {
+      })"
+          :key="bot.user_id"
+        >
+          <button class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors text-left" @click="startBotConversation(bot)">
+            <div class="avatar" :class="{ 'placeholder': !bot.avatar_url }">
+              <template x-if="bot.avatar_url">
+                <div class="w-10 rounded-full">
+                  <img :src="bot.avatar_url" alt="" :alt="bot.display_name" />
+                </div>
+              </template>
+              <template x-if="!bot.avatar_url">
+                <div class="bg-secondary text-secondary-content w-10 rounded-full">
+                  <i data-lucide="bot" class="w-5 h-5"></i>
+                </div>
+              </template>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-sm" x-text="bot.display_name"></div>
+              <div class="text-xs text-base-content/50 truncate" x-text="bot.description"></div>
+            </div>
+          </button>
+        </template>
+        <div x-show="availableBots.length === 0" class="text-center text-sm text-base-content/50 py-4">
+          No AI bots available.
+        </div>
+        <div
+          x-show="availableBots.length > 0 && botFilter && availableBots.filter(b => {
         const q = botFilter.toLowerCase();
         return (b.display_name && b.display_name.toLowerCase().includes(q))
             || (b.description && b.description.toLowerCase().includes(q));
-      }).length === 0" class="text-center text-sm text-base-content/50 py-4">
-        No bots match your filter.
+      }).length === 0"
+          class="text-center text-sm text-base-content/50 py-4"
+        >No bots match your filter.</div>
       </div>
-    </div>
-    <!-- Agent mode (advanced): give the bot a long-term goal at creation -->
-    <div class="px-5 pb-1 border-t border-base-200">
-      <button type="button" class="w-full flex items-center gap-2 py-2 text-xs text-base-content/60 hover:text-base-content transition-colors"
-              @click="botGoalDraft.enabled = !botGoalDraft.enabled">
-        <i data-lucide="target" class="w-3.5 h-3.5 text-warning"></i>
-        Agent mode — give a long-term goal
-        <i :data-lucide="botGoalDraft.enabled ? 'chevron-up' : 'chevron-down'" class="w-3.5 h-3.5 ml-auto"></i>
-      </button>
-      <div x-show="botGoalDraft.enabled" x-collapse class="space-y-2 pb-2">
-        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="3"
-                  placeholder="Objective: what should the bot pursue autonomously? (e.g. follow apartment listings in Lyon and alert me about good ones)"
-                  x-model="botGoalDraft.goal"></textarea>
-        <input type="text" class="input input-bordered input-sm w-full"
-               placeholder="Title (optional)"
-               x-model="botGoalDraft.title">
-        <div class="grid grid-cols-2 gap-2">
-          <label class="form-control">
-            <span class="label-text text-xs text-base-content/60 pb-0.5">First check-in (optional)</span>
-            <input type="datetime-local" class="input input-bordered input-sm w-full"
-                   x-model="botGoalDraft.first_check_at">
-          </label>
-          <label class="form-control">
-            <span class="label-text text-xs text-base-content/60 pb-0.5">Deadline (optional)</span>
-            <input type="datetime-local" class="input input-bordered input-sm w-full"
-                   x-model="botGoalDraft.deadline">
-          </label>
+      <!-- Agent mode (advanced): give the bot a long-term goal at creation -->
+      <div class="px-5 pb-1 border-t border-base-200">
+        <button type="button" class="w-full flex items-center gap-2 py-2 text-xs text-base-content/60 hover:text-base-content transition-colors" @click="botGoalDraft.enabled = !botGoalDraft.enabled">
+          <i data-lucide="target" class="w-3.5 h-3.5 text-warning"></i>
+          Agent mode — give a long-term goal
+          <i :data-lucide="botGoalDraft.enabled ? 'chevron-up' : 'chevron-down'" class="w-3.5 h-3.5 ml-auto"></i>
+        </button>
+        <div x-show="botGoalDraft.enabled" x-collapse class="space-y-2 pb-2">
+          <textarea class="textarea textarea-bordered textarea-sm w-full" rows="3" placeholder="Objective: what should the bot pursue autonomously? (e.g. follow apartment listings in Lyon and alert me about good ones)" x-model="botGoalDraft.goal"></textarea>
+          <input type="text" class="input input-bordered input-sm w-full" placeholder="Title (optional)" x-model="botGoalDraft.title" />
+          <div class="grid grid-cols-2 gap-2">
+            <label class="form-control">
+              <span class="label-text text-xs text-base-content/60 pb-0.5">First check-in (optional)</span>
+              <input type="datetime-local" class="input input-bordered input-sm w-full" x-model="botGoalDraft.first_check_at" />
+            </label>
+            <label class="form-control">
+              <span class="label-text text-xs text-base-content/60 pb-0.5">Deadline (optional)</span>
+              <input type="datetime-local" class="input input-bordered input-sm w-full" x-model="botGoalDraft.deadline" />
+            </label>
+          </div>
+          <p class="text-[0.65rem] text-base-content/40">
+            The bot will work on this goal on its own schedule and only message you when it has something worth saying. Pick a bot above to start.
+          </p>
         </div>
-        <p class="text-[0.65rem] text-base-content/40">
-          The bot will work on this goal on its own schedule and only message you when it has something worth saying. Pick a bot above to start.
-        </p>
+      </div>
+      <div class="flex justify-end px-5 pb-5 pt-1">
+        <button class="btn btn-ghost btn-sm" @click="showBotPicker = false; resetBotGoalDraft()">Cancel</button>
       </div>
     </div>
-    <div class="flex justify-end px-5 pb-5 pt-1">
-      <button class="btn btn-ghost btn-sm" @click="showBotPicker = false; resetBotGoalDraft()">Cancel</button>
-    </div>
-  </div>
-  <form method="dialog" class="modal-backdrop"><button @click="showBotPicker = false; resetBotGoalDraft()">close</button></form>
-</dialog>
+    <form method="dialog" class="modal-backdrop">
+      <button @click="showBotPicker = false; resetBotGoalDraft()">close</button>
+    </form>
+  </dialog>
 {% endif %}
 
 <!-- Attachment viewer modal -->

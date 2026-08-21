@@ -16,10 +16,7 @@
           <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">Search users</span>
         </label>
         <div class="relative">
-          <div
-            class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-info/50 transition-colors cursor-text"
-            @click="$refs.addMemberSearchInput.focus()"
-          >
+          <div class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-info/50 transition-colors cursor-text" @click="$refs.addMemberSearchInput.focus()">
             <!-- Selected user chips -->
             <template x-for="u in addMemberSelected" :key="u.id">
               {% include "ui/partials/user_chip.html" with user_id_expr="u.id" username_expr="u.username" remove_expr="removeAddMember(u.id)" %}
@@ -42,30 +39,15 @@
           </div>
 
           <!-- Dropdown results -->
-          <div
-            x-show="addMemberShowDropdown && addMemberResults.length > 0"
-            x-cloak
-            @click.outside="addMemberShowDropdown = false"
-            class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
-          >
+          <div x-show="addMemberShowDropdown && addMemberResults.length > 0" x-cloak @click.outside="addMemberShowDropdown = false" class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
             <ul class="menu menu-sm p-1">
               <template x-for="(user, idx) in addMemberResults" :key="user.id">
                 <li>
-                  <button
-                    type="button"
-                    class="flex items-center gap-2 rounded"
-                    :class="idx === addMemberHighlight ? 'active' : ''"
-                    @click="selectAddMember(user); $refs.addMemberSearchInput.focus()"
-                    @mouseenter="addMemberHighlight = idx"
-                  >
+                  <button type="button" class="flex items-center gap-2 rounded" :class="idx === addMemberHighlight ? 'active' : ''" @click="selectAddMember(user); $refs.addMemberSearchInput.focus()" @mouseenter="addMemberHighlight = idx">
                     <user-avatar :user-id="user.id" :username="user.username" size="xs" presence></user-avatar>
                     <div class="flex flex-col items-start">
                       <span class="font-medium text-sm" x-text="user.username"></span>
-                      <span
-                        class="text-xs text-base-content/60"
-                        x-show="user.first_name || user.last_name"
-                        x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"
-                      ></span>
+                      <span class="text-xs text-base-content/60" x-show="user.first_name || user.last_name" x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"></span>
                     </div>
                   </button>
                 </li>
@@ -79,20 +61,14 @@
             x-cloak
             @click.outside="addMemberShowDropdown = false"
             class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
-          >
-            No users found
-          </div>
+          >No users found</div>
         </div>
       </div>
 
       <!-- Actions -->
       <div class="flex justify-end gap-2 pt-1">
         <button class="btn btn-ghost btn-sm" @click="$refs.addMemberDialog.close()">Cancel</button>
-        <button
-          class="btn btn-info btn-sm gap-1.5"
-          @click="confirmAddMembers()"
-          :disabled="addMemberSelected.length === 0 || addMemberSaving"
-        >
+        <button class="btn btn-info btn-sm gap-1.5" @click="confirmAddMembers()" :disabled="addMemberSelected.length === 0 || addMemberSaving">
           <template x-if="!addMemberSaving">
             <span class="flex items-center gap-1.5">
               <i data-lucide="user-plus" class="w-4 h-4"></i>

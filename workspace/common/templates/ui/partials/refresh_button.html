@@ -17,12 +17,7 @@ to the original ``<i>`` - the spin would never start. Wrapping in a
 ``<span>`` (which Lucide never touches) preserves the binding and makes
 the SVG inside rotate via ``animate-spin``.
 {% endcomment %}
-<a
-  :href="{{ url_expr }}"
-  class="btn btn-ghost btn-{{ size|default:'sm' }} btn-square"
-  x-target="{{ target }}"
-  title="{{ title|default:'Refresh' }}"
->
+<a :href="{{ url_expr }}" class="btn btn-ghost btn-{{ size|default:'sm' }} btn-square" x-target="{{ target }}" title="{{ title|default:'Refresh' }}">
   <span class="inline-flex" :class="{{ loading_expr|default:'loading' }} && 'animate-spin'">
     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
   </span>

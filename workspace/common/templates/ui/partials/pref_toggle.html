@@ -23,7 +23,10 @@ Optional context:
 {% endcomment %}
 <label class="flex items-center justify-between gap-2 cursor-pointer">
   <span class="text-sm">{{ label }}</span>
-  <input type="checkbox" class="toggle toggle-sm {{ accent }}"
+  <input
+    type="checkbox"
+    class="toggle toggle-sm {{ accent }}"
     :checked="{% if state %}{{ state }}{% else %}prefs.{{ key }}{% endif %}"
-    @change="{% if change %}{{ change }}{% else %}{% firstof handler 'update' %}('{{ key }}', $event.target.checked){% endif %}">
+    @change="{% if change %}{{ change }}{% else %}{% firstof handler 'update' %}('{{ key }}', $event.target.checked){% endif %}"
+  />
 </label>

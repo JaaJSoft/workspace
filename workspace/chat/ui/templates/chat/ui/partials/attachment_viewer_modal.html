@@ -5,18 +5,15 @@
       <!-- Actions (Top Right) -->
       <div class="absolute top-4 right-4 z-10 flex items-center gap-1">
         <!-- Download -->
-        <a :href="downloadUrl" download
-           class="btn btn-ghost btn-sm btn-square" title="Download">
+        <a :href="downloadUrl" download class="btn btn-ghost btn-sm btn-square" title="Download">
           <i data-lucide="download" class="w-4 h-4"></i>
         </a>
         <!-- Save to Files -->
-        <button type="button" class="btn btn-ghost btn-sm btn-square"
-                @click="saveToFiles()" title="Save to Files">
+        <button type="button" class="btn btn-ghost btn-sm btn-square" @click="saveToFiles()" title="Save to Files">
           <i data-lucide="folder-down" class="w-4 h-4"></i>
         </button>
         <!-- Close -->
-        <button type="button" class="btn btn-ghost btn-sm btn-square"
-                @click="close()" title="Close (ESC)">
+        <button type="button" class="btn btn-ghost btn-sm btn-square" @click="close()" title="Close (ESC)">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -27,19 +24,14 @@
           <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
           <div class="flex items-center gap-2">
             <p class="text-sm text-base-content/60" x-text="mimeType"></p>
-            <span
-              class="text-xs text-base-content/40"
-              x-show="_totalViewable() > 1"
-              x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
-            ></span>
+            <span class="text-xs text-base-content/40" x-show="_totalViewable() > 1" x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"></span>
           </div>
         </div>
       </div>
 
       <!-- Viewer Container: #viewer-panel is the alpine-ajax merge anchor
            every /chat/view-attachment/ response replaces (see viewer_panel.js). -->
-      <div class="flex-1 overflow-auto bg-base-200"
-           x-show="!viewerLoading && !viewerError">
+      <div class="flex-1 overflow-auto bg-base-200" x-show="!viewerLoading && !viewerError">
         <div id="viewer-panel" style="display: contents"></div>
       </div>
 
@@ -114,7 +106,9 @@
         _getViewableAttachments() {
           const els = document.querySelectorAll('#message-list [data-attachment-uuid]');
           return Array.from(els)
-            .filter(function(el) { return el.offsetParent !== null; })
+            .filter(function(el) {
+              return el.offsetParent !== null;
+            })
             .map(function(el) {
               return {
                 uuid: el.dataset.attachmentUuid,
@@ -130,7 +124,9 @@
           // bindings would be evaluated once against an empty list and stick.
           const current = this.attachmentUuid;
           const atts = this._getViewableAttachments();
-          return atts.findIndex(function(a) { return a.uuid === current; });
+          return atts.findIndex(function(a) {
+            return a.uuid === current;
+          });
         },
 
         _totalViewable() {
@@ -178,7 +174,9 @@
           this.close();
           // Delegate to the chat component which already has the working flow
           window.dispatchEvent(new CustomEvent('chat-save-attachment-to-files', {
-            detail: { uuid: uuid },
+            detail: {
+              uuid: uuid
+            },
           }));
         },
 
@@ -205,12 +203,18 @@
             const d = e.detail;
             self.openAttachment(d.uuid, d.name, d.type);
           };
-          this._keydownHandler = function(e) { self.handleKeydown(e); };
+          this._keydownHandler = function(e) {
+            self.handleKeydown(e);
+          };
           window.addEventListener('open-chat-attachment-viewer', this._openHandler);
           window.addEventListener('keydown', this._keydownHandler);
           this._detachSwipe = window.attachSwipeNavigation(this.$refs.dialog, {
-            onPrev: function() { self.navigatePrev(); },
-            onNext: function() { self.navigateNext(); },
+            onPrev: function() {
+              self.navigatePrev();
+            },
+            onNext: function() {
+              self.navigateNext();
+            },
           });
         },
       };

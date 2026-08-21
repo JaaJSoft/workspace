@@ -10,11 +10,14 @@
   </div>
 
   <div class="grid gap-4 items-start xl:grid-cols-2">
-    <section id="settings-general" class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
-             x-data="projectSettingsGeneral({
+    <section
+      id="settings-general"
+      class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
+      x-data="projectSettingsGeneral({
                apiBase: '/api/v1/projects/{{ project.uuid }}',
                writable: {% if writable %}true{% else %}false{% endif %},
-             })">
+             })"
+    >
       <h3 class="font-semibold flex items-center gap-2">
         <i data-lucide="sliders-horizontal" class="w-4 h-4 text-accent"></i>
         General
@@ -27,18 +30,15 @@
       </template>
       <label class="form-control w-full">
         <div class="label py-1"><span class="label-text">Name</span></div>
-        <input type="text" class="input input-bordered w-full" x-model="name"
-               maxlength="255" {% if not writable %}disabled{% endif %}>
+        <input type="text" class="input input-bordered w-full" x-model="name" maxlength="255" {% if not writable %}disabled{% endif %} />
       </label>
       <label class="form-control w-full">
         <div class="label py-1"><span class="label-text">Description</span></div>
-        <textarea class="textarea textarea-bordered w-full" rows="3"
-                  x-model="description" {% if not writable %}disabled{% endif %}></textarea>
+        <textarea class="textarea textarea-bordered w-full" rows="3" x-model="description" {% if not writable %}disabled{% endif %}></textarea>
       </label>
       <label class="form-control w-full">
         <div class="label py-1"><span class="label-text">Key</span></div>
-        <input type="text" class="input input-bordered w-full font-mono uppercase" x-model="key"
-               maxlength="10" {% if not writable %}disabled{% endif %}>
+        <input type="text" class="input input-bordered w-full font-mono uppercase" x-model="key" maxlength="10" {% if not writable %}disabled{% endif %} />
         <div class="label py-1">
           <span class="label-text-alt">Used in task references ({{ project.key }}-42). Changing it changes every reference shown.</span>
         </div>
@@ -48,13 +48,18 @@
           <span class="label-text">Completed tasks visibility</span>
           <span class="label-text-alt font-medium text-accent" x-text="retentionSliderLabel()"></span>
         </div>
-        <input type="range" min="0" max="5" step="1"
-               class="range range-sm range-accent"
-               aria-label="Completed tasks visibility"
-               :aria-valuetext="retentionSliderLabel()"
-               :value="retentionIndex()"
-               @input="setRetentionIndex($event.target.value)"
-               {% if not writable %}disabled{% endif %}>
+        <input
+          type="range"
+          min="0"
+          max="5"
+          step="1"
+          class="range range-sm range-accent"
+          aria-label="Completed tasks visibility"
+          :aria-valuetext="retentionSliderLabel()"
+          :value="retentionIndex()"
+          @input="setRetentionIndex($event.target.value)"
+          {% if not writable %}disabled{% endif %}
+        />
         <div class="flex justify-between px-1.5 mt-1 text-xs text-base-content/50">
           <span>1d</span>
           <span>7d</span>
@@ -68,17 +73,14 @@
         </div>
       </div>
       <div class="flex justify-end">
-        <button type="button" class="btn btn-accent btn-sm" @click="save()"
-                :disabled="saving || !name.trim() || !key.trim() || !writable">
+        <button type="button" class="btn btn-accent btn-sm" @click="save()" :disabled="saving || !name.trim() || !key.trim() || !writable">
           Save
         </button>
       </div>
     </section>
 
     {% if project.type != 'personal' %}
-      <section id="settings-members" class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
-               x-data="projectMembers({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
-               @project-member-selected.window="addMember($event.detail.user)">
+      <section id="settings-members" class="rounded-box bg-base-200 p-4 flex flex-col gap-3" x-data="projectMembers({ apiBase: '/api/v1/projects/{{ project.uuid }}' })" @project-member-selected.window="addMember($event.detail.user)">
         <div>
           <h3 class="font-semibold flex items-center gap-2">
             <i data-lucide="users" class="w-4 h-4 text-accent"></i>
@@ -90,9 +92,7 @@
           <inline-alert type="error"><span x-text="error"></span></inline-alert>
         </template>
 
-        <div id="settings-group" class="flex flex-col gap-2"
-             x-data="projectGroupAccess({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
-             @project-group-selected.window="addGroup($event.detail.group)">
+        <div id="settings-group" class="flex flex-col gap-2" x-data="projectGroupAccess({ apiBase: '/api/v1/projects/{{ project.uuid }}' })" @project-group-selected.window="addGroup($event.detail.group)">
           <template x-if="error">
             <inline-alert type="error" class="mb-2"><span x-text="error"></span></inline-alert>
           </template>
@@ -111,9 +111,7 @@
                 <i data-lucide="users" class="w-3 h-3 opacity-60"></i>
                 <span x-text="group.name"></span>
                 {% if writable %}
-                  <button type="button" class="btn btn-ghost btn-xs btn-square text-error"
-                          aria-label="Detach group" :disabled="busy"
-                          @click="removeGroup(group)">
+                  <button type="button" class="btn btn-ghost btn-xs btn-square text-error" aria-label="Detach group" :disabled="busy" @click="removeGroup(group)">
                     <i data-lucide="x" class="w-3 h-3"></i>
                   </button>
                 {% endif %}
@@ -130,27 +128,20 @@
         {% endif %}
         <ul class="flex flex-col gap-1.5">
           <template x-for="member in items" :key="member.uuid">
-            <li class="flex items-center gap-3 p-2 rounded-box bg-base-100"
-                x-data="{ imgOk: true }">
+            <li class="flex items-center gap-3 p-2 rounded-box bg-base-100" x-data="{ imgOk: true }">
               <div class="avatar placeholder">
-                <div class="w-8 rounded-full text-white text-xs"
-                     :class="imgOk ? '' : userAvatarColorClass(member.user)">
-                  <img x-show="imgOk" :src="'/api/v1/users/' + member.user + '/avatar'"
-                       :alt="member.username" loading="lazy" @error="imgOk = false">
+                <div class="w-8 rounded-full text-white text-xs" :class="imgOk ? '' : userAvatarColorClass(member.user)">
+                  <img x-show="imgOk" :src="'/api/v1/users/' + member.user + '/avatar'" alt="" :alt="member.username" loading="lazy" @error="imgOk = false" />
                   <span x-show="!imgOk" x-text="member.username.charAt(0).toUpperCase()"></span>
                 </div>
               </div>
               <span class="font-medium flex-1 truncate" x-text="member.username"></span>
               {% if writable %}
-                <select class="select select-bordered select-sm"
-                        :value="member.role" :disabled="busy"
-                        @change="changeRole(member, $event.target.value)">
+                <select class="select select-bordered select-sm" :value="member.role" :disabled="busy" @change="changeRole(member, $event.target.value)">
                   <option value="admin">Admin</option>
                   <option value="member">Member</option>
                 </select>
-                <button type="button" class="btn btn-ghost btn-xs btn-square text-error"
-                        aria-label="Remove member" :disabled="busy"
-                        @click="removeMember(member)">
+                <button type="button" class="btn btn-ghost btn-xs btn-square text-error" aria-label="Remove member" :disabled="busy" @click="removeMember(member)">
                   <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
               {% else %}
@@ -162,8 +153,7 @@
       </section>
     {% endif %}
 
-    <section id="settings-columns" class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
-             x-data="projectColumns({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
+    <section id="settings-columns" class="rounded-box bg-base-200 p-4 flex flex-col gap-3" x-data="projectColumns({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
       <div class="flex items-center justify-between">
         <h3 class="font-semibold flex items-center gap-2">
           <i data-lucide="columns-3" class="w-4 h-4 text-accent"></i>
@@ -180,12 +170,10 @@
       </template>
 
       <template x-if="adding">
-        <form class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-100"
-              @submit.prevent="addColumn()" @keydown.escape="adding = false">
+        <form class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-100" @submit.prevent="addColumn()" @keydown.escape="adding = false">
           <label class="form-control">
             <div class="label py-0"><span class="label-text-alt">Name</span></div>
-            <input type="text" class="input input-bordered input-sm" x-model="addForm.name"
-                   required maxlength="100">
+            <input type="text" class="input input-bordered input-sm" x-model="addForm.name" required maxlength="100" />
           </label>
           <label class="form-control">
             <div class="label py-0"><span class="label-text-alt">Category</span></div>
@@ -199,71 +187,64 @@
             <div class="label py-0"><span class="label-text-alt">Color</span></div>
             <div class="flex items-center gap-1.5 h-8">
               <template x-for="c in colors" :key="c">
-                <button type="button"
-                        class="w-6 h-6 rounded-full border border-base-300 shrink-0"
-                        :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
-                        :style="c ? 'background:' + c : ''"
-                        :aria-label="c ? 'Color ' + c : 'No color'"
-                        :aria-pressed="addForm.color === c"
-                        @click="addForm.color = c"></button>
+                <button
+                  type="button"
+                  class="w-6 h-6 rounded-full border border-base-300 shrink-0"
+                  :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
+                  :style="c ? 'background:' + c : ''"
+                  :aria-label="c ? 'Color ' + c : 'No color'"
+                  :aria-pressed="addForm.color === c"
+                  @click="addForm.color = c"
+                ></button>
               </template>
             </div>
           </div>
           <div class="flex items-center gap-2 ml-auto">
             <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
-            <button type="submit" class="btn btn-accent btn-sm"
-                    :disabled="busy || !addForm.name.trim()">Add</button>
+            <button type="submit" class="btn btn-accent btn-sm" :disabled="busy || !addForm.name.trim()">Add</button>
           </div>
         </form>
       </template>
 
       <ul class="flex flex-col gap-1.5">
         <template x-for="column in columns" :key="column.uuid">
-          <li class="flex items-center gap-2 p-2 rounded-box bg-base-100"
-              :class="draggingColumn === column.uuid ? 'opacity-50' : ''"
-              {% if writable %}draggable="true"
-              @dragstart="onColumnDragStart($event, column.uuid)"
-              @dragend="draggingColumn = null"
-              @dragover.prevent
-              @drop.prevent="onColumnDrop($event, column.uuid)"{% endif %}>
+          <li
+            class="flex items-center gap-2 p-2 rounded-box bg-base-100"
+            :class="draggingColumn === column.uuid ? 'opacity-50' : ''"
+            {% if writable %}draggable="true" @dragstart="onColumnDragStart($event, column.uuid)" @dragend="draggingColumn = null" @dragover.prevent @drop.prevent="onColumnDrop($event, column.uuid)"{% endif %}
+          >
             <i data-lucide="grip-vertical" class="w-4 h-4 opacity-40 shrink-0"></i>
-            <span class="w-3 h-3 rounded-full shrink-0 border border-base-300"
-                  :style="column.color ? 'background:' + column.color : ''"></span>
+            <span class="w-3 h-3 rounded-full shrink-0 border border-base-300" :style="column.color ? 'background:' + column.color : ''"></span>
             <template x-if="editing !== column.uuid">
-              <button type="button" class="font-medium truncate text-left flex-1"
-                      {% if writable %}@click="startEdit(column)"{% endif %}
-                      x-text="column.name"></button>
+              <button type="button" class="font-medium truncate text-left flex-1" {% if writable %}@click="startEdit(column)"{% endif %} x-text="column.name">
+              </button>
             </template>
             <template x-if="editing === column.uuid">
-              <input type="text" class="input input-bordered input-sm h-6 flex-1"
-                     x-model="editName" maxlength="100"
-                     @keydown.enter.prevent="saveEdit(column)"
-                     @keydown.escape="editName = column.name; editing = null"
-                     @blur="saveEdit(column)" x-init="$el.focus()">
+              <input type="text" class="input input-bordered input-sm h-6 flex-1" x-model="editName" maxlength="100" @keydown.enter.prevent="saveEdit(column)" @keydown.escape="editName = column.name; editing = null" @blur="saveEdit(column)" x-init="$el.focus()" />
             </template>
             <span class="badge badge-ghost badge-sm capitalize" x-text="column.category"></span>
-            <span class="badge badge-ghost badge-sm"
-                  x-text="column.task_count + ' task' + (column.task_count === 1 ? '' : 's')"></span>
+            <span class="badge badge-ghost badge-sm" x-text="column.task_count + ' task' + (column.task_count === 1 ? '' : 's')"></span>
             {% if writable %}
               <div class="dropdown dropdown-end">
-                <button type="button" tabindex="0" class="btn btn-ghost btn-xs btn-square"
-                        aria-label="Column color">
+                <button type="button" tabindex="0" class="btn btn-ghost btn-xs btn-square" aria-label="Column color">
                   <i data-lucide="palette" class="w-4 h-4"></i>
                 </button>
                 <ul tabindex="0" class="dropdown-content z-50 mt-1 flex flex-row items-center gap-1.5 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2">
                   <template x-for="c in colors" :key="c">
                     <li class="flex">
-                      <button type="button" class="w-5 h-5 rounded-full border border-base-300 shrink-0"
-                              :class="column.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
-                              :style="c ? 'background:' + c : ''"
-                              :aria-label="c ? 'Color ' + c : 'No color'"
-                              @click="setColor(column, c); document.activeElement.blur()"></button>
+                      <button
+                        type="button"
+                        class="w-5 h-5 rounded-full border border-base-300 shrink-0"
+                        :class="column.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
+                        :style="c ? 'background:' + c : ''"
+                        :aria-label="c ? 'Color ' + c : 'No color'"
+                        @click="setColor(column, c); document.activeElement.blur()"
+                      ></button>
                     </li>
                   </template>
                 </ul>
               </div>
-              <button type="button" class="btn btn-ghost btn-xs btn-square text-error"
-                      aria-label="Delete column" @click="deleteColumn(column)">
+              <button type="button" class="btn btn-ghost btn-xs btn-square text-error" aria-label="Delete column" @click="deleteColumn(column)">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             {% endif %}
@@ -272,8 +253,7 @@
       </ul>
     </section>
 
-    <section id="settings-labels" class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
-             x-data="projectLabels({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
+    <section id="settings-labels" class="rounded-box bg-base-200 p-4 flex flex-col gap-3" x-data="projectLabels({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
       <div class="flex items-center justify-between">
         <h3 class="font-semibold flex items-center gap-2">
           <i data-lucide="tags" class="w-4 h-4 text-accent"></i>
@@ -289,31 +269,30 @@
         <inline-alert type="error"><span x-text="error"></span></inline-alert>
       </template>
       <template x-if="adding">
-        <form class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-100"
-              @submit.prevent="addLabel()" @keydown.escape="adding = false">
+        <form class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-100" @submit.prevent="addLabel()" @keydown.escape="adding = false">
           <label class="form-control">
             <div class="label py-0"><span class="label-text-alt">Name</span></div>
-            <input type="text" class="input input-bordered input-sm" x-model="addForm.name"
-                   required maxlength="100">
+            <input type="text" class="input input-bordered input-sm" x-model="addForm.name" required maxlength="100" />
           </label>
           <div class="form-control">
             <div class="label py-0"><span class="label-text-alt">Color</span></div>
             <div class="flex items-center gap-1.5 h-8">
               <template x-for="c in colors" :key="c">
-                <button type="button"
-                        class="w-6 h-6 rounded-full border border-base-300 shrink-0"
-                        :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
-                        :style="c ? 'background:' + c : ''"
-                        :aria-label="c ? 'Color ' + c : 'No color'"
-                        :aria-pressed="addForm.color === c"
-                        @click="addForm.color = c"></button>
+                <button
+                  type="button"
+                  class="w-6 h-6 rounded-full border border-base-300 shrink-0"
+                  :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
+                  :style="c ? 'background:' + c : ''"
+                  :aria-label="c ? 'Color ' + c : 'No color'"
+                  :aria-pressed="addForm.color === c"
+                  @click="addForm.color = c"
+                ></button>
               </template>
             </div>
           </div>
           <div class="flex items-center gap-2 ml-auto">
             <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
-            <button type="submit" class="btn btn-accent btn-sm"
-                    :disabled="busy || !addForm.name.trim()">Add</button>
+            <button type="submit" class="btn btn-accent btn-sm" :disabled="busy || !addForm.name.trim()">Add</button>
           </div>
         </form>
       </template>
@@ -323,46 +302,56 @@
       <div class="flex flex-wrap gap-1.5">
         <template x-for="label in items" :key="label.uuid">
           <tag-chip :color="label.color"{% if writable %} removable{% endif %}>
-            <template x-if="editing !== label.uuid">
-              <button type="button"
-                      class="relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0"
-                      x-text="label.name"
-                      {% if writable %}@click="startEdit(label)"{% endif %}></button>
-            </template>
-            <template x-if="editing === label.uuid">
-              {# h-5 keeps the pill at its 26px resting height while editing. #}
-              <input type="text" class="input input-ghost input-xs w-24 h-5 min-h-0 px-0 text-xs"
-                     x-model="editName" maxlength="100"
-                     @keydown.enter.prevent="saveEdit(label)"
-                     @keydown.escape="editName = label.name; editing = null"
-                     @blur="saveEdit(label)" x-init="$el.focus()">
-            </template>
-            {% if writable %}
-              {% comment %}Inline SVGs on purpose: lucide.createIcons() does not
-              process nodes that Alpine clones out of an x-for template.{% endcomment %}
-              {# Opens rightward: chips hug the section's left edge and an end- #}
-              {# aligned popover gets clipped by the overflow-hidden main pane. #}
-              <div class="dropdown">
-                <button type="button" tabindex="0" class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0" aria-label="Label color">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
-                </button>
-                <ul tabindex="0" class="dropdown-content z-50 mt-1 flex flex-row items-center gap-1.5 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2">
-                  <template x-for="c in colors" :key="c">
-                    <li class="flex">
-                      <button type="button" class="w-5 h-5 rounded-full border border-base-300 shrink-0"
-                              :class="label.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
-                              :style="c ? 'background:' + c : ''"
-                              :aria-label="c ? 'Color ' + c : 'No color'"
-                              @click="setColor(label, c); document.activeElement.blur()"></button>
-                    </li>
-                  </template>
-                </ul>
-              </div>
-              <button type="button" class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0 text-error"
-                      aria-label="Delete label" @click="removeLabel(label)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <template x-if="editing !== label.uuid">
+            <button type="button" class="relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0" x-text="label.name" {% if writable %}@click="startEdit(label)"{% endif %}>
+            </button>
+          </template>
+          <template x-if="editing === label.uuid">
+            {# h-5 keeps the pill at its 26px resting height while editing. #}
+            <input
+              type="text"
+              class="input input-ghost input-xs w-24 h-5 min-h-0 px-0 text-xs"
+              x-model="editName"
+              maxlength="100"
+              @keydown.enter.prevent="saveEdit(label)"
+              @keydown.escape="editName = label.name; editing = null"
+              @blur="saveEdit(label)"
+              x-init="$el.focus()"
+            />
+          </template>
+          {% if writable %}
+            {% comment %}Inline SVGs on purpose: lucide.createIcons() does not
+            process nodes that Alpine clones out of an x-for template.{% endcomment %}
+            {# Opens rightward: chips hug the section's left edge and an end- #}
+            {# aligned popover gets clipped by the overflow-hidden main pane. #}
+            <div class="dropdown">
+              <button type="button" tabindex="0" class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0" aria-label="Label color">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+                  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+                </svg>
               </button>
-            {% endif %}
+              <ul tabindex="0" class="dropdown-content z-50 mt-1 flex flex-row items-center gap-1.5 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2">
+                <template x-for="c in colors" :key="c">
+                  <li class="flex">
+                    <button
+                      type="button"
+                      class="w-5 h-5 rounded-full border border-base-300 shrink-0"
+                      :class="label.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
+                      :style="c ? 'background:' + c : ''"
+                      :aria-label="c ? 'Color ' + c : 'No color'"
+                      @click="setColor(label, c); document.activeElement.blur()"
+                    ></button>
+                  </li>
+                </template>
+              </ul>
+            </div>
+            <button type="button" class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0 text-error" aria-label="Delete label" @click="removeLabel(label)">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          {% endif %}
           </tag-chip>
         </template>
       </div>
@@ -370,8 +359,7 @@
     </section>
 
     {% if project.type != 'personal' %}
-      <section id="settings-danger" class="rounded-box border border-error/30 bg-error/5 p-4 flex flex-col gap-3 xl:col-span-2"
-               x-data="projectSettingsDanger({ apiBase: '/api/v1/projects/{{ project.uuid }}', projectName: '{{ project.name|escapejs }}' })">
+      <section id="settings-danger" class="rounded-box border border-error/30 bg-error/5 p-4 flex flex-col gap-3 xl:col-span-2" x-data="projectSettingsDanger({ apiBase: '/api/v1/projects/{{ project.uuid }}', projectName: '{{ project.name|escapejs }}' })">
         <h3 class="font-semibold flex items-center gap-2 text-error">
           <i data-lucide="triangle-alert" class="w-4 h-4"></i>
           Danger zone
@@ -388,11 +376,9 @@
               </p>
             </div>
             {% if project.archived_at %}
-              <button type="button" class="btn btn-outline btn-sm" :disabled="busy"
-                      @click="archive('unarchive')">Unarchive</button>
+              <button type="button" class="btn btn-outline btn-sm" :disabled="busy" @click="archive('unarchive')">Unarchive</button>
             {% else %}
-              <button type="button" class="btn btn-outline btn-sm" :disabled="busy"
-                      @click="archive('archive')">Archive</button>
+              <button type="button" class="btn btn-outline btn-sm" :disabled="busy" @click="archive('archive')">Archive</button>
             {% endif %}
           </div>
           <div class="rounded-box bg-base-100 p-3 flex items-center justify-between gap-3 flex-wrap">
@@ -400,8 +386,7 @@
               <p class="font-medium">Delete project</p>
               <p class="text-sm text-base-content/60">Permanently deletes {{ project.name }} and all its tasks.</p>
             </div>
-            <button type="button" class="btn btn-error btn-outline btn-sm" :disabled="busy"
-                    @click="deleteProject()">Delete</button>
+            <button type="button" class="btn btn-error btn-outline btn-sm" :disabled="busy" @click="deleteProject()">Delete</button>
           </div>
         </div>
       </section>

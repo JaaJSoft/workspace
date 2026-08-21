@@ -30,27 +30,19 @@ no arithmetic on purpose - see the docstring in charts.py.
     instead; wide containers never reach the minimum and never scroll.
   {% endcomment %}
   <div class="overflow-x-auto">
-  <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}"
-       class="w-full h-auto min-w-[42rem]"
-       role="img" aria-label="{{ aria_label }}">
-    {% for line in chart.gridlines %}
-      <line x1="{{ chart.plot.x }}" y1="{{ line.y }}"
-            x2="{{ chart.width }}" y2="{{ line.y }}"
-            class="stroke-base-content/10" stroke-width="1" />
-      <text x="{{ chart.plot.x }}" y="{{ line.y }}" dx="-6" dy="3"
-            text-anchor="end" class="fill-base-content/50" font-size="9">{{ line.value }}</text>
-    {% endfor %}
-    {% for bar in chart.bars %}
-      <rect x="{{ bar.x }}" y="{{ bar.y }}"
-            width="{{ bar.width }}" height="{{ bar.height }}"
-            rx="1.5" class="{{ bar.css_class }}">
+    <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" class="w-full h-auto min-w-[42rem]" role="img" aria-label="{{ aria_label }}">
+      {% for line in chart.gridlines %}
+        <line x1="{{ chart.plot.x }}" y1="{{ line.y }}" x2="{{ chart.width }}" y2="{{ line.y }}" class="stroke-base-content/10" stroke-width="1" />
+        <text x="{{ chart.plot.x }}" y="{{ line.y }}" dx="-6" dy="3" text-anchor="end" class="fill-base-content/50" font-size="9">{{ line.value }}</text>
+      {% endfor %}
+      {% for bar in chart.bars %}
+        <rect x="{{ bar.x }}" y="{{ bar.y }}" width="{{ bar.width }}" height="{{ bar.height }}" rx="1.5" class="{{ bar.css_class }}">
         <title>{{ bar.tooltip }}</title>
-      </rect>
-    {% endfor %}
-    {% for cat in chart.categories %}
-      <text x="{{ cat.x }}" y="{{ chart.height }}" dy="-8"
-            text-anchor="middle" class="fill-base-content/50" font-size="9">{{ cat.label }}</text>
-    {% endfor %}
-  </svg>
+        </rect>
+      {% endfor %}
+      {% for cat in chart.categories %}
+        <text x="{{ cat.x }}" y="{{ chart.height }}" dy="-8" text-anchor="middle" class="fill-base-content/50" font-size="9">{{ cat.label }}</text>
+      {% endfor %}
+    </svg>
   </div>
 </div>

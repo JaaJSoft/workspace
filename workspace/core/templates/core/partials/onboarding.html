@@ -1,14 +1,17 @@
-<dialog id="onboarding-dialog" class="modal"
-        aria-labelledby="onboarding-title"
-        x-data="onboardingWizard({{ ONBOARDING_PENDING|yesno:'true,false' }})"
-        x-init="
+<dialog
+  id="onboarding-dialog"
+  class="modal"
+  aria-labelledby="onboarding-title"
+  x-data="onboardingWizard({{ ONBOARDING_PENDING|yesno:'true,false' }})"
+  x-init="
           {% if ONBOARDING_PENDING %}
           $nextTick(() => setTimeout(() => window.dispatchEvent(new CustomEvent('onboarding-open')), 400));
           {% endif %}
         "
-        @onboarding-open.window="step = 1; $el.showModal(); focusStep()"
-        @keydown="if ($event.key === 'ArrowRight') { next() } else if ($event.key === 'ArrowLeft') { prev() }"
-        @close="markCompleteIfNeeded()">
+  @onboarding-open.window="step = 1; $el.showModal(); focusStep()"
+  @keydown="if ($event.key === 'ArrowRight') { next() } else if ($event.key === 'ArrowLeft') { prev() }"
+  @close="markCompleteIfNeeded()"
+>
   <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col">
     <!-- Header -->
     <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0">
@@ -30,8 +33,8 @@
 
     <!-- Progress bar -->
     <div class="h-1 bg-base-200" aria-hidden="true">
-      <div class="h-full bg-primary transition-all duration-300 motion-reduce:transition-none"
-           :style="`width: ${(step / 3) * 100}%`"></div>
+      <div class="h-full bg-primary transition-all duration-300 motion-reduce:transition-none" :style="`width: ${(step / 3) * 100}%`">
+      </div>
     </div>
 
     <!-- Body -->
@@ -41,8 +44,7 @@
         <div class="mx-auto w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
           <i data-lucide="sparkles" class="w-10 h-10 text-primary"></i>
         </div>
-        <h2 data-step-title tabindex="-1"
-            class="text-2xl font-bold mb-2">Welcome{% if user.first_name %}, {{ user.first_name }}{% endif %}</h2>
+        <h2 data-step-title tabindex="-1" class="text-2xl font-bold mb-2">Welcome{% if user.first_name %}, {{ user.first_name }}{% endif %}</h2>
         <p class="text-base-content/70 max-w-md mx-auto">
           JaaJ Workspace is your all-in-one space for files, notes, mail, calendar, chat, and more.
           Let's take a quick tour so you know where everything lives.
@@ -59,9 +61,7 @@
           {% for module in workspace_active_modules %}
             {% if module.show_on_dashboard is False %}
             {% elif module.url %}
-              <a href="{{ module.url }}"
-                 @click.prevent="goTo('{{ module.url|escapejs }}')"
-                 class="flex items-start gap-3 p-3 rounded-lg border border-base-300 hover:border-primary hover:bg-base-200 transition-colors">
+              <a href="{{ module.url }}" @click.prevent="goTo('{{ module.url|escapejs }}')" class="flex items-start gap-3 p-3 rounded-lg border border-base-300 hover:border-primary hover:bg-base-200 transition-colors">
                 <div class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0">
                   <i data-lucide="{{ module.icon }}" class="w-5 h-5 text-{{ module.color }}"></i>
                 </div>
@@ -121,9 +121,7 @@
             </div>
             <div>
               <div class="font-medium text-sm">Re-open this tour anytime</div>
-              <div class="text-xs text-base-content/60">
-                Click "Welcome tour" in the user menu to revisit these steps.
-              </div>
+              <div class="text-xs text-base-content/60">Click "Welcome tour" in the user menu to revisit these steps.</div>
             </div>
           </li>
           <li class="flex items-start gap-3">
@@ -132,13 +130,9 @@
             </div>
             <div class="flex-1 min-w-0">
               <div class="font-medium text-sm">See what's new in each release</div>
-              <div class="text-xs text-base-content/60">
-                The changelog lists every recent improvement and fix.
-              </div>
+              <div class="text-xs text-base-content/60">The changelog lists every recent improvement and fix.</div>
             </div>
-            <button type="button"
-                    class="btn btn-xs btn-ghost shrink-0 self-center gap-1 hover:bg-primary/10 hover:text-primary"
-                    @click="openChangelog()">
+            <button type="button" class="btn btn-xs btn-ghost shrink-0 self-center gap-1 hover:bg-primary/10 hover:text-primary" @click="openChangelog()">
               View changelog
               <i data-lucide="external-link" class="w-3 h-3"></i>
             </button>
@@ -150,10 +144,7 @@
     <!-- Footer -->
     <div class="flex items-center justify-between gap-2 px-5 py-4 border-t border-base-300 shrink-0">
       <div class="flex items-center gap-1">
-        <button type="button"
-                x-show="step > 1"
-                class="btn btn-ghost btn-sm"
-                @click="prev()">
+        <button type="button" x-show="step > 1" class="btn btn-ghost btn-sm" @click="prev()">
           <i data-lucide="chevron-left" class="w-4 h-4"></i>
           Back
         </button>
@@ -163,27 +154,22 @@
       </div>
       <div class="flex gap-2" aria-hidden="true">
         <template x-for="i in 3" :key="i">
-          <span class="w-2 h-2 rounded-full transition-colors motion-reduce:transition-none"
-                :class="i <= step ? 'bg-primary' : 'bg-base-300'"></span>
+          <span class="w-2 h-2 rounded-full transition-colors motion-reduce:transition-none" :class="i <= step ? 'bg-primary' : 'bg-base-300'"></span>
         </template>
       </div>
-      <button x-show="step < 3"
-              type="button"
-              class="btn btn-primary btn-sm"
-              @click="next()">
+      <button x-show="step < 3" type="button" class="btn btn-primary btn-sm" @click="next()">
         Next
         <i data-lucide="chevron-right" class="w-4 h-4"></i>
       </button>
-      <a x-show="step === 3" x-cloak
-         href="{% url 'dashboard:index' %}"
-         class="btn btn-primary btn-sm"
-         @click.prevent="goTo('{% url 'dashboard:index' %}')">
+      <a x-show="step === 3" x-cloak href="{% url 'dashboard:index' %}" class="btn btn-primary btn-sm" @click.prevent="goTo('{% url 'dashboard:index' %}')">
         Get started
         <i data-lucide="check" class="w-4 h-4"></i>
       </a>
     </div>
   </div>
-  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
 </dialog>
 
 <script>
@@ -224,7 +210,9 @@
             'Content-Type': 'application/json',
             'X-CSRFToken': getCSRFToken(),
           },
-          body: JSON.stringify({ value: true }),
+          body: JSON.stringify({
+            value: true
+          }),
         }).catch(() => {});
       },
       async goTo(url) {

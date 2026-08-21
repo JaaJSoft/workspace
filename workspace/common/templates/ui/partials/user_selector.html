@@ -36,29 +36,15 @@
   </label>
 
   <!-- Dropdown results -->
-  <div
-    x-show="showDropdown && results.length > 0"
-    x-cloak
-    class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
-  >
+  <div x-show="showDropdown && results.length > 0" x-cloak class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
     <ul class="menu menu-sm p-1">
       <template x-for="(user, idx) in results" :key="user.id">
         <li>
-          <button
-            type="button"
-            class="flex items-center gap-2 rounded"
-            :class="idx === highlight ? 'active' : ''"
-            @click="selectUser(user)"
-            @mouseenter="highlight = idx"
-          >
+          <button type="button" class="flex items-center gap-2 rounded" :class="idx === highlight ? 'active' : ''" @click="selectUser(user)" @mouseenter="highlight = idx">
             <user-avatar :user-id="user.id" :username="user.username" size="sm" presence></user-avatar>
             <div class="flex flex-col items-start">
               <span class="font-medium text-sm" x-text="user.username"></span>
-              <span
-                class="text-xs text-base-content/60"
-                x-show="user.first_name || user.last_name"
-                x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"
-              ></span>
+              <span class="text-xs text-base-content/60" x-show="user.first_name || user.last_name" x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"></span>
             </div>
           </button>
         </li>
@@ -71,7 +57,5 @@
     x-show="showDropdown && results.length === 0 && (localUsers ? query.length > 0 : query.length >= 2) && !loading"
     x-cloak
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
-  >
-    No users found
-  </div>
+  >No users found</div>
 </div>

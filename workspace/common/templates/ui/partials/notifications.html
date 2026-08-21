@@ -1,5 +1,7 @@
 <!-- Notifications dropdown -->
-<div class="dropdown dropdown-end" x-data="{
+<div
+  class="dropdown dropdown-end"
+  x-data="{
   notificationsOpen: false,
   filter: 'all',
   searchOpen: false,
@@ -44,18 +46,11 @@
     if (!item.is_read) await $store.notifications.markRead(item.uuid);
     if (item.url) window.location.href = item.url;
   }
-}">
-  <button
-    @click="toggle()"
-    class="btn btn-ghost btn-circle btn-sm hover:bg-primary/10 transition-all indicator"
-    title="Notifications"
-  >
+}"
+>
+  <button @click="toggle()" class="btn btn-ghost btn-circle btn-sm hover:bg-primary/10 transition-all indicator" title="Notifications">
     <i data-lucide="bell" class="w-5 h-5"></i>
-    <span
-      x-show="$store.notifications.unread > 0"
-      x-text="$store.notifications.unread > 99 ? '99+' : $store.notifications.unread"
-      class="indicator-item badge badge-primary badge-xs"
-    ></span>
+    <span x-show="$store.notifications.unread > 0" x-text="$store.notifications.unread > 99 ? '99+' : $store.notifications.unread" class="indicator-item badge badge-primary badge-xs"></span>
   </button>
   <div
     x-show="notificationsOpen"
@@ -84,50 +79,25 @@
         >
           <i :data-lucide="$store.push.enabled ? 'bell-ring' : 'bell-off'" class="w-3.5 h-3.5"></i>
         </button>
-        <button
-          @click="searchOpen ? clearSearch() : (searchOpen = true, $nextTick(() => $refs.searchInput.focus()))"
-          class="btn btn-ghost btn-xs btn-circle"
-          :class="searchOpen ? 'text-primary' : 'text-base-content/50'"
-          title="Search"
-        >
+        <button @click="searchOpen ? clearSearch() : (searchOpen = true, $nextTick(() => $refs.searchInput.focus()))" class="btn btn-ghost btn-xs btn-circle" :class="searchOpen ? 'text-primary' : 'text-base-content/50'" title="Search">
           <i data-lucide="search" class="w-3.5 h-3.5"></i>
         </button>
-        <button
-          x-show="$store.notifications.unread > 0"
-          @click="$store.notifications.markAllRead()"
-          class="btn btn-ghost btn-xs text-primary hover:bg-primary/10"
-        >Mark all read</button>
+        <button x-show="$store.notifications.unread > 0" @click="$store.notifications.markAllRead()" class="btn btn-ghost btn-xs text-primary hover:bg-primary/10">Mark all read</button>
       </div>
     </div>
 
     <!-- Search bar -->
     <div x-show="searchOpen" x-cloak x-collapse class="px-2 pt-2">
-      <input
-        x-ref="searchInput"
-        x-model.debounce.300ms="search"
-        x-effect="if (searchOpen) applySearch()"
-        type="text"
-        class="input input-bordered input-xs w-full"
-        placeholder="Search notifications..."
-        @keydown.escape="clearSearch()"
-      />
+      <input x-ref="searchInput" x-model.debounce.300ms="search" x-effect="if (searchOpen) applySearch()" type="text" class="input input-bordered input-xs w-full" placeholder="Search notifications..." @keydown.escape="clearSearch()" />
     </div>
 
     <!-- Quick filters -->
     <div x-show="$store.notifications.loaded" class="px-2 pt-2 pb-1 flex gap-1 flex-wrap justify-center">
-      <button
-        @click="applyFilter('all')"
-        class="badge badge-sm gap-1 cursor-pointer transition-colors"
-        :class="filter === 'all' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'"
-      >
+      <button @click="applyFilter('all')" class="badge badge-sm gap-1 cursor-pointer transition-colors" :class="filter === 'all' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'">
         <i data-lucide="layers" class="w-3 h-3"></i>
         All
       </button>
-      <button
-        @click="applyFilter('unread')"
-        class="badge badge-sm gap-1 cursor-pointer transition-colors"
-        :class="filter === 'unread' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'"
-      >
+      <button @click="applyFilter('unread')" class="badge badge-sm gap-1 cursor-pointer transition-colors" :class="filter === 'unread' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'">
         <i data-lucide="circle-dot" class="w-3 h-3"></i>
         Unread
       </button>
@@ -171,7 +141,8 @@
           }"
         >
           <div class="avatar placeholder flex-shrink-0">
-            <div class="rounded-full w-9 flex items-center justify-center"
+            <div
+              class="rounded-full w-9 flex items-center justify-center"
               :class="item.color
                 ? 'bg-' + item.color + ' text-' + item.color + '-content'
                 : {
@@ -185,7 +156,8 @@
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-sm truncate" :class="item.is_read ? 'text-base-content/70' : 'font-medium'" x-text="item.title"></p>
-            <p x-show="item.body" class="text-xs truncate" :class="item.is_read ? 'text-base-content/50' : 'text-base-content/60'" x-text="item.body"></p>
+            <p x-show="item.body" class="text-xs truncate" :class="item.is_read ? 'text-base-content/50' : 'text-base-content/60'" x-text="item.body">
+            </p>
             <div class="flex items-center gap-2 mt-1">
               <span class="text-xs" :class="item.is_read ? 'text-base-content/40' : 'text-primary'" x-text="window.formatTimeAgo(item.created_at)"></span>
               <span x-show="item.priority === 'urgent' || item.priority === 'high'" class="badge badge-error badge-xs" x-text="item.priority"></span>
@@ -196,13 +168,7 @@
       </template>
 
       <!-- Load more -->
-      <button
-        x-cloak
-        x-show="$store.notifications.hasMore"
-        @click="$store.notifications.loadMore()"
-        class="btn btn-ghost btn-xs btn-block mt-1 text-base-content/50"
-        :disabled="$store.notifications.loadingMore"
-      >
+      <button x-cloak x-show="$store.notifications.hasMore" @click="$store.notifications.loadMore()" class="btn btn-ghost btn-xs btn-block mt-1 text-base-content/50" :disabled="$store.notifications.loadingMore">
         <span x-show="$store.notifications.loadingMore" class="loading loading-spinner loading-xs"></span>
         <span x-show="!$store.notifications.loadingMore">Load more</span>
       </button>
@@ -210,10 +176,7 @@
 
     <!-- Footer -->
     <div x-show="$store.notifications.items.length > 0" class="p-2 border-t border-base-300">
-      <button
-        @click="$store.notifications.items.forEach(n => { if (!n.is_read) $store.notifications.markRead(n.uuid); }); notificationsOpen = false;"
-        class="btn btn-ghost btn-sm btn-block text-primary hover:bg-primary/10"
-      >
+      <button @click="$store.notifications.items.forEach(n => { if (!n.is_read) $store.notifications.markRead(n.uuid); }); notificationsOpen = false;" class="btn btn-ghost btn-sm btn-block text-primary hover:bg-primary/10">
         Dismiss all
       </button>
     </div>

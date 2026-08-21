@@ -8,7 +8,7 @@ card/row (see taskMatchesFilters in board.js).
 <div id="task-filters" class="flex flex-wrap items-center gap-2">
   <label class="input input-bordered input-sm flex items-center gap-2 flex-1 min-w-0 sm:flex-none sm:w-56">
     <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
-    <input type="search" class="grow min-w-0" placeholder="Search tasks" x-model="filters.q">
+    <input type="search" class="grow min-w-0" placeholder="Search tasks" x-model="filters.q" />
   </label>
   {% comment %}
     The dropdowns share a row that scrolls sideways rather than shrinking, so no label
@@ -48,8 +48,7 @@ card/row (see taskMatchesFilters in board.js).
         {% endfor %}
       </select>
     {% endif %}
-    <button type="button" class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3" x-show="filtersActive()" x-cloak
-            title="Clear filters" aria-label="Clear filters" @click="clearFilters()">
+    <button type="button" class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3" x-show="filtersActive()" x-cloak title="Clear filters" aria-label="Clear filters" @click="clearFilters()">
       <i data-lucide="x" class="w-4 h-4"></i>
       <span class="hidden sm:inline">Clear</span>
     </button>

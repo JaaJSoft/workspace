@@ -9,12 +9,9 @@ Params:
   folders    (optional) - expression for the option list, default "rulesAccountFolders()"
   on_change  (optional) - Alpine expression run after a row is picked
 {% endcomment %}
-<template x-for="f in {{ folders|default:'rulesAccountFolders()' }}" :key="f.uuid">
+<template x-for="f in {{ folders|default:'rulesAccountFolders() ' }}" :key="f.uuid">
   <li>
-    <button type="button" class="flex items-center gap-2"
-       :class="{{ model }} === f.uuid ? 'active' : ''"
-       :style="f._depth ? `padding-left:${0.5 + f._depth * 0.75}rem` : ''"
-       @click="{{ model }} = f.uuid;{% if on_change %} {{ on_change }};{% endif %}">
+    <button type="button" class="flex items-center gap-2" :class="{{ model }} === f.uuid ? 'active' : ''" :style="f._depth ? `padding-left:${0.5 + f._depth * 0.75}rem` : ''" @click="{{ model }} = f.uuid;{% if on_change %} {{ on_change }};{% endif %}">
       <span class="flex-shrink-0" :class="f.color || ''">
         <i :data-lucide="f.icon || folderIcon(f.folder_type)" class="w-4 h-4"></i>
       </span>

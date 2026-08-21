@@ -15,524 +15,422 @@
 <div class="border-base-300 flex flex-col flex-1 min-h-0" x-data="fileTableWithView()">
   <div class="card-body p-0 flex flex-col flex-1 min-h-0">
     {% if nodes %}
-    <!-- Toolbar: Filter bar OR Bulk action bar -->
-    <div class="border-b border-base-300 bg-base-100 px-3 py-2">
-      <!-- Filter bar (when nothing selected) -->
-      <div class="flex flex-wrap items-center gap-2" x-show="selectedUuids.size === 0">
-        <label class="input input-sm input-bordered flex items-center gap-2 w-full sm:w-48 md:w-64 lg:w-96">
-          <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
-          <input
-            type="search"
-            class="grow"
-            placeholder="Filter by name"
-            x-model.debounce.200ms="searchQuery"
-          />
-        </label>
+      <!-- Toolbar: Filter bar OR Bulk action bar -->
+      <div class="border-b border-base-300 bg-base-100 px-3 py-2">
+        <!-- Filter bar (when nothing selected) -->
+        <div class="flex flex-wrap items-center gap-2" x-show="selectedUuids.size === 0">
+          <label class="input input-sm input-bordered flex items-center gap-2 w-full sm:w-48 md:w-64 lg:w-96">
+            <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+            <input type="search" class="grow" placeholder="Filter by name" x-model.debounce.200ms="searchQuery" />
+          </label>
 
-        <select class="select select-sm select-bordered" x-model="typeFilter">
-          <option value="all">All</option>
-          <option value="files">Files</option>
-          <option value="folders">Folders</option>
-          {% if not is_trash_view %}
-          <option value="favorites">Favorites</option>
-          {% endif %}
-        </select>
-
-        {% if listing_tags %}
-        <div class="dropdown" x-data="{ open: false }" :class="open ? 'dropdown-open' : ''" @click.outside="open = false">
-          <button type="button" class="btn btn-sm gap-2"
-                  :class="tagFilter.length ? 'btn-secondary' : 'btn-outline'"
-                  @click="open = !open" :aria-expanded="open.toString()">
-            <i data-lucide="tag" class="w-4 h-4"></i>
-            <span x-text="tagFilterLabel()">Tags</span>
-          </button>
-          <div tabindex="-1" class="dropdown-content z-50 w-60 p-2 shadow-xl bg-base-100 border border-base-300 rounded-lg" @click.stop>
-            <div class="max-h-64 overflow-y-auto space-y-0.5">
-              {% for tag in listing_tags %}
-              <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200 cursor-pointer">
-                <input type="checkbox" class="checkbox checkbox-xs"
-                       :checked="hasTagFilter('{{ tag.uuid }}')"
-                       @change="toggleTagFilter('{{ tag.uuid }}')" />
-                <i data-lucide="{{ tag.icon|default:'tag' }}" class="w-4 h-4 flex-shrink-0"
-                   style="{% if tag.color %}color: {{ tag.color }}{% endif %}"></i>
-                <span class="truncate text-sm">{{ tag.name }}</span>
-              </label>
-              {% endfor %}
-            </div>
-            <button type="button" class="btn btn-xs btn-ghost w-full mt-1"
-                    :disabled="tagFilter.length === 0" @click="clearTagFilter()">Clear</button>
-          </div>
-        </div>
-        {% endif %}
-
-        <div class="join">
-          <select class="select select-sm select-bordered join-item" x-model="sortField">
-            <option value="default">Default</option>
-            <option value="name">Name</option>
-            <option value="size">Size</option>
-            <option value="created">Created</option>
-            <option value="modified">Modified</option>
+          <select class="select select-sm select-bordered" x-model="typeFilter">
+            <option value="all">All</option>
+            <option value="files">Files</option>
+            <option value="folders">Folders</option>
             {% if not is_trash_view %}
-            <option value="favorite">Favorite</option>
+              <option value="favorites">Favorites</option>
             {% endif %}
-            <option value="type">Type</option>
           </select>
-          <button
-            type="button"
-            class="btn btn-sm btn-outline join-item"
-            @click="toggleSortDir()"
-            :disabled="sortField === 'default'"
-            aria-label="Toggle sort direction"
-          >
-            <i data-lucide="arrow-up" class="w-4 h-4" x-show="sortDir === 'asc'" x-cloak></i>
-            <i data-lucide="arrow-down" class="w-4 h-4" x-show="sortDir === 'desc'" x-cloak></i>
-          </button>
-        </div>
 
-        <button type="button" class="btn btn-sm btn-ghost" @click="resetAll()" title="Reset filters and sorting">Reset</button>
-
-        <!-- Paste button (when clipboard has items) -->
-        <button x-show="hasClipboardItems" x-cloak type="button" class="btn btn-sm btn-primary gap-1" @click="bulkPaste()" title="Paste items here">
-          <i data-lucide="clipboard-paste" class="w-4 h-4"></i>
-          <span class="hidden sm:inline">Paste</span>
-        </button>
-
-        <!-- Spacer to push view toggle to the right -->
-        <div class="flex-1"></div>
-
-        <!-- Right-side controls (grouped to prevent wrapping) -->
-        <div class="flex items-center gap-2 shrink-0">
-          <!-- Columns button (only in list view) -->
-          <div class="dropdown dropdown-end" x-data="{ open: false }" :class="open ? 'dropdown-open' : ''" @click.outside="open = false" x-show="viewMode === 'list'" x-cloak>
-            <button type="button" class="btn btn-sm btn-outline gap-2" @click="open = !open" :aria-expanded="open.toString()">
-              <i data-lucide="columns-2" class="w-4 h-4"></i>
-              <span class="hidden md:inline">Columns</span>
-            </button>
-            <div tabindex="-1" class="dropdown-content z-50 w-72 p-2 shadow-xl bg-base-100 border border-base-300 rounded-lg" @click.stop>
-              <div class="text-xs uppercase tracking-wide text-base-content/60 px-2 py-1">Visible</div>
-              <div class="space-y-1">
-                <template x-for="col in columns" :key="col.id">
-                  <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200">
-                    <input
-                      type="checkbox"
-                      class="checkbox checkbox-xs"
-                      :checked="isColumnVisible(col.id)"
-                      :disabled="col.required"
-                      @change="setColumnVisible(col.id, $event.target.checked)"
-                    />
-                    <span class="text-sm" x-text="col.label"></span>
-                    <span class="ml-auto text-xs text-base-content/40" x-show="col.required">Required</span>
-                  </label>
-                </template>
-              </div>
-              <div class="divider my-2"></div>
-              <div class="text-xs uppercase tracking-wide text-base-content/60 px-2 py-1">Order</div>
-              <div class="space-y-1">
-                <template x-for="(col, index) in orderedColumns()" :key="col.id">
-                  <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200">
-                    <span class="text-sm" x-text="col.label"></span>
-                    <div class="ml-auto flex items-center gap-1">
-                      <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, -1)" :disabled="index === 0">
-                        <i data-lucide="chevron-up" class="w-3 h-3"></i>
-                      </button>
-                      <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, 1)" :disabled="index === orderedColumns().length - 1">
-                        <i data-lucide="chevron-down" class="w-3 h-3"></i>
-                      </button>
-                    </div>
-                  </div>
-                </template>
-              </div>
-              <div class="mt-2 flex justify-end">
-                <button type="button" class="btn btn-xs btn-ghost" @click="resetColumns()">Reset columns</button>
+          {% if listing_tags %}
+            <div class="dropdown" x-data="{ open: false }" :class="open ? 'dropdown-open' : ''" @click.outside="open = false">
+              <button type="button" class="btn btn-sm gap-2" :class="tagFilter.length ? 'btn-secondary' : 'btn-outline'" @click="open = !open" :aria-expanded="open.toString()">
+                <i data-lucide="tag" class="w-4 h-4"></i>
+                <span x-text="tagFilterLabel()">Tags</span>
+              </button>
+              <div tabindex="-1" class="dropdown-content z-50 w-60 p-2 shadow-xl bg-base-100 border border-base-300 rounded-lg" @click.stop>
+                <div class="max-h-64 overflow-y-auto space-y-0.5">
+                  {% for tag in listing_tags %}
+                    <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200 cursor-pointer">
+                      <input type="checkbox" class="checkbox checkbox-xs" :checked="hasTagFilter('{{ tag.uuid }}')" @change="toggleTagFilter('{{ tag.uuid }}')" />
+                      <i data-lucide="{{ tag.icon|default:'tag' }}" class="w-4 h-4 flex-shrink-0" style="{% if tag.color %}color: {{ tag.color }}{% endif %}"></i>
+                      <span class="truncate text-sm">{{ tag.name }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+                <button type="button" class="btn btn-xs btn-ghost w-full mt-1" :disabled="tagFilter.length === 0" @click="clearTagFilter()">Clear</button>
               </div>
             </div>
-          </div>
+          {% endif %}
 
-          <!-- Tile size slider (mosaic view only) -->
-          <div class="flex items-center gap-1.5 text-primary" x-show="viewMode === 'mosaic'" x-cloak>
-            <i data-lucide="grid-2x2" class="w-3 h-3 opacity-60"></i>
-            <input
-              type="range" min="1" max="5" step="1"
-              x-model.number="mosaicTileSize"
-              @change="setMosaicTileSize(mosaicTileSize)"
-              class="range range-xs range-primary w-24"
-              title="Tile size"
-            />
-            <i data-lucide="grid-2x2" class="w-5 h-5 opacity-60"></i>
-          </div>
-
-          <!-- View toggle button (always visible at the end) -->
           <div class="join">
-            <button
-              type="button"
-              class="btn btn-sm btn-outline join-item"
-              :class="viewMode === 'list' ? 'bg-primary/10 text-primary' : ''"
-              @click="setViewMode('list')"
-              title="List view"
-              aria-label="List view"
-            >
-              <i data-lucide="list" class="w-4 h-4"></i>
-            </button>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline join-item"
-              :class="viewMode === 'mosaic' ? 'bg-primary/10 text-primary' : ''"
-              @click="setViewMode('mosaic')"
-              title="Mosaic view"
-              aria-label="Mosaic view"
-            >
-              <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+            <select class="select select-sm select-bordered join-item" x-model="sortField">
+              <option value="default">Default</option>
+              <option value="name">Name</option>
+              <option value="size">Size</option>
+              <option value="created">Created</option>
+              <option value="modified">Modified</option>
+              {% if not is_trash_view %}
+                <option value="favorite">Favorite</option>
+              {% endif %}
+              <option value="type">Type</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline join-item" @click="toggleSortDir()" :disabled="sortField === 'default'" aria-label="Toggle sort direction">
+              <i data-lucide="arrow-up" class="w-4 h-4" x-show="sortDir === 'asc'" x-cloak></i>
+              <i data-lucide="arrow-down" class="w-4 h-4" x-show="sortDir === 'desc'" x-cloak></i>
             </button>
           </div>
-        </div>
-      </div>
 
-      <!-- Bulk action bar (when items selected) -->
-      <div class="flex items-center gap-2" x-show="selectedUuids.size > 0" x-cloak>
-        <span class="text-sm font-medium" x-text="selectedUuids.size + ' item' + (selectedUuids.size > 1 ? 's' : '') + ' selected'"></span>
-        <div class="flex items-center gap-1 ml-4">
-          <template x-for="action in bulkActions" :key="action.id">
-            <button type="button" class="btn btn-sm btn-ghost gap-1" :class="action.css_class"
-                    :title="action.label" @click="executeBulkAction(action)">
-              <i :data-lucide="action.icon" class="w-4 h-4"></i>
-              <span class="hidden sm:inline" x-text="action.label"></span>
-            </button>
-          </template>
-          <span x-show="bulkActionsLoading" class="loading loading-spinner loading-xs ml-2"></span>
+          <button type="button" class="btn btn-sm btn-ghost" @click="resetAll()" title="Reset filters and sorting">Reset</button>
+
+          <!-- Paste button (when clipboard has items) -->
+          <button x-show="hasClipboardItems" x-cloak type="button" class="btn btn-sm btn-primary gap-1" @click="bulkPaste()" title="Paste items here">
+            <i data-lucide="clipboard-paste" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Paste</span>
+          </button>
+
+          <!-- Spacer to push view toggle to the right -->
+          <div class="flex-1"></div>
+
+          <!-- Right-side controls (grouped to prevent wrapping) -->
+          <div class="flex items-center gap-2 shrink-0">
+            <!-- Columns button (only in list view) -->
+            <div class="dropdown dropdown-end" x-data="{ open: false }" :class="open ? 'dropdown-open' : ''" @click.outside="open = false" x-show="viewMode === 'list'" x-cloak>
+              <button type="button" class="btn btn-sm btn-outline gap-2" @click="open = !open" :aria-expanded="open.toString()">
+                <i data-lucide="columns-2" class="w-4 h-4"></i>
+                <span class="hidden md:inline">Columns</span>
+              </button>
+              <div tabindex="-1" class="dropdown-content z-50 w-72 p-2 shadow-xl bg-base-100 border border-base-300 rounded-lg" @click.stop>
+                <div class="text-xs uppercase tracking-wide text-base-content/60 px-2 py-1">Visible</div>
+                <div class="space-y-1">
+                  <template x-for="col in columns" :key="col.id">
+                    <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200">
+                      <input type="checkbox" class="checkbox checkbox-xs" :checked="isColumnVisible(col.id)" :disabled="col.required" @change="setColumnVisible(col.id, $event.target.checked)" />
+                      <span class="text-sm" x-text="col.label"></span>
+                      <span class="ml-auto text-xs text-base-content/40" x-show="col.required">Required</span>
+                    </label>
+                  </template>
+                </div>
+                <div class="divider my-2"></div>
+                <div class="text-xs uppercase tracking-wide text-base-content/60 px-2 py-1">Order</div>
+                <div class="space-y-1">
+                  <template x-for="(col, index) in orderedColumns()" :key="col.id">
+                    <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200">
+                      <span class="text-sm" x-text="col.label"></span>
+                      <div class="ml-auto flex items-center gap-1">
+                        <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, -1)" :disabled="index === 0">
+                          <i data-lucide="chevron-up" class="w-3 h-3"></i>
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, 1)" :disabled="index === orderedColumns().length - 1">
+                          <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+                <div class="mt-2 flex justify-end">
+                  <button type="button" class="btn btn-xs btn-ghost" @click="resetColumns()">Reset columns</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tile size slider (mosaic view only) -->
+            <div class="flex items-center gap-1.5 text-primary" x-show="viewMode === 'mosaic'" x-cloak>
+              <i data-lucide="grid-2x2" class="w-3 h-3 opacity-60"></i>
+              <input type="range" min="1" max="5" step="1" x-model.number="mosaicTileSize" @change="setMosaicTileSize(mosaicTileSize)" class="range range-xs range-primary w-24" title="Tile size" />
+              <i data-lucide="grid-2x2" class="w-5 h-5 opacity-60"></i>
+            </div>
+
+            <!-- View toggle button (always visible at the end) -->
+            <div class="join">
+              <button type="button" class="btn btn-sm btn-outline join-item" :class="viewMode === 'list' ? 'bg-primary/10 text-primary' : ''" @click="setViewMode('list')" title="List view" aria-label="List view">
+                <i data-lucide="list" class="w-4 h-4"></i>
+              </button>
+              <button type="button" class="btn btn-sm btn-outline join-item" :class="viewMode === 'mosaic' ? 'bg-primary/10 text-primary' : ''" @click="setViewMode('mosaic')" title="Mosaic view" aria-label="Mosaic view">
+                <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
         </div>
-        <button type="button" @click="clearSelection()" class="btn btn-sm btn-ghost ml-auto">
-          Cancel
-        </button>
+
+        <!-- Bulk action bar (when items selected) -->
+        <div class="flex items-center gap-2" x-show="selectedUuids.size > 0" x-cloak>
+          <span class="text-sm font-medium" x-text="selectedUuids.size + ' item' + (selectedUuids.size > 1 ? 's' : '') + ' selected'"></span>
+          <div class="flex items-center gap-1 ml-4">
+            <template x-for="action in bulkActions" :key="action.id">
+              <button type="button" class="btn btn-sm btn-ghost gap-1" :class="action.css_class" :title="action.label" @click="executeBulkAction(action)">
+                <i :data-lucide="action.icon" class="w-4 h-4"></i>
+                <span class="hidden sm:inline" x-text="action.label"></span>
+              </button>
+            </template>
+            <span x-show="bulkActionsLoading" class="loading loading-spinner loading-xs ml-2"></span>
+          </div>
+          <button type="button" @click="clearSelection()" class="btn btn-sm btn-ghost ml-auto">Cancel</button>
+        </div>
       </div>
-    </div>
     {% endif %}
 
     <!-- Table container with overflow -->
     <div class="overflow-auto flex-1 min-h-0"{% if not is_trash_view %} @contextmenu="openBackgroundContextMenu($event)"{% endif %}>
       {% if nodes %}
-      <table class="table table-fixed [&_td]:align-middle [&_th]:align-middle" :class="compactList ? 'table-xs [&_svg]:h-4 [&_svg]:w-4 [&_.checkbox]:h-4 [&_.checkbox]:w-4 [&_.btn-square]:h-5 [&_.btn-square]:w-5 [&_.btn-square]:min-h-0' : ''" x-show="viewMode === 'list'" x-cloak>
-        <thead class="sticky top-0 z-10">
-          <tr class="bg-base-200">
-            <th class="w-10" data-col="select">
-              <input
-                type="checkbox"
-                class="checkbox checkbox-sm align-middle"
-                @click="toggleSelectAll()"
-                :checked="selectAllState() === 'all'"
-                x-effect="$el.indeterminate = selectAllState() === 'partial'"
-              />
-            </th>
-            <th class="w-12" data-col="icon"><span class="sr-only">Type</span></th>
-            <th data-col="name">Name</th>
-            {% if not is_trash_view %}
-            <th class="w-10 text-center" data-col="favorite">Fav</th>
-            {% endif %}
-            <th class="hidden lg:table-cell w-40" data-col="tags">Tags</th>
-            <th class="hidden sm:table-cell w-24" data-col="size">Size</th>
-            <th class="hidden md:table-cell w-36" data-col="created">Created</th>
-            <th class="hidden md:table-cell w-36" data-col="modified">{% if is_trash_view %}Deleted{% else %}Modified{% endif %}</th>
-            {% if show_actions != False %}
-            <th class="w-16" data-col="actions"><span class="sr-only">Actions</span></th>
-            {% endif %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for node in nodes %}
-          <tr
-            class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity"
-            :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : '')"
-            @mouseenter="hoveredUuid = '{{ node.uuid }}'"
-            @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
-            data-uuid="{{ node.uuid }}"
-            data-name="{{ node.name|lower }}"
-            data-display-name="{{ node.name }}"
-            data-node-type="{{ node.node_type }}"
-            data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
-            data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
-            data-viewable="{{ node.is_viewable|yesno:'1,0' }}"
-            data-file-type="{{ node.type }}"
-            data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
-            data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
-            data-created="{{ node.created_at|date:'U' }}"
-            data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
-            {% if node.node_type == 'folder' and not is_trash_view %}
-            draggable="true"
-            @dragstart="$event.dataTransfer.effectAllowed = 'copy'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
-            @click="openFolderFromRow($event)"
-            {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
-            @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')"
-            {% endif %}
-            @contextmenu="openContextMenu($event, {
+        <table
+          class="table table-fixed [&_td]:align-middle [&_th]:align-middle"
+          :class="compactList ? 'table-xs [&_svg]:h-4 [&_svg]:w-4 [&_.checkbox]:h-4 [&_.checkbox]:w-4 [&_.btn-square]:h-5 [&_.btn-square]:w-5 [&_.btn-square]:min-h-0' : ''"
+          x-show="viewMode === 'list'"
+          x-cloak
+        >
+          <thead class="sticky top-0 z-10">
+            <tr class="bg-base-200">
+              <th class="w-10" data-col="select">
+                <input type="checkbox" class="checkbox checkbox-sm align-middle" @click="toggleSelectAll()" :checked="selectAllState() === 'all'" x-effect="$el.indeterminate = selectAllState() === 'partial'" />
+              </th>
+              <th class="w-12" data-col="icon"><span class="sr-only">Type</span></th>
+              <th data-col="name">Name</th>
+              {% if not is_trash_view %}
+                <th class="w-10 text-center" data-col="favorite">Fav</th>
+              {% endif %}
+              <th class="hidden lg:table-cell w-40" data-col="tags">Tags</th>
+              <th class="hidden sm:table-cell w-24" data-col="size">Size</th>
+              <th class="hidden md:table-cell w-36" data-col="created">Created</th>
+              <th class="hidden md:table-cell w-36" data-col="modified">{% if is_trash_view %}Deleted{% else %}Modified{% endif %}</th>
+              {% if show_actions != False %}
+                <th class="w-16" data-col="actions"><span class="sr-only">Actions</span></th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for node in nodes %}
+              <tr
+                class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity"
+                :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : '')"
+                @mouseenter="hoveredUuid = '{{ node.uuid }}'"
+                @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
+                data-uuid="{{ node.uuid }}"
+                data-name="{{ node.name|lower }}"
+                data-display-name="{{ node.name }}"
+                data-node-type="{{ node.node_type }}"
+                data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
+                data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
+                data-viewable="{{ node.is_viewable|yesno:'1,0' }}"
+                data-file-type="{{ node.type }}"
+                data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
+                data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
+                data-created="{{ node.created_at|date:'U' }}"
+                data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
+                {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" @dragstart="$event.dataTransfer.effectAllowed = 'copy'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))" @click="openFolderFromRow($event)" {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %} @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% endif %}
+                @contextmenu="openContextMenu($event, {
               uuid: '{{ node.uuid }}',
               name: '{{ node.name|escapejs }}',
               nodeType: '{{ node.node_type }}',
               fileType: '{{ node.type }}',
               actions: actionsMap['{{ node.uuid }}'] || []
             })"
-          >
-            <td data-col="select" data-stop-row-click @click.stop>
-              <input
-                type="checkbox"
-                class="checkbox checkbox-sm align-middle"
-                :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
-                @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
-              />
-            </td>
-            <td class="text-base-content/60" data-col="icon">
-              {% if node.node_type == 'folder' %}
-                <i data-lucide="{{ node.icon|default:'folder' }}" class="w-5 h-5 {{ node.color|default:'text-warning' }}"></i>
-              {% else %}
-                <i data-lucide="{{ node.type|type_to_icon }}" class="w-5 h-5 {{ node.type|type_to_color }}"></i>
-              {% endif %}
-            </td>
-            <td data-col="name">
-              {% if node.node_type == 'folder' and not is_trash_view %}
-                {% comment %}
+              >
+                <td data-col="select" data-stop-row-click @click.stop>
+                  <input type="checkbox" class="checkbox checkbox-sm align-middle" :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')" @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)" />
+                </td>
+                <td class="text-base-content/60" data-col="icon">
+                  {% if node.node_type == 'folder' %}
+                    <i data-lucide="{{ node.icon|default:'folder' }}" class="w-5 h-5 {{ node.color|default:'text-warning' }}"></i>
+                  {% else %}
+                    <i data-lucide="{{ node.type|type_to_icon }}" class="w-5 h-5 {{ node.type|type_to_color }}"></i>
+                  {% endif %}
+                </td>
+                <td data-col="name">
+                  {% if node.node_type == 'folder' and not is_trash_view %}
+                    {% comment %}
                   draggable="false" hands the drag back to the row: an anchor
                   is draggable by default, and a link drag carries a
                   text/uri-list payload that Chrome routes through the OS
                   instead of the page, so the sidebar never sees the drop.
-                {% endcomment %}
-                <a
-                  href="/files/{{ node.uuid }}"
-                  class="font-medium hover:text-primary hover:underline block truncate"
-                  x-target.push="folder-browser"
-                  data-folder-link
-                  draggable="false"
-                  title="{{ node.name }}"
-                >
-                  {{ node.name }}
-                </a>
-              {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
-                <span class="font-medium block truncate group-hover:text-primary group-hover:underline" title="{{ node.name }}">{{ node.name }}</span>
-              {% else %}
-                <span class="font-medium block truncate" title="{{ node.name }}">{{ node.name }}</span>
-              {% endif %}
-            </td>
-            {% if not is_trash_view %}
-            <td class="text-center text-base-content/60" data-stop-row-click data-col="favorite">
-              <span x-show="isActionLoading('{{ node.uuid }}')" class="loading loading-spinner loading-xs"></span>
-              {% if node.is_favorite %}
-                <button
-                  x-show="!isActionLoading('{{ node.uuid }}')"
-                  type="button"
-                  class="btn btn-ghost btn-xs btn-square"
-                  aria-label="Remove from favorites"
-                  @click="toggleFavorite('{{ node.uuid }}', true)"
-                >
-                  <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
-                </button>
-              {% else %}
-                <button
-                  x-show="!isActionLoading('{{ node.uuid }}')"
-                  type="button"
-                  class="btn btn-ghost btn-xs btn-square"
-                  aria-label="Add to favorites"
-                  @click="toggleFavorite('{{ node.uuid }}', false)"
-                >
-                  <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
-                </button>
-              {% endif %}
-            </td>
-            {% endif %}
-            <td class="hidden lg:table-cell" data-col="tags">
-              <div class="flex flex-wrap items-center gap-1">
-                {% for ft in node.file_tags.all %}
-                <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
-                {% endfor %}
-              </div>
-            </td>
-            <td class="hidden sm:table-cell text-sm text-base-content/70" data-col="size">
-              {% if node.node_type == 'file' %}
-                {{ node.size|filesizeformat }}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="hidden md:table-cell text-sm text-base-content/70" data-col="created">
-              {{ node.created_at|localtime_tag:"date" }}
-            </td>
-            <td class="hidden md:table-cell text-sm text-base-content/70" data-col="modified">
-              {% if is_trash_view %}
-                {{ node.deleted_at|localtime_tag:"date" }}
-              {% else %}
-                {{ node.updated_at|localtime_tag:"date" }}
-              {% endif %}
-            </td>
-            {% if show_actions != False %}
-            <td data-stop-row-click data-col="actions">
-              <span x-show="isActionLoading('{{ node.uuid }}')" class="loading loading-spinner loading-xs"></span>
-              <button
-                x-show="!isActionLoading('{{ node.uuid }}')"
-                type="button"
-                class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                @click="openContextMenu($event, {
+                    {% endcomment %}
+                    <a href="/files/{{ node.uuid }}" class="font-medium hover:text-primary hover:underline block truncate" x-target.push="folder-browser" data-folder-link draggable="false" title="{{ node.name }}">
+                      {{ node.name }}
+                    </a>
+                  {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
+                    <span class="font-medium block truncate group-hover:text-primary group-hover:underline" title="{{ node.name }}">{{ node.name }}</span>
+                  {% else %}
+                    <span class="font-medium block truncate" title="{{ node.name }}">{{ node.name }}</span>
+                  {% endif %}
+                </td>
+                {% if not is_trash_view %}
+                  <td class="text-center text-base-content/60" data-stop-row-click data-col="favorite">
+                    <span x-show="isActionLoading('{{ node.uuid }}')" class="loading loading-spinner loading-xs"></span>
+                    {% if node.is_favorite %}
+                      <button x-show="!isActionLoading('{{ node.uuid }}')" type="button" class="btn btn-ghost btn-xs btn-square" aria-label="Remove from favorites" @click="toggleFavorite('{{ node.uuid }}', true)">
+                        <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
+                      </button>
+                    {% else %}
+                      <button x-show="!isActionLoading('{{ node.uuid }}')" type="button" class="btn btn-ghost btn-xs btn-square" aria-label="Add to favorites" @click="toggleFavorite('{{ node.uuid }}', false)">
+                        <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
+                      </button>
+                    {% endif %}
+                  </td>
+                {% endif %}
+                <td class="hidden lg:table-cell" data-col="tags">
+                  <div class="flex flex-wrap items-center gap-1">
+                    {% for ft in node.file_tags.all %}
+                      <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+                    {% endfor %}
+                  </div>
+                </td>
+                <td class="hidden sm:table-cell text-sm text-base-content/70" data-col="size">
+                  {% if node.node_type == 'file' %}
+                    {{ node.size|filesizeformat }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="hidden md:table-cell text-sm text-base-content/70" data-col="created">
+                  {{ node.created_at|localtime_tag:"date" }}
+                </td>
+                <td class="hidden md:table-cell text-sm text-base-content/70" data-col="modified">
+                  {% if is_trash_view %}
+                    {{ node.deleted_at|localtime_tag:"date" }}
+                  {% else %}
+                    {{ node.updated_at|localtime_tag:"date" }}
+                  {% endif %}
+                </td>
+                {% if show_actions != False %}
+                  <td data-stop-row-click data-col="actions">
+                    <span x-show="isActionLoading('{{ node.uuid }}')" class="loading loading-spinner loading-xs"></span>
+                    <button
+                      x-show="!isActionLoading('{{ node.uuid }}')"
+                      type="button"
+                      class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                      @click="openContextMenu($event, {
                   uuid: '{{ node.uuid }}',
                   name: '{{ node.name|escapejs }}',
                   nodeType: '{{ node.node_type }}',
                   fileType: '{{ node.type }}',
                   actions: actionsMap['{{ node.uuid }}'] || []
                 })"
-              >
-                <i data-lucide="more-vertical" class="w-4 h-4"></i>
-              </button>
-            </td>
-            {% endif %}
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+                    >
+                      <i data-lucide="more-vertical" class="w-4 h-4"></i>
+                    </button>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
 
-      <!-- Mosaic/Grid view -->
-      <div :class="mosaicTileSize <= 2 ? 'p-2' : 'p-4'" x-show="viewMode === 'mosaic'" x-cloak>
-        <div class="grid" :style="'grid-template-columns: repeat(auto-fill, minmax(' + tileMinWidth() + 'px, 1fr)); gap: ' + tileGap() + 'px'">
-          {% for node in nodes %}
-          <div
-            class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
-            :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : '')"
-            data-uuid="{{ node.uuid }}"
-            data-name="{{ node.name|lower }}"
-            data-display-name="{{ node.name }}"
-            data-node-type="{{ node.node_type }}"
-            data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
-            data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
-            data-viewable="{{ node.is_viewable|yesno:'1,0' }}"
-            data-file-type="{{ node.type }}"
-            data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
-            data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
-            data-created="{{ node.created_at|date:'U' }}"
-            data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
-            @mouseenter="hoveredUuid = '{{ node.uuid }}'"
-            @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
-            {% if node.node_type == 'folder' and not is_trash_view %}
-            draggable="true"
-            @dragstart="$event.dataTransfer.effectAllowed = 'copy'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
-            @click="navigateToFolder($event, '/files/{{ node.uuid }}')"
-            {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
-            @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')"
-            {% endif %}
-            @contextmenu.prevent="openContextMenu($event, {
+        <!-- Mosaic/Grid view -->
+        <div :class="mosaicTileSize <= 2 ? 'p-2' : 'p-4'" x-show="viewMode === 'mosaic'" x-cloak>
+          <div class="grid" :style="'grid-template-columns: repeat(auto-fill, minmax(' + tileMinWidth() + 'px, 1fr)); gap: ' + tileGap() + 'px'">
+            {% for node in nodes %}
+              <div
+                class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
+                :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : '')"
+                data-uuid="{{ node.uuid }}"
+                data-name="{{ node.name|lower }}"
+                data-display-name="{{ node.name }}"
+                data-node-type="{{ node.node_type }}"
+                data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
+                data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
+                data-viewable="{{ node.is_viewable|yesno:'1,0' }}"
+                data-file-type="{{ node.type }}"
+                data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
+                data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
+                data-created="{{ node.created_at|date:'U' }}"
+                data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
+                @mouseenter="hoveredUuid = '{{ node.uuid }}'"
+                @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
+                {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" @dragstart="$event.dataTransfer.effectAllowed = 'copy'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))" @click="navigateToFolder($event, '/files/{{ node.uuid }}')" {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %} @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% endif %}
+                @contextmenu.prevent="openContextMenu($event, {
               uuid: '{{ node.uuid }}',
               name: '{{ node.name|escapejs }}',
               nodeType: '{{ node.node_type }}',
               fileType: '{{ node.type }}',
               actions: actionsMap['{{ node.uuid }}'] || []
             })"
-          >
-            <!-- Checkbox overlay (top-left) -->
-            <div class="absolute top-2 left-2 z-10" @click.stop>
-              <input
-                type="checkbox"
-                class="checkbox checkbox-sm bg-base-100/80 backdrop-blur-sm"
-                :class="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
-                :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
-                @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
-              />
-            </div>
-
-            <!-- Favorite button (top-right) -->
-            {% if not is_trash_view %}
-            <div class="absolute top-2 right-2 z-10" @click.stop>
-              <span x-show="isActionLoading('{{ node.uuid }}')" class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm pointer-events-none">
-                <span class="loading loading-spinner loading-xs"></span>
-              </span>
-              {% if node.is_favorite %}
-              <button
-                x-show="!isActionLoading('{{ node.uuid }}')"
-                type="button"
-                class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm"
-                aria-label="Remove from favorites"
-                @click="toggleFavorite('{{ node.uuid }}', true)"
               >
-                <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
-              </button>
-              {% else %}
-              <button
-                x-show="!isActionLoading('{{ node.uuid }}')"
-                type="button"
-                class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
-                aria-label="Add to favorites"
-                @click="toggleFavorite('{{ node.uuid }}', false)"
-              >
-                <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
-              </button>
-              {% endif %}
-            </div>
-            {% endif %}
-
-            <!-- Preview/Icon area (square) -->
-            <div class="relative w-full" style="padding-bottom: 100%;">
-              {% if node.has_thumbnail %}
-              <img
-                src="/api/v1/files/{{ node.uuid }}/thumbnail"
-                alt=""
-                class="absolute inset-0 w-full h-full object-cover bg-base-200"
-                loading="lazy"
-                decoding="async"
-                draggable="false"
-              />
-              {% else %}
-              <div class="absolute inset-0 flex items-center justify-center bg-base-200">
-                <div :style="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'">
-                  {% if node.node_type == 'folder' %}
-                    <i data-lucide="{{ node.icon|default:'folder' }}" class="w-full h-full {{ node.color|default:'text-warning' }}"></i>
-                  {% else %}
-                    <i data-lucide="{{ node.type|type_to_icon }}" class="w-full h-full {{ node.type|type_to_color }}"></i>
-                  {% endif %}
+                <!-- Checkbox overlay (top-left) -->
+                <div class="absolute top-2 left-2 z-10" @click.stop>
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-sm bg-base-100/80 backdrop-blur-sm"
+                    :class="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+                    :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
+                    @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
+                  />
                 </div>
-              </div>
-              {% endif %}
-            </div>
 
-            <!-- File info -->
-            <div class="border-t border-base-300 flex-1" :class="mosaicTileSize <= 2 ? 'px-2 py-1.5' : 'p-3'">
-              <div class="flex items-start justify-between gap-1">
-                <div class="flex-1 min-w-0">
-                  <h3 class="font-medium truncate" :class="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'" title="{{ node.name }}">{{ node.name }}</h3>
-                  <p class="text-xs text-base-content/60" :class="mosaicTileSize <= 1 ? 'hidden' : 'mt-0.5'" x-cloak>
-                    {% if node.node_type == 'file' %}
-                      {{ node.size|filesizeformat }}
+                <!-- Favorite button (top-right) -->
+                {% if not is_trash_view %}
+                  <div class="absolute top-2 right-2 z-10" @click.stop>
+                    <span x-show="isActionLoading('{{ node.uuid }}')" class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm pointer-events-none">
+                      <span class="loading loading-spinner loading-xs"></span>
+                    </span>
+                    {% if node.is_favorite %}
+                      <button x-show="!isActionLoading('{{ node.uuid }}')" type="button" class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm" aria-label="Remove from favorites" @click="toggleFavorite('{{ node.uuid }}', true)">
+                        <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
+                      </button>
                     {% else %}
-                      Folder
+                      <button x-show="!isActionLoading('{{ node.uuid }}')" type="button" class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100" aria-label="Add to favorites" @click="toggleFavorite('{{ node.uuid }}', false)">
+                        <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
+                      </button>
                     {% endif %}
-                  </p>
-                  {% if node.file_tags.all %}
-                  <div class="flex flex-wrap items-center gap-1 mt-1" :class="mosaicTileSize <= 1 ? 'hidden' : ''" x-cloak>
-                    {% for ft in node.file_tags.all %}
-                    <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
-                    {% endfor %}
                   </div>
+                {% endif %}
+
+                <!-- Preview/Icon area (square) -->
+                <div class="relative w-full" style="padding-bottom: 100%;">
+                  {% if node.has_thumbnail %}
+                    <img src="/api/v1/files/{{ node.uuid }}/thumbnail" alt="" class="absolute inset-0 w-full h-full object-cover bg-base-200" loading="lazy" decoding="async" draggable="false" />
+                  {% else %}
+                    <div class="absolute inset-0 flex items-center justify-center bg-base-200">
+                      <div :style="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'">
+                        {% if node.node_type == 'folder' %}
+                          <i data-lucide="{{ node.icon|default:'folder' }}" class="w-full h-full {{ node.color|default:'text-warning' }}"></i>
+                        {% else %}
+                          <i data-lucide="{{ node.type|type_to_icon }}" class="w-full h-full {{ node.type|type_to_color }}"></i>
+                        {% endif %}
+                      </div>
+                    </div>
                   {% endif %}
                 </div>
-                {% if show_actions != False %}
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-xs btn-square flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  @click.stop="openContextMenu($event, {
+
+                <!-- File info -->
+                <div class="border-t border-base-300 flex-1" :class="mosaicTileSize <= 2 ? 'px-2 py-1.5' : 'p-3'">
+                  <div class="flex items-start justify-between gap-1">
+                    <div class="flex-1 min-w-0">
+                      <h3 class="font-medium truncate" :class="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'" title="{{ node.name }}">{{ node.name }}</h3>
+                      <p class="text-xs text-base-content/60" :class="mosaicTileSize <= 1 ? 'hidden' : 'mt-0.5'" x-cloak>
+                        {% if node.node_type == 'file' %}
+                          {{ node.size|filesizeformat }}
+                        {% else %}
+                          Folder
+                        {% endif %}
+                      </p>
+                      {% if node.file_tags.all %}
+                        <div class="flex flex-wrap items-center gap-1 mt-1" :class="mosaicTileSize <= 1 ? 'hidden' : ''" x-cloak>
+                          {% for ft in node.file_tags.all %}
+                            <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    </div>
+                    {% if show_actions != False %}
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-xs btn-square flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        @click.stop="openContextMenu($event, {
                     uuid: '{{ node.uuid }}',
                     name: '{{ node.name|escapejs }}',
                     nodeType: '{{ node.node_type }}',
                     fileType: '{{ node.type }}',
                     actions: actionsMap['{{ node.uuid }}'] || []
                   })"
-                >
-                  <i data-lucide="more-vertical" class="w-4 h-4"></i>
-                </button>
-                {% endif %}
+                      >
+                        <i data-lucide="more-vertical" class="w-4 h-4"></i>
+                      </button>
+                    {% endif %}
+                  </div>
+                </div>
               </div>
-            </div>
+            {% endfor %}
           </div>
-          {% endfor %}
         </div>
-      </div>
       {% else %}
-      <div class="flex h-full items-center justify-center text-base-content/60">
-        <div class="text-center">
-          <i data-lucide="folder-open" class="w-12 h-12 mb-4 opacity-40 mx-auto"></i>
-          <p class="text-lg font-medium mb-1">{{ empty_title|default:"This folder is empty" }}</p>
-          <p class="text-sm">{{ empty_message|default:"Create a folder or upload files to get started." }}</p>
+        <div class="flex h-full items-center justify-center text-base-content/60">
+          <div class="text-center">
+            <i data-lucide="folder-open" class="w-12 h-12 mb-4 opacity-40 mx-auto"></i>
+            <p class="text-lg font-medium mb-1">{{ empty_title|default:"This folder is empty" }}</p>
+            <p class="text-sm">{{ empty_message|default:"Create a folder or upload files to get started." }}</p>
+          </div>
         </div>
-      </div>
       {% endif %}
     </div>
 
@@ -557,18 +455,18 @@
 
               <!-- Folders count (hidden while a filter is active) -->
               {% if folder_stats.folder_count > 0 %}
-              <span class="flex items-center gap-1" x-show="visibleCount() === totalCount()">
-                <i data-lucide="folder" class="w-3 h-3"></i>
-                <span>{{ folder_stats.folder_count }} folder{{ folder_stats.folder_count|pluralize }}</span>
-              </span>
+                <span class="flex items-center gap-1" x-show="visibleCount() === totalCount()">
+                  <i data-lucide="folder" class="w-3 h-3"></i>
+                  <span>{{ folder_stats.folder_count }} folder{{ folder_stats.folder_count|pluralize }}</span>
+                </span>
               {% endif %}
 
               <!-- Files count (hidden while a filter is active) -->
               {% if folder_stats.file_count > 0 %}
-              <span class="flex items-center gap-1" x-show="visibleCount() === totalCount()">
-                <i data-lucide="file" class="w-3 h-3"></i>
-                <span>{{ folder_stats.file_count }} file{{ folder_stats.file_count|pluralize }}</span>
-              </span>
+                <span class="flex items-center gap-1" x-show="visibleCount() === totalCount()">
+                  <i data-lucide="file" class="w-3 h-3"></i>
+                  <span>{{ folder_stats.file_count }} file{{ folder_stats.file_count|pluralize }}</span>
+                </span>
               {% endif %}
             </span>
           {% else %}
@@ -582,20 +480,17 @@
         <div class="flex items-center gap-2">
           <!-- Total size -->
           {% if folder_stats.total_size > 0 %}
-          <span class="flex items-center gap-1">
-            <i data-lucide="hard-drive" class="w-3 h-3"></i>
-            <span>{{ folder_stats.total_size|filesizeformat }}</span>
-          </span>
+            <span class="flex items-center gap-1">
+              <i data-lucide="hard-drive" class="w-3 h-3"></i>
+              <span>{{ folder_stats.total_size|filesizeformat }}</span>
+            </span>
           {% endif %}
 
           <!-- Current folder properties -->
           {% if current_folder %}
-          <button type="button"
-                  class="btn btn-ghost btn-xs btn-square -mr-2"
-                  title="Folder properties"
-                  @click="window.dispatchEvent(new CustomEvent('open-properties', { detail: { uuid: '{{ current_folder.uuid }}', nodeType: 'folder' } }))">
-            <i data-lucide="info" class="w-3.5 h-3.5"></i>
-          </button>
+            <button type="button" class="btn btn-ghost btn-xs btn-square -mr-2" title="Folder properties" @click="window.dispatchEvent(new CustomEvent('open-properties', { detail: { uuid: '{{ current_folder.uuid }}', nodeType: 'folder' } }))">
+              <i data-lucide="info" class="w-3.5 h-3.5"></i>
+            </button>
           {% endif %}
         </div>
       </div>

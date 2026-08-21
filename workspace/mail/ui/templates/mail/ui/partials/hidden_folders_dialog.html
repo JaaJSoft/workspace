@@ -14,8 +14,7 @@
 
     <template x-if="hiddenFolders.length > 0">
       <div>
-        <input type="text" x-model="hiddenFoldersSearch" placeholder="Search..."
-               class="input input-bordered input-sm w-full mb-3" />
+        <input type="text" x-model="hiddenFoldersSearch" placeholder="Search..." class="input input-bordered input-sm w-full mb-3" />
       </div>
     </template>
 
@@ -41,5 +40,7 @@
       </form>
     </div>
   </div>
-  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
 </dialog>

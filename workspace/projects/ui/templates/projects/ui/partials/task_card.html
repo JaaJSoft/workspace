@@ -1,16 +1,18 @@
 {# concentric radius: board column is rounded-box with p-3, so inner radius = rounded-box - 0.75rem #}
-<li class="card rounded-[max(0px,calc(var(--rounded-box)_-_0.75rem))] bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow select-none {% if writable %}cursor-grab{% endif %}"
-    :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
-    x-show="taskVisible($el.dataset)"
-    {% if writable %}draggable="true"{% endif %}
-    data-task-uuid="{{ task.uuid }}"
-    data-search="{{ project.key|lower }}-{{ task.number }} {{ task.title|lower }} {% for label in task.labels.all %}{{ label.name|lower }} {% endfor %}"
-    data-priority="{{ task.priority }}"
-    data-assignees="{% for assignee in task.assignees.all %}{{ assignee.pk }} {% endfor %}"
-    data-labels="{% for label in task.labels.all %}{{ label.uuid }} {% endfor %}"
-    @dragstart="onDragStart($event, '{{ task.uuid }}')"
-    @dragend="onDragEnd()"
-    @click="openTask('{{ task.uuid }}')">
+<li
+  class="card rounded-[max(0px,calc(var(--rounded-box)_-_0.75rem))] bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow select-none {% if writable %}cursor-grab{% endif %}"
+  :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
+  x-show="taskVisible($el.dataset)"
+  {% if writable %}draggable="true"{% endif %}
+  data-task-uuid="{{ task.uuid }}"
+  data-search="{{ project.key|lower }}-{{ task.number }} {{ task.title|lower }} {% for label in task.labels.all %}{{ label.name|lower }} {% endfor %}"
+  data-priority="{{ task.priority }}"
+  data-assignees="{% for assignee in task.assignees.all %}{{ assignee.pk }} {% endfor %}"
+  data-labels="{% for label in task.labels.all %}{{ label.uuid }} {% endfor %}"
+  @dragstart="onDragStart($event, '{{ task.uuid }}')"
+  @dragend="onDragEnd()"
+  @click="openTask('{{ task.uuid }}')"
+>
   <div class="card-body p-3 gap-1.5">
     <span class="text-xs font-mono text-base-content/50">{{ project.key }}-{{ task.number }}</span>
     <span class="text-sm font-medium leading-snug">{{ task.title }}</span>

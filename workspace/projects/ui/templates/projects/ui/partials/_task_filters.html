@@ -31,11 +31,11 @@ would clip them.
     />
   </label>
   <div class="w-full sm:w-auto flex items-center gap-2">
-    <div class="flex-1 min-w-0 sm:flex-none sm:w-44">
+    <div class="flex-1 min-w-0 sm:flex-none sm:w-56">
       {% include "ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" icon="users" %}
     </div>
     {% if labels_data %}
-      <div class="flex-1 min-w-0 sm:flex-none sm:w-44">
+      <div class="flex-1 min-w-0 sm:flex-none sm:w-56">
         {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-label-selected" all_source="labels" selected_source="filters.label" placeholder="Filter by label" no_create=True %}
       </div>
     {% endif %}

@@ -35,15 +35,20 @@ class CacheControlMixin:
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
 
-        # Don't touch errors or responses that already have the header
-        if response.status_code >= 400 or response.get("Cache-Control"):
+        # Don't touch errors
+        if response.status_code >= 400:
             return response
 
-        # no-store subsumes the max-age/revalidate pair rather than joining
-        # it: a max-age alongside it is an invitation to store the very thing
-        # the directive forbids storing.
+        # Ahead of the deference to an existing header below, and subsuming the
+        # max-age/revalidate pair rather than joining it. A refusal to cache is
+        # not a caching policy: yielding to whoever set the header first would
+        # let a ciphertext leave under a directive inviting its storage.
         if self.cache_no_store:
             response["Cache-Control"] = "no-store"
+            return response
+
+        # Someone upstream already chose a policy; it stands
+        if response.get("Cache-Control"):
             return response
 
         visibility = "private" if self.cache_private else "public"

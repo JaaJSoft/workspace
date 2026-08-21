@@ -32,6 +32,20 @@ class _FailingNoStoreView(_NoStoreView):
         return Response({"detail": "nope"}, status=404)
 
 
+class _PreSetHeaderNoStoreView(_NoStoreView):
+    def get(self, request):
+        response = Response({"ok": True})
+        response["Cache-Control"] = "public, max-age=3600"
+        return response
+
+
+class _PreSetHeaderDefaultView(_DefaultView):
+    def get(self, request):
+        response = Response({"ok": True})
+        response["Cache-Control"] = "public, max-age=3600"
+        return response
+
+
 class CacheControlNoStoreTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -51,6 +65,14 @@ class CacheControlNoStoreTests(TestCase):
         """A view that declares both is contradicting itself, and the safe
         reading of the contradiction is the one that stores nothing."""
         self.assertEqual(self._header(_CachingNoStoreView), "no-store")
+
+    def test_no_store_overrides_a_header_the_response_already_carries(self):
+        """The mixin otherwise defers to whoever set the header first, which
+        is right for a caching policy and wrong for a refusal to cache."""
+        self.assertEqual(self._header(_PreSetHeaderNoStoreView), "no-store")
+
+    def test_an_existing_header_still_wins_without_no_store(self):
+        self.assertEqual(self._header(_PreSetHeaderDefaultView), "public, max-age=3600")
 
     def test_an_error_response_is_left_alone(self):
         self.assertIsNone(self._header(_FailingNoStoreView))

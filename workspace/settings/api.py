@@ -24,6 +24,19 @@ REST_FRAMEWORK = {
         "drf_orjson_renderer.renderers.ORJSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
+    # Vault account endpoints. The design's v1 starting values; retune on
+    # telemetry, and raise rather than lower - each one guards key material.
+    "DEFAULT_THROTTLE_RATES": {
+        "vault.account.init.ip": "10/min",
+        "vault.account.init.user": "30/hour",
+        "vault.account.finalize.ip": "10/min",
+        "vault.account.envelope.burst": "10/min",
+        "vault.account.envelope.user": "60/hour",
+        # Deliberately not redundant with the per-user limit above: it catches
+        # an exfiltration spread across several stolen session cookies.
+        "vault.account.envelope.ip": "200/hour",
+        "vault.account.rotate.user": "5/hour",
+    },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",
         "rest_framework.parsers.FormParser",
@@ -100,6 +113,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Users",
             "description": "User profiles, avatars, passwords, and presence status.",
+        },
+        {
+            "name": "Vault",
+            "description": "End-to-end encrypted password vault (preview).",
         },
     ],
     "SWAGGER_UI_SETTINGS": {

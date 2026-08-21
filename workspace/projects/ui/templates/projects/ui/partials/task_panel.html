@@ -396,21 +396,23 @@
 
     <section>
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Linked tasks</h3>
-      <ul class="flex flex-col gap-1 mb-2" x-show="links.length" x-cloak>
+      <ul class="flex flex-col gap-1.5 mb-2" x-show="links.length" x-cloak>
         <template x-for="link in links" :key="link.uuid">
-          <li class="flex items-center gap-2 text-sm min-w-0">
-            <span class="text-base-content/60 shrink-0" x-text="link.label"></span>
+          <li
+            class="flex items-center gap-2 min-w-0 rounded-lg border border-base-300/60 bg-base-200/40 px-2.5 py-1.5"
+          >
+            <span class="text-xs text-base-content/60 shrink-0" x-text="link.label"></span>
             <a
               :href="link.task.url"
-              class="link link-hover flex items-center gap-1.5 min-w-0"
+              class="group flex items-center gap-2 min-w-0"
               @click.prevent="openLinkedTask(link.task)"
             >
               <span
-                class="font-mono text-xs text-base-content/50 shrink-0"
+                class="badge badge-ghost badge-sm font-mono shrink-0"
                 x-text="link.task.reference"
               ></span>
               <span
-                class="truncate"
+                class="text-sm truncate group-hover:underline"
                 :class="link.task.is_done && 'line-through opacity-60'"
                 x-text="link.task.title"
               ></span>
@@ -436,9 +438,11 @@
         No linked tasks.
       </p>
       {% if "link" in panel_action_ids %}
-        <div class="flex gap-2">
+        {# Stacked full-width rows: side by side the panel leaves the search #}
+        {# input too narrow to read a reference and a title fragment. #}
+        <div class="flex flex-col gap-1.5">
           <select
-            class="select select-sm select-bordered w-36 shrink-0"
+            class="select select-sm select-bordered w-full"
             x-model="linkRel"
             aria-label="Link type"
           >
@@ -448,7 +452,7 @@
             <option value="duplicated_by">is duplicated by</option>
             <option value="relates_to">relates to</option>
           </select>
-          <div class="relative grow min-w-0" @click.outside="linkDropdown = false">
+          <div class="relative min-w-0" @click.outside="linkDropdown = false">
             <label class="input input-sm input-bordered flex items-center gap-2 w-full">
               {# shrink-0 + min-w-0: the label-selector precedent - keeps the icon from flex-crushing. #}
               <i data-lucide="link" class="w-4 h-4 opacity-60 shrink-0"></i>
@@ -472,9 +476,9 @@
             <div
               x-show="linkDropdown"
               x-cloak
-              class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden thin-scrollbar"
+              class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-64 overflow-y-auto overflow-x-hidden thin-scrollbar"
             >
-              <ul class="menu menu-sm p-1" x-show="linkResults.length">
+              <ul class="menu p-1" x-show="linkResults.length">
                 <template x-for="result in linkResults" :key="result.uuid">
                   <li class="w-full min-w-0">
                     <button
@@ -483,10 +487,14 @@
                       @click="addLink(result)"
                     >
                       <span
-                        class="font-mono text-xs text-base-content/50 shrink-0"
+                        class="badge badge-ghost badge-sm font-mono shrink-0"
                         x-text="result.reference"
                       ></span>
                       <span class="text-sm min-w-0 truncate" x-text="result.title"></span>
+                      <span
+                        class="ml-auto text-xs text-base-content/40 truncate max-w-24"
+                        x-text="result.project_name"
+                      ></span>
                     </button>
                   </li>
                 </template>

@@ -3,6 +3,7 @@ from rest_framework.routers import SimpleRouter
 
 from .views_actions import ProjectActionsView
 from .views_calendar import TaskCalendarView
+from .views_search import TaskSearchView
 from .viewsets import (
     LabelViewSet,
     MemberViewSet,
@@ -11,6 +12,7 @@ from .viewsets import (
     SubtaskViewSet,
     TaskAttachmentViewSet,
     TaskCommentViewSet,
+    TaskLinkViewSet,
     TaskViewSet,
 )
 
@@ -41,6 +43,8 @@ task_comment_detail = TaskCommentViewSet.as_view(
 )
 task_attachments = TaskAttachmentViewSet.as_view({"get": "list", "post": "create"})
 task_attachment_detail = TaskAttachmentViewSet.as_view({"delete": "destroy"})
+task_links = TaskLinkViewSet.as_view({"get": "list", "post": "create"})
+task_link_detail = TaskLinkViewSet.as_view({"delete": "destroy"})
 
 urlpatterns = [
     path(
@@ -52,6 +56,11 @@ urlpatterns = [
         "api/v1/projects/tasks/calendar",
         TaskCalendarView.as_view(),
         name="project-tasks-calendar",
+    ),
+    path(
+        "api/v1/projects/tasks/search",
+        TaskSearchView.as_view(),
+        name="project-tasks-search",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/members",
@@ -142,6 +151,16 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/attachments/<uuid:uuid>",
         task_attachment_detail,
         name="project-task-attachment-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/links",
+        task_links,
+        name="project-task-links",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/links/<uuid:uuid>",
+        task_link_detail,
+        name="project-task-link-detail",
     ),
     path("api/v1/", include(router.urls)),
 ]

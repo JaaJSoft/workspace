@@ -800,6 +800,13 @@ function taskPanel() {
     attachments: [],
     _attachmentsUrl: '',
     _attachmentsSaving: false,
+    links: [],
+    linkRel: 'blocks',
+    linkQuery: '',
+    linkResults: [],
+    linkDropdown: false,
+    linkSaving: false,
+    _linkSearchGeneration: 0,
 
     init() {
       this.data = JSON.parse(
@@ -814,6 +821,8 @@ function taskPanel() {
       this.attachments = attachmentsEl
         ? JSON.parse(attachmentsEl.textContent)
         : [];
+      const linksEl = document.getElementById('task-panel-links');
+      this.links = linksEl ? JSON.parse(linksEl.textContent) : [];
       // members-data lives on the page shell, not in the swapped panel, so
       // it survives alpine-ajax panel reloads.
       const membersEl = document.getElementById('members-data');
@@ -1128,6 +1137,91 @@ function taskPanel() {
           },
         })
       );
+    },
+
+    async searchLinkTasks() {
+      const query = this.linkQuery.trim();
+      if (!query) {
+        this.linkDropdown = false;
+        this.linkResults = [];
+        return;
+      }
+      // Race protection (_loadGeneration precedent): a slow response must
+      // not overwrite the results of a newer query.
+      const generation = ++this._linkSearchGeneration;
+      try {
+        const resp = await fetch(
+          this.data.link_search_url +
+            '?q=' +
+            encodeURIComponent(query) +
+            '&exclude=' +
+            this.data.uuid
+        );
+        if (!resp.ok) throw new Error('Search failed');
+        const results = await resp.json();
+        if (generation !== this._linkSearchGeneration) return;
+        const linked = new Set(this.links.map((l) => l.task.uuid));
+        this.linkResults = results.filter((r) => !linked.has(r.uuid));
+        this.linkDropdown = true;
+      } catch (e) {
+        if (generation !== this._linkSearchGeneration) return;
+        this.linkDropdown = false;
+      }
+    },
+
+    async addLink(result) {
+      if (!this.can('link') || this.linkSaving) return;
+      this.linkSaving = true;
+      try {
+        const resp = await fetch(this.data.links_url, {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({ target: result.uuid, relation: this.linkRel }),
+        });
+        if (!resp.ok) {
+          // Rule violations (cycle, duplicate) come back as a curated
+          // detail message worth surfacing verbatim.
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.detail || 'Could not link the tasks.');
+        }
+        this.links = await resp.json();
+        this.linkQuery = '';
+        this.linkResults = [];
+        this.linkDropdown = false;
+        // Blocked badges on the board may have changed.
+        this.refresh();
+      } catch (e) {
+        if (window.AppAlert) {
+          AppAlert.error(e.message || 'Could not link the tasks.');
+        }
+      } finally {
+        this.linkSaving = false;
+      }
+    },
+
+    async removeLink(uuid) {
+      if (!this.can('link')) return;
+      try {
+        const resp = await fetch(this.data.links_url + '/' + uuid, {
+          method: 'DELETE',
+          headers: this.headers(),
+        });
+        if (!resp.ok) throw new Error('Unlink failed');
+        this.links = this.links.filter((l) => l.uuid !== uuid);
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not remove the link.');
+      } finally {
+        this.refresh();
+      }
+    },
+
+    openLinkedTask(task) {
+      if (task.project === this.data.project) {
+        this.openTask(task.uuid);
+      } else {
+        // Cross-project: the other board owns the panel context.
+        window.location.assign(task.url);
+      }
     },
 
     copyLink(reference) {

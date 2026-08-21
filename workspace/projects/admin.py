@@ -10,6 +10,7 @@ from .models import (
     Task,
     TaskComment,
     TaskEvent,
+    TaskLink,
     TaskStatus,
 )
 
@@ -99,6 +100,15 @@ class TaskCommentAdmin(ModelAdmin):
     list_select_related = ("task", "author")
     search_fields = ("body", "author__username", "task__title")
     autocomplete_fields = ("task", "author")
+
+
+@admin.register(TaskLink)
+class TaskLinkAdmin(ModelAdmin):
+    list_display = ("source", "type", "target", "created_by", "created_at")
+    list_filter = ("type",)
+    list_select_related = ("source__project", "target__project", "created_by")
+    search_fields = ("source__title", "target__title")
+    autocomplete_fields = ("source", "target", "created_by")
 
 
 @admin.register(TaskEvent)

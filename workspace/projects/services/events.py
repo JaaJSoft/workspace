@@ -71,6 +71,11 @@ def serialize_task_event(ev):
             label = f"Estimate set to {ev.to_value}"
         elif ev.from_value:
             label = "Estimate removed"
+    elif ev.type in (TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED):
+        # from_value holds the direction label ("blocks", "is blocked by"),
+        # to_value the other end's reference, both snapshotted at link time.
+        if ev.from_value and ev.to_value:
+            label = f"{ev.short_label}: {ev.from_value} {ev.to_value}"
     return {
         "icon": ev.icon,
         "label": label,

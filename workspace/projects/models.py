@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -259,6 +259,57 @@ class Subtask(models.Model):
         return self.title
 
 
+class TaskLink(models.Model):
+    """Directed, typed relation between two tasks.
+
+    One row per relation: "A blocks B" is stored once and rendered from both
+    ends ("blocks" / "is blocked by"). Cross-project rows are legal; readers
+    filter each end against the viewer's project access.
+    """
+
+    class Type(models.TextChoices):
+        BLOCKS = "blocks", "Blocks"
+        DUPLICATES = "duplicates", "Duplicates"
+        RELATES_TO = "relates_to", "Relates to"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    source = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="outgoing_links",
+    )
+    target = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="incoming_links",
+    )
+    type = models.CharField(max_length=10, choices=Type.choices)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "target", "type"],
+                name="unique_task_link",
+            ),
+            models.CheckConstraint(
+                condition=~Q(source=F("target")),
+                name="task_link_not_self",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.source_id} {self.type} {self.target_id}"
+
+
 class TaskComment(models.Model):
     """User comment on a task."""
 
@@ -344,6 +395,8 @@ class TaskEvent(models.Model):
         ESTIMATED = "estimate", "Estimated"
         ATTACHED = "attached", "Attached"
         DETACHED = "detached", "Detached"
+        LINKED = "linked", "Linked"
+        UNLINKED = "unlinked", "Unlinked"
 
     _ICONS = {
         Type.CREATED: "plus",
@@ -356,6 +409,8 @@ class TaskEvent(models.Model):
         Type.ESTIMATED: "ruler",
         Type.ATTACHED: "paperclip",
         Type.DETACHED: "paperclip",
+        Type.LINKED: "link",
+        Type.UNLINKED: "unlink",
     }
     _LABELS = {
         Type.CREATED: "Task created",
@@ -368,6 +423,8 @@ class TaskEvent(models.Model):
         Type.ESTIMATED: "Estimate changed",
         Type.ATTACHED: "File attached",
         Type.DETACHED: "File removed",
+        Type.LINKED: "Link added",
+        Type.UNLINKED: "Link removed",
     }
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)

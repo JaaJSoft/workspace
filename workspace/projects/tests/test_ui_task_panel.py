@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.projects.models import Label
+from workspace.projects.services.links import create_link
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.subtasks import create_subtask
 from workspace.projects.services.tasks import create_task
@@ -284,3 +285,45 @@ class TaskPanelEstimateTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.client.get(f"/projects/{self.project.uuid}/tasks/{task.uuid}/panel")
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, "Estimate (")
+
+
+class TaskPanelLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(self.project, self.admin, title="Anchor")
+        self.other = create_task(self.project, self.admin, title="Dependency")
+        self.url = f"/projects/{self.project.uuid}/tasks/{self.task.uuid}/panel"
+
+    def test_panel_embeds_the_serialized_links(self):
+        create_link(self.other, self.task, "blocks")
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="task-panel-links"')
+        (item,) = resp.context["panel_links"]
+        self.assertEqual(item["label"], "is blocked by")
+        self.assertEqual(item["task"]["uuid"], str(self.other.uuid))
+
+    def test_panel_data_carries_the_link_endpoints(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        data = resp.context["panel_task_data"]
+        self.assertEqual(
+            data["links_url"],
+            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/links",
+        )
+        self.assertEqual(data["link_search_url"], "/api/v1/projects/tasks/search")
+
+    def test_member_gets_the_link_picker(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertIn("link", resp.context["panel_action_ids"])
+        self.assertContains(resp, 'x-model="linkRel"')
+
+    def test_archived_project_hides_the_link_picker(self):
+        self.project.archived_at = timezone.now()
+        self.project.save(update_fields=["archived_at"])
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertNotIn("link", resp.context["panel_action_ids"])
+        self.assertNotContains(resp, 'x-model="linkRel"')

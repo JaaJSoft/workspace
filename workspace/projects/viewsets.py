@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Q, Subquery
 from django.http import Http404
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -23,6 +23,7 @@ from .models import (
     TaskAttachment,
     TaskComment,
     TaskEvent,
+    TaskLink,
     TaskStatus,
 )
 from .queries import get_project_role, project_users, user_project_ids
@@ -38,6 +39,7 @@ from .serializers import (
     TaskAttachmentSerializer,
     TaskCommentBodySerializer,
     TaskCommentSerializer,
+    TaskLinkCreateSerializer,
     TaskMoveSerializer,
     TaskReorderSerializer,
     TaskSerializer,
@@ -54,6 +56,7 @@ from .services.attachments import (
 from .services.comments import notify_comment_added, notify_comment_edited
 from .services.estimates import format_estimate
 from .services.events import record_task_event
+from .services.links import create_link, delete_link, links_for_task
 from .services.members import (
     ProjectRuleError,
     add_member,
@@ -634,6 +637,82 @@ class SubtaskViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         serializer.is_valid(raise_exception=True)
         reorder_subtasks(self.task, serializer.validated_data["order"])
         return Response({"success": True})
+
+
+@extend_schema(tags=["Projects"])
+class TaskLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
+    """Links anchored on one task: list both directions, create, remove.
+
+    Responses are serialized relative to the anchor task ("blocks" vs "is
+    blocked by"); a link whose other end the caller cannot access is hidden
+    from the list, never surfaced as a 403.
+    """
+
+    serializer_class = TaskLinkCreateSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+    # Schema generation only; list/destroy build their own querysets.
+    queryset = TaskLink.objects.none()
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        try:
+            # select_related caches task.project for the reference snapshots
+            # the link events write.
+            self.task = self.project.tasks.select_related("project").get(
+                uuid=kwargs["task_uuid"]
+            )
+        except Task.DoesNotExist:
+            raise Http404 from None
+
+    def list(self, request, *args, **kwargs):
+        return Response(links_for_task(request.user, self.task))
+
+    def create(self, request, *args, **kwargs):
+        self._require_writable()
+        serializer = TaskLinkCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        other = (
+            Task.objects.filter(
+                uuid=serializer.validated_data["target"],
+                project_id__in=user_project_ids(request.user),
+                project__archived_at__isnull=True,
+            )
+            .select_related("project", "status")
+            .first()
+        )
+        if other is None:
+            # Unknown and inaccessible targets answer alike (404-not-403).
+            return Response(
+                {"detail": "Task not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        try:
+            create_link(
+                self.task,
+                other,
+                serializer.validated_data["relation"],
+                actor=request.user,
+            )
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
+        return Response(
+            links_for_task(request.user, self.task), status=status.HTTP_201_CREATED
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_writable()
+        link = (
+            TaskLink.objects.filter(
+                Q(source=self.task) | Q(target=self.task),
+                uuid=self.kwargs["uuid"],
+            )
+            .select_related("source__project", "target__project")
+            .first()
+        )
+        if link is None:
+            raise Http404
+        delete_link(link, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(tags=["Projects"])

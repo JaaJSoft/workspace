@@ -80,6 +80,7 @@ class TaskActionTests(ProjectTestMixin, TestCase):
                 "set_due",
                 "set_labels",
                 "attach",
+                "link",
                 "comment",
                 "delete",
             },

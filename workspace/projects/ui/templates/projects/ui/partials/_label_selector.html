@@ -35,7 +35,8 @@ label (handled once on the board root), then the selection event.
       @input="searchLocal()"
       @focus="searchLocal()"
       @keydown="handleKeydown($event)"
-      @keydown.escape="showDropdown = false"
+      {# While the dropdown is open, Escape belongs to it alone - it must not bubble up and also close a layer hosting the selector (e.g. the task filters panel). #}
+      @keydown.escape="if (showDropdown) $event.stopPropagation(); showDropdown = false"
     />
     <span x-show="creating" x-cloak class="loading loading-spinner loading-xs"></span>
   </label>

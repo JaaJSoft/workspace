@@ -5,67 +5,105 @@ applyFilters in board.js), so a filtered view is shareable by URL. The
 filter state lives on the root projectBoard component and is re-synced
 from the URL after each content swap.
 
+The bar itself is a single compact row (search + Filters button + Clear)
+so it degrades gracefully at any width; the pickers all live in a popover
+panel anchored under the bar. The open flag (filtersPanelOpen) lives on
+the root projectBoard component, outside the swap target, so the panel
+survives the content swap that every filter change triggers.
+
 Assignee and label are multi-value (repeated query params, OR'd
-server-side) and reuse the same picker components as the task form;
-the active selections render as removable chips on their own row. The
-pickers sit outside the scrollable select row on purpose: their
-dropdowns are absolutely positioned and an overflow-x-auto ancestor
-would clip them.
+server-side) and reuse the same picker components as the task form. Every
+active filter renders as a removable chip on its own row, so the state
+stays readable while the panel is closed.
 {% endcomment %}
 <div
   id="task-filters"
-  class="flex flex-wrap items-center gap-2"
+  class="relative flex flex-col gap-2"
   @filter-assignee-selected.window="addAssigneeFilter($event.detail.user)"
   @filter-label-selected.window="addLabelFilter($event.detail.label)"
 >
-  <label
-    class="input input-bordered input-sm flex items-center gap-2 flex-1 min-w-0 sm:flex-none sm:w-56"
-  >
-    <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
-    <input
-      type="search"
-      class="grow min-w-0"
-      placeholder="Search tasks"
-      x-model="filters.q"
-      @input.debounce.300ms="applyFilters()"
-    />
-  </label>
-  <div class="w-full sm:w-auto flex flex-wrap items-center gap-2">
-    <div class="flex-1 min-w-40 sm:flex-none sm:w-56">
-      {% include "ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" icon="users" %}
-    </div>
-    {% if labels_data %}
-      <div class="flex-1 min-w-40 sm:flex-none sm:w-56">
-        {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-label-selected" all_source="labels" selected_source="filters.label" placeholder="Filter by label" no_create=True %}
-      </div>
-    {% endif %}
-    {# These live with the pickers, not the scrollable row below: their dropdowns would be clipped by the overflow-x-auto ancestor. #}
-    <div class="flex-1 min-w-40 sm:flex-none sm:w-44">
-      {% include "projects/ui/partials/_priority_selector.html" with model_expr="filters.priority" on_change="applyFilters()" with_all=True label="Filter by priority" %}
-    </div>
-    {% if show_status_filter %}
-      <div class="flex-1 min-w-40 sm:flex-none sm:w-44">
-        {% include "projects/ui/partials/_status_selector.html" with model_expr="filters.status" on_change="applyFilters()" with_all=True label="Filter by status" %}
-      </div>
-    {% endif %}
-  </div>
-  {% comment %}
-    The fixed-size controls share a row that scrolls sideways rather than
-    shrinking. On mobile the row spans the full width, keeping the bar
-    compact whatever fits.
-  {% endcomment %}
-  <div
-    class="w-full sm:w-auto flex items-center gap-2 overflow-x-auto no-scrollbar py-1 -my-1"
-  >
-    <button
-      type="button"
-      class="btn btn-sm shrink-0 font-normal"
-      :class="isAssigneeFilter('none') ? 'btn-accent' : 'btn-ghost border border-base-300'"
-      @click="toggleAssigneeFilter('none')"
+  <div class="flex items-center gap-2">
+    <label
+      class="input input-bordered input-sm flex items-center gap-2 flex-1 min-w-0 sm:max-w-xs"
     >
-      <i data-lucide="user-x" class="w-4 h-4"></i>
-      Unassigned
-    </button>
+      <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
+      <input
+        type="search"
+        class="grow min-w-0"
+        placeholder="Search tasks"
+        x-model="filters.q"
+        @input.debounce.300ms="applyFilters()"
+      />
+    </label>
+    {# The wrapper is the click-outside boundary for both the trigger and the panel; the panel itself is positioned against the whole bar (the relative root above) so it can span the full width on mobile. #}
+    <div
+      class="shrink-0"
+      @click.outside="filtersPanelOpen = false"
+      @keydown.escape="if (filtersPanelOpen) { $event.stopPropagation(); filtersPanelOpen = false }"
+    >
+      <button
+        type="button"
+        class="btn btn-sm font-normal"
+        :class="activeFilterCount() ? 'btn-accent' : 'btn-ghost border border-base-300'"
+        aria-haspopup="true"
+        :aria-expanded="filtersPanelOpen"
+        @click="filtersPanelOpen = !filtersPanelOpen"
+      >
+        <i data-lucide="list-filter" class="w-4 h-4"></i>
+        <span class="hidden sm:inline">Filters</span>
+        <span
+          class="badge badge-sm"
+          x-show="activeFilterCount()"
+          x-cloak
+          x-text="activeFilterCount()"
+        ></span>
+      </button>
+      <div
+        x-show="filtersPanelOpen"
+        x-cloak
+        class="absolute left-0 top-9 z-50 w-full max-w-sm bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 flex flex-col gap-3"
+      >
+        <div class="flex flex-col gap-1.5">
+          <span class="text-xs font-medium text-base-content/60">Assignee</span>
+          {% include "ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" icon="users" %}
+          <label class="flex items-center gap-2 cursor-pointer py-0.5">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-xs"
+              :checked="isAssigneeFilter('none')"
+              @change="toggleAssigneeFilter('none')"
+            />
+            <span class="text-sm">Unassigned tasks</span>
+          </label>
+        </div>
+        {% if labels_data %}
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-base-content/60">Label</span>
+            {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-label-selected" all_source="labels" selected_source="filters.label" placeholder="Filter by label" no_create=True %}
+          </div>
+        {% endif %}
+        <div class="flex flex-col gap-1.5">
+          <span class="text-xs font-medium text-base-content/60">Priority</span>
+          {% include "projects/ui/partials/_priority_selector.html" with model_expr="filters.priority" on_change="applyFilters()" with_all=True label="Filter by priority" %}
+        </div>
+        {% if show_status_filter %}
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-base-content/60">Status</span>
+            {% include "projects/ui/partials/_status_selector.html" with model_expr="filters.status" on_change="applyFilters()" with_all=True label="Filter by status" %}
+          </div>
+        {% endif %}
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs self-start -ml-1"
+          x-show="filtersActive()"
+          x-cloak
+          @click="clearFilters()"
+        >
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          Clear all filters
+        </button>
+      </div>
+    </div>
     <button
       type="button"
       class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3"
@@ -79,17 +117,68 @@ would clip them.
       <span class="hidden sm:inline">Clear</span>
     </button>
   </div>
-  {# The "none" pseudo-assignee is carried by the toggle above, not a chip. #}
+  {# Search is visible in the input itself, so only the panel-managed filters get a chip. #}
   <div
-    class="w-full flex flex-wrap items-center gap-1.5"
-    x-show="assigneeFilterChips().length || filters.label.length"
+    class="flex flex-wrap items-center gap-1.5"
+    x-show="activeFilterCount()"
     x-cloak
   >
     <template x-for="id in assigneeFilterChips()" :key="id">
       {% include "ui/partials/user_chip.html" with user_id_expr="id" username_expr="filterAssigneeName(id)" remove_expr="removeAssigneeFilter(id)" %}
     </template>
+    <span
+      class="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100 py-0.5 pl-2 pr-1"
+      x-show="isAssigneeFilter('none')"
+      x-cloak
+    >
+      <i data-lucide="user-x" class="w-3.5 h-3.5 opacity-60"></i>
+      <span class="text-xs">Unassigned</span>
+      <button
+        type="button"
+        class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
+        aria-label="Remove the unassigned filter"
+        @click="toggleAssigneeFilter('none')"
+      >
+        <i data-lucide="x" class="w-3 h-3"></i>
+      </button>
+    </span>
     <template x-for="id in filters.label" :key="id">
       <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabelFilter(id)"></tag-chip>
     </template>
+    <span
+      class="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100 py-0.5 pl-2 pr-1"
+      x-show="filters.priority"
+      x-cloak
+    >
+      <i data-lucide="flag" class="w-3.5 h-3.5 opacity-60"></i>
+      <span class="text-xs" x-text="filterPriorityName()"></span>
+      <button
+        type="button"
+        class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
+        aria-label="Remove the priority filter"
+        @click="filters.priority = ''; applyFilters()"
+      >
+        <i data-lucide="x" class="w-3 h-3"></i>
+      </button>
+    </span>
+    <span
+      class="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100 py-0.5 pl-2 pr-1"
+      x-show="filters.status"
+      x-cloak
+    >
+      <span
+        class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
+        :style="filterStatusColor() ? 'background-color: ' + filterStatusColor() : ''"
+      ></span>
+      <span class="text-xs" x-text="filterStatusName()"></span>
+      <button
+        type="button"
+        class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
+        aria-label="Remove the status filter"
+        @click="filters.status = ''; applyFilters()"
+      >
+        <i data-lucide="x" class="w-3 h-3"></i>
+      </button>
+    </span>
   </div>
 </div>

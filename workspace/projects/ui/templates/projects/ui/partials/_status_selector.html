@@ -23,7 +23,7 @@ Params:
   @click.outside="open = false"
   @keydown.arrow-down.prevent="move(1)"
   @keydown.arrow-up.prevent="move(-1)"
-  @keydown.escape="if (open) { $event.preventDefault(); closeAndFocus() }"
+  @keydown.escape="if (open) { $event.preventDefault(); $event.stopPropagation(); closeAndFocus() }"
   @keydown.tab="open = false"
 >
   <button

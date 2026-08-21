@@ -283,6 +283,10 @@ function projectBoard(config) {
     panelTaskUuid: config.initialTask || null,
     _panelGeneration: 0,
     filters: emptyTaskFilters(),
+    // The filter bar sits inside the content swap every filter change
+    // triggers; the panel only stays open across a swap because this
+    // flag is on the root component, which the swap never re-renders.
+    filtersPanelOpen: false,
     selected: [],
 
     init() {
@@ -495,6 +499,37 @@ function projectBoard(config) {
     removeLabelFilter(uuid) {
       this.filters.label = this.filters.label.filter((v) => v !== uuid);
       this.applyFilters();
+    },
+
+    // Badge on the Filters button: counts the panel-managed filters only.
+    // The search box sits on the bar itself, so q stays out of the count.
+    activeFilterCount() {
+      return (
+        this.filters.assignee.length +
+        this.filters.label.length +
+        (this.filters.priority ? 1 : 0) +
+        (this.filters.status ? 1 : 0)
+      );
+    },
+
+    filterPriorityName() {
+      const names = {
+        urgent: 'Urgent',
+        high: 'High',
+        medium: 'Medium',
+        low: 'Low',
+      };
+      return names[this.filters.priority] || this.filters.priority;
+    },
+
+    filterStatusName() {
+      const s = this.statuses.find((x) => x.uuid === this.filters.status);
+      return s ? s.name : 'Unknown status';
+    },
+
+    filterStatusColor() {
+      const s = this.statuses.find((x) => x.uuid === this.filters.status);
+      return s && s.color ? s.color : '';
     },
 
     visibleBacklogUuids() {

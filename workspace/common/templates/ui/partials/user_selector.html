@@ -36,7 +36,8 @@
       @input.debounce.300ms="search()"
       @focus="openLocal()"
       @keydown="handleKeydown($event)"
-      @keydown.escape="showDropdown = false"
+      {# While the dropdown is open, Escape belongs to it alone - it must not bubble up and also close a layer hosting the selector (e.g. the task filters panel). #}
+      @keydown.escape="if (showDropdown) $event.stopPropagation(); showDropdown = false"
       @click.outside="showDropdown = false"
       autocomplete="off"
     />

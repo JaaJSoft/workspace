@@ -42,7 +42,7 @@ label (handled once on the board root), then the selection event.
   <div
     x-show="showDropdown && (results.length || showCreate() || createError || trimmedQuery())"
     x-cloak
-    class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+    class="absolute z-50 mt-1 w-max min-w-full max-w-64 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden"
   >
     <ul class="menu menu-sm p-1" x-show="results.length || showCreate()">
       <template x-for="(label, idx) in results" :key="label.uuid">

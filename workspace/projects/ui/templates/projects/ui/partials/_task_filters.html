@@ -12,143 +12,99 @@ pickers sit outside the scrollable select row on purpose: their
 dropdowns are absolutely positioned and an overflow-x-auto ancestor
 would clip them.
 {% endcomment %}
-<<<<<<< HEAD
-<div id="task-filters" class="flex flex-wrap items-center gap-2">
+<div
+  id="task-filters"
+  class="flex flex-wrap items-center gap-2"
+  @filter-assignee-selected.window="addAssigneeFilter($event.detail.user)"
+  @filter-label-selected.window="addLabelFilter($event.detail.label)"
+>
   <label
     class="input input-bordered input-sm flex items-center gap-2 flex-1 min-w-0 sm:flex-none sm:w-56"
   >
-    =======
-    <div
-      id="task-filters"
-      class="flex flex-wrap items-center gap-2"
-      @filter-assignee-selected.window="addAssigneeFilter($event.detail.user)"
-      @filter-label-selected.window="addLabelFilter($event.detail.label)"
-    >
-      <label
-        class="input input-bordered input-sm flex items-center gap-2 flex-1 min-w-0 sm:flex-none sm:w-56"
-      >
-        >>>>>>> bed2f483 (feat(projects): reuse the task form pickers for the assignee and label filters)
-        <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
-        <input
-          type="search"
-          class="grow min-w-0"
-          placeholder="Search tasks"
-          x-model="filters.q"
-          @input.debounce.300ms="applyFilters()"
-        />
-      </label>
-      <div class="w-full sm:w-auto flex items-center gap-2">
-        <div class="flex-1 min-w-0 sm:flex-none sm:w-44">
-          {% include "ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" %}
-        </div>
-        {% if labels_data %}
-          <div class="flex-1 min-w-0 sm:flex-none sm:w-44">
-            {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-label-selected" all_source="labels" selected_source="filters.label" placeholder="Filter by label" no_create=True %}
-          </div>
-        {% endif %}
+    <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+    <input
+      type="search"
+      class="grow min-w-0"
+      placeholder="Search tasks"
+      x-model="filters.q"
+      @input.debounce.300ms="applyFilters()"
+    />
+  </label>
+  <div class="w-full sm:w-auto flex items-center gap-2">
+    <div class="flex-1 min-w-0 sm:flex-none sm:w-44">
+      {% include "ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" icon="users" %}
+    </div>
+    {% if labels_data %}
+      <div class="flex-1 min-w-0 sm:flex-none sm:w-44">
+        {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-label-selected" all_source="labels" selected_source="filters.label" placeholder="Filter by label" no_create=True %}
       </div>
-      {% comment %}
+    {% endif %}
+  </div>
+  {% comment %}
     The fixed-size controls share a row that scrolls sideways rather than
     shrinking. On mobile the row spans the full width, keeping the bar
     compact whatever fits.
-      {% endcomment %}
-      <<<<<<< HEAD
-      <div
-        class="w-full sm:w-auto flex items-center gap-2 overflow-x-auto py-1 -my-1"
+  {% endcomment %}
+  <div
+    class="w-full sm:w-auto flex items-center gap-2 overflow-x-auto py-1 -my-1"
+  >
+    <button
+      type="button"
+      class="btn btn-sm shrink-0 font-normal"
+      :class="isAssigneeFilter('none') ? 'btn-accent' : 'btn-ghost border border-base-300'"
+      @click="toggleAssigneeFilter('none')"
+    >
+      Unassigned
+    </button>
+    <select
+      class="select select-bordered select-sm shrink-0"
+      x-model="filters.priority"
+      @change="applyFilters()"
+      aria-label="Filter by priority"
+    >
+      <option value="">All priorities</option>
+      <option value="urgent">Urgent</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+    {% if show_status_filter %}
+      <select
+        class="select select-bordered select-sm shrink-0"
+        x-model="filters.status"
+        @change="applyFilters()"
+        aria-label="Filter by status"
       >
-        <select
-          class="select select-bordered select-sm shrink-0"
-          x-model="filters.assignee"
-          @change="applyFilters()"
-          aria-label="Filter by assignee"
-        >
-          <option value="">All assignees</option>
-          <option value="none">Unassigned</option>
-          {% for m in members_data %}
-            <option value="{{ m.id }}">{{ m.username }}</option>
-          {% endfor %}
-        </select>
-        {% if labels_data %}
-          <select
-            class="select select-bordered select-sm shrink-0"
-            x-model="filters.label"
-            @change="applyFilters()"
-            aria-label="Filter by label"
-          >
-            <option value="">All labels</option>
-            {% for label in labels_data %}
-              <option value="{{ label.uuid }}">{{ label.name }}</option>
-            {% endfor %}
-          </select>
-        {% endif %}
-        <select
-          class="select select-bordered select-sm shrink-0"
-          x-model="filters.priority"
-          @change="applyFilters()"
-          aria-label="Filter by priority"
-        >
-          =======
-          <div
-            class="w-full sm:w-auto flex items-center gap-2 overflow-x-auto py-1 -my-1"
-          >
-            <button
-              type="button"
-              class="btn btn-sm shrink-0 font-normal"
-              :class="isAssigneeFilter('none') ? 'btn-accent' : 'btn-ghost border border-base-300'"
-              @click="toggleAssigneeFilter('none')"
-            >
-              Unassigned
-            </button>
-            <select
-              class="select select-bordered select-sm shrink-0"
-              x-model="filters.priority"
-              @change="applyFilters()"
-              aria-label="Filter by priority"
-            >
-              >>>>>>> bed2f483 (feat(projects): reuse the task form pickers for the assignee and label filters)
-              <option value="">All priorities</option>
-              <option value="urgent">Urgent</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-            {% if show_status_filter %}
-              <select
-                class="select select-bordered select-sm shrink-0"
-                x-model="filters.status"
-                @change="applyFilters()"
-                aria-label="Filter by status"
-              >
-                <option value="">All statuses</option>
-                {% for s in statuses_data %}
-                  <option value="{{ s.uuid }}">{{ s.name }}</option>
-                {% endfor %}
-              </select>
-            {% endif %}
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3"
-              x-show="filtersActive()"
-              x-cloak
-              title="Clear filters"
-              aria-label="Clear filters"
-              @click="clearFilters()"
-            >
-              <i data-lucide="x" class="w-4 h-4"></i>
-              <span class="hidden sm:inline">Clear</span>
-            </button>
-          </div>
-          {# The "none" pseudo-assignee is carried by the toggle above, not a chip. #}
-          <div
-            class="w-full flex flex-wrap items-center gap-1.5"
-            x-show="assigneeFilterChips().length || filters.label.length"
-            x-cloak
-          >
-            <template x-for="id in assigneeFilterChips()" :key="id">
-              {% include "ui/partials/user_chip.html" with user_id_expr="id" username_expr="filterAssigneeName(id)" remove_expr="removeAssigneeFilter(id)" %}
-            </template>
-            <template x-for="id in filters.label" :key="id">
-              <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabelFilter(id)"></tag-chip>
-            </template>
-          </div>
-        </div>
+        <option value="">All statuses</option>
+        {% for s in statuses_data %}
+          <option value="{{ s.uuid }}">{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    {% endif %}
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3"
+      x-show="filtersActive()"
+      x-cloak
+      title="Clear filters"
+      aria-label="Clear filters"
+      @click="clearFilters()"
+    >
+      <i data-lucide="x" class="w-4 h-4"></i>
+      <span class="hidden sm:inline">Clear</span>
+    </button>
+  </div>
+  {# The "none" pseudo-assignee is carried by the toggle above, not a chip. #}
+  <div
+    class="w-full flex flex-wrap items-center gap-1.5"
+    x-show="assigneeFilterChips().length || filters.label.length"
+    x-cloak
+  >
+    <template x-for="id in assigneeFilterChips()" :key="id">
+      {% include "ui/partials/user_chip.html" with user_id_expr="id" username_expr="filterAssigneeName(id)" remove_expr="removeAssigneeFilter(id)" %}
+    </template>
+    <template x-for="id in filters.label" :key="id">
+      <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabelFilter(id)"></tag-chip>
+    </template>
+  </div>
+</div>

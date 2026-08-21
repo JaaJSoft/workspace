@@ -4,6 +4,7 @@
 
   Parameters:
     - placeholder: Placeholder text for the search input (default: "Search users...")
+    - icon: Lucide icon name for the input (default: "search")
     - on_select_event: Custom event name dispatched when a user is selected (required)
     - local_source: Optional Alpine expression (evaluated in the parent scope)
       returning a list of {id, username, first_name, last_name}. When set, the
@@ -23,7 +24,10 @@
 >
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">
     {# shrink-0 + min-w-0: in a narrow container the input's intrinsic min width otherwise flex-crushes the icon to zero width. #}
-    <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
+    <i
+      data-lucide="{{ icon|default:'search' }}"
+      class="w-4 h-4 opacity-60 shrink-0"
+    ></i>
     <input
       type="text"
       class="grow min-w-0"
@@ -43,7 +47,7 @@
   <div
     x-show="showDropdown && results.length > 0"
     x-cloak
-    class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+    class="absolute z-50 mt-1 w-max min-w-full max-w-64 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden"
   >
     <ul class="menu menu-sm p-1">
       <template x-for="(user, idx) in results" :key="user.id">
@@ -56,8 +60,11 @@
             @mouseenter="highlight = idx"
           >
             <user-avatar :user-id="user.id" :username="user.username" size="sm" presence></user-avatar>
-            <div class="flex flex-col items-start">
-              <span class="font-medium text-sm" x-text="user.username"></span>
+            <div class="flex flex-col items-start min-w-0">
+              <span
+                class="font-medium text-sm max-w-full truncate"
+                x-text="user.username"
+              ></span>
               <span
                 class="text-xs text-base-content/60"
                 x-show="user.first_name || user.last_name"

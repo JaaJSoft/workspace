@@ -117,6 +117,16 @@ class RedactingExceptionReporterFilter(SafeExceptionReporterFilter):
         # so this one never stands down.
         return True
 
+    def get_traceback_frame_variables(self, request, tb_frame):
+        # Django cleanses a frame's locals only where @sensitive_variables
+        # named them, which leaves every undecorated frame rendering whatever
+        # it happens to hold. Matching on the name catches the rest; a view
+        # holding key material under an innocent name still has to declare it.
+        return [
+            (name, self.cleansed_substitute if is_sensitive_name(name) else value)
+            for name, value in super().get_traceback_frame_variables(request, tb_frame)
+        ]
+
     def get_post_parameters(self, request):
         parameters = super().get_post_parameters(request)
         if not hasattr(parameters, "items"):

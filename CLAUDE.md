@@ -452,8 +452,15 @@ logger.exception("Activity provider '%s' failed", scrub(source))
 *name* marks them as a secret - `password`, `secret_key`, `session_key`, and anything prefixed
 `wrapped_`, `encrypted_` or `sig_` - are redacted by `workspace/common/redaction.py`, wired into the
 console log handler and into `DEFAULT_EXCEPTION_REPORTER_FILTER`. Extend the catalogue there rather
-than relying on remembering not to log a field, and mark a view's body with Django's
-`@sensitive_post_parameters` so a traceback cannot render it either.
+than relying on remembering not to log a field.
+
+Redaction by name cannot reach a frame's local variables, because the name that matters is the
+field's, not the variable's - a `data = serializer.validated_data` holding a wrapped key is called
+`data`. **A view that handles secrets must declare it**, and for a JSON API the decorator to reach
+for is `@sensitive_variables()`, not `@sensitive_post_parameters`: the latter cleanses `request.POST`,
+which is empty when the body is JSON, so on a DRF endpoint it protects nothing. Put
+`@sensitive_variables()` closest to the method, under any `@extend_schema`, and the whole frame stops
+rendering on the technical 500 page. `workspace/vault/views.py` is the worked example.
 
 ### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`
 

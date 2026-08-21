@@ -16,7 +16,10 @@ import os
 
 from django.utils import timezone
 from django.utils.decorators import method_decorator
-from django.views.decorators.debug import sensitive_post_parameters
+from django.views.decorators.debug import (
+    sensitive_post_parameters,
+    sensitive_variables,
+)
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
@@ -133,6 +136,7 @@ class AccountFinalizeView(APIView):
         request=AccountFinalizeSerializer,
         responses={201: None},
     )
+    @sensitive_variables()
     def post(self, request):
         identity = AccountIdentity.objects.filter(user=request.user).first()
         if identity is None:
@@ -188,6 +192,7 @@ class AccountRotateView(CacheControlMixin, APIView):
         request=AccountRotateSerializer,
         responses={200: None},
     )
+    @sensitive_variables()
     def post(self, request):
         identity = AccountIdentity.objects.filter(
             user=request.user, state=AccountIdentity.State.ACTIVE

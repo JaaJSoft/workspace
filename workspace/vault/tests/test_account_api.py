@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
 from workspace.vault.tests.reference import ad, primitives
@@ -288,6 +288,26 @@ class AccountFinalizeTests(TestCase):
         self.assertIn(self._post().status_code, (401, 403))
         self.identity.refresh_from_db()
         self.assertEqual(self.identity.state, AccountIdentity.State.PENDING)
+
+    @override_settings(DEBUG=True)
+    def test_a_crash_renders_no_secret_on_the_technical_500_page(self):
+        """The body reaches this view as request.data, so it lives in the
+        frame's locals rather than in request.POST - and a traceback renders
+        every frame's locals."""
+        self.client.raise_request_exception = False
+        with patch(
+            "workspace.vault.views.verify_kex_pub_attestation",
+            side_effect=RuntimeError("boom"),
+        ):
+            response = self._post()
+
+        self.assertEqual(response.status_code, 500)
+        page = response.content.decode()
+        for value in (
+            self.payload["wrapped_kex_priv"],
+            self.payload["wrapped_sig_priv"],
+        ):
+            self.assertNotIn(value, page)
 
     def test_leaves_no_wrapped_key_in_the_logs(self):
         import logging

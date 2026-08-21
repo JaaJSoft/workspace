@@ -112,7 +112,7 @@ class VectorReplayTests(SimpleTestCase):
                     self.assertEqual(
                         to_base64url(
                             ad.kex_pub_payload(
-                                vector["user_uuid"], vector["kex_public_b64"]
+                                vector["account_uuid"], vector["kex_public_b64"]
                             )
                         ),
                         vector["message_b64"],

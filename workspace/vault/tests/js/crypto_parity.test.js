@@ -203,7 +203,7 @@ test('ed25519 vectors replay exactly', async () => {
       // Rebuilt, not replayed: a divergence on what goes into the attestation
       // has to fail here.
       assert.equal(
-        b64(V.AD.kexPubPayload(vector.user_uuid, vector.kex_public_b64)),
+        b64(V.AD.kexPubPayload(vector.account_uuid, vector.kex_public_b64)),
         vector.message_b64,
         vector.id
       );

@@ -20,6 +20,11 @@ ENTRY_COLUMN_FIELD_IDS = frozenset({"name", "notes"})
 
 CUSTOM_PREFIX = "custom:"
 
+# The account identifier in these strings is the UUID of the account's
+# AccountIdentity row, not a user id: Django's auth.User has an integer
+# primary key, which is enumerable and reassignable after a deletion - an
+# associated data string another human could one day inherit.
+
 
 def _uuid(value: str) -> str:
     return str(value).lower()
@@ -33,20 +38,20 @@ def entry_key_info(entry_uuid: str) -> bytes:
     return f"v1|entry-key|{_uuid(entry_uuid)}".encode("ascii")
 
 
-def kex_priv_ad(user_uuid: str) -> bytes:
-    return f"v1|account-kex-priv|{_uuid(user_uuid)}".encode("ascii")
+def kex_priv_ad(account_uuid: str) -> bytes:
+    return f"v1|account-kex-priv|{_uuid(account_uuid)}".encode("ascii")
 
 
-def sig_priv_ad(user_uuid: str) -> bytes:
-    return f"v1|account-sig-priv|{_uuid(user_uuid)}".encode("ascii")
+def sig_priv_ad(account_uuid: str) -> bytes:
+    return f"v1|account-sig-priv|{_uuid(account_uuid)}".encode("ascii")
 
 
 def entry_field_ad(entry_uuid: str, field_name: str) -> bytes:
     return f"v1|entry-field|{_uuid(entry_uuid)}|{field_name}".encode("ascii")
 
 
-def kex_pub_payload(user_uuid: str, kex_pub_b64: str) -> bytes:
-    return f"v1|account-kex-pub|{_uuid(user_uuid)}|{kex_pub_b64}".encode("ascii")
+def kex_pub_payload(account_uuid: str, kex_pub_b64: str) -> bytes:
+    return f"v1|account-kex-pub|{_uuid(account_uuid)}|{kex_pub_b64}".encode("ascii")
 
 
 def vault_key_info(vault_uuid: str, recipient_uuid: str) -> bytes:

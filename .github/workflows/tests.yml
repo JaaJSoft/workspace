@@ -279,10 +279,6 @@ jobs:
       - name: Run JS unit tests
         run: node --test "workspace/*/tests/js/**/*.test.js"
 
-  # Deliberately ungated by a paths filter: advisories land against
-  # dependencies we did not touch, so an audit that only runs when the
-  # manifest changes is an audit that never runs when it matters.
-  #
   webdav-mount:
     runs-on: ubuntu-latest
     name: WebDAV (davfs2 mount)

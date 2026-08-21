@@ -10,7 +10,6 @@ from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
 
-from workspace.common.logging import scrub
 from workspace.common.uuids import uuid_v7_or_v4
 
 User = get_user_model()
@@ -213,6 +212,11 @@ class File(models.Model):
     def save(self, *args, **kwargs):
         if "/" in self.name:
             raise ValueError("File and folder names must not contain '/'.")
+        # '.'/'..' would resolve to a parent directory in every storage path
+        # built from ``path``, letting a rename or delete escape the node's
+        # own directory.
+        if self.name in (".", ".."):
+            raise ValueError("File and folder names must not be '.' or '..'.")
 
         old_data = None
         if self.pk:
@@ -511,85 +515,17 @@ class PinnedFolder(models.Model):
         return f"{self.owner} -> {self.folder}"
 
 
-# Signal to handle file deletion when using QuerySet.delete() or bulk operations
 @receiver(pre_delete, sender=File)
 def delete_file_on_delete(sender, instance, **kwargs):
+    """Remove the physical file or folder when a File row is deleted.
+
+    A pre_delete signal (rather than an override of ``delete``) so the disk
+    cleanup also runs on queryset and cascade deletes.
     """
-    Delete the physical file or folder when a File instance is deleted.
-    This signal ensures files are deleted even in bulk operations.
-    For folders, attempts to remove the physical directory if it exists.
-    """
-    import logging
-    import os
-    import shutil
+    # Imported lazily: the services package imports this module.
+    from workspace.files.services._storage_ops import delete_node_storage
 
-    from django.core.files.storage import default_storage
-
-    logger = logging.getLogger(__name__)
-
-    if instance.node_type == File.NodeType.FILE and instance.has_thumbnail:
-        from workspace.files.services.thumbnails.generation import delete_thumbnail
-
-        delete_thumbnail(instance.uuid)
-
-    if instance.node_type == File.NodeType.FILE and instance.content:
-        # Handle file deletion
-        try:
-            file_path = instance.content.name
-            if file_path and default_storage.exists(file_path):
-                default_storage.delete(file_path)
-                logger.info(f"Signal: Deleted physical file: {scrub(file_path)}")
-
-                # Try to remove empty parent directories
-                try:
-                    dir_path = os.path.dirname(file_path)
-                    while dir_path and dir_path != "files":
-                        full_path = os.path.join(default_storage.location, dir_path)
-                        if os.path.exists(full_path) and os.path.isdir(full_path):
-                            if not os.listdir(full_path):  # Directory is empty
-                                os.rmdir(full_path)
-                                logger.info(
-                                    f"Signal: Deleted empty directory: {scrub(dir_path)}"
-                                )
-                                dir_path = os.path.dirname(dir_path)
-                            else:
-                                break  # Directory not empty, stop
-                        else:
-                            break
-                except Exception as e:
-                    logger.warning(
-                        f"Signal: Could not remove empty directory for {scrub(file_path)}: {scrub(e)}"
-                    )
-
-        except Exception as e:
-            logger.error(
-                f"Signal: Error deleting physical file {scrub(instance.content.name)}: {scrub(e)}"
-            )
-
-    elif instance.node_type == File.NodeType.FOLDER:
-        # Handle folder deletion - remove the physical directory if it exists
-        try:
-            # Build the folder path
-            folder_path = instance.path or instance.get_path()
-            if folder_path:
-                # Convert path to file system path
-                full_path = os.path.join(
-                    default_storage.location,
-                    "files",
-                    instance.owner.username,
-                    folder_path.split("/", 1)[1] if "/" in folder_path else folder_path,
-                )
-
-                if os.path.exists(full_path) and os.path.isdir(full_path):
-                    # Remove directory and all its contents (in case there are orphaned files)
-                    shutil.rmtree(full_path)
-                    logger.info(
-                        f"Signal: Deleted folder and contents: {scrub(full_path)}"
-                    )
-        except Exception as e:
-            logger.warning(
-                f"Signal: Could not delete folder {scrub(instance.name)}: {scrub(e)}"
-            )
+    delete_node_storage(instance)
 
 
 @receiver(pre_delete, sender="auth.Group")

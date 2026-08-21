@@ -29,6 +29,12 @@ class CreateProjectTests(ProjectTestMixin, TestCase):
             ],
         )
 
+    def test_seeds_default_statuses_with_colors(self):
+        colors = list(
+            self.project.statuses.order_by("position").values_list("color", flat=True)
+        )
+        self.assertEqual(colors, ["#a855f7", "#3b82f6", "#eab308", "#22c55e"])
+
     def test_creator_becomes_admin_member(self):
         self.assertEqual(self.admin_membership.role, ProjectMember.Role.ADMIN)
         self.assertIsNone(self.admin_membership.left_at)

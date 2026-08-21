@@ -49,6 +49,16 @@ class AccountFinalizeSerializerTests(SimpleTestCase):
         )
         self.assertFalse(serializer.is_valid())
 
+    def test_refuses_an_opaque_field_that_is_not_base64url(self):
+        """Stored as submitted, a value that is not base64url only fails at
+        unlock, where the user has no recourse and no explanation."""
+        for value in ("!!!!", "not base64", "AA!!AA", "===="):
+            with self.subTest(value=value):
+                serializer = AccountFinalizeSerializer(
+                    data=finalize_payload(wrapped_kex_priv=value)
+                )
+                self.assertFalse(serializer.is_valid())
+
     def test_refuses_kdf_params_that_are_not_positive_integers(self):
         for params in (
             {"m": 0, "t": 3, "p": 2},

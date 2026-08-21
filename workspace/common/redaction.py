@@ -23,11 +23,12 @@ _SENSITIVE_NAME = re.compile(
     r"(password|secret_key|session_key|^wrapped_|^encrypted_|^sig_)", re.IGNORECASE
 )
 
-# name=value in a preformatted message. The value alternative puts the printf
-# placeholders first so a lazily formatted record keeps its own arguments.
-_ASSIGNMENT = re.compile(
-    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>%\([A-Za-z0-9_]+\)s|%[sdr]|[^\s,;]+)"
-)
+# name=value in a message, whether already formatted or still a format string.
+_ASSIGNMENT = re.compile(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>[^\s,;]+)")
+
+# A printf conversion, so an assignment whose value is still a placeholder can
+# be told apart from one carrying a literal.
+_CONVERSION = re.compile(r"%(?:\([A-Za-z0-9_]+\))?[-+ #0-9.]*[a-zA-Z%]")
 
 
 def is_sensitive_name(name) -> bool:
@@ -54,15 +55,32 @@ class SecretRedactingFilter(logging.Filter):
     secret already spelled out in the message as ``name=value``. Both come
     from the same well-meant line - "log the request body so we can debug
     this" - and neither is visible in review once it is there.
+
+    A secret passed positionally cannot be matched to the name in front of its
+    placeholder, so a format string that names one has every positional
+    argument redacted. Blunt, and the only direction that fails closed.
     """
 
     def filter(self, record):
         if isinstance(record.args, dict):
             record.args = redact(record.args)
         elif isinstance(record.args, tuple):
-            record.args = tuple(redact(arg) for arg in record.args)
+            if self._names_a_secret_positionally(record.msg):
+                record.args = tuple(REDACTED for _ in record.args)
+            else:
+                record.args = tuple(redact(arg) for arg in record.args)
         record.msg = self._redact_assignments(record.msg)
         return True
+
+    @staticmethod
+    def _names_a_secret_positionally(message):
+        if not isinstance(message, str):
+            return False
+        return any(
+            is_sensitive_name(match.group("name"))
+            and _CONVERSION.fullmatch(match.group("value"))
+            for match in _ASSIGNMENT.finditer(message)
+        )
 
     @staticmethod
     def _redact_assignments(message):
@@ -70,9 +88,15 @@ class SecretRedactingFilter(logging.Filter):
             return message
 
         def replace(match):
-            name = match.group("name")
-            value = REDACTED if is_sensitive_name(name) else match.group("value")
-            return f"{name}={value}"
+            value = match.group("value")
+            # A placeholder is left in place. Removing it while its argument
+            # stays in record.args makes getMessage() raise, and logging's
+            # error handler prints the arguments to stderr itself.
+            if not is_sensitive_name(match.group("name")) or _CONVERSION.fullmatch(
+                value
+            ):
+                return match.group(0)
+            return f"{match.group('name')}={REDACTED}"
 
         return _ASSIGNMENT.sub(replace, message)
 
@@ -87,9 +111,10 @@ class RedactingExceptionReporterFilter(SafeExceptionReporterFilter):
     """
 
     def is_active(self, request):
-        # Django's own filter only activates outside DEBUG. A secret rendered
-        # into a developer's browser is still a secret written to a log
-        # somewhere upstream, so this one never stands down.
+        # Django's own filter stands down under DEBUG, on the reasoning that a
+        # developer wants the whole frame. A DEBUG deployment is precisely the
+        # accident where the technical 500 page reaches someone it should not,
+        # so this one never stands down.
         return True
 
     def get_post_parameters(self, request):

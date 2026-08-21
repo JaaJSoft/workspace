@@ -16,6 +16,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
+from rest_framework.settings import api_settings
 from rest_framework.test import APIRequestFactory
 from rest_framework.throttling import SimpleRateThrottle
 
@@ -54,6 +55,24 @@ class IpRateThrottleTests(TestCase):
         elsewhere.user = User.objects.get(username="probe-one")
         self.assertNotEqual(keys[0], _Probe().get_cache_key(elsewhere, None))
 
+    def test_a_declared_proxy_count_makes_the_header_trusted_again(self):
+        """The header is not banned, only disbelieved by default. A deployment
+        that declares how many proxies sit in front has said which hop is the
+        real peer, and DRF's parsing applies again."""
+
+        class _Probe(IpRateThrottle):
+            scope = "vault.account.envelope.ip"
+
+        request = APIRequestFactory().get(
+            ENVELOPE_URL, REMOTE_ADDR="10.0.0.9", HTTP_X_FORWARDED_FOR="203.0.113.7"
+        )
+        request.user = User.objects.create_user(username="proxied", password="pw")
+
+        with patch.object(api_settings, "NUM_PROXIES", 1):
+            key = _Probe().get_cache_key(request, None)
+
+        self.assertIn("203.0.113.7", key)
+
     def test_two_users_behind_one_ip_share_the_budget(self):
         """The per-IP limit exists to catch an exfiltration spread across
         stolen session cookies. Keyed on the user it would just be the
@@ -70,6 +89,22 @@ class IpRateThrottleTests(TestCase):
         self.assertNotEqual(first.status_code, 429)
         self.assertEqual(second.status_code, 429)
         self.assertIn("Retry-After", second)
+
+    def test_a_client_supplied_forwarded_for_header_buys_no_new_budget(self):
+        """DRF's own get_ident falls back to the whole X-Forwarded-For header
+        when NUM_PROXIES is unset, and that header is written by the caller.
+        Varying it per request would hand out a fresh bucket every time and
+        the per-IP limit - the one control aimed at a distributed exfiltration
+        - would be a single header away from doing nothing."""
+        alice = User.objects.create_user(username="spoofer", password="pw")
+        self.client.force_login(alice)
+
+        with with_rates(**{"vault.account.envelope.ip": "1/hour"}):
+            first = self.client.get(ENVELOPE_URL, HTTP_X_FORWARDED_FOR="203.0.113.1")
+            second = self.client.get(ENVELOPE_URL, HTTP_X_FORWARDED_FOR="203.0.113.2")
+
+        self.assertNotEqual(first.status_code, 429)
+        self.assertEqual(second.status_code, 429)
 
     def test_the_per_user_limit_does_not_follow_the_user_to_another_ip(self):
         alice = User.objects.create_user(username="alice2", password="pw")

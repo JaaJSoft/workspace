@@ -14,10 +14,11 @@ vector through this module.
 """
 
 import base64
-import binascii
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+_URLSAFE_TO_STANDARD = str.maketrans("-_", "+/")
 
 PUBKEY_ALG_X25519 = 0x01
 PUBKEY_ALG_ED25519 = 0x02
@@ -37,12 +38,25 @@ class AttestationError(ValueError):
 
 
 def decode_base64url(text) -> bytes:
+    """Decode *text*, refusing anything that is not exactly base64url.
+
+    ``validate=True`` matters: the default silently drops every character
+    outside the alphabet, so ``"===="`` and ``"!!!!"`` both decode to no bytes
+    at all and arrive downstream as an empty key or an empty signature rather
+    than as a refusal.
+    """
     if not isinstance(text, str) or not text:
         raise AttestationError("expected non-empty base64url text")
     try:
-        return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
-    except (binascii.Error, ValueError) as exc:
+        raw = base64.b64decode(
+            text.translate(_URLSAFE_TO_STANDARD) + "=" * (-len(text) % 4),
+            validate=True,
+        )
+    except ValueError as exc:
         raise AttestationError("value is not valid base64url") from exc
+    if not raw:
+        raise AttestationError("value decodes to no bytes")
+    return raw
 
 
 def decode_public_key(stored: bytes, expected_alg: int) -> bytes:

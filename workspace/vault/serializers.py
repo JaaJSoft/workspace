@@ -9,6 +9,7 @@ parameters are the kind of thing Argon2id can be run with.
 from rest_framework import serializers
 
 from .models import AccountIdentity
+from .services.attestation import AttestationError, decode_base64url
 
 _KDF_PARAM_KEYS = ("m", "t", "p")
 
@@ -35,6 +36,20 @@ def validate_kdf_params(value):
     return value
 
 
+def validate_base64url(value):
+    """The one shape the server can check on a value it cannot open.
+
+    Without it, a client bug stores something that is not a ciphertext at all,
+    and the account only finds out at unlock time - when there is nothing left
+    to do about it.
+    """
+    try:
+        decode_base64url(value)
+    except AttestationError as exc:
+        raise serializers.ValidationError("must be base64url text") from exc
+    return value
+
+
 class _OpaqueField(serializers.CharField):
     """base64url text the server stores and can never open."""
 
@@ -42,6 +57,7 @@ class _OpaqueField(serializers.CharField):
         kwargs.setdefault("allow_blank", False)
         kwargs.setdefault("trim_whitespace", False)
         kwargs.setdefault("max_length", 4096)
+        kwargs.setdefault("validators", [validate_base64url])
         super().__init__(**kwargs)
 
 

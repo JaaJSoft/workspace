@@ -67,6 +67,39 @@ class SecretRedactingFilterTests(TestCase):
         rendered = self._render("body=%s", {"wrapped_sig_priv": "SECRETVALUE"})
         self.assertNotIn("SECRETVALUE", rendered)
 
+    def test_a_positional_secret_survives_formatting(self):
+        """Dropping a placeholder from the format string while its argument
+        stays in record.args makes getMessage() raise, and logging's own error
+        handler then prints Message and Arguments to stderr - the filter would
+        publish the secret it exists to hide."""
+        record = logging.LogRecord(
+            "workspace.test",
+            logging.INFO,
+            __file__,
+            1,
+            "wrapped_kex_priv=%s",
+            ("SECRETVALUE",),
+            None,
+        )
+        SecretRedactingFilter().filter(record)
+        rendered = record.getMessage()
+        self.assertNotIn("SECRETVALUE", rendered)
+
+    def test_a_sensitive_placeholder_redacts_its_neighbours_too(self):
+        """Positional arguments cannot be matched to names, so a format string
+        that names a secret has all of them redacted rather than guessing."""
+        record = logging.LogRecord(
+            "workspace.test",
+            logging.INFO,
+            __file__,
+            1,
+            "user=%s wrapped_sig_priv=%s",
+            ("alice", "SECRETVALUE"),
+            None,
+        )
+        SecretRedactingFilter().filter(record)
+        self.assertNotIn("SECRETVALUE", record.getMessage())
+
     def test_leaves_an_ordinary_message_untouched(self):
         self.assertEqual(self._render("synced %s folders", 3), "synced 3 folders")
 

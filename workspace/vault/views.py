@@ -14,6 +14,7 @@ the failure surfaces the next time they try to unlock.
 import base64
 import os
 
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters
 from drf_spectacular.utils import extend_schema
@@ -78,24 +79,22 @@ class AccountInitView(APIView):
         },
     )
     def post(self, request):
-        identity = AccountIdentity.objects.filter(user=request.user).first()
-        if identity is None:
-            identity = AccountIdentity.objects.create(
-                user=request.user, kdf_salt=_new_salt()
-            )
-            code = status.HTTP_201_CREATED
-        elif identity.state == AccountIdentity.State.ACTIVE:
-            # Not the uniform 404 used elsewhere: that rule hides the existence
-            # of other people's resources. Here the caller is asking about
-            # their own account, and the refusal is the answer they need - a
-            # fresh salt would leave their sealed keys underivable.
+        # get_or_create rather than a lookup and an insert: `user` is unique,
+        # so two first calls racing each other would make the loser raise
+        # IntegrityError - a 500 earned by double-clicking a button.
+        identity, created = AccountIdentity.objects.get_or_create(
+            user=request.user, defaults={"kdf_salt": _new_salt()}
+        )
+        if not created and identity.state == AccountIdentity.State.ACTIVE:
+            # Not the design's uniform 404, which hides the existence of other
+            # people's resources. The caller is asking about their own account,
+            # and the refusal is the answer they need - a fresh salt would
+            # leave their sealed keys underivable.
             return Response(status=status.HTTP_409_CONFLICT)
-        else:
-            code = status.HTTP_200_OK
 
         return Response(
             {"account_uuid": str(identity.uuid), "kdf_salt": identity.kdf_salt},
-            status=code,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
 
@@ -161,10 +160,15 @@ class AccountFinalizeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        for field, value in data.items():
-            setattr(identity, field, value)
-        identity.state = AccountIdentity.State.ACTIVE
-        identity.save()
+        # A conditional update, not a check followed by a save: the state read
+        # above and the write are otherwise two steps, and a second finalize
+        # slipping between them would replace the sealed private keys while
+        # every key wrap already made still points at the pair they replaced.
+        activated = AccountIdentity.objects.filter(
+            pk=identity.pk, state=AccountIdentity.State.PENDING
+        ).update(state=AccountIdentity.State.ACTIVE, updated_at=timezone.now(), **data)
+        if not activated:
+            return Response(status=status.HTTP_409_CONFLICT)
         return Response(status=status.HTTP_201_CREATED)
 
 

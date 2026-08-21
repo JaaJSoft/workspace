@@ -113,6 +113,16 @@ class VerifyKexPubAttestationTests(SimpleTestCase):
         with self.assertRaises(AttestationError):
             verify_kex_pub_attestation(ACCOUNT_UUID, kex_pub, sig_pub, "!!!not base64")
 
+    def test_refuses_base64url_that_decodes_to_no_bytes(self):
+        """`urlsafe_b64decode` discards characters outside the alphabet, so
+        "====" and "!!!!" both decode to b"" - and an empty signature reaches
+        the algorithm-byte check as an index into nothing."""
+        kex_pub, sig_pub, _ = build_attestation()
+        for text in ("====", "!!!!"):
+            with self.subTest(text=text):
+                with self.assertRaises(AttestationError):
+                    verify_kex_pub_attestation(ACCOUNT_UUID, kex_pub, sig_pub, text)
+
     def test_refuses_an_empty_field(self):
         kex_pub, sig_pub, signature = build_attestation()
         for kex, sig, sign in (
@@ -153,6 +163,12 @@ class DecodeHelperTests(SimpleTestCase):
 
     def test_accepts_unpadded_and_padded_base64url(self):
         self.assertEqual(decode_base64url("AAAA"), bytes(3))
+
+    def test_refuses_characters_outside_the_alphabet(self):
+        """Silently discarding them is the default, and it turns junk into a
+        short buffer instead of a refusal."""
+        with self.assertRaises(AttestationError):
+            decode_base64url("AA!!AA")
 
     def test_refuses_a_value_that_is_not_text(self):
         for value in (None, 42, b"bytes"):

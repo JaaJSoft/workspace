@@ -4,6 +4,11 @@ These strings ARE the format. Changing one does not break a build, it breaks
 the decryption of every value already written with it, and nothing fails until
 a user opens the entry. ASCII only, `|` as the separator, RFC 4122 lowercase
 UUIDs, no trailing newline.
+
+An account is named by the UUID of its AccountIdentity row, never by a user
+id: Django's auth.User has an integer primary key, which is enumerable and
+reassignable once an account is deleted - an associated data string another
+human could one day inherit.
 """
 
 # System identifiers an entry type may declare. Anything else a user adds is
@@ -19,11 +24,6 @@ RESERVED_FIELD_IDS = frozenset({"username", "password", "totp", "uri"})
 ENTRY_COLUMN_FIELD_IDS = frozenset({"name", "notes"})
 
 CUSTOM_PREFIX = "custom:"
-
-# The account identifier in these strings is the UUID of the account's
-# AccountIdentity row, not a user id: Django's auth.User has an integer
-# primary key, which is enumerable and reassignable after a deletion - an
-# associated data string another human could one day inherit.
 
 
 def _uuid(value: str) -> str:

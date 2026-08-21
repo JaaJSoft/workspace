@@ -1,4 +1,5 @@
 import base64
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -100,6 +101,23 @@ class AccountInitTests(TestCase):
         self.assertEqual(response.status_code, 409)
         identity.refresh_from_db()
         self.assertEqual(identity.kdf_salt, "original")
+
+    def test_survives_a_concurrent_first_call(self):
+        """`user` is a OneToOneField, so two calls that both find no identity
+        and both insert make the loser raise IntegrityError - a 500 on nothing
+        worse than a double-clicked onboarding button. The race window is
+        between the lookup and the insert, which is where the salt is drawn."""
+
+        def competing_write():
+            AccountIdentity.objects.create(user=self.user, kdf_salt="COMPETITOR")
+            return "MINE"
+
+        with patch("workspace.vault.views._new_salt", side_effect=competing_write):
+            response = self._post()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["kdf_salt"], "COMPETITOR")
+        self.assertEqual(AccountIdentity.objects.filter(user=self.user).count(), 1)
 
     def test_requires_authentication(self):
         self.client.logout()
@@ -236,6 +254,30 @@ class AccountFinalizeTests(TestCase):
         self.assertEqual(response.status_code, 409)
         self.identity.refresh_from_db()
         self.assertEqual(self.identity.kex_public, self.payload["kex_public"])
+
+    def test_refuses_a_finalize_that_lost_a_race(self):
+        """The state check and the write are not one step. Attestation
+        verification sits in the window between them, so activating the row
+        from there reproduces the interleaving deterministically: without an
+        atomic guard the loser overwrites the winner's sealed private keys,
+        and every key wrap the winner made is orphaned."""
+        winner = build_identity_payload(str(self.identity.uuid))
+
+        def activate_meanwhile(*args, **kwargs):
+            AccountIdentity.objects.filter(pk=self.identity.pk).update(
+                state=AccountIdentity.State.ACTIVE, **winner
+            )
+
+        with patch(
+            "workspace.vault.views.verify_kex_pub_attestation",
+            side_effect=activate_meanwhile,
+        ):
+            response = self._post()
+
+        self.assertEqual(response.status_code, 409)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.kex_public, winner["kex_public"])
+        self.assertEqual(self.identity.wrapped_kex_priv, winner["wrapped_kex_priv"])
 
     def test_answers_404_without_an_init(self):
         AccountIdentity.objects.all().delete()

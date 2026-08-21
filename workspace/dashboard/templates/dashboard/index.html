@@ -13,35 +13,74 @@
     {# ── Hero ── #}
     <section class="text-center space-y-1 relative">
       {# The name stays in HTML (Django autoescape); only the greeting word goes through JS. #}
-      <h1 class="text-3xl font-semibold text-base-content"><span
+      <h1
+        class="text-3xl font-semibold text-base-content"
+      ><span
   x-data
   x-text="(() => { const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined; const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date()), 10) % 24; return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; })()"
 >Welcome back</span>, {{ user.first_name|default:user.username }}.</h1>
-      <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
+      <p
+        class="text-base-content/60"
+        x-data="weatherWidget()"
+        x-cloak
+      >
         <span x-text="label"></span>
       </p>
 
       {# ── Top-right controls: dashboard settings + usage ── #}
-      <div class="absolute right-0 top-0 flex items-center gap-1">
+      <div
+        class="absolute right-0 top-0 flex items-center gap-1"
+      >
         {# ── Usage popover ── #}
-        <div class="relative" x-data="usagePopover()" @click.outside="open = false">
-          <button @click="toggle()" class="btn btn-ghost btn-sm btn-square" title="Workspace usage">
-            <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+        <div
+          class="relative"
+          x-data="usagePopover()"
+          @click.outside="open = false"
+        >
+          <button
+            @click="toggle()"
+            class="btn btn-ghost btn-sm btn-square"
+            title="Workspace usage"
+          >
+            <i
+              data-lucide="bar-chart-3"
+              class="w-4 h-4"
+            ></i>
           </button>
-          <div x-show="open" x-cloak x-transition.opacity class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4">
-            {% include 'dashboard/partials/usage_widget.html' %}
-          </div>
+          <div
+            x-show="open"
+            x-cloak
+            x-transition.opacity
+            class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
+          >{% include 'dashboard/partials/usage_widget.html' %}</div>
         </div>
 
         {# ── Dashboard settings popover ── #}
-        <div class="dropdown dropdown-end" x-data="dashboardPrefsForm()">
+        <div
+          class="dropdown dropdown-end"
+          x-data="dashboardPrefsForm()"
+        >
           {{ dashboard_apps|json_script:"dashboard-apps-data" }}
-          <button type="button" tabindex="0" class="btn btn-ghost btn-sm btn-square" aria-label="Dashboard settings" title="Dashboard settings">
+          <button
+            type="button"
+            tabindex="0"
+            class="btn btn-ghost btn-sm btn-square"
+            aria-label="Dashboard settings"
+            title="Dashboard settings"
+          >
             <i data-lucide="settings" class="w-4 h-4"></i>
           </button>
-          <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-72 mt-1 text-left">
-            <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-              <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
+          <div
+            tabindex="0"
+            class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-72 mt-1 text-left"
+          >
+            <h4
+              class="font-semibold text-sm mb-3 flex items-center gap-2"
+            >
+              <i
+                data-lucide="layout-dashboard"
+                class="w-4 h-4 text-primary"
+              ></i>
               Dashboard
             </h4>
             {% include "dashboard/partials/_preferences_content.html" %}
@@ -51,17 +90,29 @@
     </section>
 
     {# ── Search bar ── #}
-    <section id="dashboard-search" class="hidden sm:block max-w-2xl mx-auto w-full" x-data="commandPaletteDropdown()">
+    <section
+      id="dashboard-search"
+      class="hidden sm:block max-w-2xl mx-auto w-full"
+      x-data="commandPaletteDropdown()"
+    >
       <div class="relative">
         {% include 'ui/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
 
         {# ── Dropdown ── #}
-        <div x-show="open" x-cloak @click.outside="close()" class="absolute z-[100] mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden">
+        <div
+          x-show="open"
+          x-cloak
+          @click.outside="close()"
+          class="absolute z-[100] mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
+        >
           {% include 'ui/partials/search/quick_actions.html' with size='lg' %}
           {% include 'ui/partials/search/search_results.html' with size='lg' %}
 
           {# ── Footer hints ── #}
-          <div x-show="open" class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3">
+          <div
+            x-show="open"
+            class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
+          >
             <span class="flex items-center gap-1">
               <kbd class="kbd kbd-xs">↑↓</kbd>
               navigate
@@ -70,8 +121,17 @@
               <kbd class="kbd kbd-xs">⏎</kbd>
               select
             </span>
-            <button type="button" @click="close()" class="btn btn-ghost btn-xs ml-auto" title="Close" aria-label="Close search results">
-              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            <button
+              type="button"
+              @click="close()"
+              class="btn btn-ghost btn-xs ml-auto"
+              title="Close"
+              aria-label="Close search results"
+            >
+              <i
+                data-lucide="chevron-down"
+                class="w-4 h-4"
+              ></i>
             </button>
           </div>
         </div>
@@ -80,9 +140,9 @@
 
     {# ── Modules grid ── #}
     {# The x-data wrapper sits outside the swap target so the SSE listeners survive every fragment refresh. #}
-    <div x-data="dashboardBadges('{% url 'dashboard:modules_fragment' %}')">
-      {% include 'dashboard/partials/modules_grid_fragment.html' %}
-    </div>
+    <div
+      x-data="dashboardBadges('{% url 'dashboard:modules_fragment' %}')"
+    >{% include 'dashboard/partials/modules_grid_fragment.html' %}</div>
 
     {% if show_upcoming_events %}
       {# ── Upcoming events (loaded async via alpine-ajax) ── #}
@@ -92,7 +152,11 @@
     {% endif %}
 
     {# ── My tasks: async load; empty hidden slot kept so the prefs toggle can swap it live ── #}
-    <section id="dashboard-tasks" class="max-w-4xl mx-auto w-full{% if not show_my_tasks %} hidden{% endif %}" {% if show_my_tasks %} x-data="{}" x-init="$ajax('{% url 'dashboard:tasks_fragment' %}')" @ajax:error="$el.replaceChildren()" {% endif %}>
+    <section
+      id="dashboard-tasks"
+      class="max-w-4xl mx-auto w-full{% if not show_my_tasks %} hidden{% endif %}"
+      {% if show_my_tasks %} x-data="{}" x-init="$ajax('{% url 'dashboard:tasks_fragment' %}')" @ajax:error="$el.replaceChildren()" {% endif %}
+    >
       {% if show_my_tasks %}
         {% include 'dashboard/partials/my_tasks_skeleton.html' %}
       {% endif %}
@@ -108,7 +172,9 @@
           @ajax:error="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedFailed.innerHTML"
         >
           <div class="card-body gap-4 p-4 sm:p-6">
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div
+              class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+            >
               <div class="space-y-1">
                 <h2 class="card-title text-xl">
                   <i data-lucide="activity" class="w-5 h-5"></i>
@@ -143,24 +209,35 @@
                 <ul class="divide-y divide-base-200">
                   {% for _ in "123456" %}
                     <li class="py-3 flex items-center gap-3">
-                      <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
+                      <div
+                        class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"
+                      ></div>
                       <div class="flex-1 min-w-0 space-y-2">
                         <div class="h-4 bg-base-300 rounded w-3/4"></div>
                         <div class="h-3 bg-base-300 rounded w-1/2"></div>
                       </div>
-                      <div class="h-6 w-12 bg-base-300 rounded hidden sm:block"></div>
+                      <div
+                        class="h-6 w-12 bg-base-300 rounded hidden sm:block"
+                      ></div>
                     </li>
                   {% endfor %}
                 </ul>
               </div>
             </div>
 
-            <div id="dashboard-activity" x-init="$el.innerHTML = $refs.feedSkeleton.innerHTML; $ajax(feedUrl, { target: 'dashboard-activity' })">
-            </div>
+            <div
+              id="dashboard-activity"
+              x-init="$el.innerHTML = $refs.feedSkeleton.innerHTML; $ajax(feedUrl, { target: 'dashboard-activity' })"
+            ></div>
 
             {# Error markup, copied into the feed target by @ajax:error above so the card is never left blank #}
             <div x-ref="feedFailed" hidden>
-              <p class="py-3 text-sm text-base-content/60">Couldn't load activity. <a href="{% url 'dashboard:index' %}" class="link link-hover">Reload</a></p>
+              <p
+                class="py-3 text-sm text-base-content/60"
+              >Couldn't load activity. <a
+   href="{% url 'dashboard:index' %}"
+   class="link link-hover"
+ >Reload</a></p>
             </div>
           </div>
         </div>
@@ -170,7 +247,9 @@
 
   </div>
 
-  <script src="{% static 'dashboard/js/badges.js' %}"></script>
+  <script
+    src="{% static 'dashboard/js/badges.js' %}"
+  ></script>
   <script>
     const _weatherCodes = {
       0: 'clear-day',

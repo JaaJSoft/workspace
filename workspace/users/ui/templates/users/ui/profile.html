@@ -10,20 +10,34 @@
 {% block main_class %}container mx-auto p-4 max-w-4xl{% endblock %}
 
 {% block content %}
-  <div class="py-6 space-y-6" x-data="{ now: Date.now() }">
+  <div
+    class="py-6 space-y-6"
+    x-data="{ now: Date.now() }"
+  >
 
     <!-- ── Profile hero ───────────────────────────────────── -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden relative">
+    <div
+      class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden relative"
+    >
       <!-- Banner -->
       {% if banner_gradient %}
-        <div class="h-36 relative" style="background: {{ banner_gradient }}">
-          <div class="absolute inset-0" style="background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)">
-          </div>
+        <div
+          class="h-36 relative"
+          style="background: {{ banner_gradient }}"
+        >
+          <div
+            class="absolute inset-0"
+            style="background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)"
+          ></div>
         </div>
       {% else %}
-        <div class="h-36 bg-gradient-to-br from-primary via-primary/80 to-secondary relative">
-          <div class="absolute inset-0" style="background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)">
-          </div>
+        <div
+          class="h-36 bg-gradient-to-br from-primary via-primary/80 to-secondary relative"
+        >
+          <div
+            class="absolute inset-0"
+            style="background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)"
+          ></div>
         </div>
       {% endif %}
 
@@ -39,8 +53,16 @@
           <span class="hidden sm:inline">Settings</span>
         </a>
       {% else %}
-        <a href="/chat?dm={{ profile_user.id }}" class="btn btn-sm btn-info absolute top-3 right-3 z-10 w-8 px-0 sm:w-auto sm:px-3 gap-0 sm:gap-2" aria-label="Send message" title="Send message">
-          <i data-lucide="message-circle" class="w-4 h-4"></i>
+        <a
+          href="/chat?dm={{ profile_user.id }}"
+          class="btn btn-sm btn-info absolute top-3 right-3 z-10 w-8 px-0 sm:w-auto sm:px-3 gap-0 sm:gap-2"
+          aria-label="Send message"
+          title="Send message"
+        >
+          <i
+            data-lucide="message-circle"
+            class="w-4 h-4"
+          ></i>
           <span class="hidden sm:inline">Send message</span>
         </a>
       {% endif %}
@@ -51,48 +73,86 @@
         <div class="flex items-start">
           {% if profile_user|has_avatar %}
             <div class="avatar relative -mt-14">
-              <div class="w-24 h-24 rounded-full ring-4 ring-base-100 shadow-lg" :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }})">
-                <img src="/api/v1/users/{{ profile_user.id }}/avatar" alt="{{ profile_user.username }}" class="rounded-full object-cover" loading="lazy" decoding="async" />
+              <div
+                class="w-24 h-24 rounded-full ring-4 ring-base-100 shadow-lg"
+                :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }})"
+              >
+                <img
+                  src="/api/v1/users/{{ profile_user.id }}/avatar"
+                  alt="{{ profile_user.username }}"
+                  class="rounded-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
               </div>
-              <span class="absolute bottom-1 right-1 block w-4 h-4 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass({{ profile_user.id }})"></span>
+              <span
+                class="absolute bottom-1 right-1 block w-4 h-4 rounded-full ring-2 ring-base-100"
+                :class="$store.presence.dotClass({{ profile_user.id }})"
+              ></span>
             </div>
           {% else %}
-            <div class="avatar placeholder relative -mt-14">
-              <div class="w-24 h-24 text-3xl text-white rounded-full ring-4 ring-base-100 shadow-lg" :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }}) + ' ' + userAvatarColorClass({{ profile_user.id }})">
+            <div
+              class="avatar placeholder relative -mt-14"
+            >
+              <div
+                class="w-24 h-24 text-3xl text-white rounded-full ring-4 ring-base-100 shadow-lg"
+                :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }}) + ' ' + userAvatarColorClass({{ profile_user.id }})"
+              >
                 <span>{{ profile_user.username|slice:":1"|upper }}</span>
               </div>
-              <span class="absolute bottom-1 right-1 block w-4 h-4 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass({{ profile_user.id }})"></span>
+              <span
+                class="absolute bottom-1 right-1 block w-4 h-4 rounded-full ring-2 ring-base-100"
+                :class="$store.presence.dotClass({{ profile_user.id }})"
+              ></span>
             </div>
           {% endif %}
         </div>
 
         <!-- Identity -->
         <div class="mt-3">
-          <div class="flex flex-wrap items-baseline gap-2">
+          <div
+            class="flex flex-wrap items-baseline gap-2"
+          >
             <h1 class="text-xl font-bold leading-none">{% if profile_user.first_name or profile_user.last_name %}{{ profile_user.first_name }} {{ profile_user.last_name }}{% else %}{{ profile_user.username }}{% endif %}</h1>
             {% if profile_user.is_superuser %}
-              <span class="badge badge-error badge-sm font-medium gap-1">
-                <i data-lucide="shield-check" class="w-3 h-3"></i>
+              <span
+                class="badge badge-error badge-sm font-medium gap-1"
+              >
+                <i
+                  data-lucide="shield-check"
+                  class="w-3 h-3"
+                ></i>
                 Admin
               </span>
             {% elif profile_user.is_staff %}
-              <span class="badge badge-warning badge-sm font-medium gap-1">
+              <span
+                class="badge badge-warning badge-sm font-medium gap-1"
+              >
                 <i data-lucide="shield" class="w-3 h-3"></i>
                 Staff
               </span>
             {% else %}
-              <span class="badge badge-info badge-sm font-medium gap-1">
+              <span
+                class="badge badge-info badge-sm font-medium gap-1"
+              >
                 <i data-lucide="user" class="w-3 h-3"></i>
                 Member
               </span>
             {% endif %}
           </div>
           {% if profile_role %}
-            <div class="text-sm text-base-content/60 font-medium mt-1">{{ profile_role }}</div>
+            <div
+              class="text-sm text-base-content/60 font-medium mt-1"
+            >{{ profile_role }}</div>
           {% endif %}
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-base-content/60">
+          <div
+            class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-base-content/60"
+          >
             <span class="flex items-center gap-1.5">
-              <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>
+              <i
+                data-lucide="at-sign"
+                class="w-3.5 h-3.5"
+              ></i>
               {{ profile_user.username }}
             </span>
             {% if profile_user.email %}
@@ -101,8 +161,14 @@
                 {{ profile_user.email }}
               </span>
             {% endif %}
-            <span class="flex items-center gap-1.5" x-data="{ get status() { return $store.presence.statusOf({{ profile_user.id }}) }, lastSeen: {% if last_seen %}'{{ last_seen|date:'c' }}'{% else %}null{% endif %} }">
-              <span class="w-2 h-2 rounded-full flex-shrink-0" :class="$store.presence.dotClass({{ profile_user.id }})"></span>
+            <span
+              class="flex items-center gap-1.5"
+              x-data="{ get status() { return $store.presence.statusOf({{ profile_user.id }}) }, lastSeen: {% if last_seen %}'{{ last_seen|date:'c' }}'{% else %}null{% endif %} }"
+            >
+              <span
+                class="w-2 h-2 rounded-full flex-shrink-0"
+                :class="$store.presence.dotClass({{ profile_user.id }})"
+              ></span>
               <span
                 class="font-medium capitalize"
                 :class="{
@@ -114,75 +180,116 @@
                   }"
                 x-text="status"
               ></span>
-              <template x-if="(status === 'offline' || status === 'away') && lastSeen">
-                <span class="text-base-content/40" x-text="window.formatLastSeenAgo(lastSeen)"></span>
+              <template
+                x-if="(status === 'offline' || status === 'away') && lastSeen"
+              >
+                <span
+                  class="text-base-content/40"
+                  x-text="window.formatLastSeenAgo(lastSeen)"
+                ></span>
               </template>
             </span>
           </div>
           {% if profile_bio %}
-            <p class="text-sm text-base-content/60 mt-3 max-w-xl leading-relaxed">{{ profile_bio }}</p>
+            <p
+              class="text-sm text-base-content/60 mt-3 max-w-xl leading-relaxed"
+            >{{ profile_bio }}</p>
           {% endif %}
         </div>
 
         <!-- Inline stats -->
-        <div class="flex flex-wrap gap-x-8 gap-y-3 mt-5 pt-5 border-t border-base-content/5">
+        <div
+          class="flex flex-wrap gap-x-8 gap-y-3 mt-5 pt-5 border-t border-base-content/5"
+        >
           <div>
             <div class="text-xl font-bold">{{ activity_stats.files.total_files|default:"0" }}</div>
-            <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Files</div>
+            <div
+              class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5"
+            >Files</div>
           </div>
           <div>
             <div class="text-xl font-bold">{{ activity_stats.chat.total_messages|default:"0" }}</div>
-            <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Messages</div>
+            <div
+              class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5"
+            >Messages</div>
           </div>
           <div>
             <div class="text-xl font-bold">{{ activity_stats.calendar.total_events|default:"0" }}</div>
-            <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Events</div>
+            <div
+              class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5"
+            >Events</div>
           </div>
           <div>
             <div class="text-xl font-bold">{{ profile_user.date_joined|localtime_tag:"date" }}</div>
-            <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Member since</div>
+            <div
+              class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5"
+            >Member since</div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- ── Contribution heatmap ─────────────────────────── -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div
+      class="card bg-base-100 border border-base-300 shadow-sm"
+    >
       <div class="card-body p-4 sm:p-6">
-        <div class="flex items-center justify-between mb-3">
+        <div
+          class="flex items-center justify-between mb-3"
+        >
           <h2 class="card-title text-base gap-2">
             <i data-lucide="grid-3x3" class="w-5 h-5"></i>
             {{ heatmap.total_contributions }} contribution{{ heatmap.total_contributions|pluralize }} in the last year
           </h2>
         </div>
 
-        <div x-data="{ tooltip: '', tooltipX: 0, tooltipY: 0, showTooltip: false }">
-          <div class="overflow-x-auto -mx-4 px-4 pb-2 sm:mx-0 sm:px-0 sm:pb-0">
+        <div
+          x-data="{ tooltip: '', tooltipX: 0, tooltipY: 0, showTooltip: false }"
+        >
+          <div
+            class="overflow-x-auto -mx-4 px-4 pb-2 sm:mx-0 sm:px-0 sm:pb-0"
+          >
             <div class="min-w-[640px] sm:min-w-0">
               <!-- Month labels -->
               <div class="flex mb-1">
                 <div class="flex-none" style="width: 24px;"></div>
                 {% for label in heatmap.month_labels %}
-                  <div class="flex-1 min-w-0 text-xs text-base-content/40 whitespace-nowrap">{{ label }}</div>
+                  <div
+                    class="flex-1 min-w-0 text-xs text-base-content/40 whitespace-nowrap"
+                  >{{ label }}</div>
                 {% endfor %}
               </div>
 
               <!-- Grid -->
               <div class="flex gap-px">
                 <!-- Day labels -->
-                <div class="flex flex-col gap-px flex-none" style="width: 24px;">
+                <div
+                  class="flex flex-col gap-px flex-none"
+                  style="width: 24px"
+                >
                   <div class="flex-1 flex items-center"></div>
-                  <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Mon</div>
+                  <div
+                    class="flex-1 flex items-center text-base-content/40"
+                    style="font-size: 9px"
+                  >Mon</div>
                   <div class="flex-1 flex items-center"></div>
-                  <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Wed</div>
+                  <div
+                    class="flex-1 flex items-center text-base-content/40"
+                    style="font-size: 9px"
+                  >Wed</div>
                   <div class="flex-1 flex items-center"></div>
-                  <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Fri</div>
+                  <div
+                    class="flex-1 flex items-center text-base-content/40"
+                    style="font-size: 9px"
+                  >Fri</div>
                   <div class="flex-1 flex items-center"></div>
                 </div>
 
                 <!-- Week columns -->
                 {% for week in heatmap.weeks %}
-                  <div class="flex-1 min-w-0 flex flex-col gap-px">
+                  <div
+                    class="flex-1 min-w-0 flex flex-col gap-px"
+                  >
                     {% for day in week %}
                       <div
                         class="aspect-square rounded-sm cursor-pointer {% if day.level == 0 %}bg-base-300/50{% elif day.level == 1 %}bg-primary/20{% elif day.level == 2 %}bg-primary/40{% elif day.level == 3 %}bg-primary/60{% else %}bg-primary{% endif %}"
@@ -207,13 +314,25 @@
           ></div>
 
           <!-- Legend -->
-          <div class="flex items-center justify-end gap-1.5 mt-2 text-xs text-base-content/40">
+          <div
+            class="flex items-center justify-end gap-1.5 mt-2 text-xs text-base-content/40"
+          >
             <span>Less</span>
-            <div class="w-2.5 h-2.5 rounded-sm bg-base-300/50"></div>
-            <div class="w-2.5 h-2.5 rounded-sm bg-primary/20"></div>
-            <div class="w-2.5 h-2.5 rounded-sm bg-primary/40"></div>
-            <div class="w-2.5 h-2.5 rounded-sm bg-primary/60"></div>
-            <div class="w-2.5 h-2.5 rounded-sm bg-primary"></div>
+            <div
+              class="w-2.5 h-2.5 rounded-sm bg-base-300/50"
+            ></div>
+            <div
+              class="w-2.5 h-2.5 rounded-sm bg-primary/20"
+            ></div>
+            <div
+              class="w-2.5 h-2.5 rounded-sm bg-primary/40"
+            ></div>
+            <div
+              class="w-2.5 h-2.5 rounded-sm bg-primary/60"
+            ></div>
+            <div
+              class="w-2.5 h-2.5 rounded-sm bg-primary"
+            ></div>
             <span>More</span>
           </div>
         </div>
@@ -239,7 +358,9 @@
       @ajax:error="$el.querySelector('#profile-activity').innerHTML = $refs.feedFailed.innerHTML"
     >
       <div class="card-body gap-4 p-4 sm:p-6">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        >
           <h2 class="card-title text-base gap-2">
             <i data-lucide="activity" class="w-5 h-5"></i>
             Activity
@@ -272,7 +393,9 @@
             <ul class="divide-y divide-base-200">
               {% for _ in "12345" %}
                 <li class="py-3 flex items-center gap-3">
-                  <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
+                  <div
+                    class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"
+                  ></div>
                   <div class="flex-1 min-w-0 space-y-2">
                     <div class="h-4 bg-base-300 rounded w-3/4"></div>
                     <div class="h-3 bg-base-300 rounded w-1/2"></div>
@@ -283,12 +406,19 @@
           </div>
         </div>
 
-        <div id="profile-activity" x-init="$el.innerHTML = $refs.feedSkeleton.innerHTML; $ajax(feedUrl, { target: 'profile-activity' })">
-        </div>
+        <div
+          id="profile-activity"
+          x-init="$el.innerHTML = $refs.feedSkeleton.innerHTML; $ajax(feedUrl, { target: 'profile-activity' })"
+        ></div>
 
         {# Error markup, copied into the feed target by the card's @ajax:error so the card is never left blank #}
         <div x-ref="feedFailed" hidden>
-          <p class="py-3 text-sm text-base-content/60">Couldn't load activity. <a href="{% url 'users_ui:profile_by_username' username=profile_user.username %}" class="link link-hover">Reload</a></p>
+          <p
+            class="py-3 text-sm text-base-content/60"
+          >Couldn't load activity. <a
+   href="{% url 'users_ui:profile_by_username' username=profile_user.username %}"
+   class="link link-hover"
+ >Reload</a></p>
         </div>
       </div>
     </div>

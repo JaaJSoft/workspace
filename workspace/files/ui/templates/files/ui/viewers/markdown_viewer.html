@@ -43,31 +43,66 @@
     display: none !important;
   }
 </style>
-<div class="flex flex-col h-full" x-data="markdownViewerCrepe()" x-init="initEditor()" @viewer-cleanup.window="dispose()">
+<div
+  class="flex flex-col h-full"
+  x-data="markdownViewerCrepe()"
+  x-init="initEditor()"
+  @viewer-cleanup.window="dispose()"
+>
 
   <!-- Toolbar -->
-  <div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-base-100 border-b border-base-300">
+  <div
+    class="flex items-center justify-between gap-1 px-3 py-1.5 bg-base-100 border-b border-base-300"
+  >
     <div class="flex items-center gap-2 min-w-0">
-      <span class="badge badge-sm badge-ghost font-mono">markdown</span>
+      <span
+        class="badge badge-sm badge-ghost font-mono"
+      >markdown</span>
       {% if can_edit %}
         <!-- Modified -->
-        <span x-show="saveStatus === 'modified'" x-cloak class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
-          <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
+        <span
+          x-show="saveStatus === 'modified'"
+          x-cloak
+          class="flex items-center gap-1 text-warning text-xs whitespace-nowrap"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-warning inline-block"
+          ></span>
           Modified
         </span>
         <!-- Saving -->
-        <span x-show="saveStatus === 'saving'" x-cloak class="flex items-center gap-1 text-base-content/60 text-xs whitespace-nowrap">
-          <span class="loading loading-spinner loading-xs"></span>
+        <span
+          x-show="saveStatus === 'saving'"
+          x-cloak
+          class="flex items-center gap-1 text-base-content/60 text-xs whitespace-nowrap"
+        >
+          <span
+            class="loading loading-spinner loading-xs"
+          ></span>
           Saving...
         </span>
         <!-- Saved -->
-        <span x-show="saveStatus === 'saved'" x-cloak class="flex items-center gap-1 text-success text-xs whitespace-nowrap" x-transition:leave="transition ease-in duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+        <span
+          x-show="saveStatus === 'saved'"
+          x-cloak
+          class="flex items-center gap-1 text-success text-xs whitespace-nowrap"
+          x-transition:leave="transition ease-in duration-300"
+          x-transition:leave-start="opacity-100"
+          x-transition:leave-end="opacity-0"
+        >
           <i data-lucide="check" class="w-3.5 h-3.5"></i>
           Saved
         </span>
         <!-- Error -->
-        <span x-show="saveStatus === 'error'" x-cloak class="flex items-center gap-1 text-error text-xs whitespace-nowrap">
-          <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+        <span
+          x-show="saveStatus === 'error'"
+          x-cloak
+          class="flex items-center gap-1 text-error text-xs whitespace-nowrap"
+        >
+          <i
+            data-lucide="alert-circle"
+            class="w-3.5 h-3.5"
+          ></i>
           Save failed
         </span>
       {% endif %}
@@ -75,12 +110,27 @@
     {% if can_edit %}
       <div class="flex items-center gap-0.5">
         <!-- Retry (only on error) -->
-        <button x-show="saveStatus === 'error'" x-cloak type="button" class="btn btn-error btn-xs" @click="save()">
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+        <button
+          x-show="saveStatus === 'error'"
+          x-cloak
+          type="button"
+          class="btn btn-error btn-xs"
+          @click="save()"
+        >
+          <i
+            data-lucide="refresh-cw"
+            class="w-3.5 h-3.5"
+          ></i>
           Retry
         </button>
         <!-- Save -->
-        <button type="button" class="btn btn-ghost btn-xs" :disabled="!isDirty || saveStatus === 'saving'" @click="save()" title="Save (Ctrl+S)">
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs"
+          :disabled="!isDirty || saveStatus === 'saving'"
+          @click="save()"
+          title="Save (Ctrl+S)"
+        >
           <i data-lucide="save" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -88,29 +138,60 @@
   </div>
 
   <!-- Lock banner -->
-  <div x-show="lockOwner" x-cloak class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-warning-content text-sm">
-    <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
+  <div
+    x-show="lockOwner"
+    x-cloak
+    class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-warning-content text-sm"
+  >
+    <i
+      data-lucide="lock"
+      class="w-4 h-4 text-warning shrink-0"
+    ></i>
     <span class="flex-1"><strong x-text="lockOwner"></strong> is editing this file</span>
-    <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">Force unlock</button>
+    <button
+      type="button"
+      class="btn btn-warning btn-xs"
+      @click="forceUnlock()"
+    >Force unlock</button>
   </div>
 
   <!-- Loading State -->
-  <div x-show="loading" class="flex-1 flex items-center justify-center" x-cloak>
-    <span class="loading loading-spinner loading-lg"></span>
+  <div
+    x-show="loading"
+    class="flex-1 flex items-center justify-center"
+    x-cloak
+  >
+    <span
+      class="loading loading-spinner loading-lg"
+    ></span>
   </div>
 
   <!-- Error State -->
-  <div x-show="!loading && error" class="flex-1 flex items-center justify-center p-8" x-cloak>
+  <div
+    x-show="!loading && error"
+    class="flex-1 flex items-center justify-center p-8"
+    x-cloak
+  >
     <div class="text-center">
-      <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
+      <i
+        data-lucide="alert-circle"
+        class="w-12 h-12 text-error mx-auto mb-4"
+      ></i>
       <p class="text-lg font-medium mb-2">Failed to load editor</p>
-      <p class="text-sm text-base-content/60" x-text="error"></p>
+      <p
+        class="text-sm text-base-content/60"
+        x-text="error"
+      ></p>
     </div>
   </div>
 
   <!-- Milkdown Crepe Container -->
-  <div x-ref="crepeContainer" x-show="!loading && !error" class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-100" x-cloak>
-  </div>
+  <div
+    x-ref="crepeContainer"
+    x-show="!loading && !error"
+    class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-100"
+    x-cloak
+  ></div>
 </div>
 
 <script>

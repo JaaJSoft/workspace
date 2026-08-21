@@ -1,18 +1,33 @@
-<div id="analytics" class="w-full max-w-6xl mx-auto flex flex-col gap-4">
+<div
+  id="analytics"
+  class="w-full max-w-6xl mx-auto flex flex-col gap-4"
+>
   {% if is_empty %}
-    <section class="rounded-box bg-base-200 p-10 text-center">
-      <i data-lucide="bar-chart-3" class="w-10 h-10 mx-auto text-base-content/30"></i>
+    <section
+      class="rounded-box bg-base-200 p-10 text-center"
+    >
+      <i
+        data-lucide="bar-chart-3"
+        class="w-10 h-10 mx-auto text-base-content/30"
+      ></i>
       <h2 class="font-semibold mt-3">Nothing to chart yet</h2>
-      <p class="text-sm text-base-content/60 mt-1 max-w-md mx-auto">
+      <p
+        class="text-sm text-base-content/60 mt-1 max-w-md mx-auto"
+      >
         Create a few tasks and move them across the board. Throughput and
         distribution appear here as soon as there is history to read.
       </p>
     </section>
   {% else %}
-    <div class="stats stats-vertical sm:stats-horizontal bg-base-200 shadow-sm w-full">
+    <div
+      class="stats stats-vertical sm:stats-horizontal bg-base-200 shadow-sm w-full"
+    >
       <div class="stat">
         <div class="stat-figure text-success">
-          <i data-lucide="circle-check" class="w-6 h-6"></i>
+          <i
+            data-lucide="circle-check"
+            class="w-6 h-6"
+          ></i>
         </div>
         <div class="stat-title">Completed</div>
         <div class="stat-value text-2xl">{{ flow_summary.completed }}</div>
@@ -32,8 +47,13 @@
           the window) nets zero, and folding that into the negative branch
           reports a shrinking backlog on a board where nothing moved.
         {% endcomment %}
-        <div class="stat-figure {% if flow_summary.net > 0 %}text-warning{% elif flow_summary.net < 0 %}text-success{% else %}text-base-content/50{% endif %}">
-          <i data-lucide="{% if flow_summary.net > 0 %}trending-up{% elif flow_summary.net < 0 %}trending-down{% else %}minus{% endif %}" class="w-6 h-6"></i>
+        <div
+          class="stat-figure {% if flow_summary.net > 0 %}text-warning{% elif flow_summary.net < 0 %}text-success{% else %}text-base-content/50{% endif %}"
+        >
+          <i
+            data-lucide="{% if flow_summary.net > 0 %}trending-up{% elif flow_summary.net < 0 %}trending-down{% else %}minus{% endif %}"
+            class="w-6 h-6"
+          ></i>
         </div>
         <div class="stat-title">Net change</div>
         <div class="stat-value text-2xl">{% if flow_summary.net > 0 %}+{% endif %}{{ flow_summary.net }}</div>
@@ -50,15 +70,24 @@
     </div>
 
     <section class="rounded-box bg-base-200 p-4">
-      <h2 class="font-semibold mb-1 flex items-center gap-2">
-        <i data-lucide="activity" class="w-4 h-4 text-accent"></i>
+      <h2
+        class="font-semibold mb-1 flex items-center gap-2"
+      >
+        <i
+          data-lucide="activity"
+          class="w-4 h-4 text-accent"
+        ></i>
         Created vs completed
       </h2>
-      <p class="text-xs text-base-content/50 mb-3">Weekly, oldest first. The final bar covers the current week so far.</p>
+      <p
+        class="text-xs text-base-content/50 mb-3"
+      >Weekly, oldest first. The final bar covers the current week so far.</p>
       {% include "ui/partials/column_chart.html" with chart=flow_chart aria_label="Tasks created and completed per week over the last 12 weeks" %}
     </section>
 
-    <div class="grid gap-4 items-start lg:grid-cols-3">
+    <div
+      class="grid gap-4 items-start lg:grid-cols-3"
+    >
       {% include "projects/ui/partials/_distribution_card.html" with title="Open by column" icon="columns-3" entries=distribution.by_status %}
       {% include "projects/ui/partials/_distribution_card.html" with title="Open by assignee" icon="users" entries=distribution.by_assignee %}
       {% include "projects/ui/partials/_distribution_card.html" with title="Open by priority" icon="flag" entries=distribution.by_priority %}

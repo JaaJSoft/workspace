@@ -1,27 +1,65 @@
 <!-- Tag picker — assign/unassign tags on one file, opened by the "Tags"
      context-menu action. Requires tagsMixin() + fileBrowser() bindings. -->
-<dialog id="tag-picker-dialog" class="modal" @close="onTagPickerClosed()" @keydown.escape="onTagPickerClosed()">
+<dialog
+  id="tag-picker-dialog"
+  class="modal"
+  @close="onTagPickerClosed()"
+  @keydown.escape="onTagPickerClosed()"
+>
   <div class="modal-box max-w-sm">
-    <h3 class="font-bold text-lg flex items-center gap-2 mb-3">
-      <i data-lucide="tag" class="w-5 h-5 text-primary flex-shrink-0"></i>
-      <span class="truncate" x-text="tagPickerName || 'Tags'"></span>
+    <h3
+      class="font-bold text-lg flex items-center gap-2 mb-3"
+    >
+      <i
+        data-lucide="tag"
+        class="w-5 h-5 text-primary flex-shrink-0"
+      ></i>
+      <span
+        class="truncate"
+        x-text="tagPickerName || 'Tags'"
+      ></span>
     </h3>
-    <div class="max-h-72 overflow-y-auto space-y-0.5">
+    <div
+      class="max-h-72 overflow-y-auto space-y-0.5"
+    >
       <template x-for="tag in allTags" :key="tag.uuid">
-        <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-base-200 cursor-pointer">
-          <input type="checkbox" class="checkbox checkbox-sm" :checked="fileHasTag(tag.uuid)" @change="toggleFileTag(tag)" />
-          <i :data-lucide="tag.icon || 'tag'" class="w-4 h-4 flex-shrink-0" :class="tag.color ? '' : 'text-base-content/50'" :style="tag.color ? 'color: ' + tag.color : ''"></i>
+        <label
+          class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-base-200 cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            class="checkbox checkbox-sm"
+            :checked="fileHasTag(tag.uuid)"
+            @change="toggleFileTag(tag)"
+          />
+          <i
+            :data-lucide="tag.icon || 'tag'"
+            class="w-4 h-4 flex-shrink-0"
+            :class="tag.color ? '' : 'text-base-content/50'"
+            :style="tag.color ? 'color: ' + tag.color : ''"
+          ></i>
           <span class="truncate" x-text="tag.name"></span>
         </label>
       </template>
-      <div x-show="allTags.length === 0" class="px-2 py-6 text-center text-sm text-base-content/40">No tags yet</div>
+      <div
+        x-show="allTags.length === 0"
+        class="px-2 py-6 text-center text-sm text-base-content/40"
+      >No tags yet</div>
     </div>
     <div class="modal-action">
-      <button type="button" class="btn btn-ghost btn-sm mr-auto gap-1" @click="showTagModal()">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm mr-auto gap-1"
+        @click="showTagModal()"
+      >
         <i data-lucide="plus" class="w-3.5 h-3.5"></i>
         New tag
       </button>
-      <button type="button" class="btn btn-sm" @click="closeTagPicker()">Done</button>
+      <button
+        type="button"
+        class="btn btn-sm"
+        @click="closeTagPicker()"
+      >Done</button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">

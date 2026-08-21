@@ -1,30 +1,77 @@
 <!-- Image Viewer -->
-<div class="flex flex-col h-full" x-data="imageViewerData()">
+<div
+  class="flex flex-col h-full"
+  x-data="imageViewerData()"
+>
   <!-- Toolbar -->
-  <div class="flex items-center justify-center gap-2 p-4 bg-base-100 border-b border-base-300">
-    <button type="button" class="btn btn-sm btn-ghost" @click="zoom(-0.2)" title="Zoom out (-)">
+  <div
+    class="flex items-center justify-center gap-2 p-4 bg-base-100 border-b border-base-300"
+  >
+    <button
+      type="button"
+      class="btn btn-sm btn-ghost"
+      @click="zoom(-0.2)"
+      title="Zoom out (-)"
+    >
       <i data-lucide="zoom-out" class="w-4 h-4"></i>
     </button>
-    <span class="text-sm font-mono min-w-[4rem] text-center" x-text="Math.round(zoomLevel * 100) + '%'"></span>
-    <button type="button" class="btn btn-sm btn-ghost" @click="zoom(0.2)" title="Zoom in (+)">
+    <span
+      class="text-sm font-mono min-w-[4rem] text-center"
+      x-text="Math.round(zoomLevel * 100) + '%'"
+    ></span>
+    <button
+      type="button"
+      class="btn btn-sm btn-ghost"
+      @click="zoom(0.2)"
+      title="Zoom in (+)"
+    >
       <i data-lucide="zoom-in" class="w-4 h-4"></i>
     </button>
     <div class="divider divider-horizontal mx-2"></div>
-    <button type="button" class="btn btn-sm btn-ghost" @click="rotate(90)" title="Rotate (R)">
+    <button
+      type="button"
+      class="btn btn-sm btn-ghost"
+      @click="rotate(90)"
+      title="Rotate (R)"
+    >
       <i data-lucide="rotate-cw" class="w-4 h-4"></i>
     </button>
-    <button type="button" class="btn btn-sm btn-ghost" @click="reset()" title="Reset (0)">
-      <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+    <button
+      type="button"
+      class="btn btn-sm btn-ghost"
+      @click="reset()"
+      title="Reset (0)"
+    >
+      <i
+        data-lucide="refresh-cw"
+        class="w-4 h-4"
+      ></i>
     </button>
     {% if user_can_edit %}
       <div class="divider divider-horizontal mx-2"></div>
-      <button type="button" class="btn btn-sm btn-ghost" :class="isFavorite ? 'text-warning' : ''" @click="toggleFavorite()" :title="isFavorite ? 'Remove from favorites' : 'Add to favorites'">
-        <i :data-lucide="isFavorite ? 'star' : 'star'" class="w-4 h-4" :class="isFavorite ? 'fill-current' : ''"></i>
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost"
+        :class="isFavorite ? 'text-warning' : ''"
+        @click="toggleFavorite()"
+        :title="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+      >
+        <i
+          :data-lucide="isFavorite ? 'star' : 'star'"
+          class="w-4 h-4"
+          :class="isFavorite ? 'fill-current' : ''"
+        ></i>
       </button>
     {% endif %}
     {% if ai_edit_available %}
       <div class="divider divider-horizontal mx-2"></div>
-      <button type="button" class="btn btn-sm" :class="editMode ? 'btn-primary' : 'btn-ghost'" @click="toggleEditMode()" title="AI Edit">
+      <button
+        type="button"
+        class="btn btn-sm"
+        :class="editMode ? 'btn-primary' : 'btn-ghost'"
+        @click="toggleEditMode()"
+        title="AI Edit"
+      >
         <i data-lucide="wand-2" class="w-4 h-4"></i>
         <span class="hidden sm:inline">AI Edit</span>
       </button>
@@ -34,15 +81,29 @@
   <!-- Main content: image + edit panel -->
   <div class="flex-1 flex min-h-0">
     <!-- Image Container -->
-    <div class="flex-1 overflow-auto flex items-center justify-center p-4 min-h-0">
-      <img :src="editPreview || '{{ content_url }}'" alt="{{ file.name }}" class="max-w-full max-h-full object-contain transition-transform duration-200" :style="`transform: scale(${zoomLevel}) rotate(${rotation}deg)`" x-ref="image" />
+    <div
+      class="flex-1 overflow-auto flex items-center justify-center p-4 min-h-0"
+    >
+      <img
+        :src="editPreview || '{{ content_url }}'"
+        alt="{{ file.name }}"
+        class="max-w-full max-h-full object-contain transition-transform duration-200"
+        :style="`transform: scale(${zoomLevel}) rotate(${rotation}deg)`"
+        x-ref="image"
+      />
     </div>
 
     <!-- AI Edit Panel -->
     {% if ai_edit_available %}
-      <div x-show="editMode" x-cloak class="w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-y-auto shrink-0">
+      <div
+        x-show="editMode"
+        x-cloak
+        class="w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-y-auto shrink-0"
+      >
         <div class="p-4 flex flex-col gap-4 h-full">
-          <h4 class="font-semibold text-sm flex items-center gap-2">
+          <h4
+            class="font-semibold text-sm flex items-center gap-2"
+          >
             <i data-lucide="wand-2" class="w-4 h-4"></i>
             AI Image Edit
           </h4>
@@ -50,13 +111,24 @@
           <!-- Prompt -->
           <div class="form-control">
             <label class="label"><span class="label-text text-xs">Describe the edit</span></label>
-            <textarea x-model="editPrompt" class="textarea textarea-bordered textarea-sm w-full" rows="3" placeholder='e.g. "remove the background", "make it brighter"' :disabled="editLoading" @keydown.ctrl.enter="generateEdit()"></textarea>
+            <textarea
+              x-model="editPrompt"
+              class="textarea textarea-bordered textarea-sm w-full"
+              rows="3"
+              placeholder='e.g. "remove the background", "make it brighter"'
+              :disabled="editLoading"
+              @keydown.ctrl.enter="generateEdit()"
+            ></textarea>
           </div>
 
           <!-- Size selector -->
           <div class="form-control">
             <label class="label"><span class="label-text text-xs">Output size</span></label>
-            <select x-model="editSize" class="select select-bordered select-sm w-full" :disabled="editLoading">
+            <select
+              x-model="editSize"
+              class="select select-bordered select-sm w-full"
+              :disabled="editLoading"
+            >
               <option value="1024x1024">1024 x 1024</option>
               <option value="1792x1024">1792 x 1024 (landscape)</option>
               <option value="1024x1792">1024 x 1792 (portrait)</option>
@@ -64,13 +136,27 @@
           </div>
 
           <!-- Generate button -->
-          <button type="button" class="btn btn-primary btn-sm w-full" @click="generateEdit()" :disabled="editLoading || !editPrompt.trim()">
-            <span x-show="!editLoading" class="flex items-center gap-2">
+          <button
+            type="button"
+            class="btn btn-primary btn-sm w-full"
+            @click="generateEdit()"
+            :disabled="editLoading || !editPrompt.trim()"
+          >
+            <span
+              x-show="!editLoading"
+              class="flex items-center gap-2"
+            >
               <i data-lucide="sparkles" class="w-4 h-4"></i>
               Generate
             </span>
-            <span x-show="editLoading" class="flex items-center gap-2" x-cloak>
-              <span class="loading loading-spinner loading-xs"></span>
+            <span
+              x-show="editLoading"
+              class="flex items-center gap-2"
+              x-cloak
+            >
+              <span
+                class="loading loading-spinner loading-xs"
+              ></span>
               Generating...
             </span>
           </button>
@@ -83,49 +169,97 @@
           <!-- Edit history actions (visible when there's a preview) -->
           <template x-if="editPreview">
             <div class="flex flex-col gap-2 mt-auto">
-              <div class="text-xs text-base-content/60 text-center" x-text="'Edit ' + editHistory.length + ' of ' + editHistory.length">
-              </div>
+              <div
+                class="text-xs text-base-content/60 text-center"
+                x-text="'Edit ' + editHistory.length + ' of ' + editHistory.length"
+              ></div>
 
               <!-- Undo -->
-              <button type="button" class="btn btn-ghost btn-sm w-full" @click="undoEdit()" :disabled="editHistory.length <= 1">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm w-full"
+                @click="undoEdit()"
+                :disabled="editHistory.length <= 1"
+              >
                 <i data-lucide="undo-2" class="w-4 h-4"></i>
                 Undo
               </button>
 
               <!-- Save As -->
-              <button type="button" class="btn btn-success btn-sm w-full" @click="showSaveAs = true" x-show="!showSaveAs">
+              <button
+                type="button"
+                class="btn btn-success btn-sm w-full"
+                @click="showSaveAs = true"
+                x-show="!showSaveAs"
+              >
                 <i data-lucide="save" class="w-4 h-4"></i>
                 Save as copy
               </button>
 
               <!-- Save As form -->
-              <div x-show="showSaveAs" x-cloak class="flex flex-col gap-2 p-3 bg-base-200 rounded-lg">
+              <div
+                x-show="showSaveAs"
+                x-cloak
+                class="flex flex-col gap-2 p-3 bg-base-200 rounded-lg"
+              >
                 <div class="form-control">
                   <label class="label"><span class="label-text text-xs">File name</span></label>
-                  <input type="text" x-model="saveAsName" class="input input-bordered input-sm w-full" :disabled="saveAsLoading" />
+                  <input
+                    type="text"
+                    x-model="saveAsName"
+                    class="input input-bordered input-sm w-full"
+                    :disabled="saveAsLoading"
+                  />
                 </div>
                 <div class="form-control">
                   <label class="label"><span class="label-text text-xs">Folder</span></label>
-                  <select x-model="saveAsParent" class="select select-bordered select-sm w-full" :disabled="saveAsLoading">
+                  <select
+                    x-model="saveAsParent"
+                    class="select select-bordered select-sm w-full"
+                    :disabled="saveAsLoading"
+                  >
                     <option value="">Root</option>
-                    <template x-for="folder in folders" :key="folder.uuid">
-                      <option :value="folder.uuid" x-text="folder.path || folder.name" :selected="folder.uuid === saveAsParent"></option>
+                    <template
+                      x-for="folder in folders"
+                      :key="folder.uuid"
+                    >
+                      <option
+                        :value="folder.uuid"
+                        x-text="folder.path || folder.name"
+                        :selected="folder.uuid === saveAsParent"
+                      ></option>
                     </template>
                   </select>
                 </div>
                 <div class="flex gap-2">
-                  <button type="button" class="btn btn-ghost btn-sm flex-1" @click="showSaveAs = false" :disabled="saveAsLoading">
-                    Cancel
-                  </button>
-                  <button type="button" class="btn btn-success btn-sm flex-1" @click="saveAsCopy()" :disabled="saveAsLoading || !saveAsName.trim()">
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm flex-1"
+                    @click="showSaveAs = false"
+                    :disabled="saveAsLoading"
+                  >Cancel</button>
+                  <button
+                    type="button"
+                    class="btn btn-success btn-sm flex-1"
+                    @click="saveAsCopy()"
+                    :disabled="saveAsLoading || !saveAsName.trim()"
+                  >
                     <span x-show="!saveAsLoading">Save</span>
-                    <span x-show="saveAsLoading" x-cloak class="loading loading-spinner loading-xs"></span>
+                    <span
+                      x-show="saveAsLoading"
+                      x-cloak
+                      class="loading loading-spinner loading-xs"
+                    ></span>
                   </button>
                 </div>
               </div>
 
               <!-- Discard -->
-              <button type="button" class="btn btn-ghost btn-sm w-full text-error" @click="discardEdits()">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm w-full text-error"
+                @click="discardEdits()"
+              >
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                 Discard edits
               </button>

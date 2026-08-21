@@ -1,32 +1,55 @@
-<div class="navbar bg-base-100 border-b border-base-300 backdrop-blur-lg bg-opacity-80 sticky top-0 z-50 min-h-[3.25rem] py-1">
-  <div class="{% if navbar_full_width %}container mx-auto max-w-none{% else %}container mx-auto{% endif %}">
+<div
+  class="navbar bg-base-100 border-b border-base-300 backdrop-blur-lg bg-opacity-80 sticky top-0 z-50 min-h-[3.25rem] py-1"
+>
+  <div
+    class="{% if navbar_full_width %}container mx-auto max-w-none{% else %}container mx-auto{% endif %}"
+  >
     <!-- Brand -->
     <div class="flex-1">
-      <a href="/" class="btn btn-ghost normal-case hover:bg-primary/10 transition-all">
-        {% include 'ui/partials/app_logo.html' with size='sm' %}
-      </a>
+      <a
+        href="/"
+        class="btn btn-ghost normal-case hover:bg-primary/10 transition-all"
+      >{% include 'ui/partials/app_logo.html' with size='sm' %}</a>
     </div>
 
     <!-- Command palette dropdown -->
-    <div class="flex-none flex justify-center px-4" x-data="{ mobileSearchOpen: false }">
+    <div
+      class="flex-none flex justify-center px-4"
+      x-data="{ mobileSearchOpen: false }"
+    >
       <!-- Mobile search icon (visible only on small screens) -->
-      <button @click="mobileSearchOpen = true" class="btn btn-ghost btn-circle btn-sm sm:hidden" title="Search">
+      <button
+        @click="mobileSearchOpen = true"
+        class="btn btn-ghost btn-circle btn-sm sm:hidden"
+        title="Search"
+      >
         <i data-lucide="search" class="w-5 h-5"></i>
       </button>
 
       <!-- Desktop search bar (hidden on small screens) -->
-      <div class="w-[32rem] hidden sm:block relative" x-data="commandPaletteDropdown()">
+      <div
+        class="w-[32rem] hidden sm:block relative"
+        x-data="commandPaletteDropdown()"
+      >
         <!-- Search input trigger -->
         {% include 'ui/partials/search/search_input.html' with input_class='input-sm hover:border-primary/30' show_kbd=True %}
 
         <!-- Dropdown results -->
-        <div x-show="open" x-cloak @click.outside="close()" class="absolute z-[100] mt-3 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden">
+        <div
+          x-show="open"
+          x-cloak
+          @click.outside="close()"
+          class="absolute z-[100] mt-3 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
+        >
           <!-- Quick actions & Search results -->
           {% include 'ui/partials/search/quick_actions.html' %}
           {% include 'ui/partials/search/search_results.html' %}
 
           <!-- Footer hints -->
-          <div x-show="open" class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3">
+          <div
+            x-show="open"
+            class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
+          >
             <span class="flex items-center gap-1">
               <kbd class="kbd kbd-xs">↑↓</kbd>
               navigate
@@ -35,8 +58,17 @@
               <kbd class="kbd kbd-xs">⏎</kbd>
               select
             </span>
-            <button type="button" @click="close()" class="btn btn-ghost btn-xs ml-auto" title="Close" aria-label="Close search results">
-              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            <button
+              type="button"
+              @click="close()"
+              class="btn btn-ghost btn-xs ml-auto"
+              title="Close"
+              aria-label="Close search results"
+            >
+              <i
+                data-lucide="chevron-down"
+                class="w-4 h-4"
+              ></i>
             </button>
           </div>
         </div>
@@ -68,21 +100,30 @@
           x-transition:leave-end="opacity-0 -translate-y-2"
         >
           <!-- Mobile search header -->
-          <div class="px-3 py-2.5 border-b border-base-300 flex items-center gap-2">
+          <div
+            class="px-3 py-2.5 border-b border-base-300 flex items-center gap-2"
+          >
             {% include 'ui/partials/search/search_input.html' with on_escape='mobileSearchOpen = false' %}
-            <button @click="mobileSearchOpen = false" class="btn btn-ghost btn-circle btn-sm flex-shrink-0">
+            <button
+              @click="mobileSearchOpen = false"
+              class="btn btn-ghost btn-circle btn-sm flex-shrink-0"
+            >
               <i data-lucide="x" class="w-5 h-5"></i>
             </button>
           </div>
 
           <!-- Mobile search content -->
-          <div class="flex-1 overflow-y-auto overscroll-contain">
+          <div
+            class="flex-1 overflow-y-auto overscroll-contain"
+          >
             {% include 'ui/partials/search/quick_actions.html' with on_click='mobileSearchOpen = false' %}
             {% include 'ui/partials/search/search_results.html' with on_click='mobileSearchOpen = false' container_class='p-2' %}
           </div>
 
           <!-- Footer hints -->
-          <div class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3">
+          <div
+            class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
+          >
             <span class="flex items-center gap-1">
               <kbd class="kbd kbd-xs">↑↓</kbd>
               navigate
@@ -95,8 +136,17 @@
               <kbd class="kbd kbd-xs">Esc</kbd>
               close
             </span>
-            <button type="button" @click="mobileSearchOpen = false" class="btn btn-ghost btn-xs ml-auto" title="Close" aria-label="Close search results">
-              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            <button
+              type="button"
+              @click="mobileSearchOpen = false"
+              class="btn btn-ghost btn-xs ml-auto"
+              title="Close"
+              aria-label="Close search results"
+            >
+              <i
+                data-lucide="chevron-down"
+                class="w-4 h-4"
+              ></i>
             </button>
           </div>
         </div>
@@ -104,34 +154,63 @@
     </div>
 
     <!-- Right side actions -->
-    <div class="flex-1 flex items-center justify-end gap-1.5">
+    <div
+      class="flex-1 flex items-center justify-end gap-1.5"
+    >
       <!-- Theme toggle -->
-      <label class="swap swap-rotate btn btn-ghost btn-circle btn-sm hover:bg-warning/10 transition-all" title="Toggle theme">
-        <input id="themeToggle" type="checkbox" aria-label="Toggle theme" />
+      <label
+        class="swap swap-rotate btn btn-ghost btn-circle btn-sm hover:bg-warning/10 transition-all"
+        title="Toggle theme"
+      >
+        <input
+          id="themeToggle"
+          type="checkbox"
+          aria-label="Toggle theme"
+        />
         <!-- Sun icon (light) -->
         <div class="swap-off">
-          <i data-lucide="sun" class="w-5 h-5 text-warning"></i>
+          <i
+            data-lucide="sun"
+            class="w-5 h-5 text-warning"
+          ></i>
         </div>
         <!-- Moon icon (dark) -->
         <div class="swap-on">
-          <i data-lucide="moon" class="w-5 h-5 text-info"></i>
+          <i
+            data-lucide="moon"
+            class="w-5 h-5 text-info"
+          ></i>
         </div>
       </label>
       {% include 'ui/partials/notifications.html' %}
 
       <!-- User menu dropdown -->
-      <div class="dropdown dropdown-end leading-[0]">
-        <label tabindex="0" class="btn btn-ghost btn-circle btn-sm cursor-pointer">
+      <div
+        class="dropdown dropdown-end leading-[0]"
+      >
+        <label
+          tabindex="0"
+          class="btn btn-ghost btn-circle btn-sm cursor-pointer"
+        >
           <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="sm" presence ring></user-avatar>
         </label>
-        <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-64">
+        <ul
+          tabindex="0"
+          class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-64"
+        >
           {% if user.is_authenticated %}
             <!-- User info header -->
-            <li class="menu-title px-3 py-2 flex-row items-center gap-2">
+            <li
+              class="menu-title px-3 py-2 flex-row items-center gap-2"
+            >
               <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="md" presence></user-avatar>
               <div class="flex-1 min-w-0">
-                <div class="font-semibold text-base-content truncate">{{ user.username }}</div>
-                <div class="text-xs text-base-content/60 truncate">{{ user.email|default:"No email" }}</div>
+                <div
+                  class="font-semibold text-base-content truncate"
+                >{{ user.username }}</div>
+                <div
+                  class="text-xs text-base-content/60 truncate"
+                >{{ user.email|default:"No email" }}</div>
               </div>
             </li>
             <div class="divider my-1"></div>
@@ -179,16 +258,42 @@
               }"
             >
               <li>
-                <button type="button" class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors" @click="open = !open">
-                  <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="currentDot()"></span>
-                  <span class="font-medium" x-text="currentLabel()">Online</span>
-                  <i data-lucide="chevron-down" class="w-3.5 h-3.5 ml-auto transition-transform duration-200" :class="open && 'rotate-180'"></i>
+                <button
+                  type="button"
+                  class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
+                  @click="open = !open"
+                >
+                  <span
+                    class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    :class="currentDot()"
+                  ></span>
+                  <span
+                    class="font-medium"
+                    x-text="currentLabel()"
+                  >Online</span>
+                  <i
+                    data-lucide="chevron-down"
+                    class="w-3.5 h-3.5 ml-auto transition-transform duration-200"
+                    :class="open && 'rotate-180'"
+                  ></i>
                 </button>
               </li>
-              <div x-show="open" x-collapse class="px-2 pb-1 space-y-0.5">
+              <div
+                x-show="open"
+                x-collapse
+                class="px-2 pb-1 space-y-0.5"
+              >
                 <template x-for="s in statuses" :key="s.value">
-                  <button type="button" class="flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-sm transition-colors" :class="isActive(s.value) ? 'bg-base-200 font-semibold' : 'hover:bg-base-200/60 opacity-70 hover:opacity-100'" @click="setStatus(s.value)">
-                    <span class="w-2 h-2 rounded-full flex-shrink-0" :class="s.dot"></span>
+                  <button
+                    type="button"
+                    class="flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-sm transition-colors"
+                    :class="isActive(s.value) ? 'bg-base-200 font-semibold' : 'hover:bg-base-200/60 opacity-70 hover:opacity-100'"
+                    @click="setStatus(s.value)"
+                  >
+                    <span
+                      class="w-2 h-2 rounded-full flex-shrink-0"
+                      :class="s.dot"
+                    ></span>
                     <span x-text="s.label"></span>
                   </button>
                 </template>
@@ -198,7 +303,9 @@
             <div class="divider my-1"></div>
 
             <!-- Profile -->
-            <li class="{% if request.resolver_match.view_name == 'users_ui:profile' %}disabled{% endif %}">
+            <li
+              class="{% if request.resolver_match.view_name == 'users_ui:profile' %}disabled{% endif %}"
+            >
               <a
                 href="{% url 'users_ui:profile' %}"
                 class="gap-3 {% if request.resolver_match.view_name != 'users_ui:profile' %}hover:bg-primary/10 hover:text-primary{% endif %} transition-colors"
@@ -210,7 +317,9 @@
             </li>
 
             <!-- Settings -->
-            <li class="{% if request.resolver_match.view_name == 'users_ui:settings' %}disabled{% endif %}">
+            <li
+              class="{% if request.resolver_match.view_name == 'users_ui:settings' %}disabled{% endif %}"
+            >
               <a
                 href="{% url 'users_ui:settings' %}"
                 class="gap-3 {% if request.resolver_match.view_name != 'users_ui:settings' %}hover:bg-info/10 hover:text-info{% endif %} transition-colors"
@@ -224,15 +333,22 @@
             {# Modules kept off the dashboard (tools, not apps) are reached from here. #}
             {% for module in workspace_active_modules %}
               {% if module.show_on_dashboard is False and module.url %}
-                <li class="{% if request.path == module.url %}disabled{% endif %}">
+                <li
+                  class="{% if request.path == module.url %}disabled{% endif %}"
+                >
                   <a
                     href="{{ module.url }}"
                     class="gap-3 {% if request.path != module.url %}hover:bg-{{ module.color }}/10 hover:text-{{ module.color }}{% endif %} transition-colors"
                     {% if request.path == module.url %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
                   >
-                    <i data-lucide="{{ module.icon }}" class="w-4 h-4"></i>
+                    <i
+                      data-lucide="{{ module.icon }}"
+                      class="w-4 h-4"
+                    ></i>
                     <span class="font-medium">{{ module.name }}</span>
-                    {% if module.preview %}<span class="badge badge-xs badge-warning ml-auto">Preview</span>{% endif %}
+                    {% if module.preview %}<span
+  class="badge badge-xs badge-warning ml-auto"
+>Preview</span>{% endif %}
                   </a>
                 </li>
               {% endif %}
@@ -240,16 +356,26 @@
 
             <!-- What's new -->
             <li>
-              <button type="button" onclick="window.dispatchEvent(new CustomEvent('changelog-open'))" class="gap-3 hover:bg-warning/10 hover:text-warning transition-colors">
+              <button
+                type="button"
+                onclick="window.dispatchEvent(new CustomEvent('changelog-open'))"
+                class="gap-3 hover:bg-warning/10 hover:text-warning transition-colors"
+              >
                 <i data-lucide="sparkles" class="w-4 h-4"></i>
                 <span class="font-medium">What's new</span>
-                <span class="badge badge-xs badge-ghost text-base-content/50 ml-auto">{{ APP_VERSION }}</span>
+                <span
+                  class="badge badge-xs badge-ghost text-base-content/50 ml-auto"
+                >{{ APP_VERSION }}</span>
               </button>
             </li>
 
             <!-- Welcome tour -->
             <li>
-              <button type="button" onclick="window.dispatchEvent(new CustomEvent('onboarding-open'))" class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors">
+              <button
+                type="button"
+                onclick="window.dispatchEvent(new CustomEvent('onboarding-open'))"
+                class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
+              >
                 <i data-lucide="rocket" class="w-4 h-4"></i>
                 <span class="font-medium">Welcome tour</span>
               </button>
@@ -257,12 +383,17 @@
 
             {% if user.is_staff or user.is_superuser %}
               <div class="divider my-1">
-                <span class="text-xs text-base-content/40 uppercase tracking-wider">Admin</span>
+                <span
+                  class="text-xs text-base-content/40 uppercase tracking-wider"
+                >Admin</span>
               </div>
 
               <!-- Admin -->
               <li>
-                <a href="/admin/" class="gap-3 hover:bg-error/10 hover:text-error transition-colors">
+                <a
+                  href="/admin/"
+                  class="gap-3 hover:bg-error/10 hover:text-error transition-colors"
+                >
                   <i data-lucide="shield" class="w-4 h-4"></i>
                   <span class="font-medium">Admin Panel</span>
                 </a>
@@ -270,7 +401,10 @@
 
               <!-- API Docs -->
               <li>
-                <a href="/schema/swagger-ui/" class="gap-3 hover:bg-secondary/10 hover:text-secondary transition-colors">
+                <a
+                  href="/schema/swagger-ui/"
+                  class="gap-3 hover:bg-secondary/10 hover:text-secondary transition-colors"
+                >
                   <i data-lucide="code-2" class="w-4 h-4"></i>
                   <span class="font-medium">API Docs</span>
                 </a>
@@ -281,14 +415,21 @@
 
             <!-- Logout -->
             <li>
-              <button type="button" onclick="document.getElementById('logout-form').submit();" class="gap-3 hover:bg-error/10 hover:text-error transition-colors font-medium">
+              <button
+                type="button"
+                onclick="document.getElementById('logout-form').submit();"
+                class="gap-3 hover:bg-error/10 hover:text-error transition-colors font-medium"
+              >
                 <i data-lucide="log-out" class="w-4 h-4"></i>
                 <span>Sign Out</span>
               </button>
             </li>
           {% else %}
             <li>
-              <a href="{% url 'login' %}?next={{ request.path }}" class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors">
+              <a
+                href="{% url 'login' %}?next={{ request.path }}"
+                class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
+              >
                 <i data-lucide="log-in" class="w-4 h-4"></i>
                 <span class="font-medium">Sign In</span>
               </a>
@@ -302,7 +443,12 @@
 
 <!-- Hidden logout form -->
 {% if user.is_authenticated %}
-  <form id="logout-form" method="post" action="{% url 'logout' %}" style="display: none;">
+  <form
+    id="logout-form"
+    method="post"
+    action="{% url 'logout' %}"
+    style="display: none"
+  >
     {% csrf_token %}
   </form>
 {% endif %}
@@ -332,11 +478,18 @@
           }
         "
   >
-    <div class="modal-box w-11/12 max-w-3xl max-h-[80vh] p-0 flex flex-col">
+    <div
+      class="modal-box w-11/12 max-w-3xl max-h-[80vh] p-0 flex flex-col"
+    >
       <!-- Header -->
-      <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0">
+      <div
+        class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0"
+      >
         <div class="rounded-lg bg-warning/10 p-2">
-          <i data-lucide="sparkles" class="w-5 h-5 text-warning"></i>
+          <i
+            data-lucide="sparkles"
+            class="w-5 h-5 text-warning"
+          ></i>
         </div>
         <div class="flex-1">
           <h3 class="font-bold text-lg">What's new</h3>
@@ -350,10 +503,17 @@
       </div>
 
       <!-- Body -->
-      <div class="flex-1 overflow-y-auto overscroll-contain" data-cl-scroller>
+      <div
+        class="flex-1 overflow-y-auto overscroll-contain"
+        data-cl-scroller
+      >
         <template x-if="loading && !loaded">
-          <div class="flex items-center justify-center py-12">
-            <span class="loading loading-spinner loading-md text-base-content/30"></span>
+          <div
+            class="flex items-center justify-center py-12"
+          >
+            <span
+              class="loading loading-spinner loading-md text-base-content/30"
+            ></span>
           </div>
         </template>
         <div id="changelog-content"></div>

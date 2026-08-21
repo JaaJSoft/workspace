@@ -40,19 +40,39 @@ Usage Examples:
 {% endcomment %}
 
 {% with c=color|default:"primary" %}
-  <li class="list-none" :class="{{ collapse_expr|default:"collapsed" }} ? 'flex justify-center' : ''">
+  <li
+    class="list-none"
+    :class="{{ collapse_expr|default:"collapsed" }} ? 'flex justify-center' : ''"
+  >
     {% if disabled %}
       <span class="flex items-center opacity-50 cursor-not-allowed text-base rounded-lg transition-colors hover:bg-base-300/30" :class="{{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'" {% if title_binding %} :title="{{ title_binding|safe }}" {% else %} :title="{{ collapse_expr|default:"collapsed" }} ? '{{ label }}{% if badge %} ({{ badge }}){% endif %}' : ''" {% endif %} {% if aria_label_binding %} :aria-label="{{ aria_label_binding|safe }}" {% elif aria_label %} aria-label="{{ aria_label }}" {% endif %} {% if onclick %}@click="{{ onclick }}"{% endif %}>
         {% if icon_expr %}
-          <i data-lucide="{{ icon_true }}" x-show="{{ icon_expr|safe }}" class="w-5 h-5 flex-shrink-0"></i>
-          <i data-lucide="{{ icon_false }}" x-show="!({{ icon_expr|safe }})" class="w-5 h-5 flex-shrink-0"></i>
+          <i
+            data-lucide="{{ icon_true }}"
+            x-show="{{ icon_expr|safe }}"
+            class="w-5 h-5 flex-shrink-0"
+          ></i>
+          <i
+            data-lucide="{{ icon_false }}"
+            x-show="!({{ icon_expr|safe }})"
+            class="w-5 h-5 flex-shrink-0"
+          ></i>
         {% else %}
-          <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+          <i
+            data-lucide="{{ icon }}"
+            class="w-5 h-5 flex-shrink-0"
+          ></i>
         {% endif %}
-        <span x-show="!{{ collapse_expr|default:"collapsed" }}" x-transition class="flex items-center gap-2 flex-1">
+        <span
+          x-show="!{{ collapse_expr|default:"collapsed" }}"
+          x-transition
+          class="flex items-center gap-2 flex-1"
+        >
           {{ label }}
           {% if badge %}
-            <span class="badge badge-{{ badge_type|default:'sm' }}">{{ badge }}</span>
+            <span
+              class="badge badge-{{ badge_type|default:'sm' }}"
+            >{{ badge }}</span>
           {% endif %}
         </span>
       </span>
@@ -62,15 +82,32 @@ Usage Examples:
           ({{ active_binding|safe }}) ? 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}'
         ]" {% else %} class="flex items-center {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} text-base rounded-lg transition-colors" :class="{{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'" {% endif %} {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %} {% if onclick %}@click="{{ onclick }}"{% endif %} {% if title_binding %} :title="{{ title_binding|safe }}" {% else %} :title="{{ collapse_expr|default:"collapsed" }} ? '{{ tooltip|default:label }}' : ''" {% endif %} {% if aria_label_binding %} :aria-label="{{ aria_label_binding|safe }}" {% elif aria_label %} aria-label="{{ aria_label }}" {% endif %}>
         {% if icon_expr %}
-          <i data-lucide="{{ icon_true }}" x-show="{{ icon_expr|safe }}" class="w-5 h-5 flex-shrink-0"></i>
-          <i data-lucide="{{ icon_false }}" x-show="!({{ icon_expr|safe }})" class="w-5 h-5 flex-shrink-0"></i>
+          <i
+            data-lucide="{{ icon_true }}"
+            x-show="{{ icon_expr|safe }}"
+            class="w-5 h-5 flex-shrink-0"
+          ></i>
+          <i
+            data-lucide="{{ icon_false }}"
+            x-show="!({{ icon_expr|safe }})"
+            class="w-5 h-5 flex-shrink-0"
+          ></i>
         {% else %}
-          <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+          <i
+            data-lucide="{{ icon }}"
+            class="w-5 h-5 flex-shrink-0"
+          ></i>
         {% endif %}
-        <span x-show="!{{ collapse_expr|default:"collapsed" }}" x-transition class="flex items-center gap-2 flex-1">
+        <span
+          x-show="!{{ collapse_expr|default:"collapsed" }}"
+          x-transition
+          class="flex items-center gap-2 flex-1"
+        >
           {{ label }}
           {% if badge %}
-            <span class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}">{{ badge }}</span>
+            <span
+              class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}"
+            >{{ badge }}</span>
           {% endif %}
         </span>
       </a>
@@ -80,15 +117,32 @@ Usage Examples:
           ({{ active_binding|safe }}) ? 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}'
         ]" {% else %} class="flex items-center w-full text-left {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} text-base rounded-lg transition-colors" :class="{{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'" {% endif %} {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %} {% if onclick %}@click="{{ onclick }}"{% endif %} {% if title_binding %} :title="{{ title_binding|safe }}" {% else %} :title="{{ collapse_expr|default:"collapsed" }} ? '{{ tooltip|default:label }}' : ''" {% endif %} {% if aria_label_binding %} :aria-label="{{ aria_label_binding|safe }}" {% elif aria_label %} aria-label="{{ aria_label }}" {% endif %}>
         {% if icon_expr %}
-          <i data-lucide="{{ icon_true }}" x-show="{{ icon_expr|safe }}" class="w-5 h-5 flex-shrink-0"></i>
-          <i data-lucide="{{ icon_false }}" x-show="!({{ icon_expr|safe }})" class="w-5 h-5 flex-shrink-0"></i>
+          <i
+            data-lucide="{{ icon_true }}"
+            x-show="{{ icon_expr|safe }}"
+            class="w-5 h-5 flex-shrink-0"
+          ></i>
+          <i
+            data-lucide="{{ icon_false }}"
+            x-show="!({{ icon_expr|safe }})"
+            class="w-5 h-5 flex-shrink-0"
+          ></i>
         {% else %}
-          <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+          <i
+            data-lucide="{{ icon }}"
+            class="w-5 h-5 flex-shrink-0"
+          ></i>
         {% endif %}
-        <span x-show="!{{ collapse_expr|default:"collapsed" }}" x-transition class="flex items-center gap-2 flex-1">
+        <span
+          x-show="!{{ collapse_expr|default:"collapsed" }}"
+          x-transition
+          class="flex items-center gap-2 flex-1"
+        >
           {{ label }}
           {% if badge %}
-            <span class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}">{{ badge }}</span>
+            <span
+              class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}"
+            >{{ badge }}</span>
           {% endif %}
         </span>
       </button>

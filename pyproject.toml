@@ -87,10 +87,11 @@ extension = "html"
 # Templates are indented with 2 spaces, like the JS and CSS bundles.
 indent = 2
 max_line_length = 120
-# Tailwind class lists routinely exceed any sane threshold; a high cap keeps
-# djlint from splitting attribute values (an Alpine expression broken across
-# lines inside quotes is a JS syntax error) while still wrapping huge tags.
-max_attribute_length = 250
+# Compared against the combined length of a tag's attributes: past ~4 short
+# attributes or any real Tailwind class list, the tag goes vertical (one
+# attribute per line). Attribute values themselves are never split, whatever
+# the threshold - a lone long Alpine expression stays intact on its line.
+max_attribute_length = 40
 single_attribute_per_line = true
 close_void_tags = true
 max_blank_lines = 1

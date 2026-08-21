@@ -11,47 +11,92 @@
             {{ card_user.username }}
           {% endif %}
         </div>
-        <div class="text-xs text-base-content/50 truncate">@{{ card_user.username }}</div>
+        <div
+          class="text-xs text-base-content/50 truncate"
+        >@{{ card_user.username }}</div>
       </div>
     </div>
 
-    <div class="space-y-1 text-xs text-base-content/60 mb-3">
-      <div class="flex items-center gap-1.5" data-user-card-status data-user-id="{{ card_user.id }}" {% if card_user_last_seen %}data-last-seen="{{ card_user_last_seen|date:'c' }}"{% endif %}>
-        <span class="w-2 h-2 rounded-full flex-shrink-0" data-status-dot></span>
-        <span class="font-medium capitalize" data-status-label></span>
-        <span class="text-base-content/40" data-status-ago></span>
+    <div
+      class="space-y-1 text-xs text-base-content/60 mb-3"
+    >
+      <div
+        class="flex items-center gap-1.5"
+        data-user-card-status
+        data-user-id="{{ card_user.id }}"
+        {% if card_user_last_seen %}data-last-seen="{{ card_user_last_seen|date:'c' }}"{% endif %}
+      >
+        <span
+          class="w-2 h-2 rounded-full flex-shrink-0"
+          data-status-dot
+        ></span>
+        <span
+          class="font-medium capitalize"
+          data-status-label
+        ></span>
+        <span
+          class="text-base-content/40"
+          data-status-ago
+        ></span>
       </div>
       {% if card_user.email %}
-        <div class="flex items-center gap-1.5 truncate">
-          <i data-lucide="mail" class="w-3 h-3 flex-shrink-0"></i>
+        <div
+          class="flex items-center gap-1.5 truncate"
+        >
+          <i
+            data-lucide="mail"
+            class="w-3 h-3 flex-shrink-0"
+          ></i>
           <span class="truncate">{{ card_user.email }}</span>
         </div>
       {% endif %}
       <div class="flex items-center gap-1.5">
-        <i data-lucide="calendar" class="w-3 h-3 flex-shrink-0"></i>
+        <i
+          data-lucide="calendar"
+          class="w-3 h-3 flex-shrink-0"
+        ></i>
         <span>Joined {{ card_user.date_joined|date:"N j, Y" }}</span>
       </div>
       {% if card_user.is_superuser %}
-        <span class="badge badge-sm badge-error gap-1">
-          <i data-lucide="shield-check" class="w-2.5 h-2.5"></i>
+        <span
+          class="badge badge-sm badge-error gap-1"
+        >
+          <i
+            data-lucide="shield-check"
+            class="w-2.5 h-2.5"
+          ></i>
           Admin
         </span>
       {% elif card_user.is_staff %}
-        <span class="badge badge-sm badge-warning gap-1">
-          <i data-lucide="shield" class="w-2.5 h-2.5"></i>
+        <span
+          class="badge badge-sm badge-warning gap-1"
+        >
+          <i
+            data-lucide="shield"
+            class="w-2.5 h-2.5"
+          ></i>
           Staff
         </span>
       {% endif %}
     </div>
 
     <div class="flex gap-1">
-      <a href="{% url 'users_ui:profile_by_username' card_user.username %}" class="btn btn-ghost btn-xs flex-1 gap-1">
+      <a
+        href="{% url 'users_ui:profile_by_username' card_user.username %}"
+        class="btn btn-ghost btn-xs flex-1 gap-1"
+      >
         <i data-lucide="user" class="w-3 h-3"></i>
         Profile
       </a>
       {% if card_user.id != request.user.id %}
-        <a href="/chat?dm={{ card_user.id }}" class="btn btn-outline btn-info btn-xs flex-1 gap-1">
-          <i data-lucide="message-circle" class="w-3 h-3"></i>
+        <a
+          href="/chat?dm={{ card_user.id }}"
+          class="btn btn-outline btn-info btn-xs flex-1 gap-1"
+        >
+          <i
+            data-lucide="message-circle"
+            class="w-3 h-3"
+          ></i>
           Message
         </a>
       {% endif %}

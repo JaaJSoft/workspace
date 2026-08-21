@@ -371,12 +371,24 @@
 
   <div class="cl-layout">
     {% if entries %}
-      <nav class="cl-nav" data-cl-nav aria-label="Versions">
+      <nav
+        class="cl-nav"
+        data-cl-nav
+        aria-label="Versions"
+      >
         <div class="cl-nav-title">Versions</div>
         {% for entry in entries %}
-          <a class="cl-nav-link{% if forloop.first %} is-active{% endif %} {% if entry.read %}is-read{% else %}is-unread{% endif %}" data-cl-jump="{{ entry.version }}" href="#" title="{% if entry.read %}Already read{% else %}New to you{% endif %}">
+          <a
+            class="cl-nav-link{% if forloop.first %} is-active{% endif %} {% if entry.read %}is-read{% else %}is-unread{% endif %}"
+            data-cl-jump="{{ entry.version }}"
+            href="#"
+            title="{% if entry.read %}Already read{% else %}New to you{% endif %}"
+          >
             <span class="cl-nav-link-header">
-              <span class="cl-nav-link-mark" aria-hidden="true"></span>
+              <span
+                class="cl-nav-link-mark"
+                aria-hidden="true"
+              ></span>
               <span>{{ entry.version }}</span>
             </span>
             {% if entry.title %}<span class="cl-nav-link-sub">{{ entry.title }}</span>{% endif %}
@@ -386,7 +398,10 @@
     {% endif %}
     <div class="cl-list" data-cl-body>
       {% for entry in entries %}
-        <div class="cl-entry{% if forloop.first %} is-latest{% endif %}" data-cl-version="{{ entry.version }}">
+        <div
+          class="cl-entry{% if forloop.first %} is-latest{% endif %}"
+          data-cl-version="{{ entry.version }}"
+        >
           <div class="cl-version">
             <span class="cl-version-num">{{ entry.version }}</span>
             {% if forloop.first %}
@@ -399,7 +414,9 @@
           <div class="changelog-body">{{ entry.html|safe }}</div>
         </div>
       {% empty %}
-        <div class="px-4 py-10 text-center text-sm text-base-content/50">No changelog available.</div>
+        <div
+          class="px-4 py-10 text-center text-sm text-base-content/50"
+        >No changelog available.</div>
       {% endfor %}
     </div>
   </div>

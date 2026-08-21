@@ -1,15 +1,27 @@
 <div class="space-y-3">
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Density</label>
-    <select class="select select-bordered select-sm w-full" :value="prefs.density" @change="update('density', $event.target.value)">
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+    >Density</label>
+    <select
+      class="select select-bordered select-sm w-full"
+      :value="prefs.density"
+      @change="update('density', $event.target.value)"
+    >
       <option value="compact">Compact</option>
       <option value="normal">Normal</option>
       <option value="spacious">Spacious</option>
     </select>
   </div>
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Preview lines</label>
-    <select class="select select-bordered select-sm w-full" :value="prefs.previewLines" @change="update('previewLines', parseInt($event.target.value))">
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+    >Preview lines</label>
+    <select
+      class="select select-bordered select-sm w-full"
+      :value="prefs.previewLines"
+      @change="update('previewLines', parseInt($event.target.value))"
+    >
       <option value="0">None</option>
       <option value="1">1 line</option>
       <option value="2">2 lines</option>
@@ -19,32 +31,52 @@
   {% include "ui/partials/pref_toggle.html" with label="Show labels in list" key="showLabels" accent="toggle-warning" %}
   {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-warning" %}
   <hr class="border-base-300" />
-  <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">AI features</div>
+  <div
+    class="text-xs font-semibold uppercase tracking-wide text-base-content/60"
+  >AI features</div>
   {% include "ui/partials/pref_toggle.html" with label="Auto-classify new emails" key="classify" state="ai.classify" handler="saveAiFeature" accent="toggle-warning" %}
   {% include "ui/partials/pref_toggle.html" with label="Extract events and tasks" key="extract" state="ai.extract" handler="saveAiFeature" accent="toggle-warning" %}
   {% include "ui/partials/pref_toggle.html" with label="AI writing assistance" key="manual" state="ai.manual" handler="saveAiFeature" accent="toggle-warning" %}
   <hr class="border-base-300" />
-  <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Notifications</div>
+  <div
+    class="text-xs font-semibold uppercase tracking-wide text-base-content/60"
+  >Notifications</div>
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Notify me about</label>
-    <select class="select select-bordered select-sm w-full" :value="notifyMode" @change="saveNotifyMode($event.target.value)">
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+    >Notify me about</label>
+    <select
+      class="select select-bordered select-sm w-full"
+      :value="notifyMode"
+      @change="saveNotifyMode($event.target.value)"
+    >
       <option value="all">All new emails</option>
       <option value="labels">Only labels I chose</option>
       <option value="never">Never</option>
     </select>
   </div>
-  <template x-if="notifyMode === 'labels' && !ai.classify">
+  <template
+    x-if="notifyMode === 'labels' && !ai.classify"
+  >
     <inline-alert type="warning" message="Auto-classify is off, so no email gets labelled and no notification is sent." class="mt-1"></inline-alert>
   </template>
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Max notifications per folder at once</label>
-    <select class="select select-bordered select-sm w-full" :value="notifyBurst" @change="saveNotifyBurst(parseInt($event.target.value))">
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+    >Max notifications per folder at once</label>
+    <select
+      class="select select-bordered select-sm w-full"
+      :value="notifyBurst"
+      @change="saveNotifyBurst(parseInt($event.target.value))"
+    >
       <option value="3">3</option>
       <option value="5">5</option>
       <option value="10">10</option>
       <option value="20">20</option>
       <option value="50">50</option>
     </select>
-    <p class="text-xs text-base-content/50 mt-1">When several emails arrive together, only the first ones are notified. The rest still appear in your inbox.</p>
+    <p
+      class="text-xs text-base-content/50 mt-1"
+    >When several emails arrive together, only the first ones are notified. The rest still appear in your inbox.</p>
   </div>
 </div>

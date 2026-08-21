@@ -4,8 +4,14 @@
 {% block title %}Calendar - Workspace{% endblock %}
 
 {% block extra_head %}
-  <link rel="stylesheet" href="{% static 'calendar/ui/css/calendar.css' %}" />
-  <link rel="stylesheet" href="{% static 'calendar/ui/css/polls.css' %}" />
+  <link
+    rel="stylesheet"
+    href="{% static 'calendar/ui/css/calendar.css' %}"
+  />
+  <link
+    rel="stylesheet"
+    href="{% static 'calendar/ui/css/polls.css' %}"
+  />
 {% endblock %}
 
 {% block navbar %}
@@ -25,40 +31,107 @@
 {% block content %}
   <div class="flex h-full min-h-0 min-w-0">
     <!-- Calendar area (hidden on mobile when an event is open) -->
-    <div class="flex-1 flex flex-col min-w-0 min-h-0" :class="showPanel && isMobile() ? 'hidden' : ''">
+    <div
+      class="flex-1 flex flex-col min-w-0 min-h-0"
+      :class="showPanel && isMobile() ? 'hidden' : ''"
+    >
       <!-- Mobile top bar (hamburger + nav + title + view switcher) -->
-      <div class="lg:hidden flex items-center gap-2 p-3 border-b border-base-300 bg-base-100 flex-shrink-0">
+      <div
+        class="lg:hidden flex items-center gap-2 p-3 border-b border-base-300 bg-base-100 flex-shrink-0"
+      >
         {% include "ui/partials/drawer_toggle.html" with drawer_id="calendar-drawer" label="Open sidebar" %}
-        <button type="button" class="btn btn-ghost btn-sm btn-circle" @click="calendarPrev()" aria-label="Previous">
-          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-circle"
+          @click="calendarPrev()"
+          aria-label="Previous"
+        >
+          <i
+            data-lucide="chevron-left"
+            class="w-4 h-4"
+          ></i>
         </button>
-        <h3 class="text-sm font-semibold flex-1 text-center truncate" x-text="currentTitle"></h3>
-        <button type="button" class="btn btn-ghost btn-sm btn-circle" @click="calendarNext()" aria-label="Next">
-          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        <h3
+          class="text-sm font-semibold flex-1 text-center truncate"
+          x-text="currentTitle"
+        ></h3>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-circle"
+          @click="calendarNext()"
+          aria-label="Next"
+        >
+          <i
+            data-lucide="chevron-right"
+            class="w-4 h-4"
+          ></i>
         </button>
-        <button type="button" class="btn btn-ghost btn-xs" @click="calendarToday()">Today</button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs"
+          @click="calendarToday()"
+        >Today</button>
         <div class="dropdown dropdown-end">
-          <label tabindex="0" class="btn btn-ghost btn-sm btn-circle" aria-label="Change view">
-            <i data-lucide="layout-grid" class="w-4 h-4"></i>
+          <label
+            tabindex="0"
+            class="btn btn-ghost btn-sm btn-circle"
+            aria-label="Change view"
+          >
+            <i
+              data-lucide="layout-grid"
+              class="w-4 h-4"
+            ></i>
           </label>
-          <ul tabindex="0" class="dropdown-content z-50 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-40 p-1">
+          <ul
+            tabindex="0"
+            class="dropdown-content z-50 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-40 p-1"
+          >
             <li>
-              <button type="button" class="rounded" :class="currentView === 'dayGridMonth' ? 'active' : ''" @click="changeView('dayGridMonth'); document.activeElement.blur()">
-                <i data-lucide="calendar-days" class="w-4 h-4"></i> Month
+              <button
+                type="button"
+                class="rounded"
+                :class="currentView === 'dayGridMonth' ? 'active' : ''"
+                @click="changeView('dayGridMonth'); document.activeElement.blur()"
+              >
+                <i
+                  data-lucide="calendar-days"
+                  class="w-4 h-4"
+                ></i> Month
               </button>
             </li>
             <li>
-              <button type="button" class="rounded" :class="currentView === 'timeGridWeek' ? 'active' : ''" @click="changeView('timeGridWeek'); document.activeElement.blur()">
-                <i data-lucide="calendar-range" class="w-4 h-4"></i> Week
+              <button
+                type="button"
+                class="rounded"
+                :class="currentView === 'timeGridWeek' ? 'active' : ''"
+                @click="changeView('timeGridWeek'); document.activeElement.blur()"
+              >
+                <i
+                  data-lucide="calendar-range"
+                  class="w-4 h-4"
+                ></i> Week
               </button>
             </li>
             <li>
-              <button type="button" class="rounded" :class="currentView === 'timeGridDay' ? 'active' : ''" @click="changeView('timeGridDay'); document.activeElement.blur()">
-                <i data-lucide="calendar-clock" class="w-4 h-4"></i> Day
+              <button
+                type="button"
+                class="rounded"
+                :class="currentView === 'timeGridDay' ? 'active' : ''"
+                @click="changeView('timeGridDay'); document.activeElement.blur()"
+              >
+                <i
+                  data-lucide="calendar-clock"
+                  class="w-4 h-4"
+                ></i> Day
               </button>
             </li>
             <li>
-              <button type="button" class="rounded" :class="currentView === 'agenda' ? 'active' : ''" @click="changeView('agenda'); document.activeElement.blur()">
+              <button
+                type="button"
+                class="rounded"
+                :class="currentView === 'agenda' ? 'active' : ''"
+                @click="changeView('agenda'); document.activeElement.blur()"
+              >
                 <i data-lucide="list" class="w-4 h-4"></i> Agenda
               </button>
             </li>
@@ -66,31 +139,57 @@
         </div>
       </div>
       <!-- FullCalendar container (month/week/day views) -->
-      <div x-show="currentView !== 'agenda'" x-ref="calendarEl" class="calendar-fc-container flex-1 min-h-0"></div>
+      <div
+        x-show="currentView !== 'agenda'"
+        x-ref="calendarEl"
+        class="calendar-fc-container flex-1 min-h-0"
+      ></div>
 
       <!-- Custom Alpine agenda (list view) -->
-      <div x-show="currentView === 'agenda'" class="agenda-view flex-1 min-h-0 overflow-y-auto">
+      <div
+        x-show="currentView === 'agenda'"
+        class="agenda-view flex-1 min-h-0 overflow-y-auto"
+      >
 
         <!-- Empty state -->
-        <template x-if="agenda.initialLoaded && agenda.events.length === 0 && !agenda.loading">
+        <template
+          x-if="agenda.initialLoaded && agenda.events.length === 0 && !agenda.loading"
+        >
           <div class="agenda-empty">
-            <i data-lucide="calendar" class="w-10 h-10 opacity-50"></i>
+            <i
+              data-lucide="calendar"
+              class="w-10 h-10 opacity-50"
+            ></i>
             <p>No upcoming events</p>
           </div>
         </template>
 
         <!-- Loading (initial) -->
-        <template x-if="!agenda.initialLoaded && agenda.loading">
+        <template
+          x-if="!agenda.initialLoaded && agenda.loading"
+        >
           <div class="agenda-loading">
-            <span class="loading loading-spinner loading-md"></span>
+            <span
+              class="loading loading-spinner loading-md"
+            ></span>
           </div>
         </template>
 
         <!-- Day-grouped list -->
-        <template x-for="group in agendaByDay()" :key="group.date">
+        <template
+          x-for="group in agendaByDay()"
+          :key="group.date"
+        >
           <div class="agenda-day-group">
-            <div class="agenda-day-header" :class="group.isToday ? 'is-today' : ''" x-text="group.label"></div>
-            <template x-for="event in group.events" :key="event.uuid">
+            <div
+              class="agenda-day-header"
+              :class="group.isToday ? 'is-today' : ''"
+              x-text="group.label"
+            ></div>
+            <template
+              x-for="event in group.events"
+              :key="event.uuid"
+            >
               <div
                 class="agenda-event"
                 :class="agendaEventClasses(event)"
@@ -99,9 +198,27 @@
                 @mouseenter="_hasHover && !ctxMenu.open && window._eventCardShow($el, event.uuid)"
                 @mouseleave="_hasHover && window._cardPopoverScheduleHide($el)"
               >
-                <span class="agenda-event-time" x-text="formatAgendaEventTime(event)"></span>
-                <span class="agenda-event-title" x-text="event.title"></span>
-                <svg x-show="event.is_recurring" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="agenda-recurring-icon">
+                <span
+                  class="agenda-event-time"
+                  x-text="formatAgendaEventTime(event)"
+                ></span>
+                <span
+                  class="agenda-event-title"
+                  x-text="event.title"
+                ></span>
+                <svg
+                  x-show="event.is_recurring"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="agenda-recurring-icon"
+                >
                   <path d="m17 2 4 4-4 4" />
                   <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
                   <path d="m7 22-4-4 4-4" />
@@ -113,14 +230,28 @@
         </template>
 
         <!-- Intersection sentinel for auto-load on scroll -->
-        <div x-ref="agendaSentinel" class="agenda-sentinel" aria-hidden="true"></div>
+        <div
+          x-ref="agendaSentinel"
+          class="agenda-sentinel"
+          aria-hidden="true"
+        ></div>
 
         <!-- Load more (fallback button; auto-load runs via IntersectionObserver) -->
-        <div class="agenda-load-more" x-show="agenda.nextAfter !== null && agenda.initialLoaded">
-          <button type="button" class="btn btn-ghost btn-sm" @click="loadMoreAgenda()" :disabled="agenda.loading">
+        <div
+          class="agenda-load-more"
+          x-show="agenda.nextAfter !== null && agenda.initialLoaded"
+        >
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            @click="loadMoreAgenda()"
+            :disabled="agenda.loading"
+          >
             <span x-show="!agenda.loading">Load more</span>
             <span x-show="agenda.loading">
-              <span class="loading loading-spinner loading-xs"></span>
+              <span
+                class="loading loading-spinner loading-xs"
+              ></span>
               Loading…
             </span>
           </button>
@@ -131,7 +262,13 @@
     {% include "calendar/ui/partials/_event_detail_panel.html" %}
 
     <!-- Mobile new event FAB -->
-    <button class="btn btn-accent btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden" @click="createEventNow()" x-show="!showPanel" x-cloak aria-label="New event">
+    <button
+      class="btn btn-accent btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
+      @click="createEventNow()"
+      x-show="!showPanel"
+      x-cloak
+      aria-label="New event"
+    >
       <i data-lucide="plus" class="w-5 h-5"></i>
     </button>
   </div>
@@ -146,10 +283,18 @@
   {% include "calendar/ui/partials/help_dialog.html" %}
 
   <!-- Mobile preferences dialog -->
-  <dialog id="calendar-prefs-dialog" class="modal">
+  <dialog
+    id="calendar-prefs-dialog"
+    class="modal"
+  >
     <div class="modal-box">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="settings" class="w-5 h-5 text-accent"></i>
+      <h3
+        class="font-bold text-lg flex items-center gap-2"
+      >
+        <i
+          data-lucide="settings"
+          class="w-5 h-5 text-accent"
+        ></i>
         Preferences
       </h3>
       <div class="mt-4">{% include "calendar/ui/partials/_preferences_content.html" %}</div>
@@ -166,18 +311,42 @@
 {% endblock %}
 
 {% block extra_scripts %}
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"
+  ></script>
   <!-- Named-timezone support for the grid: luxon + the FullCalendar bridge
      (without it, a named timeZone degrades to UTC coercion). -->
-  <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js" integrity="sha384-CU0J6nu6GO5gWB5IqOOhPQsG0LKyjpotF5Gw502R+0zbkzKHjDWc6FKSZsNTJfLX" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/luxon3@6.1.15/index.global.min.js" integrity="sha384-IrJ8IFDRrT4FxNjjLp1sNpEM3tgtoeL2SGxzHZkXXyH5r6i3h72IQ/JXTC/xbOek" crossorigin="anonymous"></script>
-  <script src="{% static 'calendar/ui/js/polls.js' %}"></script>
-  <script src="{% static 'calendar/ui/js/calendar_calendars.js' %}"></script>
-  <script src="{% static 'calendar/ui/js/calendar_events.js' %}"></script>
-  <script src="{% static 'calendar/ui/js/calendar_tasks.js' %}"></script>
-  <script src="{% static 'calendar/ui/js/calendar_recurrence.js' %}"></script>
-  <script src="{% static 'calendar/ui/js/calendar_polls.js' %}"></script>
-  <script src="{% static 'calendar/ui/js/calendar.js' %}"></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"
+    integrity="sha384-CU0J6nu6GO5gWB5IqOOhPQsG0LKyjpotF5Gw502R+0zbkzKHjDWc6FKSZsNTJfLX"
+    crossorigin="anonymous"
+  ></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/@fullcalendar/luxon3@6.1.15/index.global.min.js"
+    integrity="sha384-IrJ8IFDRrT4FxNjjLp1sNpEM3tgtoeL2SGxzHZkXXyH5r6i3h72IQ/JXTC/xbOek"
+    crossorigin="anonymous"
+  ></script>
+  <script
+    src="{% static 'calendar/ui/js/polls.js' %}"
+  ></script>
+  <script
+    src="{% static 'calendar/ui/js/calendar_calendars.js' %}"
+  ></script>
+  <script
+    src="{% static 'calendar/ui/js/calendar_events.js' %}"
+  ></script>
+  <script
+    src="{% static 'calendar/ui/js/calendar_tasks.js' %}"
+  ></script>
+  <script
+    src="{% static 'calendar/ui/js/calendar_recurrence.js' %}"
+  ></script>
+  <script
+    src="{% static 'calendar/ui/js/calendar_polls.js' %}"
+  ></script>
+  <script
+    src="{% static 'calendar/ui/js/calendar.js' %}"
+  ></script>
   <script>
     document.body.dataset.userId = '{{ request.user.id }}';
   </script>

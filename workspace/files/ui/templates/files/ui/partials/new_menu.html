@@ -1,7 +1,17 @@
-<ul tabindex="0" class="dropdown-content z-50 menu menu-sm shadow-xl bg-base-100 border border-base-300 rounded-lg w-56 p-1 mt-2">
+<ul
+  tabindex="0"
+  class="dropdown-content z-50 menu menu-sm shadow-xl bg-base-100 border border-base-300 rounded-lg w-56 p-1 mt-2"
+>
   <li>
-    <button type="button" class="gap-3 rounded" @click="showCreateFolderDialog(); document.activeElement.blur()">
-      <i data-lucide="folder-plus" class="w-4 h-4"></i>
+    <button
+      type="button"
+      class="gap-3 rounded"
+      @click="showCreateFolderDialog(); document.activeElement.blur()"
+    >
+      <i
+        data-lucide="folder-plus"
+        class="w-4 h-4"
+      ></i>
       <div class="flex-1">
         <div class="font-medium">New Folder</div>
         <div class="text-xs text-base-content/60">Create a new folder</div>
@@ -9,7 +19,11 @@
     </button>
   </li>
   <li>
-    <button type="button" class="gap-3 rounded" @click="showCreateFileDialog(); document.activeElement.blur()">
+    <button
+      type="button"
+      class="gap-3 rounded"
+      @click="showCreateFileDialog(); document.activeElement.blur()"
+    >
       <i data-lucide="file-text" class="w-4 h-4"></i>
       <div class="flex-1">
         <div class="font-medium">New File</div>
@@ -24,18 +38,33 @@
         <div class="font-medium">Upload Files</div>
         <div class="text-xs text-base-content/60">Select files from your computer</div>
       </div>
-      <input id="file-upload-input" type="file" class="hidden" multiple @change="handleUpload($event)" />
+      <input
+        id="file-upload-input"
+        type="file"
+        class="hidden"
+        multiple
+        @change="handleUpload($event)"
+      />
     </label>
   </li>
   <div class="divider my-1"></div>
   <li>
     <label class="gap-3 rounded cursor-pointer">
-      <i data-lucide="folder-open" class="w-4 h-4"></i>
+      <i
+        data-lucide="folder-open"
+        class="w-4 h-4"
+      ></i>
       <div class="flex-1">
         <div class="font-medium">Upload Folder</div>
         <div class="text-xs text-base-content/60">Upload entire folder</div>
       </div>
-      <input type="file" class="hidden" webkitdirectory directory @change="handleUpload($event)" />
+      <input
+        type="file"
+        class="hidden"
+        webkitdirectory
+        directory
+        @change="handleUpload($event)"
+      />
     </label>
   </li>
 </ul>

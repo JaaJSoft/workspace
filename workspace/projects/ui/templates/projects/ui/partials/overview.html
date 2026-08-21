@@ -1,9 +1,17 @@
 {% load ui_filters %}
-<div id="overview" class="w-full max-w-6xl mx-auto flex flex-col gap-4">
-  <div class="stats stats-vertical sm:stats-horizontal bg-base-200 shadow-sm w-full">
+<div
+  id="overview"
+  class="w-full max-w-6xl mx-auto flex flex-col gap-4"
+>
+  <div
+    class="stats stats-vertical sm:stats-horizontal bg-base-200 shadow-sm w-full"
+  >
     <div class="stat">
       <div class="stat-figure text-accent">
-        <i data-lucide="square-kanban" class="w-6 h-6"></i>
+        <i
+          data-lucide="square-kanban"
+          class="w-6 h-6"
+        ></i>
       </div>
       <div class="stat-title">On the board</div>
       <div class="stat-value text-2xl">{{ board_count }}</div>
@@ -17,46 +25,77 @@
     </div>
     <div class="stat">
       <div class="stat-figure text-success">
-        <i data-lucide="circle-check" class="w-6 h-6"></i>
+        <i
+          data-lucide="circle-check"
+          class="w-6 h-6"
+        ></i>
       </div>
       <div class="stat-title">Done</div>
       <div class="stat-value text-2xl">{{ done_count }}</div>
     </div>
   </div>
 
-  <div class="grid gap-4 items-start lg:grid-cols-3">
-    <div class="flex flex-col gap-4 lg:col-span-2">
+  <div
+    class="grid gap-4 items-start lg:grid-cols-3"
+  >
+    <div
+      class="flex flex-col gap-4 lg:col-span-2"
+    >
       <section class="rounded-box bg-base-200 p-4">
-        <h2 class="font-semibold mb-2 flex items-center gap-2">
-          <i data-lucide="info" class="w-4 h-4 text-accent"></i>
+        <h2
+          class="font-semibold mb-2 flex items-center gap-2"
+        >
+          <i
+            data-lucide="info"
+            class="w-4 h-4 text-accent"
+          ></i>
           About
         </h2>
         {% if project.description %}
-          <p class="text-base-content/80 whitespace-pre-line">{{ project.description }}</p>
+          <p
+            class="text-base-content/80 whitespace-pre-line"
+          >{{ project.description }}</p>
         {% else %}
           <p class="text-base-content/50 italic">No description yet.</p>
         {% endif %}
-        <p class="text-sm text-base-content/60 mt-3 flex items-center gap-1.5">
-          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+        <p
+          class="text-sm text-base-content/60 mt-3 flex items-center gap-1.5"
+        >
+          <i
+            data-lucide="calendar"
+            class="w-3.5 h-3.5"
+          ></i>
           Created {{ project.created_at|date:"DATE_FORMAT" }}{% if project.created_by %} by {{ project.created_by.username }}{% endif %}
         </p>
       </section>
 
       <section class="rounded-box bg-base-200 p-4">
-        <h2 class="font-semibold mb-2 flex items-center gap-2">
-          <i data-lucide="history" class="w-4 h-4 text-accent"></i>
+        <h2
+          class="font-semibold mb-2 flex items-center gap-2"
+        >
+          <i
+            data-lucide="history"
+            class="w-4 h-4 text-accent"
+          ></i>
           Recent activity
         </h2>
         <ul class="flex flex-col gap-3">
           {% for ev in recent_events %}
             <li class="flex items-start gap-2.5">
-              <i data-lucide="{{ ev.icon }}" class="w-4 h-4 mt-0.5 shrink-0 text-base-content/60"></i>
+              <i
+                data-lucide="{{ ev.icon }}"
+                class="w-4 h-4 mt-0.5 shrink-0 text-base-content/60"
+              ></i>
               <div class="min-w-0 flex-1">
                 <p class="text-sm truncate">
                   <span class="font-medium">{{ ev.short_label }}</span>
                   <span class="text-base-content/70">-</span>
                   {% if ev.task_id %}
-                    <button type="button" class="link link-hover text-base-content/70" @click="openTask('{{ ev.task_id }}')">{% if ev.task_number %}<span class="font-mono text-base-content/50">{{ project.key }}-{{ ev.task_number }}</span> {% endif %}{{ ev.task_title }}</button>
+                    <button
+                      type="button"
+                      class="link link-hover text-base-content/70"
+                      @click="openTask('{{ ev.task_id }}')"
+                    >{% if ev.task_number %}<span class="font-mono text-base-content/50">{{ project.key }}-{{ ev.task_number }}</span> {% endif %}{{ ev.task_title }}</button>
                   {% else %}
                     <span class="text-base-content/70">{% if ev.task_number %}<span class="font-mono text-base-content/50">{{ project.key }}-{{ ev.task_number }}</span> {% endif %}{{ ev.task_title }}</span>
                   {% endif %}
@@ -67,7 +106,9 @@
               </div>
             </li>
           {% empty %}
-            <li class="text-sm text-base-content/50 italic">No activity yet.</li>
+            <li
+              class="text-sm text-base-content/50 italic"
+            >No activity yet.</li>
           {% endfor %}
         </ul>
       </section>
@@ -75,8 +116,13 @@
 
     <div class="flex flex-col gap-4">
       <section class="rounded-box bg-base-200 p-4">
-        <h2 class="font-semibold mb-2 flex items-center gap-2">
-          <i data-lucide="users" class="w-4 h-4 text-accent"></i>
+        <h2
+          class="font-semibold mb-2 flex items-center gap-2"
+        >
+          <i
+            data-lucide="users"
+            class="w-4 h-4 text-accent"
+          ></i>
           Members
         </h2>
         <ul class="flex flex-col gap-2">
@@ -92,8 +138,13 @@
 
       {% if labels_data %}
         <section class="rounded-box bg-base-200 p-4">
-          <h2 class="font-semibold mb-2 flex items-center gap-2">
-            <i data-lucide="tags" class="w-4 h-4 text-accent"></i>
+          <h2
+            class="font-semibold mb-2 flex items-center gap-2"
+          >
+            <i
+              data-lucide="tags"
+              class="w-4 h-4 text-accent"
+            ></i>
             Labels
           </h2>
           <div class="flex flex-wrap gap-1.5">

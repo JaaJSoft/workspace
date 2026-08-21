@@ -16,80 +16,189 @@
 </style>
 
 <!-- Text/Code Viewer with Monaco Editor -->
-<div class="flex flex-col h-full" x-data="textViewerMonaco()" x-init="initEditor()" @viewer-cleanup.window="dispose()">
+<div
+  class="flex flex-col h-full"
+  x-data="textViewerMonaco()"
+  x-init="initEditor()"
+  @viewer-cleanup.window="dispose()"
+>
 
   <!-- Toolbar -->
-  <div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-base-100 border-b border-base-300">
+  <div
+    class="flex items-center justify-between gap-1 px-3 py-1.5 bg-base-100 border-b border-base-300"
+  >
     <!-- Left: info -->
     <div class="flex items-center gap-2 min-w-0">
-      <span class="badge badge-sm badge-ghost font-mono">{{ language }}</span>
+      <span
+        class="badge badge-sm badge-ghost font-mono"
+      >{{ language }}</span>
       {% if can_edit %}
-        <span x-show="isDirty" x-cloak class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
-          <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
+        <span
+          x-show="isDirty"
+          x-cloak
+          class="flex items-center gap-1 text-warning text-xs whitespace-nowrap"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-warning inline-block"
+          ></span>
           Modified
         </span>
       {% endif %}
     </div>
 
     <!-- Right: actions -->
-    <div class="flex items-center gap-0.5 flex-wrap">
+    <div
+      class="flex items-center gap-0.5 flex-wrap"
+    >
       {% if can_edit %}
         <!-- Undo / Redo -->
-        <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('undo')" title="Undo (Ctrl+Z)">
-          <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square"
+          @click="editorAction('undo')"
+          title="Undo (Ctrl+Z)"
+        >
+          <i
+            data-lucide="undo-2"
+            class="w-3.5 h-3.5"
+          ></i>
         </button>
-        <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('redo')" title="Redo (Ctrl+Y)">
-          <i data-lucide="redo-2" class="w-3.5 h-3.5"></i>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square"
+          @click="editorAction('redo')"
+          title="Redo (Ctrl+Y)"
+        >
+          <i
+            data-lucide="redo-2"
+            class="w-3.5 h-3.5"
+          ></i>
         </button>
 
         <div class="w-px h-4 bg-base-300 mx-0.5"></div>
       {% endif %}
 
       <!-- Find / Replace -->
-      <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('find')" title="Find (Ctrl+F)">
-        <i data-lucide="search" class="w-3.5 h-3.5"></i>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        @click="editorAction('find')"
+        title="Find (Ctrl+F)"
+      >
+        <i
+          data-lucide="search"
+          class="w-3.5 h-3.5"
+        ></i>
       </button>
       {% if can_edit %}
-        <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('replace')" title="Replace (Ctrl+H)">
-          <i data-lucide="replace" class="w-3.5 h-3.5"></i>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square"
+          @click="editorAction('replace')"
+          title="Replace (Ctrl+H)"
+        >
+          <i
+            data-lucide="replace"
+            class="w-3.5 h-3.5"
+          ></i>
         </button>
       {% endif %}
 
       <div class="w-px h-4 bg-base-300 mx-0.5"></div>
 
       <!-- Font size -->
-      <button type="button" class="btn btn-ghost btn-xs btn-square" @click="changeFontSize(-1)" title="Decrease font size">
-        <i data-lucide="a-arrow-down" class="w-3.5 h-3.5"></i>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        @click="changeFontSize(-1)"
+        title="Decrease font size"
+      >
+        <i
+          data-lucide="a-arrow-down"
+          class="w-3.5 h-3.5"
+        ></i>
       </button>
-      <span class="text-xs font-mono w-6 text-center select-none" x-text="fontSize"></span>
-      <button type="button" class="btn btn-ghost btn-xs btn-square" @click="changeFontSize(1)" title="Increase font size">
-        <i data-lucide="a-arrow-up" class="w-3.5 h-3.5"></i>
+      <span
+        class="text-xs font-mono w-6 text-center select-none"
+        x-text="fontSize"
+      ></span>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        @click="changeFontSize(1)"
+        title="Increase font size"
+      >
+        <i
+          data-lucide="a-arrow-up"
+          class="w-3.5 h-3.5"
+        ></i>
       </button>
 
       <div class="w-px h-4 bg-base-300 mx-0.5"></div>
 
       <!-- Tab size (cycle 2 → 4 → 8) -->
-      <button type="button" class="btn btn-ghost btn-xs gap-0.5 font-mono" @click="cycleTabSize()" title="Tab size (click to cycle)">
-        <i data-lucide="indent-increase" class="w-3.5 h-3.5"></i>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs gap-0.5 font-mono"
+        @click="cycleTabSize()"
+        title="Tab size (click to cycle)"
+      >
+        <i
+          data-lucide="indent-increase"
+          class="w-3.5 h-3.5"
+        ></i>
         <span class="text-xs" x-text="tabSize"></span>
       </button>
 
       <div class="w-px h-4 bg-base-300 mx-0.5"></div>
 
       <!-- Whitespace -->
-      <button type="button" class="btn btn-ghost btn-xs btn-square" :class="showWhitespace ? 'btn-active' : ''" @click="toggleWhitespace()" title="Toggle whitespace characters">
-        <i data-lucide="pilcrow" class="w-3.5 h-3.5"></i>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        :class="showWhitespace ? 'btn-active' : ''"
+        @click="toggleWhitespace()"
+        title="Toggle whitespace characters"
+      >
+        <i
+          data-lucide="pilcrow"
+          class="w-3.5 h-3.5"
+        ></i>
       </button>
       <!-- Line numbers -->
-      <button type="button" class="btn btn-ghost btn-xs btn-square" :class="lineNumbers ? 'btn-active' : ''" @click="toggleLineNumbers()" title="Toggle line numbers">
-        <i data-lucide="list-ordered" class="w-3.5 h-3.5"></i>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        :class="lineNumbers ? 'btn-active' : ''"
+        @click="toggleLineNumbers()"
+        title="Toggle line numbers"
+      >
+        <i
+          data-lucide="list-ordered"
+          class="w-3.5 h-3.5"
+        ></i>
       </button>
       <!-- Word wrap -->
-      <button type="button" class="btn btn-ghost btn-xs btn-square" :class="wordWrap ? 'btn-active' : ''" @click="toggleWordWrap()" title="Toggle word wrap">
-        <i data-lucide="wrap-text" class="w-3.5 h-3.5"></i>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        :class="wordWrap ? 'btn-active' : ''"
+        @click="toggleWordWrap()"
+        title="Toggle word wrap"
+      >
+        <i
+          data-lucide="wrap-text"
+          class="w-3.5 h-3.5"
+        ></i>
       </button>
       <!-- Minimap -->
-      <button type="button" class="btn btn-ghost btn-xs btn-square" :class="minimapEnabled ? 'btn-active' : ''" @click="toggleMinimap()" title="Toggle minimap">
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        :class="minimapEnabled ? 'btn-active' : ''"
+        @click="toggleMinimap()"
+        title="Toggle minimap"
+      >
         <i data-lucide="map" class="w-3.5 h-3.5"></i>
       </button>
 
@@ -98,34 +207,70 @@
 
         <!-- AI Actions -->
         <div class="dropdown dropdown-end">
-          <label tabindex="0" class="btn btn-ghost btn-xs gap-1" :class="aiProcessing ? 'btn-disabled' : ''">
-            <span x-show="aiProcessing" class="loading loading-spinner loading-xs"></span>
-            <i x-show="!aiProcessing" data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          <label
+            tabindex="0"
+            class="btn btn-ghost btn-xs gap-1"
+            :class="aiProcessing ? 'btn-disabled' : ''"
+          >
+            <span
+              x-show="aiProcessing"
+              class="loading loading-spinner loading-xs"
+            ></span>
+            <i
+              x-show="!aiProcessing"
+              data-lucide="sparkles"
+              class="w-3.5 h-3.5"
+            ></i>
             AI
-            <i data-lucide="chevron-down" class="w-3 h-3"></i>
+            <i
+              data-lucide="chevron-down"
+              class="w-3 h-3"
+            ></i>
           </label>
-          <ul tabindex="0" class="dropdown-content z-50 menu menu-sm shadow-xl bg-base-100 border border-base-300 rounded-lg w-52 p-1 mt-2">
+          <ul
+            tabindex="0"
+            class="dropdown-content z-50 menu menu-sm shadow-xl bg-base-100 border border-base-300 rounded-lg w-52 p-1 mt-2"
+          >
             <li>
-              <button type="button" class="gap-3 rounded" @click="aiAction('improve'); document.activeElement.blur()">
+              <button
+                type="button"
+                class="gap-3 rounded"
+                @click="aiAction('improve'); document.activeElement.blur()"
+              >
                 <i data-lucide="wand-2" class="w-4 h-4"></i>
                 <span>Improve</span>
               </button>
             </li>
             <li>
-              <button type="button" class="gap-3 rounded" @click="aiAction('explain'); document.activeElement.blur()">
-                <i data-lucide="message-square-text" class="w-4 h-4"></i>
+              <button
+                type="button"
+                class="gap-3 rounded"
+                @click="aiAction('explain'); document.activeElement.blur()"
+              >
+                <i
+                  data-lucide="message-square-text"
+                  class="w-4 h-4"
+                ></i>
                 <span>Explain</span>
               </button>
             </li>
             <li>
-              <button type="button" class="gap-3 rounded" @click="aiAction('summarize'); document.activeElement.blur()">
+              <button
+                type="button"
+                class="gap-3 rounded"
+                @click="aiAction('summarize'); document.activeElement.blur()"
+              >
                 <i data-lucide="list" class="w-4 h-4"></i>
                 <span>Summarize</span>
               </button>
             </li>
             <hr class="my-1 border-base-300" />
             <li>
-              <button type="button" class="gap-3 rounded" @click="aiAction('custom'); document.activeElement.blur()">
+              <button
+                type="button"
+                class="gap-3 rounded"
+                @click="aiAction('custom'); document.activeElement.blur()"
+              >
                 <i data-lucide="pencil" class="w-4 h-4"></i>
                 <span>Custom prompt...</span>
               </button>
@@ -138,9 +283,22 @@
         <div class="w-px h-4 bg-base-300 mx-0.5"></div>
 
         <!-- Save -->
-        <button type="button" class="btn btn-primary btn-xs" :disabled="!isDirty || saving" @click="save()" title="Save (Ctrl+S)">
-          <span x-show="saving" class="loading loading-spinner loading-xs"></span>
-          <i x-show="!saving" data-lucide="save" class="w-3.5 h-3.5"></i>
+        <button
+          type="button"
+          class="btn btn-primary btn-xs"
+          :disabled="!isDirty || saving"
+          @click="save()"
+          title="Save (Ctrl+S)"
+        >
+          <span
+            x-show="saving"
+            class="loading loading-spinner loading-xs"
+          ></span>
+          <i
+            x-show="!saving"
+            data-lucide="save"
+            class="w-3.5 h-3.5"
+          ></i>
           Save
         </button>
       {% endif %}
@@ -148,14 +306,28 @@
   </div>
 
   <!-- Lock banner -->
-  <div x-show="lockOwner" x-cloak class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-warning-content text-sm">
-    <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
+  <div
+    x-show="lockOwner"
+    x-cloak
+    class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-warning-content text-sm"
+  >
+    <i
+      data-lucide="lock"
+      class="w-4 h-4 text-warning shrink-0"
+    ></i>
     <span class="flex-1"><strong x-text="lockOwner"></strong> is editing this file</span>
-    <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">Force unlock</button>
+    <button
+      type="button"
+      class="btn btn-warning btn-xs"
+      @click="forceUnlock()"
+    >Force unlock</button>
   </div>
 
   <!-- Monaco Container -->
-  <div x-ref="monacoContainer" class="flex-1 min-h-0"></div>
+  <div
+    x-ref="monacoContainer"
+    class="flex-1 min-h-0"
+  ></div>
 </div>
 
 <script>

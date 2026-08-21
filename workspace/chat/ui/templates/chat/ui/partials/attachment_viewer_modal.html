@@ -1,51 +1,115 @@
 <!-- Chat Attachment Viewer Modal -->
-<div x-data="chatAttachmentViewer()" @ajax:missing="_viewerMissing($event)" @ajax:merge="_viewerMerge($event)">
-  <dialog x-ref="dialog" class="modal" @close="_onDialogClose()">
-    <div class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col max-w-5xl relative">
+<div
+  x-data="chatAttachmentViewer()"
+  @ajax:missing="_viewerMissing($event)"
+  @ajax:merge="_viewerMerge($event)"
+>
+  <dialog
+    x-ref="dialog"
+    class="modal"
+    @close="_onDialogClose()"
+  >
+    <div
+      class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col max-w-5xl relative"
+    >
       <!-- Actions (Top Right) -->
-      <div class="absolute top-4 right-4 z-10 flex items-center gap-1">
+      <div
+        class="absolute top-4 right-4 z-10 flex items-center gap-1"
+      >
         <!-- Download -->
-        <a :href="downloadUrl" download class="btn btn-ghost btn-sm btn-square" title="Download">
+        <a
+          :href="downloadUrl"
+          download
+          class="btn btn-ghost btn-sm btn-square"
+          title="Download"
+        >
           <i data-lucide="download" class="w-4 h-4"></i>
         </a>
         <!-- Save to Files -->
-        <button type="button" class="btn btn-ghost btn-sm btn-square" @click="saveToFiles()" title="Save to Files">
-          <i data-lucide="folder-down" class="w-4 h-4"></i>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          @click="saveToFiles()"
+          title="Save to Files"
+        >
+          <i
+            data-lucide="folder-down"
+            class="w-4 h-4"
+          ></i>
         </button>
         <!-- Close -->
-        <button type="button" class="btn btn-ghost btn-sm btn-square" @click="close()" title="Close (ESC)">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          @click="close()"
+          title="Close (ESC)"
+        >
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
       <!-- Header -->
-      <div class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100">
+      <div
+        class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100"
+      >
         <div class="flex-1 min-w-0">
-          <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
+          <h3
+            class="font-bold text-lg truncate"
+            x-text="fileName"
+          ></h3>
           <div class="flex items-center gap-2">
-            <p class="text-sm text-base-content/60" x-text="mimeType"></p>
-            <span class="text-xs text-base-content/40" x-show="_totalViewable() > 1" x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"></span>
+            <p
+              class="text-sm text-base-content/60"
+              x-text="mimeType"
+            ></p>
+            <span
+              class="text-xs text-base-content/40"
+              x-show="_totalViewable() > 1"
+              x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
+            ></span>
           </div>
         </div>
       </div>
 
       <!-- Viewer Container: #viewer-panel is the alpine-ajax merge anchor
            every /chat/view-attachment/ response replaces (see viewer_panel.js). -->
-      <div class="flex-1 overflow-auto bg-base-200" x-show="!viewerLoading && !viewerError">
-        <div id="viewer-panel" style="display: contents"></div>
+      <div
+        class="flex-1 overflow-auto bg-base-200"
+        x-show="!viewerLoading && !viewerError"
+      >
+        <div
+          id="viewer-panel"
+          style="display: contents"
+        ></div>
       </div>
 
       <!-- Loading -->
-      <div x-show="viewerLoading" class="flex-1 flex items-center justify-center" x-cloak>
-        <span class="loading loading-spinner loading-lg"></span>
+      <div
+        x-show="viewerLoading"
+        class="flex-1 flex items-center justify-center"
+        x-cloak
+      >
+        <span
+          class="loading loading-spinner loading-lg"
+        ></span>
       </div>
 
       <!-- Error -->
-      <div x-show="viewerError" class="flex-1 flex items-center justify-center p-8" x-cloak>
+      <div
+        x-show="viewerError"
+        class="flex-1 flex items-center justify-center p-8"
+        x-cloak
+      >
         <div class="text-center">
-          <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
+          <i
+            data-lucide="alert-circle"
+            class="w-12 h-12 text-error mx-auto mb-4"
+          ></i>
           <p class="text-lg font-medium mb-2">Failed to load file</p>
-          <p class="text-sm text-base-content/60" x-text="viewerError"></p>
+          <p
+            class="text-sm text-base-content/60"
+            x-text="viewerError"
+          ></p>
         </div>
       </div>
 
@@ -58,7 +122,10 @@
         x-cloak
         @click="navigatePrev()"
       >
-        <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        <i
+          data-lucide="chevron-left"
+          class="w-5 h-5"
+        ></i>
       </button>
       <button
         type="button"
@@ -68,7 +135,10 @@
         x-cloak
         @click="navigateNext()"
       >
-        <i data-lucide="chevron-right" class="w-5 h-5"></i>
+        <i
+          data-lucide="chevron-right"
+          class="w-5 h-5"
+        ></i>
       </button>
     </div>
 

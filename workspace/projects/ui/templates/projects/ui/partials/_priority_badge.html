@@ -1,11 +1,15 @@
 {% if task.priority == "urgent" %}
-  <span class="badge badge-sm badge-error gap-1">
+  <span
+    class="badge badge-sm badge-error gap-1"
+  >
     <i data-lucide="flame" class="w-3 h-3"></i>{{ task.get_priority_display }}
   </span>
 {% elif task.priority == "high" %}
   <span class="badge badge-sm badge-warning">{{ task.get_priority_display }}</span>
 {% elif task.priority == "low" %}
-  <span class="badge badge-sm badge-ghost opacity-70">{{ task.get_priority_display }}</span>
+  <span
+    class="badge badge-sm badge-ghost opacity-70"
+  >{{ task.get_priority_display }}</span>
 {% else %}
   <span class="badge badge-sm badge-ghost">{{ task.get_priority_display }}</span>
 {% endif %}

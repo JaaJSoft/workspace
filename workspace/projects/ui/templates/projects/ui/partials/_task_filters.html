@@ -5,10 +5,23 @@ alpine-ajax content swaps when switching between board and backlog.
 Matching is client-side against the data-* attributes on each task
 card/row (see taskMatchesFilters in board.js).
 {% endcomment %}
-<div id="task-filters" class="flex flex-wrap items-center gap-2">
-  <label class="input input-bordered input-sm flex items-center gap-2 flex-1 min-w-0 sm:flex-none sm:w-56">
-    <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
-    <input type="search" class="grow min-w-0" placeholder="Search tasks" x-model="filters.q" />
+<div
+  id="task-filters"
+  class="flex flex-wrap items-center gap-2"
+>
+  <label
+    class="input input-bordered input-sm flex items-center gap-2 flex-1 min-w-0 sm:flex-none sm:w-56"
+  >
+    <i
+      data-lucide="search"
+      class="w-4 h-4 opacity-60"
+    ></i>
+    <input
+      type="search"
+      class="grow min-w-0"
+      placeholder="Search tasks"
+      x-model="filters.q"
+    />
   </label>
   {% comment %}
     The dropdowns share a row that scrolls sideways rather than shrinking, so no label
@@ -17,8 +30,14 @@ card/row (see taskMatchesFilters in board.js).
     name would otherwise spill out of the bar and scroll the whole page.
     On mobile the row spans the full width, keeping the bar at two lines.
   {% endcomment %}
-  <div class="w-full sm:w-auto flex items-center gap-2 overflow-x-auto py-1 -my-1">
-    <select class="select select-bordered select-sm shrink-0" x-model="filters.assignee" aria-label="Filter by assignee">
+  <div
+    class="w-full sm:w-auto flex items-center gap-2 overflow-x-auto py-1 -my-1"
+  >
+    <select
+      class="select select-bordered select-sm shrink-0"
+      x-model="filters.assignee"
+      aria-label="Filter by assignee"
+    >
       <option value="">All assignees</option>
       <option value="none">Unassigned</option>
       {% for m in members_data %}
@@ -26,14 +45,22 @@ card/row (see taskMatchesFilters in board.js).
       {% endfor %}
     </select>
     {% if labels_data %}
-      <select class="select select-bordered select-sm shrink-0" x-model="filters.label" aria-label="Filter by label">
+      <select
+        class="select select-bordered select-sm shrink-0"
+        x-model="filters.label"
+        aria-label="Filter by label"
+      >
         <option value="">All labels</option>
         {% for label in labels_data %}
           <option value="{{ label.uuid }}">{{ label.name }}</option>
         {% endfor %}
       </select>
     {% endif %}
-    <select class="select select-bordered select-sm shrink-0" x-model="filters.priority" aria-label="Filter by priority">
+    <select
+      class="select select-bordered select-sm shrink-0"
+      x-model="filters.priority"
+      aria-label="Filter by priority"
+    >
       <option value="">All priorities</option>
       <option value="urgent">Urgent</option>
       <option value="high">High</option>
@@ -41,14 +68,26 @@ card/row (see taskMatchesFilters in board.js).
       <option value="low">Low</option>
     </select>
     {% if show_status_filter %}
-      <select class="select select-bordered select-sm shrink-0" x-model="filters.status" aria-label="Filter by status">
+      <select
+        class="select select-bordered select-sm shrink-0"
+        x-model="filters.status"
+        aria-label="Filter by status"
+      >
         <option value="">All statuses</option>
         {% for s in statuses_data %}
           <option value="{{ s.uuid }}">{{ s.name }}</option>
         {% endfor %}
       </select>
     {% endif %}
-    <button type="button" class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3" x-show="filtersActive()" x-cloak title="Clear filters" aria-label="Clear filters" @click="clearFilters()">
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3"
+      x-show="filtersActive()"
+      x-cloak
+      title="Clear filters"
+      aria-label="Clear filters"
+      @click="clearFilters()"
+    >
       <i data-lucide="x" class="w-4 h-4"></i>
       <span class="hidden sm:inline">Clear</span>
     </button>

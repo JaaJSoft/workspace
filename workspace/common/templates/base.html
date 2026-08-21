@@ -9,29 +9,55 @@
 >
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
     <title>{% block title %}Workspace{% endblock %}</title>
 
     <!-- Warm up TLS + DNS for the JS CDNs. jsDelivr is unused on this page but
        still hit by the calendar, chat and files templates that extend it. -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-    <link rel="preconnect" href="https://unpkg.com" crossorigin />
+    <link
+      rel="preconnect"
+      href="https://cdn.jsdelivr.net"
+      crossorigin
+    />
+    <link
+      rel="preconnect"
+      href="https://unpkg.com"
+      crossorigin
+    />
 
     <!-- Tailwind + DaisyUI + Typography - locally built (see scripts/frontend/:
        tailwind.config.js, input.css). Replaces the Tailwind Play
        CDN which shipped a 140KB JIT compiler that re-ran on every page. -->
-    <link href="{% static 'css/app.css' %}" rel="stylesheet" type="text/css" />
-    <link href="{% static 'ui/css/mentions.css' %}" rel="stylesheet" type="text/css" />
+    <link
+      href="{% static 'css/app.css' %}"
+      rel="stylesheet"
+      type="text/css"
+    />
+    <link
+      href="{% static 'ui/css/mentions.css' %}"
+      rel="stylesheet"
+      type="text/css"
+    />
 
     <!-- Alpine.js + plugins - locally built (see scripts/frontend/). Alpine holds
        personal entries in its reactive state, so it must not come from
        an origin we don't control.
        Keep this tag deferred: it must run after the non-deferred end-of-body
        scripts that register `alpine:init` listeners. -->
-    <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
+    <script
+      defer
+      src="{% static 'ui/js/vendor/alpine/alpine.js' %}"
+    ></script>
 
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@1.11.0/dist/umd/lucide.min.js" integrity="sha384-7PArHXNzg1s/WgbAH9xkBpx4T6MJ0jPAxaEM9yld+zvdFEjSf+wzzv0hDnem/6rw" crossorigin="anonymous"></script>
+    <script
+      src="https://unpkg.com/lucide@1.11.0/dist/umd/lucide.min.js"
+      integrity="sha384-7PArHXNzg1s/WgbAH9xkBpx4T6MJ0jPAxaEM9yld+zvdFEjSf+wzzv0hDnem/6rw"
+      crossorigin="anonymous"
+    ></script>
     <script src="{% static 'ui/js/lucide.js' %}"></script>
     <script src="{% static 'ui/js/csrf.js' %}"></script>
     <script src="{% static 'ui/js/uuid.js' %}"></script>
@@ -44,7 +70,9 @@
   must be defined before the parser reaches the server-rendered chips and
     avatars, or they flash unstyled.{% endcomment %}
     <script src="{% static 'ui/js/tag_chip.js' %}"></script>
-    <script src="{% static 'ui/js/user_avatar.js' %}"></script>
+    <script
+      src="{% static 'ui/js/user_avatar.js' %}"
+    ></script>
     <style>
       .lucide {
         pointer-events: none;
@@ -55,10 +83,23 @@
     <link rel="icon" href="https://fav.farm/👥" />
 
     <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
-    <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link
+      rel="manifest"
+      href="/manifest.json"
+      crossorigin="use-credentials"
+    />
+    <link
+      rel="apple-touch-icon"
+      href="{% static 'icons/icon-192.png' %}"
+    />
+    <meta
+      name="apple-mobile-web-app-capable"
+      content="yes"
+    />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
 
     <!-- Theme Color -->
     <meta name="theme-color" content="#111827" />
@@ -161,7 +202,11 @@
 
     {% block extra_head %}{% endblock %}
   </head>
-  <body class="{% block body_class %}bg-base-100{% endblock %}" data-login-url="{% url 'login' %}" data-app-version="{{ APP_VERSION }}">
+  <body
+    class="{% block body_class %}bg-base-100{% endblock %}"
+    data-login-url="{% url 'login' %}"
+    data-app-version="{{ APP_VERSION }}"
+  >
     {% block body %}{% endblock %}
 
     <!-- Generic Dialogs -->
@@ -183,9 +228,13 @@
 
     <script src="{% static 'ui/js/timeago.js' %}"></script>
     <script src="{% static 'ui/js/localtime.js' %}"></script>
-    <script src="{% static 'ui/js/theme_toggle.js' %}"></script>
+    <script
+      src="{% static 'ui/js/theme_toggle.js' %}"
+    ></script>
     <script src="{% static 'ui/js/dialogs.js' %}"></script>
-    <script src="{% static 'ui/js/inline_alert.js' %}"></script>
+    <script
+      src="{% static 'ui/js/inline_alert.js' %}"
+    ></script>
     <script src="{% static 'ui/js/toast.js' %}"></script>
 
     {% if user.is_authenticated %}
@@ -257,19 +306,32 @@
           });
         })();
       </script>
-      <div id="tz-suggest-banner" class="hidden fixed bottom-4 right-4 z-50 max-w-md bg-base-100 rounded-lg shadow-lg"></div>
+      <div
+        id="tz-suggest-banner"
+        class="hidden fixed bottom-4 right-4 z-50 max-w-md bg-base-100 rounded-lg shadow-lg"
+      ></div>
     {% endif %}
 
     <!-- Shared components -->
     <script src="{% static 'ui/js/avatar.js' %}"></script>
-    <script src="{% static 'ui/js/card_popover.js' %}"></script>
+    <script
+      src="{% static 'ui/js/card_popover.js' %}"
+    ></script>
     <script src="{% static 'ui/js/note_card.js' %}"></script>
-    <script src="{% static 'ui/js/user_selector.js' %}"></script>
-    <script src="{% static 'ui/js/group_selector.js' %}"></script>
-    <script src="{% static 'ui/js/icon_picker.js' %}"></script>
+    <script
+      src="{% static 'ui/js/user_selector.js' %}"
+    ></script>
+    <script
+      src="{% static 'ui/js/group_selector.js' %}"
+    ></script>
+    <script
+      src="{% static 'ui/js/icon_picker.js' %}"
+    ></script>
 
     <!-- Session expiry handler: redirect to login on expired session (AJAX & alpine-ajax) -->
-    <script src="{% static 'ui/js/session_expiry.js' %}"></script>
+    <script
+      src="{% static 'ui/js/session_expiry.js' %}"
+    ></script>
 
     {% if user.is_authenticated %}
       {{ workspace_active_modules|json_script:"workspace-modules-data" }}

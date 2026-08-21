@@ -5,12 +5,23 @@
   - container_class: classes CSS pour le conteneur (optionnel)
   - size: 'lg' pour des éléments plus grands avec des icônes plus grandes (optionnel)
 {% endcomment %}
-<div x-show="query.length >= 2" class="{{ container_class|default:'overflow-y-auto scroll-smooth' }} {% if size == 'lg' %}max-h-[28rem]{% elif not container_class %}max-h-96{% endif %}">
+<div
+  x-show="query.length >= 2"
+  class="{{ container_class|default:'overflow-y-auto scroll-smooth' }} {% if size == 'lg' %}max-h-[28rem]{% elif not container_class %}max-h-96{% endif %}"
+>
 
   <!-- Commands / Actions -->
-  <div x-show="commands.length > 0" class="p-2">
-    <div class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider">Actions</div>
-    <template x-for="(cmd, index) in commands" :key="cmd.name + cmd.url">
+  <div
+    x-show="commands.length > 0"
+    class="p-2"
+  >
+    <div
+      class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
+    >Actions</div>
+    <template
+      x-for="(cmd, index) in commands"
+      :key="cmd.name + cmd.url"
+    >
       <a
         :href="cmd.url"
         @click="trackCommand(cmd.url){% if on_click %}; {{ on_click }}{% endif %}"
@@ -19,19 +30,39 @@
         class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
       >
         <div class="flex-shrink-0">
-          <div :class="`bg-${cmd.color || 'primary'}/10 text-${cmd.color || 'primary'}`" class="rounded-lg {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center">
-            <i :data-lucide="cmd.icon || 'terminal'" class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %}"></i>
+          <div
+            :class="`bg-${cmd.color || 'primary'}/10 text-${cmd.color || 'primary'}`"
+            class="rounded-lg {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center"
+          >
+            <i
+              :data-lucide="cmd.icon || 'terminal'"
+              class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %}"
+            ></i>
           </div>
         </div>
         <div class="flex-1 min-w-0">
-          <div class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium" x-html="highlightMatch(cmd.name, searchQuery)">
-          </div>
+          <div
+            class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium"
+            x-html="highlightMatch(cmd.name, searchQuery)"
+          ></div>
         </div>
-        <div x-show="cmd.kind === 'action'" class="flex-shrink-0">
-          <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-base-content/30"></i>
+        <div
+          x-show="cmd.kind === 'action'"
+          class="flex-shrink-0"
+        >
+          <i
+            data-lucide="arrow-right"
+            class="w-3.5 h-3.5 text-base-content/30"
+          ></i>
         </div>
-        <div x-show="cmd.kind === 'navigate'" class="flex-shrink-0">
-          <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-base-content/30"></i>
+        <div
+          x-show="cmd.kind === 'navigate'"
+          class="flex-shrink-0"
+        >
+          <i
+            data-lucide="chevron-right"
+            class="w-3.5 h-3.5 text-base-content/30"
+          ></i>
         </div>
       </a>
     </template>
@@ -39,10 +70,17 @@
 
   <!-- Search results -->
   <div x-show="results.length > 0" class="p-2">
-    <div class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider">
-      <span x-text="`${results.length} Result${results.length > 1 ? 's' : ''}`"></span>
+    <div
+      class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
+    >
+      <span
+        x-text="`${results.length} Result${results.length > 1 ? 's' : ''}`"
+      ></span>
     </div>
-    <template x-for="(result, index) in results" :key="result.uuid">
+    <template
+      x-for="(result, index) in results"
+      :key="result.uuid"
+    >
       <a
         :href="result.url"
         {% if on_click %}@click="{{ on_click }}"{% endif %}
@@ -50,22 +88,52 @@
         :class="isResultActive(index) ? 'bg-base-300' : 'bg-transparent'"
         class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
       >
-        <div class="avatar placeholder flex-shrink-0">
-          <div :class="`bg-${result.module_color || 'primary'} text-${result.module_color || 'primary'}-content`" class="rounded-full {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center overflow-hidden">
-            <i :data-lucide="result.type_icon || 'search'" class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %}"></i>
+        <div
+          class="avatar placeholder flex-shrink-0"
+        >
+          <div
+            :class="`bg-${result.module_color || 'primary'} text-${result.module_color || 'primary'}-content`"
+            class="rounded-full {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center overflow-hidden"
+          >
+            <i
+              :data-lucide="result.type_icon || 'search'"
+              class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %}"
+            ></i>
           </div>
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
-            <div class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium truncate flex-1" x-text="result.name">
-            </div>
-            <span x-show="result.date" class="text-xs text-base-content/50 flex-shrink-0 tabular-nums" x-text="result.date"></span>
+            <div
+              class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium truncate flex-1"
+              x-text="result.name"
+            ></div>
+            <span
+              x-show="result.date"
+              class="text-xs text-base-content/50 flex-shrink-0 tabular-nums"
+              x-text="result.date"
+            ></span>
           </div>
-          <div class="text-xs text-base-content/60 flex items-center gap-2">
-            <i :data-lucide="result.type_icon || 'tag'" class="w-3 h-3 flex-shrink-0" :class="`text-${result.module_color || 'primary'}`"></i>
-            <span class="truncate flex-1" x-html="highlightMatch(result.matched_value, searchQuery)"></span>
-            <template x-for="tag in (result.tags || [])" :key="tag.label">
-              <span class="badge badge-xs flex-shrink-0" :class="`badge-${tag.color || 'ghost'}`" x-text="tag.label"></span>
+          <div
+            class="text-xs text-base-content/60 flex items-center gap-2"
+          >
+            <i
+              :data-lucide="result.type_icon || 'tag'"
+              class="w-3 h-3 flex-shrink-0"
+              :class="`text-${result.module_color || 'primary'}`"
+            ></i>
+            <span
+              class="truncate flex-1"
+              x-html="highlightMatch(result.matched_value, searchQuery)"
+            ></span>
+            <template
+              x-for="tag in (result.tags || [])"
+              :key="tag.label"
+            >
+              <span
+                class="badge badge-xs flex-shrink-0"
+                :class="`badge-${tag.color || 'ghost'}`"
+                x-text="tag.label"
+              ></span>
             </template>
           </div>
         </div>
@@ -74,16 +142,29 @@
 
     <!-- Load more button -->
     <div x-show="hasMore" class="px-3 py-2">
-      <button @click="loadMore()" :disabled="loadingMore" class="w-full btn btn-sm btn-ghost">
+      <button
+        @click="loadMore()"
+        :disabled="loadingMore"
+        class="w-full btn btn-sm btn-ghost"
+      >
         <span x-show="!loadingMore">Load more...</span>
-        <span x-show="loadingMore" class="loading loading-spinner loading-sm"></span>
+        <span
+          x-show="loadingMore"
+          class="loading loading-spinner loading-sm"
+        ></span>
       </button>
     </div>
   </div>
 
   <!-- No results -->
-  <div x-show="commands.length === 0 && results.length === 0 && !loading" class="px-4 py-8 text-center">
-    <i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
+  <div
+    x-show="commands.length === 0 && results.length === 0 && !loading"
+    class="px-4 py-8 text-center"
+  >
+    <i
+      data-lucide="search-x"
+      class="w-8 h-8 mx-auto mb-2 opacity-30"
+    ></i>
     <div class="text-sm text-base-content/60">No results found</div>
   </div>
 </div>

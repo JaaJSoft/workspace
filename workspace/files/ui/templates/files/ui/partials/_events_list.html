@@ -20,14 +20,26 @@ Loaded by:
 {% endcomment %}
 <div id="file-events-list">
   {% if grouped_actions %}
-    <div class="divider my-0 text-xs text-base-content/40">Activity</div>
+    <div
+      class="divider my-0 text-xs text-base-content/40"
+    >Activity</div>
 
-    <select class="select select-bordered select-xs w-full my-2" aria-label="Filter activity by action" x-on:change="$ajax(`/files/{{ file.uuid }}/events?action=${encodeURIComponent($event.target.value)}`, { target: 'file-events-list' })">
-      <option value="" {% if not action_filter %}selected{% endif %}>All actions</option>
+    <select
+      class="select select-bordered select-xs w-full my-2"
+      aria-label="Filter activity by action"
+      x-on:change="$ajax(`/files/{{ file.uuid }}/events?action=${encodeURIComponent($event.target.value)}`, { target: 'file-events-list' })"
+    >
+      <option
+        value=""
+        {% if not action_filter %}selected{% endif %}
+      >All actions</option>
       {% for category, actions in grouped_actions %}
         <optgroup label="{{ category }}">
           {% for value, label in actions %}
-            <option value="{{ value }}" {% if action_filter == value %}selected{% endif %}>{{ label }}</option>
+            <option
+              value="{{ value }}"
+              {% if action_filter == value %}selected{% endif %}
+            >{{ label }}</option>
           {% endfor %}
         </optgroup>
       {% endfor %}
@@ -36,8 +48,13 @@ Loaded by:
     {% if file_events %}
       <ul class="space-y-2.5">
         {% for event in file_events %}
-          <li class="flex items-start gap-2.5 text-sm">
-            <i data-lucide="{{ event.icon }}" class="w-3.5 h-3.5 mt-1 text-base-content/50 flex-shrink-0"></i>
+          <li
+            class="flex items-start gap-2.5 text-sm"
+          >
+            <i
+              data-lucide="{{ event.icon }}"
+              class="w-3.5 h-3.5 mt-1 text-base-content/50 flex-shrink-0"
+            ></i>
             <div class="flex-1 min-w-0">
               <p class="text-sm leading-tight">
                 <span class="font-medium">{% if event.actor %}{{ event.actor.username }}{% else %}System{% endif %}</span>
@@ -70,7 +87,12 @@ Loaded by:
                   <span class="text-base-content/60">{{ event.metadata.shared_with_username|default:'a user' }}</span>'s access
                 {% elif event.action == 'link_created' %}
                   created a public link
-                  {% if event.metadata.has_password %}<i data-lucide="lock" class="w-3 h-3 inline text-base-content/40"></i>{% endif %}
+                  {% if event.metadata.has_password %}
+                    <i
+                      data-lucide="lock"
+                      class="w-3 h-3 inline text-base-content/40"
+                    ></i>
+                  {% endif %}
                 {% elif event.action == 'link_revoked' %}
                   revoked a public link
                 {% else %}
@@ -83,15 +105,27 @@ Loaded by:
         {% endfor %}
       </ul>
 
-      <div class="flex items-center justify-center gap-2 pt-1">
+      <div
+        class="flex items-center justify-center gap-2 pt-1"
+      >
         {% if load_more_url %}
-          <a href="{{ load_more_url }}" x-target="file-events-list" @ajax:before.stop class="btn btn-ghost btn-xs gap-1">
-            <i data-lucide="chevron-down" class="w-3 h-3"></i>
+          <a
+            href="{{ load_more_url }}"
+            x-target="file-events-list"
+            @ajax:before.stop
+            class="btn btn-ghost btn-xs gap-1"
+          >
+            <i
+              data-lucide="chevron-down"
+              class="w-3 h-3"
+            ></i>
             Load more
             <span class="text-base-content/40">({{ events_limit }} of {{ total_event_count }})</span>
           </a>
         {% elif total_event_count > events_limit %}
-          <p class="text-xs text-base-content/40 text-center flex-1">
+          <p
+            class="text-xs text-base-content/40 text-center flex-1"
+          >
             Showing the {{ max_events_limit }} most recent of {{ total_event_count }} events. Older entries aren't displayed.
           </p>
         {% endif %}
@@ -99,7 +133,9 @@ Loaded by:
       </div>
 
     {% else %}
-      <p class="text-sm text-base-content/40 px-1 py-2">No events match this filter.</p>
+      <p
+        class="text-sm text-base-content/40 px-1 py-2"
+      >No events match this filter.</p>
     {% endif %}
   {% endif %}
 </div>

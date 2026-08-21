@@ -14,10 +14,18 @@ no arithmetic on purpose - see the docstring in charts.py.
 {% endcomment %}
 
 <div class="w-full">
-  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2">
+  <div
+    class="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2"
+  >
     {% for s in chart.series %}
-      <span class="flex items-center gap-1.5 text-xs text-base-content/70">
-        <svg viewBox="0 0 8 8" class="w-2.5 h-2.5 {{ s.css_class }}" aria-hidden="true">
+      <span
+        class="flex items-center gap-1.5 text-xs text-base-content/70"
+      >
+        <svg
+          viewBox="0 0 8 8"
+          class="w-2.5 h-2.5 {{ s.css_class }}"
+          aria-hidden="true"
+        >
           <rect width="8" height="8" rx="1.5" />
         </svg>
         {{ s.name }}
@@ -30,7 +38,12 @@ no arithmetic on purpose - see the docstring in charts.py.
     instead; wide containers never reach the minimum and never scroll.
   {% endcomment %}
   <div class="overflow-x-auto">
-    <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" class="w-full h-auto min-w-[42rem]" role="img" aria-label="{{ aria_label }}">
+    <svg
+      viewBox="0 0 {{ chart.width }} {{ chart.height }}"
+      class="w-full h-auto min-w-[42rem]"
+      role="img"
+      aria-label="{{ aria_label }}"
+    >
       {% for line in chart.gridlines %}
         <line x1="{{ chart.plot.x }}" y1="{{ line.y }}" x2="{{ chart.width }}" y2="{{ line.y }}" class="stroke-base-content/10" stroke-width="1" />
         <text x="{{ chart.plot.x }}" y="{{ line.y }}" dx="-6" dy="3" text-anchor="end" class="fill-base-content/50" font-size="9">{{ line.value }}</text>

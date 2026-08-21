@@ -11,9 +11,17 @@ Params (Alpine expression fragments, evaluated in the caller's scope):
   - label:      optional heading, defaults to "Color"
 {% endcomment %}
 <div class="mb-4">
-  <label class="text-xs text-base-content/60 mb-1.5 block">{{ label|default:"Color" }}</label>
-  <div class="flex flex-wrap gap-1.5" x-data="{ palette: window.TAG_CHIP_COLORS }">
-    <template x-for="swatch in palette" :key="swatch.name">
+  <label
+    class="text-xs text-base-content/60 mb-1.5 block"
+  >{{ label|default:"Color" }}</label>
+  <div
+    class="flex flex-wrap gap-1.5"
+    x-data="{ palette: window.TAG_CHIP_COLORS }"
+  >
+    <template
+      x-for="swatch in palette"
+      :key="swatch.name"
+    >
       <button
         type="button"
         class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
@@ -24,7 +32,10 @@ Params (Alpine expression fragments, evaluated in the caller's scope):
         @click="{{ color_expr }} = swatch.value"
       >
         {# The neutral swatch has no fill, so mark it with a slash instead. #}
-        <span x-show="!swatch.value" class="block w-4 h-px bg-base-content/50 rotate-45"></span>
+        <span
+          x-show="!swatch.value"
+          class="block w-4 h-px bg-base-content/50 rotate-45"
+        ></span>
       </button>
     </template>
   </div>

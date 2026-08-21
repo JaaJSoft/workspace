@@ -4,8 +4,14 @@
 {% block title %}Mail - Workspace{% endblock %}
 
 {% block extra_head %}
-  <link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}" />
-  <link rel="stylesheet" href="{% static 'mail/ui/css/mail.css' %}" />
+  <link
+    rel="stylesheet"
+    href="{% static 'ui/css/ai-thinking.css' %}"
+  />
+  <link
+    rel="stylesheet"
+    href="{% static 'mail/ui/css/mail.css' %}"
+  />
 {% endblock %}
 
 {% block navbar %}
@@ -24,30 +30,74 @@
 
 {% block drawer_sidebar %}
   <div class="drawer-side z-40 h-full">
-    <label for="mail-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+    <label
+      for="mail-drawer"
+      aria-label="close sidebar"
+      class="drawer-overlay"
+    ></label>
 
     <!-- Sidebar -->
-    <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300" :class="collapsed ? 'w-16' : 'w-72'">
+    <aside
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
+      :class="collapsed ? 'w-16' : 'w-72'"
+    >
       <!-- Sidebar header -->
-      <div class="lg:border-b border-base-300 py-4 px-3 relative" x-data="{ ...mailPreferences(), prefsOpen: false }">
-        <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
-          <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
-            <i data-lucide="mail" class="w-6 h-6 text-warning"></i>
+      <div
+        class="lg:border-b border-base-300 py-4 px-3 relative"
+        x-data="{ ...mailPreferences(), prefsOpen: false }"
+      >
+        <div
+          class="flex items-center"
+          :class="collapsed ? 'justify-center' : 'justify-between'"
+        >
+          <h2
+            class="text-xl font-semibold flex items-center gap-2"
+            :class="collapsed ? '' : 'pl-2'"
+          >
+            <i
+              data-lucide="mail"
+              class="w-6 h-6 text-warning"
+            ></i>
             <span x-show="!collapsed" x-transition>Mail</span>
           </h2>
-          <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
-            <button type="button" class="btn btn-ghost btn-sm btn-square hover:text-warning" aria-label="Settings" title="Settings" @click="prefsOpen = !prefsOpen">
+          <div
+            class="flex items-center gap-0.5"
+            x-show="!collapsed"
+            x-transition
+          >
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-square hover:text-warning"
+              aria-label="Settings"
+              title="Settings"
+              @click="prefsOpen = !prefsOpen"
+            >
               <i data-lucide="settings" class="w-4 h-4"></i>
             </button>
-            <button class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning" @click="showCompose()" title="Compose (C)">
+            <button
+              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning"
+              @click="showCompose()"
+              title="Compose (C)"
+            >
               <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
         <!-- Preferences popover -->
-        <div x-show="prefsOpen" x-cloak x-transition @click.outside="prefsOpen = false" class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4">
-          <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-            <i data-lucide="settings" class="w-4 h-4 text-warning"></i>
+        <div
+          x-show="prefsOpen"
+          x-cloak
+          x-transition
+          @click.outside="prefsOpen = false"
+          class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4"
+        >
+          <h4
+            class="font-semibold text-sm mb-3 flex items-center gap-2"
+          >
+            <i
+              data-lucide="settings"
+              class="w-4 h-4 text-warning"
+            ></i>
             Preferences
           </h4>
           {% include "mail/ui/partials/_preferences_content.html" %}
@@ -55,10 +105,16 @@
       </div>
 
       <!-- Folder list -->
-      <div class="flex-1 overflow-y-auto py-2 px-3">{% include "mail/ui/partials/folder_list.html" %}</div>
+      <div
+        class="flex-1 overflow-y-auto py-2 px-3"
+      >{% include "mail/ui/partials/folder_list.html" %}</div>
 
       <!-- Compose button (collapsed) -->
-      <div class="px-3 pb-2" x-show="collapsed" x-cloak>
+      <div
+        class="px-3 pb-2"
+        x-show="collapsed"
+        x-cloak
+      >
         <ul class="menu p-0">
           {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="warning" onclick="showCompose()" tooltip="Compose" %}
         </ul>
@@ -72,7 +128,9 @@
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
-      <div class="border-t border-base-300 py-4 px-3">
+      <div
+        class="border-t border-base-300 py-4 px-3"
+      >
         <ul class="menu p-0 hidden lg:block">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="warning" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
         </ul>
@@ -88,13 +146,25 @@
   <!-- Mail pane -->
   <div class="h-full flex min-w-0 bg-base-100">
     <!-- No accounts: centered empty state -->
-    <template x-if="accounts.length === 0 && !selectedFolder">
-      <div class="flex-1 flex items-center justify-center">
-        <div class="text-center text-base-content/40">
-          <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
+    <template
+      x-if="accounts.length === 0 && !selectedFolder"
+    >
+      <div
+        class="flex-1 flex items-center justify-center"
+      >
+        <div
+          class="text-center text-base-content/40"
+        >
+          <i
+            data-lucide="mail"
+            class="w-16 h-16 mx-auto mb-4 opacity-30"
+          ></i>
           <p class="text-lg font-medium mb-2">No mail accounts configured</p>
           <p class="text-sm mb-4">Add a mail account to get started</p>
-          <button class="btn btn-warning btn-sm" @click="showAddAccount()">
+          <button
+            class="btn btn-warning btn-sm"
+            @click="showAddAccount()"
+          >
             <i data-lucide="plus" class="w-4 h-4"></i>
             Add Account
           </button>
@@ -103,23 +173,33 @@
     </template>
 
     <!-- Normal layout: has accounts or folder selected -->
-    <template x-if="accounts.length > 0 || selectedFolder">
+    <template
+      x-if="accounts.length > 0 || selectedFolder"
+    >
       <div class="flex h-full min-w-0 w-full">
         <!-- Message list panel -->
-        <div class="w-full lg:w-96 border-r border-base-300 flex flex-col min-h-0" :class="selectedMessage && isMobile() ? 'hidden' : ''" x-show="selectedFolder || selectedLabel || unifiedInbox">
-          {% include "mail/ui/partials/message_list.html" %}
-        </div>
+        <div
+          class="w-full lg:w-96 border-r border-base-300 flex flex-col min-h-0"
+          :class="selectedMessage && isMobile() ? 'hidden' : ''"
+          x-show="selectedFolder || selectedLabel || unifiedInbox"
+        >{% include "mail/ui/partials/message_list.html" %}</div>
 
         <!-- Message detail panel -->
-        <div class="flex-1 flex flex-col min-h-0 min-w-0" :class="!selectedMessage && isMobile() ? 'hidden' : ''">
-          {% include "mail/ui/partials/message_detail.html" %}
-        </div>
+        <div
+          class="flex-1 flex flex-col min-h-0 min-w-0"
+          :class="!selectedMessage && isMobile() ? 'hidden' : ''"
+        >{% include "mail/ui/partials/message_detail.html" %}</div>
 
       </div>
     </template>
 
     <!-- Mobile compose FAB -->
-    <button class="btn btn-warning btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden" @click="showCompose()" x-show="!selectedMessage" x-cloak>
+    <button
+      class="btn btn-warning btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
+      @click="showCompose()"
+      x-show="!selectedMessage"
+      x-cloak
+    >
       <i data-lucide="pencil" class="w-5 h-5"></i>
     </button>
   </div>
@@ -142,16 +222,32 @@
   <!-- Label create/edit dialog -->
   <dialog id="mail-label-dialog" class="modal">
     <div class="modal-box max-w-md">
-      <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
-        <span :class="labelModal.color && labelModal.color !== 'ghost' ? 'text-' + labelModal.color : 'text-base-content/50'">
-          <i :data-lucide="labelModal.icon || 'tag'" class="w-5 h-5"></i>
+      <h3
+        class="font-bold text-lg mb-4 flex items-center gap-2"
+      >
+        <span
+          :class="labelModal.color && labelModal.color !== 'ghost' ? 'text-' + labelModal.color : 'text-base-content/50'"
+        >
+          <i
+            :data-lucide="labelModal.icon || 'tag'"
+            class="w-5 h-5"
+          ></i>
         </span>
-        <span x-text="labelModal.uuid ? 'Edit Label' : 'New Label'"></span>
+        <span
+          x-text="labelModal.uuid ? 'Edit Label' : 'New Label'"
+        ></span>
       </h3>
       <form @submit.prevent="saveLabelModal()">
         <label class="form-control w-full mb-3">
           <div class="label"><span class="label-text">Name</span></div>
-          <input type="text" class="input input-bordered w-full input-sm" x-model="labelModal.name" placeholder="Label name" required @keydown.escape="closeLabelModal()" />
+          <input
+            type="text"
+            class="input input-bordered w-full input-sm"
+            x-model="labelModal.name"
+            placeholder="Label name"
+            required
+            @keydown.escape="closeLabelModal()"
+          />
         </label>
         <!-- Icon & color picker (shared component) -->
         <div
@@ -181,25 +277,62 @@
       "
           class="mb-4"
         >{% include "ui/partials/icon_picker.html" %}</div>
-        <label class="flex items-center justify-between gap-2 cursor-pointer mb-3">
+        <label
+          class="flex items-center justify-between gap-2 cursor-pointer mb-3"
+        >
           <span class="text-sm">
             Notify me about these emails
-            <span class="block text-xs text-base-content/50">A new email getting this label sends a notification.</span>
+            <span
+              class="block text-xs text-base-content/50"
+            >A new email getting this label sends a notification.</span>
           </span>
-          <input type="checkbox" class="toggle toggle-sm toggle-warning" x-model="labelModal.notifyOnApply" />
+          <input
+            type="checkbox"
+            class="toggle toggle-sm toggle-warning"
+            x-model="labelModal.notifyOnApply"
+          />
         </label>
-        <div x-show="labelModal.error" x-cloak class="mb-3">
-          <div class="text-sm text-error" x-text="labelModal.error"></div>
+        <div
+          x-show="labelModal.error"
+          x-cloak
+          class="mb-3"
+        >
+          <div
+            class="text-sm text-error"
+            x-text="labelModal.error"
+          ></div>
         </div>
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost btn-sm text-error mr-auto" x-show="labelModal.uuid" @click="deleteLabelConfirm()">
-            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm text-error mr-auto"
+            x-show="labelModal.uuid"
+            @click="deleteLabelConfirm()"
+          >
+            <i
+              data-lucide="trash-2"
+              class="w-3.5 h-3.5"
+            ></i>
             Delete
           </button>
-          <button type="button" class="btn btn-ghost btn-sm" @click="closeLabelModal()">Cancel</button>
-          <button type="submit" class="btn btn-warning btn-sm" :disabled="labelModal.saving || !labelModal.name.trim()">
-            <span x-show="!labelModal.saving" x-text="labelModal.uuid ? 'Save' : 'Create'"></span>
-            <span x-show="labelModal.saving" class="loading loading-spinner loading-xs"></span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            @click="closeLabelModal()"
+          >Cancel</button>
+          <button
+            type="submit"
+            class="btn btn-warning btn-sm"
+            :disabled="labelModal.saving || !labelModal.name.trim()"
+          >
+            <span
+              x-show="!labelModal.saving"
+              x-text="labelModal.uuid ? 'Save' : 'Create'"
+            ></span>
+            <span
+              x-show="labelModal.saving"
+              class="loading loading-spinner loading-xs"
+            ></span>
           </button>
         </div>
       </form>
@@ -216,7 +349,10 @@
   {% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/message_context_menu.html" open="msgCtx.open" close="msgCtx.open = false" x="msgCtx.x" y="msgCtx.y" width="w-52" id="message-context-menu" %}
 
   <!-- Folder icon picker dialog -->
-  <dialog id="mail-folder-icon-dialog" class="modal">
+  <dialog
+    id="mail-folder-icon-dialog"
+    class="modal"
+  >
     <div
       class="modal-box max-w-md"
       x-data="iconPicker(
@@ -229,18 +365,28 @@
       x-effect="if (folderIconEdit.uuid) { uuid = folderIconEdit.uuid; selectedIcon = folderIconEdit.icon || 'folder'; selectedColor = folderIconEdit.color || 'text-warning'; $nextTick(() => updatePreviewIcon()); }"
     >
       <h3 class="font-bold text-lg mb-1">Change folder icon</h3>
-      <p class="text-sm text-base-content/50 mb-4" x-text="folderIconEdit.name"></p>
+      <p
+        class="text-sm text-base-content/50 mb-4"
+        x-text="folderIconEdit.name"
+      ></p>
 
       <!-- Preview -->
       <div class="flex justify-center mb-4">
-        <div class="w-14 h-14 flex items-center justify-center bg-base-200 rounded-xl" x-ref="previewIcon" x-init="$nextTick(() => updatePreviewIcon())">
-        </div>
+        <div
+          class="w-14 h-14 flex items-center justify-center bg-base-200 rounded-xl"
+          x-ref="previewIcon"
+          x-init="$nextTick(() => updatePreviewIcon())"
+        ></div>
       </div>
 
       {% include "ui/partials/icon_picker.html" %}
 
       <div class="modal-action">
-        <button type="button" class="btn btn-ghost btn-sm" @click="document.getElementById('mail-folder-icon-dialog').close()">Close</button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="document.getElementById('mail-folder-icon-dialog').close()"
+        >Close</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
@@ -252,10 +398,19 @@
   {% include "mail/ui/partials/help_dialog.html" %}
 
   <!-- Mobile preferences dialog -->
-  <dialog id="mail-prefs-dialog" class="modal" x-data="mailPreferences()">
+  <dialog
+    id="mail-prefs-dialog"
+    class="modal"
+    x-data="mailPreferences()"
+  >
     <div class="modal-box">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="settings" class="w-5 h-5 text-warning"></i>
+      <h3
+        class="font-bold text-lg flex items-center gap-2"
+      >
+        <i
+          data-lucide="settings"
+          class="w-5 h-5 text-warning"
+        ></i>
         Preferences
       </h3>
       <div class="mt-4">{% include "mail/ui/partials/_preferences_content.html" %}</div>
@@ -274,7 +429,10 @@
   {% include "mail/ui/partials/compose_dialog.html" %}
 
   <!-- Add account dialog -->
-  <dialog id="mail-add-account-dialog" class="modal">
+  <dialog
+    id="mail-add-account-dialog"
+    class="modal"
+  >
     <div class="modal-box max-w-lg">
       <h3 class="font-bold text-lg mb-4">Add Mail Account</h3>
 
@@ -282,11 +440,22 @@
       <template x-if="oauthProviders.length > 0">
         <div>
           <div class="space-y-2">
-            <template x-for="p in oauthProviders" :key="p.provider">
-              <button type="button" class="btn btn-outline w-full btn-sm gap-2" @click="startOAuth(p.provider)">
+            <template
+              x-for="p in oauthProviders"
+              :key="p.provider"
+            >
+              <button
+                type="button"
+                class="btn btn-outline w-full btn-sm gap-2"
+                @click="startOAuth(p.provider)"
+              >
                 <!-- Google logo -->
                 <template x-if="p.provider === 'google'">
-                  <svg class="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg
+                    class="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
@@ -295,7 +464,11 @@
                 </template>
                 <!-- Microsoft logo -->
                 <template x-if="p.provider === 'microsoft'">
-                  <svg class="w-4 h-4" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
+                  <svg
+                    class="w-4 h-4"
+                    viewBox="0 0 23 23"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
                     <rect x="1" y="1" width="10" height="10" fill="#F25022" />
                     <rect x="12" y="1" width="10" height="10" fill="#7FBA00" />
                     <rect x="1" y="12" width="10" height="10" fill="#00A4EF" />
@@ -303,7 +476,9 @@
                   </svg>
                 </template>
                 <!-- Generic provider icon -->
-                <template x-if="p.provider !== 'google' && p.provider !== 'microsoft'">
+                <template
+                  x-if="p.provider !== 'google' && p.provider !== 'microsoft'"
+                >
                   <i data-lucide="key-round" class="w-4 h-4"></i>
                 </template>
                 <span>Connect with <span x-text="p.name"></span></span>
@@ -319,71 +494,149 @@
           <label class="form-control w-full">
             <div class="label"><span class="label-text">Email address</span></div>
             <div class="flex gap-2">
-              <input type="email" x-model="newAccount.email" class="input input-bordered w-full input-sm" required />
-              <button type="button" class="btn btn-outline btn-warning btn-sm whitespace-nowrap" :disabled="!newAccount.email || autoDiscovering" @click="autodiscoverSettings()">
-                <span x-show="!autoDiscovering" class="flex items-center gap-1">
+              <input
+                type="email"
+                x-model="newAccount.email"
+                class="input input-bordered w-full input-sm"
+                required
+              />
+              <button
+                type="button"
+                class="btn btn-outline btn-warning btn-sm whitespace-nowrap"
+                :disabled="!newAccount.email || autoDiscovering"
+                @click="autodiscoverSettings()"
+              >
+                <span
+                  x-show="!autoDiscovering"
+                  class="flex items-center gap-1"
+                >
                   <i data-lucide="radar" class="w-3.5 h-3.5"></i>
                   Detect
                 </span>
-                <span x-show="autoDiscovering" class="loading loading-spinner loading-xs"></span>
+                <span
+                  x-show="autoDiscovering"
+                  class="loading loading-spinner loading-xs"
+                ></span>
               </button>
             </div>
           </label>
           <label class="form-control w-full">
             <div class="label"><span class="label-text">Display name</span></div>
-            <input type="text" x-model="newAccount.display_name" class="input input-bordered w-full input-sm" />
+            <input
+              type="text"
+              x-model="newAccount.display_name"
+              class="input input-bordered w-full input-sm"
+            />
           </label>
           <div class="divider text-xs my-1">IMAP (Incoming)</div>
           <div class="grid grid-cols-3 gap-2">
             <label class="form-control col-span-2">
               <div class="label"><span class="label-text">Host</span></div>
-              <input type="text" x-model="newAccount.imap_host" class="input input-bordered w-full input-sm" required />
+              <input
+                type="text"
+                x-model="newAccount.imap_host"
+                class="input input-bordered w-full input-sm"
+                required
+              />
             </label>
             <label class="form-control">
               <div class="label"><span class="label-text">Port</span></div>
-              <input type="number" x-model.number="newAccount.imap_port" class="input input-bordered w-full input-sm" />
+              <input
+                type="number"
+                x-model.number="newAccount.imap_port"
+                class="input input-bordered w-full input-sm"
+              />
             </label>
           </div>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" x-model="newAccount.imap_use_ssl" class="toggle toggle-sm toggle-warning" />
+          <label
+            class="flex items-center gap-2 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              x-model="newAccount.imap_use_ssl"
+              class="toggle toggle-sm toggle-warning"
+            />
             <span class="label-text">Use SSL</span>
           </label>
           <div class="divider text-xs my-1">SMTP (Outgoing)</div>
           <div class="grid grid-cols-3 gap-2">
             <label class="form-control col-span-2">
               <div class="label"><span class="label-text">Host</span></div>
-              <input type="text" x-model="newAccount.smtp_host" class="input input-bordered w-full input-sm" required />
+              <input
+                type="text"
+                x-model="newAccount.smtp_host"
+                class="input input-bordered w-full input-sm"
+                required
+              />
             </label>
             <label class="form-control">
               <div class="label"><span class="label-text">Port</span></div>
-              <input type="number" x-model.number="newAccount.smtp_port" class="input input-bordered w-full input-sm" />
+              <input
+                type="number"
+                x-model.number="newAccount.smtp_port"
+                class="input input-bordered w-full input-sm"
+              />
             </label>
           </div>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" x-model="newAccount.smtp_use_tls" class="toggle toggle-sm toggle-warning" />
+          <label
+            class="flex items-center gap-2 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              x-model="newAccount.smtp_use_tls"
+              class="toggle toggle-sm toggle-warning"
+            />
             <span class="label-text">Use STARTTLS</span>
           </label>
           <div class="divider text-xs my-1">Authentication</div>
           <label class="form-control w-full">
             <div class="label"><span class="label-text">Username</span></div>
-            <input type="text" x-model="newAccount.username" class="input input-bordered w-full input-sm" required />
+            <input
+              type="text"
+              x-model="newAccount.username"
+              class="input input-bordered w-full input-sm"
+              required
+            />
           </label>
           <label class="form-control w-full">
             <div class="label"><span class="label-text">Password</span></div>
-            <input type="password" x-model="newAccount.password" class="input input-bordered w-full input-sm" required />
+            <input
+              type="password"
+              x-model="newAccount.password"
+              class="input input-bordered w-full input-sm"
+              required
+            />
           </label>
         </div>
-        <div id="account-error" class="mt-3" x-show="accountError" x-cloak>
-          <div class="alert alert-error text-white text-sm">
+        <div
+          id="account-error"
+          class="mt-3"
+          x-show="accountError"
+          x-cloak
+        >
+          <div
+            class="alert alert-error text-white text-sm"
+          >
             <i data-lucide="x-circle" class="w-4 h-4"></i>
             <span x-text="accountError"></span>
           </div>
         </div>
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost btn-sm" @click="closeAddAccount()">Cancel</button>
-          <button type="submit" class="btn btn-warning btn-sm" :disabled="addingAccount">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            @click="closeAddAccount()"
+          >Cancel</button>
+          <button
+            type="submit"
+            class="btn btn-warning btn-sm"
+            :disabled="addingAccount"
+          >
             <span x-show="!addingAccount">Add Account</span>
-            <span x-show="addingAccount" class="loading loading-spinner loading-xs"></span>
+            <span
+              x-show="addingAccount"
+              class="loading loading-spinner loading-xs"
+            ></span>
           </button>
         </div>
       </form>
@@ -394,68 +647,137 @@
   </dialog>
 
   <!-- Edit account dialog -->
-  <dialog id="mail-edit-account-dialog" class="modal">
+  <dialog
+    id="mail-edit-account-dialog"
+    class="modal"
+  >
     <template x-if="editAccount">
       <div class="modal-box max-w-lg">
         <h3 class="font-bold text-lg mb-1">Edit Account</h3>
-        <p class="text-sm text-base-content/50 mb-4" x-text="editAccount?.email"></p>
+        <p
+          class="text-sm text-base-content/50 mb-4"
+          x-text="editAccount?.email"
+        ></p>
         <form @submit.prevent="saveAccount()">
           <div class="grid grid-cols-1 gap-3">
             <label class="form-control w-full">
               <div class="label"><span class="label-text">Display name</span></div>
-              <input type="text" x-model="editAccount.display_name" class="input input-bordered w-full input-sm" />
+              <input
+                type="text"
+                x-model="editAccount.display_name"
+                class="input input-bordered w-full input-sm"
+              />
             </label>
             <div class="divider text-xs my-1">IMAP (Incoming)</div>
             <div class="grid grid-cols-3 gap-2">
               <label class="form-control col-span-2">
                 <div class="label"><span class="label-text">Host</span></div>
-                <input type="text" x-model="editAccount.imap_host" class="input input-bordered w-full input-sm" required />
+                <input
+                  type="text"
+                  x-model="editAccount.imap_host"
+                  class="input input-bordered w-full input-sm"
+                  required
+                />
               </label>
               <label class="form-control">
                 <div class="label"><span class="label-text">Port</span></div>
-                <input type="number" x-model.number="editAccount.imap_port" class="input input-bordered w-full input-sm" />
+                <input
+                  type="number"
+                  x-model.number="editAccount.imap_port"
+                  class="input input-bordered w-full input-sm"
+                />
               </label>
             </div>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" x-model="editAccount.imap_use_ssl" class="toggle toggle-sm toggle-warning" />
+            <label
+              class="flex items-center gap-2 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                x-model="editAccount.imap_use_ssl"
+                class="toggle toggle-sm toggle-warning"
+              />
               <span class="label-text">Use SSL</span>
             </label>
             <div class="divider text-xs my-1">SMTP (Outgoing)</div>
             <div class="grid grid-cols-3 gap-2">
               <label class="form-control col-span-2">
                 <div class="label"><span class="label-text">Host</span></div>
-                <input type="text" x-model="editAccount.smtp_host" class="input input-bordered w-full input-sm" required />
+                <input
+                  type="text"
+                  x-model="editAccount.smtp_host"
+                  class="input input-bordered w-full input-sm"
+                  required
+                />
               </label>
               <label class="form-control">
                 <div class="label"><span class="label-text">Port</span></div>
-                <input type="number" x-model.number="editAccount.smtp_port" class="input input-bordered w-full input-sm" />
+                <input
+                  type="number"
+                  x-model.number="editAccount.smtp_port"
+                  class="input input-bordered w-full input-sm"
+                />
               </label>
             </div>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" x-model="editAccount.smtp_use_tls" class="toggle toggle-sm toggle-warning" />
+            <label
+              class="flex items-center gap-2 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                x-model="editAccount.smtp_use_tls"
+                class="toggle toggle-sm toggle-warning"
+              />
               <span class="label-text">Use STARTTLS</span>
             </label>
             <div class="divider text-xs my-1">Authentication</div>
             <label class="form-control w-full">
               <div class="label"><span class="label-text">Username</span></div>
-              <input type="text" x-model="editAccount.username" class="input input-bordered w-full input-sm" required />
+              <input
+                type="text"
+                x-model="editAccount.username"
+                class="input input-bordered w-full input-sm"
+                required
+              />
             </label>
             <label class="form-control w-full">
-              <div class="label"><span class="label-text">Password</span><span class="label-text-alt text-base-content/40">Leave empty to keep current</span></div>
-              <input type="password" x-model="editAccount.password" class="input input-bordered w-full input-sm" placeholder="••••••••" />
+              <div class="label"><span class="label-text">Password</span><span
+  class="label-text-alt text-base-content/40"
+>Leave empty to keep current</span></div>
+              <input
+                type="password"
+                x-model="editAccount.password"
+                class="input input-bordered w-full input-sm"
+                placeholder="••••••••"
+              />
             </label>
           </div>
-          <div class="mt-3" x-show="editAccountError" x-cloak>
-            <div class="alert alert-error text-white text-sm">
+          <div
+            class="mt-3"
+            x-show="editAccountError"
+            x-cloak
+          >
+            <div
+              class="alert alert-error text-white text-sm"
+            >
               <i data-lucide="x-circle" class="w-4 h-4"></i>
               <span x-text="editAccountError"></span>
             </div>
           </div>
           <div class="modal-action">
-            <button type="button" class="btn btn-ghost btn-sm" @click="closeEditAccount()">Cancel</button>
-            <button type="submit" class="btn btn-warning btn-sm" :disabled="savingAccount">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="closeEditAccount()"
+            >Cancel</button>
+            <button
+              type="submit"
+              class="btn btn-warning btn-sm"
+              :disabled="savingAccount"
+            >
               <span x-show="!savingAccount">Save</span>
-              <span x-show="savingAccount" class="loading loading-spinner loading-xs"></span>
+              <span
+                x-show="savingAccount"
+                class="loading loading-spinner loading-xs"
+              ></span>
             </button>
           </div>
         </form>
@@ -467,27 +789,57 @@
   </dialog>
 
   <!-- Signature dialog (opened per-account from the account context menu) -->
-  <dialog id="mail-signature-dialog" class="modal">
+  <dialog
+    id="mail-signature-dialog"
+    class="modal"
+  >
     <div class="modal-box max-w-lg">
       <h3 class="font-bold text-lg mb-1">Signature</h3>
-      <p class="text-sm text-base-content/50 mb-4" x-text="signatureEdit.email"></p>
+      <p
+        class="text-sm text-base-content/50 mb-4"
+        x-text="signatureEdit.email"
+      ></p>
       <form @submit.prevent="saveSignature()">
         <label class="form-control w-full">
           <div class="label">
             <span class="label-text">This signature is added to new messages, replies and forwards.</span>
           </div>
-          <textarea x-model="signatureEdit.text" class="textarea textarea-bordered w-full" rows="6" maxlength="5000" placeholder="Your signature"></textarea>
+          <textarea
+            x-model="signatureEdit.text"
+            class="textarea textarea-bordered w-full"
+            rows="6"
+            maxlength="5000"
+            placeholder="Your signature"
+          ></textarea>
         </label>
-        <div class="mt-3" x-show="signatureEditError" x-cloak>
-          <div class="alert alert-error text-white text-sm">
+        <div
+          class="mt-3"
+          x-show="signatureEditError"
+          x-cloak
+        >
+          <div
+            class="alert alert-error text-white text-sm"
+          >
             <i data-lucide="x-circle" class="w-4 h-4"></i>
             <span x-text="signatureEditError"></span>
           </div>
         </div>
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost btn-sm" @click="document.getElementById('mail-signature-dialog').close()">Cancel</button>
-          <button type="submit" class="btn btn-primary btn-sm" :class="signatureEdit.saving ? 'pointer-events-none opacity-60' : ''">
-            <span class="loading loading-spinner loading-xs" x-show="signatureEdit.saving" x-cloak></span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            @click="document.getElementById('mail-signature-dialog').close()"
+          >Cancel</button>
+          <button
+            type="submit"
+            class="btn btn-primary btn-sm"
+            :class="signatureEdit.saving ? 'pointer-events-none opacity-60' : ''"
+          >
+            <span
+              class="loading loading-spinner loading-xs"
+              x-show="signatureEdit.saving"
+              x-cloak
+            ></span>
             Save
           </button>
         </div>
@@ -507,16 +859,38 @@
 {% endblock %}
 
 {% block extra_scripts %}
-  <script src="{% static 'mail/ui/js/mail_helpers.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_preferences.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_accounts.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_folders.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_messages.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_signature.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_compose.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_labels.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_ai.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_rules.js' %}"></script>
-  <script src="{% static 'mail/ui/js/mail_rules_form.js' %}"></script>
+  <script
+    src="{% static 'mail/ui/js/mail_helpers.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_preferences.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_accounts.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_folders.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_messages.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_signature.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_compose.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_labels.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_ai.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_rules.js' %}"
+  ></script>
+  <script
+    src="{% static 'mail/ui/js/mail_rules_form.js' %}"
+  ></script>
   <script src="{% static 'mail/ui/js/mail.js' %}"></script>
 {% endblock %}

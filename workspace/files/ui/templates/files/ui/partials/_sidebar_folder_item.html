@@ -23,9 +23,20 @@ Parameters:
   :title="collapsed ? '{{ folder.name|escapejs }}' : ''"
   {{ extra_attrs }}
 >
-  <i data-lucide="{{ folder.icon|default:default_icon }}" class="w-5 h-5 flex-shrink-0 {{ folder.color|default:default_color }}"></i>
-  <span x-show="!collapsed" x-transition class="truncate flex-1">{{ folder.name }}</span>
+  <i
+    data-lucide="{{ folder.icon|default:default_icon }}"
+    class="w-5 h-5 flex-shrink-0 {{ folder.color|default:default_color }}"
+  ></i>
+  <span
+    x-show="!collapsed"
+    x-transition
+    class="truncate flex-1"
+  >{{ folder.name }}</span>
   {% if show_grip %}
-    <i data-lucide="grip-vertical" class="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab" x-show="!collapsed"></i>
+    <i
+      data-lucide="grip-vertical"
+      class="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab"
+      x-show="!collapsed"
+    ></i>
   {% endif %}
 </a>

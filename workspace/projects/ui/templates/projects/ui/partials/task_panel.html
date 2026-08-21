@@ -189,12 +189,15 @@
           x-text="subtasksDone() + '/' + subtasks.length"
         ></span>
       </h3>
+      {# x-effect, not :value - Alpine's value binding skips the write when #}
+      {# the IDL property already matches (0 on an attribute-less progress), #}
+      {# leaving the bar indeterminate whenever no item is done. The property #}
+      {# setters always reflect to the attributes. #}
       <progress
         class="progress progress-success w-full h-1 mb-1.5"
         x-show="subtasks.length"
         x-cloak
-        :value="subtasksDone()"
-        :max="subtasks.length"
+        x-effect="$el.value = subtasksDone(); $el.max = subtasks.length || 1"
       ></progress>
       <ul
         class="flex flex-col"

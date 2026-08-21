@@ -81,7 +81,7 @@ knowing before writing another implementation:
 ## The reference implementation
 
 `workspace/vault/tests/reference/` is a second, independent implementation of
-the same specification in Python. It exists to generate the vectors and to be
+the key hierarchy above, in Python. It exists to generate the vectors and to be
 compared against, and **application code must never import it**: a server-side
 path able to perform these operations would be a server-side path able to
 decrypt, which is the property this module is built to deny. It lives under

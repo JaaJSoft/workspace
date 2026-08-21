@@ -18,4 +18,9 @@ urlpatterns = [
         views.AccountEnvelopeView.as_view(),
         name="vault-account-envelope",
     ),
+    path(
+        "api/v1/vault/account/rotate",
+        views.AccountRotateView.as_view(),
+        name="vault-account-rotate",
+    ),
 ]

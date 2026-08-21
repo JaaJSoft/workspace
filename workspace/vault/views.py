@@ -24,7 +24,11 @@ from rest_framework.views import APIView
 from workspace.common.mixins import CacheControlMixin
 
 from .models import AccountIdentity
-from .serializers import AccountEnvelopeSerializer, AccountFinalizeSerializer
+from .serializers import (
+    AccountEnvelopeSerializer,
+    AccountFinalizeSerializer,
+    AccountRotateSerializer,
+)
 from .services.attestation import AttestationError, verify_kex_pub_attestation
 from .throttling import (
     AccountEnvelopeBurstThrottle,
@@ -33,6 +37,7 @@ from .throttling import (
     AccountFinalizeIpThrottle,
     AccountInitIpThrottle,
     AccountInitUserThrottle,
+    AccountRotateUserThrottle,
 )
 
 SALT_LENGTH = 32
@@ -156,3 +161,46 @@ class AccountFinalizeView(APIView):
         identity.state = AccountIdentity.State.ACTIVE
         identity.save()
         return Response(status=status.HTTP_201_CREATED)
+
+
+@method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
+class AccountRotateView(CacheControlMixin, APIView):
+    cache_no_store = True
+    throttle_classes = [AccountRotateUserThrottle]
+
+    @extend_schema(
+        tags=["Vault"],
+        summary="Rotate the vault password envelope",
+        description=(
+            "Re-wraps the same account private keys under a key derived from a "
+            "new vault password. No vault is re-encrypted: the vault keys have "
+            "not changed, only the envelope that seals the account keys."
+        ),
+        request=AccountRotateSerializer,
+        responses={200: None},
+    )
+    def post(self, request):
+        identity = AccountIdentity.objects.filter(
+            user=request.user, state=AccountIdentity.State.ACTIVE
+        ).first()
+        if identity is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AccountRotateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # update_fields names the three columns a rotation rewrites, so no
+        # later edit here can widen it into a re-identification: the sealed
+        # private keys are the only path back to every VaultKeyWrap, and a
+        # recreated identity orphans all of them without a word.
+        for field, value in serializer.validated_data.items():
+            setattr(identity, field, value)
+        identity.save(
+            update_fields=[
+                "kdf_params",
+                "wrapped_kex_priv",
+                "wrapped_sig_priv",
+                "updated_at",
+            ]
+        )
+        return Response(status=status.HTTP_200_OK)

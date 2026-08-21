@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.vault.models import AccountIdentity
+from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
 from workspace.vault.tests.reference import ad, primitives
 from workspace.vault.tests.reference.encoding import to_base64url
 
@@ -13,6 +13,7 @@ User = get_user_model()
 INIT_URL = "/api/v1/vault/account/init"
 ENVELOPE_URL = "/api/v1/vault/account/envelope"
 FINALIZE_URL = "/api/v1/vault/account/finalize"
+ROTATE_URL = "/api/v1/vault/account/rotate"
 
 
 def build_identity_payload(account_uuid):
@@ -258,3 +259,121 @@ class AccountFinalizeTests(TestCase):
             self.payload["wrapped_sig_priv"],
         ):
             self.assertNotIn(value, blob)
+
+
+class AccountRotateTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.client.force_login(self.user)
+        self.identity = AccountIdentity.objects.create(
+            user=self.user,
+            kdf_algo="argon2id",
+            kdf_params={"m": 65536, "t": 3, "p": 2},
+            kdf_salt="SALT",
+            kex_public="KEX",
+            sig_public="SIG",
+            wrapped_kex_priv="OLD-WKEX",
+            wrapped_sig_priv="OLD-WSIG",
+            sig_over_kex_pub="ATTEST",
+            state=AccountIdentity.State.ACTIVE,
+        )
+        self.vault = Vault.objects.create(
+            owner=self.user, encrypted_name="NAME", metadata_sig="SIG"
+        )
+        self.wrap = VaultKeyWrap.objects.create(
+            vault=self.vault,
+            recipient=self.user,
+            wrapped_key="WRAPPED",
+            key_version=1,
+            hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
+        )
+        self.body = {
+            "kdf_params": {"m": 262144, "t": 4, "p": 2},
+            "wrapped_kex_priv": "NEW-WKEX",
+            "wrapped_sig_priv": "NEW-WSIG",
+        }
+
+    def tearDown(self):
+        cache.clear()
+
+    def _post(self, body=None):
+        return self.client.post(
+            ROTATE_URL,
+            data=self.body if body is None else body,
+            content_type="application/json",
+        )
+
+    def test_rewrites_the_envelope(self):
+        self.assertEqual(self._post().status_code, 200)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.wrapped_kex_priv, "NEW-WKEX")
+        self.assertEqual(self.identity.wrapped_sig_priv, "NEW-WSIG")
+        self.assertEqual(self.identity.kdf_params, {"m": 262144, "t": 4, "p": 2})
+
+    def test_updates_the_row_in_place_rather_than_recreating_it(self):
+        """The identity UUID is what every associated data string of this
+        account is bound to, and the sealed private keys are the only path back
+        to every VaultKeyWrap. A delete-then-recreate is invisible in the data:
+        VaultKeyWrap points at auth.User, not at the identity, so every wrap
+        survives the deletion intact and merely stops being decryptable. The
+        account can never open a vault again, and nothing says so until the
+        next unlock. Only the UUID's stability catches it."""
+        original_uuid = self.identity.uuid
+        self.assertEqual(self._post().status_code, 200)
+
+        identities = AccountIdentity.objects.filter(user=self.user)
+        self.assertEqual(identities.count(), 1)
+        self.assertEqual(identities.get().uuid, original_uuid)
+
+    def test_keeps_every_key_wrap(self):
+        self.assertEqual(self._post().status_code, 200)
+        self.wrap.refresh_from_db()
+        self.assertEqual(self.wrap.wrapped_key, "WRAPPED")
+        self.assertEqual(VaultKeyWrap.objects.filter(recipient=self.user).count(), 1)
+
+    def test_never_touches_the_public_keys_or_the_salt(self):
+        response = self._post(
+            {
+                **self.body,
+                "kex_public": "ATTACKER-KEX",
+                "sig_public": "ATTACKER-SIG",
+                "kdf_salt": "ATTACKER-SALT",
+                "sig_over_kex_pub": "ATTACKER-ATTEST",
+                "state": "pending",
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.kex_public, "KEX")
+        self.assertEqual(self.identity.sig_public, "SIG")
+        self.assertEqual(self.identity.kdf_salt, "SALT")
+        self.assertEqual(self.identity.sig_over_kex_pub, "ATTEST")
+        self.assertEqual(self.identity.state, AccountIdentity.State.ACTIVE)
+
+    def test_refuses_a_body_missing_a_wrapped_key(self):
+        body = dict(self.body)
+        del body["wrapped_sig_priv"]
+        self.assertEqual(self._post(body).status_code, 400)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")
+
+    def test_answers_404_when_the_identity_is_still_pending(self):
+        AccountIdentity.objects.filter(user=self.user).update(
+            state=AccountIdentity.State.PENDING
+        )
+        self.assertEqual(self._post().status_code, 404)
+
+    def test_answers_404_without_an_identity(self):
+        VaultKeyWrap.objects.all().delete()
+        Vault.objects.all().delete()
+        AccountIdentity.objects.all().delete()
+        self.assertEqual(self._post().status_code, 404)
+
+    def test_the_response_is_never_cached(self):
+        self.assertEqual(self._post()["Cache-Control"], "no-store")
+
+    def test_requires_authentication(self):
+        self.client.logout()
+        self.assertIn(self._post().status_code, (401, 403))
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")

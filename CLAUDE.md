@@ -448,6 +448,13 @@ logger.exception("Activity provider '%s' failed", scrub(source))
 - Internal/system values that never touched user input (settings keys, hard-coded enum members, `__name__`, computed counts) don't need `scrub()`. Apply it to the *tainted* fields, not the whole format string.
 - The helper lives in `workspace/common/logging.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` - do not refactor the replaces away or wrap them in another helper.
 
+**Secrets are a separate concern.** `scrub()` stops log injection; it hides nothing. Values whose
+*name* marks them as a secret - `password`, `secret_key`, `session_key`, and anything prefixed
+`wrapped_`, `encrypted_` or `sig_` - are redacted by `workspace/common/redaction.py`, wired into the
+console log handler and into `DEFAULT_EXCEPTION_REPORTER_FILTER`. Extend the catalogue there rather
+than relying on remembering not to log a field, and mark a view's body with Django's
+`@sensitive_post_parameters` so a traceback cannot render it either.
+
 ### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`
 
 Two recurring bugs land here, both because Python's loose typing or Django's deep-cleaning layer surface as confusing 500s instead of clean 4xxs:

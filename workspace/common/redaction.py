@@ -143,8 +143,6 @@ class RedactingExceptionReporterFilter(SafeExceptionReporterFilter):
 
     def get_post_parameters(self, request):
         parameters = super().get_post_parameters(request)
-        if not hasattr(parameters, "items"):
-            return parameters
         return {
             key: REDACTED if is_sensitive_name(key) else value
             for key, value in parameters.items()

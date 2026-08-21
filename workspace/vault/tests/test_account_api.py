@@ -176,6 +176,23 @@ class AccountEnvelopeTests(TestCase):
         response = self.client.get(ENVELOPE_URL + "?user=not-a-uuid&page=%00")
         self.assertEqual(response.status_code, 200)
 
+    @override_settings(DEBUG=True)
+    def test_a_crash_renders_no_secret_on_the_technical_500_page(self):
+        """This view is not decorated: its locals hold the identity model, and
+        a traceback renders locals. Django prints a model by its __str__, so
+        the sealed keys never reach the page - a property worth pinning rather
+        than reasoning about."""
+        self._identity(self.user)
+        self.client.raise_request_exception = False
+        with patch(
+            "workspace.vault.views.AccountEnvelopeSerializer",
+            side_effect=RuntimeError("boom"),
+        ):
+            response = self.client.get(ENVELOPE_URL)
+
+        self.assertEqual(response.status_code, 500)
+        self.assertNotIn("WKEX", response.content.decode())
+
     def test_requires_authentication(self):
         self._identity(self.user)
         self.client.logout()

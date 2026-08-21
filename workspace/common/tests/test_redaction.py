@@ -158,6 +158,18 @@ class SecretRedactingFilterTests(TestCase):
     def test_leaves_an_ordinary_assignment_untouched(self):
         self.assertEqual(self._render("state=pending"), "state=pending")
 
+    def test_survives_a_non_string_message_carrying_arguments(self):
+        """A record can be built with a non-string message and arguments. The
+        scan for a secret named in the format string has to cope with having
+        no format string; whether such a record renders at all is logging's
+        own problem, so the filter passes it through untouched."""
+        record = logging.LogRecord(
+            "workspace.test", logging.INFO, __file__, 1, 42, ("x",), None
+        )
+        self.assertTrue(SecretRedactingFilter().filter(record))
+        self.assertEqual(record.msg, 42)
+        self.assertEqual(record.args, ("x",))
+
     def test_survives_a_non_string_message(self):
         self.assertEqual(self._render(42), "42")
 

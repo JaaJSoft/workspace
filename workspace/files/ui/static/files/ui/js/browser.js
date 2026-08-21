@@ -924,10 +924,10 @@ window.fileBrowser = function fileBrowser() {
       if (window.getFilePrefs().confirmBeforeDelete) {
         const count = uuids.length;
         const confirmed = await AppDialog.confirm({
-          title: 'Delete Items',
-          message: `Are you sure you want to delete ${count} item${count > 1 ? 's' : ''}? They will be moved to trash.`,
-          confirmText: 'Delete',
-          confirmClass: 'btn-error'
+          title: `Delete ${count} item${count > 1 ? 's' : ''}?`,
+          message: `Move ${count} item${count > 1 ? 's' : ''} to trash? Folders will also move all their contents.`,
+          okLabel: 'Move to trash',
+          okClass: 'btn-error'
         });
         if (!confirmed) return;
       }

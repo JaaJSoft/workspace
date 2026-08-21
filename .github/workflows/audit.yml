@@ -1,0 +1,52 @@
+# npm advisories are invisible to the rest of CI: tests.yml filters out
+# scripts/frontend, and Trivy reads the image, which carries the built
+# artifacts and never the npm tree. The schedule matters as much as the pull
+# request trigger - an advisory lands without anyone touching the manifest.
+#
+# `dependencies` is bundled and runs in a signed-in user's browser, so an
+# advisory there fails the run. `devDependencies` never leaves CI: annotation.
+name: Dependency audit
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/frontend/package.json'
+      - 'scripts/frontend/package-lock.json'
+      - '.github/workflows/audit.yml'
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    name: Dependency audit
+    defaults:
+      run:
+        working-directory: scripts/frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Report advisories across the whole tree
+        run: |
+          if npm audit --audit-level=high; then
+            echo "No advisory at high severity or above."
+          else
+            echo "::warning title=Build tooling advisories::advisories at high severity or above - see the log above"
+          fi
+
+      - name: Fail on advisories in the bundled dependencies
+        run: npm audit --omit=dev --audit-level=high

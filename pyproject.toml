@@ -74,6 +74,14 @@ dev = [
     # Real OpenID Connect provider (RS256 + JWKS + discovery) booted in-process
     # by the OIDC login E2E test, so the SSO flow is exercised end to end.
     "oidc-provider-mock>=0.4.6",
+    # Reference implementation of the vault cryptography, used only to generate
+    # and verify workspace/vault/tests/crypto_vectors.json. Never imported by
+    # application code: the browser owns every real cryptographic operation.
+    # argon2-cffi is required for its low-level core(), the only API exposing
+    # the Argon2 `secret` parameter (K) the key hierarchy depends on.
+    "argon2-cffi>=25.1.0",
+    "pyhpke>=0.6.0",
+    "cbor2>=5.7.0",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
     "ruff==0.16.3",

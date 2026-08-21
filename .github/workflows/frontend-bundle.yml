@@ -1,5 +1,6 @@
 # Rebuilds the vendored frontend assets (Alpine bundle, Milkdown editor bundle
-# and theme CSS, Tailwind stylesheet) when the build project changes -
+# and theme CSS, vault crypto bundles, Tailwind stylesheet) when the build
+# project changes -
 # typically a Dependabot bump of scripts/frontend/package.json. Without this,
 # a dependency PR would update the manifest but leave the committed artifacts
 # stale, so CI would silently keep testing the old code.
@@ -23,6 +24,7 @@ on:
       - 'workspace/common/static/ui/js/vendor/alpine/**'
       - 'workspace/files/ui/static/files/ui/js/vendor/milkdown/**'
       - 'workspace/files/ui/static/files/ui/css/vendor/milkdown/**'
+      - 'workspace/vault/ui/static/vault/ui/js/vendor/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,7 +61,7 @@ jobs:
           npm run build
 
       - name: Verify bundle integrity
-        run: node --test "workspace/common/tests/js/alpine_bundle.test.js" "workspace/common/tests/js/css_bundle.test.js" "workspace/files/tests/js/milkdown_bundle.test.js"
+        run: node --test "workspace/common/tests/js/alpine_bundle.test.js" "workspace/common/tests/js/css_bundle.test.js" "workspace/files/tests/js/milkdown_bundle.test.js" "workspace/vault/tests/js/vault_bundle.test.js"
 
       # The token is injected only here, after all dependency code has run.
       - name: Commit and push if changed
@@ -70,7 +72,8 @@ jobs:
           git add -A workspace/common/static/ui/js/vendor/alpine \
             workspace/common/static/css/app.css \
             workspace/files/ui/static/files/ui/js/vendor/milkdown \
-            workspace/files/ui/static/files/ui/css/vendor/milkdown
+            workspace/files/ui/static/files/ui/css/vendor/milkdown \
+            workspace/vault/ui/static/vault/ui/js/vendor
           if git diff --cached --quiet; then
             echo "Vendored assets already up to date"
             exit 0

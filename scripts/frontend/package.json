@@ -1,23 +1,32 @@
 {
   "name": "workspace-frontend",
   "version": "1.0.0",
-  "description": "Build of every vendored frontend asset for the workspace Django project: the Alpine.js bundle loaded by base.html, the Milkdown Crepe editor bundle and its theme CSS, and the Tailwind + DaisyUI stylesheet. Everything is committed to statics and served via whitenoise so no page depends on a CDN at runtime. Rebuild with `npm run build` after bumping any pinned version.",
+  "description": "Build of every vendored frontend asset for the workspace Django project: the Alpine.js bundle loaded by base.html, the Milkdown Crepe editor bundle and its theme CSS, the vault client cryptography bundles, and the Tailwind + DaisyUI stylesheet. Everything is committed to statics and served via whitenoise so no page depends on a CDN at runtime. Rebuild with `npm run build` after bumping any pinned version.",
   "private": true,
   "scripts": {
-    "build": "npm run build:alpine && npm run build:editor && npm run build:editor-css && npm run build:css",
+    "build": "npm run build:alpine && npm run build:editor && npm run build:editor-css && npm run build:vault && npm run build:vault-onboarding && npm run build:css",
     "build:alpine": "esbuild alpine-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/common/static/ui/js/vendor/alpine/alpine.js",
     "build:editor": "esbuild milkdown-editor.js --bundle --format=esm --splitting --minify --target=es2022 --outdir=../../workspace/files/ui/static/files/ui/js/vendor/milkdown --chunk-names=chunk-[hash]",
     "build:editor-css": "esbuild milkdown-theme.css --bundle --minify --loader:.woff2=file --loader:.woff=empty --loader:.ttf=empty --asset-names=fonts/[name] --outfile=../../workspace/files/ui/static/files/ui/css/vendor/milkdown/theme.css",
+    "build:vault-onboarding": "esbuild vault-onboarding-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/vault/ui/static/vault/ui/js/vendor/vault-onboarding.js",
+    "build:vault": "esbuild vault-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js",
     "build:css": "tailwindcss -i ./input.css -o ../../workspace/common/static/css/app.css --minify",
     "watch:css": "tailwindcss -i ./input.css -o ../../workspace/common/static/css/app.css --watch"
   },
   "dependencies": {
     "@alpinejs/collapse": "3.16.1",
+    "@hpke/core": "1.9.0",
+    "@hpke/dhkem-x25519": "1.8.0",
     "@imacrayon/alpine-ajax": "0.12.7",
     "@milkdown/crepe": "7.22.1",
     "@milkdown/plugin-slash": "7.22.1",
+    "@zxcvbn-ts/core": "3.0.4",
+    "@zxcvbn-ts/language-common": "3.0.4",
     "alpinejs": "3.16.1",
-    "codemirror": "6.0.2"
+    "cbor-x": "1.6.0",
+    "codemirror": "6.0.2",
+    "hash-wasm": "4.12.0",
+    "jspdf": "4.2.1"
   },
   "devDependencies": {
     "@tailwindcss/typography": "0.5.20",

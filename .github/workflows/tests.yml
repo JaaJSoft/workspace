@@ -233,6 +233,7 @@ jobs:
           - mail
           - notes
           - users
+          - vault
     name: E2E (${{ matrix.module }})
     steps:
       - name: Checkout repository
@@ -253,6 +254,11 @@ jobs:
         env:
           E2E: '1'
           PYTHONWARNINGS: default
+          # The Playwright image runs this job as root while $HOME is
+          # /github/home, owned by pwuser. Firefox refuses to start in that
+          # situation and prints this exact workaround; Chromium does not care,
+          # which is why it only surfaced when a suite first drove Firefox.
+          HOME: /root
         run: |
           uv run python manage.py test workspace.${{ matrix.module }}.tests.e2e -v 2
 

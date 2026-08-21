@@ -47,7 +47,7 @@
   <div
     x-show="showDropdown && results.length > 0"
     x-cloak
-    class="absolute z-50 mt-1 w-max min-w-full max-w-64 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden"
+    class="absolute z-50 mt-1 w-max min-w-full max-w-64 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden thin-scrollbar"
   >
     <ul class="menu menu-sm p-1">
       <template x-for="(user, idx) in results" :key="user.id">

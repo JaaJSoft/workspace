@@ -2,6 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Thin, unobtrusive scrollbar for picker dropdowns (user/label selectors).
+   The default ~15px scrollbar is carved out of the dropdown's content box,
+   squeezing the rows and making the dropdown visibly wider than its input. */
+@layer components {
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(var(--bc) / 0.15) transparent;
+  }
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: oklch(var(--bc) / 0.15);
+    border-radius: 3px;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--bc) / 0.25);
+  }
+}
+
 /* Toast slide animations. ui/js/toast.js assigns the enter one inline and
    declares the exit one in data-animation-out, which <inline-alert> plays
    on removal. */

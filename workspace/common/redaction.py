@@ -8,6 +8,13 @@ error report, whatever code path put it there.
 The catalogue matches names, not values, because the values are opaque
 base64url by construction - there is nothing in a wrapped private key that
 distinguishes it from a thumbnail path.
+
+Scope: every logger that reaches the project's console handler, plus anything
+an error reporter renders. Access logs are not covered - `django.server` keeps
+Django's own handler and does not propagate, and in production the access log
+belongs to gunicorn, outside Django's logging entirely. Nothing here puts a
+secret in a URL, so no value crosses that line today; a feature that did would
+need the handler taught about this filter as well.
 """
 
 import logging

@@ -454,6 +454,10 @@ logger.exception("Activity provider '%s' failed", scrub(source))
 console log handler and into `DEFAULT_EXCEPTION_REPORTER_FILTER`. Extend the catalogue there rather
 than relying on remembering not to log a field.
 
+It does **not** cover access logs: `django.server` keeps Django's own handler and does not
+propagate, and in production the access log is gunicorn's. Never put a secret in a URL - a query
+parameter is logged verbatim by both.
+
 Redaction by name cannot reach a frame's local variables, because the name that matters is the
 field's, not the variable's - a `data = serializer.validated_data` holding a wrapped key is called
 `data`. **A view that handles secrets must declare it**, and for a JSON API the decorator to reach

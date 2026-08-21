@@ -142,9 +142,10 @@
         </ul>
       </div>
 
-      <!-- Help button -->
+      <!-- Preferences + Help buttons -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0">
+        <ul class="menu p-0 gap-1">
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="accent" onclick="document.getElementById('projects-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" %}
           {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="accent" onclick="document.getElementById('projects-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" %}
         </ul>
       </div>
@@ -187,6 +188,7 @@
 
   {% include "projects/ui/partials/task_modal.html" %}
   {% include "projects/ui/partials/help_dialog.html" %}
+  {% include "projects/ui/partials/prefs_dialog.html" %}
 
   <dialog id="new-project-dialog" class="modal">
     <div

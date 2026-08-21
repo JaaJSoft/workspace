@@ -1,0 +1,75 @@
+{% comment %}
+Per-user preferences for the projects module (cross-project, unlike the
+admin-only per-project settings page). Opened from the sidebar's
+Preferences item; rendered once per full page load.
+{% endcomment %}
+<dialog id="projects-prefs-dialog" class="modal">
+  <div
+    class="modal-box max-w-sm"
+    x-data="projectsPrefsForm({{ reminder_hour }})"
+  >
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="bg-accent/10 text-accent rounded-lg p-2 shrink-0">
+          <i data-lucide="sliders-horizontal" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0">
+          <h3 class="font-bold text-lg">Preferences</h3>
+          <p class="text-sm text-base-content/60">Personal settings for all your projects</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm btn-square"
+        aria-label="Close"
+        @click="document.getElementById('projects-prefs-dialog').close()"
+      >
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <label class="flex items-center justify-between gap-4">
+      <div>
+        <div class="font-medium text-sm">Due-date reminder time</div>
+        <div class="text-xs text-base-content/60">Tasks assigned to you remind you once when they fall due and once when they become overdue, after this hour of your day.</div>
+      </div>
+      <select
+        class="select select-bordered select-sm w-24 shrink-0"
+        x-model.number="hour"
+        @change="save()"
+      >
+        <template x-for="h in 24" :key="h">
+          <option :value="h - 1" x-text="String(h - 1).padStart(2, '0') + ':00'" :selected="h - 1 === hour"></option>
+        </template>
+      </select>
+    </label>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<script>
+  function projectsPrefsForm(initial) {
+    return {
+      hour: initial,
+      previous: initial,
+      save() {
+        const revert = () => {
+          this.hour = this.previous;
+          if (window.AppAlert) window.AppAlert.error('Failed to save reminder time');
+        };
+        fetch('/api/v1/settings/projects/reminder_hour', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+          },
+          body: JSON.stringify({
+            value: this.hour
+          }),
+        }).then((resp) => {
+          if (!resp.ok) revert();
+          else this.previous = this.hour;
+        }).catch(revert);
+      },
+    };
+  }
+</script>

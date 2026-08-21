@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_REMINDER_HOUR = 8
 
 
-def _reminder_hour(user):
+def reminder_hour(user):
     """Local hour (0-23) from which the user's due reminders may be sent.
 
     The setting is JSON from the API, so anything malformed falls back to
@@ -94,7 +94,7 @@ def notify_due_tasks():
                 if user.pk not in local_times:
                     local_times[user.pk] = (
                         now.astimezone(get_user_timezone(user)),
-                        _reminder_hour(user),
+                        reminder_hour(user),
                     )
                 local_now, from_hour = local_times[user.pk]
                 today = local_now.date()

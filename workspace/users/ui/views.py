@@ -20,7 +20,7 @@ from workspace.core.services.activity import (
 from workspace.users.banner_palettes import BANNER_PALETTES, gradient_from_palette_value
 from workspace.users.services import avatar as avatar_service
 from workspace.users.services import presence as presence_service
-from workspace.users.services.settings import get_module_settings, get_setting
+from workspace.users.services.settings import get_module_settings
 
 ACTIVITY_LIMIT = 10
 
@@ -282,9 +282,6 @@ def settings_view(request):
             "banner_palettes": BANNER_PALETTES,
             "oidc_managed": is_oidc_managed(request.user),
             "oidc_provider_name": django_settings.OIDC_PROVIDER_NAME,
-            "reminder_hour": get_setting(
-                request.user, "projects", "reminder_hour", default=8
-            ),
         },
     )
 

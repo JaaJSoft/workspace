@@ -17,59 +17,67 @@ reference the parent chatApp() x-data scope.
 
 <div id="conversation-list">
 
-{% if not other_conversations and not pinned_conversations %}
-  <div class="text-center py-8" x-show="!collapsed">
-    {% if search_query %}
-    <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-base-content/5 flex items-center justify-center">
-      <i data-lucide="search-x" class="w-6 h-6 text-base-content/50"></i>
+  {% if not other_conversations and not pinned_conversations %}
+    <div class="text-center py-8" x-show="!collapsed">
+      {% if search_query %}
+        <div
+          class="w-12 h-12 mx-auto mb-3 rounded-full bg-base-content/5 flex items-center justify-center"
+        >
+          <i data-lucide="search-x" class="w-6 h-6 text-base-content/50"></i>
+        </div>
+        <p class="text-sm text-base-content/60">No conversations match "{{ search_query }}".</p>
+      {% else %}
+        <div
+          class="w-12 h-12 mx-auto mb-3 rounded-full bg-info/10 flex items-center justify-center"
+        >
+          <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
+        </div>
+        <p class="text-sm text-base-content/60 mb-3">No conversations yet</p>
+        <button class="btn btn-info btn-xs" @click="showNewConversationDialog()">
+          <i data-lucide="plus" class="w-3 h-3"></i> New chat
+        </button>
+      {% endif %}
     </div>
-    <p class="text-sm text-base-content/60">No conversations match "{{ search_query }}".</p>
-    {% else %}
-    <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-info/10 flex items-center justify-center">
-      <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
-    </div>
-    <p class="text-sm text-base-content/60 mb-3">No conversations yet</p>
-    <button class="btn btn-info btn-xs" @click="showNewConversationDialog()">
-      <i data-lucide="plus" class="w-3 h-3"></i> New chat
-    </button>
+
+  {% else %}
+
+    {# ── Pinned ── #}
+    {% if pinned_conversations %}
+      <div>
+        <h3
+          class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
+          :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'"
+          :aria-hidden="collapsed"
+        >
+          <span class="flex items-center gap-2">
+            <i data-lucide="pin" class="w-3 h-3"></i>
+            Pinned
+          </span>
+        </h3>
+        <ul class="space-y-1">
+          {% for conv in pinned_conversations %}
+            {% include "chat/ui/partials/_conversation_item.html" with conv=conv pinned=True %}
+          {% endfor %}
+        </ul>
+      </div>
+
+      {% if other_conversations %}
+        <hr
+          class="my-3 border-base-300 transition-all duration-200"
+          :class="collapsed ? 'opacity-0' : 'opacity-100'"
+        />
+      {% endif %}
     {% endif %}
-  </div>
 
-{% else %}
+    {# ── Merged conversation list (DMs + Groups), sorted by recent activity ── #}
+    {% if other_conversations %}
+      <ul class="space-y-1">
+        {% for conv in other_conversations %}
+          {% include "chat/ui/partials/_conversation_item.html" with conv=conv pinned=False %}
+        {% endfor %}
+      </ul>
+    {% endif %}
 
-  {# ── Pinned ── #}
-  {% if pinned_conversations %}
-  <div>
-    <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
-        :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'"
-        :aria-hidden="collapsed">
-      <span class="flex items-center gap-2">
-        <i data-lucide="pin" class="w-3 h-3"></i>
-        Pinned
-      </span>
-    </h3>
-    <ul class="space-y-1">
-      {% for conv in pinned_conversations %}
-        {% include "chat/ui/partials/_conversation_item.html" with conv=conv pinned=True %}
-      {% endfor %}
-    </ul>
-  </div>
-
-  {% if other_conversations %}
-  <hr class="my-3 border-base-300 transition-all duration-200"
-      :class="collapsed ? 'opacity-0' : 'opacity-100'">
   {% endif %}
-  {% endif %}
-
-  {# ── Merged conversation list (DMs + Groups), sorted by recent activity ── #}
-  {% if other_conversations %}
-  <ul class="space-y-1">
-    {% for conv in other_conversations %}
-      {% include "chat/ui/partials/_conversation_item.html" with conv=conv pinned=False %}
-    {% endfor %}
-  </ul>
-  {% endif %}
-
-{% endif %}
 
 </div>

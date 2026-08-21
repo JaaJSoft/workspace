@@ -2,16 +2,18 @@
   {% include "ui/partials/pref_toggle.html" with label="Show hidden files" key="showHiddenFiles" accent="toggle-primary" %}
   {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-primary" %}
   {% include "ui/partials/pref_toggle.html" with label="Compact file list" key="compactList" accent="toggle-primary" %}
-  <hr class="border-base-300">
+  <hr class="border-base-300" />
   <label class="text-sm text-base-content/60 block mb-1">Sidebar sections</label>
   {% include "ui/partials/pref_toggle.html" with label="Show pinned folders" key="showPinned" accent="toggle-primary" %}
   {% include "ui/partials/pref_toggle.html" with label="Show group folders" key="showGroups" accent="toggle-primary" %}
-  <hr class="border-base-300">
+  <hr class="border-base-300" />
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Default sort</label>
-    <select class="select select-bordered select-sm w-full"
+    <select
+      class="select select-bordered select-sm w-full"
       :value="prefs.defaultSort"
-      @change="update('defaultSort', $event.target.value)">
+      @change="update('defaultSort', $event.target.value)"
+    >
       <option value="default">Default</option>
       <option value="name">Name</option>
       <option value="modified">Modified</option>
@@ -20,27 +22,37 @@
       <option value="type">Type</option>
     </select>
   </div>
-  <hr class="border-base-300">
+  <hr class="border-base-300" />
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Same-name files</label>
-    <select class="select select-bordered select-sm w-full"
+    <select
+      class="select select-bordered select-sm w-full"
       :value="prefs.nameCollision"
-      @change="update('nameCollision', $event.target.value)">
+      @change="update('nameCollision', $event.target.value)"
+    >
       <option value="ask">Ask me</option>
       <option value="keep_both">Keep both</option>
       <option value="replace">Replace</option>
       <option value="skip">Skip</option>
     </select>
   </div>
-  <hr class="border-base-300">
+  <hr class="border-base-300" />
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Breadcrumb collapse after</label>
     <div class="flex items-center gap-2">
-      <input type="range" min="2" max="8" step="1"
+      <input
+        type="range"
+        min="2"
+        max="8"
+        step="1"
         class="range range-sm range-primary flex-1"
         :value="prefs.breadcrumbCollapse"
-        @input="update('breadcrumbCollapse', parseInt($event.target.value))">
-      <span class="text-sm font-mono w-5 text-center" x-text="prefs.breadcrumbCollapse"></span>
+        @input="update('breadcrumbCollapse', parseInt($event.target.value))"
+      />
+      <span
+        class="text-sm font-mono w-5 text-center"
+        x-text="prefs.breadcrumbCollapse"
+      ></span>
     </div>
   </div>
 </div>

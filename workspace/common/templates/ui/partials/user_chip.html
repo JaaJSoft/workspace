@@ -14,15 +14,34 @@ Params:
                       Omit for a read-only chip without a cross.
   - remove_show_expr: optional - expression gating the cross's visibility (x-show)
 {% endcomment %}
-<span class="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100 py-0.5 pl-0.5 pr-1">
+<span
+  class="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100 py-0.5 pl-0.5 pr-1"
+>
   <user-avatar :user-id="{{ user_id_expr }}" :username="{{ username_expr }}" size="xs"></user-avatar>
   <span class="text-xs" x-text="{{ username_expr }}"></span>
   {% if remove_expr %}
     {% comment %}Inline SVG on purpose: lucide.createIcons() does not process
     nodes that Alpine clones out of an x-for template, so a data-lucide icon
     here would render blank.{% endcomment %}
-    <button type="button" class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"{% if remove_show_expr %} x-show="{{ remove_show_expr }}" x-cloak{% endif %} @click.stop="{{ remove_expr }}" :aria-label="'Remove ' + {{ username_expr }}">
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    <button
+      type="button"
+      class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
+      {% if remove_show_expr %} x-show="{{ remove_show_expr }}" x-cloak{% endif %}
+      @click.stop="{{ remove_expr }}"
+      :aria-label="'Remove ' + {{ username_expr }}"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="w-3 h-3"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
     </button>
   {% endif %}
 </span>

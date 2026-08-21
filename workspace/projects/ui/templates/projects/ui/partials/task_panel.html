@@ -2,41 +2,70 @@
 {# Swapped via alpine-ajax (target id "task-panel"); also included by #}
 {# project.html on ?task= deep links. Action availability is rendered #}
 {# server-side from the ActionRegistry; taskPanel() re-checks it in JS. #}
-<div id="task-panel" class="flex flex-col min-h-0 h-full" x-data="taskPanel()">
+<div
+  id="task-panel"
+  class="flex flex-col min-h-0 h-full"
+  x-data="taskPanel()"
+>
   {{ panel_task_data|json_script:"task-panel-data" }}
   {{ panel_action_ids|json_script:"task-panel-actions" }}
 
   {# Meta strip: navigation, reference and task actions on a tinted band, #}
   {# visually separated from the editable content below. #}
-  <div class="flex items-center gap-2 px-4 py-1.5 bg-base-200/60 border-b border-base-300">
-    <button type="button" class="btn btn-sm btn-square btn-ghost lg:hidden -ml-1"
-            @click="closePanel()" aria-label="Back to board">
+  <div
+    class="flex items-center gap-2 px-4 py-1.5 bg-base-200/60 border-b border-base-300"
+  >
+    <button
+      type="button"
+      class="btn btn-sm btn-square btn-ghost lg:hidden -ml-1"
+      @click="closePanel()"
+      aria-label="Back to board"
+    >
       <i data-lucide="arrow-left" class="w-4 h-4"></i>
     </button>
-    <span class="font-mono text-xs tracking-wide text-base-content/50 select-all">{{ project.key }}-{{ panel_task.number }}</span>
-    <button type="button" class="btn btn-sm btn-square btn-ghost ml-auto"
-            @click="copyLink('{{ project.key }}-{{ panel_task.number }}')"
-            aria-label="Copy link" :title="linkCopied ? 'Copied' : 'Copy link'">
+    <span
+      class="font-mono text-xs tracking-wide text-base-content/50 select-all"
+    >{{ project.key }}-{{ panel_task.number }}</span>
+    <button
+      type="button"
+      class="btn btn-sm btn-square btn-ghost ml-auto"
+      @click="copyLink('{{ project.key }}-{{ panel_task.number }}')"
+      aria-label="Copy link"
+      :title="linkCopied ? 'Copied' : 'Copy link'"
+    >
       <span x-show="!linkCopied" class="inline-flex"><i data-lucide="link" class="w-4 h-4"></i></span>
       <span x-show="linkCopied" x-cloak class="inline-flex text-success"><i data-lucide="check" class="w-4 h-4"></i></span>
     </button>
     {% if "delete" in panel_action_ids %}
-      <button type="button" class="btn btn-sm btn-square btn-ghost text-error"
-              @click="removeTask()" aria-label="Delete task" title="Delete task">
+      <button
+        type="button"
+        class="btn btn-sm btn-square btn-ghost text-error"
+        @click="removeTask()"
+        aria-label="Delete task"
+        title="Delete task"
+      >
         <i data-lucide="trash-2" class="w-4 h-4"></i>
       </button>
     {% endif %}
-    <button type="button" class="btn btn-sm btn-square btn-ghost hidden lg:inline-flex -mr-1"
-            @click="closePanel()" aria-label="Close panel">
+    <button
+      type="button"
+      class="btn btn-sm btn-square btn-ghost hidden lg:inline-flex -mr-1"
+      @click="closePanel()"
+      aria-label="Close panel"
+    >
       <i data-lucide="x" class="w-4 h-4"></i>
     </button>
   </div>
   <div class="px-4 pt-3 pb-3 border-b border-base-300">
     <div class="min-w-0">
       <template x-if="editing !== 'title'">
-        <h2 class="font-semibold text-lg leading-tight break-words"
-            :class="can('edit') && 'cursor-text hover:bg-base-200 rounded px-1 -mx-1'"
-            @click="startEdit('title', data.title)">{{ panel_task.title }}</h2>
+        <h2
+          class="font-semibold text-lg leading-tight break-words"
+          :class="can('edit') && 'cursor-text hover:bg-base-200 rounded px-1 -mx-1'"
+          @click="startEdit('title', data.title)"
+        >
+          {{ panel_task.title }}
+        </h2>
       </template>
       {# Textarea (not input): it must wrap and keep the h2's typography so #}
       {# entering edit mode doesn't reflow the header. Height follows content #}
@@ -45,14 +74,19 @@
       {# so the box's footprint and text column match the h2 exactly - the #}
       {# header keeps its height and the text wraps at the same point. #}
       <template x-if="editing === 'title'">
-        <textarea rows="1" maxlength="255"
-                  class="textarea textarea-bordered box-content block w-full resize-none overflow-hidden min-h-0 rounded p-[3px] -m-1 font-semibold text-lg leading-tight"
-                  {# $nextTick: x-init runs before x-model fills the value, #}
-                  {# so sizing must wait for the draft to land in the field. #}
-                  x-model="draft" x-init="$nextTick(() => { $el.focus(); autoGrowTitle($el) })"
-                  @input="autoGrowTitle($el)"
-                  @keydown.enter.prevent="$el.blur()" @keydown.escape="cancelEdit()"
-                  @blur="commitDraft('title')"></textarea>
+        <textarea
+          rows="1"
+          maxlength="255"
+          class="textarea textarea-bordered box-content block w-full resize-none overflow-hidden min-h-0 rounded p-[3px] -m-1 font-semibold text-lg leading-tight"
+          {# $nextTick: x-init runs before x-model fills the value, #}
+          {# so sizing must wait for the draft to land in the field. #}
+          x-model="draft"
+          x-init="$nextTick(() => { $el.focus(); autoGrowTitle($el) })"
+          @input="autoGrowTitle($el)"
+          @keydown.enter.prevent="$el.blur()"
+          @keydown.escape="cancelEdit()"
+          @blur="commitDraft('title')"
+        ></textarea>
       </template>
     </div>
   </div>
@@ -61,9 +95,12 @@
     <div class="grid grid-cols-2 gap-2">
       <label class="form-control">
         <div class="label py-1"><span class="label-text text-xs">Status</span></div>
-        <select class="select select-bordered select-sm" x-model="data.status"
-                @change="commitField('status', data.status)"
-                {% if "move" not in panel_action_ids %}disabled{% endif %}>
+        <select
+          class="select select-bordered select-sm"
+          x-model="data.status"
+          @change="commitField('status', data.status)"
+          {% if "move" not in panel_action_ids %}disabled{% endif %}
+        >
           {% for s in statuses %}
             <option value="{{ s.uuid }}">{{ s.name }}</option>
           {% endfor %}
@@ -71,9 +108,12 @@
       </label>
       <label class="form-control">
         <div class="label py-1"><span class="label-text text-xs">Priority</span></div>
-        <select class="select select-bordered select-sm" x-model="data.priority"
-                @change="commitField('priority', data.priority)"
-                {% if "edit" not in panel_action_ids %}disabled{% endif %}>
+        <select
+          class="select select-bordered select-sm"
+          x-model="data.priority"
+          @change="commitField('priority', data.priority)"
+          {% if "edit" not in panel_action_ids %}disabled{% endif %}
+        >
           <option value="low">Low</option>
           <option value="medium">Medium</option>
           <option value="high">High</option>
@@ -82,17 +122,23 @@
       </label>
       <label class="form-control col-span-2">
         <div class="label py-1"><span class="label-text text-xs">Due date</span></div>
-        <input type="date" class="input input-bordered input-sm" x-model="data.due_date"
-               @change="commitField('due_date', data.due_date || null)"
-               {% if "set_due" not in panel_action_ids %}disabled{% endif %}>
+        <input
+          type="date"
+          class="input input-bordered input-sm"
+          x-model="data.due_date"
+          @change="commitField('due_date', data.due_date || null)"
+          {% if "set_due" not in panel_action_ids %}disabled{% endif %}
+        />
       </label>
     </div>
 
     <section>
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Description</h3>
       <template x-if="editing !== 'description'">
-        <div :class="can('edit') && 'cursor-text hover:bg-base-200 rounded p-1 -m-1'"
-             @click="startEdit('description', data.description)">
+        <div
+          :class="can('edit') && 'cursor-text hover:bg-base-200 rounded p-1 -m-1'"
+          @click="startEdit('description', data.description)"
+        >
           {% if panel_description_html %}
             <div class="prose prose-sm max-w-none">{{ panel_description_html|safe }}</div>
           {% else %}
@@ -102,12 +148,23 @@
       </template>
       <template x-if="editing === 'description'">
         <div>
-          <textarea class="textarea textarea-bordered w-full text-sm" rows="6"
-                    x-model="draft" placeholder="Markdown supported"
-                    x-init="$el.focus()" @keydown.escape="cancelEdit()"></textarea>
+          <textarea
+            class="textarea textarea-bordered w-full text-sm"
+            rows="6"
+            x-model="draft"
+            placeholder="Markdown supported"
+            x-init="$el.focus()"
+            @keydown.escape="cancelEdit()"
+          ></textarea>
           <div class="flex justify-end gap-2 mt-1">
             <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">Cancel</button>
-            <button type="button" class="btn btn-accent btn-xs" @click="commitDraft('description')">Save</button>
+            <button
+              type="button"
+              class="btn btn-accent btn-xs"
+              @click="commitDraft('description')"
+            >
+              Save
+            </button>
           </div>
         </div>
       </template>
@@ -115,35 +172,55 @@
 
     <section @panel-assignee-selected.window="addAssignee($event.detail.user)">
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Assignees</h3>
-      <div class="flex flex-wrap gap-1.5 mb-2" x-show="data.assignees.length" x-cloak>
+      <div
+        class="flex flex-wrap gap-1.5 mb-2"
+        x-show="data.assignees.length"
+        x-cloak
+      >
         <template x-for="id in data.assignees" :key="id">
           {% include "ui/partials/user_chip.html" with user_id_expr="id" username_expr="assigneeName(id)" remove_expr="removeAssignee(id)" remove_show_expr="can('assign')" %}
         </template>
       </div>
-      <p class="text-sm text-base-content/50 italic mb-2" x-show="!data.assignees.length" x-cloak>No assignees.</p>
+      <p
+        class="text-sm text-base-content/50 italic mb-2"
+        x-show="!data.assignees.length"
+        x-cloak
+      >
+        No assignees.
+      </p>
       <div x-show="can('assign') && unassignedUsers().length" x-cloak>
         {% include "ui/partials/user_selector.html" with on_select_event="panel-assignee-selected" placeholder="Add assignee..." local_source="unassignedUsers()" %}
       </div>
     </section>
 
     {% if labels_data or role == "admin" %}
-    <section @panel-label-selected.window="addLabel($event.detail.label)">
-      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Labels</h3>
-      {{ labels_data|json_script:"panel-labels-data" }}
-      <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="data.labels.length" x-cloak>
-        <template x-for="id in data.labels" :key="id">
-          {% if "set_labels" in panel_action_ids %}
-            <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabel(id)"></tag-chip>
-          {% else %}
-            <tag-chip :name="labelName(id)" :color="labelColor(id)"></tag-chip>
-          {% endif %}
-        </template>
-      </div>
-      <p class="text-sm text-base-content/50 italic mb-2" x-show="!data.labels.length" x-cloak>No labels.</p>
-      {% if "set_labels" in panel_action_ids %}
-        {% include "projects/ui/partials/_label_selector.html" with on_select_event="panel-label-selected" all_source="labels" selected_source="data.labels" %}
-      {% endif %}
-    </section>
+      <section @panel-label-selected.window="addLabel($event.detail.label)">
+        <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Labels</h3>
+        {{ labels_data|json_script:"panel-labels-data" }}
+        <div
+          class="flex flex-wrap gap-1.5 mb-1.5"
+          x-show="data.labels.length"
+          x-cloak
+        >
+          <template x-for="id in data.labels" :key="id">
+            {% if "set_labels" in panel_action_ids %}
+              <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabel(id)"></tag-chip>
+            {% else %}
+              <tag-chip :name="labelName(id)" :color="labelColor(id)"></tag-chip>
+            {% endif %}
+          </template>
+        </div>
+        <p
+          class="text-sm text-base-content/50 italic mb-2"
+          x-show="!data.labels.length"
+          x-cloak
+        >
+          No labels.
+        </p>
+        {% if "set_labels" in panel_action_ids %}
+          {% include "projects/ui/partials/_label_selector.html" with on_select_event="panel-label-selected" all_source="labels" selected_source="data.labels" %}
+        {% endif %}
+      </section>
     {% endif %}
 
     <section>
@@ -163,7 +240,9 @@
       </ul>
     </section>
 
-    <section class="text-xs text-base-content/50 flex flex-col gap-0.5 border-t border-base-200 pt-3">
+    <section
+      class="text-xs text-base-content/50 flex flex-col gap-0.5 border-t border-base-200 pt-3"
+    >
       <span>Created {{ panel_task.created_at|date:"DATE_FORMAT" }}{% if panel_task.created_by %} by {{ panel_task.created_by.username }}{% endif %}</span>
       <span>Updated {{ panel_task.updated_at|date:"DATE_FORMAT" }}</span>
       {% if panel_task.completed_at %}<span>Completed {{ panel_task.completed_at|date:"DATE_FORMAT" }}</span>{% endif %}

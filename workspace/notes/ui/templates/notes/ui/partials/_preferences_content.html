@@ -4,12 +4,14 @@
   {% include "ui/partials/pref_toggle.html" with label="Compact note list" key="compactList" accent="toggle-success" %}
   {% include "ui/partials/pref_toggle.html" with label="Show folders" key="showFolders" accent="toggle-success" %}
   {% include "ui/partials/pref_toggle.html" with label="Show group folders" key="showGroupFolders" accent="toggle-success" %}
-  <hr class="border-base-300">
+  <hr class="border-base-300" />
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Default view</label>
-    <select class="select select-bordered select-sm w-full"
+    <select
+      class="select select-bordered select-sm w-full"
       :value="prefs.defaultView"
-      @change="update('defaultView', $event.target.value)">
+      @change="update('defaultView', $event.target.value)"
+    >
       <option value="all">My Notes</option>
       <option value="recent">Recent</option>
       <option value="journal">Journal</option>
@@ -17,9 +19,11 @@
   </div>
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Sort notes by</label>
-    <select class="select select-bordered select-sm w-full"
+    <select
+      class="select select-bordered select-sm w-full"
       :value="prefs.sortBy"
-      @change="update('sortBy', $event.target.value)">
+      @change="update('sortBy', $event.target.value)"
+    >
       <option value="modified">Last modified</option>
       <option value="created">Date created</option>
       <option value="name">Name</option>
@@ -27,9 +31,15 @@
   </div>
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Default notes folder</label>
-    <div class="input input-bordered input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
-         @mousedown.prevent @click="pickDefaultFolder()">
-      <span class="text-sm flex-1 truncate" x-text="defaultFolderName || 'Not set'"></span>
+    <div
+      class="input input-bordered input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
+      @mousedown.prevent
+      @click="pickDefaultFolder()"
+    >
+      <span
+        class="text-sm flex-1 truncate"
+        x-text="defaultFolderName || 'Not set'"
+      ></span>
       <button type="button" class="btn btn-ghost btn-xs btn-square" tabindex="-1">
         <i data-lucide="pen-line" class="w-3 h-3"></i>
       </button>
@@ -37,15 +47,21 @@
   </div>
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Journal folder</label>
-    <div class="input input-bordered input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
-         @mousedown.prevent @click="pickJournalFolder()">
-      <span class="text-sm flex-1 truncate" x-text="journalFolderName || 'Not set'"></span>
+    <div
+      class="input input-bordered input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
+      @mousedown.prevent
+      @click="pickJournalFolder()"
+    >
+      <span
+        class="text-sm flex-1 truncate"
+        x-text="journalFolderName || 'Not set'"
+      ></span>
       <button type="button" class="btn btn-ghost btn-xs btn-square" tabindex="-1">
         <i data-lucide="pen-line" class="w-3 h-3"></i>
       </button>
     </div>
   </div>
-  <hr class="border-base-300">
+  <hr class="border-base-300" />
   {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-success" %}
   {% include "ui/partials/pref_toggle.html" with label="Show hidden items" key="showHidden" accent="toggle-success" %}
 </div>

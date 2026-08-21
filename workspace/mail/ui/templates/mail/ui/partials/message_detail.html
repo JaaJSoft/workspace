@@ -1,26 +1,47 @@
 <!-- Empty state: folder info -->
-<div x-show="!selectedMessage && selectedFolder" class="flex-1 flex items-center justify-center">
+<div
+  x-show="!selectedMessage && selectedFolder"
+  class="flex-1 flex items-center justify-center"
+>
   <div class="text-center max-w-xs">
     <!-- Folder icon -->
     <div class="mb-4">
       <span :class="selectedFolder?.color || 'text-warning'" class="opacity-60">
-        <i :data-lucide="selectedFolder?.icon || folderIcon(selectedFolder?.folder_type)" class="w-16 h-16 mx-auto"></i>
+        <i
+          :data-lucide="selectedFolder?.icon || folderIcon(selectedFolder?.folder_type)"
+          class="w-16 h-16 mx-auto"
+        ></i>
       </span>
     </div>
     <!-- Folder name -->
-    <h3 class="text-lg font-semibold mb-1" x-text="selectedFolder?.display_name"></h3>
+    <h3
+      class="text-lg font-semibold mb-1"
+      x-text="selectedFolder?.display_name"
+    ></h3>
     <!-- Account -->
-    <p class="text-sm text-base-content/50 mb-4"
-       x-text="accounts.find(a => a.uuid === selectedFolder?.account_id)?.display_name || accounts.find(a => a.uuid === selectedFolder?.account_id)?.email || ''"></p>
+    <p
+      class="text-sm text-base-content/50 mb-4"
+      x-text="accounts.find(a => a.uuid === selectedFolder?.account_id)?.display_name || accounts.find(a => a.uuid === selectedFolder?.account_id)?.email || ''"
+    ></p>
     <!-- Stats -->
-    <div class="flex items-center justify-center gap-4 text-sm text-base-content/60">
+    <div
+      class="flex items-center justify-center gap-4 text-sm text-base-content/60"
+    >
       <span class="flex items-center gap-1.5">
         <i data-lucide="mail" class="w-4 h-4"></i>
-        <span x-text="(selectedFolder?.message_count ?? 0) + ' message' + ((selectedFolder?.message_count ?? 0) !== 1 ? 's' : '')"></span>
+        <span
+          x-text="(selectedFolder?.message_count ?? 0) + ' message' + ((selectedFolder?.message_count ?? 0) !== 1 ? 's' : '')"
+        ></span>
       </span>
-      <span class="flex items-center gap-1.5" x-show="selectedFolder?.unread_count > 0 && !['sent', 'drafts'].includes(selectedFolder?.folder_type)">
+      <span
+        class="flex items-center gap-1.5"
+        x-show="selectedFolder?.unread_count > 0 && !['sent', 'drafts'].includes(selectedFolder?.folder_type)"
+      >
         <i data-lucide="circle-dot" class="w-4 h-4 text-warning"></i>
-        <span class="text-warning" x-text="(selectedFolder?.unread_count ?? 0) + ' unread'"></span>
+        <span
+          class="text-warning"
+          x-text="(selectedFolder?.unread_count ?? 0) + ' unread'"
+        ></span>
       </span>
     </div>
     <!-- Hint -->
@@ -30,7 +51,10 @@
 </div>
 
 <!-- Empty state: no folder, but has accounts -->
-<div x-show="!selectedMessage && !selectedFolder && accounts.length > 0" class="flex-1 flex items-center justify-center">
+<div
+  x-show="!selectedMessage && !selectedFolder && accounts.length > 0"
+  class="flex-1 flex items-center justify-center"
+>
   <div class="text-center text-base-content/40">
     <i data-lucide="mail-open" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
     <p class="text-sm">Select a message to read</p>
@@ -45,56 +69,109 @@
     <div class="px-4 py-3 border-b border-base-300 bg-base-100">
       <div class="flex items-center gap-2 mb-2">
         <!-- Back button (mobile) -->
-        <button class="btn btn-ghost btn-sm btn-circle lg:hidden" @click="history.back()">
+        <button
+          class="btn btn-ghost btn-sm btn-circle lg:hidden"
+          @click="history.back()"
+        >
           <i data-lucide="arrow-left" class="w-5 h-5"></i>
         </button>
 
-        <h2 class="text-base font-semibold flex-1 min-w-0 truncate" x-text="messageDetail.subject || '(no subject)'"></h2>
+        <h2
+          class="text-base font-semibold flex-1 min-w-0 truncate"
+          x-text="messageDetail.subject || '(no subject)'"
+        ></h2>
 
         <!-- Actions -->
         <div class="flex items-center gap-0.5 flex-shrink-0">
-          <span class="loading loading-spinner loading-xs text-warning mr-1" x-show="actionInProgress" x-cloak></span>
+          <span
+            class="loading loading-spinner loading-xs text-warning mr-1"
+            x-show="actionInProgress"
+            x-cloak
+          ></span>
           <!-- Always visible actions -->
-          <button class="btn btn-ghost btn-xs btn-square" @click="replyTo(messageDetail)" title="Reply (R)">
+          <button
+            class="btn btn-ghost btn-xs btn-square"
+            @click="replyTo(messageDetail)"
+            title="Reply (R)"
+          >
             <i data-lucide="reply" class="w-4 h-4"></i>
           </button>
-          <button class="btn btn-ghost btn-xs btn-square" @click="toggleStar(messageDetail)"
-                  :disabled="actionInProgress"
-                  :title="messageDetail.is_starred ? 'Unstar' : 'Star'">
-            <i data-lucide="star" class="w-4 h-4" :class="messageDetail.is_starred ? 'text-warning fill-warning' : ''"></i>
+          <button
+            class="btn btn-ghost btn-xs btn-square"
+            @click="toggleStar(messageDetail)"
+            :disabled="actionInProgress"
+            :title="messageDetail.is_starred ? 'Unstar' : 'Star'"
+          >
+            <i
+              data-lucide="star"
+              class="w-4 h-4"
+              :class="messageDetail.is_starred ? 'text-warning fill-warning' : ''"
+            ></i>
           </button>
-          <button class="btn btn-ghost btn-xs btn-square text-error" @click="deleteMessage(messageDetail)"
-                  :disabled="actionInProgress" title="Delete">
+          <button
+            class="btn btn-ghost btn-xs btn-square text-error"
+            @click="deleteMessage(messageDetail)"
+            :disabled="actionInProgress"
+            title="Delete"
+          >
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
           <!-- Desktop-only actions -->
-          <button class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex" @click="toggleRead(messageDetail)"
-                  :disabled="actionInProgress"
-                  :title="messageDetail.is_read ? 'Mark unread' : 'Mark read'">
-            <i :data-lucide="messageDetail.is_read ? 'mail' : 'mail-open'" class="w-4 h-4"></i>
+          <button
+            class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
+            @click="toggleRead(messageDetail)"
+            :disabled="actionInProgress"
+            :title="messageDetail.is_read ? 'Mark unread' : 'Mark read'"
+          >
+            <i
+              :data-lucide="messageDetail.is_read ? 'mail' : 'mail-open'"
+              class="w-4 h-4"
+            ></i>
           </button>
-          <button class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex" @click="replyAll(messageDetail)" title="Reply all (A)">
+          <button
+            class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
+            @click="replyAll(messageDetail)"
+            title="Reply all (A)"
+          >
             <i data-lucide="reply-all" class="w-4 h-4"></i>
           </button>
-          <button class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex" @click="forwardMessage(messageDetail)" title="Forward (F)">
+          <button
+            class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
+            @click="forwardMessage(messageDetail)"
+            title="Forward (F)"
+          >
             <i data-lucide="forward" class="w-4 h-4"></i>
           </button>
           {% if ai_enabled %}
-          <button class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex" @click="summarizeMessage(messageDetail)"
-                  :disabled="actionInProgress || aiSummarizing" title="Summarize with AI">
-            <span x-show="!aiSummarizing"><i data-lucide="sparkles" class="w-4 h-4"></i></span>
-            <span x-show="aiSummarizing" class="loading loading-spinner loading-xs"></span>
-          </button>
+            <button
+              class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
+              @click="summarizeMessage(messageDetail)"
+              :disabled="actionInProgress || aiSummarizing"
+              title="Summarize with AI"
+            >
+              <span x-show="!aiSummarizing"><i data-lucide="sparkles" class="w-4 h-4"></i></span>
+              <span x-show="aiSummarizing" class="loading loading-spinner loading-xs"></span>
+            </button>
           {% endif %}
           <!-- Mobile overflow menu -->
           <div class="dropdown dropdown-end lg:hidden">
             <label tabindex="0" class="btn btn-ghost btn-xs btn-square">
               <i data-lucide="more-vertical" class="w-4 h-4"></i>
             </label>
-            <ul tabindex="0" class="dropdown-content z-[1] menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-48 p-1">
+            <ul
+              tabindex="0"
+              class="dropdown-content z-[1] menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-48 p-1"
+            >
               <li>
-                <button type="button" @click="toggleRead(messageDetail)" :disabled="actionInProgress">
-                  <i :data-lucide="messageDetail.is_read ? 'mail' : 'mail-open'" class="w-4 h-4"></i>
+                <button
+                  type="button"
+                  @click="toggleRead(messageDetail)"
+                  :disabled="actionInProgress"
+                >
+                  <i
+                    :data-lucide="messageDetail.is_read ? 'mail' : 'mail-open'"
+                    class="w-4 h-4"
+                  ></i>
                   <span x-text="messageDetail.is_read ? 'Mark unread' : 'Mark read'"></span>
                 </button>
               </li>
@@ -109,11 +186,15 @@
                 </button>
               </li>
               {% if ai_enabled %}
-              <li>
-                <button type="button" @click="summarizeMessage(messageDetail)" :disabled="actionInProgress || aiSummarizing">
-                  <i data-lucide="sparkles" class="w-4 h-4"></i> Summarize
-                </button>
-              </li>
+                <li>
+                  <button
+                    type="button"
+                    @click="summarizeMessage(messageDetail)"
+                    :disabled="actionInProgress || aiSummarizing"
+                  >
+                    <i data-lucide="sparkles" class="w-4 h-4"></i> Summarize
+                  </button>
+                </li>
               {% endif %}
             </ul>
           </div>
@@ -124,12 +205,20 @@
       <div class="text-sm space-y-1">
         <div class="flex items-center gap-2">
           <span class="text-base-content/50 w-10 text-right flex-shrink-0">From</span>
-          <span class="inline-flex cursor-pointer hover:text-warning transition-colors"
-                @mouseenter="window._mailCardShow($el, messageDetail.from_address)"
-                @mouseleave="window._mailCardScheduleHide($el)">
-            <span class="font-medium" x-text="cleanName(messageDetail.from_address?.name) || messageDetail.from_address?.email"></span>
-            <span class="text-base-content/50 ml-1" x-show="messageDetail.from_address?.name"
-                  x-text="'<' + messageDetail.from_address?.email + '>'"></span>
+          <span
+            class="inline-flex cursor-pointer hover:text-warning transition-colors"
+            @mouseenter="window._mailCardShow($el, messageDetail.from_address)"
+            @mouseleave="window._mailCardScheduleHide($el)"
+          >
+            <span
+              class="font-medium"
+              x-text="cleanName(messageDetail.from_address?.name) || messageDetail.from_address?.email"
+            ></span>
+            <span
+              class="text-base-content/50 ml-1"
+              x-show="messageDetail.from_address?.name"
+              x-text="'<' + messageDetail.from_address?.email + '>'"
+            ></span>
           </span>
         </div>
         <div class="flex items-start gap-2">
@@ -137,10 +226,12 @@
           <span class="flex-1 flex flex-wrap gap-x-1 text-base-content/80">
             <template x-for="(addr, i) in (messageDetail.to_addresses || [])" :key="i">
               <span>
-                <span class="cursor-pointer hover:text-warning transition-colors"
-                      @mouseenter="window._mailCardShow($el, addr)"
-                      @mouseleave="window._mailCardScheduleHide($el)"
-                      x-text="cleanName(addr.name) || addr.email"></span><span x-show="i < (messageDetail.to_addresses || []).length - 1">,</span>
+                <span
+                  class="cursor-pointer hover:text-warning transition-colors"
+                  @mouseenter="window._mailCardShow($el, addr)"
+                  @mouseleave="window._mailCardScheduleHide($el)"
+                  x-text="cleanName(addr.name) || addr.email"
+                ></span><span x-show="i < (messageDetail.to_addresses || []).length - 1">,</span>
               </span>
             </template>
           </span>
@@ -151,10 +242,12 @@
             <span class="flex-1 flex flex-wrap gap-x-1 text-base-content/80">
               <template x-for="(addr, i) in messageDetail.cc_addresses" :key="i">
                 <span>
-                  <span class="cursor-pointer hover:text-warning transition-colors"
-                        @mouseenter="window._mailCardShow($el, addr)"
-                        @mouseleave="window._mailCardScheduleHide($el)"
-                        x-text="cleanName(addr.name) || addr.email"></span><span x-show="i < messageDetail.cc_addresses.length - 1">,</span>
+                  <span
+                    class="cursor-pointer hover:text-warning transition-colors"
+                    @mouseenter="window._mailCardShow($el, addr)"
+                    @mouseleave="window._mailCardScheduleHide($el)"
+                    x-text="cleanName(addr.name) || addr.email"
+                  ></span><span x-show="i < messageDetail.cc_addresses.length - 1">,</span>
                 </span>
               </template>
             </span>
@@ -162,26 +255,39 @@
         </template>
         <div class="flex items-center gap-2">
           <span class="text-base-content/50 w-10 text-right flex-shrink-0">Date</span>
-          <span class="text-base-content/80" x-text="formatFullDate(messageDetail.date)"></span>
+          <span
+            class="text-base-content/80"
+            x-text="formatFullDate(messageDetail.date)"
+          ></span>
         </div>
       </div>
     </div>
 
     <!-- Attachments bar -->
-    <div x-show="messageDetail.attachments?.length > 0" x-cloak
-         class="px-4 py-2 border-b border-base-300 bg-base-100/50 flex flex-wrap gap-2">
+    <div
+      x-show="messageDetail.attachments?.length > 0"
+      x-cloak
+      class="px-4 py-2 border-b border-base-300 bg-base-100/50 flex flex-wrap gap-2"
+    >
       <template x-for="att in messageDetail.attachments" :key="att.uuid">
         <div class="group/att relative flex items-center">
-          <a :href="'/api/v1/mail/attachments/' + att.uuid"
-             class="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-base-300 bg-base-200 text-xs hover:bg-base-300 transition-colors"
-             download>
+          <a
+            :href="'/api/v1/mail/attachments/' + att.uuid"
+            class="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-base-300 bg-base-200 text-xs hover:bg-base-300 transition-colors"
+            download
+          >
             <i data-lucide="paperclip" class="w-3 h-3 flex-shrink-0"></i>
             <span class="truncate max-w-[10rem]" x-text="att.filename"></span>
-            <span class="text-base-content/50 flex-shrink-0" x-text="formatFileSize(att.size)"></span>
+            <span
+              class="text-base-content/50 flex-shrink-0"
+              x-text="formatFileSize(att.size)"
+            ></span>
           </a>
-          <button class="btn btn-ghost btn-xs btn-square opacity-100 lg:opacity-0 lg:group-hover/att:opacity-100 transition-opacity ml-0.5"
-                  title="Save to Files"
-                  @click.prevent="saveAttachmentToFiles(att.uuid)">
+          <button
+            class="btn btn-ghost btn-xs btn-square opacity-100 lg:opacity-0 lg:group-hover/att:opacity-100 transition-opacity ml-0.5"
+            title="Save to Files"
+            @click.prevent="saveAttachmentToFiles(att.uuid)"
+          >
             <i data-lucide="folder-down" class="w-3.5 h-3.5"></i>
           </button>
         </div>
@@ -195,43 +301,86 @@
       </div>
 
       <!-- AI Summary loading -->
-      <div x-show="aiSummarizing && !aiSummary" x-cloak class="mb-4 flex justify-center">
+      <div
+        x-show="aiSummarizing && !aiSummary"
+        x-cloak
+        class="mb-4 flex justify-center"
+      >
         {% include "ui/partials/ai_thinking_bubble.html" %}
       </div>
 
       <!-- AI Summary (inside scrollable area) -->
-      <div x-show="aiSummary" x-cloak
-           class="mb-5 rounded-lg border border-secondary/15 bg-gradient-to-br from-secondary/5 via-transparent to-secondary/3 overflow-hidden">
-        <div class="flex items-center gap-2 px-3 py-2 border-b border-secondary/10 bg-secondary/5">
-          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-secondary flex-shrink-0"></i>
-          <span class="text-xs font-semibold text-secondary tracking-wide uppercase flex-1">Summary</span>
-          <button class="opacity-40 hover:opacity-100 transition-opacity" @click="dismissSummary(messageDetail)" title="Dismiss summary">
+      <div
+        x-show="aiSummary"
+        x-cloak
+        class="mb-5 rounded-lg border border-secondary/15 bg-gradient-to-br from-secondary/5 via-transparent to-secondary/3 overflow-hidden"
+      >
+        <div
+          class="flex items-center gap-2 px-3 py-2 border-b border-secondary/10 bg-secondary/5"
+        >
+          <i
+            data-lucide="sparkles"
+            class="w-3.5 h-3.5 text-secondary flex-shrink-0"
+          ></i>
+          <span
+            class="text-xs font-semibold text-secondary tracking-wide uppercase flex-1"
+          >Summary</span>
+          <button
+            class="opacity-40 hover:opacity-100 transition-opacity"
+            @click="dismissSummary(messageDetail)"
+            title="Dismiss summary"
+          >
             <i data-lucide="x" class="w-3.5 h-3.5"></i>
           </button>
         </div>
-        <div class="px-3 py-2.5 text-sm prose prose-sm max-w-none" x-html="aiSummary"></div>
+        <div
+          class="px-3 py-2.5 text-sm prose prose-sm max-w-none"
+          x-html="aiSummary"
+        ></div>
       </div>
 
       <!-- Extracted calendar events -->
-      <template x-for="extraction in (messageDetail.extractions || [])" :key="extraction.uuid">
-        <div x-show="extraction.kind === 'event' && extraction.target"
-             x-cloak
-             class="mb-5 rounded-lg border border-accent/15 bg-gradient-to-br from-accent/5 via-transparent to-accent/3 overflow-hidden">
-          <div class="flex items-center gap-2 px-3 py-2 border-b border-accent/10 bg-accent/5">
-            <i data-lucide="calendar-plus" class="w-3.5 h-3.5 text-accent flex-shrink-0"></i>
-            <span class="text-xs font-semibold text-accent tracking-wide uppercase flex-1">Suggested event</span>
+      <template
+        x-for="extraction in (messageDetail.extractions || [])"
+        :key="extraction.uuid"
+      >
+        <div
+          x-show="extraction.kind === 'event' && extraction.target"
+          x-cloak
+          class="mb-5 rounded-lg border border-accent/15 bg-gradient-to-br from-accent/5 via-transparent to-accent/3 overflow-hidden"
+        >
+          <div
+            class="flex items-center gap-2 px-3 py-2 border-b border-accent/10 bg-accent/5"
+          >
+            <i
+              data-lucide="calendar-plus"
+              class="w-3.5 h-3.5 text-accent flex-shrink-0"
+            ></i>
+            <span
+              class="text-xs font-semibold text-accent tracking-wide uppercase flex-1"
+            >Suggested event</span>
           </div>
           <div class="px-3 py-2.5 text-sm space-y-2">
             <div class="font-medium" x-text="extraction.target.title"></div>
-            <div class="text-base-content/70 text-xs" x-text="formatFullDate(extraction.target.start)"></div>
-            <div x-show="extraction.target.location" class="text-base-content/70 text-xs" x-text="extraction.target.location"></div>
+            <div
+              class="text-base-content/70 text-xs"
+              x-text="formatFullDate(extraction.target.start)"
+            ></div>
+            <div
+              x-show="extraction.target.location"
+              class="text-base-content/70 text-xs"
+              x-text="extraction.target.location"
+            ></div>
             <div class="flex items-center gap-2 pt-1">
-              <a :href="`/calendar?event=${extraction.target.uuid}`" class="btn btn-xs btn-ghost">
-                View in calendar
-              </a>
-              <button type="button"
-                      class="btn btn-xs btn-ghost text-error/80"
-                      @click="dismissExtraction(extraction, messageDetail)">
+              <a
+                :href="`/calendar?event=${extraction.target.uuid}`"
+                class="btn btn-xs btn-ghost"
+              >View in calendar</a>
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost text-error/80"
+                @click="dismissExtraction(extraction, messageDetail)"
+              >
                 Remove
               </button>
             </div>
@@ -240,10 +389,16 @@
       </template>
 
       <template x-if="messageDetail.body_html">
-        <div class="mail-body prose prose-sm max-w-none" x-html="messageDetail.body_html"></div>
+        <div
+          class="mail-body prose prose-sm max-w-none"
+          x-html="messageDetail.body_html"
+        ></div>
       </template>
       <template x-if="!messageDetail.body_html && messageDetail.body_text">
-        <pre class="mail-body-text whitespace-pre-wrap text-sm font-sans" x-text="messageDetail.body_text"></pre>
+        <pre
+          class="mail-body-text whitespace-pre-wrap text-sm font-sans"
+          x-text="messageDetail.body_text"
+        ></pre>
       </template>
     </div>
   </div>

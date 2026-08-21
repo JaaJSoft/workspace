@@ -5,14 +5,25 @@
     <!-- Row 1: mobile menu toggle + title + scope -->
     <div class="flex items-center gap-2 px-3 pt-3 pb-2">
       {% include "ui/partials/drawer_toggle.html" with drawer_id="notes-drawer" class="lg:hidden" %}
-      <h3 class="text-sm font-semibold text-base-content/60 truncate flex-1" x-text="viewTitle"></h3>
+      <h3
+        class="text-sm font-semibold text-base-content/60 truncate flex-1"
+        x-text="viewTitle"
+      ></h3>
       <div class="join w-36 flex-shrink-0">
-        <button class="btn btn-xs join-item flex-1"
-                :class="graphScope === 'mine' ? 'btn-success' : 'btn-ghost'"
-                @click="setGraphScope('mine')">My notes</button>
-        <button class="btn btn-xs join-item flex-1"
-                :class="graphScope === 'all' ? 'btn-success' : 'btn-ghost'"
-                @click="setGraphScope('all')">All</button>
+        <button
+          class="btn btn-xs join-item flex-1"
+          :class="graphScope === 'mine' ? 'btn-success' : 'btn-ghost'"
+          @click="setGraphScope('mine')"
+        >
+          My notes
+        </button>
+        <button
+          class="btn btn-xs join-item flex-1"
+          :class="graphScope === 'all' ? 'btn-success' : 'btn-ghost'"
+          @click="setGraphScope('all')"
+        >
+          All
+        </button>
       </div>
     </div>
     <!-- Row 2: search + kind + legend popover -->
@@ -21,12 +32,23 @@
            popover sits at the far right of the toolbar -->
       <div class="flex items-center gap-2 flex-1 min-w-0">
         <div class="relative flex-1 min-w-0 max-w-xs">
-          <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40"></i>
-          <input type="text" class="input input-sm input-bordered w-full pl-8" placeholder="Search notes..."
-                 x-model="graphSearch" @input.debounce.200ms="onGraphSearch()">
+          <i
+            data-lucide="search"
+            class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40"
+          ></i>
+          <input
+            type="text"
+            class="input input-sm input-bordered w-full pl-8"
+            placeholder="Search notes..."
+            x-model="graphSearch"
+            @input.debounce.200ms="onGraphSearch()"
+          />
         </div>
-        <select class="select select-sm select-bordered flex-shrink-0"
-                x-model="graphKind" @change="setGraphKind($event.target.value)">
+        <select
+          class="select select-sm select-bordered flex-shrink-0"
+          x-model="graphKind"
+          @change="setGraphKind($event.target.value)"
+        >
           <option value="all">All notes</option>
           <option value="favorite">Favorites</option>
           <option value="journal">Journal</option>
@@ -34,49 +56,91 @@
         </select>
         <!-- Tag multi-select dropdown: keep only nodes carrying a selected tag.
              Mirrors the note-list tag filter (toggleGraphTag / graphTags). -->
-        <div class="relative flex-shrink-0" x-show="allTags.length > 0"
-             @click.outside="showGraphTagDropdown = false">
-          <button class="btn btn-sm gap-1"
-                  :class="graphTags.length > 0 ? 'btn-secondary' : 'btn-ghost'"
-                  @click="showGraphTagDropdown = !showGraphTagDropdown">
+        <div
+          class="relative flex-shrink-0"
+          x-show="allTags.length > 0"
+          @click.outside="showGraphTagDropdown = false"
+        >
+          <button
+            class="btn btn-sm gap-1"
+            :class="graphTags.length > 0 ? 'btn-secondary' : 'btn-ghost'"
+            @click="showGraphTagDropdown = !showGraphTagDropdown"
+          >
             <i data-lucide="tag" class="w-3.5 h-3.5"></i>
-            <span class="truncate max-w-24" x-text="graphTags.length > 0 ? selectedGraphTagNames() : 'Tags'"></span>
+            <span
+              class="truncate max-w-24"
+              x-text="graphTags.length > 0 ? selectedGraphTagNames() : 'Tags'"
+            ></span>
             <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
           </button>
-          <div class="absolute left-0 top-full mt-1 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg w-56 max-h-72 overflow-hidden flex flex-col"
-               x-show="showGraphTagDropdown" x-cloak x-transition>
+          <div
+            class="absolute left-0 top-full mt-1 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg w-56 max-h-72 overflow-hidden flex flex-col"
+            x-show="showGraphTagDropdown"
+            x-cloak
+            x-transition
+          >
             <!-- Search box: filters the list below by name (filteredGraphTags). -->
             <div class="p-2 border-b border-base-300">
-              <input type="text" class="input input-xs input-bordered w-full"
-                     placeholder="Filter tags..." x-model="graphTagSearch"
-                     @keydown.escape.stop="graphTagSearch = ''">
+              <input
+                type="text"
+                class="input input-xs input-bordered w-full"
+                placeholder="Filter tags..."
+                x-model="graphTagSearch"
+                @keydown.escape.stop="graphTagSearch = ''"
+              />
             </div>
             <div class="overflow-y-auto py-1">
-              <button class="w-full text-left px-3 py-1.5 hover:bg-base-200 text-xs text-base-content/60"
-                      x-show="graphTags.length > 0" @click="clearGraphTags()">Clear filter</button>
+              <button
+                class="w-full text-left px-3 py-1.5 hover:bg-base-200 text-xs text-base-content/60"
+                x-show="graphTags.length > 0"
+                @click="clearGraphTags()"
+              >
+                Clear filter
+              </button>
               <template x-for="tag in filteredGraphTags()" :key="tag.uuid">
-                <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-sm">
-                  <input type="checkbox" class="checkbox checkbox-xs"
-                         :checked="graphTags.indexOf(tag.uuid) !== -1"
-                         @change="toggleGraphTag(tag.uuid)">
+                <label
+                  class="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-xs"
+                    :checked="graphTags.indexOf(tag.uuid) !== -1"
+                    @change="toggleGraphTag(tag.uuid)"
+                  />
                   <tag-chip :name="tag.name" :color="tag.color" size="sm"></tag-chip>
                 </label>
               </template>
-              <div x-show="filteredGraphTags().length === 0"
-                   class="px-3 py-2 text-xs text-base-content/40">No tags found</div>
+              <div
+                x-show="filteredGraphTags().length === 0"
+                class="px-3 py-2 text-xs text-base-content/40"
+              >
+                No tags found
+              </div>
             </div>
           </div>
         </div>
       </div>
-      <button class="btn btn-ghost btn-sm btn-square flex-shrink-0" @click="resetGraphView()"
-              aria-label="Reset view" title="Reset view">
+      <button
+        class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+        @click="resetGraphView()"
+        aria-label="Reset view"
+        title="Reset view"
+      >
         <i data-lucide="maximize" class="w-4 h-4"></i>
       </button>
       <div class="dropdown dropdown-end flex-shrink-0">
-        <button tabindex="0" class="btn btn-ghost btn-sm btn-square" aria-label="Legend" title="Legend">
+        <button
+          tabindex="0"
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label="Legend"
+          title="Legend"
+        >
           <i data-lucide="info" class="w-4 h-4"></i>
         </button>
-        <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-3 mt-1 w-40 text-xs space-y-1.5">
+        <div
+          tabindex="0"
+          class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-3 mt-1 w-40 text-xs space-y-1.5"
+        >
           <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-warning"></span> Favorite</div>
           <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-success"></span> Journal</div>
           <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-base-content/50"></span> Note</div>
@@ -91,8 +155,12 @@
     <!-- Loading overlay: shown while the graph module imports force-graph and
          fetches the (scope + filters)-filtered data. Driven by graphLoading,
          toggled through the onLoading callback wired in _openGraph(). -->
-    <div x-show="graphLoading" x-cloak x-transition.opacity
-         class="absolute inset-0 z-10 flex items-center justify-center bg-base-100/60 pointer-events-none">
+    <div
+      x-show="graphLoading"
+      x-cloak
+      x-transition.opacity
+      class="absolute inset-0 z-10 flex items-center justify-center bg-base-100/60 pointer-events-none"
+    >
       <span class="loading loading-spinner loading-lg text-base-content/50"></span>
     </div>
   </div>

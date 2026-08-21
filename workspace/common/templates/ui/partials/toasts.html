@@ -1,16 +1,21 @@
 <!-- AppAlert toast container - ui/js/toast.js renders into it -->
-<div id="app-alerts-container" class="fixed bottom-4 right-4 flex flex-col gap-2 max-w-md" style="z-index: 99999 !important;"></div>
+<div
+  id="app-alerts-container"
+  class="fixed bottom-4 right-4 flex flex-col gap-2 max-w-md"
+  style="z-index: 99999 !important"
+></div>
 
 {% if messages %}
   {# Django messages, shown as toasts by ui/js/toast.js on DOMContentLoaded. #}
   <script id="django-messages-data" type="application/json">
     [
       {% for message in messages %}
-        {
-          "message": "{{ message|escapejs }}",
-          "type": "{{ message.tags|default:'info' }}",
-          "level": "{{ message.level_tag }}"
-        }{% if not forloop.last %},{% endif %}
+      {
+        "message": "{{ message|escapejs }}",
+        "type": "{{ message.tags|default:'info' }}",
+        "level": "{{ message.level_tag }}"
+      }
+      {% if not forloop.last %}, {% endif %}
       {% endfor %}
     ]
   </script>

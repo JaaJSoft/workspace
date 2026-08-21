@@ -1,14 +1,24 @@
-<div class="navbar bg-base-100 border-b border-base-300 backdrop-blur-lg bg-opacity-80 sticky top-0 z-50 min-h-[3.25rem] py-1">
-  <div class="{% if navbar_full_width %}container mx-auto max-w-none{% else %}container mx-auto{% endif %}">
+<div
+  class="navbar bg-base-100 border-b border-base-300 backdrop-blur-lg bg-opacity-80 sticky top-0 z-50 min-h-[3.25rem] py-1"
+>
+  <div
+    class="{% if navbar_full_width %}container mx-auto max-w-none{% else %}container mx-auto{% endif %}"
+  >
     <!-- Brand -->
     <div class="flex-1">
-      <a href="/" class="btn btn-ghost normal-case hover:bg-primary/10 transition-all">
+      <a
+        href="/"
+        class="btn btn-ghost normal-case hover:bg-primary/10 transition-all"
+      >
         {% include 'ui/partials/app_logo.html' with size='sm' %}
       </a>
     </div>
 
     <!-- Command palette dropdown -->
-    <div class="flex-none flex justify-center px-4" x-data="{ mobileSearchOpen: false }">
+    <div
+      class="flex-none flex justify-center px-4"
+      x-data="{ mobileSearchOpen: false }"
+    >
       <!-- Mobile search icon (visible only on small screens) -->
       <button
         @click="mobileSearchOpen = true"
@@ -19,7 +29,10 @@
       </button>
 
       <!-- Desktop search bar (hidden on small screens) -->
-      <div class="w-[32rem] hidden sm:block relative" x-data="commandPaletteDropdown()">
+      <div
+        class="w-[32rem] hidden sm:block relative"
+        x-data="commandPaletteDropdown()"
+      >
         <!-- Search input trigger -->
         {% include 'ui/partials/search/search_input.html' with input_class='input-sm hover:border-primary/30' show_kbd=True %}
 
@@ -103,7 +116,9 @@
           </div>
 
           <!-- Footer hints -->
-          <div class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3">
+          <div
+            class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
+          >
             <span class="flex items-center gap-1">
               <kbd class="kbd kbd-xs">↑↓</kbd>
               navigate
@@ -137,7 +152,7 @@
         class="swap swap-rotate btn btn-ghost btn-circle btn-sm hover:bg-warning/10 transition-all"
         title="Toggle theme"
       >
-        <input id="themeToggle" type="checkbox" aria-label="Toggle theme"/>
+        <input id="themeToggle" type="checkbox" aria-label="Toggle theme" />
         <!-- Sun icon (light) -->
         <div class="swap-off">
           <i data-lucide="sun" class="w-5 h-5 text-warning"></i>
@@ -212,10 +227,18 @@
               }"
             >
               <li>
-                <button type="button" class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors" @click="open = !open">
+                <button
+                  type="button"
+                  class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
+                  @click="open = !open"
+                >
                   <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="currentDot()"></span>
                   <span class="font-medium" x-text="currentLabel()">Online</span>
-                  <i data-lucide="chevron-down" class="w-3.5 h-3.5 ml-auto transition-transform duration-200" :class="open && 'rotate-180'"></i>
+                  <i
+                    data-lucide="chevron-down"
+                    class="w-3.5 h-3.5 ml-auto transition-transform duration-200"
+                    :class="open && 'rotate-180'"
+                  ></i>
                 </button>
               </li>
               <div x-show="open" x-collapse class="px-2 pb-1 space-y-0.5">
@@ -236,7 +259,9 @@
             <div class="divider my-1"></div>
 
             <!-- Profile -->
-            <li class="{% if request.resolver_match.view_name == 'users_ui:profile' %}disabled{% endif %}">
+            <li
+              class="{% if request.resolver_match.view_name == 'users_ui:profile' %}disabled{% endif %}"
+            >
               <a
                 href="{% url 'users_ui:profile' %}"
                 class="gap-3 {% if request.resolver_match.view_name != 'users_ui:profile' %}hover:bg-primary/10 hover:text-primary{% endif %} transition-colors"
@@ -248,7 +273,9 @@
             </li>
 
             <!-- Settings -->
-            <li class="{% if request.resolver_match.view_name == 'users_ui:settings' %}disabled{% endif %}">
+            <li
+              class="{% if request.resolver_match.view_name == 'users_ui:settings' %}disabled{% endif %}"
+            >
               <a
                 href="{% url 'users_ui:settings' %}"
                 class="gap-3 {% if request.resolver_match.view_name != 'users_ui:settings' %}hover:bg-info/10 hover:text-info{% endif %} transition-colors"
@@ -308,7 +335,10 @@
 
               <!-- Admin -->
               <li>
-                <a href="/admin/" class="gap-3 hover:bg-error/10 hover:text-error transition-colors">
+                <a
+                  href="/admin/"
+                  class="gap-3 hover:bg-error/10 hover:text-error transition-colors"
+                >
                   <i data-lucide="shield" class="w-4 h-4"></i>
                   <span class="font-medium">Admin Panel</span>
                 </a>
@@ -358,62 +388,74 @@
 
 <!-- Hidden logout form -->
 {% if user.is_authenticated %}
-<form id="logout-form" method="post" action="{% url 'logout' %}" style="display: none;">
-  {% csrf_token %}
-</form>
+  <form
+    id="logout-form"
+    method="post"
+    action="{% url 'logout' %}"
+    style="display: none"
+  >
+    {% csrf_token %}
+  </form>
 {% endif %}
 
 <!-- Onboarding modal -->
 {% if user.is_authenticated %}
-{% include 'core/partials/onboarding.html' %}
+  {% include 'core/partials/onboarding.html' %}
 {% endif %}
 
 <!-- Changelog modal -->
 {% if user.is_authenticated %}
-<dialog id="changelog-dialog" class="modal"
-        x-data="{ loaded: false, loading: false }"
-        x-init="
+  <dialog
+    id="changelog-dialog"
+    class="modal"
+    x-data="{ loaded: false, loading: false }"
+    x-init="
           {% if CHANGELOG_UNREAD %}
           $nextTick(() => setTimeout(() => window.dispatchEvent(new CustomEvent('changelog-open')), 400));
           {% endif %}
         "
-        @changelog-open.window="
+    @changelog-open.window="
           $el.showModal();
           if (!loaded && !loading) {
             loading = true;
             $ajax('/changelog', { target: 'changelog-content' })
               .finally(() => { loaded = true; loading = false; });
           }
-        ">
-  <div class="modal-box w-11/12 max-w-3xl max-h-[80vh] p-0 flex flex-col">
-    <!-- Header -->
-    <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0">
-      <div class="rounded-lg bg-warning/10 p-2">
-        <i data-lucide="sparkles" class="w-5 h-5 text-warning"></i>
-      </div>
-      <div class="flex-1">
-        <h3 class="font-bold text-lg">What's new</h3>
-        <p class="text-xs text-base-content/50">Version {{ APP_VERSION }}</p>
-      </div>
-      <form method="dialog">
-        <button class="btn btn-ghost btn-sm btn-square">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </form>
-    </div>
-
-    <!-- Body -->
-    <div class="flex-1 overflow-y-auto overscroll-contain" data-cl-scroller>
-      <template x-if="loading && !loaded">
-        <div class="flex items-center justify-center py-12">
-          <span class="loading loading-spinner loading-md text-base-content/30"></span>
+        "
+  >
+    <div class="modal-box w-11/12 max-w-3xl max-h-[80vh] p-0 flex flex-col">
+      <!-- Header -->
+      <div
+        class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0"
+      >
+        <div class="rounded-lg bg-warning/10 p-2">
+          <i data-lucide="sparkles" class="w-5 h-5 text-warning"></i>
         </div>
-      </template>
-      <div id="changelog-content"></div>
+        <div class="flex-1">
+          <h3 class="font-bold text-lg">What's new</h3>
+          <p class="text-xs text-base-content/50">Version {{ APP_VERSION }}</p>
+        </div>
+        <form method="dialog">
+          <button class="btn btn-ghost btn-sm btn-square">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </form>
+      </div>
+
+      <!-- Body -->
+      <div class="flex-1 overflow-y-auto overscroll-contain" data-cl-scroller>
+        <template x-if="loading && !loaded">
+          <div class="flex items-center justify-center py-12">
+            <span class="loading loading-spinner loading-md text-base-content/30"></span>
+          </div>
+        </template>
+        <div id="changelog-content"></div>
+      </div>
     </div>
-  </div>
-  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
 {% endif %}
 
 {% include 'ui/partials/search/command_palette_dropdown_scripts.html' %}

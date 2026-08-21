@@ -15,7 +15,10 @@
   The dispatched event contains { detail: { group: { id, name } } }
 {% endcomment %}
 
-<div x-data="groupSelector('{{ on_select_event }}', () => ({{ local_source }}))" class="relative">
+<div
+  x-data="groupSelector('{{ on_select_event }}', () => ({{ local_source }}))"
+  class="relative"
+>
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">
     <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
     <input

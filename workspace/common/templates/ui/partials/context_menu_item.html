@@ -51,26 +51,61 @@ Shortcut badge:
   - shortcut:       static text (e.g. "Ctrl+V")
   - shortcut_expr:  x-text expression; the badge shows only when it resolves
 {% endcomment %}
-{% if not bare %}<li{% if show %} x-show="{{ show }}"{% endif %}{% if li_class %} class="{{ li_class }}"{% endif %}{% if li_class_expr %} :class="{{ li_class_expr }}"{% endif %}>{% endif %}
+{% if not bare %}
+  <li
+    {% if show %} x-show="{{ show }}"{% endif %}
+    {% if li_class %} class="{{ li_class }}"{% endif %}
+    {% if li_class_expr %} :class="{{ li_class_expr }}"{% endif %}
+  >
+{% endif %}
 <{% if href or href_expr %}a{% else %}button{% endif %}
-  {% if href %}href="{{ href }}"{% elif href_expr %}:href="{{ href_expr }}"{% else %}type="button"{% endif %}
-  {% if blank %}target="_blank"{% endif %}
-  {% if download_expr %}download :download="{{ download_expr }}"{% endif %}
-  {% if bare and show %}x-show="{{ show }}"{% endif %}
-  class="gap-3 rounded{% if tone %} text-{{ tone }}{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}"
-  {% if class_expr %}:class="{{ class_expr }}"{% endif %}
-  {% if click %}@click{% if stop %}.stop{% endif %}="{{ click }}"{% endif %}
-  {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}
+{% if href %}href="{{ href }}"{% elif href_expr %}:href="{{ href_expr }}"{% else %}type="button"{% endif %}
+{% if blank %}target="_blank"{% endif %}
+{% if download_expr %}download :download="{{ download_expr }}"{% endif %}
+{% if bare and show %}x-show="{{ show }}"{% endif %}
+class="gap-3 rounded{% if tone %} text-{{ tone }}{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}"
+{% if class_expr %}:class="{{ class_expr }}"{% endif %}
+{% if click %}@click{% if stop %}.stop{% endif %}="{{ click }}"{% endif %}
+{% if aria_label %}aria-label="{{ aria_label }}"{% endif %}
 >
-  {% if icon_toggle %}
-    <i data-lucide="{{ icon }}" class="w-4 h-4" x-show="{{ icon_toggle }}" x-cloak></i>
-    <i data-lucide="{{ icon_alt }}" class="w-4 h-4" x-show="!({{ icon_toggle }})"></i>
-  {% elif icon or icon_expr %}
-    <i {% if icon_expr %}:data-lucide="{{ icon_expr }}"{% else %}data-lucide="{{ icon }}"{% endif %} class="w-4 h-4"{% if icon_class_expr %} :class="{{ icon_class_expr }}"{% endif %}{% if loading %} x-show="!({{ loading }})"{% endif %}></i>
-  {% endif %}
-  {% if loading %}<span class="loading loading-spinner loading-xs" x-show="{{ loading }}" x-cloak></span>{% endif %}
-  <span{% if label_class %} class="{{ label_class }}"{% endif %}{% if label_expr %} x-text="{{ label_expr }}"{% endif %}>{% if not label_expr %}{{ label }}{% endif %}</span>
-  {% if shortcut %}<kbd class="kbd kbd-xs ml-auto">{{ shortcut }}</kbd>{% endif %}
-  {% if shortcut_expr %}<kbd x-show="{{ shortcut_expr }}" class="kbd kbd-xs ml-auto" x-text="{{ shortcut_expr }}"></kbd>{% endif %}
+{% if icon_toggle %}
+  <i
+    data-lucide="{{ icon }}"
+    class="w-4 h-4"
+    x-show="{{ icon_toggle }}"
+    x-cloak
+  ></i>
+  <i
+    data-lucide="{{ icon_alt }}"
+    class="w-4 h-4"
+    x-show="!({{ icon_toggle }})"
+  ></i>
+{% elif icon or icon_expr %}
+  <i
+    {% if icon_expr %}:data-lucide="{{ icon_expr }}"{% else %}data-lucide="{{ icon }}"{% endif %}
+    class="w-4 h-4"
+    {% if icon_class_expr %} :class="{{ icon_class_expr }}"{% endif %}
+    {% if loading %} x-show="!({{ loading }})"{% endif %}
+  ></i>
+{% endif %}
+{% if loading %}
+  <span
+    class="loading loading-spinner loading-xs"
+    x-show="{{ loading }}"
+    x-cloak
+  ></span>
+{% endif %}
+<span
+  {% if label_class %} class="{{ label_class }}"{% endif %}
+  {% if label_expr %} x-text="{{ label_expr }}"{% endif %}
+>{% if not label_expr %}{{ label }}{% endif %}</span>
+{% if shortcut %}<kbd class="kbd kbd-xs ml-auto">{{ shortcut }}</kbd>{% endif %}
+{% if shortcut_expr %}
+  <kbd
+    x-show="{{ shortcut_expr }}"
+    class="kbd kbd-xs ml-auto"
+    x-text="{{ shortcut_expr }}"
+  ></kbd>
+{% endif %}
 </{% if href or href_expr %}a{% else %}button{% endif %}>
 {% if not bare %}</li>{% endif %}

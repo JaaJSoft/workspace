@@ -11,6 +11,8 @@ Params:
   x_show     (optional) - Alpine x-show expression on the <ul>
   class      (optional) - extra classes on the <ul>
 {% endcomment %}
-<ul {% if x_show %}x-show="{{ x_show }}" {% endif %}class="menu menu-sm w-full max-h-72 flex-nowrap overflow-y-auto rounded-xl border border-base-300 bg-base-100 p-1 {{ class }}">
+<ul
+  {% if x_show %}x-show="{{ x_show }}" {% endif %}class="menu menu-sm w-full max-h-72 flex-nowrap overflow-y-auto rounded-xl border border-base-300 bg-base-100 p-1 {{ class }}"
+>
   {% include "mail/ui/partials/_folder_options.html" %}
 </ul>

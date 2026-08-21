@@ -1,5 +1,7 @@
 <!-- Unified Picker Dialog (folder mode + file mode) — include once in base.html -->
-<dialog id="app-dialog-picker" class="modal"
+<dialog
+  id="app-dialog-picker"
+  class="modal"
   x-data="{
     open: false,
     mode: 'folder',
@@ -246,18 +248,31 @@
   <div class="modal-box flex flex-col max-h-[70vh]">
     <!-- Header -->
     <div class="flex items-center gap-3 mb-4">
-      <div :class="options.iconClass || defaultIconClass" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center">
+      <div
+        :class="options.iconClass || defaultIconClass"
+        class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+      >
         <i :data-lucide="options.icon || defaultIcon" class="w-5 h-5"></i>
       </div>
       <div class="flex-1 min-w-0">
-        <h3 class="font-bold text-lg break-words" x-text="options.title || defaultTitle"></h3>
-        <p class="text-sm text-base-content/60 break-words" x-text="options.message || defaultMessage"></p>
+        <h3
+          class="font-bold text-lg break-words"
+          x-text="options.title || defaultTitle"
+        ></h3>
+        <p
+          class="text-sm text-base-content/60 break-words"
+          x-text="options.message || defaultMessage"
+        ></p>
       </div>
     </div>
 
     <!-- Space selector (personal / group folders) - only when the user has group folders -->
     <div x-show="spaces.length > 1" x-cloak class="mb-3">
-      <select class="select select-bordered select-sm w-full" @change="selectSpace($event.target.value)" aria-label="Location">
+      <select
+        class="select select-bordered select-sm w-full"
+        @change="selectSpace($event.target.value)"
+        aria-label="Location"
+      >
         <option value="personal" :selected="space.key === 'personal'">My Files</option>
         <optgroup label="Groups">
           <template x-for="sp in spaces.slice(1)" :key="sp.key">
@@ -270,7 +285,10 @@
     <!-- Search (file mode only) -->
     <div x-show="isFileMode" class="mb-3">
       <div class="relative">
-        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40"></i>
+        <i
+          data-lucide="search"
+          class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40"
+        ></i>
         <input
           type="text"
           class="input input-bordered input-sm w-full pl-9"
@@ -291,8 +309,15 @@
     </div>
 
     <!-- Breadcrumbs -->
-    <div x-show="!search" class="flex items-center gap-1 text-sm mb-3 px-1 flex-wrap min-h-[28px]">
-      <span x-show="space.rootUuid" x-cloak class="flex items-center gap-1 px-2 text-base-content/60">
+    <div
+      x-show="!search"
+      class="flex items-center gap-1 text-sm mb-3 px-1 flex-wrap min-h-[28px]"
+    >
+      <span
+        x-show="space.rootUuid"
+        x-cloak
+        class="flex items-center gap-1 px-2 text-base-content/60"
+      >
         <i data-lucide="users" class="w-3 h-3"></i>
         Groups
         <span class="text-base-content/40 ml-1">/</span>
@@ -320,7 +345,9 @@
     </div>
 
     <!-- Item list -->
-    <div class="border border-base-300 rounded-lg flex-1 overflow-y-auto min-h-[200px] max-h-[300px]">
+    <div
+      class="border border-base-300 rounded-lg flex-1 overflow-y-auto min-h-[200px] max-h-[300px]"
+    >
       <!-- Loading spinner -->
       <template x-if="loading">
         <div class="flex items-center justify-center h-full py-8">
@@ -332,10 +359,15 @@
       <template x-if="!loading">
         <div>
           <template x-if="items.length === 0">
-            <div class="flex flex-col items-center justify-center py-8 text-base-content/40">
+            <div
+              class="flex flex-col items-center justify-center py-8 text-base-content/40"
+            >
               <i x-show="!isFileMode" data-lucide="folder-x" class="w-8 h-8 mb-2"></i>
               <i x-show="isFileMode" data-lucide="file-x" class="w-8 h-8 mb-2"></i>
-              <span class="text-sm" x-text="search ? 'No files found' : (isFileMode ? 'Empty folder' : 'No subfolders')"></span>
+              <span
+                class="text-sm"
+                x-text="search ? 'No files found' : (isFileMode ? 'Empty folder' : 'No subfolders')"
+              ></span>
             </div>
           </template>
           <template x-for="item in items" :key="item.uuid">
@@ -345,17 +377,49 @@
               @click="item.node_type === 'folder' ? navigateToFolder(item) : toggleFile(item)"
             >
               <!-- Folder icon -->
-              <i data-lucide="folder" x-show="item.node_type === 'folder'" class="w-4 h-4 text-warning flex-shrink-0"></i>
+              <i
+                data-lucide="folder"
+                x-show="item.node_type === 'folder'"
+                class="w-4 h-4 text-warning flex-shrink-0"
+              ></i>
               <!-- File icons (file mode only) -->
-              <i data-lucide="image" x-show="isFileType(item, 'image')" class="w-4 h-4 text-success flex-shrink-0"></i>
-              <i data-lucide="film" x-show="isFileType(item, 'video')" class="w-4 h-4 text-info flex-shrink-0"></i>
-              <i data-lucide="music" x-show="isFileType(item, 'audio')" class="w-4 h-4 text-secondary flex-shrink-0"></i>
-              <i data-lucide="file-text" x-show="isFileType(item, 'document') || isFileType(item, 'text')" class="w-4 h-4 text-error flex-shrink-0"></i>
-              <i data-lucide="file" x-show="isGenericFile(item)" class="w-4 h-4 text-base-content/50 flex-shrink-0"></i>
+              <i
+                data-lucide="image"
+                x-show="isFileType(item, 'image')"
+                class="w-4 h-4 text-success flex-shrink-0"
+              ></i>
+              <i
+                data-lucide="film"
+                x-show="isFileType(item, 'video')"
+                class="w-4 h-4 text-info flex-shrink-0"
+              ></i>
+              <i
+                data-lucide="music"
+                x-show="isFileType(item, 'audio')"
+                class="w-4 h-4 text-secondary flex-shrink-0"
+              ></i>
+              <i
+                data-lucide="file-text"
+                x-show="isFileType(item, 'document') || isFileType(item, 'text')"
+                class="w-4 h-4 text-error flex-shrink-0"
+              ></i>
+              <i
+                data-lucide="file"
+                x-show="isGenericFile(item)"
+                class="w-4 h-4 text-base-content/50 flex-shrink-0"
+              ></i>
 
               <span class="text-sm truncate flex-1" x-text="item.name"></span>
-              <span x-show="isFileMode && item.node_type === 'file' && item.size" class="text-xs text-base-content/40 flex-shrink-0" x-text="formatFileSize(item.size)"></span>
-              <i data-lucide="chevron-right" x-show="item.node_type === 'folder'" class="w-4 h-4 text-base-content/30 ml-auto flex-shrink-0"></i>
+              <span
+                x-show="isFileMode && item.node_type === 'file' && item.size"
+                class="text-xs text-base-content/40 flex-shrink-0"
+                x-text="formatFileSize(item.size)"
+              ></span>
+              <i
+                data-lucide="chevron-right"
+                x-show="item.node_type === 'folder'"
+                class="w-4 h-4 text-base-content/30 ml-auto flex-shrink-0"
+              ></i>
               <input
                 x-show="isFileMode && item.node_type === 'file'"
                 type="checkbox"
@@ -373,7 +437,10 @@
     <!-- New folder row (folder mode only) -->
     <div x-show="!isFileMode" class="mt-3">
       <template x-if="!showNewFolder">
-        <button class="btn btn-ghost btn-xs gap-1 text-base-content/60" @click="showNewFolder = true; $nextTick(() => $refs.newFolderInput?.focus())">
+        <button
+          class="btn btn-ghost btn-xs gap-1 text-base-content/60"
+          @click="showNewFolder = true; $nextTick(() => $refs.newFolderInput?.focus())"
+        >
           <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i>
           New folder
         </button>
@@ -402,7 +469,11 @@
               <span>Create</span>
             </template>
           </button>
-          <button class="btn btn-ghost btn-sm" @click="showNewFolder = false; newFolderName = ''" :disabled="creatingFolder">
+          <button
+            class="btn btn-ghost btn-sm"
+            @click="showNewFolder = false; newFolderName = ''"
+            :disabled="creatingFolder"
+          >
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
@@ -421,11 +492,11 @@
         </template>
         <!-- File mode: selection count -->
         <span x-show="isFileMode && selectedFiles.length > 0">
-          <span x-text="selectedFiles.length + ' file' + (selectedFiles.length > 1 ? 's' : '') + ' selected'"></span>
+          <span
+            x-text="selectedFiles.length + ' file' + (selectedFiles.length > 1 ? 's' : '') + ' selected'"
+          ></span>
         </span>
-        <span x-show="isFileMode && selectedFiles.length === 0">
-          Click a file to select it
-        </span>
+        <span x-show="isFileMode && selectedFiles.length === 0">Click a file to select it</span>
       </div>
       <button class="btn btn-ghost btn-sm" @click="cancel()">
         <span x-text="options.cancelLabel || 'Cancel'"></span>

@@ -1,17 +1,28 @@
 <!-- Properties Sidebar Panel -->
 <!-- Header -->
-<div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+<div
+  class="px-4 py-3 border-b border-base-300 flex items-center justify-between"
+>
   <h4 class="font-semibold text-sm flex items-center gap-2">
-    <i :data-lucide="propertiesNodeType === 'folder' ? 'folder' : 'file'" class="w-4 h-4"></i>
+    <i
+      :data-lucide="propertiesNodeType === 'folder' ? 'folder' : 'file'"
+      class="w-4 h-4"
+    ></i>
     Properties
   </h4>
-  <button class="btn btn-ghost btn-xs btn-square" @click="closePropertiesPanel()">
+  <button
+    class="btn btn-ghost btn-xs btn-square"
+    @click="closePropertiesPanel()"
+  >
     <i data-lucide="x" class="w-3.5 h-3.5"></i>
   </button>
 </div>
 
 <!-- Loading state -->
-<div x-show="propertiesLoading" class="flex items-center justify-center py-8">
+<div
+  x-show="propertiesLoading"
+  class="flex items-center justify-center py-8"
+>
   <span class="loading loading-spinner loading-lg"></span>
 </div>
 

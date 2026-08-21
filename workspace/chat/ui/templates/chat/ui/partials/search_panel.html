@@ -1,5 +1,7 @@
 <!-- Search panel header -->
-<div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+<div
+  class="px-4 py-3 border-b border-base-300 flex items-center justify-between"
+>
   <h4 class="font-semibold text-sm">Search messages</h4>
   <button class="btn btn-ghost btn-xs btn-square" @click="closeSearchPanel()">
     <i data-lucide="x" class="w-3.5 h-3.5"></i>
@@ -94,10 +96,7 @@
         <option value="custom">Custom range</option>
       </select>
       <!-- Custom date inputs -->
-      <div
-        x-show="searchFilterDateRange === 'custom'"
-        class="flex gap-2 mt-1"
-      >
+      <div x-show="searchFilterDateRange === 'custom'" class="flex gap-2 mt-1">
         <input
           type="date"
           class="input input-xs input-bordered flex-1"
@@ -153,7 +152,10 @@
   </div>
 
   <!-- Results list -->
-  <div x-show="!searchLoading && searchResults.length > 0" class="space-y-1 max-h-[calc(100vh-16rem)] overflow-y-auto">
+  <div
+    x-show="!searchLoading && searchResults.length > 0"
+    class="space-y-1 max-h-[calc(100vh-16rem)] overflow-y-auto"
+  >
     <template x-for="(result, idx) in searchResults" :key="result.uuid">
       <div
         class="rounded-lg px-3 py-2 hover:bg-base-200 transition-colors cursor-pointer text-sm"
@@ -163,8 +165,14 @@
         @mouseenter="searchHighlight = idx"
       >
         <div class="flex items-center gap-2 mb-0.5">
-          <span class="font-medium text-xs" x-text="((result.author.first_name || '') + ' ' + (result.author.last_name || '')).trim() || result.author.username"></span>
-          <span class="text-[0.65rem] text-base-content/40" x-text="formatDateTime(result.created_at)"></span>
+          <span
+            class="font-medium text-xs"
+            x-text="((result.author.first_name || '') + ' ' + (result.author.last_name || '')).trim() || result.author.username"
+          ></span>
+          <span
+            class="text-[0.65rem] text-base-content/40"
+            x-text="formatDateTime(result.created_at)"
+          ></span>
         </div>
         {% comment %}body_html is server-rendered and sanitized, so it is
         highlighted unescaped - escaping it here would print the markup
@@ -182,7 +190,10 @@
     x-show="!searchLoading && (searchQuery.trim().length >= 2 || hasActiveSearchFilters()) && searchResults.length === 0"
     class="text-center py-6"
   >
-    <i data-lucide="search-x" class="w-8 h-8 mx-auto text-base-content/20 mb-2"></i>
+    <i
+      data-lucide="search-x"
+      class="w-8 h-8 mx-auto text-base-content/20 mb-2"
+    ></i>
     <p class="text-sm text-base-content/40">No messages found</p>
   </div>
 
@@ -191,7 +202,10 @@
     x-show="!searchLoading && searchQuery.trim().length < 2 && !hasActiveSearchFilters()"
     class="text-center py-6"
   >
-    <i data-lucide="search" class="w-8 h-8 mx-auto text-base-content/20 mb-2"></i>
+    <i
+      data-lucide="search"
+      class="w-8 h-8 mx-auto text-base-content/20 mb-2"
+    ></i>
     <p class="text-sm text-base-content/40">Type at least 2 characters or use filters</p>
   </div>
 </div>

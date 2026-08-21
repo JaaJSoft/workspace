@@ -6,112 +6,177 @@ outer `<div id="notes-sidebar">` wrapper is rendered here (not in the parent
 template) - alpine-ajax needs the id in the response to merge it, and removes
 the target element outright when an OK response lacks it.
 {% endcomment %}
-<div class="flex-1 overflow-y-auto py-2 px-3" id="notes-sidebar" x-target="notes-sidebar">
+<div
+  class="flex-1 overflow-y-auto py-2 px-3"
+  id="notes-sidebar"
+  x-target="notes-sidebar"
+>
 
-<!-- Embedded folder data for Alpine -->
-{{ folders|json_script:"notes-folders-data" }}
-{{ group_folders|json_script:"notes-group-folders-data" }}
+  <!-- Embedded folder data for Alpine -->
+  {{ folders|json_script:"notes-folders-data" }}
+  {{ group_folders|json_script:"notes-group-folders-data" }}
 
-<!-- Quick Access -->
-<div class="mb-2">
-  <div class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider"
-       x-show="!collapsed">
-    <span class="flex items-center gap-2">
-      <i data-lucide="zap" class="w-3 h-3"></i>
-      Quick Access
-    </span>
+  <!-- Quick Access -->
+  <div class="mb-2">
+    <div
+      class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider"
+      x-show="!collapsed"
+    >
+      <span class="flex items-center gap-2">
+        <i data-lucide="zap" class="w-3 h-3"></i>
+        Quick Access
+      </span>
+    </div>
+    <ul class="space-y-1">
+      {% include "ui/partials/drawer_item.html" with icon="notebook-pen" label="My Notes" color="success" active_binding="activeView === 'all'" onclick="setView('all')" tooltip="My Notes" %}
+      {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="activeView === 'favorites'" onclick="setView('favorites')" tooltip="Favorites" %}
+      {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="success" active_binding="activeView === 'recent'" onclick="setView('recent')" tooltip="Recent" %}
+      {% include "ui/partials/drawer_item.html" with icon="waypoints" label="Graph" color="success" active_binding="activeView === 'graph'" onclick="setView('graph')" tooltip="Graph" %}
+      <template x-if="notePrefs.showJournal">
+        {% include "ui/partials/drawer_item.html" with icon="book-open" label="Journal" color="success" active_binding="activeView === 'journal'" onclick="openJournal()" tooltip="Journal" %}
+      </template>
+    </ul>
   </div>
-  <ul class="space-y-1">
-    {% include "ui/partials/drawer_item.html" with icon="notebook-pen" label="My Notes" color="success" active_binding="activeView === 'all'" onclick="setView('all')" tooltip="My Notes" %}
-    {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="activeView === 'favorites'" onclick="setView('favorites')" tooltip="Favorites" %}
-    {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="success" active_binding="activeView === 'recent'" onclick="setView('recent')" tooltip="Recent" %}
-    {% include "ui/partials/drawer_item.html" with icon="waypoints" label="Graph" color="success" active_binding="activeView === 'graph'" onclick="setView('graph')" tooltip="Graph" %}
-    <template x-if="notePrefs.showJournal">
-      {% include "ui/partials/drawer_item.html" with icon="book-open" label="Journal" color="success" active_binding="activeView === 'journal'" onclick="openJournal()" tooltip="Journal" %}
-    </template>
-  </ul>
-</div>
 
-<!-- Tags -->
-<div class="mb-2" x-show="!collapsed && notePrefs.showTags">
-  <div class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between">
-    <span class="flex items-center gap-2">
-      <i data-lucide="tag" class="w-3 h-3"></i>
-      Tags
-    </span>
-    <button class="btn btn-ghost btn-square btn-xs" @click="showTagModal()" title="New tag">
-      <i data-lucide="plus" class="w-3 h-3"></i>
-    </button>
-  </div>
-  {% if tags %}
-  <ul class="menu p-0 space-y-1">
-    {% for tag in tags %}
-    <li class="list-none" x-show="notePrefs.showHidden || !isHidden('{{ tag.uuid }}')">
-      <div
-        class="group flex items-center w-full gap-3 p-2 text-base rounded-lg transition-colors cursor-pointer"
-        {% comment %}The tag color tints the icon (inline style, since it is
-        a CSS color and not a theme token); the active row keeps the neutral
-        highlight so every tag reads the same when selected.{% endcomment %}
-        :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-base-content/10 text-base-content' : 'text-base-content/70 hover:bg-base-content/5'"
-        data-tag-uuid="{{ tag.uuid }}"
-        data-tag-name="{{ tag.name }}"
-        @click="setView('tag', '{{ tag.uuid }}', '{{ tag.name }}')"
-        @contextmenu="openCtxMenu($event, 'tag', { uuid: '{{ tag.uuid }}', name: '{{ tag.name|escapejs }}', icon: '{{ tag.icon }}', color: '{{ tag.color }}' })"
+  <!-- Tags -->
+  <div class="mb-2" x-show="!collapsed && notePrefs.showTags">
+    <div
+      class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between"
+    >
+      <span class="flex items-center gap-2">
+        <i data-lucide="tag" class="w-3 h-3"></i>
+        Tags
+      </span>
+      <button
+        class="btn btn-ghost btn-square btn-xs"
+        @click="showTagModal()"
+        title="New tag"
       >
-        <i data-lucide="{{ tag.icon|default:'tag' }}" class="w-5 h-5 flex-shrink-0"
-           style="{% if tag.color %}color: {{ tag.color }}{% endif %}"></i>
-        <span class="truncate flex-1">{{ tag.name }}</span>
-        <button type="button" class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity"
-                @click.stop="openCtxMenu($event, 'tag', { uuid: '{{ tag.uuid }}', name: '{{ tag.name|escapejs }}', icon: '{{ tag.icon }}', color: '{{ tag.color }}' })">
-          <i data-lucide="ellipsis-vertical" class="w-4 h-4"></i>
-        </button>
-      </div>
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-</div>
-
-<!-- Folders -->
-<div x-show="!collapsed && notePrefs.showFolders">
-  <div class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between">
-    <span class="flex items-center gap-2">
-      <i data-lucide="folder-tree" class="w-3 h-3"></i>
-      Folders
-    </span>
-    <button class="btn btn-ghost btn-square btn-xs" @click="showCreateFolderDialog()" title="New folder">
-      <i data-lucide="plus" class="w-3 h-3"></i>
-    </button>
-  </div>
-  <ul class="menu menu-sm p-0">
-    {% include "notes/ui/partials/folder_tree.html" with rows="sidebarFolders" view_type="folder" %}
-  </ul>
-</div>
-
-<!-- Group Folders -->
-<div x-show="!collapsed && notePrefs.showGroupFolders">
-  {% if available_groups %}<div x-ref="hasAvailableGroups" hidden></div>{% endif %}
-  <div class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between"
-       x-show="sidebarGroupFolders.length > 0 || $refs.hasAvailableGroups">
-    <span class="flex items-center gap-2">
-      <i data-lucide="users" class="w-3 h-3"></i>
-      Groups
-    </span>
-    {% if available_groups %}
-    <button class="btn btn-ghost btn-square btn-xs"
-            @click="document.getElementById('notes-create-group-folder-dialog').showModal()"
-            title="Create group folder">
-      <i data-lucide="plus" class="w-3 h-3"></i>
-    </button>
+        <i data-lucide="plus" class="w-3 h-3"></i>
+      </button>
+    </div>
+    {% if tags %}
+      <ul class="menu p-0 space-y-1">
+        {% for tag in tags %}
+          <li
+            class="list-none"
+            x-show="notePrefs.showHidden || !isHidden('{{ tag.uuid }}')"
+          >
+            <div
+              class="group flex items-center w-full gap-3 p-2 text-base rounded-lg transition-colors cursor-pointer"
+              {% comment %}
+              The
+              tag
+              color
+              tints
+              the
+              icon
+              (inline
+              style,
+              since
+              it
+              is
+              a
+              CSS
+              color
+              and
+              not
+              a
+              theme
+              token);
+              the
+              active
+              row
+              keeps
+              the
+              neutral
+              highlight
+              so
+              every
+              tag
+              reads
+              the
+              same
+              when
+              selected.{% endcomment %}
+              :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-base-content/10 text-base-content' : 'text-base-content/70 hover:bg-base-content/5'"
+              data-tag-uuid="{{ tag.uuid }}"
+              data-tag-name="{{ tag.name }}"
+              @click="setView('tag', '{{ tag.uuid }}', '{{ tag.name }}')"
+              @contextmenu="openCtxMenu($event, 'tag', { uuid: '{{ tag.uuid }}', name: '{{ tag.name|escapejs }}', icon: '{{ tag.icon }}', color: '{{ tag.color }}' })"
+            >
+              <i
+                data-lucide="{{ tag.icon|default:'tag' }}"
+                class="w-5 h-5 flex-shrink-0"
+                style="{% if tag.color %}color: {{ tag.color }}{% endif %}"
+              ></i>
+              <span class="truncate flex-1">{{ tag.name }}</span>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity"
+                @click.stop="openCtxMenu($event, 'tag', { uuid: '{{ tag.uuid }}', name: '{{ tag.name|escapejs }}', icon: '{{ tag.icon }}', color: '{{ tag.color }}' })"
+              >
+                <i data-lucide="ellipsis-vertical" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
     {% endif %}
   </div>
-  <ul class="menu menu-sm p-0">
-    {% include "notes/ui/partials/folder_tree.html" with rows="sidebarGroupFolders" view_type="group_folder" %}
-    <li class="list-none px-3 py-2 text-sm text-base-content/40"
-        x-show="sidebarGroupFolders.length === 0 && $refs.hasAvailableGroups">
-      No group folders
-    </li>
-  </ul>
-</div>
+
+  <!-- Folders -->
+  <div x-show="!collapsed && notePrefs.showFolders">
+    <div
+      class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between"
+    >
+      <span class="flex items-center gap-2">
+        <i data-lucide="folder-tree" class="w-3 h-3"></i>
+        Folders
+      </span>
+      <button
+        class="btn btn-ghost btn-square btn-xs"
+        @click="showCreateFolderDialog()"
+        title="New folder"
+      >
+        <i data-lucide="plus" class="w-3 h-3"></i>
+      </button>
+    </div>
+    <ul class="menu menu-sm p-0">
+      {% include "notes/ui/partials/folder_tree.html" with rows="sidebarFolders" view_type="folder" %}
+    </ul>
+  </div>
+
+  <!-- Group Folders -->
+  <div x-show="!collapsed && notePrefs.showGroupFolders">
+    {% if available_groups %}<div x-ref="hasAvailableGroups" hidden></div>{% endif %}
+    <div
+      class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between"
+      x-show="sidebarGroupFolders.length > 0 || $refs.hasAvailableGroups"
+    >
+      <span class="flex items-center gap-2">
+        <i data-lucide="users" class="w-3 h-3"></i>
+        Groups
+      </span>
+      {% if available_groups %}
+        <button
+          class="btn btn-ghost btn-square btn-xs"
+          @click="document.getElementById('notes-create-group-folder-dialog').showModal()"
+          title="Create group folder"
+        >
+          <i data-lucide="plus" class="w-3 h-3"></i>
+        </button>
+      {% endif %}
+    </div>
+    <ul class="menu menu-sm p-0">
+      {% include "notes/ui/partials/folder_tree.html" with rows="sidebarGroupFolders" view_type="group_folder" %}
+      <li
+        class="list-none px-3 py-2 text-sm text-base-content/40"
+        x-show="sidebarGroupFolders.length === 0 && $refs.hasAvailableGroups"
+      >
+        No group folders
+      </li>
+    </ul>
+  </div>
 
 </div>

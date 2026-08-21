@@ -1,9 +1,16 @@
-<dialog x-ref="addMemberDialog" class="modal" @keydown.escape="$refs.addMemberDialog.close()">
+<dialog
+  x-ref="addMemberDialog"
+  class="modal"
+  @keydown.escape="$refs.addMemberDialog.close()"
+>
   <div class="modal-box max-w-md p-0 flex flex-col overflow-visible">
     <!-- Header -->
     <div class="flex items-center justify-between px-5 pt-5 pb-2">
       <h3 class="font-bold text-lg">Add members</h3>
-      <button class="btn btn-ghost btn-sm btn-square" @click="$refs.addMemberDialog.close()">
+      <button
+        class="btn btn-ghost btn-sm btn-square"
+        @click="$refs.addMemberDialog.close()"
+      >
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -13,7 +20,9 @@
       <!-- Search input with chips -->
       <div class="form-control">
         <label class="label pb-1">
-          <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">Search users</span>
+          <span
+            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50"
+          >Search users</span>
         </label>
         <div class="relative">
           <div

@@ -1,28 +1,48 @@
 <!-- Chat Attachment Viewer Modal -->
-<div x-data="chatAttachmentViewer()" @ajax:missing="_viewerMissing($event)" @ajax:merge="_viewerMerge($event)">
+<div
+  x-data="chatAttachmentViewer()"
+  @ajax:missing="_viewerMissing($event)"
+  @ajax:merge="_viewerMerge($event)"
+>
   <dialog x-ref="dialog" class="modal" @close="_onDialogClose()">
-    <div class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col max-w-5xl relative">
+    <div
+      class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col max-w-5xl relative"
+    >
       <!-- Actions (Top Right) -->
       <div class="absolute top-4 right-4 z-10 flex items-center gap-1">
         <!-- Download -->
-        <a :href="downloadUrl" download
-           class="btn btn-ghost btn-sm btn-square" title="Download">
+        <a
+          :href="downloadUrl"
+          download
+          class="btn btn-ghost btn-sm btn-square"
+          title="Download"
+        >
           <i data-lucide="download" class="w-4 h-4"></i>
         </a>
         <!-- Save to Files -->
-        <button type="button" class="btn btn-ghost btn-sm btn-square"
-                @click="saveToFiles()" title="Save to Files">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          @click="saveToFiles()"
+          title="Save to Files"
+        >
           <i data-lucide="folder-down" class="w-4 h-4"></i>
         </button>
         <!-- Close -->
-        <button type="button" class="btn btn-ghost btn-sm btn-square"
-                @click="close()" title="Close (ESC)">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          @click="close()"
+          title="Close (ESC)"
+        >
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
       <!-- Header -->
-      <div class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100">
+      <div
+        class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100"
+      >
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
           <div class="flex items-center gap-2">
@@ -38,18 +58,28 @@
 
       <!-- Viewer Container: #viewer-panel is the alpine-ajax merge anchor
            every /chat/view-attachment/ response replaces (see viewer_panel.js). -->
-      <div class="flex-1 overflow-auto bg-base-200"
-           x-show="!viewerLoading && !viewerError">
+      <div
+        class="flex-1 overflow-auto bg-base-200"
+        x-show="!viewerLoading && !viewerError"
+      >
         <div id="viewer-panel" style="display: contents"></div>
       </div>
 
       <!-- Loading -->
-      <div x-show="viewerLoading" class="flex-1 flex items-center justify-center" x-cloak>
+      <div
+        x-show="viewerLoading"
+        class="flex-1 flex items-center justify-center"
+        x-cloak
+      >
         <span class="loading loading-spinner loading-lg"></span>
       </div>
 
       <!-- Error -->
-      <div x-show="viewerError" class="flex-1 flex items-center justify-center p-8" x-cloak>
+      <div
+        x-show="viewerError"
+        class="flex-1 flex items-center justify-center p-8"
+        x-cloak
+      >
         <div class="text-center">
           <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
           <p class="text-lg font-medium mb-2">Failed to load file</p>
@@ -114,7 +144,9 @@
         _getViewableAttachments() {
           const els = document.querySelectorAll('#message-list [data-attachment-uuid]');
           return Array.from(els)
-            .filter(function(el) { return el.offsetParent !== null; })
+            .filter(function(el) {
+              return el.offsetParent !== null;
+            })
             .map(function(el) {
               return {
                 uuid: el.dataset.attachmentUuid,
@@ -130,7 +162,9 @@
           // bindings would be evaluated once against an empty list and stick.
           const current = this.attachmentUuid;
           const atts = this._getViewableAttachments();
-          return atts.findIndex(function(a) { return a.uuid === current; });
+          return atts.findIndex(function(a) {
+            return a.uuid === current;
+          });
         },
 
         _totalViewable() {
@@ -178,7 +212,9 @@
           this.close();
           // Delegate to the chat component which already has the working flow
           window.dispatchEvent(new CustomEvent('chat-save-attachment-to-files', {
-            detail: { uuid: uuid },
+            detail: {
+              uuid: uuid
+            },
           }));
         },
 
@@ -205,12 +241,18 @@
             const d = e.detail;
             self.openAttachment(d.uuid, d.name, d.type);
           };
-          this._keydownHandler = function(e) { self.handleKeydown(e); };
+          this._keydownHandler = function(e) {
+            self.handleKeydown(e);
+          };
           window.addEventListener('open-chat-attachment-viewer', this._openHandler);
           window.addEventListener('keydown', this._keydownHandler);
           this._detachSwipe = window.attachSwipeNavigation(this.$refs.dialog, {
-            onPrev: function() { self.navigatePrev(); },
-            onNext: function() { self.navigateNext(); },
+            onPrev: function() {
+              self.navigatePrev();
+            },
+            onNext: function() {
+              self.navigateNext();
+            },
           });
         },
       };

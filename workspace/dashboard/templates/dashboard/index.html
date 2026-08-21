@@ -8,363 +8,441 @@
 {% block main_layout_class %}{% endblock %}
 
 {% block content %}
-<div class="py-6 space-y-8">
+  <div class="py-6 space-y-8">
 
-  {# ── Hero ── #}
-  <section class="text-center space-y-1 relative">
-    {# The name stays in HTML (Django autoescape); only the greeting word goes through JS. #}
-    <h1 class="text-3xl font-semibold text-base-content"><span x-data x-text="(() => { const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined; const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date()), 10) % 24; return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; })()">Welcome back</span>, {{ user.first_name|default:user.username }}.</h1>
-    <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
-      <span x-text="label"></span>
-    </p>
+    {# ── Hero ── #}
+    <section class="text-center space-y-1 relative">
+      {# The name stays in HTML (Django autoescape); only the greeting word goes through JS. #}
+      <h1 class="text-3xl font-semibold text-base-content"><span
+  x-data
+  x-text="(() => { const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined; const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date()), 10) % 24; return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; })()"
+>Welcome back</span>, {{ user.first_name|default:user.username }}.</h1>
+      <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
+        <span x-text="label"></span>
+      </p>
 
-    {# ── Top-right controls: dashboard settings + usage ── #}
-    <div class="absolute right-0 top-0 flex items-center gap-1">
-      {# ── Usage popover ── #}
-      <div class="relative" x-data="usagePopover()" @click.outside="open = false">
-        <button
-          @click="toggle()"
-          class="btn btn-ghost btn-sm btn-square"
-          title="Workspace usage"
+      {# ── Top-right controls: dashboard settings + usage ── #}
+      <div class="absolute right-0 top-0 flex items-center gap-1">
+        {# ── Usage popover ── #}
+        <div
+          class="relative"
+          x-data="usagePopover()"
+          @click.outside="open = false"
         >
-          <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
-        </button>
+          <button
+            @click="toggle()"
+            class="btn btn-ghost btn-sm btn-square"
+            title="Workspace usage"
+          >
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+          </button>
+          <div
+            x-show="open"
+            x-cloak
+            x-transition.opacity
+            class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
+          >
+            {% include 'dashboard/partials/usage_widget.html' %}
+          </div>
+        </div>
+
+        {# ── Dashboard settings popover ── #}
+        <div class="dropdown dropdown-end" x-data="dashboardPrefsForm()">
+          {{ dashboard_apps|json_script:"dashboard-apps-data" }}
+          <button
+            type="button"
+            tabindex="0"
+            class="btn btn-ghost btn-sm btn-square"
+            aria-label="Dashboard settings"
+            title="Dashboard settings"
+          >
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </button>
+          <div
+            tabindex="0"
+            class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-72 mt-1 text-left"
+          >
+            <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+              <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
+              Dashboard
+            </h4>
+            {% include "dashboard/partials/_preferences_content.html" %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {# ── Search bar ── #}
+    <section
+      id="dashboard-search"
+      class="hidden sm:block max-w-2xl mx-auto w-full"
+      x-data="commandPaletteDropdown()"
+    >
+      <div class="relative">
+        {% include 'ui/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
+
+        {# ── Dropdown ── #}
         <div
           x-show="open"
           x-cloak
-          x-transition.opacity
-          class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
+          @click.outside="close()"
+          class="absolute z-[100] mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
         >
-          {% include 'dashboard/partials/usage_widget.html' %}
-        </div>
-      </div>
+          {% include 'ui/partials/search/quick_actions.html' with size='lg' %}
+          {% include 'ui/partials/search/search_results.html' with size='lg' %}
 
-      {# ── Dashboard settings popover ── #}
-      <div class="dropdown dropdown-end" x-data="dashboardPrefsForm()">
-        {{ dashboard_apps|json_script:"dashboard-apps-data" }}
-        <button
-          type="button"
-          tabindex="0"
-          class="btn btn-ghost btn-sm btn-square"
-          aria-label="Dashboard settings"
-          title="Dashboard settings"
-        >
-          <i data-lucide="settings" class="w-4 h-4"></i>
-        </button>
-        <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-72 mt-1 text-left">
-          <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-            <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
-            Dashboard
-          </h4>
-          {% include "dashboard/partials/_preferences_content.html" %}
-        </div>
-      </div>
-    </div>
-  </section>
-
-  {# ── Search bar ── #}
-  <section id="dashboard-search" class="hidden sm:block max-w-2xl mx-auto w-full" x-data="commandPaletteDropdown()">
-    <div class="relative">
-      {% include 'ui/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
-
-      {# ── Dropdown ── #}
-      <div
-        x-show="open"
-        x-cloak
-        @click.outside="close()"
-        class="absolute z-[100] mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
-      >
-        {% include 'ui/partials/search/quick_actions.html' with size='lg' %}
-        {% include 'ui/partials/search/search_results.html' with size='lg' %}
-
-        {# ── Footer hints ── #}
-        <div
-          x-show="open"
-          class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
-        >
-          <span class="flex items-center gap-1">
-            <kbd class="kbd kbd-xs">↑↓</kbd>
-            navigate
-          </span>
-          <span class="flex items-center gap-1">
-            <kbd class="kbd kbd-xs">⏎</kbd>
-            select
-          </span>
-          <button
-            type="button"
-            @click="close()"
-            class="btn btn-ghost btn-xs ml-auto"
-            title="Close"
-            aria-label="Close search results"
+          {# ── Footer hints ── #}
+          <div
+            x-show="open"
+            class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
           >
-            <i data-lucide="chevron-down" class="w-4 h-4"></i>
-          </button>
+            <span class="flex items-center gap-1">
+              <kbd class="kbd kbd-xs">↑↓</kbd>
+              navigate
+            </span>
+            <span class="flex items-center gap-1">
+              <kbd class="kbd kbd-xs">⏎</kbd>
+              select
+            </span>
+            <button
+              type="button"
+              @click="close()"
+              class="btn btn-ghost btn-xs ml-auto"
+              title="Close"
+              aria-label="Close search results"
+            >
+              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </section>
-
-  {# ── Modules grid ── #}
-  {# The x-data wrapper sits outside the swap target so the SSE listeners survive every fragment refresh. #}
-  <div x-data="dashboardBadges('{% url 'dashboard:modules_fragment' %}')">
-    {% include 'dashboard/partials/modules_grid_fragment.html' %}
-  </div>
-
-  {% if show_upcoming_events %}
-    {# ── Upcoming events (loaded async via alpine-ajax) ── #}
-    <section>
-      {% include 'dashboard/partials/upcoming_skeleton.html' %}
     </section>
-  {% endif %}
 
-  {# ── My tasks: async load; empty hidden slot kept so the prefs toggle can swap it live ── #}
-  <section
-    id="dashboard-tasks"
-    class="max-w-4xl mx-auto w-full{% if not show_my_tasks %} hidden{% endif %}"
-    {% if show_my_tasks %}
-    x-data="{}"
-    x-init="$ajax('{% url 'dashboard:tasks_fragment' %}')"
-    @ajax:error="$el.replaceChildren()"
-    {% endif %}
-  >
-    {% if show_my_tasks %}
-      {% include 'dashboard/partials/my_tasks_skeleton.html' %}
-    {% endif %}
-  </section>
+    {# ── Modules grid ── #}
+    {# The x-data wrapper sits outside the swap target so the SSE listeners survive every fragment refresh. #}
+    <div x-data="dashboardBadges('{% url 'dashboard:modules_fragment' %}')">
+      {% include 'dashboard/partials/modules_grid_fragment.html' %}
+    </div>
 
-  {# ── Activity feed ── #}
-  <section class="max-w-4xl mx-auto w-full">
-    <div>
-      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }" @ajax:before="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedSkeleton.innerHTML" @ajax:error="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedFailed.innerHTML">
-        <div class="card-body gap-4 p-4 sm:p-6">
-          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div class="space-y-1">
-              <h2 class="card-title text-xl">
-                <i data-lucide="activity" class="w-5 h-5"></i>
-                Recent Activity
-              </h2>
-              <p class="text-sm text-base-content/60">What's happening across your workspace.</p>
-            </div>
-            <div class="flex items-center gap-2 min-w-0">
-            {% include "ui/partials/activity_tabs.html" with activity_prefix="dashboard-activity" %}
-            <button
-              class="btn btn-ghost btn-sm btn-square"
-              :class="searchOpen && 'btn-active'"
-              title="Search"
-              @click="searchOpen = !searchOpen; if (!searchOpen) { activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click()) } else { $nextTick(() => $refs.activitySearchInput.focus()) }"
+    {% if show_upcoming_events %}
+      {# ── Upcoming events (loaded async via alpine-ajax) ── #}
+      <section>
+        {% include 'dashboard/partials/upcoming_skeleton.html' %}
+      </section>
+    {% endif %}
+
+    {# ── My tasks: async load; empty hidden slot kept so the prefs toggle can swap it live ── #}
+    <section
+      id="dashboard-tasks"
+      class="max-w-4xl mx-auto w-full{% if not show_my_tasks %} hidden{% endif %}"
+      {% if show_my_tasks %} x-data="{}" x-init="$ajax('{% url 'dashboard:tasks_fragment' %}')" @ajax:error="$el.replaceChildren()" {% endif %}
+    >
+      {% if show_my_tasks %}
+        {% include 'dashboard/partials/my_tasks_skeleton.html' %}
+      {% endif %}
+    </section>
+
+    {# ── Activity feed ── #}
+    <section class="max-w-4xl mx-auto w-full">
+      <div>
+        <div
+          class="card bg-base-100 shadow border border-base-300"
+          x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }"
+          @ajax:before="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedSkeleton.innerHTML"
+          @ajax:error="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedFailed.innerHTML"
+        >
+          <div class="card-body gap-4 p-4 sm:p-6">
+            <div
+              class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
             >
-              <i data-lucide="search" class="w-4 h-4"></i>
-            </button>
-            {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="dashboard-activity" loading_expr="false" %}
+              <div class="space-y-1">
+                <h2 class="card-title text-xl">
+                  <i data-lucide="activity" class="w-5 h-5"></i>
+                  Recent Activity
+                </h2>
+                <p class="text-sm text-base-content/60">What's happening across your workspace.</p>
+              </div>
+              <div class="flex items-center gap-2 min-w-0">
+                {% include "ui/partials/activity_tabs.html" with activity_prefix="dashboard-activity" %}
+                <button
+                  class="btn btn-ghost btn-sm btn-square"
+                  :class="searchOpen && 'btn-active'"
+                  title="Search"
+                  @click="searchOpen = !searchOpen; if (!searchOpen) { activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click()) } else { $nextTick(() => $refs.activitySearchInput.focus()) }"
+                >
+                  <i data-lucide="search" class="w-4 h-4"></i>
+                </button>
+                {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="dashboard-activity" loading_expr="false" %}
+              </div>
             </div>
-          </div>
-          {% include "ui/partials/activity_search.html" with activity_prefix="dashboard-activity" %}
+            {% include "ui/partials/activity_search.html" with activity_prefix="dashboard-activity" %}
 
-          {% comment %}
+            {% comment %}
           Self-loading feed. The skeleton (feedSkeleton) is shown before every
           fetch - on first paint via x-init, and on tab/search/refresh via the
           card's @ajax:before - then alpine-ajax overwrites the target with the
           response. There is no loading flag to get stuck; on failure the card's
           @ajax:error swaps in feedFailed instead.
-          {% endcomment %}
-          <div x-ref="feedSkeleton" hidden>
-            <div class="animate-pulse">
-              <ul class="divide-y divide-base-200">
-                {% for _ in "123456" %}
-                <li class="py-3 flex items-center gap-3">
-                  <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
-                  <div class="flex-1 min-w-0 space-y-2">
-                    <div class="h-4 bg-base-300 rounded w-3/4"></div>
-                    <div class="h-3 bg-base-300 rounded w-1/2"></div>
-                  </div>
-                  <div class="h-6 w-12 bg-base-300 rounded hidden sm:block"></div>
-                </li>
-                {% endfor %}
-              </ul>
+            {% endcomment %}
+            <div x-ref="feedSkeleton" hidden>
+              <div class="animate-pulse">
+                <ul class="divide-y divide-base-200">
+                  {% for _ in "123456" %}
+                    <li class="py-3 flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
+                      <div class="flex-1 min-w-0 space-y-2">
+                        <div class="h-4 bg-base-300 rounded w-3/4"></div>
+                        <div class="h-3 bg-base-300 rounded w-1/2"></div>
+                      </div>
+                      <div class="h-6 w-12 bg-base-300 rounded hidden sm:block"></div>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
             </div>
-          </div>
 
-          <div
-            id="dashboard-activity"
-            x-init="$el.innerHTML = $refs.feedSkeleton.innerHTML; $ajax(feedUrl, { target: 'dashboard-activity' })"
-          ></div>
+            <div
+              id="dashboard-activity"
+              x-init="$el.innerHTML = $refs.feedSkeleton.innerHTML; $ajax(feedUrl, { target: 'dashboard-activity' })"
+            ></div>
 
-          {# Error markup, copied into the feed target by @ajax:error above so the card is never left blank #}
-          <div x-ref="feedFailed" hidden>
-            <p class="py-3 text-sm text-base-content/60">Couldn't load activity. <a href="{% url 'dashboard:index' %}" class="link link-hover">Reload</a></p>
+            {# Error markup, copied into the feed target by @ajax:error above so the card is never left blank #}
+            <div x-ref="feedFailed" hidden>
+              <p class="py-3 text-sm text-base-content/60">Couldn't load activity. <a href="{% url 'dashboard:index' %}" class="link link-hover">Reload</a></p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-  </section>
+    </section>
 
-</div>
+  </div>
 
-<script src="{% static 'dashboard/js/badges.js' %}"></script>
-<script>
-const _weatherCodes = {
-  0:'clear-day',1:'clear-day',2:'partly-cloudy',3:'cloudy',
-  45:'fog',48:'fog',
-  51:'drizzle',53:'drizzle',55:'drizzle',56:'drizzle',57:'drizzle',
-  61:'rain',63:'rain',65:'rain',66:'rain',67:'rain',
-  71:'snow',73:'snow',75:'snow',77:'snow',
-  80:'rain',81:'rain',82:'rain',
-  85:'snow',86:'snow',
-  95:'thunderstorm',96:'thunderstorm',99:'thunderstorm',
-};
-const _weatherIcons = {
-  'clear-day':'sun','clear-night':'moon','partly-cloudy':'cloud-sun',
-  'cloudy':'cloud','fog':'cloud-fog','drizzle':'cloud-drizzle',
-  'rain':'cloud-rain','snow':'snowflake','thunderstorm':'cloud-lightning',
-};
-const _WEATHER_CACHE_KEY = 'dashboard_weather';
-const _WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 min
+  <script src="{% static 'dashboard/js/badges.js' %}"></script>
+  <script>
+    const _weatherCodes = {
+      0: 'clear-day',
+      1: 'clear-day',
+      2: 'partly-cloudy',
+      3: 'cloudy',
+      45: 'fog',
+      48: 'fog',
+      51: 'drizzle',
+      53: 'drizzle',
+      55: 'drizzle',
+      56: 'drizzle',
+      57: 'drizzle',
+      61: 'rain',
+      63: 'rain',
+      65: 'rain',
+      66: 'rain',
+      67: 'rain',
+      71: 'snow',
+      73: 'snow',
+      75: 'snow',
+      77: 'snow',
+      80: 'rain',
+      81: 'rain',
+      82: 'rain',
+      85: 'snow',
+      86: 'snow',
+      95: 'thunderstorm',
+      96: 'thunderstorm',
+      99: 'thunderstorm',
+    };
+    const _weatherIcons = {
+      'clear-day': 'sun',
+      'clear-night': 'moon',
+      'partly-cloudy': 'cloud-sun',
+      'cloudy': 'cloud',
+      'fog': 'cloud-fog',
+      'drizzle': 'cloud-drizzle',
+      'rain': 'cloud-rain',
+      'snow': 'snowflake',
+      'thunderstorm': 'cloud-lightning',
+    };
+    const _WEATHER_CACHE_KEY = 'dashboard_weather';
+    const _WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 min
 
-function usagePopover() {
-  return {
-    open: false,
-    animated: false,
-    toggle() {
-      this.open = !this.open;
-      if (this.open) {
-        this.$nextTick(() => {
-          if (!this.animated) {
-            this.animated = true;
-            this._animateCounts();
-            this._animateStorage();
+    function usagePopover() {
+      return {
+        open: false,
+        animated: false,
+        toggle() {
+          this.open = !this.open;
+          if (this.open) {
+            this.$nextTick(() => {
+              if (!this.animated) {
+                this.animated = true;
+                this._animateCounts();
+                this._animateStorage();
+              }
+            });
           }
-        });
-      }
-    },
-    _animateCounts() {
-      const refs = ['countFiles', 'countMessages', 'countMail', 'countEvents'];
-      const duration = 600;
-      for (let i = 0; i < refs.length; i++) {
-        const el = this.$refs[refs[i]];
-        if (!el) continue;
-        const target = parseInt(el.dataset.target) || 0;
-        if (target === 0) { el.textContent = '0'; continue; }
-        this._countUp(el, target, duration);
-      }
-    },
-    _countUp(el, target, duration) {
-      const start = performance.now();
-      function tick(now) {
-        const progress = Math.min((now - start) / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        el.textContent = Math.round(eased * target).toLocaleString();
-        if (progress < 1) requestAnimationFrame(tick);
-      }
-      requestAnimationFrame(tick);
-    },
-    _animateStorage() {
-      const bar = this.$refs.storageBar;
-      if (!bar) return;
-      const used = {{ usage_stats.files.total_size|default:"0" }};
-      const quota = {{ storage_quota }};
-      const pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
-      requestAnimationFrame(() => { bar.style.width = pct + '%'; });
-    },
-  };
-}
-
-function weatherWidget() {
-  return {
-    label: '',
-    init() {
-      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      const now = new Date();
-      this.label = now.toLocaleDateString(undefined, { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' });
-      this._loadWeather();
-    },
-    _loadWeather() {
-      const self = this;
-      // Check cache
-      try {
-        const raw = localStorage.getItem(_WEATHER_CACHE_KEY);
-        if (raw) {
-          const c = JSON.parse(raw);
-          if (c.ts + _WEATHER_CACHE_TTL > Date.now()) {
-            self._applyWeather(c.temp, c.code);
-            return;
+        },
+        _animateCounts() {
+          const refs = ['countFiles', 'countMessages', 'countMail', 'countEvents'];
+          const duration = 600;
+          for (let i = 0; i < refs.length; i++) {
+            const el = this.$refs[refs[i]];
+            if (!el) continue;
+            const target = parseInt(el.dataset.target) || 0;
+            if (target === 0) {
+              el.textContent = '0';
+              continue;
+            }
+            this._countUp(el, target, duration);
           }
-        }
-      } catch(e) {}
+        },
+        _countUp(el, target, duration) {
+          const start = performance.now();
 
-      if (!navigator.geolocation) return;
-      navigator.geolocation.getCurrentPosition(function(pos) {
-        const lat = pos.coords.latitude.toFixed(2);
-        const lon = pos.coords.longitude.toFixed(2);
-        fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m,weather_code')
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            const temp = Math.round(data.current.temperature_2m);
-            const code = data.current.weather_code;
-            try { localStorage.setItem(_WEATHER_CACHE_KEY, JSON.stringify({ temp: temp, code: code, ts: Date.now() })); } catch(e) {}
-            self._applyWeather(temp, code);
-        }).catch(function() {});
-      }, function() {}, { timeout: 5000 });
-    },
-    _applyWeather(temp, code) {
-      let condition = _weatherCodes[code] || 'cloudy';
-      const h = new Date().getHours();
-      if ((condition === 'clear-day') && (h < 6 || h >= 20)) condition = 'clear-night';
-      const icon = _weatherIcons[condition] || 'cloud';
-      const dateStr = new Date().toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined, weekday: 'long', month: 'long', day: 'numeric' });
-      this.label = dateStr + '  ·  ' + temp + '°C';
-      // Inject lucide icon next to temperature
-      this.$nextTick(() => {
-        const el = this.$el.querySelector('[data-weather-icon]');
-        if (el) el.remove();
-        const span = document.createElement('i');
-        span.setAttribute('data-lucide', icon);
-        span.setAttribute('data-weather-icon', '');
-        span.className = 'inline-block w-4 h-4 ml-1 -translate-y-px';
-        this.$el.querySelector('span').appendChild(span);
-      });
-    },
-  };
-}
+          function tick(now) {
+            const progress = Math.min((now - start) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            el.textContent = Math.round(eased * target).toLocaleString();
+            if (progress < 1) requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        },
+        _animateStorage() {
+          const bar = this.$refs.storageBar;
+          if (!bar) return;
+          const used = {{ usage_stats.files.total_size|default:"0" }};
+          const quota = {{ storage_quota }};
+          const pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
+          requestAnimationFrame(() => {
+            bar.style.width = pct + '%';
+          });
+        },
+      };
+    }
 
-function dashboardPrefsForm() {
-  const apps = JSON.parse(document.getElementById('dashboard-apps-data').textContent);
-  return {
-    showUpcoming: {{ show_upcoming_events|yesno:"true,false" }},
-    showEmpty: {{ show_upcoming_empty|yesno:"true,false" }},
-    showMyTasks: {{ show_my_tasks|yesno:"true,false" }},
-    apps: apps,
-    hidden: apps.filter(a => a.hidden).map(a => a.slug),
-    isVisible(slug) {
-      return !this.hidden.includes(slug);
-    },
-    toggleMyTasks() {
-      // Persist first, then re-fetch the section: the server decides whether
-      // the widget or the empty hidden slot comes back.
-      this.save('show_my_tasks', this.showMyTasks).then(() => {
-        this.$ajax('{% url 'dashboard:tasks_fragment' %}', { target: 'dashboard-tasks' });
-      });
-    },
-    toggleApp(slug, visible) {
-      if (visible) {
-        this.hidden = this.hidden.filter(s => s !== slug);
-      } else if (!this.hidden.includes(slug)) {
-        this.hidden.push(slug);
-      }
-      // Persist first, then re-render the grid from the server so the tile
-      // appears/disappears live without a full page reload.
-      this.save('hidden_modules', this.hidden).then(() => {
-        this.$ajax('{% url 'dashboard:modules_fragment' %}', { target: 'dashboard-modules-grid' });
-      });
-    },
-    save(key, value) {
-      return fetch('/api/v1/settings/dashboard/' + key, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ value: value }),
-      });
-    },
-  };
-}
-</script>
+    function weatherWidget() {
+      return {
+        label: '',
+        init() {
+          const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+          const now = new Date();
+          this.label = now.toLocaleDateString(undefined, {
+            timeZone: tz,
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric'
+          });
+          this._loadWeather();
+        },
+        _loadWeather() {
+          const self = this;
+          // Check cache
+          try {
+            const raw = localStorage.getItem(_WEATHER_CACHE_KEY);
+            if (raw) {
+              const c = JSON.parse(raw);
+              if (c.ts + _WEATHER_CACHE_TTL > Date.now()) {
+                self._applyWeather(c.temp, c.code);
+                return;
+              }
+            }
+          } catch (e) {}
+
+          if (!navigator.geolocation) return;
+          navigator.geolocation.getCurrentPosition(function(pos) {
+            const lat = pos.coords.latitude.toFixed(2);
+            const lon = pos.coords.longitude.toFixed(2);
+            fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m,weather_code')
+              .then(function(r) {
+                return r.json();
+              })
+              .then(function(data) {
+                const temp = Math.round(data.current.temperature_2m);
+                const code = data.current.weather_code;
+                try {
+                  localStorage.setItem(_WEATHER_CACHE_KEY, JSON.stringify({
+                    temp: temp,
+                    code: code,
+                    ts: Date.now()
+                  }));
+                } catch (e) {}
+                self._applyWeather(temp, code);
+              }).catch(function() {});
+          }, function() {}, {
+            timeout: 5000
+          });
+        },
+        _applyWeather(temp, code) {
+          let condition = _weatherCodes[code] || 'cloudy';
+          const h = new Date().getHours();
+          if ((condition === 'clear-day') && (h < 6 || h >= 20)) condition = 'clear-night';
+          const icon = _weatherIcons[condition] || 'cloud';
+          const dateStr = new Date().toLocaleDateString(undefined, {
+            timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined,
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric'
+          });
+          this.label = dateStr + '  ·  ' + temp + '°C';
+          // Inject lucide icon next to temperature
+          this.$nextTick(() => {
+            const el = this.$el.querySelector('[data-weather-icon]');
+            if (el) el.remove();
+            const span = document.createElement('i');
+            span.setAttribute('data-lucide', icon);
+            span.setAttribute('data-weather-icon', '');
+            span.className = 'inline-block w-4 h-4 ml-1 -translate-y-px';
+            this.$el.querySelector('span').appendChild(span);
+          });
+        },
+      };
+    }
+
+    function dashboardPrefsForm() {
+      const apps = JSON.parse(document.getElementById('dashboard-apps-data').textContent);
+      return {
+        showUpcoming: {{ show_upcoming_events|yesno:"true,false" }},
+        showEmpty: {{ show_upcoming_empty|yesno:"true,false" }},
+        showMyTasks: {{ show_my_tasks|yesno:"true,false" }},
+        apps: apps,
+        hidden: apps.filter(a => a.hidden).map(a => a.slug),
+        isVisible(slug) {
+          return !this.hidden.includes(slug);
+        },
+        toggleMyTasks() {
+          // Persist first, then re-fetch the section: the server decides whether
+          // the widget or the empty hidden slot comes back.
+          this.save('show_my_tasks', this.showMyTasks).then(() => {
+            this.$ajax('{% url 'dashboard:tasks_fragment' %}', {
+              target: 'dashboard-tasks'
+            });
+          });
+        },
+        toggleApp(slug, visible) {
+          if (visible) {
+            this.hidden = this.hidden.filter(s => s !== slug);
+          } else if (!this.hidden.includes(slug)) {
+            this.hidden.push(slug);
+          }
+          // Persist first, then re-render the grid from the server so the tile
+          // appears/disappears live without a full page reload.
+          this.save('hidden_modules', this.hidden).then(() => {
+            this.$ajax('{% url 'dashboard:modules_fragment' %}', {
+              target: 'dashboard-modules-grid'
+            });
+          });
+        },
+        save(key, value) {
+          return fetch('/api/v1/settings/dashboard/' + key, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+              value: value
+            }),
+          });
+        },
+      };
+    }
+  </script>
 {% endblock %}

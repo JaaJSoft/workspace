@@ -1,10 +1,10 @@
 <!-- File Viewer Modal -->
-<div x-data="fileViewerModal()" @ajax:missing="_viewerMissing($event)" @ajax:merge="_viewerMerge($event)">
-  <dialog
-    x-ref="dialog"
-    class="modal"
-    @close="_onDialogClose()"
-  >
+<div
+  x-data="fileViewerModal()"
+  @ajax:missing="_viewerMissing($event)"
+  @ajax:merge="_viewerMerge($event)"
+>
+  <dialog x-ref="dialog" class="modal" @close="_onDialogClose()">
     <div
       class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col relative transition-[max-width] duration-200"
       :class="expanded ? 'max-w-[90vw]' : 'max-w-5xl'"
@@ -46,7 +46,9 @@
       </div>
 
       <!-- Header -->
-      <div class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100">
+      <div
+        class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100"
+      >
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
           <div class="flex items-center gap-2">
@@ -136,7 +138,9 @@
         _getViewableFiles() {
           const rows = document.querySelectorAll('[data-uuid][data-viewable="1"][data-node-type="file"]');
           return Array.from(rows)
-            .filter(function(r) { return r.offsetParent !== null; })
+            .filter(function(r) {
+              return r.offsetParent !== null;
+            })
             .map(function(r) {
               return {
                 uuid: r.dataset.uuid,
@@ -184,13 +188,20 @@
         },
 
         _saveViewerPrefs() {
-          const prefs = { expanded: this.expanded };
+          const prefs = {
+            expanded: this.expanded
+          };
           clearTimeout(_prefsSaveTimer);
           _prefsSaveTimer = setTimeout(function() {
             fetch(VIEWER_PREFS_URL, {
               method: 'PUT',
-              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-              body: JSON.stringify({ value: prefs }),
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+              },
+              body: JSON.stringify({
+                value: prefs
+              }),
             }).catch(function() {});
           }, 500);
         },
@@ -293,7 +304,11 @@
 
           this._keydownHandler = (e) => this.handleKeydown(e);
           this._openFileHandler = (e) => {
-            const { uuid, name, type } = e.detail;
+            const {
+              uuid,
+              name,
+              type
+            } = e.detail;
             this.openFile(uuid, name, type);
           };
 

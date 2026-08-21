@@ -8,7 +8,10 @@ lists are rendered from whatever the registry returns; only the rows the
 registry knows nothing about (sidebar visibility, "Open in Files") are
 written out here.
 {% endcomment %}
-<ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'folder' || ctxMenu.type === 'group_folder'">
+<ul
+  class="menu menu-sm p-0"
+  x-show="ctxMenu.type === 'folder' || ctxMenu.type === 'group_folder'"
+>
   <li x-show="ctxMenu.actions === null">
     <span class="gap-3 rounded pointer-events-none">
       <span class="loading loading-spinner loading-xs"></span>
@@ -51,6 +54,6 @@ written out here.
 <ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'tag'">
   {% include "ui/partials/context_menu_item.html" with icon="pencil" label="Edit" click="ctxAction('edit')" only %}
   {% include "ui/partials/context_menu_item.html" with icon="eye" icon_alt="eye-off" icon_toggle="isHidden(ctxMenu.data?.uuid)" label_expr="isHidden(ctxMenu.data?.uuid) ? 'Show in sidebar' : 'Hide from sidebar'" click="ctxAction('hide')" only %}
-  <hr class="my-1 border-base-300">
+  <hr class="my-1 border-base-300" />
   {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="ctxAction('delete')" only %}
 </ul>

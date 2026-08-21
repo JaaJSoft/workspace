@@ -22,39 +22,55 @@ Size mapping:
 
 {% if size == 'sm' %}
   <div class="flex items-center gap-2 {{ classes }}">
-    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-md">
+    <div
+      class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-md"
+    >
       <i data-lucide="users" class="w-5 h-5 text-base-100"></i>
     </div>
     {% if show_text != False %}
-      <span class="text-xl font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Workspace</span>
+      <span
+        class="text-xl font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent"
+      >Workspace</span>
     {% endif %}
   </div>
 {% elif size == 'lg' %}
   <div class="flex items-center gap-4 {{ classes }}">
-    <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-xl">
+    <div
+      class="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-xl"
+    >
       <i data-lucide="users" class="w-8 h-8 text-base-100"></i>
     </div>
     {% if show_text != False %}
-      <span class="text-5xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Workspace</span>
+      <span
+        class="text-5xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent"
+      >Workspace</span>
     {% endif %}
   </div>
 {% elif size == 'xl' %}
   <div class="flex items-center gap-5 {{ classes }}">
-    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-2xl">
+    <div
+      class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-2xl"
+    >
       <i data-lucide="users" class="w-10 h-10 text-base-100"></i>
     </div>
     {% if show_text != False %}
-      <span class="text-6xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Workspace</span>
+      <span
+        class="text-6xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent"
+      >Workspace</span>
     {% endif %}
   </div>
 {% else %}
   {# Default: md #}
   <div class="flex items-center gap-3 {{ classes }}">
-    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
+    <div
+      class="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg"
+    >
       <i data-lucide="users" class="w-7 h-7 text-base-100"></i>
     </div>
     {% if show_text != False %}
-      <span class="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Workspace</span>
+      <span
+        class="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent"
+      >Workspace</span>
     {% endif %}
   </div>
 {% endif %}

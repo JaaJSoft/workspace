@@ -7,12 +7,18 @@ Rows of the event context menu. The panel around them is
   {% include "ui/partials/context_menu_item.html" with icon="link" label="Copy link" click="ctxMenuAction('copy_link')" only %}
 
   {% comment %}Owner actions - hidden for events synced from an external calendar.{% endcomment %}
-  <hr x-show="ctxMenu.isOwner && !ctxMenu.isExternal" class="my-1 border-base-300" />
+  <hr
+    x-show="ctxMenu.isOwner && !ctxMenu.isExternal"
+    class="my-1 border-base-300"
+  />
   {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isOwner && !ctxMenu.isExternal" icon="pencil" label="Edit" click="ctxMenuAction('edit')" only %}
   {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isOwner && !ctxMenu.isExternal" icon="trash-2" label="Delete" tone="error" click="ctxMenuAction('delete')" only %}
 
   {% comment %}Invitee actions.{% endcomment %}
-  <hr x-show="!ctxMenu.isOwner && ctxMenu.inviteStatus !== null" class="my-1 border-base-300" />
+  <hr
+    x-show="!ctxMenu.isOwner && ctxMenu.inviteStatus !== null"
+    class="my-1 border-base-300"
+  />
   {% include "ui/partials/context_menu_item.html" with show="!ctxMenu.isOwner && ctxMenu.inviteStatus !== null && ctxMenu.inviteStatus !== 'accepted'" icon="check" label="Accept" tone="success" click="ctxMenuAction('accept')" only %}
   {% include "ui/partials/context_menu_item.html" with show="!ctxMenu.isOwner && ctxMenu.inviteStatus !== null && ctxMenu.inviteStatus !== 'declined'" icon="x" label="Decline" tone="error" click="ctxMenuAction('decline')" only %}
 </ul>

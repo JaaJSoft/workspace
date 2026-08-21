@@ -23,7 +23,10 @@ the SVG inside rotate via ``animate-spin``.
   x-target="{{ target }}"
   title="{{ title|default:'Refresh' }}"
 >
-  <span class="inline-flex" :class="{{ loading_expr|default:'loading' }} && 'animate-spin'">
+  <span
+    class="inline-flex"
+    :class="{{ loading_expr|default:'loading' }} && 'animate-spin'"
+  >
     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
   </span>
 </a>

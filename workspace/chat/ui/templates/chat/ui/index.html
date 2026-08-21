@@ -4,18 +4,26 @@
 {% block title %}Chat - Workspace{% endblock %}
 
 {% block extra_head %}
-{% comment %}In <head> and not deferred on purpose: <conversation-avatar> must
+  {% comment %}In <head> and not deferred on purpose: <conversation-avatar> must
 be defined before the parser reaches the markup using it, or server-rendered
-avatars flash unstyled.{% endcomment %}
-<script src="{% static 'chat/ui/js/conversation_avatar.js' %}"></script>
-<link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}">
-<link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" integrity="sha384-6LFfkTKLRlzFtgx8xsWyBdKGpcMMQTkv+dB7rAbugeJAu1Ym2q1Aji1cjHBG12Xh" crossorigin="anonymous" />
-<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+  avatars flash unstyled.{% endcomment %}
+  <script src="{% static 'chat/ui/js/conversation_avatar.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}" />
+  <link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}" />
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css"
+    integrity="sha384-6LFfkTKLRlzFtgx8xsWyBdKGpcMMQTkv+dB7rAbugeJAu1Ym2q1Aji1cjHBG12Xh"
+    crossorigin="anonymous"
+  />
+  <script
+    type="module"
+    src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"
+  ></script>
 {% endblock %}
 
 {% block navbar %}
-{% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+  {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
 
 {% block drawer_class %}drawer-open{% endblock %}
@@ -24,42 +32,44 @@ avatars flash unstyled.{% endcomment %}
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_attrs %}
-x-data="chatApp({{ user.id }})"
-@ajax:missing="_onAjaxMissing($event)"
-@chat-message.window="handleSSEMessage($event.detail)"
-@chat-message_edited.window="handleSSEMessageEdited($event.detail)"
-@chat-message_deleted.window="handleSSEMessageDeleted($event.detail)"
-@chat-reaction.window="handleSSEReaction($event.detail)"
-@chat-unread.window="handleSSEUnread($event.detail)"
-@chat-message_pinned.window="handleSSEMessagePinned($event.detail)"
-@chat-link_preview.window="handleSSELinkPreview($event.detail)"
-@chat-read.window="handleSSERead($event.detail)"
-@chat-typing.window="handleSSETyping($event.detail)"
-@ai-stream-bot_step.window="handleSSEBotStep($event.detail)"
-@ai-stream-bot_generating.window="handleSSEBotGenerating($event.detail)"
-@chat-conversation_updated.window="handleSSEConversationUpdated($event.detail)"
-@chat-call_started.window="onCallStarted($event.detail)"
-@chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
-@chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
-@chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
-@chat-call_ended.window="onCallEnded($event.detail)"
-@chat-call_signal.window="onCallSignal($event.detail)"
-@chat-call_diagnostic_signal.window="onCallDiagnosticSignal($event.detail)"
-@chat-run-diagnostic.window="openDiagnostic()"
-@keydown.window="
+  x-data="chatApp({{ user.id }})"
+  @ajax:missing="_onAjaxMissing($event)"
+  @chat-message.window="handleSSEMessage($event.detail)"
+  @chat-message_edited.window="handleSSEMessageEdited($event.detail)"
+  @chat-message_deleted.window="handleSSEMessageDeleted($event.detail)"
+  @chat-reaction.window="handleSSEReaction($event.detail)"
+  @chat-unread.window="handleSSEUnread($event.detail)"
+  @chat-message_pinned.window="handleSSEMessagePinned($event.detail)"
+  @chat-link_preview.window="handleSSELinkPreview($event.detail)"
+  @chat-read.window="handleSSERead($event.detail)"
+  @chat-typing.window="handleSSETyping($event.detail)"
+  @ai-stream-bot_step.window="handleSSEBotStep($event.detail)"
+  @ai-stream-bot_generating.window="handleSSEBotGenerating($event.detail)"
+  @chat-conversation_updated.window="handleSSEConversationUpdated($event.detail)"
+  @chat-call_started.window="onCallStarted($event.detail)"
+  @chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
+  @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
+  @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
+  @chat-call_ended.window="onCallEnded($event.detail)"
+  @chat-call_signal.window="onCallSignal($event.detail)"
+  @chat-call_diagnostic_signal.window="onCallDiagnosticSignal($event.detail)"
+  @chat-run-diagnostic.window="openDiagnostic()"
+  @keydown.window="
   if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }
   if (($event.ctrlKey || $event.metaKey) && $event.key === 'f' && activeConversation) { $event.preventDefault(); toggleSearchPanel(); }
   if ($event.altKey && $event.key === 'i' && activeConversation) { $event.preventDefault(); toggleInfoPanel(); }
-"
+  "
 {% endblock %}
 
 {% block drawer_sidebar %}
-<div class="drawer-side z-40 h-full"
-     :style="(activeConversation || pendingInitialConvUuid) && isMobile() ? 'display:none!important' : ''">
-  <label for="chat-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+  <div
+    class="drawer-side z-40 h-full"
+    :style="(activeConversation || pendingInitialConvUuid) && isMobile() ? 'display:none!important' : ''"
+  >
+    <label for="chat-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
-  <!-- Sidebar -->
-  <!--
+    <!-- Sidebar -->
+    <!--
     Base width is `w-16` on every viewport so the very first paint (before
     Alpine binds its :class) already matches mobile's collapsed state — no
     w-80 → w-16 flash on /chat. `lg:!w-80` (with Tailwind's !important
@@ -67,188 +77,225 @@ x-data="chatApp({{ user.id }})"
     `transition-all` is gated on `sidebarMounted` so Alpine's first bind
     doesn't animate; it's flipped via $nextTick in chatApp.init().
   -->
-  <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col w-16"
-         :class="{
+    <aside
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col w-16"
+      :class="{
            'lg:!w-80': !collapsed,
            'transition-all duration-300': sidebarMounted,
-         }">
-    <!-- Sidebar header -->
-    <div class="border-b border-base-300 py-4 px-3 relative" x-data="{ ...chatPreferences(), prefsOpen: false }"
-         @chat-run-diagnostic.window="prefsOpen = false">
-      <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
-        <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
-          <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
-          <span x-show="!collapsed" x-transition>Chat</span>
-        </h2>
-        <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm btn-square hover:text-info"
-            @click="prefsOpen = !prefsOpen"
-            aria-label="Preferences" title="Preferences"
+         }"
+    >
+      <!-- Sidebar header -->
+      <div
+        class="border-b border-base-300 py-4 px-3 relative"
+        x-data="{ ...chatPreferences(), prefsOpen: false }"
+        @chat-run-diagnostic.window="prefsOpen = false"
+      >
+        <div
+          class="flex items-center"
+          :class="collapsed ? 'justify-center' : 'justify-between'"
+        >
+          <h2
+            class="text-xl font-semibold flex items-center gap-2"
+            :class="collapsed ? '' : 'pl-2'"
           >
-            <i data-lucide="settings" class="w-4 h-4"></i>
-          </button>
-          {% if ai_enabled %}
-          <button
-            class="btn btn-ghost btn-sm btn-square hover:text-secondary"
-            @click="botFilter = ''; showBotPicker = true"
-            title="New AI Chat"
-          >
-            <i data-lucide="sparkles" class="w-4 h-4"></i>
-          </button>
-          {% endif %}
-          <button
-            class="btn btn-ghost btn-sm btn-square mr-1 hover:text-info"
-            @click="showNewConversationDialog()"
-            title="New conversation (Alt+N)"
-          >
-            <i data-lucide="plus" class="w-4 h-4"></i>
-          </button>
+            <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
+            <span x-show="!collapsed" x-transition>Chat</span>
+          </h2>
+          <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-square hover:text-info"
+              @click="prefsOpen = !prefsOpen"
+              aria-label="Preferences"
+              title="Preferences"
+            >
+              <i data-lucide="settings" class="w-4 h-4"></i>
+            </button>
+            {% if ai_enabled %}
+              <button
+                class="btn btn-ghost btn-sm btn-square hover:text-secondary"
+                @click="botFilter = ''; showBotPicker = true"
+                title="New AI Chat"
+              >
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+              </button>
+            {% endif %}
+            <button
+              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-info"
+              @click="showNewConversationDialog()"
+              title="New conversation (Alt+N)"
+            >
+              <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+        <!-- Preferences popover -->
+        <div
+          x-show="prefsOpen"
+          x-cloak
+          x-transition
+          @click.outside="prefsOpen = false"
+          class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4"
+        >
+          <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+            <i data-lucide="settings" class="w-4 h-4 text-info"></i>
+            Preferences
+          </h4>
+          {% include "chat/ui/partials/_preferences_content.html" %}
         </div>
       </div>
-      <!-- Preferences popover -->
-      <div x-show="prefsOpen" x-cloak x-transition
-           @click.outside="prefsOpen = false"
-           class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4">
-        <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-          <i data-lucide="settings" class="w-4 h-4 text-info"></i>
-          Preferences
-        </h4>
-        {% include "chat/ui/partials/_preferences_content.html" %}
-      </div>
-    </div>
 
-    <!-- Search + conversation list (shared convSearch scope) -->
-    <div class="flex-1 min-h-0 flex flex-col"
-         x-data="{
+      <!-- Search + conversation list (shared convSearch scope) -->
+      <div
+        class="flex-1 min-h-0 flex flex-col"
+        x-data="{
            convSearch: '',
            refreshList() {
              const base = '{% url 'chat_ui:conversation_list' %}';
              const qs = this.convSearch.trim() ? '?q=' + encodeURIComponent(this.convSearch.trim()) : '';
              this.$ajax(base + qs, { target: 'conversation-list' });
            },
-         }">
-      <div class="px-3 pt-3" x-show="!collapsed" x-cloak>
-        <label class="input input-sm input-bordered w-full flex items-center gap-2">
-          <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
-          <input
-            type="search"
-            class="grow [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
-            placeholder="Search conversations"
-            x-model="convSearch"
-            @input.debounce.300ms="refreshList()"
-            @keydown.escape.stop="convSearch = ''; refreshList()"
-          />
-          <button
-            type="button"
-            x-show="convSearch.length > 0"
-            x-cloak
-            @click="convSearch = ''; refreshList()"
-            class="btn btn-ghost btn-xs btn-square -mr-1"
-            title="Clear search"
-          >
-            <i data-lucide="x" class="w-3 h-3"></i>
-          </button>
-        </label>
-      </div>
-      {% comment %}The cloak wrapper stays outside the #conversation-list swap
-      target so alpine-ajax refreshes never re-hide the list; "invisible" keeps
-      its space reserved while Alpine boots.{% endcomment %}
-      <div class="flex-1 overflow-y-auto py-4 px-3" x-cloak="invisible">
-        {% include "chat/ui/partials/conversation_list.html" %}
-      </div>
-    </div>
-
-    <!-- New chat buttons (visible when collapsed) -->
-    <div class="px-3 pb-2" x-show="collapsed" x-cloak>
-      <ul class="menu p-0">
-        {% if ai_enabled %}
-        {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" %}
-        {% endif %}
-        {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="info" onclick="showNewConversationDialog()" tooltip="New chat" %}
-      </ul>
-    </div>
-
-    <!-- Passive call banner. The call itself lives in the dedicated room tab;
-         here we only reflect server state and offer Join / Return to room. -->
-    <div x-show="callBannerAction()" x-cloak data-testid="call-banner" class="border-t border-base-300 px-3 py-2 mb-2">
-      <div x-show="!collapsed" x-cloak
-           class="rounded-lg border border-base-300 bg-base-100 p-2 flex flex-col gap-2">
-        <div class="flex items-center gap-2">
-          <i data-lucide="phone-call" class="w-4 h-4 text-success flex-shrink-0"></i>
-          <div class="flex flex-col min-w-0 leading-tight flex-1">
-            <span class="text-xs font-semibold text-success">Call in progress</span>
-            <span class="text-[0.6rem] text-base-content/60 truncate"
-                  x-text="callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '')"></span>
-          </div>
+         }"
+      >
+        <div class="px-3 pt-3" x-show="!collapsed" x-cloak>
+          <label class="input input-sm input-bordered w-full flex items-center gap-2">
+            <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+            <input
+              type="search"
+              class="grow [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
+              placeholder="Search conversations"
+              x-model="convSearch"
+              @input.debounce.300ms="refreshList()"
+              @keydown.escape.stop="convSearch = ''; refreshList()"
+            />
+            <button
+              type="button"
+              x-show="convSearch.length > 0"
+              x-cloak
+              @click="convSearch = ''; refreshList()"
+              class="btn btn-ghost btn-xs btn-square -mr-1"
+              title="Clear search"
+            >
+              <i data-lucide="x" class="w-3 h-3"></i>
+            </button>
+          </label>
         </div>
-        <button class="btn btn-xs btn-success gap-1"
-                @click="openCallRoom(callSession && callSession.conversation_id)">
-          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-          <span x-text="callBannerAction() === 'return' ? 'Return to room' : 'Join call'"></span>
-        </button>
+        {% comment %}The cloak wrapper stays outside the #conversation-list swap
+      target so alpine-ajax refreshes never re-hide the list; "invisible" keeps
+        its space reserved while Alpine boots.{% endcomment %}
+        <div class="flex-1 overflow-y-auto py-4 px-3" x-cloak="invisible">
+          {% include "chat/ui/partials/conversation_list.html" %}
+        </div>
       </div>
-      <ul x-show="collapsed" x-cloak class="menu p-0">
-        <li class="list-none flex justify-center">
-          <button type="button"
-                  class="flex items-center justify-center w-10 h-10 !p-0 rounded-lg text-success hover:bg-success/10 transition-colors"
-                  @click="openCallRoom(callSession && callSession.conversation_id)"
-                  title="Open voice room">
-            <i data-lucide="phone-call" class="w-5 h-5 flex-shrink-0"></i>
+
+      <!-- New chat buttons (visible when collapsed) -->
+      <div class="px-3 pb-2" x-show="collapsed" x-cloak>
+        <ul class="menu p-0">
+          {% if ai_enabled %}
+            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" %}
+          {% endif %}
+          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="info" onclick="showNewConversationDialog()" tooltip="New chat" %}
+        </ul>
+      </div>
+
+      <!-- Passive call banner. The call itself lives in the dedicated room tab;
+         here we only reflect server state and offer Join / Return to room. -->
+      <div
+        x-show="callBannerAction()"
+        x-cloak
+        data-testid="call-banner"
+        class="border-t border-base-300 px-3 py-2 mb-2"
+      >
+        <div
+          x-show="!collapsed"
+          x-cloak
+          class="rounded-lg border border-base-300 bg-base-100 p-2 flex flex-col gap-2"
+        >
+          <div class="flex items-center gap-2">
+            <i data-lucide="phone-call" class="w-4 h-4 text-success flex-shrink-0"></i>
+            <div class="flex flex-col min-w-0 leading-tight flex-1">
+              <span class="text-xs font-semibold text-success">Call in progress</span>
+              <span
+                class="text-[0.6rem] text-base-content/60 truncate"
+                x-text="callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '')"
+              ></span>
+            </div>
+          </div>
+          <button
+            class="btn btn-xs btn-success gap-1"
+            @click="openCallRoom(callSession && callSession.conversation_id)"
+          >
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+            <span
+              x-text="callBannerAction() === 'return' ? 'Return to room' : 'Join call'"
+            ></span>
           </button>
-        </li>
-      </ul>
-    </div>
+        </div>
+        <ul x-show="collapsed" x-cloak class="menu p-0">
+          <li class="list-none flex justify-center">
+            <button
+              type="button"
+              class="flex items-center justify-center w-10 h-10 !p-0 rounded-lg text-success hover:bg-success/10 transition-colors"
+              @click="openCallRoom(callSession && callSession.conversation_id)"
+              title="Open voice room"
+            >
+              <i data-lucide="phone-call" class="w-5 h-5 flex-shrink-0"></i>
+            </button>
+          </li>
+        </ul>
+      </div>
 
-    <!-- Help button -->
-    <div class="px-3 pb-2">
-      <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="info" onclick="document.getElementById('chat-help-dialog').showModal()" tooltip="Help" %}
-      </ul>
-    </div>
+      <!-- Help button -->
+      <div class="px-3 pb-2">
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="info" onclick="document.getElementById('chat-help-dialog').showModal()" tooltip="Help" %}
+        </ul>
+      </div>
 
-    <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
-    <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0 hidden lg:block">
-        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
-      </ul>
-      <ul class="menu p-0 lg:hidden">
-        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
-      </ul>
-    </div>
-  </aside>
-</div>
-
+      <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
+      <div class="border-t border-base-300 py-4 px-3">
+        <ul class="menu p-0 hidden lg:block">
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+        </ul>
+        <ul class="menu p-0 lg:hidden">
+          {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
+        </ul>
+      </div>
+    </aside>
+  </div>
 
 {% endblock %}
 
 {% block content %}
-{% include "chat/ui/partials/conversation_pane.html" %}
+  {% include "chat/ui/partials/conversation_pane.html" %}
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
-<script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
-<!-- Initial preferences embedded server-side so JS doesn't need to fetch
+  <script
+    src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"
+    integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir"
+    crossorigin="anonymous"
+  ></script>
+  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <!-- Initial preferences embedded server-side so JS doesn't need to fetch
      /api/v1/settings/chat/preferences on page load. -->
-{{ chat_prefs|json_script:"chat-prefs-data" }}
-<script src="{% static 'chat/ui/js/chat_preferences.js' %}"></script>
-<script src="{% static 'chat/ui/js/conversations.js' %}"></script>
-<script src="{% static 'chat/ui/js/message_shell.js' %}"></script>
-<script src="{% static 'chat/ui/js/messages.js' %}"></script>
-<script src="{% static 'chat/ui/js/sse.js' %}"></script>
-<script src="{% static 'chat/ui/js/members.js' %}"></script>
-<script src="{% static 'chat/ui/js/panels.js' %}"></script>
-<script src="{% static 'chat/ui/js/threads.js' %}"></script>
-<script src="{% static 'chat/ui/js/bot.js' %}"></script>
-<script src="{% static 'chat/ui/js/input.js' %}"></script>
-<script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
-<script src="{% static 'chat/ui/js/call.js' %}"></script>
-<script src="{% static 'chat/ui/js/call_room.js' %}"></script>
-<script src="{% static 'chat/ui/js/call_diagnostic.js' %}"></script>
-<script src="{% static 'chat/ui/js/ui_helpers.js' %}"></script>
-<script src="{% static 'chat/ui/js/audio.js' %}"></script>
-<script src="{% static 'chat/ui/js/recorder.js' %}"></script>
-<script src="{% static 'chat/ui/js/chat.js' %}"></script>
+  {{ chat_prefs|json_script:"chat-prefs-data" }}
+  <script src="{% static 'chat/ui/js/chat_preferences.js' %}"></script>
+  <script src="{% static 'chat/ui/js/conversations.js' %}"></script>
+  <script src="{% static 'chat/ui/js/message_shell.js' %}"></script>
+  <script src="{% static 'chat/ui/js/messages.js' %}"></script>
+  <script src="{% static 'chat/ui/js/sse.js' %}"></script>
+  <script src="{% static 'chat/ui/js/members.js' %}"></script>
+  <script src="{% static 'chat/ui/js/panels.js' %}"></script>
+  <script src="{% static 'chat/ui/js/threads.js' %}"></script>
+  <script src="{% static 'chat/ui/js/bot.js' %}"></script>
+  <script src="{% static 'chat/ui/js/input.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call_room.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call_diagnostic.js' %}"></script>
+  <script src="{% static 'chat/ui/js/ui_helpers.js' %}"></script>
+  <script src="{% static 'chat/ui/js/audio.js' %}"></script>
+  <script src="{% static 'chat/ui/js/recorder.js' %}"></script>
+  <script src="{% static 'chat/ui/js/chat.js' %}"></script>
 {% endblock %}

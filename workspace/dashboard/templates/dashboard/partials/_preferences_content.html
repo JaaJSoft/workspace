@@ -9,7 +9,7 @@
       class="toggle toggle-sm toggle-primary"
       x-model="showUpcoming"
       @change="save('show_upcoming_events', showUpcoming)"
-    >
+    />
   </label>
 
   <label
@@ -26,22 +26,22 @@
       x-model="showEmpty"
       @change="save('show_upcoming_empty', showEmpty)"
       :disabled="!showUpcoming"
-    >
+    />
   </label>
 
   {% if my_tasks_available %}
-  <label class="flex items-center justify-between gap-4">
-    <div>
-      <div class="font-medium text-sm">Show my tasks</div>
-      <div class="text-xs text-base-content/60">Display your assigned project tasks on the dashboard.</div>
-    </div>
-    <input
-      type="checkbox"
-      class="toggle toggle-sm toggle-primary"
-      x-model="showMyTasks"
-      @change="toggleMyTasks()"
-    >
-  </label>
+    <label class="flex items-center justify-between gap-4">
+      <div>
+        <div class="font-medium text-sm">Show my tasks</div>
+        <div class="text-xs text-base-content/60">Display your assigned project tasks on the dashboard.</div>
+      </div>
+      <input
+        type="checkbox"
+        class="toggle toggle-sm toggle-primary"
+        x-model="showMyTasks"
+        @change="toggleMyTasks()"
+      />
+    </label>
   {% endif %}
 
   <div
@@ -67,7 +67,7 @@
             class="toggle toggle-sm toggle-primary"
             :checked="isVisible(app.slug)"
             @change="toggleApp(app.slug, $event.target.checked)"
-          >
+          />
         </label>
       </template>
     </div>

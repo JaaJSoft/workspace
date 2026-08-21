@@ -9,7 +9,10 @@
         </div>
         <div>
           <h3 class="font-bold text-lg">Share</h3>
-          <p class="text-sm text-base-content/60 truncate max-w-[300px]" x-text="fileName"></p>
+          <p
+            class="text-sm text-base-content/60 truncate max-w-[300px]"
+            x-text="fileName"
+          ></p>
         </div>
       </div>
 
@@ -29,7 +32,10 @@
           </div>
 
           <!-- Empty state -->
-          <div x-show="!loading && displayList.length === 0" class="text-sm text-base-content/60 text-center py-4">
+          <div
+            x-show="!loading && displayList.length === 0"
+            class="text-sm text-base-content/60 text-center py-4"
+          >
             Not shared with anyone yet
           </div>
 
@@ -41,7 +47,11 @@
             >
               <user-avatar :user-id="entry.id" :username="entry.username" size="sm" presence card></user-avatar>
               <div class="flex-1 min-w-0">
-                <div class="font-medium text-sm truncate" :class="entry._removed ? 'line-through' : ''" x-text="entry.username"></div>
+                <div
+                  class="font-medium text-sm truncate"
+                  :class="entry._removed ? 'line-through' : ''"
+                  x-text="entry.username"
+                ></div>
                 <div
                   class="text-xs text-base-content/60 truncate"
                   x-show="entry.first_name || entry.last_name"
@@ -67,7 +77,9 @@
                   class="btn btn-ghost btn-xs"
                   title="Undo removal"
                   @click="undoRemove(entry.id)"
-                >Undo</button>
+                >
+                  Undo
+                </button>
               </template>
               <template x-if="!entry._removed">
                 <button
@@ -75,7 +87,9 @@
                   class="btn btn-ghost btn-xs btn-square text-error"
                   title="Remove access"
                   @click="stageRemove(entry.id)"
-                >&times;</button>
+                >
+                  &times;
+                </button>
               </template>
             </div>
           </template>
@@ -94,7 +108,9 @@
         <!-- Links list -->
         <div class="space-y-2" x-show="!linksLoading">
           <template x-for="link in shareLinks" :key="link.uuid">
-            <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-base-200 text-sm">
+            <div
+              class="flex items-center gap-2 p-2 rounded-lg hover:bg-base-200 text-sm"
+            >
               <i data-lucide="link" class="w-4 h-4 text-primary flex-shrink-0"></i>
               <div class="flex-1 min-w-0">
                 <div class="font-mono text-xs truncate" x-text="link.url"></div>
@@ -105,16 +121,29 @@
                   </template>
                 </div>
               </div>
-              <button type="button" class="btn btn-ghost btn-xs btn-square" title="Copy link" @click="copyShareLink(link.url)">
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square"
+                title="Copy link"
+                @click="copyShareLink(link.url)"
+              >
                 <i data-lucide="copy" class="w-3.5 h-3.5"></i>
               </button>
-              <button type="button" class="btn btn-ghost btn-xs btn-square text-error" title="Revoke" @click="deleteShareLink(link.uuid)">
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square text-error"
+                title="Revoke"
+                @click="deleteShareLink(link.uuid)"
+              >
                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
               </button>
             </div>
           </template>
 
-          <div x-show="!linksLoading && shareLinks.length === 0 && !showLinkForm" class="text-sm text-base-content/60 text-center py-2">
+          <div
+            x-show="!linksLoading && shareLinks.length === 0 && !showLinkForm"
+            class="text-sm text-base-content/60 text-center py-2"
+          >
             No public links
           </div>
         </div>
@@ -124,15 +153,35 @@
           <div class="mt-2 p-3 bg-base-200 rounded-lg space-y-2">
             <div class="form-control">
               <label class="label py-0.5"><span class="label-text text-xs">Expiration (optional)</span></label>
-              <input type="date" class="input input-bordered input-sm" x-model="newLinkExpiry" />
+              <input
+                type="date"
+                class="input input-bordered input-sm"
+                x-model="newLinkExpiry"
+              />
             </div>
             <div class="form-control">
               <label class="label py-0.5"><span class="label-text text-xs">Password (optional)</span></label>
-              <input type="password" class="input input-bordered input-sm" x-model="newLinkPassword" placeholder="Leave empty for no password" />
+              <input
+                type="password"
+                class="input input-bordered input-sm"
+                x-model="newLinkPassword"
+                placeholder="Leave empty for no password"
+              />
             </div>
             <div class="flex gap-2 justify-end">
-              <button type="button" class="btn btn-ghost btn-xs" @click="showLinkForm = false">Cancel</button>
-              <button type="button" class="btn btn-primary btn-xs" @click="createShareLink()" :disabled="creatingLink">
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                @click="showLinkForm = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary btn-xs"
+                @click="createShareLink()"
+                :disabled="creatingLink"
+              >
                 <span x-show="creatingLink" class="loading loading-spinner loading-xs"></span>
                 Create
               </button>
@@ -166,6 +215,8 @@
         </button>
       </div>
     </div>
-    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
   </dialog>
 </div>

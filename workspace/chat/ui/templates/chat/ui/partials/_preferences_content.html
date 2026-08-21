@@ -9,9 +9,11 @@
   {% include "ui/partials/pref_toggle.html" with label="Show thread replies in the conversation" key="showThreadRepliesInline" accent="toggle-info" handler="updateAndSync" %}
   {% include "ui/partials/pref_toggle.html" with label="Call sounds" state="callSounds" change="saveCallSounds($event.target.checked)" accent="toggle-info" %}
   <div class="pt-4 border-t border-base-300">
-    <button type="button"
+    <button
+      type="button"
       class="btn btn-ghost btn-sm w-full justify-start gap-2 hover:text-info"
-      @click="$dispatch('chat-run-diagnostic'); $el.closest('dialog')?.close()">
+      @click="$dispatch('chat-run-diagnostic'); $el.closest('dialog')?.close()"
+    >
       <i data-lucide="activity" class="w-4 h-4 text-info"></i>
       <span class="text-sm">Test call connection</span>
     </button>

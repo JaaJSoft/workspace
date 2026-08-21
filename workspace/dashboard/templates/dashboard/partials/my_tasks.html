@@ -5,7 +5,10 @@
   {% if show_my_tasks %}
     <div class="card bg-base-100 shadow border border-base-300">
       <div class="card-body gap-3 p-4 sm:p-6 relative">
-        <a href="/projects" class="btn btn-ghost btn-sm absolute top-4 right-4 sm:top-6 sm:right-6">
+        <a
+          href="/projects"
+          class="btn btn-ghost btn-sm absolute top-4 right-4 sm:top-6 sm:right-6"
+        >
           Projects
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </a>
@@ -24,14 +27,20 @@
                   href="/projects/{{ task.project_id }}?task={{ task.uuid }}"
                   class="flex items-center gap-3 py-1.5 group"
                 >
-                  <span class="text-xs font-mono text-base-content/50 flex-shrink-0 w-14 truncate">{{ task.reference }}</span>
-                  <span class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline">{{ task.title }}</span>
-                  <span class="text-xs text-base-content/50 truncate hidden sm:block max-w-28">{{ task.project.name }}</span>
+                  <span
+                    class="text-xs font-mono text-base-content/50 flex-shrink-0 w-14 truncate"
+                  >{{ task.reference }}</span>
+                  <span
+                    class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline"
+                  >{{ task.title }}</span>
+                  <span
+                    class="text-xs text-base-content/50 truncate hidden sm:block max-w-28"
+                  >{{ task.project.name }}</span>
                   {% include "projects/ui/partials/_priority_badge.html" %}
                   {% if task.due_date %}
-                    <span class="text-xs tabular-nums flex-shrink-0 w-12 text-right {% if task.due_date < today %}text-error font-medium{% elif task.due_date == today %}text-warning font-medium{% else %}text-base-content/50{% endif %}">
-                      {{ task.due_date|date:"M j" }}
-                    </span>
+                    <span
+                      class="text-xs tabular-nums flex-shrink-0 w-12 text-right {% if task.due_date < today %}text-error font-medium{% elif task.due_date == today %}text-warning font-medium{% else %}text-base-content/50{% endif %}"
+                    >{{ task.due_date|date:"M j" }}</span>
                   {% else %}
                     <span class="w-12 flex-shrink-0 hidden sm:block"></span>
                   {% endif %}

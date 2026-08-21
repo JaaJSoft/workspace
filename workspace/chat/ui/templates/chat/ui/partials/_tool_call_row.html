@@ -1,8 +1,13 @@
 {% comment %}One tool call row: compact summary line, expandable args + result.{% endcomment %}
 <details class="group/call min-w-0">
-  <summary class="flex items-center gap-1 cursor-pointer list-none select-none min-w-0 hover:text-base-content/60 transition-colors {% if call.is_error %}text-error/70{% endif %}">
+  <summary
+    class="flex items-center gap-1 cursor-pointer list-none select-none min-w-0 hover:text-base-content/60 transition-colors {% if call.is_error %}text-error/70{% endif %}"
+  >
     {% include "chat/ui/partials/_tool_step_summary.html" %}
-    <i data-lucide="chevron-down" class="w-3 h-3 flex-shrink-0 transition-transform group-open/call:rotate-180"></i>
+    <i
+      data-lucide="chevron-down"
+      class="w-3 h-3 flex-shrink-0 transition-transform group-open/call:rotate-180"
+    ></i>
   </summary>
   <div class="mt-1 mb-1.5 ml-5 flex flex-col gap-1 min-w-0">
     {% if call.args %}
@@ -15,7 +20,9 @@
       <pre class="whitespace-pre-wrap break-words font-mono text-[0.7rem]">{{ call.args_raw }}</pre>
     {% endif %}
     {% if call.result %}
-      <pre class="max-h-60 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-base-300/40 p-2 font-mono text-[0.7rem] {% if call.is_error %}text-error{% endif %}">{{ call.result }}</pre>
+      <pre
+        class="max-h-60 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-base-300/40 p-2 font-mono text-[0.7rem] {% if call.is_error %}text-error{% endif %}"
+      >{{ call.result }}</pre>
     {% endif %}
   </div>
 </details>

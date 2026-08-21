@@ -4,7 +4,7 @@
 {% block title %}{{ project.name }} - Projects{% endblock %}
 
 {% block navbar %}
-{% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+  {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
 
 {% block drawer_class %}lg:drawer-open{% endblock %}
@@ -13,167 +13,210 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_attrs %}
-x-data="projectBoard({
+  x-data="projectBoard({
   apiBase: '/api/v1/projects/{{ project.uuid }}',
   projectBase: '{% url 'projects_ui:project' project.uuid %}',
   writable: {{ writable|yesno:'true,false' }},
   view: '{{ view }}',
   initialTask: '{{ panel_task.uuid }}',
-})"
-@popstate.window="onPopState()"
-@keydown.window="handleKeydown($event)"
-@ajax:after="ensureTaskParam()"
-@project-label-created.window="onLabelCreated($event.detail.label)"
+  })"
+  @popstate.window="onPopState()"
+  @keydown.window="handleKeydown($event)"
+  @ajax:after="ensureTaskParam()"
+  @project-label-created.window="onLabelCreated($event.detail.label)"
 {% endblock %}
 
 {% block drawer_sidebar %}
-<div class="drawer-side z-40 h-full">
-  <label for="projects-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+  <div class="drawer-side z-40 h-full">
+    <label
+      for="projects-drawer"
+      aria-label="close sidebar"
+      class="drawer-overlay"
+    ></label>
 
-  <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
-         :class="sidebarCollapsed() ? 'w-16' : 'w-72'">
-    <!-- Sidebar header -->
-    <div class="lg:border-b border-base-300 py-4 px-3">
-      <div class="flex items-center" :class="sidebarCollapsed() ? 'justify-center' : 'justify-between'">
-        <h2 class="text-xl font-semibold flex items-center gap-2" :class="sidebarCollapsed() ? '' : 'pl-2'">
-          <i data-lucide="square-kanban" class="w-6 h-6 text-accent"></i>
-          <span x-show="!sidebarCollapsed()" x-transition>Projects</span>
-        </h2>
+    <aside
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
+      :class="sidebarCollapsed() ? 'w-16' : 'w-72'"
+    >
+      <!-- Sidebar header -->
+      <div class="lg:border-b border-base-300 py-4 px-3">
+        <div
+          class="flex items-center"
+          :class="sidebarCollapsed() ? 'justify-center' : 'justify-between'"
+        >
+          <h2
+            class="text-xl font-semibold flex items-center gap-2"
+            :class="sidebarCollapsed() ? '' : 'pl-2'"
+          >
+            <i data-lucide="square-kanban" class="w-6 h-6 text-accent"></i>
+            <span x-show="!sidebarCollapsed()" x-transition>Projects</span>
+          </h2>
+        </div>
       </div>
-    </div>
 
-    <!-- Project switcher -->
-    <div class="px-3 pt-3" x-show="!sidebarCollapsed()" x-transition>
-      <div class="dropdown w-full">
-        <button type="button" tabindex="0"
-                class="btn btn-ghost h-10 min-h-10 w-full justify-between border border-base-300 font-normal text-base">
-          <span class="flex items-center gap-2 min-w-0">
-            <i data-lucide="{% if project.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
-               class="w-5 h-5 text-accent shrink-0"></i>
-            <span class="truncate">{{ project.name }}</span>
-            {% if project.archived_at %}<span class="badge badge-ghost badge-sm">Archived</span>{% endif %}
-          </span>
-          <i data-lucide="chevrons-up-down" class="w-4 h-4 shrink-0 opacity-60"></i>
-        </button>
-        <ul tabindex="0"
-            class="dropdown-content menu z-50 mt-1 w-full bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2 gap-1">
-          {% for p in projects %}
-            <li>
-              <a href="{% url 'projects_ui:project' p.uuid %}"
-                 class="{% if p.uuid == project.uuid %}active{% endif %}">
-                <i data-lucide="{% if p.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
-                   class="w-4 h-4 shrink-0"></i>
-                <span class="truncate flex-1">{{ p.name }}</span>
-                {% if p.archived_at %}
-                  <span class="badge badge-ghost badge-sm">Archived</span>
-                {% elif p.open_task_count %}
-                  <span class="badge badge-ghost badge-sm">{{ p.open_task_count }}</span>
-                {% endif %}
-              </a>
+      <!-- Project switcher -->
+      <div class="px-3 pt-3" x-show="!sidebarCollapsed()" x-transition>
+        <div class="dropdown w-full">
+          <button
+            type="button"
+            tabindex="0"
+            class="btn btn-ghost h-10 min-h-10 w-full justify-between border border-base-300 font-normal text-base"
+          >
+            <span class="flex items-center gap-2 min-w-0">
+              <i
+                data-lucide="{% if project.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
+                class="w-5 h-5 text-accent shrink-0"
+              ></i>
+              <span class="truncate">{{ project.name }}</span>
+              {% if project.archived_at %}<span class="badge badge-ghost badge-sm">Archived</span>{% endif %}
+            </span>
+            <i data-lucide="chevrons-up-down" class="w-4 h-4 shrink-0 opacity-60"></i>
+          </button>
+          <ul
+            tabindex="0"
+            class="dropdown-content menu z-50 mt-1 w-full bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2 gap-1"
+          >
+            {% for p in projects %}
+              <li>
+                <a
+                  href="{% url 'projects_ui:project' p.uuid %}"
+                  class="{% if p.uuid == project.uuid %}active{% endif %}"
+                >
+                  <i
+                    data-lucide="{% if p.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
+                    class="w-4 h-4 shrink-0"
+                  ></i>
+                  <span class="truncate flex-1">{{ p.name }}</span>
+                  {% if p.archived_at %}
+                    <span class="badge badge-ghost badge-sm">Archived</span>
+                  {% elif p.open_task_count %}
+                    <span class="badge badge-ghost badge-sm">{{ p.open_task_count }}</span>
+                  {% endif %}
+                </a>
+              </li>
+            {% endfor %}
+            <li class="border-t border-base-300 pt-1">
+              <button
+                type="button"
+                @click="document.activeElement.blur(); document.getElementById('new-project-dialog').showModal()"
+              >
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                New project
+              </button>
             </li>
-          {% endfor %}
-          <li class="border-t border-base-300 pt-1">
-            <button type="button"
-                    @click="document.activeElement.blur(); document.getElementById('new-project-dialog').showModal()">
-              <i data-lucide="plus" class="w-4 h-4"></i>
-              New project
-            </button>
-          </li>
+          </ul>
+        </div>
+      </div>
+      <!-- Collapsed switcher stub: expand to switch projects -->
+      <div class="px-3 pt-3 flex justify-center" x-show="sidebarCollapsed()">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          title="{{ project.name }}"
+          @click="toggleCollapse()"
+        >
+          <i
+            data-lucide="{% if project.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
+            class="w-5 h-5 text-accent"
+          ></i>
+        </button>
+      </div>
+
+      <!-- Project navigation -->
+      <div class="flex-1 overflow-y-auto py-2 px-3">
+        <ul class="menu p-0 gap-1">
+          {% url 'projects_ui:project' project.uuid as overview_url %}
+          {% include "ui/partials/drawer_item.html" with href=overview_url icon="layout-dashboard" label="Overview" color="accent" active_binding="currentView === 'overview'" x_target="project-content" x_target_history="push" onclick="currentView = 'overview'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Overview" %}
+          {% url 'projects_ui:board' project.uuid as board_url %}
+          {% include "ui/partials/drawer_item.html" with href=board_url icon="square-kanban" label="Board" color="accent" active_binding="currentView === 'board'" x_target="project-content" x_target_history="push" onclick="currentView = 'board'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Board" %}
+          {% url 'projects_ui:backlog' project.uuid as backlog_url %}
+          {% include "ui/partials/drawer_item.html" with href=backlog_url icon="list-todo" label="Backlog" color="accent" active_binding="currentView === 'backlog'" x_target="project-content" x_target_history="push" onclick="currentView = 'backlog'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Backlog" badge=backlog_count %}
+          {% url 'projects_ui:all_tasks' project.uuid as all_tasks_url %}
+          {% include "ui/partials/drawer_item.html" with href=all_tasks_url icon="list" label="All tasks" color="accent" active_binding="currentView === 'tasks'" x_target="project-content" x_target_history="push" onclick="currentView = 'tasks'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="All tasks" %}
+          {% url 'projects_ui:analytics' project.uuid as analytics_url %}
+          {% include "ui/partials/drawer_item.html" with href=analytics_url icon="bar-chart-3" label="Analytics" color="accent" active_binding="currentView === 'analytics'" x_target="project-content" x_target_history="push" onclick="currentView = 'analytics'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Analytics" %}
+          {% if role == "admin" %}
+            {% url 'projects_ui:settings' project.uuid as settings_url %}
+            {% include "ui/partials/drawer_item.html" with href=settings_url icon="settings" label="Settings" color="accent" active_binding="currentView === 'settings'" x_target="project-content" x_target_history="push" onclick="currentView = 'settings'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Settings" %}
+          {% endif %}
         </ul>
       </div>
-    </div>
-    <!-- Collapsed switcher stub: expand to switch projects -->
-    <div class="px-3 pt-3 flex justify-center" x-show="sidebarCollapsed()">
-      <button type="button" class="btn btn-ghost btn-sm btn-square"
-              title="{{ project.name }}" @click="toggleCollapse()">
-        <i data-lucide="{% if project.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
-           class="w-5 h-5 text-accent"></i>
-      </button>
-    </div>
 
-    <!-- Project navigation -->
-    <div class="flex-1 overflow-y-auto py-2 px-3">
-      <ul class="menu p-0 gap-1">
-        {% url 'projects_ui:project' project.uuid as overview_url %}
-        {% include "ui/partials/drawer_item.html" with href=overview_url icon="layout-dashboard" label="Overview" color="accent" active_binding="currentView === 'overview'" x_target="project-content" x_target_history="push" onclick="currentView = 'overview'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Overview" %}
-        {% url 'projects_ui:board' project.uuid as board_url %}
-        {% include "ui/partials/drawer_item.html" with href=board_url icon="square-kanban" label="Board" color="accent" active_binding="currentView === 'board'" x_target="project-content" x_target_history="push" onclick="currentView = 'board'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Board" %}
-        {% url 'projects_ui:backlog' project.uuid as backlog_url %}
-        {% include "ui/partials/drawer_item.html" with href=backlog_url icon="list-todo" label="Backlog" color="accent" active_binding="currentView === 'backlog'" x_target="project-content" x_target_history="push" onclick="currentView = 'backlog'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Backlog" badge=backlog_count %}
-        {% url 'projects_ui:all_tasks' project.uuid as all_tasks_url %}
-        {% include "ui/partials/drawer_item.html" with href=all_tasks_url icon="list" label="All tasks" color="accent" active_binding="currentView === 'tasks'" x_target="project-content" x_target_history="push" onclick="currentView = 'tasks'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="All tasks" %}
-        {% url 'projects_ui:analytics' project.uuid as analytics_url %}
-        {% include "ui/partials/drawer_item.html" with href=analytics_url icon="bar-chart-3" label="Analytics" color="accent" active_binding="currentView === 'analytics'" x_target="project-content" x_target_history="push" onclick="currentView = 'analytics'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Analytics" %}
-        {% if role == "admin" %}
-          {% url 'projects_ui:settings' project.uuid as settings_url %}
-          {% include "ui/partials/drawer_item.html" with href=settings_url icon="settings" label="Settings" color="accent" active_binding="currentView === 'settings'" x_target="project-content" x_target_history="push" onclick="currentView = 'settings'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Settings" %}
-        {% endif %}
-      </ul>
-    </div>
+      <!-- Help button -->
+      <div class="px-3 pb-2">
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="accent" onclick="document.getElementById('projects-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" %}
+        </ul>
+      </div>
 
-    <!-- Help button -->
-    <div class="px-3 pb-2">
-      <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="accent" onclick="document.getElementById('projects-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" %}
-      </ul>
-    </div>
-
-    <!-- Collapse toggle (desktop only) -->
-    <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0 hidden lg:block">
-        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" collapse_expr="sidebarCollapsed()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
-      </ul>
-    </div>
-  </aside>
-</div>
+      <!-- Collapse toggle (desktop only) -->
+      <div class="border-t border-base-300 py-4 px-3">
+        <ul class="menu p-0 hidden lg:block">
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" collapse_expr="sidebarCollapsed()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+        </ul>
+      </div>
+    </aside>
+  </div>
 {% endblock %}
 
 {% block content %}
-{{ statuses_data|json_script:"statuses-data" }}
-{{ members_data|json_script:"members-data" }}
-{{ labels_data|json_script:"labels-data" }}
-<div class="flex h-full min-h-0">
-  <div class="p-4 flex flex-col gap-4 flex-1 min-w-0"
-       :class="panelTaskUuid && isMobile() ? 'hidden' : ''">
-    {% include "projects/ui/partials/_content.html" %}
-  </div>
-
-  <!-- Task detail panel region (full-screen on mobile, right sidebar on desktop) -->
-  <div x-show="panelTaskUuid" x-cloak
-       class="w-full lg:w-96 shrink-0 lg:border-l border-base-300 bg-base-100 flex flex-col min-h-0 overflow-hidden">
-    {% if panel_task %}
-      {% include "projects/ui/partials/task_panel.html" %}
-    {% else %}
-      <div id="task-panel" class="flex-1 min-h-0"></div>
-    {% endif %}
-  </div>
-</div>
-
-{% include "projects/ui/partials/task_modal.html" %}
-{% include "projects/ui/partials/help_dialog.html" %}
-
-<dialog id="new-project-dialog" class="modal">
-  <div class="modal-box max-w-sm"
-       x-data="{ creating: false, name: '', description: '', error: '' }">
-    <div class="flex items-start justify-between gap-3 mb-4">
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="bg-accent/10 text-accent rounded-lg p-2 shrink-0">
-          <i data-lucide="square-kanban" class="w-5 h-5"></i>
-        </div>
-        <div class="min-w-0">
-          <h3 class="font-bold text-lg">New project</h3>
-          <p class="text-sm text-base-content/60">Board and backlog for your tasks</p>
-        </div>
-      </div>
-      <button type="button" class="btn btn-ghost btn-sm btn-square" aria-label="Close"
-              @click="document.getElementById('new-project-dialog').close()">
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
+  {{ statuses_data|json_script:"statuses-data" }}
+  {{ members_data|json_script:"members-data" }}
+  {{ labels_data|json_script:"labels-data" }}
+  <div class="flex h-full min-h-0">
+    <div
+      class="p-4 flex flex-col gap-4 flex-1 min-w-0"
+      :class="panelTaskUuid && isMobile() ? 'hidden' : ''"
+    >
+      {% include "projects/ui/partials/_content.html" %}
     </div>
-    <template x-if="error">
-      <inline-alert type="error" class="mb-2"><span x-text="error"></span></inline-alert>
-    </template>
-    <form @submit.prevent="
+
+    <!-- Task detail panel region (full-screen on mobile, right sidebar on desktop) -->
+    <div
+      x-show="panelTaskUuid"
+      x-cloak
+      class="w-full lg:w-96 shrink-0 lg:border-l border-base-300 bg-base-100 flex flex-col min-h-0 overflow-hidden"
+    >
+      {% if panel_task %}
+        {% include "projects/ui/partials/task_panel.html" %}
+      {% else %}
+        <div id="task-panel" class="flex-1 min-h-0"></div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% include "projects/ui/partials/task_modal.html" %}
+  {% include "projects/ui/partials/help_dialog.html" %}
+
+  <dialog id="new-project-dialog" class="modal">
+    <div
+      class="modal-box max-w-sm"
+      x-data="{ creating: false, name: '', description: '', error: '' }"
+    >
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="bg-accent/10 text-accent rounded-lg p-2 shrink-0">
+            <i data-lucide="square-kanban" class="w-5 h-5"></i>
+          </div>
+          <div class="min-w-0">
+            <h3 class="font-bold text-lg">New project</h3>
+            <p class="text-sm text-base-content/60">Board and backlog for your tasks</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label="Close"
+          @click="document.getElementById('new-project-dialog').close()"
+        >
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <template x-if="error">
+        <inline-alert type="error" class="mb-2"><span x-text="error"></span></inline-alert>
+      </template>
+      <form
+        @submit.prevent="
       creating = true; error = '';
       fetch('/api/v1/projects', {
         method: 'POST',
@@ -184,25 +227,49 @@ x-data="projectBoard({
         const data = await resp.json();
         window.location.href = '/projects/' + data.uuid;
       }).catch((e) => { error = e.message; }).finally(() => { creating = false; });
-    ">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">Name</span></div>
-        <input type="text" class="input input-bordered w-full" x-model="name" required maxlength="255">
-      </label>
-      <label class="form-control w-full mt-2">
-        <div class="label"><span class="label-text">Description</span></div>
-        <textarea class="textarea textarea-bordered w-full" x-model="description" rows="2"></textarea>
-      </label>
-      <div class="modal-action">
-        <button type="button" class="btn btn-ghost btn-sm"
-                @click="document.getElementById('new-project-dialog').close()">Cancel</button>
-        <button type="submit" class="btn btn-accent btn-sm" :disabled="creating || !name.trim()">Create</button>
-      </div>
+    "
+      >
+        <label class="form-control w-full">
+          <div class="label"><span class="label-text">Name</span></div>
+          <input
+            type="text"
+            class="input input-bordered w-full"
+            x-model="name"
+            required
+            maxlength="255"
+          />
+        </label>
+        <label class="form-control w-full mt-2">
+          <div class="label"><span class="label-text">Description</span></div>
+          <textarea
+            class="textarea textarea-bordered w-full"
+            x-model="description"
+            rows="2"
+          ></textarea>
+        </label>
+        <div class="modal-action">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            @click="document.getElementById('new-project-dialog').close()"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="btn btn-accent btn-sm"
+            :disabled="creating || !name.trim()"
+          >
+            Create
+          </button>
+        </div>
+      </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
     </form>
-  </div>
-  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-</dialog>
-<script src="{% static 'projects/ui/js/board.js' %}"></script>
-<script src="{% static 'projects/ui/js/settings.js' %}"></script>
-<script src="{% static 'ui/js/comments.js' %}"></script>
+  </dialog>
+  <script src="{% static 'projects/ui/js/board.js' %}"></script>
+  <script src="{% static 'projects/ui/js/settings.js' %}"></script>
+  <script src="{% static 'ui/js/comments.js' %}"></script>
 {% endblock %}

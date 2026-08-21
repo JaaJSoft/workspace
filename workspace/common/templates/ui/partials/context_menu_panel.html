@@ -20,8 +20,7 @@ Params (Alpine expression fragments evaluated in the caller's scope, except
   - x_data: optional - component to instantiate on the panel itself
 {% endcomment %}
 <div
-  {% if x_data %}x-data="{{ x_data }}"
-  {% endif %}x-show="{{ open }}"
+  {% if x_data %}x-data="{{ x_data }}" {% endif %}x-show="{{ open }}"
   x-cloak
   @click.outside="{{ close }}"
   @keydown.escape.window="{{ close }}"

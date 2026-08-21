@@ -17,7 +17,10 @@
   The dispatched event contains { detail: { user: { id, username, first_name, last_name } } }
 {% endcomment %}
 
-<div x-data="userSelector('{{ on_select_event }}'{% if local_source %}, () => ({{ local_source }}){% endif %})" class="relative">
+<div
+  x-data="userSelector('{{ on_select_event }}'{% if local_source %}, () => ({{ local_source }}){% endif %})"
+  class="relative"
+>
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">
     <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
     <input

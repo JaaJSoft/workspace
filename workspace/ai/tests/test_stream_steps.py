@@ -184,11 +184,12 @@ class NotifyToolStepTests(TestCase):
         )
 
         html = stream_steps.read_steps(1, None)[0][0]["data"]["html"]
-        self.assertIn(
-            'class="ai-step-label-running flex-shrink-0">Looking up profile', html
+        self.assertRegex(
+            html,
+            r'class="ai-step-label-running flex-shrink-0"\s*>\s*Looking up profile',
         )
-        self.assertIn(
-            'class="ai-step-label-done flex-shrink-0">Looked up profile', html
+        self.assertRegex(
+            html, r'class="ai-step-label-done flex-shrink-0"\s*>\s*Looked up profile'
         )
 
     @patch("workspace.ai.services.stream_steps.notify_sse")

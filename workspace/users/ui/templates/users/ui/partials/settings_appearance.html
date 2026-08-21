@@ -16,7 +16,11 @@
       <div class="mt-5">
         <div class="flex items-center gap-2 mb-2">
           <i data-lucide="sun" class="w-4 h-4 text-warning"></i>
-          <h3 class="font-semibold text-sm uppercase tracking-wide text-base-content/70">Light theme</h3>
+          <h3
+            class="font-semibold text-sm uppercase tracking-wide text-base-content/70"
+          >
+            Light theme
+          </h3>
           <span
             x-show="currentTheme === lightTheme"
             class="badge badge-xs badge-success"
@@ -46,7 +50,11 @@
       <div class="mt-6">
         <div class="flex items-center gap-2 mb-2">
           <i data-lucide="moon" class="w-4 h-4 text-info"></i>
-          <h3 class="font-semibold text-sm uppercase tracking-wide text-base-content/70">Dark theme</h3>
+          <h3
+            class="font-semibold text-sm uppercase tracking-wide text-base-content/70"
+          >
+            Dark theme
+          </h3>
           <span
             x-show="currentTheme === darkTheme"
             class="badge badge-xs badge-success"
@@ -83,36 +91,86 @@
       currentTheme: html.getAttribute('data-theme') || 'light',
       lightTheme: html.getAttribute('data-light-theme') || 'light',
       darkTheme: html.getAttribute('data-dark-theme') || 'dark',
-      lightThemes: [
-        { id: 'light',     label: 'Light' },
-        { id: 'cupcake',   label: 'Cupcake' },
-        { id: 'bumblebee', label: 'Bumblebee' },
-        { id: 'emerald',   label: 'Emerald' },
-        { id: 'corporate', label: 'Corporate' },
-        { id: 'retro',     label: 'Retro' },
-        { id: 'valentine', label: 'Valentine' },
-        { id: 'garden',    label: 'Garden' },
-        { id: 'pastel',    label: 'Pastel' },
-        { id: 'lemonade',  label: 'Lemonade' },
-        { id: 'autumn',    label: 'Autumn' },
-        { id: 'winter',    label: 'Winter' },
-        { id: 'nord',      label: 'Nord' },
-      ],
-      darkThemes: [
-        { id: 'dark',      label: 'Dark' },
-        { id: 'synthwave', label: 'Synthwave' },
-        { id: 'halloween', label: 'Halloween' },
-        { id: 'forest',    label: 'Forest' },
-        { id: 'aqua',      label: 'Aqua' },
-        { id: 'black',     label: 'Black' },
-        { id: 'luxury',    label: 'Luxury' },
-        { id: 'dracula',   label: 'Dracula' },
-        { id: 'business',  label: 'Business' },
-        { id: 'night',     label: 'Night' },
-        { id: 'coffee',    label: 'Coffee' },
-        { id: 'dim',       label: 'Dim' },
-        { id: 'sunset',    label: 'Sunset' },
-      ],
+      lightThemes: [{
+        id: 'light',
+        label: 'Light'
+      }, {
+        id: 'cupcake',
+        label: 'Cupcake'
+      }, {
+        id: 'bumblebee',
+        label: 'Bumblebee'
+      }, {
+        id: 'emerald',
+        label: 'Emerald'
+      }, {
+        id: 'corporate',
+        label: 'Corporate'
+      }, {
+        id: 'retro',
+        label: 'Retro'
+      }, {
+        id: 'valentine',
+        label: 'Valentine'
+      }, {
+        id: 'garden',
+        label: 'Garden'
+      }, {
+        id: 'pastel',
+        label: 'Pastel'
+      }, {
+        id: 'lemonade',
+        label: 'Lemonade'
+      }, {
+        id: 'autumn',
+        label: 'Autumn'
+      }, {
+        id: 'winter',
+        label: 'Winter'
+      }, {
+        id: 'nord',
+        label: 'Nord'
+      }, ],
+      darkThemes: [{
+        id: 'dark',
+        label: 'Dark'
+      }, {
+        id: 'synthwave',
+        label: 'Synthwave'
+      }, {
+        id: 'halloween',
+        label: 'Halloween'
+      }, {
+        id: 'forest',
+        label: 'Forest'
+      }, {
+        id: 'aqua',
+        label: 'Aqua'
+      }, {
+        id: 'black',
+        label: 'Black'
+      }, {
+        id: 'luxury',
+        label: 'Luxury'
+      }, {
+        id: 'dracula',
+        label: 'Dracula'
+      }, {
+        id: 'business',
+        label: 'Business'
+      }, {
+        id: 'night',
+        label: 'Night'
+      }, {
+        id: 'coffee',
+        label: 'Coffee'
+      }, {
+        id: 'dim',
+        label: 'Dim'
+      }, {
+        id: 'sunset',
+        label: 'Sunset'
+      }, ],
       selectTheme(id, kind) {
         if (kind === 'light') {
           this.lightTheme = id;

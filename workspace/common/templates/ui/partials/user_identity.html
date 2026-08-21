@@ -8,7 +8,12 @@ Parameters:
 The card popover sits on the wrapper, not on the avatar, so hovering the name
 shows it too. That is why this uses userCard() instead of <user-avatar card>.
 {% endcomment %}
-<div class="inline-flex items-center gap-1" x-data="userCard({{ user.id }})" @mouseenter="show()" @mouseleave="scheduleHide()">
+<div
+  class="inline-flex items-center gap-1"
+  x-data="userCard({{ user.id }})"
+  @mouseenter="show()"
+  @mouseleave="scheduleHide()"
+>
   <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="{{ size|default:'2xs' }}"{% if show_presence %} presence{% endif %}></user-avatar>
   <a href="/users/profile/{{ user.username }}" class="hover:underline">{{ user.full_name|default:user.username }}</a>
 </div>

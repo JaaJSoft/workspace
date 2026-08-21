@@ -2,8 +2,10 @@
 <dialog id="tag-dialog" class="modal">
   <div class="modal-box max-w-md">
     <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
-      <span :class="tagModal.color ? '' : 'text-base-content/50'"
-            :style="tagModal.color ? 'color: ' + tagModal.color : ''">
+      <span
+        :class="tagModal.color ? '' : 'text-base-content/50'"
+        :style="tagModal.color ? 'color: ' + tagModal.color : ''"
+      >
         <i :data-lucide="tagModal.icon || 'tag'" class="w-5 h-5"></i>
       </span>
       <span x-text="tagModal.uuid ? 'Edit Tag' : 'New Tag'"></span>
@@ -11,12 +13,18 @@
     <form @submit.prevent="saveTagModal()">
       <label class="form-control w-full mb-3">
         <div class="label"><span class="label-text">Name</span></div>
-        <input type="text" class="input input-bordered w-full input-sm"
-               x-model="tagModal.name" placeholder="Tag name" required
-               @keydown.escape="closeTagModal()" />
+        <input
+          type="text"
+          class="input input-bordered w-full input-sm"
+          x-model="tagModal.name"
+          placeholder="Tag name"
+          required
+          @keydown.escape="closeTagModal()"
+        />
       </label>
       <!-- Icon picker (colors come from the shared tag palette below) -->
-      <div x-data="{
+      <div
+        x-data="{
         icons: window.ICON_PICKER_ICONS,
         colors: [],
         selectedIcon: '',
@@ -26,7 +34,10 @@
         },
         saving: false,
         saved: false,
-      }" x-effect="selectedIcon = tagModal.icon || 'tag'" class="mb-3">
+      }"
+        x-effect="selectedIcon = tagModal.icon || 'tag'"
+        class="mb-3"
+      >
         {% include "ui/partials/icon_picker.html" %}
       </div>
       {% include "ui/partials/tag_color_picker.html" with color_expr="tagModal.color" %}
@@ -34,18 +45,28 @@
         <div class="text-sm text-error" x-text="tagModal.error"></div>
       </div>
       <div class="modal-action">
-        <button type="button" class="btn btn-ghost btn-sm text-error mr-auto"
-                x-show="tagModal.uuid" @click="deleteTagConfirm()">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm text-error mr-auto"
+          x-show="tagModal.uuid"
+          @click="deleteTagConfirm()"
+        >
           <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           Delete
         </button>
         <button type="button" class="btn btn-ghost btn-sm" @click="closeTagModal()">Cancel</button>
-        <button type="submit" class="btn btn-success btn-sm" :disabled="tagModal.saving || !tagModal.name.trim()">
+        <button
+          type="submit"
+          class="btn btn-success btn-sm"
+          :disabled="tagModal.saving || !tagModal.name.trim()"
+        >
           <span x-show="!tagModal.saving" x-text="tagModal.uuid ? 'Save' : 'Create'"></span>
           <span x-show="tagModal.saving" class="loading loading-spinner loading-xs"></span>
         </button>
       </div>
     </form>
   </div>
-  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
 </dialog>

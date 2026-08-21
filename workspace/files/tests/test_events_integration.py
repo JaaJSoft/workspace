@@ -588,7 +588,7 @@ class EventsPanelEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         # All-actions option is the selected one, not a phantom 'shared'.
-        self.assertIn('value="" selected', body)
+        self.assertRegex(body, r'value=""\s+selected')
         # The CREATED event is still rendered (filter dropped silently).
         self.assertIn("created this", body)
 
@@ -637,8 +637,8 @@ class EventsPanelEndpointTests(APITestCase):
 
         # The rename option keeps the selected attribute so the user sees
         # which filter is currently active.
-        self.assertIn('value="renamed" selected', body)
-        self.assertNotIn('value="" selected', body)
+        self.assertRegex(body, r'value="renamed"\s+selected')
+        self.assertNotRegex(body, r'value=""\s+selected')
 
     def test_filter_carried_over_in_load_more_url(self):
         from workspace.files.services.events import record_event

@@ -20,9 +20,9 @@
   <div class="space-y-1.5 text-xs text-base-content/60 mb-3">
     <div class="flex items-center gap-1.5">
       <i data-lucide="calendar" class="w-3 h-3 flex-shrink-0"></i>
-      <span {% if task.due_date < today %}class="text-error font-medium"{% endif %}>
-        Due {{ task.due_date|date:"DATE_FORMAT" }}
-      </span>
+      <span
+        {% if task.due_date < today %}class="text-error font-medium"{% endif %}
+      >Due {{ task.due_date|date:"DATE_FORMAT" }}</span>
     </div>
     <div class="flex items-center gap-1.5 flex-wrap">
       <span class="badge badge-sm badge-ghost">{{ task.status.name }}</span>
@@ -38,20 +38,22 @@
   </div>
 
   {% if assignees %}
-  <div class="flex items-center gap-1.5 mb-3">
-    <div class="flex -space-x-2">
-      {% for assignee in assignees %}
-        <user-avatar user-id="{{ assignee.id }}" username="{{ assignee.username }}" size="xs"></user-avatar>
-      {% endfor %}
+    <div class="flex items-center gap-1.5 mb-3">
+      <div class="flex -space-x-2">
+        {% for assignee in assignees %}
+          <user-avatar user-id="{{ assignee.id }}" username="{{ assignee.username }}" size="xs"></user-avatar>
+        {% endfor %}
+      </div>
+      {% if task.assignees.count > 5 %}
+        <span class="text-xs text-base-content/40">+{{ task.assignees.count|add:"-5" }}</span>
+      {% endif %}
     </div>
-    {% if task.assignees.count > 5 %}
-      <span class="text-xs text-base-content/40">+{{ task.assignees.count|add:"-5" }}</span>
-    {% endif %}
-  </div>
   {% endif %}
 
-  <a href="{% url 'projects_ui:board' project_uuid=project.uuid %}?task={{ task.uuid }}"
-     class="btn btn-ghost btn-xs w-full gap-1">
+  <a
+    href="{% url 'projects_ui:board' project_uuid=project.uuid %}?task={{ task.uuid }}"
+    class="btn btn-ghost btn-xs w-full gap-1"
+  >
     <i data-lucide="external-link" class="w-3 h-3"></i>
     Open task
   </a>

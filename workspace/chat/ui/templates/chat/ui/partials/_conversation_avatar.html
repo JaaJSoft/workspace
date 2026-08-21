@@ -14,17 +14,4 @@ Used by:
   - chat/ui/partials/conversation_pane.html (header)
   - chat/ui/partials/info_panel.html
 {% endcomment %}
-<conversation-avatar
-  :kind="{{ conv }}.kind"
-  :uuid="{{ conv }}.uuid"
-  :name="conversationName({{ conv }})"
-  :initials="{{ conv }}.avatar_initial"
-  :has-avatar="{{ conv }}.has_avatar"
-  :bust="{{ conv }}._avatar_bust"
-  :user-id="dmPartner({{ conv }})?.id"
-  :username="dmPartner({{ conv }})?.username"
-  size="{{ size|default:'md' }}"
-  {% comment %}Always `active`: these views only ever show the conversation the
-  sidebar draws as selected, and the two must wear the same colour.{% endcomment %}
-  active
-  presence card></conversation-avatar>
+<conversation-avatar :kind="{{ conv }}.kind" :uuid="{{ conv }}.uuid" :name="conversationName({{ conv }})" :initials="{{ conv }}.avatar_initial" :has-avatar="{{ conv }}.has_avatar" :bust="{{ conv }}._avatar_bust" :user-id="dmPartner({{ conv }})?.id" :username="dmPartner({{ conv }})?.username" size="{{ size|default:'md' }}" {% comment %}Always `active`: these views only ever show the conversation the sidebar draws as selected, and the two must wear the same colour.{% endcomment %} active presence card></conversation-avatar>

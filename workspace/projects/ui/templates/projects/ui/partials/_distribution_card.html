@@ -26,9 +26,16 @@ column carries a raw CSS colour, everything else a daisyUI class.
         <div class="h-1.5 mt-1 rounded-full bg-base-300 overflow-hidden">
           {% widthratio entry.count entry.max_count 100 as bar_width %}
           {% if entry.color %}
-            <div class="h-full rounded-full" style="width: {{ bar_width }}%; background-color: {{ entry.color }}"></div>
+            <div
+              class="h-full rounded-full"
+              style="width: {{ bar_width }}%;
+                     background-color: {{ entry.color }}"
+            ></div>
           {% else %}
-            <div class="h-full rounded-full {{ entry.css_class }}" style="width: {{ bar_width }}%"></div>
+            <div
+              class="h-full rounded-full {{ entry.css_class }}"
+              style="width: {{ bar_width }}%"
+            ></div>
           {% endif %}
         </div>
       </li>

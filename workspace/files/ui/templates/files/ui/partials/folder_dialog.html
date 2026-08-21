@@ -2,12 +2,16 @@
 <dialog id="create-folder-dialog" class="modal">
   <div class="modal-box" x-data="{ folderName: '' }">
     <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
-      <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary/10 text-primary">
+      <div
+        class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary/10 text-primary"
+      >
         <i data-lucide="folder-plus" class="w-5 h-5"></i>
       </div>
       Create New Folder
     </h3>
-    <form @submit.prevent="window.dispatchEvent(new CustomEvent('create-folder', { detail: { name: folderName } }))">
+    <form
+      @submit.prevent="window.dispatchEvent(new CustomEvent('create-folder', { detail: { name: folderName } }))"
+    >
       <div class="form-control">
         <label class="label">
           <span class="label-text">Folder name</span>
@@ -21,7 +25,13 @@
         />
       </div>
       <div class="modal-action">
-        <button type="button" class="btn btn-sm" onclick="document.getElementById('create-folder-dialog').close()">Cancel</button>
+        <button
+          type="button"
+          class="btn btn-sm"
+          onclick="document.getElementById('create-folder-dialog').close()"
+        >
+          Cancel
+        </button>
         <button type="submit" class="btn btn-primary btn-sm">Create</button>
       </div>
     </form>

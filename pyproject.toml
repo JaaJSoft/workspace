@@ -77,7 +77,49 @@ dev = [
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
     "ruff==0.16.3",
+    # HTML template linter/formatter (djlint workspace --lint / --reformat).
+    "djlint>=1.44.2",
 ]
+
+[tool.djlint]
+profile = "django"
+extension = "html"
+# Templates are indented with 2 spaces, like the JS and CSS bundles.
+indent = 2
+max_line_length = 120
+# Compared against the combined length of a tag's attributes: a lone class
+# list of moderate size stays inline, while a tag carrying several real
+# attributes goes vertical (one attribute per line). Attribute values are
+# never split, whatever the threshold - a long Alpine expression stays
+# intact on its line.
+max_attribute_length = 70
+single_attribute_per_line = true
+# When a tag wraps, its content moves to its own line so the closing tag
+# lines up with the opening one, instead of hugging the final ">".
+line_break_after_multiline_tag = true
+close_void_tags = true
+max_blank_lines = 1
+format_css = true
+format_js = true
+# Paired template tags djlint doesn't know: help_items (common/templatetags/
+# ui_tags.py) and Django 6's native partialdef.
+custom_blocks = "help_items,partialdef"
+# D018: hardcoded internal links are widespread in Alpine-driven partials and
+#       help dialogs; not worth converting to {% url %} wholesale.
+# H019: the static error pages (400/403/404/500) rely on javascript:history.back().
+# H021: inline styles carry dynamic widths/positions computed by Alpine.
+# H023: typographic entities (&mdash;, &larr;, ...) are used on purpose.
+# H030/H031: SEO meta tags are pointless behind a login wall.
+ignore = "D018,H019,H021,H023,H030,H031"
+
+# Embedded <style>/<script> blocks follow the same 2-space indent as the HTML.
+# (The indent_css/indent_js spellings are CLI-only flags; in config files the
+# beautifier settings go through these tables.)
+[tool.djlint.css]
+indent_size = 2
+
+[tool.djlint.js]
+indent_size = 2
 
 [tool.ruff]
 target-version = "py314"

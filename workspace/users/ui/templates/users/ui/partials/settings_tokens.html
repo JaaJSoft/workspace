@@ -1,5 +1,10 @@
 <!-- API Tokens Tab -->
-<div x-show="tab === 'tokens'" x-cloak x-data="apiTokensTab()" x-init="fetchTokens()">
+<div
+  x-show="tab === 'tokens'"
+  x-cloak
+  x-data="apiTokensTab()"
+  x-init="fetchTokens()"
+>
   <div class="card bg-base-100 border border-base-300 shadow-sm">
     <div class="card-body">
       <div class="flex items-center justify-between">
@@ -7,7 +12,10 @@
           <i data-lucide="key-round" class="w-5 h-5"></i>
           API Tokens
         </h2>
-        <button @click="$refs.createDialog.showModal()" class="btn btn-primary btn-sm gap-1">
+        <button
+          @click="$refs.createDialog.showModal()"
+          class="btn btn-primary btn-sm gap-1"
+        >
           <i data-lucide="plus" class="w-4 h-4"></i>
           New Token
         </button>
@@ -29,8 +37,17 @@
       <div x-show="!loading && tokens.length > 0" class="mt-4">
         <label class="input input-bordered input-sm flex items-center gap-2">
           <i data-lucide="search" class="w-4 h-4 text-base-content/40"></i>
-          <input type="text" x-model="search" class="grow" placeholder="Search tokens..." />
-          <button x-show="search" @click="search = ''" class="btn btn-ghost btn-xs btn-square">
+          <input
+            type="text"
+            x-model="search"
+            class="grow"
+            placeholder="Search tokens..."
+          />
+          <button
+            x-show="search"
+            @click="search = ''"
+            class="btn btn-ghost btn-xs btn-square"
+          >
             <i data-lucide="x" class="w-3 h-3"></i>
           </button>
         </label>
@@ -45,29 +62,44 @@
       </template>
 
       <!-- No search results -->
-      <div x-show="!loading && tokens.length > 0 && filteredTokens.length === 0" class="text-center py-6 text-base-content/50">
+      <div
+        x-show="!loading && tokens.length > 0 && filteredTokens.length === 0"
+        class="text-center py-6 text-base-content/50"
+      >
         <p class="text-sm">No tokens matching your search.</p>
       </div>
 
       <!-- Token list -->
       <div x-show="!loading && filteredTokens.length > 0" class="mt-2 space-y-2">
         <template x-for="token in filteredTokens" :key="token.id">
-          <div class="flex items-center justify-between p-3 rounded-lg border border-base-300 bg-base-200/30 group/token">
+          <div
+            class="flex items-center justify-between p-3 rounded-lg border border-base-300 bg-base-200/30 group/token"
+          >
             <div class="flex items-center gap-3 min-w-0">
               <div class="rounded-lg bg-primary/10 p-2 flex-shrink-0">
                 <i data-lucide="key-round" class="w-4 h-4 text-primary"></i>
               </div>
               <div class="min-w-0">
-                <div class="font-medium text-sm truncate" x-text="token.name || 'Unnamed token'"></div>
+                <div
+                  class="font-medium text-sm truncate"
+                  x-text="token.name || 'Unnamed token'"
+                ></div>
                 <div class="flex items-center gap-2 text-xs text-base-content/50 mt-0.5">
-                  <code class="bg-base-200 px-1 py-0.5 rounded" x-text="token.token_key + '...'"></code>
+                  <code
+                    class="bg-base-200 px-1 py-0.5 rounded"
+                    x-text="token.token_key + '...'"
+                  ></code>
                   <span>&middot;</span>
-                  <span x-text="'Created ' + new Date(token.created).toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"></span>
+                  <span
+                    x-text="'Created ' + new Date(token.created).toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"
+                  ></span>
                   <template x-if="token.expiry">
                     <span>
                       <span>&middot;</span>
-                      <span :class="new Date(token.expiry) < new Date() ? 'text-error' : ''"
-                            x-text="'Expires ' + new Date(token.expiry).toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"></span>
+                      <span
+                        :class="new Date(token.expiry) < new Date() ? 'text-error' : ''"
+                        x-text="'Expires ' + new Date(token.expiry).toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"
+                      ></span>
                     </span>
                   </template>
                   <template x-if="!token.expiry">
@@ -79,7 +111,11 @@
                 </div>
               </div>
             </div>
-            <button @click="revokeToken(token)" class="btn btn-ghost btn-sm text-error opacity-0 group-hover/token:opacity-100 transition-opacity" title="Revoke token">
+            <button
+              @click="revokeToken(token)"
+              class="btn btn-ghost btn-sm text-error opacity-0 group-hover/token:opacity-100 transition-opacity"
+              title="Revoke token"
+            >
               <i data-lucide="trash-2" class="w-4 h-4"></i>
             </button>
           </div>
@@ -96,7 +132,12 @@
       <div class="space-y-4">
         <div class="form-control">
           <label class="label"><span class="label-text font-medium">Name</span></label>
-          <input type="text" x-model="newName" class="input input-bordered input-sm w-full" placeholder="e.g. CI script, My bot" />
+          <input
+            type="text"
+            x-model="newName"
+            class="input input-bordered input-sm w-full"
+            placeholder="e.g. CI script, My bot"
+          />
         </div>
 
         <div class="form-control">
@@ -114,13 +155,19 @@
 
       <div class="modal-action">
         <button @click="closeCreateDialog()" class="btn btn-ghost btn-sm">Cancel</button>
-        <button @click="createToken()" class="btn btn-primary btn-sm" :disabled="creating">
+        <button
+          @click="createToken()"
+          class="btn btn-primary btn-sm"
+          :disabled="creating"
+        >
           <span x-show="creating" class="loading loading-spinner loading-xs"></span>
           <span x-text="creating ? 'Creating...' : 'Create'"></span>
         </button>
       </div>
     </div>
-    <form method="dialog" class="modal-backdrop"><button @click="closeCreateDialog()">close</button></form>
+    <form method="dialog" class="modal-backdrop">
+      <button @click="closeCreateDialog()">close</button>
+    </form>
   </dialog>
 
   <!-- Token Created Dialog (show token once) -->
@@ -129,13 +176,20 @@
       <h3 class="font-bold text-lg mb-2">Token Created</h3>
       <div x-ref="tokenCreatedFeedback"></div>
       <p class="text-sm text-warning mb-4">
-        <i data-lucide="alert-triangle" class="w-4 h-4 inline-block align-text-bottom mr-1"></i>
+        <i
+          data-lucide="alert-triangle"
+          class="w-4 h-4 inline-block align-text-bottom mr-1"
+        ></i>
         Copy this token now. You won't be able to see it again.
       </p>
 
       <div class="flex items-center gap-2 bg-base-200 rounded-lg p-3">
         <code class="text-sm break-all flex-1 select-all" x-text="createdToken"></code>
-        <button @click="copyToken()" class="btn btn-ghost btn-sm btn-square flex-shrink-0" title="Copy">
+        <button
+          @click="copyToken()"
+          class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+          title="Copy"
+        >
           <i x-show="!copied" data-lucide="copy" class="w-4 h-4"></i>
           <i x-show="copied" data-lucide="check" class="w-4 h-4 text-success"></i>
         </button>
@@ -188,13 +242,18 @@
       async createToken() {
         this.creating = true;
         const csrfToken = getCSRFToken();
-        const body = { name: this.newName };
+        const body = {
+          name: this.newName
+        };
         if (this.newExpiry) body.expiry_days = parseInt(this.newExpiry);
 
         try {
           const res = await fetch('/api/v1/auth/tokens', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
             body: JSON.stringify(body),
           });
           const data = await res.json();
@@ -205,7 +264,9 @@
             this.newName = '';
             this.newExpiry = '';
             this.$refs.tokenCreatedDialog.showModal();
-            this.$nextTick(() => lucide.createIcons({ nodes: [this.$refs.tokenCreatedDialog] }));
+            this.$nextTick(() => lucide.createIcons({
+              nodes: [this.$refs.tokenCreatedDialog]
+            }));
             await this.fetchTokens();
           } else {
             const msgs = data.errors || ['Failed to create token.'];
@@ -234,7 +295,9 @@
         try {
           const res = await fetch('/api/v1/auth/tokens/' + token.id, {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': csrfToken },
+            headers: {
+              'X-CSRFToken': csrfToken
+            },
           });
           if (res.ok) {
             this.tokens = this.tokens.filter(t => t.id !== token.id);
@@ -251,10 +314,17 @@
         try {
           await navigator.clipboard.writeText(this.createdToken);
           this.copied = true;
-          setTimeout(() => { this.copied = false; }, 2000);
+          setTimeout(() => {
+            this.copied = false;
+          }, 2000);
         } catch (e) {
           const el = this.$refs.tokenCreatedDialog.querySelector('code');
-          if (el) { const range = document.createRange(); range.selectNodeContents(el); window.getSelection().removeAllRanges(); window.getSelection().addRange(range); }
+          if (el) {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+          }
         }
       },
 

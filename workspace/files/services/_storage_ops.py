@@ -9,6 +9,7 @@ import gc
 import logging
 import os
 import posixpath
+import shutil
 
 from django.core.files.base import ContentFile
 from django.core.files.base import File as DjangoFile
@@ -54,6 +55,75 @@ def ensure_folder_on_storage(folder):
             "skipping directory creation for '%s'.",
             scrub(storage_path),
         )
+
+
+def delete_node_storage(node):
+    """Best-effort disk cleanup for a File row about to be deleted.
+
+    Runs from the ``pre_delete`` signal, so it covers instance, queryset and
+    cascade deletes alike. Paths are resolved through the same helpers as the
+    other storage ops (``folder_storage_path``), never rebuilt by hand.
+    """
+    if node.node_type == File.NodeType.FILE:
+        _delete_file_storage(node)
+    else:
+        _delete_folder_storage(node)
+
+
+def _delete_file_storage(node):
+    if node.has_thumbnail:
+        from .thumbnails.generation import delete_thumbnail
+
+        delete_thumbnail(node.uuid)
+
+    if not node.content:
+        return
+    file_path = node.content.name
+    try:
+        if file_path and default_storage.exists(file_path):
+            default_storage.delete(file_path)
+            logger.info("Deleted physical file: %s", scrub(file_path))
+            try:
+                _remove_empty_parents(posixpath.dirname(file_path))
+            except OSError as e:
+                logger.warning(
+                    "Could not remove empty directory for %s: %s",
+                    scrub(file_path),
+                    scrub(e),
+                )
+    except Exception as e:
+        logger.error("Error deleting physical file %s: %s", scrub(file_path), scrub(e))
+
+
+def _remove_empty_parents(dir_path):
+    """Climb from *dir_path* removing directories as long as they are empty."""
+    while dir_path and dir_path != "files":
+        full_path = default_storage.path(dir_path)
+        if not os.path.isdir(full_path) or os.listdir(full_path):
+            break
+        os.rmdir(full_path)
+        logger.info("Deleted empty directory: %s", scrub(dir_path))
+        dir_path = posixpath.dirname(dir_path)
+
+
+def _delete_folder_storage(node):
+    try:
+        storage_path = folder_storage_path(node)
+        full_path = default_storage.path(storage_path)
+        # rmtree, not rmdir: descendant rows are deleted before the folder in
+        # the cascade, but the directory may still hold orphaned entries the
+        # DB never knew about.
+        if os.path.isdir(full_path):
+            shutil.rmtree(full_path)
+            logger.info("Deleted folder and contents: %s", scrub(storage_path))
+    except NotImplementedError:
+        logger.debug(
+            "Storage backend does not support local filesystem paths; "
+            "skipping directory cleanup for folder '%s'.",
+            scrub(node.name),
+        )
+    except Exception as e:
+        logger.warning("Could not delete folder %s: %s", scrub(node.name), scrub(e))
 
 
 def rename_file_storage(file_obj, new_name):

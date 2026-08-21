@@ -234,6 +234,31 @@ class Task(models.Model):
         return f"{self.project.key}-{self.number}"
 
 
+class Subtask(models.Model):
+    """Checklist item on a task.
+
+    Deliberately not a nested task: no assignees, due dates or status, so
+    checklists never grow recursive board semantics.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="subtasks",
+    )
+    title = models.CharField(max_length=255)
+    done = models.BooleanField(default=False)
+    position = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["position", "created_at"]
+
+    def __str__(self):
+        return self.title
+
+
 class TaskComment(models.Model):
     """User comment on a task."""
 

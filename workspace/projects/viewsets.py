@@ -17,6 +17,7 @@ from .models import (
     Label,
     Project,
     ProjectMember,
+    Subtask,
     Task,
     TaskComment,
     TaskEvent,
@@ -29,7 +30,8 @@ from .serializers import (
     MemberSerializer,
     MemberWriteSerializer,
     ProjectSerializer,
-    StatusReorderSerializer,
+    ReorderSerializer,
+    SubtaskSerializer,
     TaskCommentBodySerializer,
     TaskCommentSerializer,
     TaskMoveSerializer,
@@ -49,6 +51,7 @@ from .services.members import (
 )
 from .services.projects import create_project
 from .services.statuses import create_status, delete_status, reorder_statuses
+from .services.subtasks import create_subtask, reorder_subtasks
 from .services.task_filters import (
     ORDERABLE_FIELDS,
     TaskFilterError,
@@ -373,7 +376,7 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def reorder(self, request, *args, **kwargs):
         self._require_admin()
         self._require_writable()
-        serializer = StatusReorderSerializer(data=request.data)
+        serializer = ReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         reorder_statuses(self.project, serializer.validated_data["order"])
         return Response({"success": True})
@@ -565,6 +568,61 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
 
     def _resolve_status(self, status_uuid):
         return self.project.statuses.filter(uuid=status_uuid).first()
+
+
+@extend_schema(tags=["Projects"])
+class SubtaskViewSet(ProjectContextMixin, viewsets.GenericViewSet):
+    """Checklist items nested under a task; any member of a writable
+    project can edit them, like comments."""
+
+    serializer_class = SubtaskSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        try:
+            self.task = self.project.tasks.get(uuid=kwargs["task_uuid"])
+        except Task.DoesNotExist:
+            raise Http404 from None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Subtask.objects.none()
+        return self.task.subtasks.order_by("position", "created_at")
+
+    def list(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        self._require_writable()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        subtask = create_subtask(self.task, serializer.validated_data["title"])
+        return Response(
+            self.get_serializer(subtask).data, status=status.HTTP_201_CREATED
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_writable()
+        subtask = self.get_object()
+        serializer = self.get_serializer(subtask, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_writable()
+        self.get_object().delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def reorder(self, request, *args, **kwargs):
+        self._require_writable()
+        serializer = ReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reorder_subtasks(self.task, serializer.validated_data["order"])
+        return Response({"success": True})
 
 
 @extend_schema(tags=["Projects"])

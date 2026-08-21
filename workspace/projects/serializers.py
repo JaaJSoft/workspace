@@ -7,7 +7,15 @@ from rest_framework import serializers
 
 from workspace.common.services.mentions import render_comment_body
 
-from .models import Label, Project, ProjectMember, Task, TaskComment, TaskStatus
+from .models import (
+    Label,
+    Project,
+    ProjectMember,
+    Subtask,
+    Task,
+    TaskComment,
+    TaskStatus,
+)
 from .queries import get_project_role
 from .services.references import KEY_RE
 
@@ -311,11 +319,26 @@ class TaskMoveSerializer(serializers.Serializer):
         return _parse_uuid_list(value, "tasks")
 
 
-class StatusReorderSerializer(serializers.Serializer):
+class ReorderSerializer(serializers.Serializer):
+    """Full-order payload shared by the status and subtask reorder endpoints."""
+
     order = serializers.ListField()
 
     def validate_order(self, value):
         return _parse_uuid_list(value, "order")
+
+
+class SubtaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subtask
+        fields = ["uuid", "title", "done", "position", "created_at"]
+        read_only_fields = ["position", "created_at"]
+
+    def validate_title(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Title cannot be blank.")
+        return value
 
 
 class TaskCommentAuthorSerializer(serializers.Serializer):

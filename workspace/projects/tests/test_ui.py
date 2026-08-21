@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from workspace.projects.models import Project, Task, TaskEvent
 from workspace.projects.services.projects import get_or_create_personal_project
+from workspace.projects.services.subtasks import create_subtask
 from workspace.projects.services.tasks import create_task, delete_task
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -212,6 +213,33 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.admin)
         resp = self.client.get(f"/projects/{self.project.uuid}/board")
         self.assertContains(resp, f"{self.project.key}-{task.number}")
+
+    def test_board_cards_show_the_checklist_progress(self):
+        task = create_task(
+            self.project,
+            self.admin,
+            title="With checklist",
+            status=self.project.statuses.get(name="To do"),
+        )
+        done = create_subtask(task, "done item")
+        done.done = True
+        done.save(update_fields=["done"])
+        create_subtask(task, "open item")
+        create_subtask(task, "another open item")
+        self.client.force_login(self.member)
+        resp = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertContains(resp, "1/3")
+
+    def test_board_cards_without_checklist_have_no_counter(self):
+        create_task(
+            self.project,
+            self.admin,
+            title="Plain task",
+            status=self.project.statuses.get(name="To do"),
+        )
+        self.client.force_login(self.member)
+        resp = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertNotContains(resp, "square-check-big")
 
 
 class BoardDoneRetentionTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):

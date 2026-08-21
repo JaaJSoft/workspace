@@ -21,6 +21,14 @@
     <div class="flex items-center gap-2 text-xs text-base-content/60">
       {% include "projects/ui/partials/_priority_badge.html" %}
       {% include "projects/ui/partials/_estimate_badge.html" %}
+      {% if task.subtask_count %}
+        <span
+          class="flex items-center gap-1 {% if task.subtask_done_count == task.subtask_count %}text-success{% endif %}"
+          title="Checklist"
+        >
+          <i data-lucide="square-check-big" class="w-3 h-3"></i>{{ task.subtask_done_count }}/{{ task.subtask_count }}
+        </span>
+      {% endif %}
       {% if task.due_date %}
         <span
           class="flex items-center gap-1 {% if task.due_date < today %}text-error font-medium{% endif %}"

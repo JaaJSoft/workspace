@@ -8,6 +8,7 @@ from .viewsets import (
     MemberViewSet,
     ProjectViewSet,
     StatusViewSet,
+    SubtaskViewSet,
     TaskCommentViewSet,
     TaskViewSet,
 )
@@ -27,6 +28,11 @@ task_reorder = TaskViewSet.as_view({"post": "reorder"})
 task_move = TaskViewSet.as_view({"post": "move"})
 task_detail = TaskViewSet.as_view(
     {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
+)
+subtask_list = SubtaskViewSet.as_view({"get": "list", "post": "create"})
+subtask_reorder = SubtaskViewSet.as_view({"post": "reorder"})
+subtask_detail = SubtaskViewSet.as_view(
+    {"patch": "partial_update", "delete": "destroy"}
 )
 task_comments = TaskCommentViewSet.as_view({"get": "list", "post": "create"})
 task_comment_detail = TaskCommentViewSet.as_view(
@@ -98,6 +104,21 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>",
         task_detail,
         name="project-task-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/subtasks",
+        subtask_list,
+        name="project-task-subtasks",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/subtasks/reorder",
+        subtask_reorder,
+        name="project-task-subtasks-reorder",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/subtasks/<uuid:uuid>",
+        subtask_detail,
+        name="project-task-subtask-detail",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/comments",

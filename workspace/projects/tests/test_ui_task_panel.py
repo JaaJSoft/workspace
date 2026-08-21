@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from workspace.projects.models import Label
 from workspace.projects.services.projects import create_project
+from workspace.projects.services.subtasks import create_subtask
 from workspace.projects.services.tasks import create_task
 
 from .base import ProjectTestMixin
@@ -92,10 +93,11 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(resp.context["panel_action_ids"], [])
         self.assertNotContains(resp, "Delete task")
         # No action is available on an archived project, so every gated
-        # control must be disabled: the status, priority and due-date fields.
-        # Assignees and labels render as chips whose remove controls and
-        # selectors are omitted entirely, so they carry no disabled attribute.
-        self.assertEqual(self._count_disabled(resp), 3)
+        # control must be disabled: the status, priority and due-date fields
+        # and the checklist item checkbox. Assignees and labels render as
+        # chips whose remove controls and selectors are omitted entirely, so
+        # they carry no disabled attribute.
+        self.assertEqual(self._count_disabled(resp), 4)
         # The comment form is gated on the "comment" action, absent when archived.
         self.assertNotContains(resp, "Add a comment...")
 
@@ -151,6 +153,26 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, 'id="task-panel-data"')
         self.assertContains(resp, 'id="task-panel-actions"')
         self.assertEqual(resp.context["panel_task_data"]["uuid"], str(self.task.uuid))
+
+    def test_panel_data_includes_the_checklist(self):
+        first = create_subtask(self.task, "Write the code")
+        done = create_subtask(self.task, "Review it")
+        done.done = True
+        done.save(update_fields=["done"])
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        data = resp.context["panel_task_data"]
+        self.assertEqual(
+            data["subtasks"],
+            [
+                {"uuid": str(first.uuid), "title": "Write the code", "done": False},
+                {"uuid": str(done.uuid), "title": "Review it", "done": True},
+            ],
+        )
+        self.assertEqual(
+            data["subtasks_url"],
+            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/subtasks",
+        )
 
     def test_panel_shows_the_task_reference(self):
         self.client.force_login(self.admin)

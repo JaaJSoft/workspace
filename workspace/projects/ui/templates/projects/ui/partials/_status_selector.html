@@ -1,0 +1,112 @@
+{% comment %}
+Status dropdown: styled replacement for the native <select>, visually in line
+with _priority_selector.html. Each row shows the status colour dot used on the
+board columns and backlog rows. Rows are rendered server-side from the
+`statuses` context variable (present wherever the selector is used: project
+shell, filter bars, task panel).
+
+Params:
+  - model_expr: Alpine l-value holding the current status uuid (required),
+                e.g. "form.status" or "filters.status". Resolved in the
+                parent scope through Alpine's prototypal inheritance.
+  - on_change:  optional Alpine statement run after the value is set,
+                e.g. "applyFilters()".
+  - with_all:   Django flag - prepend an "All statuses" empty-value row
+                (filter bars, where the field is optional).
+  - disabled:   Django flag - render the trigger disabled (permission gating).
+  - label:      accessible field name, prepended to the trigger's visible value
+                as screen-reader-only text (e.g. "Status" -> "Status To do").
+{% endcomment %}
+<div
+  x-data="selectDropdown()"
+  class="relative"
+  @click.outside="open = false"
+  @keydown.arrow-down.prevent="move(1)"
+  @keydown.arrow-up.prevent="move(-1)"
+  @keydown.escape="if (open) { $event.preventDefault(); closeAndFocus() }"
+  @keydown.tab="open = false"
+>
+  <button
+    type="button"
+    class="input input-sm input-bordered flex items-center gap-2 w-full cursor-pointer text-left disabled:cursor-not-allowed"
+    x-ref="trigger"
+    aria-haspopup="menu"
+    :aria-expanded="open"
+    @click="toggle()"
+    {% if disabled %}disabled{% endif %}
+  >
+    {% if label %}<span class="sr-only">{{ label }}</span>{% endif %}
+    {% if with_all %}
+      <span
+        x-show="!{{ model_expr }}"
+        x-cloak
+        class="flex items-center gap-2 min-w-0"
+      >
+        <span
+          class="w-2.5 h-2.5 rounded-full border border-dashed border-base-content/40 shrink-0"
+        ></span>
+        <span class="truncate">All statuses</span>
+      </span>
+    {% endif %}
+    {% for s in statuses %}
+      <span
+        x-show="{{ model_expr }} === '{{ s.uuid }}'"
+        x-cloak
+        class="flex items-center gap-2 min-w-0"
+      >
+        <span
+          class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
+          {% if s.color %}style="background-color: {{ s.color }}"{% endif %}
+        ></span>
+        <span class="truncate">{{ s.name }}</span>
+      </span>
+    {% endfor %}
+    <i
+      data-lucide="chevron-down"
+      class="w-3.5 h-3.5 opacity-60 ml-auto shrink-0"
+    ></i>
+  </button>
+  <div
+    x-show="open"
+    x-cloak
+    class="absolute z-50 mt-1 w-full min-w-40 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-60 overflow-y-auto overflow-x-hidden thin-scrollbar"
+  >
+    <ul class="menu menu-sm p-1" role="menu">
+      {% if with_all %}
+        <li role="none">
+          <button
+            type="button"
+            class="flex items-center gap-2 rounded"
+            :class="!{{ model_expr }} ? 'active' : ''"
+            role="menuitemradio"
+            :aria-checked="!{{ model_expr }}"
+            @click="{{ model_expr }} = ''; open = false; {{ on_change|default:'' }}"
+          >
+            <span
+              class="w-2.5 h-2.5 rounded-full border border-dashed border-base-content/40 shrink-0"
+            ></span>
+            <span class="text-sm">All statuses</span>
+          </button>
+        </li>
+      {% endif %}
+      {% for s in statuses %}
+        <li class="w-full min-w-0" role="none">
+          <button
+            type="button"
+            class="flex w-full min-w-0 items-center gap-2 rounded"
+            :class="{{ model_expr }} === '{{ s.uuid }}' ? 'active' : ''"
+            role="menuitemradio"
+            :aria-checked="{{ model_expr }} === '{{ s.uuid }}'"
+            @click="{{ model_expr }} = '{{ s.uuid }}'; open = false; {{ on_change|default:'' }}"
+          >
+            <span
+              class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
+              {% if s.color %}style="background-color: {{ s.color }}"{% endif %}
+            ></span>
+            <span class="text-sm min-w-0 truncate">{{ s.name }}</span>
+          </button>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>

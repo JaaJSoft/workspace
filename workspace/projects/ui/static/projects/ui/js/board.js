@@ -103,6 +103,47 @@ function pickLabelColor(labels) {
   return best;
 }
 
+// Menu-button behavior shared by the priority/status selector partials:
+// opening focuses the checked item, arrows rove focus over the
+// [role="menuitemradio"] rows, Escape hands focus back to the trigger.
+function selectDropdown() {
+  return {
+    open: false,
+    toggle() {
+      this.open = !this.open;
+      if (this.open) this.$nextTick(() => this.focusCurrent());
+    },
+    closeAndFocus() {
+      this.open = false;
+      this.$refs.trigger.focus();
+    },
+    options() {
+      return Array.from(this.$root.querySelectorAll('[role="menuitemradio"]'));
+    },
+    focusCurrent() {
+      const opts = this.options();
+      const current = opts.find((o) => o.getAttribute('aria-checked') === 'true');
+      (current || opts[0])?.focus();
+    },
+    move(step) {
+      if (!this.open) {
+        this.toggle();
+        return;
+      }
+      const opts = this.options();
+      if (!opts.length) return;
+      const idx = opts.indexOf(document.activeElement);
+      const next =
+        idx === -1
+          ? step > 0
+            ? 0
+            : opts.length - 1
+          : (idx + step + opts.length) % opts.length;
+      opts[next].focus();
+    },
+  };
+}
+
 // Combobox over the project's labels. allLabels/selectedUuids are getters so
 // the parent's reactive state is read at call time. An empty createUrl hides
 // the create row (non-admins); the server enforces admin regardless.
@@ -871,6 +912,7 @@ function taskPanel() {
 window.projectBoard = projectBoard;
 window.taskPanel = taskPanel;
 window.labelSelector = labelSelector;
+window.selectDropdown = selectDropdown;
 window.projectBoardHelpers = {
   listOrder: listOrder,
   taskParamUrl: taskParamUrl,

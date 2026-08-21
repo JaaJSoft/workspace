@@ -30,13 +30,22 @@ would clip them.
       @input.debounce.300ms="applyFilters()"
     />
   </label>
-  <div class="w-full sm:w-auto flex items-center gap-2">
-    <div class="flex-1 min-w-0 sm:flex-none sm:w-56">
+  <div class="w-full sm:w-auto flex flex-wrap items-center gap-2">
+    <div class="flex-1 min-w-40 sm:flex-none sm:w-56">
       {% include "ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" icon="users" %}
     </div>
     {% if labels_data %}
-      <div class="flex-1 min-w-0 sm:flex-none sm:w-56">
+      <div class="flex-1 min-w-40 sm:flex-none sm:w-56">
         {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-label-selected" all_source="labels" selected_source="filters.label" placeholder="Filter by label" no_create=True %}
+      </div>
+    {% endif %}
+    {# These live with the pickers, not the scrollable row below: their dropdowns would be clipped by the overflow-x-auto ancestor. #}
+    <div class="flex-1 min-w-40 sm:flex-none sm:w-44">
+      {% include "projects/ui/partials/_priority_selector.html" with model_expr="filters.priority" on_change="applyFilters()" with_all=True label="Filter by priority" %}
+    </div>
+    {% if show_status_filter %}
+      <div class="flex-1 min-w-40 sm:flex-none sm:w-44">
+        {% include "projects/ui/partials/_status_selector.html" with model_expr="filters.status" on_change="applyFilters()" with_all=True label="Filter by status" %}
       </div>
     {% endif %}
   </div>
@@ -57,31 +66,6 @@ would clip them.
       <i data-lucide="user-x" class="w-4 h-4"></i>
       Unassigned
     </button>
-    <select
-      class="select select-bordered select-sm shrink-0"
-      x-model="filters.priority"
-      @change="applyFilters()"
-      aria-label="Filter by priority"
-    >
-      <option value="">All priorities</option>
-      <option value="urgent">Urgent</option>
-      <option value="high">High</option>
-      <option value="medium">Medium</option>
-      <option value="low">Low</option>
-    </select>
-    {% if show_status_filter %}
-      <select
-        class="select select-bordered select-sm shrink-0"
-        x-model="filters.status"
-        @change="applyFilters()"
-        aria-label="Filter by status"
-      >
-        <option value="">All statuses</option>
-        {% for s in statuses_data %}
-          <option value="{{ s.uuid }}">{{ s.name }}</option>
-        {% endfor %}
-      </select>
-    {% endif %}
     <button
       type="button"
       class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3"

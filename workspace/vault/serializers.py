@@ -64,6 +64,18 @@ class AccountEnvelopeSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class AccountInitResponseSerializer(serializers.Serializer):
+    """What the browser needs before it can derive anything.
+
+    ``account_uuid`` is the identity row's UUID and the value every
+    account-scoped associated data string is bound to; ``kdf_salt`` is the
+    only random material the server produces, and it is public.
+    """
+
+    account_uuid = serializers.UUIDField()
+    kdf_salt = serializers.CharField()
+
+
 class AccountFinalizeSerializer(serializers.Serializer):
     kdf_algo = serializers.ChoiceField(choices=["argon2id"])
     kdf_params = serializers.JSONField(validators=[validate_kdf_params])

@@ -27,6 +27,7 @@ from .models import AccountIdentity
 from .serializers import (
     AccountEnvelopeSerializer,
     AccountFinalizeSerializer,
+    AccountInitResponseSerializer,
     AccountRotateSerializer,
 )
 from .services.attestation import AttestationError, verify_kex_pub_attestation
@@ -71,6 +72,10 @@ class AccountInitView(APIView):
             "Idempotent while the identity is pending."
         ),
         request=None,
+        responses={
+            200: AccountInitResponseSerializer,
+            201: AccountInitResponseSerializer,
+        },
     )
     def post(self, request):
         identity = AccountIdentity.objects.filter(user=request.user).first()

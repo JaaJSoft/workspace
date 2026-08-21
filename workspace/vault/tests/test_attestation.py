@@ -4,7 +4,11 @@ import pathlib
 from django.test import SimpleTestCase
 
 from workspace.vault.services.attestation import (
+    PUBKEY_ALG_ED25519,
+    PUBKEY_ALG_X25519,
     AttestationError,
+    decode_base64url,
+    decode_public_key,
     verify_kex_pub_attestation,
 )
 from workspace.vault.tests.reference import ad, primitives
@@ -124,6 +128,37 @@ class VerifyKexPubAttestationTests(SimpleTestCase):
         kex_pub, sig_pub, signature = build_attestation()
         with self.assertRaises(AttestationError):
             verify_kex_pub_attestation(ACCOUNT_UUID, None, sig_pub, signature)
+
+
+class DecodeHelperTests(SimpleTestCase):
+    """The two decoders are exported for the PRs that will verify vault and
+    entry metadata signatures, so their refusals are tested here rather than
+    only through the one caller that exists today."""
+
+    def test_refuses_a_public_key_of_the_wrong_length(self):
+        with self.assertRaises(AttestationError):
+            decode_public_key(
+                bytes([PUBKEY_ALG_ED25519]) + bytes(31), PUBKEY_ALG_ED25519
+            )
+
+    def test_refuses_an_empty_public_key(self):
+        with self.assertRaises(AttestationError):
+            decode_public_key(b"", PUBKEY_ALG_ED25519)
+
+    def test_refuses_a_public_key_under_another_algorithm(self):
+        with self.assertRaises(AttestationError):
+            decode_public_key(
+                bytes([PUBKEY_ALG_X25519]) + bytes(32), PUBKEY_ALG_ED25519
+            )
+
+    def test_accepts_unpadded_and_padded_base64url(self):
+        self.assertEqual(decode_base64url("AAAA"), bytes(3))
+
+    def test_refuses_a_value_that_is_not_text(self):
+        for value in (None, 42, b"bytes"):
+            with self.subTest(value=value):
+                with self.assertRaises(AttestationError):
+                    decode_base64url(value)
 
 
 class FrozenVectorTests(SimpleTestCase):

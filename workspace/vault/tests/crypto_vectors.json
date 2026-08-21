@@ -102,11 +102,13 @@
       "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
     },
     {
-      "expected_sig_b64": "Aej0b-mzMvunJfYItee89UGdR4Th7Qopuigr4fGJOsRCdNhBtRyPByCz6UmzXXCB-Xt7Wg0zvJBsAE5v9ARqvwM",
+      "expected_sig_b64": "AYz7ea_RDdv2w677WOMsCn9RM3I9tGFhUUdS_OZXCSS9_BSY5Jx0a0XsrSsraHQly0353r-nx0kh8EyoALpDvQ0",
       "id": "account-kex-pub-attestation",
-      "message_b64": "djF8YWNjb3VudC1rZXgtcHVifDAxOTJmM2E0LTExMTEtN2Q4ZS05ZjAxLTIzNDU2Nzg5YWJjZHxENnBvVHRLSVo3bF9TbW90N2wzNHpwZE9kcmNCamo4aW9jVFBKbmhYRHlB",
+      "kex_public_b64": "AQ-qaE7SiGe5f0pqLe5d-M6XTna3AY4_IqHEzyZ4Vw8g",
+      "message_b64": "djF8YWNjb3VudC1rZXgtcHVifDAxOTJmM2E0LTExMTEtN2Q4ZS05ZjAxLTIzNDU2Nzg5YWJjZHxBUS1xYUU3U2lHZTVmMHBxTGU1ZC1NNlhUbmEzQVk0X0lxSEV6eVo0Vnc4Zw",
       "pk_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
-      "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
+      "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM",
+      "user_uuid": "0192f3a4-1111-7d8e-9f01-23456789abcd"
     }
   ],
   "hkdf": [

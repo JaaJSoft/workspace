@@ -22,6 +22,8 @@ export const RESERVED_FIELD_IDS = Object.freeze(['username', 'password', 'totp',
 // verify, so it may never produce them.
 export const ENTRY_COLUMN_FIELD_IDS = Object.freeze(['name', 'notes']);
 
+const CUSTOM_PREFIX = 'custom:';
+
 export const AD = {
   unwrapInfo: () => ascii('v1|unwrap'),
   entryKeyInfo: (entryUuid) => ascii(`v1|entry-key|${uuid(entryUuid)}`),
@@ -33,8 +35,19 @@ export const AD = {
     ascii(`v1|vault-key|${uuid(vaultUuid)}|${uuid(recipientUuid)}`),
 };
 
+// The AD component of a STORED field id - identity, never a transformation:
+// `x` and `custom:x` are both legal rows under unique(entry, field_id), so a
+// mapping that collapsed them onto one AD would let their ciphertexts be
+// swapped and still verify. Producing a stored id from a label is the write
+// path's job.
 export function qualifyFieldId(fieldId) {
-  if (fieldId.startsWith('custom:')) return fieldId;
   if (RESERVED_FIELD_IDS.includes(fieldId)) return fieldId;
-  return `custom:${fieldId}`;
+  if (!fieldId.startsWith(CUSTOM_PREFIX)) {
+    throw new Error(`field id ${fieldId} is neither reserved nor ${CUSTOM_PREFIX}-prefixed`);
+  }
+  const label = fieldId.slice(CUSTOM_PREFIX.length);
+  if (!label || label.includes(':')) {
+    throw new Error(`field id ${fieldId} carries a malformed custom label`);
+  }
+  return fieldId;
 }

@@ -1,8 +1,15 @@
+import { randomBytes } from './encoding.js';
 import { AEAD_AES_256_GCM, decodeCiphertext, encodeCiphertext } from './wire.js';
 
 const KEY_LENGTH = 32;
+const IV_LENGTH = 12;
 
-export async function seal(key, plaintext, associatedData, { iv, keyVersion, kdfId }) {
+// The iv is drawn by default; pinning it is for the parity vectors, where
+// determinism is the point. 96 random bits are safe here only because the key
+// is per entry: the seals under one key stay far below the birthday bound.
+export async function seal(
+  key, plaintext, associatedData, { iv = randomBytes(IV_LENGTH), keyVersion, kdfId }
+) {
   // WebCrypto picks the AES variant from the key length, so a 16-byte key
   // would quietly produce AES-128-GCM under a header still declaring
   // AES-256-GCM - the agility byte would be a lie.

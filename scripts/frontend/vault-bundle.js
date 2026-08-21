@@ -6,8 +6,9 @@
 import { toBase64Url, fromBase64Url, randomBytes, equalBytes } from './src/vault/encoding.js';
 import { AD, RESERVED_FIELD_IDS, ENTRY_COLUMN_FIELD_IDS, qualifyFieldId } from './src/vault/ad.js';
 import {
-  FORMAT_VERSION, AEAD_AES_256_GCM, KDF_DIRECT, KDF_HKDF_SHA256,
+  FORMAT_VERSION, AEAD_AES_256_GCM, KDF_DIRECT, KDF_HKDF_SHA256, PUBKEY_ALG_X25519,
   UnsupportedVersionError, encodeCiphertext, decodeCiphertext,
+  encodePublicKey, decodePublicKey,
 } from './src/vault/wire.js';
 import { ARGON2_PARAMS, deriveAmk, hkdf } from './src/vault/kdf.js';
 import { seal, open } from './src/vault/aead.js';
@@ -28,9 +29,12 @@ window.VaultCrypto = {
   AEAD_AES_256_GCM,
   KDF_DIRECT,
   KDF_HKDF_SHA256,
+  PUBKEY_ALG_X25519,
   UnsupportedVersionError,
   encodeCiphertext,
   decodeCiphertext,
+  encodePublicKey,
+  decodePublicKey,
   ARGON2_PARAMS,
   deriveAmk,
   hkdf,

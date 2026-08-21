@@ -6,7 +6,22 @@ import { argon2id } from 'hash-wasm';
 // KDF - an attacker who learns one then gets the other's search space free.
 export const ARGON2_PARAMS = Object.freeze({ v: '1.3', m: 65536, t: 3, p: 2 });
 
+// Argon2 accepts a K and a salt of any length, so a secret_key one character
+// short derives a different AMK instead of failing, and only surfaces later as
+// a GCM tag error the UI can report as nothing but a wrong password. The error
+// names the length, never the value: a secret_key must not reach a log.
+const SECRET_KEY_LENGTH = 32;
+const SALT_LENGTH = 32;
+
 export async function deriveAmk({ password, secretKey, salt, params = ARGON2_PARAMS }) {
+  for (const [name, value, expected] of [
+    ['secret_key', secretKey, SECRET_KEY_LENGTH],
+    ['salt', salt, SALT_LENGTH],
+  ]) {
+    if (value.length !== expected) {
+      throw new Error(`${name} is ${value.length} bytes, expected ${expected}`);
+    }
+  }
   // NFC applies to the KDF input, not just to the length check: the same
   // password typed on two keyboards must open the same vault.
   const passwordInput = new TextEncoder().encode(password.normalize('NFC'));

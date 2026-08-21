@@ -35,6 +35,13 @@ ARGON2_PARAMS = {"algo": "argon2id", "v": "1.3", "m": 65536, "t": 3, "p": 2}
 SIG_ALG_ED25519 = 0x01
 PUBKEY_ALG_X25519 = 0x01
 
+# Raw key length per algorithm: a stored key of the wrong size is refused
+# rather than truncated.
+_PUBKEY_LENGTHS = {PUBKEY_ALG_X25519: 32}
+
+SECRET_KEY_LENGTH = 32
+SALT_LENGTH = 32
+
 HPKE_SUITE_V1 = {"kem_id": 0x0020, "kdf_id": 0x0001, "aead_id": 0x0002, "mode": 0x00}
 
 # HKDF salt is 32 zero bytes rather than drawn: the input keying material is
@@ -99,7 +106,20 @@ def argon2id_raw(
 
 
 def derive_amk(password: str, secret_key: bytes, salt: bytes, params=None) -> bytes:
-    """Argon2id with secret_key passed as K, never concatenated."""
+    """Argon2id with secret_key passed as K, never concatenated.
+
+    Argon2 accepts a K and a salt of any length, so a secret_key one character
+    short derives a different AMK instead of failing, and only surfaces later
+    as a GCM tag error the UI can report as nothing but a wrong password. The
+    guard belongs here and not in argon2id_raw, which the published RFC 9106
+    vectors reach with their own lengths.
+    """
+    for name, value, expected in (
+        ("secret_key", secret_key, SECRET_KEY_LENGTH),
+        ("salt", salt, SALT_LENGTH),
+    ):
+        if len(value) != expected:
+            raise ValueError(f"{name} is {len(value)} bytes, expected {expected}")
     params = params or ARGON2_PARAMS
     # NFC applies to the KDF input, not just to the length check: "café"
     # precomposed and decomposed are different byte strings otherwise.
@@ -178,6 +198,42 @@ def public_bytes(key) -> bytes:
     return key.public_bytes(
         encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
     )
+
+
+def encode_public_key(key, alg: int = PUBKEY_ALG_X25519) -> bytes:
+    """The stored form of a public key: algorithm byte, then the raw key.
+
+    The attestation signs this form, not the bare key: an unsigned algorithm
+    byte would be the server's to change while the signature still verifies.
+    """
+    expected = _PUBKEY_LENGTHS.get(alg)
+    if expected is None:
+        raise ValueError(f"unknown public key algorithm {alg:#04x}")
+    raw = public_bytes(key)
+    if len(raw) != expected:
+        raise ValueError(
+            f"public key is {len(raw)} bytes, algorithm {alg:#04x} wants {expected}"
+        )
+    return bytes([alg]) + raw
+
+
+def decode_public_key(stored: bytes) -> bytes:
+    """Raw key bytes from the stored form.
+
+    The KEM never sees the prefix: DHKEM(X25519) deserializes a bare 32-byte
+    key, so handing it the stored form would read the label as key material.
+    """
+    if not stored:
+        raise ValueError("public key is empty")
+    expected = _PUBKEY_LENGTHS.get(stored[0])
+    if expected is None:
+        raise ValueError(f"unsupported public key algorithm {stored[0]:#04x}")
+    if len(stored) != 1 + expected:
+        raise ValueError(
+            f"public key is {len(stored) - 1} bytes, "
+            f"algorithm {stored[0]:#04x} wants {expected}"
+        )
+    return stored[1:]
 
 
 def private_bytes(key) -> bytes:

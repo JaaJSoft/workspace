@@ -3,7 +3,7 @@ import pathlib
 
 from django.test import SimpleTestCase
 
-from workspace.vault.tests.reference import primitives
+from workspace.vault.tests.reference import ad, primitives
 from workspace.vault.tests.reference.encoding import from_base64url, to_base64url
 from workspace.vault.tests.reference.generate_fuzz_corpus import (
     CORPUS_PATH,
@@ -99,6 +99,16 @@ class VectorReplayTests(SimpleTestCase):
                 # A vector carries either a CBOR payload or a raw message; the
                 # two signing paths are different entry points and both ship.
                 if "message_b64" in vector:
+                    # Rebuilt, not replayed: a divergence on what goes into
+                    # the attestation has to fail here.
+                    self.assertEqual(
+                        to_base64url(
+                            ad.kex_pub_payload(
+                                vector["user_uuid"], vector["kex_public_b64"]
+                            )
+                        ),
+                        vector["message_b64"],
+                    )
                     signature = primitives.sign_bytes(
                         signer, from_base64url(vector["message_b64"])
                     )

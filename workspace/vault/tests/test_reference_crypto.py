@@ -73,9 +73,11 @@ class AssociatedDataTests(SimpleTestCase):
     USER = "0192f3a4-1111-7d8e-9f01-23456789abcd"
     VAULT = "0192f3a4-2222-7d8e-9f01-23456789abcd"
 
-    def test_the_catalogue_matches_the_norm_byte_for_byte(self):
-        """These strings are the contract: changing one silently breaks the
-        decryption of everything already written with it.
+    def test_the_catalogue_is_pinned_byte_for_byte(self):
+        """These strings ARE the contract - there is no document above them.
+        Changing one silently breaks the decryption of everything already
+        written with it, so they are pinned here as literals rather than
+        rebuilt from the catalogue's own helpers.
         """
         self.assertEqual(ad.unwrap_info(), b"v1|unwrap")
         self.assertEqual(
@@ -124,8 +126,21 @@ class FieldIdTests(SimpleTestCase):
         for field_id in ("username", "password", "totp", "uri"):
             self.assertEqual(ad.qualify_field_id(field_id), field_id)
 
-    def test_user_defined_identifiers_are_prefixed(self):
-        self.assertEqual(ad.qualify_field_id("recovery-code"), "custom:recovery-code")
+    def test_a_stored_custom_identifier_is_its_own_associated_data(self):
+        self.assertEqual(
+            ad.qualify_field_id("custom:recovery-code"), "custom:recovery-code"
+        )
+
+    def test_two_stored_identifiers_never_derive_the_same_associated_data(self):
+        """`x` and `custom:x` are both legal rows under unique(entry,
+        field_id), so a mapping that collapsed them onto one AD would let their
+        ciphertexts be swapped and still verify.
+        """
+        self.assertEqual(
+            ad.qualify_field_id("custom:recovery-code"), "custom:recovery-code"
+        )
+        with self.assertRaises(ValueError):
+            ad.qualify_field_id("recovery-code")
 
     def test_name_and_notes_can_never_be_produced_for_an_entry_field(self):
         """`name` and `notes` are the associated data of VaultEntry columns
@@ -133,13 +148,16 @@ class FieldIdTests(SimpleTestCase):
         ciphertext be swapped between the two and still verify - the exact
         attack the AD exists to close.
         """
-        for reserved in ("name", "notes"):
-            self.assertEqual(ad.qualify_field_id(reserved), f"custom:{reserved}")
+        for column_id in ad.ENTRY_COLUMN_FIELD_IDS:
+            with self.assertRaises(ValueError):
+                ad.qualify_field_id(column_id)
 
-    def test_an_already_prefixed_identifier_is_not_prefixed_twice(self):
-        self.assertEqual(
-            ad.qualify_field_id("custom:recovery-code"), "custom:recovery-code"
-        )
+    def test_a_malformed_custom_label_is_refused(self):
+        # A label carrying its own colon reopens the ambiguity the prefix
+        # closes; an empty one names nothing.
+        for field_id in ("custom:", "custom:a:b"):
+            with self.assertRaises(ValueError):
+                ad.qualify_field_id(field_id)
 
 
 class Argon2Tests(SimpleTestCase):
@@ -154,6 +172,25 @@ class Argon2Tests(SimpleTestCase):
         second = primitives.derive_amk("Tr0ub4dor&3", bytes([1]) + bytes(31), salt)
         self.assertNotEqual(first, second)
         self.assertEqual(len(first), 32)
+
+    def test_a_secret_key_or_salt_of_the_wrong_length_is_refused(self):
+        """Argon2 would accept either and derive a different AMK, which only
+        surfaces later as a GCM tag error the UI reports as a wrong password.
+        """
+        secret_key = bytes(range(32))
+        salt = bytes(range(32))
+        for bad_secret, bad_salt in (
+            (secret_key[:31], salt),
+            (secret_key + b"\x00", salt),
+            (secret_key, salt[:16]),
+        ):
+            with self.assertRaises(ValueError):
+                primitives.derive_amk("password", bad_secret, bad_salt)
+
+    def test_the_refusal_never_names_the_secret_key(self):
+        with self.assertRaises(ValueError) as caught:
+            primitives.derive_amk("password", b"short", bytes(32))
+        self.assertNotIn("short", str(caught.exception))
 
     def test_the_password_is_nfc_normalised(self):
         """ "café" precomposed and "café" decomposed must derive the same AMK,
@@ -280,6 +317,37 @@ class SignatureTests(SimpleTestCase):
                 bytes(signature),
                 expected_type="entry_metadata",
             )
+
+
+class PublicKeyEncodingTests(SimpleTestCase):
+    def test_the_stored_form_carries_its_algorithm_prefix(self):
+        public = primitives.generate_kex_keypair().public_key()
+        stored = primitives.encode_public_key(public)
+        self.assertEqual(stored[0], primitives.PUBKEY_ALG_X25519)
+        self.assertEqual(len(stored), 1 + 32)
+        self.assertEqual(
+            primitives.decode_public_key(stored), primitives.public_bytes(public)
+        )
+
+    def test_a_relabelled_key_is_refused_rather_than_read_as_x25519(self):
+        """The prefix is what the attestation binds. A verifier reaching a
+        label it does not implement must stop, not fall back to the one
+        algorithm it happens to know.
+        """
+        stored = primitives.encode_public_key(
+            primitives.generate_kex_keypair().public_key()
+        )
+        with self.assertRaises(ValueError):
+            primitives.decode_public_key(bytes([0x02]) + stored[1:])
+
+    def test_a_truncated_key_is_refused(self):
+        stored = primitives.encode_public_key(
+            primitives.generate_kex_keypair().public_key()
+        )
+        with self.assertRaises(ValueError):
+            primitives.decode_public_key(stored[:-1])
+        with self.assertRaises(ValueError):
+            primitives.decode_public_key(b"")
 
 
 class HpkeTests(SimpleTestCase):

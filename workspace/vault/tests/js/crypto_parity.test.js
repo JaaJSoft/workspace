@@ -199,6 +199,15 @@ test('ed25519 vectors replay exactly', async () => {
     // A vector carries either a CBOR payload or a raw message. The account key
     // attestation is the raw kind: routing it through sign() would wrap it in a
     // CBOR byte string and produce a signature no verifier accepts.
+    if (vector.message_b64) {
+      // Rebuilt, not replayed: a divergence on what goes into the attestation
+      // has to fail here.
+      assert.equal(
+        b64(V.AD.kexPubPayload(vector.user_uuid, vector.kex_public_b64)),
+        vector.message_b64,
+        vector.id
+      );
+    }
     const signature = vector.message_b64
       ? await V.signBytes(V.fromBase64Url(vector.sk_b64), V.fromBase64Url(vector.message_b64))
       : await V.sign(V.fromBase64Url(vector.sk_b64), vector.payload);
@@ -320,4 +329,105 @@ test('a ciphertext truncated inside its iv is refused', () => {
     iv: new Uint8Array(12), ciphertext: new Uint8Array(4),
   });
   assert.throws(() => V.decodeCiphertext(raw.slice(0, 8)), /shorter than its declared iv/);
+});
+
+test('a stored public key round-trips through its algorithm prefix', () => {
+  for (const vector of VECTORS.hpke) {
+    const raw = V.fromBase64Url(vector.recipient_pk_b64);
+    const stored = V.encodePublicKey(raw);
+    assert.equal(stored[0], V.PUBKEY_ALG_X25519, vector.id);
+    assert.equal(stored.length, 1 + raw.length, vector.id);
+    assert.equal(b64(V.decodePublicKey(stored)), vector.recipient_pk_b64, vector.id);
+  }
+});
+
+test('the attestation vector publishes the prefixed key, not the bare one', () => {
+  // The whole point of signing the stored form: strip the prefix here and the
+  // signature would still verify over a relabelled key.
+  const vector = VECTORS.ed25519.find((v) => v.kex_public_b64);
+  const stored = V.fromBase64Url(vector.kex_public_b64);
+  assert.equal(stored[0], V.PUBKEY_ALG_X25519);
+  assert.equal(stored.length, 33);
+});
+
+test('a relabelled or truncated public key is refused', () => {
+  const stored = V.encodePublicKey(new Uint8Array(32));
+  const relabelled = stored.slice();
+  relabelled[0] = 0x02;
+  // A verifier reaching a label it does not implement must stop, not fall back
+  // to the one algorithm it happens to know.
+  assert.throws(() => V.decodePublicKey(relabelled), /unsupported public key algorithm/);
+  assert.throws(() => V.decodePublicKey(stored.slice(0, -1)), /wants 32/);
+  assert.throws(() => V.decodePublicKey(new Uint8Array(0)), /empty/);
+  assert.throws(() => V.encodePublicKey(new Uint8Array(31)), /wants 32/);
+});
+
+test('a reserved field id is its own associated data', () => {
+  for (const fieldId of V.RESERVED_FIELD_IDS) {
+    assert.equal(V.qualifyFieldId(fieldId), fieldId);
+  }
+});
+
+test('two stored field ids never derive the same associated data', () => {
+  // `x` and `custom:x` are both legal rows under unique(entry, field_id), so a
+  // mapping that collapsed them onto one AD would let their ciphertexts be
+  // swapped and still verify.
+  assert.equal(V.qualifyFieldId('custom:recovery-code'), 'custom:recovery-code');
+  assert.throws(() => V.qualifyFieldId('recovery-code'), /neither reserved nor/);
+});
+
+test('name and notes can never be produced for an entry field', () => {
+  // They are the associated data of VaultEntry columns living in another
+  // table, which escape unique(entry, field_id) entirely.
+  for (const columnId of V.ENTRY_COLUMN_FIELD_IDS) {
+    assert.throws(() => V.qualifyFieldId(columnId), /neither reserved nor/, columnId);
+  }
+});
+
+test('a malformed custom label is refused', () => {
+  for (const fieldId of ['custom:', 'custom:a:b']) {
+    assert.throws(() => V.qualifyFieldId(fieldId), /malformed custom label/, fieldId);
+  }
+});
+
+test('seal draws a fresh iv when none is pinned', async () => {
+  const key = new Uint8Array(32);
+  const options = { keyVersion: 1, kdfId: V.KDF_HKDF_SHA256 };
+  const first = V.decodeCiphertext(
+    await V.seal(key, new Uint8Array(4), new Uint8Array(0), options)
+  );
+  const second = V.decodeCiphertext(
+    await V.seal(key, new Uint8Array(4), new Uint8Array(0), options)
+  );
+  assert.equal(first.iv.length, 12);
+  assert.notEqual(b64(first.iv), b64(second.iv));
+  // Same key, same plaintext, same associated data - and still two different
+  // ciphertexts, because the iv is not the caller's to forget.
+  assert.notEqual(b64(first.ciphertext), b64(second.ciphertext));
+});
+
+test('a secret_key or salt of the wrong length is refused', async () => {
+  // Argon2 would accept either and derive a different AMK, which only surfaces
+  // later as a GCM tag error the UI reports as a wrong password.
+  const secretKey = new Uint8Array(32);
+  const salt = new Uint8Array(32);
+  for (const [badSecret, badSalt] of [
+    [secretKey.slice(0, 31), salt],
+    [new Uint8Array(33), salt],
+    [secretKey, salt.slice(0, 16)],
+  ]) {
+    await assert.rejects(
+      () => V.deriveAmk({ password: 'password', secretKey: badSecret, salt: badSalt }),
+      /expected 32/
+    );
+  }
+});
+
+test('the refusal reports a length, never the secret_key itself', async () => {
+  await assert.rejects(
+    () => V.deriveAmk({
+      password: 'password', secretKey: new TextEncoder().encode('short'), salt: new Uint8Array(32),
+    }),
+    (error) => !error.message.includes('short') && /expected 32/.test(error.message)
+  );
 });

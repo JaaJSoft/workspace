@@ -14,8 +14,11 @@ RESERVED_FIELD_IDS = frozenset({"username", "password", "totp", "uri"})
 # Carried by VaultEntry.encrypted_name / encrypted_notes, which live in another
 # table and so escape unique(entry, field_id). An EntryField deriving the same
 # associated data would let a ciphertext be swapped between the two and still
-# verify: the database refuses the raw values and this module prefixes them.
+# verify: the database refuses the raw values and this module refuses to
+# qualify them.
 ENTRY_COLUMN_FIELD_IDS = frozenset({"name", "notes"})
+
+CUSTOM_PREFIX = "custom:"
 
 
 def _uuid(value: str) -> str:
@@ -51,9 +54,20 @@ def vault_key_info(vault_uuid: str, recipient_uuid: str) -> bytes:
 
 
 def qualify_field_id(field_id: str) -> str:
-    """Return the field_name that goes into the AD for *field_id*."""
-    if field_id.startswith("custom:"):
-        return field_id
+    """Return the field_name that goes into the AD for a stored *field_id*.
+
+    Identity, never a transformation: `x` and `custom:x` are both legal rows
+    under unique(entry, field_id), so a mapping that collapsed them onto one AD
+    would let their ciphertexts be swapped and still verify. Producing a stored
+    identifier from a user's label is the write path's job.
+    """
     if field_id in RESERVED_FIELD_IDS:
         return field_id
-    return f"custom:{field_id}"
+    if not field_id.startswith(CUSTOM_PREFIX):
+        raise ValueError(
+            f"field id {field_id!r} is neither reserved nor {CUSTOM_PREFIX}-prefixed"
+        )
+    label = field_id[len(CUSTOM_PREFIX) :]
+    if not label or ":" in label:
+        raise ValueError(f"field id {field_id!r} carries a malformed custom label")
+    return field_id

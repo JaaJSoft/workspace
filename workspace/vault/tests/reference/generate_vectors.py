@@ -49,7 +49,8 @@ def build_vectors() -> dict:
         recipient.public_key(), hpke_info, vault_key, sender_private=sender
     )
 
-    kex_pub = primitives.public_bytes(recipient.public_key())
+    # The stored form, prefix included: it is what the attestation signs.
+    kex_pub_stored = primitives.encode_public_key(recipient.public_key())
 
     signed_payload = {
         "v": 1,
@@ -205,12 +206,17 @@ def build_vectors() -> dict:
                 "id": "account-kex-pub-attestation",
                 "sk_b64": to_base64url(SIG_SK),
                 "pk_b64": to_base64url(primitives.public_bytes(signer.public_key())),
+                # Both halves are published so each language rebuilds the
+                # payload instead of replaying an opaque string.
+                "user_uuid": USER_UUID,
+                "kex_public_b64": to_base64url(kex_pub_stored),
                 "message_b64": to_base64url(
-                    ad.kex_pub_payload(USER_UUID, to_base64url(kex_pub))
+                    ad.kex_pub_payload(USER_UUID, to_base64url(kex_pub_stored))
                 ),
                 "expected_sig_b64": to_base64url(
                     primitives.sign_bytes(
-                        signer, ad.kex_pub_payload(USER_UUID, to_base64url(kex_pub))
+                        signer,
+                        ad.kex_pub_payload(USER_UUID, to_base64url(kex_pub_stored)),
                     )
                 ),
             },

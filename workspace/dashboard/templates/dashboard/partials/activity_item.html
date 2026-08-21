@@ -24,7 +24,7 @@
         &middot;
       {% endif %}
       {% if event.actor %}
-        {% include "ui/partials/user_identity.html" with user=event.actor %} &middot;
+        <user-avatar user-id="{{ event.actor.id }}" username="{{ event.actor.username }}" size="2xs" card name display-name="{{ event.actor.get_full_name|default:event.actor.username }}" href="/users/profile/{{ event.actor.username }}"></user-avatar> &middot;
       {% endif %}
       {{ event.time_ago }}
     </div>

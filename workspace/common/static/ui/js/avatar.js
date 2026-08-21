@@ -222,33 +222,3 @@ window._userCardCancelHide = function(wrapper) {
   }
 };
 
-
-/* ── Alpine component: attach a user card to an arbitrary element ── */
-
-/**
- * Alpine.js component for the user card popover.
- *
- * <user-avatar card> wires its own listeners and does not need this. Use it
- * when the hover zone must be WIDER than the avatar — user_identity.html puts
- * it on the avatar+name row so hovering the name shows the card too.
- *
- * @param {number|string} userId
- * @returns {object} Alpine data object
- */
-window.userCard = function (userId) {
-  return {
-    show() {
-      window._userCardShow(this.$el, userId);
-    },
-    scheduleHide() {
-      window._userCardScheduleHide(this.$el);
-    },
-    destroy() {
-      // Clean up the imperative popover when Alpine removes this component
-      const popover = this.$el._userCardPopover;
-      if (popover && popover.parentNode) {
-        popover.parentNode.removeChild(popover);
-      }
-    },
-  };
-};

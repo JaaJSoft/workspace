@@ -1,22 +1,35 @@
 /**
  * <user-avatar> — a user's picture, with an initials fallback, an optional
- * presence ring and dot, and an optional hover card.
+ * presence ring and dot, an optional name beside it, and an optional hover
+ * card.
  *
  * One implementation for both rendering paths. Django templates write the
  * element directly; Alpine binds the same attributes:
  *
  *   <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="sm" presence></user-avatar>
- *   <user-avatar :user-id="member.id" :username="member.username" size="sm" card></user-avatar>
+ *   <user-avatar :user-id="member.id" :username="member.username" size="sm" card name></user-avatar>
  *
  * Attributes:
- *   - user-id    numeric id. Drives the image URL, the fallback colour and
- *                the presence lookup. Absent for an anonymous placeholder.
- *   - username   alt text, and the source of the initial.
- *   - size       a key of USER_AVATAR_SIZES (default "md").
- *   - presence   opt in to the status ring and dot.
- *   - card       show the user card popover on hover.
- *   - ring       decorative ring, only drawn when there is no user-id
- *                (the anonymous navbar avatar).
+ *   - user-id       numeric id. Drives the image URL, the fallback colour and
+ *                   the presence lookup. Absent for an anonymous placeholder.
+ *   - username      alt text, and the source of the initial.
+ *   - size          a key of USER_AVATAR_SIZES (default "md").
+ *   - presence      opt in to the status ring and dot.
+ *   - card          show the user card popover on hover.
+ *   - name          render the name beside the picture.
+ *   - display-name  what `name` writes, when it is not the username
+ *                   (a full name, a chat display name).
+ *   - href          turn the name into a link to that URL.
+ *   - name-class    extra classes for the name node (its size and weight are
+ *                   the caller's call; the name inherits the surrounding text
+ *                   size by default).
+ *   - ring          decorative ring, only drawn when there is no user-id
+ *                   (the anonymous navbar avatar).
+ *
+ * `name` is what makes the hover card cover the name too: `card` wires the
+ * listeners on the host, so a name rendered as a sibling node sits outside the
+ * hover target. Never write an avatar next to a bare name span - that is the
+ * shape this attribute exists to delete.
  *
  * Geometry invariant — the reason the image and the initials cannot drift
  * apart: the initials are ALWAYS rendered, and the image sits on top of them,
@@ -28,7 +41,9 @@
  * The size lives on the HOST element, not on an inner wrapper, so a flex or
  * grid parent measures the avatar itself. That is what keeps the element
  * aligned inside buttons, dropdown rows and overlapping stacks without the
- * caller wrapping it in a sizing div.
+ * caller wrapping it in a sizing div. With `name` the host becomes the row
+ * instead, and the box moves to an inner wrapper - the picture keeps its
+ * geometry, but the element now measures picture + gap + name.
  *
  * base.html loads this in <head> without `defer`, so the element upgrades
  * while the document parses: server-rendered avatars never flash unstyled.
@@ -68,22 +83,41 @@ window.userAvatarColorClass = function (userId) {
 // in any layout; `text` sizes the fallback initial. Listed as literal strings
 // so Tailwind's scanner ships them (the config globs static/**/*.js).
 window.USER_AVATAR_SIZES = {
-  '2xs': { box: 'w-5 h-5', text: 'text-[10px]' },
-  xs: { box: 'w-6 h-6', text: 'text-xs' },
-  sm: { box: 'w-8 h-8', text: 'text-xs' },
-  md: { box: 'w-10 h-10', text: 'text-sm' },
-  lg: { box: 'w-16 h-16', text: 'text-xl' },
-  xl: { box: 'w-24 h-24', text: 'text-2xl' },
+  '2xs': { box: 'w-5 h-5', text: 'text-[10px]', gap: 'gap-1.5' },
+  xs: { box: 'w-6 h-6', text: 'text-xs', gap: 'gap-1.5' },
+  sm: { box: 'w-8 h-8', text: 'text-xs', gap: 'gap-2' },
+  md: { box: 'w-10 h-10', text: 'text-sm', gap: 'gap-2.5' },
+  lg: { box: 'w-16 h-16', text: 'text-xl', gap: 'gap-3' },
+  xl: { box: 'w-24 h-24', text: 'text-2xl', gap: 'gap-3' },
 };
 
 // Host geometry, split out so it can be unit-tested without a DOM and applied
 // with add/remove so a caller's own classes survive a re-render.
-window.userAvatarHostClasses = function userAvatarHostClasses(size) {
+window.userAvatarHostClasses = function userAvatarHostClasses(size, withName) {
   const step = window.USER_AVATAR_SIZES[size] || window.USER_AVATAR_SIZES.md;
   // `shrink-0` because an avatar in a flex row must never be squashed by a
   // long name next to it; `align-middle` because the host is inline-flex and
   // would otherwise sit on the text baseline inside a line box.
-  return ['relative', 'inline-flex', 'shrink-0', 'align-middle', ...step.box.split(' ')];
+  if (!withName) {
+    return ['relative', 'inline-flex', 'shrink-0', 'align-middle', ...step.box.split(' ')];
+  }
+  // Named: the host is the row, so it must be allowed to shrink (`min-w-0`)
+  // for the name's `truncate` to have anything to truncate against. The box
+  // classes move to the inner wrapper returned by userAvatarBoxClasses.
+  return ['inline-flex', 'items-center', 'align-middle', 'min-w-0', step.gap];
+};
+
+/**
+ * Classes for the picture itself: the host in the plain shape, the inner
+ * wrapper in the named one. `relative` is what the presence dot and the
+ * image are absolutely positioned against, so it travels with the box.
+ *
+ * @param {string} size
+ * @returns {string[]}
+ */
+window.userAvatarBoxClasses = function userAvatarBoxClasses(size) {
+  const step = window.USER_AVATAR_SIZES[size] || window.USER_AVATAR_SIZES.md;
+  return ['relative', 'inline-flex', 'shrink-0', ...step.box.split(' ')];
 };
 
 /**
@@ -94,13 +128,20 @@ window.userAvatarHostClasses = function userAvatarHostClasses(size) {
  *
  * @param {number|string} userId
  * @param {string} username
- * @param {{size?: string, presence?: boolean, card?: boolean}} [options]
+ * @param {{size?: string, presence?: boolean, card?: boolean, name?: boolean,
+ *          displayName?: string, href?: string, nameClass?: string}} [options]
  * @returns {string}
  */
 window.userAvatarTag = function userAvatarTag(userId, username, options) {
   const opts = options || {};
   const size = opts.size || 'md';
-  const flags = (opts.presence ? ' presence' : '') + (opts.card ? ' card' : '');
+  const flags =
+    (opts.presence ? ' presence' : '') +
+    (opts.card ? ' card' : '') +
+    (opts.name ? ' name' : '') +
+    (opts.displayName ? ` display-name="${escapeHtml(opts.displayName)}"` : '') +
+    (opts.href ? ` href="${escapeHtml(opts.href)}"` : '') +
+    (opts.nameClass ? ` name-class="${escapeHtml(opts.nameClass)}"` : '');
   return (
     `<user-avatar user-id="${escapeHtml(userId)}" username="${escapeHtml(username)}"` +
     ` size="${escapeHtml(size)}"${flags}></user-avatar>`
@@ -119,7 +160,10 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
 
   class UserAvatar extends HTMLElement {
     static get observedAttributes() {
-      return ['user-id', 'username', 'size', 'presence', 'card', 'ring'];
+      return [
+        'user-id', 'username', 'size', 'presence', 'card', 'ring',
+        'name', 'display-name', 'href', 'name-class',
+      ];
     }
 
     connectedCallback() {
@@ -172,9 +216,10 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
       const username = this.getAttribute('username') || '';
       const initial = (username || '?').trim().charAt(0).toUpperCase() || '?';
       const withPresence = this.hasAttribute('presence') && userId !== null;
+      const withName = this.hasAttribute('name');
 
       this.classList.remove(...this._appliedClasses);
-      this._appliedClasses = window.userAvatarHostClasses(size);
+      this._appliedClasses = window.userAvatarHostClasses(size, withName);
       this.classList.add(...this._appliedClasses);
 
       // The face and dot below are rebuilt from scratch, so the classes the
@@ -227,19 +272,48 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
         face.appendChild(img);
       }
 
-      const children = [face];
+      const boxChildren = [face];
 
       if (withPresence) {
         const dot = document.createElement('span');
         dot.className =
           'absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full ring-2 ring-base-100 bg-base-300';
         dot.setAttribute('data-presence-dot', '');
-        children.push(dot);
+        boxChildren.push(dot);
       }
 
       this._face = face;
-      this.replaceChildren(...children);
+      if (withName) {
+        const box = document.createElement('span');
+        box.className = window.userAvatarBoxClasses(size).join(' ');
+        box.replaceChildren(...boxChildren);
+        this.replaceChildren(box, this._buildName(username));
+      } else {
+        this.replaceChildren(...boxChildren);
+      }
       this.applyPresence(presenceStore());
+    }
+
+    /**
+     * The name node: a link when `href` is set, a span otherwise.
+     *
+     * No text size or weight of its own - it inherits the row it lands in, so
+     * the same element reads right in a 12px activity feed and in a 14px
+     * member list. Callers that need more pass `name-class`.
+     */
+    _buildName(username) {
+      const href = this.getAttribute('href');
+      const el = document.createElement(href ? 'a' : 'span');
+      el.className = 'truncate';
+      el.setAttribute('data-user-name', '');
+      if (href) {
+        el.href = href;
+        el.classList.add('hover:underline');
+      }
+      const extra = (this.getAttribute('name-class') || '').trim();
+      if (extra) el.classList.add(...extra.split(/\s+/));
+      el.textContent = this.getAttribute('display-name') || username;
+      return el;
     }
 
     /** Patch the ring and dot colours from the presence store. */

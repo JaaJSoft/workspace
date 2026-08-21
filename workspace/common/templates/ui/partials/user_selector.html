@@ -51,9 +51,9 @@
   >
     <ul class="menu menu-sm p-1">
       <template x-for="(user, idx) in results" :key="user.id">
-        {# w-full/min-w-0 down the chain: every flex level defaults to
-           min-width:auto, which lets long usernames push the row wider than
-           the dropdown instead of truncating. #}
+        {% comment %}w-full/min-w-0 down the chain: every flex level defaults
+          to min-width:auto, which lets long usernames push the row wider
+        than the dropdown instead of truncating.{% endcomment %}
         <li class="w-full min-w-0">
           <button
             type="button"

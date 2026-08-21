@@ -193,14 +193,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The smoke-tested image is already loaded in the daemon (with the meta
+      # labels baked in), so pushing is a retag of `workspace:ci` - no second
+      # buildx build re-importing the GHA cache just to export the same layers.
       - name: Push image
         if: env.SHOULD_PUSH == 'true'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            APT_REFRESH=${{ steps.apt_refresh.outputs.date }}
-          cache-from: type=gha
+        run: |
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag workspace:ci "$tag"
+            docker push "$tag"
+          done <<< "${{ steps.meta.outputs.tags }}"

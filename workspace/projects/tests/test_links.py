@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import TestCase
 
 from workspace.projects.models import TaskEvent, TaskLink, TaskStatus
@@ -159,3 +161,44 @@ class AnnotateBlockedTests(ProjectTestMixin, TestCase):
         create_link(self.blocker, self.blocked, "relates_to")
         create_link(self.blocker, self.blocked, "duplicates")
         self.assertFalse(self._is_blocked(self.blocked))
+
+
+class CreateLinkConcurrencyTests(ProjectTestMixin, TestCase):
+    """The duplicate pre-check can be raced past; the constraint and the
+    transaction are the backstop."""
+
+    def setUp(self):
+        super().setUp()
+        self.task_a = create_task(self.project, self.admin, title="A")
+        self.task_b = create_task(self.project, self.admin, title="B")
+
+    def test_constraint_race_maps_to_the_duplicate_rule_error(self):
+        # Simulate the lost race: the pre-check misses the concurrent row,
+        # so the unique constraint is what fires.
+        create_link(self.task_a, self.task_b, "blocks")
+        with patch(
+            "workspace.projects.services.links._same_type_link_exists",
+            return_value=False,
+        ):
+            with self.assertRaises(ProjectRuleError):
+                create_link(self.task_a, self.task_b, "blocks")
+        self.assertEqual(TaskLink.objects.count(), 1)
+
+    def test_failed_event_write_rolls_the_link_back(self):
+        with patch(
+            "workspace.projects.services.links.record_task_event",
+            side_effect=RuntimeError("boom"),
+        ):
+            with self.assertRaises(RuntimeError):
+                create_link(self.task_a, self.task_b, "blocks")
+        self.assertFalse(TaskLink.objects.exists())
+
+    def test_failed_event_write_keeps_the_link_on_delete(self):
+        link = create_link(self.task_a, self.task_b, "blocks")
+        with patch(
+            "workspace.projects.services.links.record_task_event",
+            side_effect=RuntimeError("boom"),
+        ):
+            with self.assertRaises(RuntimeError):
+                delete_link(link)
+        self.assertTrue(TaskLink.objects.exists())

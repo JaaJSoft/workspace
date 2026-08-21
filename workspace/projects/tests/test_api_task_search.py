@@ -72,3 +72,7 @@ class TaskSearchApiTests(ProjectTestMixin, APITestCase):
         response = self.client.get(URL, {"q": self.task.reference})
         uuids = [item["uuid"] for item in response.data]
         self.assertEqual(uuids.count(str(self.task.uuid)), 1)
+
+    def test_anonymous_request_is_rejected(self):
+        response = self.client.get(URL, {"q": "login"})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -23,7 +23,9 @@ MAX_RESULTS = 10
         OpenApiParameter(
             name="q",
             type=str,
-            required=True,
+            # Not required: a missing or blank query yields an empty 200,
+            # so the picker can call it unconditionally.
+            required=False,
             description="Reference (WR-42, #42, 42) or free text.",
         ),
         OpenApiParameter(
@@ -36,6 +38,10 @@ MAX_RESULTS = 10
         200: OpenApiResponse(
             response=OpenApiTypes.OBJECT,
             description="Up to 10 matches, best first.",
+        ),
+        400: OpenApiResponse(
+            response=OpenApiTypes.OBJECT,
+            description="Malformed exclude UUID.",
         ),
     },
 )
@@ -71,7 +77,7 @@ class TaskSearchView(APIView):
                 results.append(
                     {
                         "uuid": str(task.uuid),
-                        "reference": f"{task.project.key}-{task.number}",
+                        "reference": task.reference,
                         "title": task.title,
                         "project_name": task.project.name,
                     }

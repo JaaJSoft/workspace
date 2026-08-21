@@ -1,8 +1,9 @@
 """Task-to-task links: creation rules, per-viewer serialization, blocked cue."""
 
+from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Q
 
-from ..models import TaskEvent, TaskLink, TaskStatus
+from ..models import Task, TaskEvent, TaskLink, TaskStatus
 from ..queries import user_project_ids
 from .events import record_task_event
 from .members import ProjectRuleError
@@ -26,35 +27,66 @@ LINK_LABELS = {
 }
 
 
+_DUPLICATE_DETAIL = "These tasks are already linked with this type."
+
+
+def _same_type_link_exists(source, target, canonical):
+    return TaskLink.objects.filter(
+        Q(source=source, target=target) | Q(source=target, target=source),
+        type=canonical,
+    ).exists()
+
+
 def create_link(anchor, other, relation, *, actor=None):
     """Link *anchor* to *other* per *relation* (a RELATIONS key).
 
     Raises ProjectRuleError on a self-link, an existing same-type link in
     either direction, or a ``blocks`` link that would close a cycle. Both
     tasks must carry their project in cache (the events snapshot references).
+
+    Runs in a transaction that locks both task rows first, so concurrent
+    creates between the same pair - same direction or reversed, which no DB
+    constraint covers - serialize on the duplicate and cycle checks instead
+    of slipping past them together.
     """
     canonical, is_reversed = RELATIONS[relation]
     source, target = (other, anchor) if is_reversed else (anchor, other)
     if source.pk == target.pk:
         raise ProjectRuleError("A task cannot be linked to itself.")
-    if TaskLink.objects.filter(
-        Q(source=source, target=target) | Q(source=target, target=source),
-        type=canonical,
-    ).exists():
-        raise ProjectRuleError("These tasks are already linked with this type.")
-    if canonical == TaskLink.Type.BLOCKS and _reaches_through_blocks(target, source):
-        raise ProjectRuleError("This link would make a task block itself.")
-    link = TaskLink.objects.create(
-        source=source, target=target, type=canonical, created_by=actor
-    )
-    _record_link_events(link, TaskEvent.Type.LINKED, actor)
+    with transaction.atomic():
+        # Deterministic lock order (by pk): two opposite-direction creates
+        # would otherwise lock the rows in opposite order and deadlock.
+        list(
+            Task.objects.select_for_update()
+            .filter(pk__in=(source.pk, target.pk))
+            .order_by("pk")
+        )
+        if _same_type_link_exists(source, target, canonical):
+            raise ProjectRuleError(_DUPLICATE_DETAIL)
+        if canonical == TaskLink.Type.BLOCKS and _reaches_through_blocks(
+            target, source
+        ):
+            raise ProjectRuleError("This link would make a task block itself.")
+        try:
+            link = TaskLink.objects.create(
+                source=source, target=target, type=canonical, created_by=actor
+            )
+        except IntegrityError:
+            # Same-direction race on backends where the row locks don't
+            # serialize the pre-check; the unique constraint is the backstop.
+            raise ProjectRuleError(_DUPLICATE_DETAIL) from None
+        _record_link_events(link, TaskEvent.Type.LINKED, actor)
     return link
 
 
 def delete_link(link, *, actor=None):
-    """Remove *link*, leaving an UNLINKED event on both ends."""
-    _record_link_events(link, TaskEvent.Type.UNLINKED, actor)
-    link.delete()
+    """Remove *link*, leaving an UNLINKED event on both ends.
+
+    Atomic: the events and the delete commit or roll back together.
+    """
+    with transaction.atomic():
+        _record_link_events(link, TaskEvent.Type.UNLINKED, actor)
+        link.delete()
 
 
 def _reaches_through_blocks(start, wanted):
@@ -131,7 +163,8 @@ def links_for_task(user, task):
                 "label": forward if outward else backward,
                 "task": {
                     "uuid": str(other.uuid),
-                    "reference": f"{other.project.key}-{other.number}",
+                    # project is select_related above, so .reference is free.
+                    "reference": other.reference,
                     "title": other.title,
                     "project": str(other.project_id),
                     "is_done": other.status.category == TaskStatus.Category.DONE,

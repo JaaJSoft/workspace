@@ -1141,14 +1141,16 @@ function taskPanel() {
 
     async searchLinkTasks() {
       const query = this.linkQuery.trim();
+      // Race protection (_loadGeneration precedent): a slow response must
+      // not overwrite the results of a newer query. Claimed before the
+      // empty-query return so clearing the input also invalidates an
+      // in-flight search - its late response must not reopen the dropdown.
+      const generation = ++this._linkSearchGeneration;
       if (!query) {
         this.linkDropdown = false;
         this.linkResults = [];
         return;
       }
-      // Race protection (_loadGeneration precedent): a slow response must
-      // not overwrite the results of a newer query.
-      const generation = ++this._linkSearchGeneration;
       try {
         const resp = await fetch(
           this.data.link_search_url +

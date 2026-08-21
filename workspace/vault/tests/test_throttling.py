@@ -119,6 +119,11 @@ class IpRateThrottleTests(TestCase):
 
 
 class ScopeTests(TestCase):
+    def test_the_proxy_count_is_unset_by_default(self):
+        """Fail closed: a default of anything but None would mean believing a
+        caller-supplied header on every deployment that never declared one."""
+        self.assertIsNone(settings.REST_FRAMEWORK["NUM_PROXIES"])
+
     def test_every_declared_scope_has_a_configured_rate(self):
         """A throttle whose scope carries no rate is inert, and DRF says
         nothing about it - the endpoint simply stops being limited."""

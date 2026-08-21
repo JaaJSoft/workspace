@@ -129,6 +129,8 @@ window.storageAnalysis = function storageAnalysis() {
         message: `"${name}" will be moved to the trash.`,
         okLabel: 'Move to trash',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!confirmed) return;
       this.busy = true;
@@ -152,6 +154,8 @@ window.storageAnalysis = function storageAnalysis() {
         message: 'This will permanently delete all items in trash and cannot be undone.',
         okLabel: 'Empty trash',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!confirmed) return;
       this.busy = true;

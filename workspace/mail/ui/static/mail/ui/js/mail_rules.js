@@ -170,6 +170,8 @@ window.mailRulesMixin = function mailRulesMixin() {
         message: `Apply rule "${this.rulesApplying.name}" to the selected folder now? Actions like move and delete cannot be undone.`,
         okLabel: 'Apply',
         okClass: 'btn-warning',
+        icon: 'play',
+        iconClass: 'bg-warning/10 text-warning',
       });
       if (!ok) return;
       // Drop any stale dry-run preview the user may have requested earlier so
@@ -195,6 +197,8 @@ window.mailRulesMixin = function mailRulesMixin() {
         message: `Delete rule "${rule.name}"? This cannot be undone.`,
         okLabel: 'Delete',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
       const resp = await fetch(`/api/v1/mail/rules/${rule.uuid}`, {

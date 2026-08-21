@@ -45,14 +45,10 @@
         ></textarea>
       </label>
       <div class="grid grid-cols-2 gap-2 mt-2">
-        <label class="form-control">
+        <div class="form-control">
           <div class="label"><span class="label-text">Status</span></div>
-          <select class="select select-bordered select-sm" x-model="form.status">
-            <template x-for="s in statuses" :key="s.uuid">
-              <option :value="s.uuid" x-text="s.name" :selected="s.uuid === form.status"></option>
-            </template>
-          </select>
-        </label>
+          {% include "projects/ui/partials/_status_selector.html" with model_expr="form.status" %}
+        </div>
         <div class="form-control">
           <div class="label"><span class="label-text">Priority</span></div>
           {% include "projects/ui/partials/_priority_selector.html" with model_expr="form.priority" %}

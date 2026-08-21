@@ -688,16 +688,17 @@ class AllTasksViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(response, 'draggable="true"')
 
     def test_status_filter_renders_only_on_all_tasks_view(self):
+        # "All statuses" is the filter-only row of the status selector: the
+        # modal and panel variants render without it, so it marks the filter.
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/tasks")
-        self.assertContains(response, 'aria-label="Filter by status"')
         self.assertContains(response, "All statuses")
         for status in self.project.statuses.all():
-            self.assertContains(response, f'<option value="{status.uuid}">')
+            self.assertContains(response, f"filters.status = '{status.uuid}'")
         response = self.client.get(f"/projects/{self.project.uuid}/backlog")
-        self.assertNotContains(response, 'aria-label="Filter by status"')
+        self.assertNotContains(response, "All statuses")
         response = self.client.get(f"/projects/{self.project.uuid}/board")
-        self.assertNotContains(response, 'aria-label="Filter by status"')
+        self.assertNotContains(response, "All statuses")
 
 
 class BoardLabelSelectorTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):

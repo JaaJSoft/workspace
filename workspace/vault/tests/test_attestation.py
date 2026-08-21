@@ -37,21 +37,19 @@ def build_attestation(account_uuid=ACCOUNT_UUID):
 
 
 class VerifyKexPubAttestationTests(SimpleTestCase):
+    """Verification signals by raising and returns nothing, so the tests that
+    expect acceptance simply call it: an unraised exception is the assertion.
+    Only the refusals need one."""
+
     def test_accepts_a_well_formed_attestation(self):
         kex_pub, sig_pub, signature = build_attestation()
-        self.assertIsNone(
-            verify_kex_pub_attestation(ACCOUNT_UUID, kex_pub, sig_pub, signature)
-        )
+        verify_kex_pub_attestation(ACCOUNT_UUID, kex_pub, sig_pub, signature)
 
     def test_accepts_an_uppercase_account_uuid(self):
         """The catalogue lowercases the UUID before signing, so a caller that
         hands over the canonical uppercase spelling must still verify."""
         kex_pub, sig_pub, signature = build_attestation()
-        self.assertIsNone(
-            verify_kex_pub_attestation(
-                ACCOUNT_UUID.upper(), kex_pub, sig_pub, signature
-            )
-        )
+        verify_kex_pub_attestation(ACCOUNT_UUID.upper(), kex_pub, sig_pub, signature)
 
     def test_refuses_an_attestation_bound_to_another_account(self):
         kex_pub, sig_pub, signature = build_attestation()
@@ -195,13 +193,11 @@ class FrozenVectorTests(SimpleTestCase):
 
     def test_accepts_the_frozen_attestation(self):
         vector = self._attestation_vector()
-        self.assertIsNone(
-            verify_kex_pub_attestation(
-                vector["account_uuid"],
-                vector["kex_public_b64"],
-                self._sig_public(vector),
-                vector["expected_sig_b64"],
-            )
+        verify_kex_pub_attestation(
+            vector["account_uuid"],
+            vector["kex_public_b64"],
+            self._sig_public(vector),
+            vector["expected_sig_b64"],
         )
 
     def test_rebuilds_the_frozen_payload_byte_for_byte(self):

@@ -147,6 +147,31 @@ class NotifyDueTasksCronTests(NotifyDueTasksMixin, TestCase):
 
         self.assertFalse(self._unread(task, self.member).exists())
 
+    def test_unread_due_reminder_upgrades_to_overdue_in_place(self):
+        task = self._task(due_days=0)
+        self._run_cron()
+
+        self._run_cron(days=1)
+
+        # Same stream, still unread: the overdue reminder merges into the
+        # due-today row instead of stacking a second notification.
+        notif = self._unread(task, self.member).get()
+        self.assertIn("Overdue since", notif.body)
+
+    def test_claim_reminder_has_a_single_winner(self):
+        from workspace.projects.tasks import _claim_reminder
+
+        task = self._task(due_days=0)
+
+        # Two runs racing on the same reminder: only the first claim wins,
+        # whether the row is fresh or re-armed by a moved due date.
+        self.assertTrue(_claim_reminder(task, self.member.pk, "due"))
+        self.assertFalse(_claim_reminder(task, self.member.pk, "due"))
+
+        task.due_date = task.due_date + timedelta(days=1)
+        self.assertTrue(_claim_reminder(task, self.member.pk, "due"))
+        self.assertFalse(_claim_reminder(task, self.member.pk, "due"))
+
     def test_becoming_overdue_sends_exactly_one_more_reminder(self):
         task = self._task(due_days=0)
         self._run_cron()

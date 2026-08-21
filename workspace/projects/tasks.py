@@ -25,6 +25,33 @@ def _reminder_hour(user):
     return hour if 0 <= hour <= 23 else DEFAULT_REMINDER_HOUR
 
 
+def _claim_reminder(task, user_id, kind):
+    """Atomically reserve the (task, user, kind) reminder for this run.
+
+    True when this run created the row or re-armed it for a moved due date;
+    False when the same reminder was already sent - including by an
+    overlapping concurrent run. The conditional UPDATE is the serialization
+    point: two runs racing on an existing row both issue it, and the WHERE
+    clause matches for exactly one.
+    """
+    from workspace.projects.models import TaskReminder
+
+    reminder, created = TaskReminder.objects.get_or_create(
+        task=task,
+        user_id=user_id,
+        kind=kind,
+        defaults={"due_date": task.due_date},
+    )
+    if created:
+        return True
+    return (
+        TaskReminder.objects.filter(pk=reminder.pk)
+        .exclude(due_date=task.due_date)
+        .update(due_date=task.due_date, sent_at=timezone.now())
+        == 1
+    )
+
+
 @shared_task(name="projects.notify_due_tasks", ignore_result=True)
 def notify_due_tasks():
     """Send each assignee one reminder when a task falls due and one more
@@ -78,9 +105,12 @@ def notify_due_tasks():
                     if task.due_date < today
                     else TaskReminder.Kind.DUE
                 )
+                # Fast path for the steady state; _claim_reminder is the
+                # authoritative, race-safe check.
                 if reminded.get((task.uuid, user.pk, kind)) == task.due_date:
                     continue
-                recipients_by_kind[kind].append(user.pk)
+                if _claim_reminder(task, user.pk, kind):
+                    recipients_by_kind[kind].append(user.pk)
             for kind, recipient_ids in recipients_by_kind.items():
                 if kind == TaskReminder.Kind.OVERDUE:
                     body = f"Overdue since {task.due_date.isoformat()} · {project.name}"
@@ -95,13 +125,6 @@ def notify_due_tasks():
                     url=f"/projects/{task.project_id}?task={task.uuid}",
                     stream="reminder",
                 )
-                for uid in recipient_ids:
-                    TaskReminder.objects.update_or_create(
-                        task=task,
-                        user_id=uid,
-                        kind=kind,
-                        defaults={"due_date": task.due_date},
-                    )
                 sent += len(recipient_ids)
     if sent:
         logger.info("Sent %d due-task reminders", sent)

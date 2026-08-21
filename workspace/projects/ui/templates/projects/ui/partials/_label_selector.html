@@ -42,14 +42,14 @@ label (handled once on the board root), then the selection event.
   <div
     x-show="showDropdown && (results.length || showCreate() || createError || trimmedQuery())"
     x-cloak
-    class="absolute z-50 mt-1 w-max min-w-full max-w-64 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden thin-scrollbar"
+    class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden thin-scrollbar"
   >
     <ul class="menu menu-sm p-1" x-show="results.length || showCreate()">
       <template x-for="(label, idx) in results" :key="label.uuid">
-        <li>
+        <li class="w-full min-w-0">
           <button
             type="button"
-            class="flex items-center gap-2 rounded"
+            class="flex w-full min-w-0 items-center gap-2 rounded"
             :class="idx === highlight ? 'active' : ''"
             @click="select(label)"
             @mouseenter="highlight = idx"
@@ -58,7 +58,7 @@ label (handled once on the board root), then the selection event.
               class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
               :style="label.color ? 'background:' + label.color : ''"
             ></span>
-            <span class="text-sm" x-text="label.name"></span>
+            <span class="text-sm min-w-0 truncate" x-text="label.name"></span>
           </button>
         </li>
       </template>

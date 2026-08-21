@@ -47,14 +47,17 @@
   <div
     x-show="showDropdown && results.length > 0"
     x-cloak
-    class="absolute z-50 mt-1 w-max min-w-full max-w-64 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden thin-scrollbar"
+    class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden thin-scrollbar"
   >
     <ul class="menu menu-sm p-1">
       <template x-for="(user, idx) in results" :key="user.id">
-        <li>
+        {# w-full/min-w-0 down the chain: every flex level defaults to
+           min-width:auto, which lets long usernames push the row wider than
+           the dropdown instead of truncating. #}
+        <li class="w-full min-w-0">
           <button
             type="button"
-            class="flex items-center gap-2 rounded"
+            class="flex w-full min-w-0 items-center gap-2 rounded"
             :class="idx === highlight ? 'active' : ''"
             @click="selectUser(user)"
             @mouseenter="highlight = idx"
@@ -62,11 +65,11 @@
             <user-avatar :user-id="user.id" :username="user.username" size="sm" presence></user-avatar>
             <div class="flex flex-col items-start min-w-0">
               <span
-                class="font-medium text-sm max-w-full truncate"
+                class="font-medium text-sm w-full truncate text-left"
                 x-text="user.username"
               ></span>
               <span
-                class="text-xs text-base-content/60"
+                class="text-xs text-base-content/60 w-full truncate text-left"
                 x-show="user.first_name || user.last_name"
                 x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"
               ></span>

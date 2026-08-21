@@ -39,9 +39,7 @@
       :class="sidebarCollapsed() ? 'w-16' : 'w-72'"
     >
       <!-- Sidebar header -->
-      <div
-        class="lg:border-b border-base-300 py-4 px-3"
-      >
+      <div class="lg:border-b border-base-300 py-4 px-3">
         <div
           class="flex items-center"
           :class="sidebarCollapsed() ? 'justify-center' : 'justify-between'"
@@ -50,24 +48,14 @@
             class="text-xl font-semibold flex items-center gap-2"
             :class="sidebarCollapsed() ? '' : 'pl-2'"
           >
-            <i
-              data-lucide="square-kanban"
-              class="w-6 h-6 text-accent"
-            ></i>
-            <span
-              x-show="!sidebarCollapsed()"
-              x-transition
-            >Projects</span>
+            <i data-lucide="square-kanban" class="w-6 h-6 text-accent"></i>
+            <span x-show="!sidebarCollapsed()" x-transition>Projects</span>
           </h2>
         </div>
       </div>
 
       <!-- Project switcher -->
-      <div
-        class="px-3 pt-3"
-        x-show="!sidebarCollapsed()"
-        x-transition
-      >
+      <div class="px-3 pt-3" x-show="!sidebarCollapsed()" x-transition>
         <div class="dropdown w-full">
           <button
             type="button"
@@ -82,10 +70,7 @@
               <span class="truncate">{{ project.name }}</span>
               {% if project.archived_at %}<span class="badge badge-ghost badge-sm">Archived</span>{% endif %}
             </span>
-            <i
-              data-lucide="chevrons-up-down"
-              class="w-4 h-4 shrink-0 opacity-60"
-            ></i>
+            <i data-lucide="chevrons-up-down" class="w-4 h-4 shrink-0 opacity-60"></i>
           </button>
           <ul
             tabindex="0"
@@ -123,10 +108,7 @@
         </div>
       </div>
       <!-- Collapsed switcher stub: expand to switch projects -->
-      <div
-        class="px-3 pt-3 flex justify-center"
-        x-show="sidebarCollapsed()"
-      >
+      <div class="px-3 pt-3 flex justify-center" x-show="sidebarCollapsed()">
         <button
           type="button"
           class="btn btn-ghost btn-sm btn-square"
@@ -141,9 +123,7 @@
       </div>
 
       <!-- Project navigation -->
-      <div
-        class="flex-1 overflow-y-auto py-2 px-3"
-      >
+      <div class="flex-1 overflow-y-auto py-2 px-3">
         <ul class="menu p-0 gap-1">
           {% url 'projects_ui:project' project.uuid as overview_url %}
           {% include "ui/partials/drawer_item.html" with href=overview_url icon="layout-dashboard" label="Overview" color="accent" active_binding="currentView === 'overview'" x_target="project-content" x_target_history="push" onclick="currentView = 'overview'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Overview" %}
@@ -170,9 +150,7 @@
       </div>
 
       <!-- Collapse toggle (desktop only) -->
-      <div
-        class="border-t border-base-300 py-4 px-3"
-      >
+      <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" collapse_expr="sidebarCollapsed()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
         </ul>
@@ -189,7 +167,9 @@
     <div
       class="p-4 flex flex-col gap-4 flex-1 min-w-0"
       :class="panelTaskUuid && isMobile() ? 'hidden' : ''"
-    >{% include "projects/ui/partials/_content.html" %}</div>
+    >
+      {% include "projects/ui/partials/_content.html" %}
+    </div>
 
     <!-- Task detail panel region (full-screen on mobile, right sidebar on desktop) -->
     <div
@@ -213,17 +193,10 @@
       class="modal-box max-w-sm"
       x-data="{ creating: false, name: '', description: '', error: '' }"
     >
-      <div
-        class="flex items-start justify-between gap-3 mb-4"
-      >
+      <div class="flex items-start justify-between gap-3 mb-4">
         <div class="flex items-center gap-3 min-w-0">
-          <div
-            class="bg-accent/10 text-accent rounded-lg p-2 shrink-0"
-          >
-            <i
-              data-lucide="square-kanban"
-              class="w-5 h-5"
-            ></i>
+          <div class="bg-accent/10 text-accent rounded-lg p-2 shrink-0">
+            <i data-lucide="square-kanban" class="w-5 h-5"></i>
           </div>
           <div class="min-w-0">
             <h3 class="font-bold text-lg">New project</h3>
@@ -279,12 +252,16 @@
             type="button"
             class="btn btn-ghost btn-sm"
             @click="document.getElementById('new-project-dialog').close()"
-          >Cancel</button>
+          >
+            Cancel
+          </button>
           <button
             type="submit"
             class="btn btn-accent btn-sm"
             :disabled="creating || !name.trim()"
-          >Create</button>
+          >
+            Create
+          </button>
         </div>
       </form>
     </div>
@@ -292,11 +269,7 @@
       <button>close</button>
     </form>
   </dialog>
-  <script
-    src="{% static 'projects/ui/js/board.js' %}"
-  ></script>
-  <script
-    src="{% static 'projects/ui/js/settings.js' %}"
-  ></script>
+  <script src="{% static 'projects/ui/js/board.js' %}"></script>
+  <script src="{% static 'projects/ui/js/settings.js' %}"></script>
   <script src="{% static 'ui/js/comments.js' %}"></script>
 {% endblock %}

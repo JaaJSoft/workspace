@@ -1,10 +1,7 @@
-<div
-  id="all-tasks"
-  class="w-full flex flex-col gap-3"
->
-  <div
-    class="flex flex-wrap items-center gap-2"
-  >{% include "projects/ui/partials/_task_filters.html" with show_status_filter=True %}</div>
+<div id="all-tasks" class="w-full flex flex-col gap-3">
+  <div class="flex flex-wrap items-center gap-2">
+    {% include "projects/ui/partials/_task_filters.html" with show_status_filter=True %}
+  </div>
 
   {% if all_tasks %}
     <div
@@ -18,13 +15,9 @@
         <span class="w-28 hidden sm:block shrink-0">Status</span>
         <span class="w-24 hidden sm:block shrink-0">Priority</span>
         <span class="w-24 hidden md:block shrink-0">Due</span>
-        <span
-          class="w-24 hidden md:block shrink-0 text-right"
-        >Assignees</span>
+        <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>
       </div>
-      <ul
-        class="divide-y divide-base-200 min-h-8"
-      >
+      <ul class="divide-y divide-base-200 min-h-8">
         {% for task in all_tasks %}
           {% include "projects/ui/partials/_backlog_row.html" with row_readonly=True show_status=True %}
         {% endfor %}
@@ -33,7 +26,9 @@
         x-show="filtersActive() && allTasksVisibleCount() === 0"
         x-cloak
         class="px-3 py-8 text-center text-sm text-base-content/60"
-      >No tasks match the current filters.</div>
+      >
+        No tasks match the current filters.
+      </div>
     </div>
   {% else %}
     <inline-alert type="info" message="This project has no tasks yet."></inline-alert>

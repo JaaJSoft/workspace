@@ -26,10 +26,7 @@ entry and is written out below.
 
 <template x-if="nodeData && !isBackgroundMenu">
   <ul class="menu menu-sm p-0">
-    <template
-      x-for="(action, idx) in nodeData.actions"
-      :key="action.id"
-    >
+    <template x-for="(action, idx) in nodeData.actions" :key="action.id">
       <li
         x-show="action.id !== 'paste_into' || hasClipboardItems"
         :class="idx > 0 && action.category !== nodeData.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"

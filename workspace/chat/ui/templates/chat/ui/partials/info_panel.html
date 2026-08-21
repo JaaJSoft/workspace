@@ -13,9 +13,7 @@
 
 <div class="p-4 space-y-5">
   <!-- Avatar + Name -->
-  <div
-    class="flex flex-col items-center text-center gap-2"
-  >
+  <div class="flex flex-col items-center text-center gap-2">
     <!-- Clickable group avatar (upload on click) -->
     <div
       class="relative group/avatar mb-2"
@@ -23,18 +21,13 @@
     >
       <div class="scale-150">{% include "chat/ui/partials/_conversation_avatar.html" with conv="activeConversation" %}</div>
       <!-- Camera overlay for group conversations -->
-      <template
-        x-if="activeConversation.kind === 'group'"
-      >
+      <template x-if="activeConversation.kind === 'group'">
         <div
           class="absolute inset-0 scale-150 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity"
           @click="$refs.groupAvatarInput.click()"
           title="Change group avatar"
         >
-          <i
-            data-lucide="camera"
-            class="w-4 h-4 text-white"
-          ></i>
+          <i data-lucide="camera" class="w-4 h-4 text-white"></i>
         </div>
       </template>
       <input
@@ -77,39 +70,23 @@
 
   <!-- Details -->
   <div class="space-y-2 text-sm">
-    <div
-      class="flex items-center gap-2 text-base-content/60"
-    >
-      <i
-        data-lucide="calendar"
-        class="w-3.5 h-3.5 flex-shrink-0"
-      ></i>
-      <span>Created <span
-   x-text="formatDate(activeConversation.created_at)"
- ></span></span>
+    <div class="flex items-center gap-2 text-base-content/60">
+      <i data-lucide="calendar" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>Created <span x-text="formatDate(activeConversation.created_at)"></span></span>
     </div>
     <div
       class="flex items-center gap-2 text-base-content/60"
       x-show="activeConversation.kind === 'group' && activeConversation.title"
     >
-      <i
-        data-lucide="tag"
-        class="w-3.5 h-3.5 flex-shrink-0"
-      ></i>
-      <span
-        x-text="activeConversation.title"
-        class="truncate"
-      ></span>
+      <i data-lucide="tag" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span x-text="activeConversation.title" class="truncate"></span>
     </div>
     <!-- Attached groups (membership follows these groups; read-only) -->
     <div
       class="flex items-center gap-2 text-base-content/60"
       x-show="activeConversation.groups?.length"
     >
-      <i
-        data-lucide="users"
-        class="w-3.5 h-3.5 flex-shrink-0"
-      ></i>
+      <i data-lucide="users" class="w-3.5 h-3.5 flex-shrink-0"></i>
       <span
         x-text="'Linked to ' + (activeConversation.groups || []).map(g => g.name).join(', ')"
         class="truncate"
@@ -120,10 +97,7 @@
       x-show="activeConversation.description"
       class="flex items-start gap-2 text-base-content/60"
     >
-      <i
-        data-lucide="align-left"
-        class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"
-      ></i>
+      <i data-lucide="align-left" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
       <span
         x-text="activeConversation.description"
         class="whitespace-pre-line break-words flex-1"
@@ -141,10 +115,7 @@
       class="btn btn-ghost btn-xs gap-1 text-base-content/50"
       @click="editDescription()"
     >
-      <i
-        data-lucide="align-left"
-        class="w-3 h-3"
-      ></i>
+      <i data-lucide="align-left" class="w-3 h-3"></i>
       Add description
     </button>
   </div>
@@ -156,13 +127,8 @@
       @click="copyConversationLink()"
       :title="_linkCopied ? 'Copied!' : 'Copy link'"
     >
-      <i
-        :data-lucide="_linkCopied ? 'check' : 'link'"
-        class="w-3 h-3"
-      ></i>
-      <span
-        x-text="_linkCopied ? 'Copied!' : 'Copy link'"
-      ></span>
+      <i :data-lucide="_linkCopied ? 'check' : 'link'" class="w-3 h-3"></i>
+      <span x-text="_linkCopied ? 'Copied!' : 'Copy link'"></span>
     </button>
     <button
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
@@ -182,9 +148,7 @@
   </div>
 
   <!-- Divider -->
-  <div
-    class="divider my-0 text-xs text-base-content/40"
-  >
+  <div class="divider my-0 text-xs text-base-content/40">
     Members
     <span
       class="badge badge-ghost badge-xs"
@@ -203,19 +167,11 @@
       <div
         class="w-8 h-8 rounded-full border-2 border-dashed border-base-content/20 flex items-center justify-center flex-shrink-0"
       >
-        <i
-          data-lucide="plus"
-          class="w-3.5 h-3.5 text-base-content/40"
-        ></i>
+        <i data-lucide="plus" class="w-3.5 h-3.5 text-base-content/40"></i>
       </div>
-      <span
-        class="text-sm font-medium text-base-content/50"
-      >Add members</span>
+      <span class="text-sm font-medium text-base-content/50">Add members</span>
     </li>
-    <template
-      x-for="member in activeConversation.members || []"
-      :key="member.uuid"
-    >
+    <template x-for="member in activeConversation.members || []" :key="member.uuid">
       <li
         class="group flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors"
       >
@@ -274,10 +230,7 @@
 
   <template x-if="pinnedMessages.length > 0">
     <ul class="space-y-1">
-      <template
-        x-for="pin in pinnedMessages"
-        :key="pin.uuid"
-      >
+      <template x-for="pin in pinnedMessages" :key="pin.uuid">
         <li
           class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
           @click="scrollToMessage(pin.message_uuid)"
@@ -315,15 +268,11 @@
   </template>
 
   <template x-if="pinnedMessages.length === 0">
-    <p
-      class="text-xs text-base-content/40 text-center py-2"
-    >No pinned messages</p>
+    <p class="text-xs text-base-content/40 text-center py-2">No pinned messages</p>
   </template>
 
   <!-- Shared Media -->
-  <div
-    class="divider my-0 text-xs text-base-content/40"
-  >
+  <div class="divider my-0 text-xs text-base-content/40">
     Shared Media
     <span
       x-show="conversationMediaTotal > 0"
@@ -352,16 +301,16 @@
       class="btn btn-xs"
       :class="mediaFilter === 'all' ? 'btn-primary' : 'btn-ghost'"
       @click="changeMediaFilter('all')"
-    >All</button>
+    >
+      All
+    </button>
   </div>
 
   <!-- Loading -->
   <template x-if="loadingMedia">
     <div class="grid grid-cols-3 gap-1">
       <template x-for="i in 6" :key="i">
-        <div
-          class="aspect-square bg-base-300 rounded animate-pulse"
-        ></div>
+        <div class="aspect-square bg-base-300 rounded animate-pulse"></div>
       </template>
     </div>
   </template>
@@ -392,19 +341,12 @@
             </template>
             <template x-if="item.is_video">
               <div class="w-full h-full relative">
-                <video
-                  :src="item.url"
-                  class="w-full h-full object-cover"
-                  preload="metadata"
-                >
+                <video :src="item.url" class="w-full h-full object-cover" preload="metadata">
                 </video>
                 <div
                   class="absolute inset-0 flex items-center justify-center pointer-events-none"
                 >
-                  <i
-                    data-lucide="play"
-                    class="w-6 h-6 text-white drop-shadow-lg"
-                  ></i>
+                  <i data-lucide="play" class="w-6 h-6 text-white drop-shadow-lg"></i>
                 </div>
               </div>
             </template>
@@ -439,10 +381,7 @@
                 class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"
               ></i>
               <div class="flex-1 min-w-0">
-                <p
-                  class="text-xs truncate"
-                  x-text="item.original_name"
-                ></p>
+                <p class="text-xs truncate" x-text="item.original_name"></p>
                 <p
                   class="text-[0.6rem] text-base-content/40"
                   x-text="formatFileSize(item.size) + ' · ' + item.author.username"
@@ -460,10 +399,7 @@
     x-if="!loadingMedia && conversationMedia.length > 0 && mediaFilter === 'files'"
   >
     <ul class="space-y-1">
-      <template
-        x-for="item in conversationMedia"
-        :key="item.uuid"
-      >
+      <template x-for="item in conversationMedia" :key="item.uuid">
         <li
           class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
           @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })"
@@ -473,10 +409,7 @@
             class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"
           ></i>
           <div class="flex-1 min-w-0">
-            <p
-              class="text-xs truncate"
-              x-text="item.original_name"
-            ></p>
+            <p class="text-xs truncate" x-text="item.original_name"></p>
             <p
               class="text-[0.6rem] text-base-content/40"
               x-text="formatFileSize(item.size) + ' · ' + item.author.username"
@@ -488,9 +421,7 @@
   </template>
 
   <!-- Empty state -->
-  <template
-    x-if="!loadingMedia && conversationMedia.length === 0"
-  >
+  <template x-if="!loadingMedia && conversationMedia.length === 0">
     <p
       class="text-xs text-base-content/40 text-center py-2"
       x-text="mediaFilter === 'images' ? 'No media shared yet' : mediaFilter === 'files' ? 'No files shared yet' : 'No media shared yet'"
@@ -507,10 +438,7 @@
         @click="loadMoreMedia()"
         :disabled="loadingMoreMedia"
       >
-        <span
-          x-show="loadingMoreMedia"
-          class="loading loading-spinner loading-xs"
-        ></span>
+        <span x-show="loadingMoreMedia" class="loading loading-spinner loading-xs"></span>
         <span
           x-text="loadingMoreMedia ? 'Loading...' : 'Load more (' + (conversationMediaTotal - conversationMedia.length) + ')'"
         ></span>
@@ -519,9 +447,7 @@
   </template>
 
   <!-- Stats -->
-  <div
-    class="divider my-0 text-xs text-base-content/40"
-  >Statistics</div>
+  <div class="divider my-0 text-xs text-base-content/40">Statistics</div>
 
   <!-- Loading skeleton -->
   <template x-if="loadingStats">
@@ -533,79 +459,45 @@
   </template>
 
   <!-- Stats content -->
-  <template
-    x-if="!loadingStats && conversationStats"
-  >
+  <template x-if="!loadingStats && conversationStats">
     <div class="space-y-3 text-sm">
       <div class="grid grid-cols-2 gap-2">
-        <div
-          class="bg-base-200 rounded-lg px-3 py-2 text-center"
-        >
-          <div
-            class="text-lg font-bold"
-            x-text="conversationStats.message_count"
-          ></div>
+        <div class="bg-base-200 rounded-lg px-3 py-2 text-center">
+          <div class="text-lg font-bold" x-text="conversationStats.message_count"></div>
           <div class="text-xs text-base-content/50">Messages</div>
         </div>
-        <div
-          class="bg-base-200 rounded-lg px-3 py-2 text-center"
-        >
-          <div
-            class="text-lg font-bold"
-            x-text="conversationStats.reaction_count"
-          ></div>
+        <div class="bg-base-200 rounded-lg px-3 py-2 text-center">
+          <div class="text-lg font-bold" x-text="conversationStats.reaction_count"></div>
           <div class="text-xs text-base-content/50">Reactions</div>
         </div>
       </div>
 
-      <div
-        class="space-y-1.5"
-        x-show="conversationStats.first_message_at"
-      >
-        <div
-          class="flex items-center gap-2 text-base-content/60"
-        >
-          <i
-            data-lucide="message-square"
-            class="w-3.5 h-3.5 flex-shrink-0"
-          ></i>
-          <span>First message: <span
-   x-text="formatDateTime(conversationStats.first_message_at)"
- ></span></span>
+      <div class="space-y-1.5" x-show="conversationStats.first_message_at">
+        <div class="flex items-center gap-2 text-base-content/60">
+          <i data-lucide="message-square" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <span>First message: <span x-text="formatDateTime(conversationStats.first_message_at)"></span></span>
         </div>
-        <div
-          class="flex items-center gap-2 text-base-content/60"
-        >
-          <i
-            data-lucide="clock"
-            class="w-3.5 h-3.5 flex-shrink-0"
-          ></i>
-          <span>Last message: <span
-   x-text="formatDateTime(conversationStats.last_message_at)"
- ></span></span>
+        <div class="flex items-center gap-2 text-base-content/60">
+          <i data-lucide="clock" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <span>Last message: <span x-text="formatDateTime(conversationStats.last_message_at)"></span></span>
         </div>
       </div>
 
       <!-- Top contributors -->
-      <template
-        x-if="conversationStats.messages_per_member.length > 0"
-      >
+      <template x-if="conversationStats.messages_per_member.length > 0">
         <div class="space-y-1.5">
           <div
             class="text-xs font-semibold text-base-content/50 uppercase tracking-wider"
-          >Top contributors</div>
+          >
+            Top contributors
+          </div>
           <template
             x-for="entry in conversationStats.messages_per_member"
             :key="entry.username"
           >
             <div class="flex items-center gap-2">
-              <span
-                class="text-xs w-20 truncate"
-                x-text="entry.username"
-              ></span>
-              <div
-                class="flex-1 bg-base-300 rounded-full h-2 overflow-hidden"
-              >
+              <span class="text-xs w-20 truncate" x-text="entry.username"></span>
+              <div class="flex-1 bg-base-300 rounded-full h-2 overflow-hidden">
                 <div
                   class="bg-primary h-full rounded-full transition-all"
                   :style="`width: ${Math.round(entry.count / conversationStats.message_count * 100)}%`"
@@ -623,22 +515,14 @@
   </template>
 
   <!-- No stats yet -->
-  <template
-    x-if="!loadingStats && !conversationStats"
-  >
-    <div
-      class="text-sm text-base-content/40 text-center py-2"
-    >No stats available</div>
+  <template x-if="!loadingStats && !conversationStats">
+    <div class="text-sm text-base-content/40 text-center py-2">No stats available</div>
   </template>
 
   <!-- AI Memory (bot conversations only) -->
-  <template
-    x-if="isBotConversation(activeConversation)"
-  >
+  <template x-if="isBotConversation(activeConversation)">
     <div class="space-y-5">
-      <div
-        class="divider my-0 text-xs text-base-content/40"
-      >
+      <div class="divider my-0 text-xs text-base-content/40">
         AI Memory
         <span
           x-show="botMemories.length > 0"
@@ -672,39 +556,27 @@
       </div>
 
       <!-- Loading -->
-      <div
-        x-show="loadingBotMemories"
-        class="flex justify-center py-4"
-      >
-        <span
-          class="loading loading-spinner loading-sm"
-        ></span>
+      <div x-show="loadingBotMemories" class="flex justify-center py-4">
+        <span class="loading loading-spinner loading-sm"></span>
       </div>
 
       <!-- Empty state -->
-      <template
-        x-if="!loadingBotMemories && botMemories.length === 0"
-      >
-        <p
-          class="text-xs text-base-content/40 text-center py-2"
-        >No memories yet</p>
+      <template x-if="!loadingBotMemories && botMemories.length === 0">
+        <p class="text-xs text-base-content/40 text-center py-2">No memories yet</p>
       </template>
 
       <!-- No search results -->
       <div
         x-show="!loadingBotMemories && botMemories.length > 0 && filteredBotMemories().length === 0"
         class="text-xs text-base-content/40 text-center py-2"
-      >No matches</div>
+      >
+        No matches
+      </div>
 
       <!-- Memory list -->
-      <template
-        x-if="!loadingBotMemories && botMemories.length > 0"
-      >
+      <template x-if="!loadingBotMemories && botMemories.length > 0">
         <ul class="space-y-1">
-          <template
-            x-for="mem in filteredBotMemories()"
-            :key="mem.id"
-          >
+          <template x-for="mem in filteredBotMemories()" :key="mem.id">
             <li
               class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors"
             >
@@ -713,14 +585,8 @@
                 class="w-3.5 h-3.5 text-secondary flex-shrink-0 mt-0.5"
               ></i>
               <div class="flex-1 min-w-0">
-                <div
-                  class="text-xs font-semibold truncate"
-                  x-text="mem.key"
-                ></div>
-                <p
-                  class="text-xs text-base-content/70 break-words"
-                  x-text="mem.content"
-                ></p>
+                <div class="text-xs font-semibold truncate" x-text="mem.key"></div>
+                <p class="text-xs text-base-content/70 break-words" x-text="mem.content"></p>
               </div>
               <!-- Actions -->
               <div
@@ -749,13 +615,9 @@
   </template>
 
   <!-- Agent Goals (bot conversations only) -->
-  <template
-    x-if="isBotConversation(activeConversation)"
-  >
+  <template x-if="isBotConversation(activeConversation)">
     <div class="space-y-5">
-      <div
-        class="divider my-0 text-xs text-base-content/40"
-      >
+      <div class="divider my-0 text-xs text-base-content/40">
         Agent Goals
         <span
           x-show="agentGoals.length > 0"
@@ -765,33 +627,19 @@
       </div>
 
       <!-- Loading -->
-      <div
-        x-show="loadingAgentGoals"
-        class="flex justify-center py-4"
-      >
-        <span
-          class="loading loading-spinner loading-sm"
-        ></span>
+      <div x-show="loadingAgentGoals" class="flex justify-center py-4">
+        <span class="loading loading-spinner loading-sm"></span>
       </div>
 
       <!-- Empty state -->
-      <template
-        x-if="!loadingAgentGoals && agentGoals.length === 0"
-      >
-        <p
-          class="text-xs text-base-content/40 text-center py-2"
-        >No agent goals</p>
+      <template x-if="!loadingAgentGoals && agentGoals.length === 0">
+        <p class="text-xs text-base-content/40 text-center py-2">No agent goals</p>
       </template>
 
       <!-- Goal list -->
-      <template
-        x-if="!loadingAgentGoals && agentGoals.length > 0"
-      >
+      <template x-if="!loadingAgentGoals && agentGoals.length > 0">
         <ul class="space-y-1">
-          <template
-            x-for="goal in agentGoals"
-            :key="goal.uuid"
-          >
+          <template x-for="goal in agentGoals" :key="goal.uuid">
             <li
               class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors"
             >
@@ -800,10 +648,7 @@
                 class="w-3.5 h-3.5 text-warning flex-shrink-0 mt-0.5"
               ></i>
               <div class="flex-1 min-w-0">
-                <div
-                  class="text-xs font-semibold truncate"
-                  x-text="goal.title"
-                ></div>
+                <div class="text-xs font-semibold truncate" x-text="goal.title"></div>
                 <p
                   class="text-xs text-base-content/70 break-words line-clamp-2"
                   x-text="goal.goal"
@@ -843,12 +688,8 @@
                     x-text="`${goal.check_count} check-in${goal.check_count > 1 ? 's' : ''}`"
                   ></span>
                 </div>
-                <p
-                  class="text-[0.65rem] text-base-content/40 mt-0.5"
-                >
-                  Next: <span
-   x-text="formatDateTime(goal.next_check_at)"
- ></span>
+                <p class="text-[0.65rem] text-base-content/40 mt-0.5">
+                  Next: <span x-text="formatDateTime(goal.next_check_at)"></span>
                   <template x-if="goal.deadline">
                     <span> · deadline <span x-text="formatDateTime(goal.deadline)"></span></span>
                   </template>
@@ -894,13 +735,9 @@
   </template>
 
   <!-- Scheduled Messages (bot conversations only) -->
-  <template
-    x-if="isBotConversation(activeConversation)"
-  >
+  <template x-if="isBotConversation(activeConversation)">
     <div class="space-y-5">
-      <div
-        class="divider my-0 text-xs text-base-content/40"
-      >
+      <div class="divider my-0 text-xs text-base-content/40">
         Scheduled Messages
         <span
           x-show="scheduledMessages.length > 0"
@@ -910,33 +747,19 @@
       </div>
 
       <!-- Loading -->
-      <div
-        x-show="loadingSchedules"
-        class="flex justify-center py-4"
-      >
-        <span
-          class="loading loading-spinner loading-sm"
-        ></span>
+      <div x-show="loadingSchedules" class="flex justify-center py-4">
+        <span class="loading loading-spinner loading-sm"></span>
       </div>
 
       <!-- Empty state -->
-      <template
-        x-if="!loadingSchedules && scheduledMessages.length === 0"
-      >
-        <p
-          class="text-xs text-base-content/40 text-center py-2"
-        >No scheduled messages</p>
+      <template x-if="!loadingSchedules && scheduledMessages.length === 0">
+        <p class="text-xs text-base-content/40 text-center py-2">No scheduled messages</p>
       </template>
 
       <!-- Schedule list -->
-      <template
-        x-if="!loadingSchedules && scheduledMessages.length > 0"
-      >
+      <template x-if="!loadingSchedules && scheduledMessages.length > 0">
         <ul class="space-y-1">
-          <template
-            x-for="sched in scheduledMessages"
-            :key="sched.uuid"
-          >
+          <template x-for="sched in scheduledMessages" :key="sched.uuid">
             <li
               class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors"
             >
@@ -956,12 +779,8 @@
                     x-text="scheduleTimingLabel(sched)"
                   ></span>
                 </div>
-                <p
-                  class="text-[0.65rem] text-base-content/40 mt-0.5"
-                >
-                  Next: <span
-   x-text="formatDateTime(sched.next_run_at)"
- ></span>
+                <p class="text-[0.65rem] text-base-content/40 mt-0.5">
+                  Next: <span x-text="formatDateTime(sched.next_run_at)"></span>
                 </p>
               </div>
               <!-- Actions -->
@@ -995,36 +814,25 @@
 <dialog x-ref="cropperDialog" class="modal">
   <div class="modal-box max-w-lg">
     <h3 class="font-bold text-lg mb-4">Crop your photo</h3>
-    <div
-      class="w-full"
-      style="max-height: 400px"
-    >
-      <img
-        x-ref="cropperImage"
-        alt=""
-        style="display: block;
-               max-width: 100%"
-      />
+    <div class="w-full" style="max-height: 400px">
+      <img x-ref="cropperImage" alt="" style="display: block; max-width: 100%" />
     </div>
     <div class="modal-action">
       <button
         type="button"
         @click="cancelAvatarCrop()"
         class="btn btn-ghost btn-sm"
-      >Cancel</button>
+      >
+        Cancel
+      </button>
       <button
         type="button"
         @click="confirmAvatarCrop()"
         class="btn btn-primary btn-sm gap-2"
         :disabled="_cropUploading"
       >
-        <span
-          x-show="_cropUploading"
-          class="loading loading-spinner loading-sm"
-        ></span>
-        <span
-          x-text="_cropUploading ? 'Uploading...' : 'Confirm'"
-        ></span>
+        <span x-show="_cropUploading" class="loading loading-spinner loading-sm"></span>
+        <span x-text="_cropUploading ? 'Uploading...' : 'Confirm'"></span>
       </button>
     </div>
   </div>

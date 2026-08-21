@@ -4,10 +4,7 @@
   x-cloak
   class="absolute left-0 right-0 top-full mt-1 z-50 bg-base-100 rounded-lg shadow-lg ring-1 ring-base-300 max-h-60 overflow-y-auto"
 >
-  <template
-    x-for="(contact, idx) in _autocomplete.results"
-    :key="contact.email"
-  >
+  <template x-for="(contact, idx) in _autocomplete.results" :key="contact.email">
     <button
       type="button"
       class="flex items-center gap-3 w-full px-3 py-2 text-left transition-colors"

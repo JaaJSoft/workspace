@@ -11,10 +11,7 @@ Context variables:
 - pinned_folders: QuerySet of PinnedFolder objects
 {% endcomment %}
 
-<ul
-  class="space-y-0.5"
-  id="pinned-folders-list"
->
+<ul class="space-y-0.5" id="pinned-folders-list">
   {% for pin in pinned_folders %}
     <li
       class="list-none pinned-folder-item"
@@ -38,9 +35,7 @@ Context variables:
       class="list-none px-2 py-3 text-sm text-base-content/40"
       x-show="!collapsed && !dragOver"
     >
-      <span
-        class="flex items-center gap-2 justify-center"
-      >
+      <span class="flex items-center gap-2 justify-center">
         <i data-lucide="pin-off" class="w-4 h-4"></i>
         No pinned folders
       </span>

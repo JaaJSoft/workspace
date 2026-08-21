@@ -1,10 +1,6 @@
 <!-- Tag manager dropdown — requires tagsMixin() in the Alpine component -->
 <div class="dropdown dropdown-end">
-  <div
-    tabindex="0"
-    role="button"
-    class="btn btn-ghost btn-sm btn-square"
-  >
+  <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-square">
     <i data-lucide="tag" class="w-4 h-4"></i>
   </div>
   <div
@@ -13,13 +9,13 @@
   >
     <div
       class="px-2 py-1.5 text-xs font-semibold uppercase text-base-content/40"
-    >Tags</div>
+    >
+      Tags
+    </div>
     <ul class="menu menu-sm p-0">
       <template x-for="tag in allTags" :key="tag.uuid">
         <li>
-          <label
-            class="gap-3 rounded flex items-center cursor-pointer"
-          >
+          <label class="gap-3 rounded flex items-center cursor-pointer">
             <input
               type="checkbox"
               class="checkbox checkbox-xs flex-shrink-0"
@@ -48,15 +44,13 @@
     <div
       x-show="allTags.length === 0"
       class="px-2 py-1.5 text-xs text-base-content/40"
-    >No tags yet</div>
+    >
+      No tags yet
+    </div>
     <hr class="my-1 border-base-300" />
     <ul class="menu menu-sm p-0">
       <li>
-        <button
-          type="button"
-          class="gap-3 rounded"
-          @click="showTagModal()"
-        >
+        <button type="button" class="gap-3 rounded" @click="showTagModal()">
           <i data-lucide="plus" class="w-4 h-4"></i>
           <span>New tag</span>
         </button>

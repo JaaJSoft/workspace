@@ -44,9 +44,7 @@
 </div>
 
 <!-- Filter bar -->
-<div
-  class="px-3 py-2 border-b border-base-300 bg-base-100/80 space-y-1.5"
->
+<div class="px-3 py-2 border-b border-base-300 bg-base-100/80 space-y-1.5">
   <!-- Search input -->
   <div class="relative">
     <i
@@ -71,9 +69,7 @@
     </button>
   </div>
   <!-- Toggle filters -->
-  <div
-    class="flex items-center gap-1.5 flex-wrap"
-  >
+  <div class="flex items-center gap-1.5 flex-wrap">
     <button
       class="btn btn-xs gap-1"
       :class="filters.unread ? 'btn-warning' : 'btn-ghost'"
@@ -105,7 +101,9 @@
       class="btn btn-ghost btn-xs text-xs"
       x-show="_hasActiveFilters()"
       @click="clearFilters()"
-    >Clear</button>
+    >
+      Clear
+    </button>
   </div>
 </div>
 
@@ -130,10 +128,7 @@
     :disabled="batchInProgress"
     title="Mark read"
   >
-    <i
-      data-lucide="mail-open"
-      class="w-3.5 h-3.5"
-    ></i>
+    <i data-lucide="mail-open" class="w-3.5 h-3.5"></i>
   </button>
   <button
     class="btn btn-ghost btn-xs"
@@ -157,10 +152,7 @@
     title="Move to"
     @click="_showMoveDialog([...selectedMessages])"
   >
-    <i
-      data-lucide="folder-input"
-      class="w-3.5 h-3.5"
-    ></i>
+    <i data-lucide="folder-input" class="w-3.5 h-3.5"></i>
   </button>
   <button
     class="btn btn-ghost btn-xs text-error"
@@ -168,46 +160,32 @@
     :disabled="batchInProgress"
     title="Delete"
   >
-    <i
-      data-lucide="trash-2"
-      class="w-3.5 h-3.5"
-    ></i>
+    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
   </button>
   <div class="flex-1"></div>
   <button
     class="btn btn-ghost btn-xs"
     @click="selectedMessages = []"
     :disabled="batchInProgress"
-  >Clear</button>
+  >
+    Clear
+  </button>
 </div>
 
 <!-- Loading -->
-<div
-  x-show="loadingMessages"
-  class="flex justify-center py-8"
->
-  <span
-    class="loading loading-spinner loading-md text-warning"
-  ></span>
+<div x-show="loadingMessages" class="flex justify-center py-8">
+  <span class="loading loading-spinner loading-md text-warning"></span>
 </div>
 
 <!-- Message list -->
-<div
-  class="flex-1 overflow-y-auto"
-  x-show="!loadingMessages"
->
+<div class="flex-1 overflow-y-auto" x-show="!loadingMessages">
   <!-- No messages -->
   <div
     x-show="messages.length === 0 && !loadingMessages"
     class="flex items-center justify-center h-full"
   >
-    <div
-      class="text-center text-base-content/40 py-12"
-    >
-      <i
-        data-lucide="inbox"
-        class="w-10 h-10 mx-auto mb-2 opacity-30"
-      ></i>
+    <div class="text-center text-base-content/40 py-12">
+      <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
       <p class="text-sm">No messages</p>
     </div>
   </div>
@@ -264,10 +242,7 @@
           x-show="mailPrefs.showLabels && msg.labels?.length"
           x-cloak
         >
-          <template
-            x-for="lbl in msg.labels.slice(0, 3)"
-            :key="lbl.uuid"
-          >
+          <template x-for="lbl in msg.labels.slice(0, 3)" :key="lbl.uuid">
             <span
               class="badge badge-xs gap-0.5"
               :class="lbl.color ? ('badge-' + lbl.color) : 'badge-ghost'"
@@ -281,11 +256,7 @@
           ></span>
         </div>
         <!-- Account badge (unified inbox) -->
-        <div
-          x-show="unifiedInbox && accounts.length > 1"
-          x-cloak
-          class="mt-0.5"
-        >
+        <div x-show="unifiedInbox && accounts.length > 1" x-cloak class="mt-0.5">
           <span
             class="badge badge-ghost badge-xs truncate max-w-[10rem]"
             x-text="_getAccountEmail(msg.account_id)"
@@ -301,9 +272,7 @@
       </div>
 
       <!-- Indicators -->
-      <div
-        class="flex flex-col items-center gap-1 flex-shrink-0 mt-1"
-      >
+      <div class="flex flex-col items-center gap-1 flex-shrink-0 mt-1">
         <i
           data-lucide="star"
           class="w-3.5 h-3.5"
@@ -320,10 +289,7 @@
   </template>
 
   <!-- Load more -->
-  <div
-    x-show="hasMoreMessages"
-    class="flex justify-center py-3"
-  >
+  <div x-show="hasMoreMessages" class="flex justify-center py-3">
     <button
       class="btn btn-ghost btn-xs"
       @click="loadMoreMessages()"

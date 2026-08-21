@@ -7,20 +7,10 @@
   <div class="flex items-start gap-2">
     <div class="flex-1 min-w-0">{% include "projects/ui/partials/_task_filters.html" %}</div>
     {% if writable and backlog_status %}
-      <div
-        class="shrink-0 flex items-center gap-2"
-      >
-        <div
-          class="flex items-center gap-2"
-          x-show="selected.length"
-          x-cloak
-        >
-          <span
-            class="text-sm text-base-content/70 shrink-0"
-          >
-            <span x-text="selected.length"></span><span
-  class="sr-only sm:not-sr-only sm:inline"
-> selected</span>
+      <div class="shrink-0 flex items-center gap-2">
+        <div class="flex items-center gap-2" x-show="selected.length" x-cloak>
+          <span class="text-sm text-base-content/70 shrink-0">
+            <span x-text="selected.length"></span><span class="sr-only sm:not-sr-only sm:inline"> selected</span>
           </span>
           <button
             type="button"
@@ -29,10 +19,7 @@
             aria-label="Clear selection"
             @click="clearSelection()"
           >
-            <i
-              data-lucide="x"
-              class="w-4 h-4 sm:hidden"
-            ></i>
+            <i data-lucide="x" class="w-4 h-4 sm:hidden"></i>
             <span class="hidden sm:inline">Clear</span>
           </button>
           <div class="join">
@@ -41,10 +28,7 @@
               class="btn btn-accent btn-sm join-item"
               @click="sendSelected()"
             >
-              <i
-                data-lucide="arrow-right-circle"
-                class="w-4 h-4"
-              ></i>
+              <i data-lucide="arrow-right-circle" class="w-4 h-4"></i>
               <span class="hidden sm:inline">Send to board</span>
               <span class="sm:hidden">Send</span>
             </button>
@@ -56,19 +40,13 @@
                 title="Send to a specific column"
                 aria-label="Send to a specific column"
               >
-                <i
-                  data-lucide="chevron-down"
-                  class="w-4 h-4"
-                ></i>
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>
               </button>
               <ul
                 tabindex="0"
                 class="dropdown-content menu z-50 mt-1 w-52 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
               >
-                <template
-                  x-for="s in boardStatuses()"
-                  :key="s.uuid"
-                >
+                <template x-for="s in boardStatuses()" :key="s.uuid">
                   <li>
                     <button
                       type="button"
@@ -114,15 +92,10 @@
         <span class="flex-1">Task</span>
         <span class="w-24 hidden sm:block shrink-0">Priority</span>
         <span class="w-24 hidden md:block shrink-0">Due</span>
-        <span
-          class="w-24 hidden md:block shrink-0 text-right"
-        >Assignees</span>
+        <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>
         {% if writable %}<span class="w-8 shrink-0"></span>{% endif %}
       </div>
-      <ul
-        class="divide-y divide-base-200 min-h-8"
-        data-backlog-list
-      >
+      <ul class="divide-y divide-base-200 min-h-8" data-backlog-list>
         {% for task in backlog_tasks %}
           {% include "projects/ui/partials/_backlog_row.html" %}
         {% endfor %}
@@ -131,7 +104,9 @@
         x-show="filtersActive() && backlogVisibleCount() === 0"
         x-cloak
         class="px-3 py-8 text-center text-sm text-base-content/60"
-      >No tasks match the current filters.</div>
+      >
+        No tasks match the current filters.
+      </div>
     </div>
   {% else %}
     <inline-alert type="info" message="The backlog is empty."></inline-alert>

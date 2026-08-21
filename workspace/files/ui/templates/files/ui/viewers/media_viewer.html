@@ -1,12 +1,8 @@
 <!-- Media Viewer (Video / Audio) -->
-<div
-  class="flex flex-col h-full bg-base-200"
->
+<div class="flex flex-col h-full bg-base-200">
 
   {% if is_video %}
-    <div
-      class="flex-1 flex items-center justify-center overflow-hidden"
-    >
+    <div class="flex-1 flex items-center justify-center overflow-hidden">
       <video
         controls
         autoplay
@@ -20,24 +16,15 @@
   {% endif %}
 
   {% if is_audio %}
-    <div
-      class="flex-1 flex items-center justify-center"
-    >
+    <div class="flex-1 flex items-center justify-center">
       <div class="w-full max-w-lg px-6">
-        <div
-          class="flex flex-col items-center gap-6"
-        >
+        <div class="flex flex-col items-center gap-6">
           <div
             class="w-24 h-24 rounded-full bg-base-300 flex items-center justify-center"
           >
-            <i
-              data-lucide="music"
-              class="w-10 h-10 text-base-content/50"
-            ></i>
+            <i data-lucide="music" class="w-10 h-10 text-base-content/50"></i>
           </div>
-          <p
-            class="text-sm text-base-content/60 truncate max-w-full"
-          >{{ file.name }}</p>
+          <p class="text-sm text-base-content/60 truncate max-w-full">{{ file.name }}</p>
           <audio
             controls
             autoplay

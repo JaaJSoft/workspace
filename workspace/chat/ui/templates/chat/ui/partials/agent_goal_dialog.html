@@ -3,20 +3,11 @@
   class="modal"
   @keydown.escape.prevent="closeGoalEditor()"
 >
-  <div
-    class="modal-box max-w-2xl p-0 flex flex-col max-h-[90vh]"
-  >
+  <div class="modal-box max-w-2xl p-0 flex flex-col max-h-[90vh]">
     <!-- Header -->
-    <div
-      class="flex items-center justify-between px-5 pt-5 pb-2"
-    >
-      <h3
-        class="font-bold text-lg flex items-center gap-2"
-      >
-        <i
-          data-lucide="target"
-          class="w-5 h-5 text-warning"
-        ></i>
+    <div class="flex items-center justify-between px-5 pt-5 pb-2">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i data-lucide="target" class="w-5 h-5 text-warning"></i>
         Edit goal
       </h3>
       <button
@@ -28,17 +19,13 @@
       </button>
     </div>
 
-    <p
-      class="px-5 text-xs text-base-content/50"
-    >
+    <p class="px-5 text-xs text-base-content/50">
       Everything here is read by the bot at every check-in. The more precise it is, the better it
       handles the mission on its own.
     </p>
 
     <!-- Body -->
-    <div
-      class="px-5 py-4 space-y-3 overflow-y-auto"
-    >
+    <div class="px-5 py-4 space-y-3 overflow-y-auto">
       <label class="form-control">
         <span
           class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
@@ -100,9 +87,7 @@
         ></textarea>
       </label>
 
-      <div
-        class="grid grid-cols-1 sm:grid-cols-2 gap-3"
-      >
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label class="form-control">
           <span
             class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
@@ -135,9 +120,7 @@
           x-model="goalEditor.notes"
           placeholder="Empty until the first check-in"
         ></textarea>
-        <span
-          class="text-[0.65rem] text-base-content/40 pt-1"
-        >The bot's only memory between check-ins. Edit it to correct something it got wrong.</span>
+        <span class="text-[0.65rem] text-base-content/40 pt-1">The bot's only memory between check-ins. Edit it to correct something it got wrong.</span>
       </label>
 
       <p
@@ -148,9 +131,7 @@
           x-text="`${goalEditor.check_count} check-in${goalEditor.check_count > 1 ? 's' : ''} so far`"
         ></span>
         <template x-if="goalEditor.last_checked_at">
-          <span>· last one <span
-   x-text="formatDateTime(goalEditor.last_checked_at)"
- ></span></span>
+          <span>· last one <span x-text="formatDateTime(goalEditor.last_checked_at)"></span></span>
         </template>
       </p>
 
@@ -160,22 +141,14 @@
     </div>
 
     <!-- Actions -->
-    <div
-      class="flex justify-end gap-2 px-5 pb-5 pt-1"
-    >
-      <button
-        class="btn btn-ghost btn-sm"
-        @click="closeGoalEditor()"
-      >Cancel</button>
+    <div class="flex justify-end gap-2 px-5 pb-5 pt-1">
+      <button class="btn btn-ghost btn-sm" @click="closeGoalEditor()">Cancel</button>
       <button
         class="btn btn-warning btn-sm gap-1.5"
         @click="saveGoalEdit()"
         :disabled="goalEditor.saving"
       >
-        <span
-          x-show="goalEditor.saving"
-          class="loading loading-spinner loading-xs"
-        ></span>
+        <span x-show="goalEditor.saving" class="loading loading-spinner loading-xs"></span>
         Save
       </button>
     </div>

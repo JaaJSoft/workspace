@@ -1,24 +1,13 @@
 <dialog x-ref="taskDialog" class="modal">
-  <div
-    class="modal-box max-w-lg overflow-visible"
-  >
-    <div
-      class="flex items-start justify-between gap-3 mb-4"
-    >
+  <div class="modal-box max-w-lg overflow-visible">
+    <div class="flex items-start justify-between gap-3 mb-4">
       <div class="flex items-center gap-3 min-w-0">
-        <div
-          class="bg-accent/10 text-accent rounded-lg p-2 shrink-0"
-        >
-          <i
-            data-lucide="square-pen"
-            class="w-5 h-5"
-          ></i>
+        <div class="bg-accent/10 text-accent rounded-lg p-2 shrink-0">
+          <i data-lucide="square-pen" class="w-5 h-5"></i>
         </div>
         <div class="min-w-0">
           <h3 class="font-bold text-lg">New task</h3>
-          <p
-            class="text-sm text-base-content/60 truncate"
-          >{{ project.name }}</p>
+          <p class="text-sm text-base-content/60 truncate">{{ project.name }}</p>
         </div>
       </div>
       <button
@@ -32,10 +21,7 @@
     </div>
     <template x-if="formError">
       <div class="mb-2">
-        <div
-          class="alert alert-error text-sm"
-          x-text="formError"
-        ></div>
+        <div class="alert alert-error text-sm" x-text="formError"></div>
       </div>
     </template>
     <form @submit.prevent="saveTask()">
@@ -61,25 +47,15 @@
       <div class="grid grid-cols-2 gap-2 mt-2">
         <label class="form-control">
           <div class="label"><span class="label-text">Status</span></div>
-          <select
-            class="select select-bordered select-sm"
-            x-model="form.status"
-          >
+          <select class="select select-bordered select-sm" x-model="form.status">
             <template x-for="s in statuses" :key="s.uuid">
-              <option
-                :value="s.uuid"
-                x-text="s.name"
-                :selected="s.uuid === form.status"
-              ></option>
+              <option :value="s.uuid" x-text="s.name" :selected="s.uuid === form.status"></option>
             </template>
           </select>
         </label>
         <label class="form-control">
           <div class="label"><span class="label-text">Priority</span></div>
-          <select
-            class="select select-bordered select-sm"
-            x-model="form.priority"
-          >
+          <select class="select select-bordered select-sm" x-model="form.priority">
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
@@ -136,12 +112,16 @@
           type="button"
           class="btn btn-ghost btn-sm"
           @click="$refs.taskDialog.close()"
-        >Cancel</button>
+        >
+          Cancel
+        </button>
         <button
           type="submit"
           class="btn btn-accent btn-sm"
           :disabled="saving || !form.title.trim()"
-        >Save</button>
+        >
+          Save
+        </button>
       </div>
     </form>
   </div>

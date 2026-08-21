@@ -23,26 +23,15 @@
     @ended="onEnded()"
   ></audio>
 
-  <div
-    class="flex items-center gap-1.5 min-w-0"
-  >
+  <div class="flex items-center gap-1.5 min-w-0">
     <button
       class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
       @click="toggle()"
       :title="playing ? 'Pause' : 'Play'"
       :aria-label="playing ? 'Pause' : 'Play'"
     >
-      <i
-        data-lucide="play"
-        class="w-4 h-4"
-        x-show="!playing"
-      ></i>
-      <i
-        data-lucide="pause"
-        class="w-4 h-4"
-        x-show="playing"
-        x-cloak
-      ></i>
+      <i data-lucide="play" class="w-4 h-4" x-show="!playing"></i>
+      <i data-lucide="pause" class="w-4 h-4" x-show="playing" x-cloak></i>
     </button>
 
     <input
@@ -87,36 +76,23 @@
     x-cloak
     class="flex items-center gap-1.5 min-w-0 pl-1"
   >
-    <i
-      data-lucide="music"
-      class="w-3.5 h-3.5 flex-shrink-0 opacity-60"
-    ></i>
-    <span
-      class="truncate text-xs font-medium flex-1 min-w-0"
-    >{{ att.original_name }}</span>
-    <span
-      class="text-[0.65rem] opacity-60 flex-shrink-0"
-    >{{ att.size|filesizeformat }}</span>
+    <i data-lucide="music" class="w-3.5 h-3.5 flex-shrink-0 opacity-60"></i>
+    <span class="truncate text-xs font-medium flex-1 min-w-0">{{ att.original_name }}</span>
+    <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesizeformat }}</span>
     <a
       href="/api/v1/chat/attachments/{{ att.uuid }}"
       download="{{ att.original_name }}"
       class="btn btn-ghost btn-xs btn-square flex-shrink-0"
       title="Download"
     >
-      <i
-        data-lucide="download"
-        class="w-3.5 h-3.5"
-      ></i>
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
     </a>
     <button
       class="btn btn-ghost btn-xs btn-square flex-shrink-0"
       @click="saveAttachmentToFiles('{{ att.uuid }}')"
       title="Save to Files"
     >
-      <i
-        data-lucide="folder-down"
-        class="w-3.5 h-3.5"
-      ></i>
+      <i data-lucide="folder-down" class="w-3.5 h-3.5"></i>
     </button>
   </div>
 </div>

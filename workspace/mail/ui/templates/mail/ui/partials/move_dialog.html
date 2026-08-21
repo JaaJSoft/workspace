@@ -11,10 +11,7 @@ rules folder dropdown, so the picker looks identical everywhere.
       <span
         class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center flex-shrink-0"
       >
-        <i
-          data-lucide="folder-input"
-          class="w-4 h-4"
-        ></i>
+        <i data-lucide="folder-input" class="w-4 h-4"></i>
       </span>
       <h3 class="font-bold text-lg">Move to</h3>
     </div>
@@ -24,15 +21,14 @@ rules folder dropdown, so the picker looks identical everywhere.
     ></p>
     {% include "mail/ui/partials/_folder_list.html" with model="moveSelectedId" folders="moveTargets" %}
     <div class="modal-action">
-      <button
-        class="btn btn-ghost btn-sm"
-        @click="moveCancel()"
-      >Cancel</button>
+      <button class="btn btn-ghost btn-sm" @click="moveCancel()">Cancel</button>
       <button
         class="btn btn-warning btn-sm"
         :disabled="!moveSelectedId"
         @click="moveConfirm()"
-      >Move</button>
+      >
+        Move
+      </button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">

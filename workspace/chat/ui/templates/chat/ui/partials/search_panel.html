@@ -3,23 +3,15 @@
   class="px-4 py-3 border-b border-base-300 flex items-center justify-between"
 >
   <h4 class="font-semibold text-sm">Search messages</h4>
-  <button
-    class="btn btn-ghost btn-xs btn-square"
-    @click="closeSearchPanel()"
-  >
+  <button class="btn btn-ghost btn-xs btn-square" @click="closeSearchPanel()">
     <i data-lucide="x" class="w-3.5 h-3.5"></i>
   </button>
 </div>
 
 <div class="p-4 space-y-3">
   <!-- Search input -->
-  <label
-    class="input input-sm input-bordered flex items-center gap-2 w-full"
-  >
-    <i
-      data-lucide="search"
-      class="w-3.5 h-3.5 opacity-50"
-    ></i>
+  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+    <i data-lucide="search" class="w-3.5 h-3.5 opacity-50"></i>
     <input
       type="text"
       x-ref="searchInput"
@@ -46,10 +38,7 @@
       :class="searchFiltersExpanded ? 'btn-active' : ''"
       @click="searchFiltersExpanded = !searchFiltersExpanded"
     >
-      <i
-        data-lucide="sliders-horizontal"
-        class="w-3 h-3"
-      ></i>
+      <i data-lucide="sliders-horizontal" class="w-3 h-3"></i>
       Filters
       <span
         x-show="hasActiveSearchFilters()"
@@ -79,32 +68,22 @@
   >
     <!-- Sender filter -->
     <div>
-      <label
-        class="text-xs font-medium text-base-content/60 mb-1 block"
-      >Sender</label>
+      <label class="text-xs font-medium text-base-content/60 mb-1 block">Sender</label>
       <select
         class="select select-xs select-bordered w-full"
         x-model="searchFilterAuthor"
         @change="searchMessages()"
       >
         <option value="">Anyone</option>
-        <template
-          x-for="m in (activeConversation?.members || [])"
-          :key="m.user.id"
-        >
-          <option
-            :value="m.user.id"
-            x-text="memberDisplayName(m)"
-          ></option>
+        <template x-for="m in (activeConversation?.members || [])" :key="m.user.id">
+          <option :value="m.user.id" x-text="memberDisplayName(m)"></option>
         </template>
       </select>
     </div>
 
     <!-- Date filter -->
     <div>
-      <label
-        class="text-xs font-medium text-base-content/60 mb-1 block"
-      >Date</label>
+      <label class="text-xs font-medium text-base-content/60 mb-1 block">Date</label>
       <select
         class="select select-xs select-bordered w-full"
         x-model="searchFilterDateRange"
@@ -117,10 +96,7 @@
         <option value="custom">Custom range</option>
       </select>
       <!-- Custom date inputs -->
-      <div
-        x-show="searchFilterDateRange === 'custom'"
-        class="flex gap-2 mt-1"
-      >
+      <div x-show="searchFilterDateRange === 'custom'" class="flex gap-2 mt-1">
         <input
           type="date"
           class="input input-xs input-bordered flex-1"
@@ -140,9 +116,7 @@
 
     <!-- Attachment filters -->
     <div>
-      <label
-        class="text-xs font-medium text-base-content/60 mb-1 block"
-      >Attachments</label>
+      <label class="text-xs font-medium text-base-content/60 mb-1 block">Attachments</label>
       <div class="flex gap-1">
         <button
           class="btn btn-xs gap-1"
@@ -165,13 +139,8 @@
   </div>
 
   <!-- Loading -->
-  <div
-    x-show="searchLoading"
-    class="flex justify-center py-4"
-  >
-    <span
-      class="loading loading-spinner loading-sm text-info"
-    ></span>
+  <div x-show="searchLoading" class="flex justify-center py-4">
+    <span class="loading loading-spinner loading-sm text-info"></span>
   </div>
 
   <!-- Result count -->
@@ -187,10 +156,7 @@
     x-show="!searchLoading && searchResults.length > 0"
     class="space-y-1 max-h-[calc(100vh-16rem)] overflow-y-auto"
   >
-    <template
-      x-for="(result, idx) in searchResults"
-      :key="result.uuid"
-    >
+    <template x-for="(result, idx) in searchResults" :key="result.uuid">
       <div
         class="rounded-lg px-3 py-2 hover:bg-base-200 transition-colors cursor-pointer text-sm"
         :class="searchHighlight === idx ? 'bg-base-200' : ''"

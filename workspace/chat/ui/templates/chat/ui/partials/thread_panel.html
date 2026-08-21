@@ -25,13 +25,8 @@
   <div
     class="px-4 py-3 border-b border-base-300 flex items-center justify-between"
   >
-    <h4
-      class="font-semibold text-sm flex items-center gap-2"
-    >
-      <i
-        data-lucide="messages-square"
-        class="w-4 h-4 text-info"
-      ></i>
+    <h4 class="font-semibold text-sm flex items-center gap-2">
+      <i data-lucide="messages-square" class="w-4 h-4 text-info"></i>
       Thread
     </h4>
     <button
@@ -52,10 +47,7 @@
     @dragleave.prevent="handleDragLeave($event)"
     @drop.prevent="handleDrop($event)"
   >
-    <div
-      x-show="hasMoreMessages"
-      class="flex justify-center py-2"
-    >
+    <div x-show="hasMoreMessages" class="flex justify-center py-2">
       <button
         class="btn btn-ghost btn-xs"
         @click="loadMoreMessages()"
@@ -68,20 +60,12 @@
         ></span>
       </button>
     </div>
-    <div
-      x-show="loadingMessages"
-      class="flex justify-center py-8"
-    >
-      <span
-        class="loading loading-spinner loading-md text-info"
-      ></span>
+    <div x-show="loadingMessages" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-md text-info"></span>
     </div>
     <!-- Placeholders the panel's first $ajax load replaces: the root message
          renders outside the paginated list so "load older" cannot sink it. -->
-    <div
-      id="thread-messages-container"
-      @ajax:merge="_vetoStaleMerge($event)"
-    >
+    <div id="thread-messages-container" @ajax:merge="_vetoStaleMerge($event)">
       <div id="thread-root-message"></div>
       <div id="thread-message-list"></div>
     </div>

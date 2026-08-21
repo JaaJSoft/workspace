@@ -21,16 +21,11 @@ Size mapping:
 {% endcomment %}
 
 {% if size == 'sm' %}
-  <div
-    class="flex items-center gap-2 {{ classes }}"
-  >
+  <div class="flex items-center gap-2 {{ classes }}">
     <div
       class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-md"
     >
-      <i
-        data-lucide="users"
-        class="w-5 h-5 text-base-100"
-      ></i>
+      <i data-lucide="users" class="w-5 h-5 text-base-100"></i>
     </div>
     {% if show_text != False %}
       <span
@@ -39,16 +34,11 @@ Size mapping:
     {% endif %}
   </div>
 {% elif size == 'lg' %}
-  <div
-    class="flex items-center gap-4 {{ classes }}"
-  >
+  <div class="flex items-center gap-4 {{ classes }}">
     <div
       class="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-xl"
     >
-      <i
-        data-lucide="users"
-        class="w-8 h-8 text-base-100"
-      ></i>
+      <i data-lucide="users" class="w-8 h-8 text-base-100"></i>
     </div>
     {% if show_text != False %}
       <span
@@ -57,16 +47,11 @@ Size mapping:
     {% endif %}
   </div>
 {% elif size == 'xl' %}
-  <div
-    class="flex items-center gap-5 {{ classes }}"
-  >
+  <div class="flex items-center gap-5 {{ classes }}">
     <div
       class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-2xl"
     >
-      <i
-        data-lucide="users"
-        class="w-10 h-10 text-base-100"
-      ></i>
+      <i data-lucide="users" class="w-10 h-10 text-base-100"></i>
     </div>
     {% if show_text != False %}
       <span
@@ -76,16 +61,11 @@ Size mapping:
   </div>
 {% else %}
   {# Default: md #}
-  <div
-    class="flex items-center gap-3 {{ classes }}"
-  >
+  <div class="flex items-center gap-3 {{ classes }}">
     <div
       class="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg"
     >
-      <i
-        data-lucide="users"
-        class="w-7 h-7 text-base-100"
-      ></i>
+      <i data-lucide="users" class="w-7 h-7 text-base-100"></i>
     </div>
     {% if show_text != False %}
       <span

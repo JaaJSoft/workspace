@@ -24,18 +24,12 @@
       @change="toggleSelect('{{ task.uuid }}')"
     />
   {% endif %}
-  <span
-    class="flex-1 min-w-0 flex items-center gap-2"
-  >
-    <span
-      class="text-xs font-mono text-base-content/50 shrink-0"
-    >{{ project.key }}-{{ task.number }}</span>
+  <span class="flex-1 min-w-0 flex items-center gap-2">
+    <span class="text-xs font-mono text-base-content/50 shrink-0">{{ project.key }}-{{ task.number }}</span>
     <span class="text-sm font-medium truncate">{{ task.title }}</span>
     {% if task.labels.all %}
       {# ml-auto packs the chips against the priority column so they line up across rows. #}
-      <span
-        class="ml-auto hidden lg:flex items-center gap-1 shrink-0"
-      >
+      <span class="ml-auto hidden lg:flex items-center gap-1 shrink-0">
         {% for label in task.labels.all %}
           <tag-chip name="{{ label.name }}" color="{{ label.color }}" size="sm" class="shrink-0"></tag-chip>
         {% endfor %}
@@ -55,9 +49,9 @@
       <span class="truncate">{{ task.status.name }}</span>
     </span>
   {% endif %}
-  <span
-    class="w-24 hidden sm:flex items-center shrink-0"
-  >{% include "projects/ui/partials/_priority_badge.html" %}</span>
+  <span class="w-24 hidden sm:flex items-center shrink-0">
+    {% include "projects/ui/partials/_priority_badge.html" %}
+  </span>
   <span
     class="w-24 hidden md:flex items-center gap-1 shrink-0 text-xs {% if task.due_date and task.due_date < today %}text-error font-medium{% else %}text-base-content/60{% endif %}"
   >
@@ -65,9 +59,7 @@
       <i data-lucide="calendar" class="w-3 h-3"></i>{{ task.due_date|date:"M j" }}
     {% endif %}
   </span>
-  <span
-    class="w-24 hidden md:flex justify-end -space-x-2 shrink-0"
-  >
+  <span class="w-24 hidden md:flex justify-end -space-x-2 shrink-0">
     {% for assignee in task.assignees.all %}
       <user-avatar user-id="{{ assignee.id }}" username="{{ assignee.username }}" size="2xs" card></user-avatar>
     {% endfor %}
@@ -78,10 +70,7 @@
       title="Send to board"
       @click.stop="sendToBoard('{{ task.uuid }}')"
     >
-      <i
-        data-lucide="arrow-right-circle"
-        class="w-5 h-5"
-      ></i>
+      <i data-lucide="arrow-right-circle" class="w-5 h-5"></i>
     </button>
   {% endif %}
 </li>

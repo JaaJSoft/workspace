@@ -15,8 +15,5 @@ shows it too. That is why this uses userCard() instead of <user-avatar card>.
   @mouseleave="scheduleHide()"
 >
   <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="{{ size|default:'2xs' }}"{% if show_presence %} presence{% endif %}></user-avatar>
-  <a
-    href="/users/profile/{{ user.username }}"
-    class="hover:underline"
-  >{{ user.full_name|default:user.username }}</a>
+  <a href="/users/profile/{{ user.username }}" class="hover:underline">{{ user.full_name|default:user.username }}</a>
 </div>

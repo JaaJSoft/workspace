@@ -26,15 +26,8 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_sidebar %}
-  <div
-    class="drawer-side z-40 h-full"
-    x-data="sidebarCollapse()"
-  >
-    <label
-      for="files-drawer"
-      aria-label="close sidebar"
-      class="drawer-overlay"
-    ></label>
+  <div class="drawer-side z-40 h-full" x-data="sidebarCollapse()">
+    <label for="files-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     <!-- Sidebar -->
     <aside
@@ -42,9 +35,7 @@
       :class="collapsed ? 'w-16' : 'w-72'"
     >
       <!-- Sidebar header -->
-      <div
-        class="border-b border-base-300 py-3 px-3"
-      >
+      <div class="border-b border-base-300 py-3 px-3">
         <div
           class="flex items-center"
           :class="collapsed ? 'justify-center' : 'justify-between'"
@@ -79,13 +70,8 @@
               tabindex="0"
               class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1"
             >
-              <h4
-                class="font-semibold text-sm mb-3 flex items-center gap-2"
-              >
-                <i
-                  data-lucide="settings"
-                  class="w-4 h-4 text-primary"
-                ></i>
+              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                <i data-lucide="settings" class="w-4 h-4 text-primary"></i>
                 Preferences
               </h4>
               {% include "files/ui/partials/_preferences_content.html" %}
@@ -127,10 +113,7 @@
           x-show="showPinned"
           x-transition
         >
-          <hr
-            class="my-2 border-base-300"
-            x-show="!collapsed"
-          />
+          <hr class="my-2 border-base-300" x-show="!collapsed" />
           <h3
             class="text-sm font-semibold text-base-content/60 uppercase tracking-wider"
             x-show="!collapsed"
@@ -142,10 +125,7 @@
             </span>
           </h3>
           <!-- Collapsed: thin separator -->
-          <hr
-            class="my-1 border-base-300"
-            x-show="collapsed && pinnedCount > 0"
-          />
+          <hr class="my-1 border-base-300" x-show="collapsed && pinnedCount > 0" />
           <!-- Drop zone -->
           <div
             @dragover.prevent="onDragOver($event)"
@@ -163,10 +143,7 @@
               x-transition
               class="text-xs text-primary font-medium text-center py-4 border-2 border-dashed border-primary/40 rounded-lg mt-2 bg-primary/5"
             >
-              <i
-                data-lucide="pin"
-                class="w-4 h-4 inline-block mb-1"
-              ></i>
+              <i data-lucide="pin" class="w-4 h-4 inline-block mb-1"></i>
               <br />
               Drop to pin folder
             </div>
@@ -186,9 +163,7 @@
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
-      <div
-        class="border-t border-base-300 py-4 px-3"
-      >
+      <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="primary" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
         </ul>
@@ -207,11 +182,7 @@
     @ajax:error="AppAlert.error('Failed to refresh items')"
   >
     <!-- Persistent nav links for Alpine AJAX navigation (outside #folder-browser so they survive replacements) -->
-    <a
-      id="folder-nav-push"
-      class="hidden"
-      x-target.push="folder-browser"
-    ></a>
+    <a id="folder-nav-push" class="hidden" x-target.push="folder-browser"></a>
     <a
       id="folder-nav-replace"
       class="hidden"
@@ -232,17 +203,13 @@
           >
 
             <!-- Top Header Bar -->
-            <div
-              class="bg-base-100 border-b border-base-300 p-4 lg:p-6"
-            >
+            <div class="bg-base-100 border-b border-base-300 p-4 lg:p-6">
               <!-- Header with breadcrumb, title and actions on same line -->
               <div class="flex items-start gap-3">
                 <!-- Left: Breadcrumb and Title -->
                 <div class="flex-1 min-w-0">
                   <!-- Breadcrumb row with action button aligned -->
-                  <div
-                    class="flex items-center justify-between gap-4 mb-1"
-                  >
+                  <div class="flex items-center justify-between gap-4 mb-1">
                     <div class="flex items-center gap-2 min-w-0">
                       <div class="join" x-data="navButtons()">
                         <button
@@ -253,10 +220,7 @@
                           :disabled="!canGoBack"
                           @click="window.folderNav.back()"
                         >
-                          <i
-                            data-lucide="arrow-left"
-                            class="w-4 h-4"
-                          ></i>
+                          <i data-lucide="arrow-left" class="w-4 h-4"></i>
                         </button>
                         <button
                           type="button"
@@ -266,10 +230,7 @@
                           :disabled="!canGoForward"
                           @click="window.folderNav.forward()"
                         >
-                          <i
-                            data-lucide="arrow-right"
-                            class="w-4 h-4"
-                          ></i>
+                          <i data-lucide="arrow-right" class="w-4 h-4"></i>
                         </button>
                         <button
                           type="button"
@@ -302,27 +263,15 @@
                           @click="confirmCleanTrash()"
                           :disabled="cleaningTrash"
                         >
-                          <span
-                            x-show="cleaningTrash"
-                            class="loading loading-spinner loading-xs"
-                          ></span>
-                          <i
-                            x-show="!cleaningTrash"
-                            data-lucide="trash-2"
-                            class="w-4 h-4"
-                          ></i>
+                          <span x-show="cleaningTrash" class="loading loading-spinner loading-xs"></span>
+                          <i x-show="!cleaningTrash" data-lucide="trash-2" class="w-4 h-4"></i>
                           <span class="hidden sm:inline">Empty trash</span>
                         </button>
                       </div>
                     {% elif not is_shared_view and not is_recent_view %}
                       <!-- Action button with dropdown -->
-                      <div
-                        class="dropdown dropdown-end flex-shrink-0"
-                      >
-                        <button
-                          tabindex="0"
-                          class="btn btn-primary btn-sm gap-2"
-                        >
+                      <div class="dropdown dropdown-end flex-shrink-0">
+                        <button tabindex="0" class="btn btn-primary btn-sm gap-2">
                           <i data-lucide="plus" class="w-4 h-4"></i>
                           <span class="hidden sm:inline">New</span>
                           <i
@@ -336,9 +285,7 @@
                   </div>
 
                   <!-- Title below breadcrumb -->
-                  <h1
-                    class="text-2xl font-bold text-base-content"
-                  >{{ page_title }}</h1>
+                  <h1 class="text-2xl font-bold text-base-content">{{ page_title }}</h1>
                 </div>
               </div>
             </div>
@@ -363,9 +310,7 @@
                     data-lucide="upload-cloud"
                     class="w-12 h-12 mx-auto mb-3 text-primary"
                   ></i>
-                  <p
-                    class="text-lg font-semibold text-primary"
-                  >Drop files to upload</p>
+                  <p class="text-lg font-semibold text-primary">Drop files to upload</p>
                   <p class="text-sm text-base-content/60">Files will be added to the current folder</p>
                 </div>
               </div>
@@ -411,19 +356,10 @@
   {% include 'files/ui/partials/storage_dialog.html' %}
 
   <!-- Mobile preferences dialog -->
-  <dialog
-    id="files-prefs-dialog"
-    class="modal"
-    x-data="filePreferences()"
-  >
+  <dialog id="files-prefs-dialog" class="modal" x-data="filePreferences()">
     <div class="modal-box">
-      <h3
-        class="font-bold text-lg flex items-center gap-2"
-      >
-        <i
-          data-lucide="settings"
-          class="w-5 h-5 text-primary"
-        ></i>
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i data-lucide="settings" class="w-5 h-5 text-primary"></i>
         Preferences
       </h3>
       <div class="mt-4">{% include "files/ui/partials/_preferences_content.html" %}</div>
@@ -452,44 +388,20 @@
   ></script>
 
   <!-- File locking (must load before viewers) -->
-  <script
-    src="{% static 'files/ui/js/file_lock.js' %}"
-  ></script>
+  <script src="{% static 'files/ui/js/file_lock.js' %}"></script>
 
   <!-- File actions (shared) & browser -->
-  <script
-    src="{% static 'files/ui/js/file_actions.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/viewer_panel.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/core.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/preferences.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/tags.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/browser.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/table.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/pinned.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/context_menu.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/share_modal.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/storage.js' %}"
-  ></script>
+  <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
+  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/core.js' %}"></script>
+  <script src="{% static 'files/ui/js/preferences.js' %}"></script>
+  <script src="{% static 'files/ui/js/tags.js' %}"></script>
+  <script src="{% static 'files/ui/js/browser.js' %}"></script>
+  <script src="{% static 'files/ui/js/table.js' %}"></script>
+  <script src="{% static 'files/ui/js/pinned.js' %}"></script>
+  <script src="{% static 'files/ui/js/context_menu.js' %}"></script>
+  <script src="{% static 'files/ui/js/share_modal.js' %}"></script>
+  <script src="{% static 'files/ui/js/storage.js' %}"></script>
   <script src="{% static 'ui/js/comments.js' %}"></script>
 
 {% endblock %}

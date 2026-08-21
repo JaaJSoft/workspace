@@ -27,11 +27,7 @@ Parameters:
     data-lucide="{{ folder.icon|default:default_icon }}"
     class="w-5 h-5 flex-shrink-0 {{ folder.color|default:default_color }}"
   ></i>
-  <span
-    x-show="!collapsed"
-    x-transition
-    class="truncate flex-1"
-  >{{ folder.name }}</span>
+  <span x-show="!collapsed" x-transition class="truncate flex-1">{{ folder.name }}</span>
   {% if show_grip %}
     <i
       data-lucide="grip-vertical"

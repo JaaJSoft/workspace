@@ -1,8 +1,6 @@
 <div class="space-y-3">
   <div>
-    <label
-      class="text-sm text-base-content/60 block mb-1"
-    >Density</label>
+    <label class="text-sm text-base-content/60 block mb-1">Density</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="prefs.density"
@@ -14,9 +12,7 @@
     </select>
   </div>
   <div>
-    <label
-      class="text-sm text-base-content/60 block mb-1"
-    >Preview lines</label>
+    <label class="text-sm text-base-content/60 block mb-1">Preview lines</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="prefs.previewLines"
@@ -33,18 +29,20 @@
   <hr class="border-base-300" />
   <div
     class="text-xs font-semibold uppercase tracking-wide text-base-content/60"
-  >AI features</div>
+  >
+    AI features
+  </div>
   {% include "ui/partials/pref_toggle.html" with label="Auto-classify new emails" key="classify" state="ai.classify" handler="saveAiFeature" accent="toggle-warning" %}
   {% include "ui/partials/pref_toggle.html" with label="Extract events and tasks" key="extract" state="ai.extract" handler="saveAiFeature" accent="toggle-warning" %}
   {% include "ui/partials/pref_toggle.html" with label="AI writing assistance" key="manual" state="ai.manual" handler="saveAiFeature" accent="toggle-warning" %}
   <hr class="border-base-300" />
   <div
     class="text-xs font-semibold uppercase tracking-wide text-base-content/60"
-  >Notifications</div>
+  >
+    Notifications
+  </div>
   <div>
-    <label
-      class="text-sm text-base-content/60 block mb-1"
-    >Notify me about</label>
+    <label class="text-sm text-base-content/60 block mb-1">Notify me about</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="notifyMode"
@@ -55,15 +53,11 @@
       <option value="never">Never</option>
     </select>
   </div>
-  <template
-    x-if="notifyMode === 'labels' && !ai.classify"
-  >
+  <template x-if="notifyMode === 'labels' && !ai.classify">
     <inline-alert type="warning" message="Auto-classify is off, so no email gets labelled and no notification is sent." class="mt-1"></inline-alert>
   </template>
   <div>
-    <label
-      class="text-sm text-base-content/60 block mb-1"
-    >Max notifications per folder at once</label>
+    <label class="text-sm text-base-content/60 block mb-1">Max notifications per folder at once</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="notifyBurst"
@@ -75,8 +69,6 @@
       <option value="20">20</option>
       <option value="50">50</option>
     </select>
-    <p
-      class="text-xs text-base-content/50 mt-1"
-    >When several emails arrive together, only the first ones are notified. The rest still appear in your inbox.</p>
+    <p class="text-xs text-base-content/50 mt-1">When several emails arrive together, only the first ones are notified. The rest still appear in your inbox.</p>
   </div>
 </div>

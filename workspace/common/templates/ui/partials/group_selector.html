@@ -19,13 +19,8 @@
   x-data="groupSelector('{{ on_select_event }}', () => ({{ local_source }}))"
   class="relative"
 >
-  <label
-    class="input input-sm input-bordered flex items-center gap-2 w-full"
-  >
-    <i
-      data-lucide="search"
-      class="w-4 h-4 opacity-60"
-    ></i>
+  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+    <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
     <input
       type="text"
       class="grow"
@@ -47,10 +42,7 @@
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
   >
     <ul class="menu menu-sm p-1">
-      <template
-        x-for="(group, idx) in results"
-        :key="group.id"
-      >
+      <template x-for="(group, idx) in results" :key="group.id">
         <li>
           <button
             type="button"
@@ -59,14 +51,8 @@
             @click="selectGroup(group)"
             @mouseenter="highlight = idx"
           >
-            <i
-              data-lucide="users"
-              class="w-4 h-4 opacity-60"
-            ></i>
-            <span
-              class="font-medium text-sm"
-              x-text="group.name"
-            ></span>
+            <i data-lucide="users" class="w-4 h-4 opacity-60"></i>
+            <span class="font-medium text-sm" x-text="group.name"></span>
           </button>
         </li>
       </template>
@@ -78,5 +64,7 @@
     x-show="showDropdown && results.length === 0 && query.length > 0"
     x-cloak
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
-  >No groups found</div>
+  >
+    No groups found
+  </div>
 </div>

@@ -34,9 +34,7 @@
 
         {% if msg.body_html %}
           {# Capped here, not on the bubble: attachments sit in it too #}
-          <div
-            class="msg-body prose prose-sm max-w-[36rem] break-words"
-          >{{ msg.body_html|safe }}</div>
+          <div class="msg-body prose prose-sm max-w-[36rem] break-words">{{ msg.body_html|safe }}</div>
         {% endif %}
         {% if msg.tool_data %}
           {% render_ai_steps msg %}
@@ -67,9 +65,7 @@
                     />
                   {% endif %}
                   <div class="px-2.5 py-2">
-                    <div
-                      class="flex items-center gap-1 text-[0.65rem] text-base-content/50"
-                    >
+                    <div class="flex items-center gap-1 text-[0.65rem] text-base-content/50">
                       {% if lp.preview.favicon_url %}
                         <img
                           src="{{ lp.preview.favicon_url }}"
@@ -85,14 +81,10 @@
                       {% endif %}
                     </div>
                     {% if lp.preview.title %}
-                      <div
-                        class="font-medium text-xs text-base-content mt-0.5 line-clamp-2"
-                      >{{ lp.preview.title }}</div>
+                      <div class="font-medium text-xs text-base-content mt-0.5 line-clamp-2">{{ lp.preview.title }}</div>
                     {% endif %}
                     {% if lp.preview.description %}
-                      <div
-                        class="text-[0.7rem] text-base-content/60 mt-0.5 line-clamp-2"
-                      >{{ lp.preview.description }}</div>
+                      <div class="text-[0.7rem] text-base-content/60 mt-0.5 line-clamp-2">{{ lp.preview.description }}</div>
                     {% endif %}
                   </div>
                 </a>
@@ -117,9 +109,7 @@
         {% endwith %}
 
         {% if msg.edited_at %}
-          <span
-            class="text-[0.65rem] opacity-50 italic ml-1"
-          >(edited)</span>
+          <span class="text-[0.65rem] opacity-50 italic ml-1">(edited)</span>
         {% endif %}
         {% if msg.uuid in pinned_message_ids %}
           <span
@@ -137,10 +127,7 @@
             class="btn btn-ghost btn-xs gap-1 text-warning mt-0.5"
             @click="retryBotResponse('{{ msg.uuid }}')"
           >
-            <i
-              data-lucide="refresh-cw"
-              class="w-3 h-3"
-            ></i>
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
             Retry
           </button>
         {% endif %}
@@ -155,19 +142,14 @@
           >
             {# Quick reactions - server-rendered so already-applied ones show as selected #}
             {% render_reaction_picker msg current_user quick_emojis %}
-            <div
-              class="w-px self-stretch my-0.5 bg-base-300"
-            ></div>
+            <div class="w-px self-stretch my-0.5 bg-base-300"></div>
             {# Full emoji picker #}
             <button
               class="btn btn-ghost btn-xs btn-square"
               @click="openEmojiPicker('reaction', $event, '{{ msg.uuid }}')"
               title="More reactions"
             >
-              <i
-                data-lucide="smile-plus"
-                class="w-3.5 h-3.5"
-              ></i>
+              <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
             </button>
             {# Reply #}
             <button
@@ -183,10 +165,7 @@
                 @click="unpinMessage('{{ msg.uuid }}')"
                 title="Unpin"
               >
-                <i
-                  data-lucide="pin-off"
-                  class="w-3.5 h-3.5"
-                ></i>
+                <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
               </button>
             {% else %}
               <button
@@ -203,10 +182,7 @@
                 @click="startEdit('{{ msg.uuid }}')"
                 title="Edit"
               >
-                <i
-                  data-lucide="pencil"
-                  class="w-3.5 h-3.5"
-                ></i>
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </button>
             {% endif %}
             {% if is_own or is_bot %}
@@ -215,10 +191,7 @@
                 @click="deleteMessage('{{ msg.uuid }}')"
                 title="Delete"
               >
-                <i
-                  data-lucide="trash-2"
-                  class="w-3.5 h-3.5"
-                ></i>
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
               </button>
             {% endif %}
           </div>
@@ -244,10 +217,7 @@
             class="flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded-full text-xs text-info hover:bg-info/10 transition-colors"
             @click="openThread('{{ msg.uuid }}')"
           >
-            <i
-              data-lucide="messages-square"
-              class="w-3 h-3"
-            ></i>
+            <i data-lucide="messages-square" class="w-3 h-3"></i>
             {% comment %}
               Keyed by message, not found by walking siblings: a message group
               holds several messages, so a positional lookup would land on a
@@ -273,10 +243,7 @@
             class="flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded-full text-xs text-base-content/50 hover:text-info hover:bg-info/10 transition-colors"
             @click="openThread('{{ msg.thread_root_id }}')"
           >
-            <i
-              data-lucide="messages-square"
-              class="w-3 h-3"
-            ></i>
+            <i data-lucide="messages-square" class="w-3 h-3"></i>
             <span>View thread</span>
           </button>
         {% endif %}
@@ -286,10 +253,7 @@
 
   {# Footer: time + read receipt (the receipt partial's root carries slot="footer") #}
   {% with last_msg=messages|last %}
-    <span
-      slot="footer"
-      class="text-[0.65rem] text-base-content/40"
-    >{{ last_msg.created_at|localtime_tag }}</span>
+    <span slot="footer" class="text-[0.65rem] text-base-content/40">{{ last_msg.created_at|localtime_tag }}</span>
     {% if is_own %}
       {% render_read_receipt last_msg conversation_kind %}
     {% endif %}

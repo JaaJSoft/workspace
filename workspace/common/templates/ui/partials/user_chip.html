@@ -18,10 +18,7 @@ Params:
   class="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100 py-0.5 pl-0.5 pr-1"
 >
   <user-avatar :user-id="{{ user_id_expr }}" :username="{{ username_expr }}" size="xs"></user-avatar>
-  <span
-    class="text-xs"
-    x-text="{{ username_expr }}"
-  ></span>
+  <span class="text-xs" x-text="{{ username_expr }}"></span>
   {% if remove_expr %}
     {% comment %}Inline SVG on purpose: lucide.createIcons() does not process
     nodes that Alpine clones out of an x-for template, so a data-lucide icon

@@ -1,6 +1,4 @@
-<div
-  class="grid grid-cols-[repeat(auto-fit,5rem)] justify-center gap-3"
->
+<div class="grid grid-cols-[repeat(auto-fit,5rem)] justify-center gap-3">
   {% for module in modules %}
     <a
       href="{{ module.url }}"
@@ -10,10 +8,7 @@
         <div
           class="w-12 h-12 rounded-xl bg-{{ module.color }}/10 flex items-center justify-center text-{{ module.color }} group-hover:bg-{{ module.color }}/20 transition-colors"
         >
-          <i
-            data-lucide="{{ module.icon }}"
-            class="w-6 h-6"
-          ></i>
+          <i data-lucide="{{ module.icon }}" class="w-6 h-6"></i>
         </div>
         {% if module.notification_count %}
           <span

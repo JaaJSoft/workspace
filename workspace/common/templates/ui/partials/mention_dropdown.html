@@ -11,10 +11,7 @@ Params:
   x-cloak
   class="absolute bottom-full left-0 right-0 mb-1 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50"
 >
-  <template
-    x-for="(user, idx) in mentionResults"
-    :key="user.id"
-  >
+  <template x-for="(user, idx) in mentionResults" :key="user.id">
     <button
       type="button"
       class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-base-200 transition-colors text-left"
@@ -24,10 +21,7 @@ Params:
     >
       <user-avatar :user-id="user.id" :username="user.username" size="sm"></user-avatar>
       <div class="flex-1 min-w-0">
-        <span
-          class="font-medium"
-          x-text="'@' + user.username"
-        ></span>
+        <span class="font-medium" x-text="'@' + user.username"></span>
         <span
           class="text-base-content/50 ml-1 text-xs"
           x-text="[user.first_name, user.last_name].filter(Boolean).join(' ')"

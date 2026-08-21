@@ -5,9 +5,7 @@
     x-data="{ uuid: '', name: '' }"
     @open-rename.window="uuid = $event.detail.uuid; name = $event.detail.name"
   >
-    <h3
-      class="font-bold text-lg mb-4 flex items-center gap-3"
-    >
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
       <div
         class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary/10 text-primary"
       >
@@ -34,11 +32,10 @@
           type="button"
           class="btn btn-sm"
           onclick="document.getElementById('rename-dialog').close()"
-        >Cancel</button>
-        <button
-          type="submit"
-          class="btn btn-primary btn-sm"
-        >Rename</button>
+        >
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">Rename</button>
       </div>
     </form>
   </div>

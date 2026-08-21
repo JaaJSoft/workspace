@@ -3,10 +3,7 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% if file %}{{ file.name }} — {% endif %}Shared File — Workspace</title>
     <link
       href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css"
@@ -23,21 +20,14 @@
       crossorigin="anonymous"
     ></script>
   </head>
-  <body
-    class="min-h-screen bg-base-200 flex flex-col"
-  >
-    <div
-      class="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-6"
-    >
+  <body class="min-h-screen bg-base-200 flex flex-col">
+    <div class="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-6">
 
       {% if expired %}
         <!-- Expired link -->
         <div class="card bg-base-100 shadow-lg">
           <div class="card-body text-center py-12">
-            <i
-              data-lucide="clock"
-              class="w-12 h-12 text-warning mx-auto mb-4"
-            ></i>
+            <i data-lucide="clock" class="w-12 h-12 text-warning mx-auto mb-4"></i>
             <h2 class="text-xl font-bold mb-2">Link expired</h2>
             <p class="text-base-content/60">This share link is no longer available.</p>
           </div>
@@ -49,23 +39,16 @@
           class="card bg-base-100 shadow-xl max-w-sm mx-auto mt-8"
           x-data="sharedFilePassword('{{ share_token }}')"
         >
-          <div
-            class="card-body items-center text-center pt-10 pb-8 px-8"
-          >
+          <div class="card-body items-center text-center pt-10 pb-8 px-8">
             <!-- Lock icon -->
             <div
               class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg"
             >
-              <i
-                data-lucide="lock"
-                class="w-7 h-7 text-white"
-              ></i>
+              <i data-lucide="lock" class="w-7 h-7 text-white"></i>
             </div>
 
             <h2 class="text-lg font-bold">Protected file</h2>
-            <p
-              class="text-sm text-base-content/50 mb-5"
-            >Enter the password to access this file</p>
+            <p class="text-sm text-base-content/50 mb-5">Enter the password to access this file</p>
 
             <!-- Input with integrated button -->
             <div class="w-full relative">
@@ -83,25 +66,13 @@
                 @click="verify()"
                 :disabled="!password || verifying"
               >
-                <span
-                  x-show="verifying"
-                  class="loading loading-spinner loading-xs"
-                ></span>
-                <i
-                  x-show="!verifying"
-                  data-lucide="arrow-right"
-                  class="w-4 h-4"
-                ></i>
+                <span x-show="verifying" class="loading loading-spinner loading-xs"></span>
+                <i x-show="!verifying" data-lucide="arrow-right" class="w-4 h-4"></i>
               </button>
             </div>
 
             <!-- Error -->
-            <p
-              x-show="error"
-              x-cloak
-              class="text-sm text-error mt-2"
-              x-text="error"
-            ></p>
+            <p x-show="error" x-cloak class="text-sm text-error mt-2" x-text="error"></p>
           </div>
         </div>
 
@@ -142,26 +113,17 @@
 
       {% else %}
         <!-- File viewer -->
-        <div
-          class="card bg-base-100 shadow-lg overflow-hidden"
-        >
+        <div class="card bg-base-100 shadow-lg overflow-hidden">
           <!-- Header -->
-          <div
-            class="bg-gradient-to-r from-primary to-secondary px-6 py-5"
-          >
+          <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
             <div class="flex items-center gap-3">
               <div
                 class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm"
               >
-                <i
-                  data-lucide="file"
-                  class="w-5 h-5 text-white"
-                ></i>
+                <i data-lucide="file" class="w-5 h-5 text-white"></i>
               </div>
               <div class="flex-1 min-w-0">
-                <h1
-                  class="text-xl font-bold text-white truncate"
-                >{{ file.name }}</h1>
+                <h1 class="text-xl font-bold text-white truncate">{{ file.name }}</h1>
                 <p class="text-white/70 text-sm">{{ file.type|default:"unknown" }} - {{ file.size|filesizeformat }}</p>
               </div>
               <a
@@ -185,10 +147,7 @@
                   class="w-12 h-12 text-base-content/30 mx-auto mb-4"
                 ></i>
                 <p class="text-base-content/60 mb-4">Preview not available for this file type</p>
-                <a
-                  href="{{ download_url }}"
-                  class="btn btn-primary btn-sm gap-1"
-                >
+                <a href="{{ download_url }}" class="btn btn-primary btn-sm gap-1">
                   <i data-lucide="download" class="w-4 h-4"></i>
                   Download file
                 </a>
@@ -206,10 +165,7 @@
           <div
             class="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center"
           >
-            <i
-              data-lucide="share-2"
-              class="w-3.5 h-3.5 text-white"
-            ></i>
+            <i data-lucide="share-2" class="w-3.5 h-3.5 text-white"></i>
           </div>
           <span>Shared with</span>
           <a

@@ -4,14 +4,8 @@
 {% block title %}Calendar - Workspace{% endblock %}
 
 {% block extra_head %}
-  <link
-    rel="stylesheet"
-    href="{% static 'calendar/ui/css/calendar.css' %}"
-  />
-  <link
-    rel="stylesheet"
-    href="{% static 'calendar/ui/css/polls.css' %}"
-  />
+  <link rel="stylesheet" href="{% static 'calendar/ui/css/calendar.css' %}" />
+  <link rel="stylesheet" href="{% static 'calendar/ui/css/polls.css' %}" />
 {% endblock %}
 
 {% block navbar %}
@@ -46,10 +40,7 @@
           @click="calendarPrev()"
           aria-label="Previous"
         >
-          <i
-            data-lucide="chevron-left"
-            class="w-4 h-4"
-          ></i>
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
         </button>
         <h3
           class="text-sm font-semibold flex-1 text-center truncate"
@@ -61,26 +52,16 @@
           @click="calendarNext()"
           aria-label="Next"
         >
-          <i
-            data-lucide="chevron-right"
-            class="w-4 h-4"
-          ></i>
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
         </button>
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs"
-          @click="calendarToday()"
-        >Today</button>
+        <button type="button" class="btn btn-ghost btn-xs" @click="calendarToday()">Today</button>
         <div class="dropdown dropdown-end">
           <label
             tabindex="0"
             class="btn btn-ghost btn-sm btn-circle"
             aria-label="Change view"
           >
-            <i
-              data-lucide="layout-grid"
-              class="w-4 h-4"
-            ></i>
+            <i data-lucide="layout-grid" class="w-4 h-4"></i>
           </label>
           <ul
             tabindex="0"
@@ -93,10 +74,7 @@
                 :class="currentView === 'dayGridMonth' ? 'active' : ''"
                 @click="changeView('dayGridMonth'); document.activeElement.blur()"
               >
-                <i
-                  data-lucide="calendar-days"
-                  class="w-4 h-4"
-                ></i> Month
+                <i data-lucide="calendar-days" class="w-4 h-4"></i> Month
               </button>
             </li>
             <li>
@@ -106,10 +84,7 @@
                 :class="currentView === 'timeGridWeek' ? 'active' : ''"
                 @click="changeView('timeGridWeek'); document.activeElement.blur()"
               >
-                <i
-                  data-lucide="calendar-range"
-                  class="w-4 h-4"
-                ></i> Week
+                <i data-lucide="calendar-range" class="w-4 h-4"></i> Week
               </button>
             </li>
             <li>
@@ -119,10 +94,7 @@
                 :class="currentView === 'timeGridDay' ? 'active' : ''"
                 @click="changeView('timeGridDay'); document.activeElement.blur()"
               >
-                <i
-                  data-lucide="calendar-clock"
-                  class="w-4 h-4"
-                ></i> Day
+                <i data-lucide="calendar-clock" class="w-4 h-4"></i> Day
               </button>
             </li>
             <li>
@@ -156,40 +128,27 @@
           x-if="agenda.initialLoaded && agenda.events.length === 0 && !agenda.loading"
         >
           <div class="agenda-empty">
-            <i
-              data-lucide="calendar"
-              class="w-10 h-10 opacity-50"
-            ></i>
+            <i data-lucide="calendar" class="w-10 h-10 opacity-50"></i>
             <p>No upcoming events</p>
           </div>
         </template>
 
         <!-- Loading (initial) -->
-        <template
-          x-if="!agenda.initialLoaded && agenda.loading"
-        >
+        <template x-if="!agenda.initialLoaded && agenda.loading">
           <div class="agenda-loading">
-            <span
-              class="loading loading-spinner loading-md"
-            ></span>
+            <span class="loading loading-spinner loading-md"></span>
           </div>
         </template>
 
         <!-- Day-grouped list -->
-        <template
-          x-for="group in agendaByDay()"
-          :key="group.date"
-        >
+        <template x-for="group in agendaByDay()" :key="group.date">
           <div class="agenda-day-group">
             <div
               class="agenda-day-header"
               :class="group.isToday ? 'is-today' : ''"
               x-text="group.label"
             ></div>
-            <template
-              x-for="event in group.events"
-              :key="event.uuid"
-            >
+            <template x-for="event in group.events" :key="event.uuid">
               <div
                 class="agenda-event"
                 :class="agendaEventClasses(event)"
@@ -198,14 +157,8 @@
                 @mouseenter="_hasHover && !ctxMenu.open && window._eventCardShow($el, event.uuid)"
                 @mouseleave="_hasHover && window._cardPopoverScheduleHide($el)"
               >
-                <span
-                  class="agenda-event-time"
-                  x-text="formatAgendaEventTime(event)"
-                ></span>
-                <span
-                  class="agenda-event-title"
-                  x-text="event.title"
-                ></span>
+                <span class="agenda-event-time" x-text="formatAgendaEventTime(event)"></span>
+                <span class="agenda-event-title" x-text="event.title"></span>
                 <svg
                   x-show="event.is_recurring"
                   xmlns="http://www.w3.org/2000/svg"
@@ -230,11 +183,7 @@
         </template>
 
         <!-- Intersection sentinel for auto-load on scroll -->
-        <div
-          x-ref="agendaSentinel"
-          class="agenda-sentinel"
-          aria-hidden="true"
-        ></div>
+        <div x-ref="agendaSentinel" class="agenda-sentinel" aria-hidden="true"></div>
 
         <!-- Load more (fallback button; auto-load runs via IntersectionObserver) -->
         <div
@@ -249,9 +198,7 @@
           >
             <span x-show="!agenda.loading">Load more</span>
             <span x-show="agenda.loading">
-              <span
-                class="loading loading-spinner loading-xs"
-              ></span>
+              <span class="loading loading-spinner loading-xs"></span>
               Loading…
             </span>
           </button>
@@ -283,18 +230,10 @@
   {% include "calendar/ui/partials/help_dialog.html" %}
 
   <!-- Mobile preferences dialog -->
-  <dialog
-    id="calendar-prefs-dialog"
-    class="modal"
-  >
+  <dialog id="calendar-prefs-dialog" class="modal">
     <div class="modal-box">
-      <h3
-        class="font-bold text-lg flex items-center gap-2"
-      >
-        <i
-          data-lucide="settings"
-          class="w-5 h-5 text-accent"
-        ></i>
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i data-lucide="settings" class="w-5 h-5 text-accent"></i>
         Preferences
       </h3>
       <div class="mt-4">{% include "calendar/ui/partials/_preferences_content.html" %}</div>
@@ -326,27 +265,13 @@
     integrity="sha384-IrJ8IFDRrT4FxNjjLp1sNpEM3tgtoeL2SGxzHZkXXyH5r6i3h72IQ/JXTC/xbOek"
     crossorigin="anonymous"
   ></script>
-  <script
-    src="{% static 'calendar/ui/js/polls.js' %}"
-  ></script>
-  <script
-    src="{% static 'calendar/ui/js/calendar_calendars.js' %}"
-  ></script>
-  <script
-    src="{% static 'calendar/ui/js/calendar_events.js' %}"
-  ></script>
-  <script
-    src="{% static 'calendar/ui/js/calendar_tasks.js' %}"
-  ></script>
-  <script
-    src="{% static 'calendar/ui/js/calendar_recurrence.js' %}"
-  ></script>
-  <script
-    src="{% static 'calendar/ui/js/calendar_polls.js' %}"
-  ></script>
-  <script
-    src="{% static 'calendar/ui/js/calendar.js' %}"
-  ></script>
+  <script src="{% static 'calendar/ui/js/polls.js' %}"></script>
+  <script src="{% static 'calendar/ui/js/calendar_calendars.js' %}"></script>
+  <script src="{% static 'calendar/ui/js/calendar_events.js' %}"></script>
+  <script src="{% static 'calendar/ui/js/calendar_tasks.js' %}"></script>
+  <script src="{% static 'calendar/ui/js/calendar_recurrence.js' %}"></script>
+  <script src="{% static 'calendar/ui/js/calendar_polls.js' %}"></script>
+  <script src="{% static 'calendar/ui/js/calendar.js' %}"></script>
   <script>
     document.body.dataset.userId = '{{ request.user.id }}';
   </script>

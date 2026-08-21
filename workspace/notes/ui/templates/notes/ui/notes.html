@@ -33,11 +33,7 @@
 
 {% block drawer_sidebar %}
   <div class="drawer-side z-40 h-full">
-    <label
-      for="notes-drawer"
-      aria-label="close sidebar"
-      class="drawer-overlay"
-    ></label>
+    <label for="notes-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     <!-- Sidebar -->
     <aside
@@ -45,9 +41,7 @@
       :class="collapsed ? 'w-16' : 'w-72'"
     >
       <!-- Sidebar header -->
-      <div
-        class="lg:border-b border-base-300 py-4 px-3"
-      >
+      <div class="lg:border-b border-base-300 py-4 px-3">
         <div
           class="flex items-center"
           :class="collapsed ? 'justify-center' : 'justify-between'"
@@ -56,21 +50,11 @@
             class="text-xl font-semibold flex items-center gap-2"
             :class="collapsed ? '' : 'pl-2'"
           >
-            <i
-              data-lucide="notebook-pen"
-              class="w-6 h-6 text-success"
-            ></i>
+            <i data-lucide="notebook-pen" class="w-6 h-6 text-success"></i>
             <span x-show="!collapsed" x-transition>Notes</span>
           </h2>
-          <div
-            class="flex items-center gap-0.5"
-            x-show="!collapsed"
-            x-transition
-          >
-            <div
-              class="dropdown dropdown-end"
-              x-data="notesPreferences()"
-            >
+          <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
+            <div class="dropdown dropdown-end" x-data="notesPreferences()">
               <button
                 type="button"
                 tabindex="0"
@@ -84,13 +68,8 @@
                 tabindex="0"
                 class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1"
               >
-                <h4
-                  class="font-semibold text-sm mb-3 flex items-center gap-2"
-                >
-                  <i
-                    data-lucide="settings"
-                    class="w-4 h-4 text-success"
-                  ></i>
+                <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <i data-lucide="settings" class="w-4 h-4 text-success"></i>
                   Preferences
                 </h4>
                 {% include "notes/ui/partials/_preferences_content.html" %}
@@ -104,10 +83,7 @@
          The cloak wrapper stays outside the alpine-ajax swap target so refreshes
          never re-hide the sidebar; "invisible" keeps its space reserved while
          Alpine boots instead of collapsing the aside. -->
-      <div
-        class="flex-1 min-h-0 flex flex-col"
-        x-cloak="invisible"
-      >{% include "notes/ui/partials/sidebar.html" %}</div>
+      <div class="flex-1 min-h-0 flex flex-col" x-cloak="invisible">{% include "notes/ui/partials/sidebar.html" %}</div>
 
       <!-- Help button -->
       <div class="px-3 pb-2">
@@ -117,9 +93,7 @@
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
-      <div
-        class="border-t border-base-300 py-4 px-3"
-      >
+      <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="success" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
         </ul>
@@ -133,16 +107,15 @@
 
 {% block content %}
   <div class="h-full min-w-0 bg-base-100">
-    <div
-      class="h-full flex min-w-0"
-      x-show="activeView !== 'graph'"
-    >
+    <div class="h-full flex min-w-0" x-show="activeView !== 'graph'">
 
       <!-- Note List (middle panel) -->
       <div
         class="w-full lg:w-80 border-r border-base-300 flex flex-col min-h-0"
         :class="selectedNote && isMobile() ? 'hidden' : ''"
-      >{% include "notes/ui/partials/note_list.html" %}</div>
+      >
+        {% include "notes/ui/partials/note_list.html" %}
+      </div>
 
       <!-- Editor (right panel) -->
       <div
@@ -162,15 +135,9 @@
               class="btn btn-ghost btn-sm btn-square lg:hidden"
               @click="history.back()"
             >
-              <i
-                data-lucide="arrow-left"
-                class="w-4 h-4"
-              ></i>
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
             </button>
-            <i
-              data-lucide="notebook-pen"
-              class="w-4 h-4 text-success flex-shrink-0"
-            ></i>
+            <i data-lucide="notebook-pen" class="w-4 h-4 text-success flex-shrink-0"></i>
             <input
               type="text"
               class="input input-ghost input-sm font-semibold flex-1 min-w-0"
@@ -181,9 +148,7 @@
               :title="!canDoOnSelected('rename') ? 'Renaming is disabled for this note' : ''"
             />
           </div>
-          <div
-            class="flex items-center gap-1 flex-shrink-0"
-          >
+          <div class="flex items-center gap-1 flex-shrink-0">
             <button
               class="btn btn-ghost btn-sm btn-square"
               @click="toggleFavorite(selectedNote)"
@@ -208,20 +173,14 @@
               @click="moveNote(selectedNote.uuid, selectedNote.name)"
               title="Move to folder"
             >
-              <i
-                data-lucide="folder-input"
-                class="w-4 h-4"
-              ></i>
+              <i data-lucide="folder-input" class="w-4 h-4"></i>
             </button>
             <a
               class="btn btn-ghost btn-sm btn-square"
               :href="openInFilesHref(selectedNote)"
               title="Open in Files"
             >
-              <i
-                data-lucide="hard-drive"
-                class="w-4 h-4"
-              ></i>
+              <i data-lucide="hard-drive" class="w-4 h-4"></i>
             </a>
             <button
               class="btn btn-ghost btn-sm btn-square text-error"
@@ -241,19 +200,14 @@
             x-cloak
             class="flex-1 flex items-center justify-center"
           >
-            <span
-              class="loading loading-spinner loading-lg"
-            ></span>
+            <span class="loading loading-spinner loading-lg"></span>
           </div>
           <div
             x-show="selectedNote && !viewerLoading && !viewerError"
             class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-200"
           >
             {# #viewer-panel is the alpine-ajax merge anchor every /files/view/ response replaces (see viewer_panel.js). #}
-            <div
-              id="viewer-panel"
-              style="display: contents"
-            ></div>
+            <div id="viewer-panel" style="display: contents"></div>
           </div>
           <div
             x-show="selectedNote && viewerError"
@@ -261,15 +215,9 @@
             class="flex-1 flex items-center justify-center p-8"
           >
             <div class="text-center">
-              <i
-                data-lucide="alert-circle"
-                class="w-12 h-12 text-error mx-auto mb-4"
-              ></i>
+              <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
               <p class="text-lg font-medium mb-2">Failed to load note</p>
-              <p
-                class="text-sm text-base-content/60"
-                x-text="viewerError"
-              ></p>
+              <p class="text-sm text-base-content/60" x-text="viewerError"></p>
             </div>
           </div>
           <div
@@ -278,10 +226,7 @@
             class="flex items-center justify-center h-full text-base-content/30"
           >
             <div class="text-center">
-              <i
-                data-lucide="notebook-pen"
-                class="w-16 h-16 mx-auto mb-4 opacity-30"
-              ></i>
+              <i data-lucide="notebook-pen" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
               <p class="text-lg font-medium">Select or create a note</p>
               <label
                 for="notes-drawer"
@@ -295,11 +240,7 @@
         </div>
       </div>
     </div>
-    <div
-      class="h-full w-full"
-      x-show="activeView === 'graph'"
-      x-cloak
-    >{% include "notes/ui/partials/graph.html" %}</div>
+    <div class="h-full w-full" x-show="activeView === 'graph'" x-cloak>{% include "notes/ui/partials/graph.html" %}</div>
 
     <!-- Mobile new note FAB -->
     <button
@@ -319,17 +260,9 @@
   {% include "notes/ui/partials/help_dialog.html" %}
 
   <!-- Create Group Folder Dialog -->
-  <dialog
-    id="notes-create-group-folder-dialog"
-    class="modal"
-  >
-    <div
-      class="modal-box"
-      x-data="{ selectedGroup: '' }"
-    >
-      <h3
-        class="font-bold text-lg mb-4 flex items-center gap-3"
-      >
+  <dialog id="notes-create-group-folder-dialog" class="modal">
+    <div class="modal-box" x-data="{ selectedGroup: '' }">
+      <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
         <div
           class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-success/10 text-success"
         >
@@ -365,12 +298,16 @@
               type="button"
               class="btn btn-sm"
               onclick="document.getElementById('notes-create-group-folder-dialog').close()"
-            >Cancel</button>
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               class="btn btn-success btn-sm"
               :disabled="!selectedGroup"
-            >Create</button>
+            >
+              Create
+            </button>
           </div>
         </form>
       {% else %}
@@ -380,7 +317,9 @@
             type="button"
             class="btn btn-sm"
             onclick="document.getElementById('notes-create-group-folder-dialog').close()"
-          >Close</button>
+          >
+            Close
+          </button>
         </div>
       {% endif %}
     </div>
@@ -390,19 +329,10 @@
   </dialog>
 
   <!-- Mobile preferences dialog -->
-  <dialog
-    id="notes-prefs-dialog"
-    class="modal"
-    x-data="notesPreferences()"
-  >
+  <dialog id="notes-prefs-dialog" class="modal" x-data="notesPreferences()">
     <div class="modal-box">
-      <h3
-        class="font-bold text-lg flex items-center gap-2"
-      >
-        <i
-          data-lucide="settings"
-          class="w-5 h-5 text-success"
-        ></i>
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i data-lucide="settings" class="w-5 h-5 text-success"></i>
         Preferences
       </h3>
       <div class="mt-4">{% include "notes/ui/partials/_preferences_content.html" %}</div>
@@ -422,25 +352,11 @@
   <!-- Initial preferences embedded server-side so JS doesn't need to fetch
      /api/v1/settings/notes/preferences on page load. -->
   {{ notes_prefs|json_script:"notes-prefs-data" }}
-  <script
-    src="{% static 'ui/js/icon_picker.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/file_lock.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/file_actions.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/tags.js' %}"
-  ></script>
-  <script
-    src="{% static 'files/ui/js/viewer_panel.js' %}"
-  ></script>
-  <script
-    src="{% static 'notes/ui/js/notes.js' %}"
-  ></script>
-  <script
-    src="{% static 'notes/ui/js/notes_graph.js' %}"
-  ></script>
+  <script src="{% static 'ui/js/icon_picker.js' %}"></script>
+  <script src="{% static 'files/ui/js/file_lock.js' %}"></script>
+  <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
+  <script src="{% static 'files/ui/js/tags.js' %}"></script>
+  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'notes/ui/js/notes.js' %}"></script>
+  <script src="{% static 'notes/ui/js/notes_graph.js' %}"></script>
 {% endblock %}

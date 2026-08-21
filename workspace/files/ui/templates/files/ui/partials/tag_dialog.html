@@ -1,21 +1,14 @@
 <!-- Tag create/edit dialog — requires tagsMixin() in the Alpine component -->
 <dialog id="tag-dialog" class="modal">
   <div class="modal-box max-w-md">
-    <h3
-      class="font-bold text-lg mb-4 flex items-center gap-2"
-    >
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
       <span
         :class="tagModal.color ? '' : 'text-base-content/50'"
         :style="tagModal.color ? 'color: ' + tagModal.color : ''"
       >
-        <i
-          :data-lucide="tagModal.icon || 'tag'"
-          class="w-5 h-5"
-        ></i>
+        <i :data-lucide="tagModal.icon || 'tag'" class="w-5 h-5"></i>
       </span>
-      <span
-        x-text="tagModal.uuid ? 'Edit Tag' : 'New Tag'"
-      ></span>
+      <span x-text="tagModal.uuid ? 'Edit Tag' : 'New Tag'"></span>
     </h3>
     <form @submit.prevent="saveTagModal()">
       <label class="form-control w-full mb-3">
@@ -44,17 +37,12 @@
       }"
         x-effect="selectedIcon = tagModal.icon || 'tag'"
         class="mb-3"
-      >{% include "ui/partials/icon_picker.html" %}</div>
-      {% include "ui/partials/tag_color_picker.html" with color_expr="tagModal.color" %}
-      <div
-        x-show="tagModal.error"
-        x-cloak
-        class="mb-3"
       >
-        <div
-          class="text-sm text-error"
-          x-text="tagModal.error"
-        ></div>
+        {% include "ui/partials/icon_picker.html" %}
+      </div>
+      {% include "ui/partials/tag_color_picker.html" with color_expr="tagModal.color" %}
+      <div x-show="tagModal.error" x-cloak class="mb-3">
+        <div class="text-sm text-error" x-text="tagModal.error"></div>
       </div>
       <div class="modal-action">
         <button
@@ -63,30 +51,17 @@
           x-show="tagModal.uuid"
           @click="deleteTagConfirm()"
         >
-          <i
-            data-lucide="trash-2"
-            class="w-3.5 h-3.5"
-          ></i>
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           Delete
         </button>
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm"
-          @click="closeTagModal()"
-        >Cancel</button>
+        <button type="button" class="btn btn-ghost btn-sm" @click="closeTagModal()">Cancel</button>
         <button
           type="submit"
           class="btn btn-success btn-sm"
           :disabled="tagModal.saving || !tagModal.name.trim()"
         >
-          <span
-            x-show="!tagModal.saving"
-            x-text="tagModal.uuid ? 'Save' : 'Create'"
-          ></span>
-          <span
-            x-show="tagModal.saving"
-            class="loading loading-spinner loading-xs"
-          ></span>
+          <span x-show="!tagModal.saving" x-text="tagModal.uuid ? 'Save' : 'Create'"></span>
+          <span x-show="tagModal.saving" class="loading loading-spinner loading-xs"></span>
         </button>
       </div>
     </form>

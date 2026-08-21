@@ -7,17 +7,9 @@
   {% comment %}In <head> and not deferred on purpose: <conversation-avatar> must
 be defined before the parser reaches the markup using it, or server-rendered
   avatars flash unstyled.{% endcomment %}
-  <script
-    src="{% static 'chat/ui/js/conversation_avatar.js' %}"
-  ></script>
-  <link
-    rel="stylesheet"
-    href="{% static 'ui/css/ai-thinking.css' %}"
-  />
-  <link
-    rel="stylesheet"
-    href="{% static 'chat/ui/css/chat.css' %}"
-  />
+  <script src="{% static 'chat/ui/js/conversation_avatar.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}" />
+  <link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}" />
   <link
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css"
@@ -74,11 +66,7 @@ be defined before the parser reaches the markup using it, or server-rendered
     class="drawer-side z-40 h-full"
     :style="(activeConversation || pendingInitialConvUuid) && isMobile() ? 'display:none!important' : ''"
   >
-    <label
-      for="chat-drawer"
-      aria-label="close sidebar"
-      class="drawer-overlay"
-    ></label>
+    <label for="chat-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     <!-- Sidebar -->
     <!--
@@ -110,17 +98,10 @@ be defined before the parser reaches the markup using it, or server-rendered
             class="text-xl font-semibold flex items-center gap-2"
             :class="collapsed ? '' : 'pl-2'"
           >
-            <i
-              data-lucide="message-circle"
-              class="w-6 h-6 text-info"
-            ></i>
+            <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
             <span x-show="!collapsed" x-transition>Chat</span>
           </h2>
-          <div
-            x-show="!collapsed"
-            x-transition
-            class="flex items-center gap-0.5"
-          >
+          <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
             <button
               type="button"
               class="btn btn-ghost btn-sm btn-square hover:text-info"
@@ -156,13 +137,8 @@ be defined before the parser reaches the markup using it, or server-rendered
           @click.outside="prefsOpen = false"
           class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4"
         >
-          <h4
-            class="font-semibold text-sm mb-3 flex items-center gap-2"
-          >
-            <i
-              data-lucide="settings"
-              class="w-4 h-4 text-info"
-            ></i>
+          <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+            <i data-lucide="settings" class="w-4 h-4 text-info"></i>
             Preferences
           </h4>
           {% include "chat/ui/partials/_preferences_content.html" %}
@@ -181,18 +157,9 @@ be defined before the parser reaches the markup using it, or server-rendered
            },
          }"
       >
-        <div
-          class="px-3 pt-3"
-          x-show="!collapsed"
-          x-cloak
-        >
-          <label
-            class="input input-sm input-bordered w-full flex items-center gap-2"
-          >
-            <i
-              data-lucide="search"
-              class="w-4 h-4 opacity-60"
-            ></i>
+        <div class="px-3 pt-3" x-show="!collapsed" x-cloak>
+          <label class="input input-sm input-bordered w-full flex items-center gap-2">
+            <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
             <input
               type="search"
               class="grow [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
@@ -216,18 +183,13 @@ be defined before the parser reaches the markup using it, or server-rendered
         {% comment %}The cloak wrapper stays outside the #conversation-list swap
       target so alpine-ajax refreshes never re-hide the list; "invisible" keeps
         its space reserved while Alpine boots.{% endcomment %}
-        <div
-          class="flex-1 overflow-y-auto py-4 px-3"
-          x-cloak="invisible"
-        >{% include "chat/ui/partials/conversation_list.html" %}</div>
+        <div class="flex-1 overflow-y-auto py-4 px-3" x-cloak="invisible">
+          {% include "chat/ui/partials/conversation_list.html" %}
+        </div>
       </div>
 
       <!-- New chat buttons (visible when collapsed) -->
-      <div
-        class="px-3 pb-2"
-        x-show="collapsed"
-        x-cloak
-      >
+      <div class="px-3 pb-2" x-show="collapsed" x-cloak>
         <ul class="menu p-0">
           {% if ai_enabled %}
             {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" %}
@@ -250,16 +212,9 @@ be defined before the parser reaches the markup using it, or server-rendered
           class="rounded-lg border border-base-300 bg-base-100 p-2 flex flex-col gap-2"
         >
           <div class="flex items-center gap-2">
-            <i
-              data-lucide="phone-call"
-              class="w-4 h-4 text-success flex-shrink-0"
-            ></i>
-            <div
-              class="flex flex-col min-w-0 leading-tight flex-1"
-            >
-              <span
-                class="text-xs font-semibold text-success"
-              >Call in progress</span>
+            <i data-lucide="phone-call" class="w-4 h-4 text-success flex-shrink-0"></i>
+            <div class="flex flex-col min-w-0 leading-tight flex-1">
+              <span class="text-xs font-semibold text-success">Call in progress</span>
               <span
                 class="text-[0.6rem] text-base-content/60 truncate"
                 x-text="callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '')"
@@ -270,20 +225,13 @@ be defined before the parser reaches the markup using it, or server-rendered
             class="btn btn-xs btn-success gap-1"
             @click="openCallRoom(callSession && callSession.conversation_id)"
           >
-            <i
-              data-lucide="external-link"
-              class="w-3.5 h-3.5"
-            ></i>
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
             <span
               x-text="callBannerAction() === 'return' ? 'Return to room' : 'Join call'"
             ></span>
           </button>
         </div>
-        <ul
-          x-show="collapsed"
-          x-cloak
-          class="menu p-0"
-        >
+        <ul x-show="collapsed" x-cloak class="menu p-0">
           <li class="list-none flex justify-center">
             <button
               type="button"
@@ -291,10 +239,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               @click="openCallRoom(callSession && callSession.conversation_id)"
               title="Open voice room"
             >
-              <i
-                data-lucide="phone-call"
-                class="w-5 h-5 flex-shrink-0"
-              ></i>
+              <i data-lucide="phone-call" class="w-5 h-5 flex-shrink-0"></i>
             </button>
           </li>
         </ul>
@@ -308,9 +253,7 @@ be defined before the parser reaches the markup using it, or server-rendered
       </div>
 
       <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
-      <div
-        class="border-t border-base-300 py-4 px-3"
-      >
+      <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
         </ul>
@@ -333,56 +276,26 @@ be defined before the parser reaches the markup using it, or server-rendered
     integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir"
     crossorigin="anonymous"
   ></script>
-  <script
-    src="{% static 'files/ui/js/viewer_panel.js' %}"
-  ></script>
+  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
   <!-- Initial preferences embedded server-side so JS doesn't need to fetch
      /api/v1/settings/chat/preferences on page load. -->
   {{ chat_prefs|json_script:"chat-prefs-data" }}
-  <script
-    src="{% static 'chat/ui/js/chat_preferences.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/conversations.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/message_shell.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/messages.js' %}"
-  ></script>
+  <script src="{% static 'chat/ui/js/chat_preferences.js' %}"></script>
+  <script src="{% static 'chat/ui/js/conversations.js' %}"></script>
+  <script src="{% static 'chat/ui/js/message_shell.js' %}"></script>
+  <script src="{% static 'chat/ui/js/messages.js' %}"></script>
   <script src="{% static 'chat/ui/js/sse.js' %}"></script>
-  <script
-    src="{% static 'chat/ui/js/members.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/panels.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/threads.js' %}"
-  ></script>
+  <script src="{% static 'chat/ui/js/members.js' %}"></script>
+  <script src="{% static 'chat/ui/js/panels.js' %}"></script>
+  <script src="{% static 'chat/ui/js/threads.js' %}"></script>
   <script src="{% static 'chat/ui/js/bot.js' %}"></script>
-  <script
-    src="{% static 'chat/ui/js/input.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/call_sounds.js' %}"
-  ></script>
+  <script src="{% static 'chat/ui/js/input.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
   <script src="{% static 'chat/ui/js/call.js' %}"></script>
-  <script
-    src="{% static 'chat/ui/js/call_room.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/call_diagnostic.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/ui_helpers.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/audio.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/recorder.js' %}"
-  ></script>
+  <script src="{% static 'chat/ui/js/call_room.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call_diagnostic.js' %}"></script>
+  <script src="{% static 'chat/ui/js/ui_helpers.js' %}"></script>
+  <script src="{% static 'chat/ui/js/audio.js' %}"></script>
+  <script src="{% static 'chat/ui/js/recorder.js' %}"></script>
   <script src="{% static 'chat/ui/js/chat.js' %}"></script>
 {% endblock %}

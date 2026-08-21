@@ -1,9 +1,7 @@
 <!-- Mail rules management dialog (per-account) -->
 <dialog id="mail-rules-dialog" class="modal">
   <div class="modal-box max-w-3xl">
-    <div
-      class="flex items-center justify-between gap-2 mb-4"
-    >
+    <div class="flex items-center justify-between gap-2 mb-4">
       <div class="flex items-center gap-2 min-w-0">
         <span
           class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center flex-shrink-0"
@@ -11,9 +9,7 @@
           <i data-lucide="filter" class="w-4 h-4"></i>
         </span>
         <div class="min-w-0">
-          <h3
-            class="font-bold text-lg leading-tight truncate"
-          >Filters &amp; Rules</h3>
+          <h3 class="font-bold text-lg leading-tight truncate">Filters &amp; Rules</h3>
           <p
             x-show="rulesAccount"
             class="text-xs text-base-content/60 truncate"
@@ -49,9 +45,7 @@
     </div>
 
     <!-- List mode -->
-    <template
-      x-if="rulesEditing === null && rulesApplying === null"
-    >
+    <template x-if="rulesEditing === null && rulesApplying === null">
       <div class="space-y-2">
         <template x-if="!rulesList.length">
           <inline-alert type="info" message="No rules yet. Click 'New rule' to create one."></inline-alert>
@@ -70,10 +64,7 @@
           :class="mailPrefs.rulesCompact ? 'space-y-1' : 'space-y-2'"
           x-show="filteredRulesList().length"
         >
-          <template
-            x-for="rule in filteredRulesList()"
-            :key="rule.uuid"
-          >
+          <template x-for="rule in filteredRulesList()" :key="rule.uuid">
             <li
               class="bg-base-100 border border-base-300 rounded-lg flex flex-row items-center gap-3"
               :class="mailPrefs.rulesCompact ? 'px-3 py-1.5' : 'p-3'"
@@ -91,10 +82,7 @@
                 ></div>
               </div>
               <!-- Reorder arrows: hidden during search so positions are unambiguous -->
-              <div
-                x-show="!rulesSearch.trim()"
-                class="join join-vertical flex-shrink-0"
-              >
+              <div x-show="!rulesSearch.trim()" class="join join-vertical flex-shrink-0">
                 <button
                   x-show="rulesCanMoveUp(rule)"
                   class="btn btn-ghost btn-xs join-item"
@@ -102,10 +90,7 @@
                   title="Move up"
                   aria-label="Move rule up"
                 >
-                  <i
-                    data-lucide="chevron-up"
-                    class="w-4 h-4"
-                  ></i>
+                  <i data-lucide="chevron-up" class="w-4 h-4"></i>
                 </button>
                 <button
                   x-show="rulesCanMoveDown(rule)"
@@ -114,10 +99,7 @@
                   title="Move down"
                   aria-label="Move rule down"
                 >
-                  <i
-                    data-lucide="chevron-down"
-                    class="w-4 h-4"
-                  ></i>
+                  <i data-lucide="chevron-down" class="w-4 h-4"></i>
                 </button>
               </div>
               <input
@@ -155,12 +137,8 @@
           </template>
         </ul>
 
-        <template
-          x-if="rulesList.length > 0 && filteredRulesList().length === 0"
-        >
-          <p
-            class="text-base-content/60 text-sm py-4 text-center"
-          >No rules match the filter.</p>
+        <template x-if="rulesList.length > 0 && filteredRulesList().length === 0">
+          <p class="text-base-content/60 text-sm py-4 text-center">No rules match the filter.</p>
         </template>
       </div>
     </template>
@@ -187,20 +165,14 @@
             class="bg-base-200 border border-base-300 rounded-lg p-3 text-sm space-y-1"
           >
             <div>
-              <span
-                class="font-semibold"
-                x-text="rulesApplyResult.matched"
-              ></span>
+              <span class="font-semibold" x-text="rulesApplyResult.matched"></span>
               <span>of</span>
               <span x-text="rulesApplyResult.scanned"></span>
               <span>scanned message(s) match this rule.</span>
             </div>
             <div x-show="rulesApplyResult.applied_run">
               <span>Applied to</span>
-              <span
-                class="font-semibold"
-                x-text="rulesApplyResult.applied"
-              ></span>
+              <span class="font-semibold" x-text="rulesApplyResult.applied"></span>
               <span>message(s).</span>
             </div>
             <div
@@ -210,10 +182,7 @@
               <span x-text="rulesApplyResult.imap_failed"></span>
               <span>action(s) failed on the mail server (IMAP).</span>
             </div>
-            <div
-              x-show="rulesApplyResult.capped"
-              class="text-warning"
-            >
+            <div x-show="rulesApplyResult.capped" class="text-warning">
               Folder has <span x-text="rulesApplyResult.total"></span> messages; only the 500 most recent were scanned.
             </div>
           </div>
@@ -224,7 +193,9 @@
             class="btn btn-ghost btn-sm"
             @click="rulesCancelApply()"
             :disabled="rulesApplyBusy"
-          >Back</button>
+          >
+            Back
+          </button>
           <button
             class="btn btn-sm"
             @click="rulesPreviewApply()"
@@ -254,9 +225,7 @@
     <!-- Edit/Create form -->
     <template x-if="rulesEditing !== null">
       <div class="space-y-3">
-        <div
-          class="flex items-center justify-between"
-        >
+        <div class="flex items-center justify-between">
           <h4
             class="font-semibold"
             x-text="rulesEditing.uuid ? 'Edit rule' : 'New rule'"
@@ -266,12 +235,16 @@
               class="tab tab-sm"
               :class="rulesForm.mode === 'simple' ? 'tab-active' : ''"
               @click="rulesSetMode('simple')"
-            >Simple</button>
+            >
+              Simple
+            </button>
             <button
               class="tab tab-sm"
               :class="rulesForm.mode === 'advanced' ? 'tab-active' : ''"
               @click="rulesSetMode('advanced')"
-            >Advanced</button>
+            >
+              Advanced
+            </button>
           </div>
         </div>
 
@@ -282,10 +255,7 @@
           x-model="rulesEditing.name"
         />
 
-        <div
-          x-show="rulesForm.mode === 'simple'"
-          class="space-y-2"
-        >
+        <div x-show="rulesForm.mode === 'simple'" class="space-y-2">
           <div class="text-sm font-semibold">When</div>
           <div
             class="grid grid-cols-1 sm:grid-cols-[10rem_10rem_1fr] gap-2 items-stretch"
@@ -295,10 +265,7 @@
               x-model="rulesForm.simpleCondition.field"
               @change="rulesOnFieldChange()"
             >
-              <template
-                x-for="f in rulesConditionFields"
-                :key="f.value"
-              >
+              <template x-for="f in rulesConditionFields" :key="f.value">
                 <option :value="f.value" x-text="f.label"></option>
               </template>
             </select>
@@ -310,10 +277,7 @@
                 x-for="o in rulesCompatibleOps(rulesForm.simpleCondition.field)"
                 :key="o"
               >
-                <option
-                  :value="o"
-                  x-text="o.replace(/_/g, ' ')"
-                ></option>
+                <option :value="o" x-text="o.replace(/_/g, ' ')"></option>
               </template>
             </select>
             <input
@@ -325,9 +289,7 @@
           </div>
 
           <div class="text-sm font-semibold mt-3">Then</div>
-          <div
-            class="flex flex-wrap gap-2 items-stretch"
-          >
+          <div class="flex flex-wrap gap-2 items-stretch">
             <select
               class="select select-bordered select-sm w-full sm:w-44 sm:flex-shrink-0"
               x-model="rulesForm.simpleAction.type"
@@ -346,10 +308,7 @@
               class="select select-bordered select-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
               x-model="rulesForm.simpleAction.label_id"
             >
-              <template
-                x-for="lbl in rulesAccountLabels()"
-                :key="lbl.uuid"
-              >
+              <template x-for="lbl in rulesAccountLabels()" :key="lbl.uuid">
                 <option :value="lbl.uuid" x-text="lbl.name"></option>
               </template>
             </select>
@@ -357,13 +316,8 @@
           </div>
         </div>
 
-        <div
-          x-show="rulesForm.mode === 'advanced'"
-          class="space-y-2"
-        >
-          <div
-            class="flex items-center justify-between"
-          >
+        <div x-show="rulesForm.mode === 'advanced'" class="space-y-2">
+          <div class="flex items-center justify-between">
             <div class="text-sm font-semibold">Conditions (JSON tree)</div>
             <button
               type="button"
@@ -371,10 +325,7 @@
               :class="rulesShowAdvancedHelp ? 'text-warning' : 'text-base-content/60'"
               @click="rulesShowAdvancedHelp = !rulesShowAdvancedHelp"
             >
-              <i
-                data-lucide="help-circle"
-                class="w-4 h-4"
-              ></i>
+              <i data-lucide="help-circle" class="w-4 h-4"></i>
               <span
                 x-text="rulesShowAdvancedHelp ? 'Hide syntax help' : 'Show syntax help'"
               ></span>
@@ -393,7 +344,9 @@
               <p class="text-base-content/70 mb-2">A condition is either a single check (leaf) or a group combining multiple checks with AND/OR.</p>
               <div
                 class="font-mono bg-base-100 border border-base-300 rounded p-2 mb-2 whitespace-pre-wrap"
-              >{"field": "from", "op": "contains", "value": "@news.com"}</div>
+              >
+                {"field": "from", "op": "contains", "value": "@news.com"}
+              </div>
               <div
                 class="font-mono bg-base-100 border border-base-300 rounded p-2 whitespace-pre-wrap"
               >
@@ -491,17 +444,16 @@
             class="btn btn-ghost btn-sm"
             @click="rulesCancelEdit()"
             :disabled="rulesForm.saving"
-          >Back</button>
+          >
+            Back
+          </button>
           <button
             class="btn btn-primary btn-sm"
             @click="rulesSave()"
             :disabled="!rulesEditing.name || rulesForm.saving"
           >
             <span x-show="!rulesForm.saving">Save</span>
-            <span
-              x-show="rulesForm.saving"
-              class="loading loading-spinner loading-xs"
-            ></span>
+            <span x-show="rulesForm.saving" class="loading loading-spinner loading-xs"></span>
           </button>
         </div>
       </div>

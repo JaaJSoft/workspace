@@ -20,13 +20,8 @@ label (handled once on the board root), then the selection event.
   class="relative"
   @click.outside="showDropdown = false"
 >
-  <label
-    class="input input-sm input-bordered flex items-center gap-2 w-full"
-  >
-    <i
-      data-lucide="tag"
-      class="w-4 h-4 opacity-60"
-    ></i>
+  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+    <i data-lucide="tag" class="w-4 h-4 opacity-60"></i>
     <input
       type="text"
       class="grow"
@@ -39,25 +34,15 @@ label (handled once on the board root), then the selection event.
       @keydown="handleKeydown($event)"
       @keydown.escape="showDropdown = false"
     />
-    <span
-      x-show="creating"
-      x-cloak
-      class="loading loading-spinner loading-xs"
-    ></span>
+    <span x-show="creating" x-cloak class="loading loading-spinner loading-xs"></span>
   </label>
   <div
     x-show="showDropdown && (results.length || showCreate() || createError || trimmedQuery())"
     x-cloak
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
   >
-    <ul
-      class="menu menu-sm p-1"
-      x-show="results.length || showCreate()"
-    >
-      <template
-        x-for="(label, idx) in results"
-        :key="label.uuid"
-      >
+    <ul class="menu menu-sm p-1" x-show="results.length || showCreate()">
+      <template x-for="(label, idx) in results" :key="label.uuid">
         <li>
           <button
             type="button"
@@ -92,11 +77,9 @@ label (handled once on the board root), then the selection event.
       x-show="!results.length && !showCreate() && trimmedQuery() && !createError"
       x-cloak
       class="p-3 text-sm text-base-content/60 text-center"
-    >No matching labels</p>
-    <p
-      x-show="createError"
-      x-cloak
-      class="px-3 py-2 text-xs text-error"
-    >Could not create the label.</p>
+    >
+      No matching labels
+    </p>
+    <p x-show="createError" x-cloak class="px-3 py-2 text-xs text-error">Could not create the label.</p>
   </div>
 </div>

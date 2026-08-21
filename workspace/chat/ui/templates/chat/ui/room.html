@@ -7,17 +7,9 @@
   {% comment %}In <head> and not deferred on purpose: <conversation-avatar> must
 be defined before the parser reaches the markup using it, or server-rendered
   avatars flash unstyled.{% endcomment %}
-  <script
-    src="{% static 'chat/ui/js/conversation_avatar.js' %}"
-  ></script>
-  <link
-    rel="stylesheet"
-    href="{% static 'ui/css/ai-thinking.css' %}"
-  />
-  <link
-    rel="stylesheet"
-    href="{% static 'chat/ui/css/chat.css' %}"
-  />
+  <script src="{% static 'chat/ui/js/conversation_avatar.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}" />
+  <link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}" />
   <link
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css"
@@ -53,12 +45,8 @@ be defined before the parser reaches the markup using it, or server-rendered
         class="flex-1 flex flex-col gap-4 bg-base-200 p-4 min-w-0 relative"
       >
         <!-- Call status bar -->
-        <div
-          class="flex items-center gap-2 text-sm shrink-0 pl-2"
-        >
-          <span
-            class="inline-block w-2 h-2 rounded-full bg-success shrink-0"
-          ></span>
+        <div class="flex items-center gap-2 text-sm shrink-0 pl-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-success shrink-0"></span>
           <span class="font-medium">In call</span>
           <span class="text-base-content/40">&middot;</span>
           <span
@@ -66,42 +54,29 @@ be defined before the parser reaches the markup using it, or server-rendered
             x-text="callParticipants.length + ' participant' + (callParticipants.length === 1 ? '' : 's')"
           ></span>
           <span class="text-base-content/40">&middot;</span>
-          <span
-            class="text-base-content/70 tabular-nums"
-            x-text="callElapsed"
-          ></span>
+          <span class="text-base-content/70 tabular-nums" x-text="callElapsed"></span>
         </div>
 
         <!-- Main area: remote participants or placeholder -->
         <div class="flex-1 min-h-0 relative">
 
           <!-- Placeholder: shown when no remote participants -->
-          <template
-            x-if="remoteParticipants().length === 0"
-          >
+          <template x-if="remoteParticipants().length === 0">
             <div
               class="absolute inset-0 flex flex-col items-center justify-center gap-3"
             >
-              <i
-                data-lucide="users"
-                class="w-12 h-12 text-base-content/50"
-              ></i>
+              <i data-lucide="users" class="w-12 h-12 text-base-content/50"></i>
               <span class="text-sm text-base-content/50">Waiting for others to join...</span>
             </div>
           </template>
 
           <!-- Equal grid: no spotlight active -->
-          <template
-            x-if="remoteParticipants().length > 0 && !isSpotlight()"
-          >
+          <template x-if="remoteParticipants().length > 0 && !isSpotlight()">
             <div
               class="absolute inset-0 grid gap-4"
               :style="`grid-template-columns: repeat(${gridColumns()}, minmax(0, 1fr)); grid-auto-rows: 1fr;`"
             >
-              <template
-                x-for="p in remoteParticipants()"
-                :key="p.user_id"
-              >
+              <template x-for="p in remoteParticipants()" :key="p.user_id">
                 <div
                   class="relative rounded-xl bg-base-100 border-2 flex flex-col items-center justify-center gap-2 transition-colors overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
@@ -122,14 +97,9 @@ be defined before the parser reaches the markup using it, or server-rendered
                   >
                   </video>
                   <template x-if="!hasVideo(p)">
-                    <div
-                      class="flex flex-col items-center gap-2"
-                    >
+                    <div class="flex flex-col items-center gap-2">
                       <user-avatar :user-id="p.user_id" :username="p.display_name" size="lg"></user-avatar>
-                      <span
-                        class="text-sm truncate max-w-full px-2"
-                        x-text="p.display_name"
-                      ></span>
+                      <span class="text-sm truncate max-w-full px-2" x-text="p.display_name"></span>
                     </div>
                   </template>
                   <span
@@ -149,16 +119,12 @@ be defined before the parser reaches the markup using it, or server-rendered
 
           <!-- Spotlight: one large tile + thumbnail strip -->
           <template x-if="isSpotlight()">
-            <div
-              class="absolute inset-0 flex flex-col gap-3"
-            >
+            <div class="absolute inset-0 flex flex-col gap-3">
               <div
                 class="relative flex-1 min-h-0 rounded-xl bg-base-100 border-2 border-base-300 overflow-hidden flex items-center justify-center cursor-pointer"
                 @click="backToGrid()"
               >
-                <template
-                  x-if="spotlightParticipant() && hasVideo(spotlightParticipant())"
-                >
+                <template x-if="spotlightParticipant() && hasVideo(spotlightParticipant())">
                   <video
                     autoplay
                     playsinline
@@ -168,9 +134,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                   >
                   </video>
                 </template>
-                <template
-                  x-if="spotlightParticipant() && !hasVideo(spotlightParticipant())"
-                >
+                <template x-if="spotlightParticipant() && !hasVideo(spotlightParticipant())">
                   <user-avatar :user-id="spotlightParticipant().user_id" :username="spotlightParticipant().display_name" size="xl"></user-avatar>
                 </template>
                 <span
@@ -189,10 +153,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                 class="flex gap-2 shrink-0 overflow-x-auto"
                 x-show="stripParticipants().length > 0"
               >
-                <template
-                  x-for="p in stripParticipants()"
-                  :key="p.user_id"
-                >
+                <template x-for="p in stripParticipants()" :key="p.user_id">
                   <div
                     class="relative w-28 h-20 shrink-0 rounded-lg bg-base-100 border-2 overflow-hidden flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
@@ -226,9 +187,7 @@ be defined before the parser reaches the markup using it, or server-rendered
           </template>
 
           <!-- Self-view tile: hidden while spotlighting (self appears in the strip) -->
-          <template
-            x-if="selfParticipant() && !isSpotlight()"
-          >
+          <template x-if="selfParticipant() && !isSpotlight()">
             <div
               data-testid="self-tile"
               class="absolute bottom-3 right-3 w-40 aspect-video rounded-lg bg-base-100 border-2 flex flex-col items-center justify-center gap-1 px-2 transition-colors overflow-hidden z-10"
@@ -244,9 +203,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               >
               </video>
               <template x-if="!hasVideo(selfParticipant())">
-                <div
-                  class="flex flex-col items-center gap-1"
-                >
+                <div class="flex flex-col items-center gap-1">
                   <user-avatar :user-id="selfParticipant().user_id" :username="selfParticipant().display_name" size="md"></user-avatar>
                   <span
                     class="text-xs truncate max-w-full text-center px-1"
@@ -275,10 +232,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               @click="toggleMute()"
               :title="isMuted ? 'Unmute' : 'Mute'"
             >
-              <i
-                :data-lucide="isMuted ? 'mic-off' : 'mic'"
-                class="w-5 h-5"
-              ></i>
+              <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-5 h-5"></i>
             </button>
             <button
               class="btn btn-circle border-0"
@@ -286,10 +240,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               @click="toggleCamera()"
               :title="cameraOn ? 'Turn camera off' : 'Turn camera on'"
             >
-              <i
-                :data-lucide="cameraOn ? 'video' : 'video-off'"
-                class="w-5 h-5"
-              ></i>
+              <i :data-lucide="cameraOn ? 'video' : 'video-off'" class="w-5 h-5"></i>
             </button>
             <button
               class="btn btn-circle border-0"
@@ -297,10 +248,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               @click="toggleScreenShare()"
               :title="sharing ? 'Stop sharing' : 'Share screen'"
             >
-              <i
-                data-lucide="screen-share"
-                class="w-5 h-5"
-              ></i>
+              <i data-lucide="screen-share" class="w-5 h-5"></i>
             </button>
             <button
               class="btn btn-neutral btn-circle border-0"
@@ -339,53 +287,25 @@ be defined before the parser reaches the markup using it, or server-rendered
     integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir"
     crossorigin="anonymous"
   ></script>
-  <script
-    src="{% static 'files/ui/js/viewer_panel.js' %}"
-  ></script>
+  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
   <!-- Initial preferences embedded server-side so JS doesn't need to fetch
      /api/v1/settings/chat/preferences on page load. -->
   {{ chat_prefs|json_script:"chat-prefs-data" }}
-  <script
-    src="{% static 'chat/ui/js/chat_preferences.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/conversations.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/messages.js' %}"
-  ></script>
+  <script src="{% static 'chat/ui/js/chat_preferences.js' %}"></script>
+  <script src="{% static 'chat/ui/js/conversations.js' %}"></script>
+  <script src="{% static 'chat/ui/js/messages.js' %}"></script>
   <script src="{% static 'chat/ui/js/sse.js' %}"></script>
-  <script
-    src="{% static 'chat/ui/js/members.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/panels.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/threads.js' %}"
-  ></script>
+  <script src="{% static 'chat/ui/js/members.js' %}"></script>
+  <script src="{% static 'chat/ui/js/panels.js' %}"></script>
+  <script src="{% static 'chat/ui/js/threads.js' %}"></script>
   <script src="{% static 'chat/ui/js/bot.js' %}"></script>
-  <script
-    src="{% static 'chat/ui/js/input.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/call_sounds.js' %}"
-  ></script>
+  <script src="{% static 'chat/ui/js/input.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
   <script src="{% static 'chat/ui/js/call.js' %}"></script>
-  <script
-    src="{% static 'chat/ui/js/call_room.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/call_diagnostic.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/ui_helpers.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/audio.js' %}"
-  ></script>
-  <script
-    src="{% static 'chat/ui/js/recorder.js' %}"
-  ></script>
+  <script src="{% static 'chat/ui/js/call_room.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call_diagnostic.js' %}"></script>
+  <script src="{% static 'chat/ui/js/ui_helpers.js' %}"></script>
+  <script src="{% static 'chat/ui/js/audio.js' %}"></script>
+  <script src="{% static 'chat/ui/js/recorder.js' %}"></script>
   <script src="{% static 'chat/ui/js/room.js' %}"></script>
 {% endblock %}

@@ -1,21 +1,13 @@
 <!-- Appearance Tab -->
-<div
-  x-show="tab === 'appearance'"
-  x-cloak
-  x-data="themePickerForm()"
->
-  <div
-    class="card bg-base-100 border border-base-300 shadow-sm"
-  >
+<div x-show="tab === 'appearance'" x-cloak x-data="themePickerForm()">
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
         <i data-lucide="palette" class="w-5 h-5"></i>
         Appearance
       </h2>
 
-      <p
-        class="text-sm text-base-content/60 mt-1"
-      >
+      <p class="text-sm text-base-content/60 mt-1">
         Pick the theme used in light mode and the one used in dark mode.
         The toggle in the navigation bar switches between them.
       </p>
@@ -23,21 +15,18 @@
       <!-- Light themes -->
       <div class="mt-5">
         <div class="flex items-center gap-2 mb-2">
-          <i
-            data-lucide="sun"
-            class="w-4 h-4 text-warning"
-          ></i>
+          <i data-lucide="sun" class="w-4 h-4 text-warning"></i>
           <h3
             class="font-semibold text-sm uppercase tracking-wide text-base-content/70"
-          >Light theme</h3>
+          >
+            Light theme
+          </h3>
           <span
             x-show="currentTheme === lightTheme"
             class="badge badge-xs badge-success"
           >Active</span>
         </div>
-        <div
-          class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"
-        >
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           <template x-for="t in lightThemes" :key="t.id">
             <button
               type="button"
@@ -45,21 +34,13 @@
               class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]"
               :class="lightTheme === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'"
             >
-              <div
-                class="flex gap-1 mb-2"
-                :data-theme="t.id"
-              >
+              <div class="flex gap-1 mb-2" :data-theme="t.id">
                 <div class="rounded-full w-4 h-4 bg-primary"></div>
-                <div
-                  class="rounded-full w-4 h-4 bg-secondary"
-                ></div>
+                <div class="rounded-full w-4 h-4 bg-secondary"></div>
                 <div class="rounded-full w-4 h-4 bg-accent"></div>
                 <div class="rounded-full w-4 h-4 bg-neutral"></div>
               </div>
-              <span
-                class="text-sm font-medium capitalize"
-                x-text="t.label"
-              ></span>
+              <span class="text-sm font-medium capitalize" x-text="t.label"></span>
             </button>
           </template>
         </div>
@@ -68,21 +49,18 @@
       <!-- Dark themes -->
       <div class="mt-6">
         <div class="flex items-center gap-2 mb-2">
-          <i
-            data-lucide="moon"
-            class="w-4 h-4 text-info"
-          ></i>
+          <i data-lucide="moon" class="w-4 h-4 text-info"></i>
           <h3
             class="font-semibold text-sm uppercase tracking-wide text-base-content/70"
-          >Dark theme</h3>
+          >
+            Dark theme
+          </h3>
           <span
             x-show="currentTheme === darkTheme"
             class="badge badge-xs badge-success"
           >Active</span>
         </div>
-        <div
-          class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"
-        >
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           <template x-for="t in darkThemes" :key="t.id">
             <button
               type="button"
@@ -90,21 +68,13 @@
               class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]"
               :class="darkTheme === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'"
             >
-              <div
-                class="flex gap-1 mb-2"
-                :data-theme="t.id"
-              >
+              <div class="flex gap-1 mb-2" :data-theme="t.id">
                 <div class="rounded-full w-4 h-4 bg-primary"></div>
-                <div
-                  class="rounded-full w-4 h-4 bg-secondary"
-                ></div>
+                <div class="rounded-full w-4 h-4 bg-secondary"></div>
                 <div class="rounded-full w-4 h-4 bg-accent"></div>
                 <div class="rounded-full w-4 h-4 bg-neutral"></div>
               </div>
-              <span
-                class="text-sm font-medium capitalize"
-                x-text="t.label"
-              ></span>
+              <span class="text-sm font-medium capitalize" x-text="t.label"></span>
             </button>
           </template>
         </div>

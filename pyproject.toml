@@ -87,12 +87,16 @@ extension = "html"
 # Templates are indented with 2 spaces, like the JS and CSS bundles.
 indent = 2
 max_line_length = 120
-# Compared against the combined length of a tag's attributes: past ~4 short
-# attributes or any real Tailwind class list, the tag goes vertical (one
-# attribute per line). Attribute values themselves are never split, whatever
-# the threshold - a lone long Alpine expression stays intact on its line.
-max_attribute_length = 40
+# Compared against the combined length of a tag's attributes: a lone class
+# list of moderate size stays inline, while a tag carrying several real
+# attributes goes vertical (one attribute per line). Attribute values are
+# never split, whatever the threshold - a long Alpine expression stays
+# intact on its line.
+max_attribute_length = 70
 single_attribute_per_line = true
+# When a tag wraps, its content moves to its own line so the closing tag
+# lines up with the opening one, instead of hugging the final ">".
+line_break_after_multiline_tag = true
 close_void_tags = true
 max_blank_lines = 1
 format_css = true

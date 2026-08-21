@@ -3,16 +3,12 @@
   {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-primary" %}
   {% include "ui/partials/pref_toggle.html" with label="Compact file list" key="compactList" accent="toggle-primary" %}
   <hr class="border-base-300" />
-  <label
-    class="text-sm text-base-content/60 block mb-1"
-  >Sidebar sections</label>
+  <label class="text-sm text-base-content/60 block mb-1">Sidebar sections</label>
   {% include "ui/partials/pref_toggle.html" with label="Show pinned folders" key="showPinned" accent="toggle-primary" %}
   {% include "ui/partials/pref_toggle.html" with label="Show group folders" key="showGroups" accent="toggle-primary" %}
   <hr class="border-base-300" />
   <div>
-    <label
-      class="text-sm text-base-content/60 block mb-1"
-    >Default sort</label>
+    <label class="text-sm text-base-content/60 block mb-1">Default sort</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="prefs.defaultSort"
@@ -28,9 +24,7 @@
   </div>
   <hr class="border-base-300" />
   <div>
-    <label
-      class="text-sm text-base-content/60 block mb-1"
-    >Same-name files</label>
+    <label class="text-sm text-base-content/60 block mb-1">Same-name files</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="prefs.nameCollision"
@@ -44,9 +38,7 @@
   </div>
   <hr class="border-base-300" />
   <div>
-    <label
-      class="text-sm text-base-content/60 block mb-1"
-    >Breadcrumb collapse after</label>
+    <label class="text-sm text-base-content/60 block mb-1">Breadcrumb collapse after</label>
     <div class="flex items-center gap-2">
       <input
         type="range"

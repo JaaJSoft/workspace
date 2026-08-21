@@ -1,15 +1,7 @@
 <!-- Create Group Folder Dialog -->
-<dialog
-  id="create-group-folder-dialog"
-  class="modal"
->
-  <div
-    class="modal-box"
-    x-data="{ selectedGroup: '' }"
-  >
-    <h3
-      class="font-bold text-lg mb-4 flex items-center gap-3"
-    >
+<dialog id="create-group-folder-dialog" class="modal">
+  <div class="modal-box" x-data="{ selectedGroup: '' }">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
       <div
         class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-secondary/10 text-secondary"
       >
@@ -45,12 +37,16 @@
             type="button"
             class="btn btn-sm"
             onclick="document.getElementById('create-group-folder-dialog').close()"
-          >Cancel</button>
+          >
+            Cancel
+          </button>
           <button
             type="submit"
             class="btn btn-primary btn-sm"
             :disabled="!selectedGroup"
-          >Create</button>
+          >
+            Create
+          </button>
         </div>
       </form>
     {% else %}
@@ -60,7 +56,9 @@
           type="button"
           class="btn btn-sm"
           onclick="document.getElementById('create-group-folder-dialog').close()"
-        >Close</button>
+        >
+          Close
+        </button>
       </div>
     {% endif %}
   </div>

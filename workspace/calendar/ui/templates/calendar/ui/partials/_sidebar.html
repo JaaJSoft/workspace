@@ -15,9 +15,7 @@
   >
 
     <!-- Header -->
-    <div
-      class="lg:border-b border-base-300 py-4 px-3"
-    >
+    <div class="lg:border-b border-base-300 py-4 px-3">
       <div
         class="flex items-center"
         :class="sidebarCollapsed() ? 'justify-center' : 'justify-between'"
@@ -26,14 +24,8 @@
           class="text-xl font-semibold flex items-center gap-2"
           :class="sidebarCollapsed() ? '' : 'pl-2'"
         >
-          <i
-            data-lucide="calendar"
-            class="w-6 h-6 text-accent"
-          ></i>
-          <span
-            x-show="!sidebarCollapsed()"
-            x-transition
-          >Calendar</span>
+          <i data-lucide="calendar" class="w-6 h-6 text-accent"></i>
+          <span x-show="!sidebarCollapsed()" x-transition>Calendar</span>
         </h2>
         <div
           x-show="!sidebarCollapsed()"
@@ -44,7 +36,9 @@
             type="button"
             class="btn btn-ghost btn-sm hover:text-accent"
             @click="calendarToday()"
-          >Today</button>
+          >
+            Today
+          </button>
           <div class="dropdown dropdown-end">
             <button
               type="button"
@@ -58,13 +52,8 @@
               tabindex="0"
               class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1"
             >
-              <h4
-                class="font-semibold text-sm mb-3 flex items-center gap-2"
-              >
-                <i
-                  data-lucide="settings"
-                  class="w-4 h-4 text-accent"
-                ></i>
+              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                <i data-lucide="settings" class="w-4 h-4 text-accent"></i>
                 Preferences
               </h4>
               {% include "calendar/ui/partials/_preferences_content.html" %}
@@ -80,19 +69,14 @@
       :class="sidebarCollapsed() ? 'max-h-0 py-0 opacity-0 border-b-0' : 'max-h-40 opacity-100 py-3 px-3'"
     >
       <!-- Navigation: prev / period title / next -->
-      <div
-        class="flex items-center justify-between mb-2"
-      >
+      <div class="flex items-center justify-between mb-2">
         <button
           type="button"
           class="btn btn-ghost btn-xs btn-square"
           @click="calendarPrev()"
           title="Previous"
         >
-          <i
-            data-lucide="chevron-left"
-            class="w-4 h-4"
-          ></i>
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
         </button>
         <span
           class="text-sm font-semibold text-base-content truncate"
@@ -104,10 +88,7 @@
           @click="calendarNext()"
           title="Next"
         >
-          <i
-            data-lucide="chevron-right"
-            class="w-4 h-4"
-          ></i>
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
         </button>
       </div>
       <!-- View mode -->
@@ -117,32 +98,38 @@
           class="btn btn-xs flex-1"
           :class="currentView === 'dayGridMonth' ? 'btn-primary' : 'btn-ghost'"
           @click="changeView('dayGridMonth')"
-        >Month</button>
+        >
+          Month
+        </button>
         <button
           type="button"
           class="btn btn-xs flex-1"
           :class="currentView === 'timeGridWeek' ? 'btn-primary' : 'btn-ghost'"
           @click="changeView('timeGridWeek')"
-        >Week</button>
+        >
+          Week
+        </button>
         <button
           type="button"
           class="btn btn-xs flex-1"
           :class="currentView === 'timeGridDay' ? 'btn-primary' : 'btn-ghost'"
           @click="changeView('timeGridDay')"
-        >Day</button>
+        >
+          Day
+        </button>
         <button
           type="button"
           class="btn btn-xs flex-1"
           :class="currentView === 'agenda' ? 'btn-primary' : 'btn-ghost'"
           @click="changeView('agenda')"
-        >Agenda</button>
+        >
+          Agenda
+        </button>
       </div>
     </div>
 
     <!-- Calendar lists (scrollable) -->
-    <div
-      class="flex-1 overflow-y-auto py-4 px-3"
-    >
+    <div class="flex-1 overflow-y-auto py-4 px-3">
 
       <!-- My Calendars -->
       <div
@@ -168,10 +155,7 @@
       </div>
 
       <ul class="space-y-1 mb-4">
-        <template
-          x-for="cal in ownedCalendars"
-          :key="cal.uuid"
-        >
+        <template x-for="cal in ownedCalendars" :key="cal.uuid">
           <li
             class="flex items-center gap-2 p-1.5 rounded-lg text-sm hover:bg-base-content/5 group cursor-pointer"
             :class="sidebarCollapsed() ? 'justify-center' : ''"
@@ -189,13 +173,8 @@
               class="flex-1 truncate"
               x-text="cal.name"
             ></span>
-            <div
-              x-show="!sidebarCollapsed()"
-              class="flex items-center gap-0.5"
-            >
-              <div
-                class="opacity-0 group-hover:opacity-100 flex gap-0.5"
-              >
+            <div x-show="!sidebarCollapsed()" class="flex items-center gap-0.5">
+              <div class="opacity-0 group-hover:opacity-100 flex gap-0.5">
                 <button
                   type="button"
                   class="btn btn-ghost btn-xs btn-square"
@@ -226,13 +205,13 @@
         <li
           x-show="ownedCalendars.length === 0 && !sidebarCollapsed()"
           class="text-xs text-base-content/40 px-1.5 py-1"
-        >No calendars yet</li>
+        >
+          No calendars yet
+        </li>
       </ul>
 
       <!-- External Calendars (ICS feeds) -->
-      <template
-        x-if="externalCalendars.length > 0 || !sidebarCollapsed()"
-      >
+      <template x-if="externalCalendars.length > 0 || !sidebarCollapsed()">
         <div>
           <hr
             class="mb-3 border-base-300 transition-all duration-200"
@@ -260,10 +239,7 @@
             </button>
           </div>
           <ul class="space-y-1 mb-4">
-            <template
-              x-for="ext in externalCalendars"
-              :key="ext.uuid"
-            >
+            <template x-for="ext in externalCalendars" :key="ext.uuid">
               <li
                 class="flex items-center gap-2 p-1.5 rounded-lg text-sm hover:bg-base-content/5 group cursor-pointer"
                 :class="sidebarCollapsed() ? 'justify-center' : ''"
@@ -281,13 +257,8 @@
                   class="flex-1 truncate"
                   x-text="ext.name"
                 ></span>
-                <div
-                  x-show="!sidebarCollapsed()"
-                  class="flex items-center gap-0.5"
-                >
-                  <div
-                    class="opacity-0 group-hover:opacity-100 flex gap-0.5"
-                  >
+                <div x-show="!sidebarCollapsed()" class="flex items-center gap-0.5">
+                  <div class="opacity-0 group-hover:opacity-100 flex gap-0.5">
                     <button
                       type="button"
                       class="btn btn-ghost btn-xs btn-square"
@@ -357,16 +328,9 @@
               class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-secondary"
               :title="sidebarCollapsed() ? 'Task due dates' : ''"
             >
-              <i
-                data-lucide="square-check-big"
-                class="w-4 h-4"
-              ></i>
+              <i data-lucide="square-check-big" class="w-4 h-4"></i>
             </span>
-            <span
-              x-show="!sidebarCollapsed()"
-              x-transition
-              class="flex-1 truncate"
-            >Task due dates</span>
+            <span x-show="!sidebarCollapsed()" x-transition class="flex-1 truncate">Task due dates</span>
             <input
               x-show="!sidebarCollapsed()"
               type="checkbox"
@@ -395,10 +359,7 @@
             </span>
           </h3>
           <ul class="space-y-1">
-            <template
-              x-for="cal in subscribedCalendars"
-              :key="cal.uuid"
-            >
+            <template x-for="cal in subscribedCalendars" :key="cal.uuid">
               <li
                 class="flex items-center gap-2 p-1.5 rounded-lg text-sm hover:bg-base-content/5"
                 :class="sidebarCollapsed() ? 'justify-center' : ''"
@@ -410,16 +371,9 @@
                 >
                   <i data-lucide="calendar" class="w-4 h-4"></i>
                 </span>
-                <span
-                  x-show="!sidebarCollapsed()"
-                  x-transition
-                  class="flex-1 truncate"
-                >
+                <span x-show="!sidebarCollapsed()" x-transition class="flex-1 truncate">
                   <span x-text="cal.name"></span>
-                  <span
-                    class="text-base-content/40"
-                    x-text="'(' + cal.owner.username + ')'"
-                  ></span>
+                  <span class="text-base-content/40" x-text="'(' + cal.owner.username + ')'"></span>
                 </span>
                 <input
                   x-show="!sidebarCollapsed()"
@@ -455,9 +409,7 @@
     </div>
 
     <!-- Bottom action: settings on mobile, collapse on desktop -->
-    <div
-      class="border-t border-base-300 py-4 px-3"
-    >
+    <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0 hidden lg:block">
         {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" %}
       </ul>

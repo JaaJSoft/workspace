@@ -5,13 +5,9 @@
   x-data="apiTokensTab()"
   x-init="fetchTokens()"
 >
-  <div
-    class="card bg-base-100 border border-base-300 shadow-sm"
-  >
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
     <div class="card-body">
-      <div
-        class="flex items-center justify-between"
-      >
+      <div class="flex items-center justify-between">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="key-round" class="w-5 h-5"></i>
           API Tokens
@@ -25,39 +21,22 @@
         </button>
       </div>
 
-      <p
-        class="text-sm text-base-content/60 mt-1"
-      >
-        Create tokens to authenticate API requests. Use the header <code
-   class="bg-base-200 px-1.5 py-0.5 rounded text-xs"
- >Authorization: Token &lt;value&gt;</code>
+      <p class="text-sm text-base-content/60 mt-1">
+        Create tokens to authenticate API requests. Use the header <code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">Authorization: Token &lt;value&gt;</code>
       </p>
 
       <!-- Feedback -->
       <div x-ref="tokensFeedback"></div>
 
       <!-- Loading -->
-      <div
-        x-show="loading"
-        class="flex justify-center py-8"
-      >
-        <span
-          class="loading loading-spinner loading-md"
-        ></span>
+      <div x-show="loading" class="flex justify-center py-8">
+        <span class="loading loading-spinner loading-md"></span>
       </div>
 
       <!-- Search -->
-      <div
-        x-show="!loading && tokens.length > 0"
-        class="mt-4"
-      >
-        <label
-          class="input input-bordered input-sm flex items-center gap-2"
-        >
-          <i
-            data-lucide="search"
-            class="w-4 h-4 text-base-content/40"
-          ></i>
+      <div x-show="!loading && tokens.length > 0" class="mt-4">
+        <label class="input input-bordered input-sm flex items-center gap-2">
+          <i data-lucide="search" class="w-4 h-4 text-base-content/40"></i>
           <input
             type="text"
             x-model="search"
@@ -76,13 +55,8 @@
 
       <!-- Empty state -->
       <template x-if="!loading && tokens.length === 0">
-        <div
-          class="text-center py-8 text-base-content/50"
-        >
-          <i
-            data-lucide="key-round"
-            class="w-10 h-10 mx-auto mb-2 opacity-30"
-          ></i>
+        <div class="text-center py-8 text-base-content/50">
+          <i data-lucide="key-round" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
           <p class="text-sm">No API tokens yet.</p>
         </div>
       </template>
@@ -96,34 +70,21 @@
       </div>
 
       <!-- Token list -->
-      <div
-        x-show="!loading && filteredTokens.length > 0"
-        class="mt-2 space-y-2"
-      >
-        <template
-          x-for="token in filteredTokens"
-          :key="token.id"
-        >
+      <div x-show="!loading && filteredTokens.length > 0" class="mt-2 space-y-2">
+        <template x-for="token in filteredTokens" :key="token.id">
           <div
             class="flex items-center justify-between p-3 rounded-lg border border-base-300 bg-base-200/30 group/token"
           >
             <div class="flex items-center gap-3 min-w-0">
-              <div
-                class="rounded-lg bg-primary/10 p-2 flex-shrink-0"
-              >
-                <i
-                  data-lucide="key-round"
-                  class="w-4 h-4 text-primary"
-                ></i>
+              <div class="rounded-lg bg-primary/10 p-2 flex-shrink-0">
+                <i data-lucide="key-round" class="w-4 h-4 text-primary"></i>
               </div>
               <div class="min-w-0">
                 <div
                   class="font-medium text-sm truncate"
                   x-text="token.name || 'Unnamed token'"
                 ></div>
-                <div
-                  class="flex items-center gap-2 text-xs text-base-content/50 mt-0.5"
-                >
+                <div class="flex items-center gap-2 text-xs text-base-content/50 mt-0.5">
                   <code
                     class="bg-base-200 px-1 py-0.5 rounded"
                     x-text="token.token_key + '...'"
@@ -181,10 +142,7 @@
 
         <div class="form-control">
           <label class="label"><span class="label-text font-medium">Expiration</span></label>
-          <select
-            x-model="newExpiry"
-            class="select select-bordered select-sm w-full"
-          >
+          <select x-model="newExpiry" class="select select-bordered select-sm w-full">
             <option value="">No expiration</option>
             <option value="7">7 days</option>
             <option value="30">30 days</option>
@@ -196,22 +154,14 @@
       </div>
 
       <div class="modal-action">
-        <button
-          @click="closeCreateDialog()"
-          class="btn btn-ghost btn-sm"
-        >Cancel</button>
+        <button @click="closeCreateDialog()" class="btn btn-ghost btn-sm">Cancel</button>
         <button
           @click="createToken()"
           class="btn btn-primary btn-sm"
           :disabled="creating"
         >
-          <span
-            x-show="creating"
-            class="loading loading-spinner loading-xs"
-          ></span>
-          <span
-            x-text="creating ? 'Creating...' : 'Create'"
-          ></span>
+          <span x-show="creating" class="loading loading-spinner loading-xs"></span>
+          <span x-text="creating ? 'Creating...' : 'Create'"></span>
         </button>
       </div>
     </div>
@@ -221,10 +171,7 @@
   </dialog>
 
   <!-- Token Created Dialog (show token once) -->
-  <dialog
-    x-ref="tokenCreatedDialog"
-    class="modal"
-  >
+  <dialog x-ref="tokenCreatedDialog" class="modal">
     <div class="modal-box max-w-lg">
       <h3 class="font-bold text-lg mb-2">Token Created</h3>
       <div x-ref="tokenCreatedFeedback"></div>
@@ -236,36 +183,20 @@
         Copy this token now. You won't be able to see it again.
       </p>
 
-      <div
-        class="flex items-center gap-2 bg-base-200 rounded-lg p-3"
-      >
-        <code
-          class="text-sm break-all flex-1 select-all"
-          x-text="createdToken"
-        ></code>
+      <div class="flex items-center gap-2 bg-base-200 rounded-lg p-3">
+        <code class="text-sm break-all flex-1 select-all" x-text="createdToken"></code>
         <button
           @click="copyToken()"
           class="btn btn-ghost btn-sm btn-square flex-shrink-0"
           title="Copy"
         >
-          <i
-            x-show="!copied"
-            data-lucide="copy"
-            class="w-4 h-4"
-          ></i>
-          <i
-            x-show="copied"
-            data-lucide="check"
-            class="w-4 h-4 text-success"
-          ></i>
+          <i x-show="!copied" data-lucide="copy" class="w-4 h-4"></i>
+          <i x-show="copied" data-lucide="check" class="w-4 h-4 text-success"></i>
         </button>
       </div>
 
       <div class="modal-action">
-        <button
-          @click="closeTokenCreatedDialog()"
-          class="btn btn-primary btn-sm"
-        >Done</button>
+        <button @click="closeTokenCreatedDialog()" class="btn btn-primary btn-sm">Done</button>
       </div>
     </div>
   </dialog>

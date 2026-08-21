@@ -1,28 +1,21 @@
 <!-- Profile Tab -->
 <div x-show="tab === 'profile'" x-cloak>
   <div x-data="avatarUploadForm()">
-    <div
-      class="card bg-base-100 border border-base-300 shadow-sm"
-    >
+    <div class="card bg-base-100 border border-base-300 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="camera" class="w-5 h-5"></i>
           Profile Picture
         </h2>
 
-        <p
-          class="text-sm text-base-content/60 mt-1"
-        >Upload a photo to personalize your account. The image will be cropped to a square.</p>
+        <p class="text-sm text-base-content/60 mt-1">Upload a photo to personalize your account. The image will be cropped to a square.</p>
 
         <!-- Feedback -->
         <div x-ref="avatarFeedback"></div>
 
         <!-- Current avatar preview -->
         <div class="flex items-center gap-6 mt-4">
-          <div
-            class="avatar"
-            :class="hasAvatar ? '' : 'placeholder'"
-          >
+          <div class="avatar" :class="hasAvatar ? '' : 'placeholder'">
             <div
               class="w-24 h-24 rounded-full ring-2 ring-base-300 ring-offset-2 ring-offset-base-100"
               :class="hasAvatar ? '' : userAvatarColorClass({{ request.user.id }}) + ' text-white text-3xl'"
@@ -74,36 +67,19 @@
     <dialog x-ref="cropDialog" class="modal">
       <div class="modal-box max-w-lg">
         <h3 class="font-bold text-lg mb-4">Crop your photo</h3>
-        <div
-          class="w-full"
-          style="max-height: 400px"
-        >
-          <img
-            x-ref="cropImage"
-            alt=""
-            style="display: block;
-                   max-width: 100%"
-          />
+        <div class="w-full" style="max-height: 400px">
+          <img x-ref="cropImage" alt="" style="display: block; max-width: 100%" />
         </div>
         <div class="modal-action">
-          <button
-            type="button"
-            @click="cancelCrop()"
-            class="btn btn-ghost btn-sm"
-          >Cancel</button>
+          <button type="button" @click="cancelCrop()" class="btn btn-ghost btn-sm">Cancel</button>
           <button
             type="button"
             @click="confirmCrop()"
             class="btn btn-primary btn-sm gap-2"
             :disabled="loading"
           >
-            <span
-              x-show="loading"
-              class="loading loading-spinner loading-sm"
-            ></span>
-            <span
-              x-text="loading ? 'Uploading...' : 'Confirm'"
-            ></span>
+            <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+            <span x-text="loading ? 'Uploading...' : 'Confirm'"></span>
           </button>
         </div>
       </div>
@@ -138,9 +114,7 @@
           @blur="saveField('role', role)"
           @keydown.enter="$event.target.blur()"
         />
-        <label class="label"><span
-  class="label-text-alt text-base-content/40"
->Displayed below your name on your profile.</span></label>
+        <label class="label"><span class="label-text-alt text-base-content/40">Displayed below your name on your profile.</span></label>
       </div>
 
       <!-- Bio -->
@@ -155,9 +129,7 @@
           @blur="saveField('bio', bio)"
         ></textarea>
         <label class="label">
-          <span
-            class="label-text-alt text-base-content/40"
-          >Visible on your public profile.</span>
+          <span class="label-text-alt text-base-content/40">Visible on your public profile.</span>
           <span
             class="label-text-alt"
             :class="bio.length > 180 ? 'text-warning' : 'text-base-content/40'"
@@ -176,22 +148,15 @@
   >
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
-        <i
-          data-lucide="paintbrush"
-          class="w-5 h-5"
-        ></i>
+        <i data-lucide="paintbrush" class="w-5 h-5"></i>
         Banner Color
       </h2>
-      <p
-        class="text-sm text-base-content/60 mt-1"
-      >Choose a gradient for your profile banner.</p>
+      <p class="text-sm text-base-content/60 mt-1">Choose a gradient for your profile banner.</p>
 
       <div x-ref="paletteFeedback"></div>
 
       <!-- Preset grid -->
-      <div
-        class="grid grid-cols-4 sm:grid-cols-8 gap-2 mt-4"
-      >
+      <div class="grid grid-cols-4 sm:grid-cols-8 gap-2 mt-4">
         {% for pid, p in banner_palettes.items %}
           <button
             type="button"
@@ -211,13 +176,8 @@
           @click="showCustom = !showCustom"
           class="btn btn-ghost btn-xs gap-1"
         >
-          <i
-            data-lucide="sliders-horizontal"
-            class="w-3.5 h-3.5"
-          ></i>
-          <span
-            x-text="showCustom ? 'Hide custom' : 'Custom colors'"
-          ></span>
+          <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+          <span x-text="showCustom ? 'Hide custom' : 'Custom colors'"></span>
         </button>
         <button
           type="button"
@@ -225,10 +185,7 @@
           @click="resetPalette()"
           class="btn btn-ghost btn-xs gap-1 text-base-content/50"
         >
-          <i
-            data-lucide="rotate-ccw"
-            class="w-3.5 h-3.5"
-          ></i>
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
           Reset to default
         </button>
       </div>
@@ -248,10 +205,7 @@
               @input="previewCustom()"
               class="w-8 h-8 rounded cursor-pointer border-0 p-0"
             />
-            <span
-              class="text-xs text-base-content/40 font-mono"
-              x-text="customFrom"
-            ></span>
+            <span class="text-xs text-base-content/40 font-mono" x-text="customFrom"></span>
           </label>
           <label class="flex items-center gap-2 text-sm">
             <span class="text-base-content/60 w-10">Via</span>
@@ -261,10 +215,7 @@
               @input="previewCustom()"
               class="w-8 h-8 rounded cursor-pointer border-0 p-0"
             />
-            <span
-              class="text-xs text-base-content/40 font-mono"
-              x-text="customVia"
-            ></span>
+            <span class="text-xs text-base-content/40 font-mono" x-text="customVia"></span>
           </label>
           <label class="flex items-center gap-2 text-sm">
             <span class="text-base-content/60 w-10">To</span>
@@ -274,10 +225,7 @@
               @input="previewCustom()"
               class="w-8 h-8 rounded cursor-pointer border-0 p-0"
             />
-            <span
-              class="text-xs text-base-content/40 font-mono"
-              x-text="customTo"
-            ></span>
+            <span class="text-xs text-base-content/40 font-mono" x-text="customTo"></span>
           </label>
         </div>
         <!-- Live preview -->

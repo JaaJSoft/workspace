@@ -17,13 +17,8 @@ shrink inside the header flex row rather than squeezing the card title.
     @click="activityTab = 'all'"
     x-target="{{ activity_prefix }}"
   >
-    <i
-      data-lucide="layers"
-      class="w-4 h-4 shrink-0"
-    ></i>
-    <span
-      class="text-xs leading-none max-w-full truncate"
-    >All</span>
+    <i data-lucide="layers" class="w-4 h-4 shrink-0"></i>
+    <span class="text-xs leading-none max-w-full truncate">All</span>
   </a>
   {% for src in activity_sources %}
     <a
@@ -33,13 +28,8 @@ shrink inside the header flex row rather than squeezing the card title.
       @click="activityTab = '{{ src.slug }}'"
       x-target="{{ activity_prefix }}"
     >
-      <i
-        data-lucide="{{ src.icon }}"
-        class="w-4 h-4 shrink-0"
-      ></i>
-      <span
-        class="text-xs leading-none max-w-full truncate"
-      >{{ src.label }}</span>
+      <i data-lucide="{{ src.icon }}" class="w-4 h-4 shrink-0"></i>
+      <span class="text-xs leading-none max-w-full truncate">{{ src.label }}</span>
     </a>
   {% endfor %}
 </div>

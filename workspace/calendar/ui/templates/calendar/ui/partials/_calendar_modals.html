@@ -8,12 +8,8 @@
   @keydown.escape.window="showCalendarModal = false"
 >
   <div class="modal-box w-11/12 max-w-sm">
-    <div
-      class="flex items-center justify-between mb-4"
-    >
-      <h3
-        class="font-bold text-lg flex items-center gap-2"
-      >
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg flex items-center gap-2">
         <span
           class="w-8 h-8 rounded-full flex items-center justify-center"
           :class="calendarModalMode === 'create' ? 'bg-accent/10 text-accent' : 'bg-primary/10 text-primary'"
@@ -36,10 +32,7 @@
       </button>
     </div>
 
-    <form
-      @submit.prevent="saveCalendar()"
-      class="space-y-4"
-    >
+    <form @submit.prevent="saveCalendar()" class="space-y-4">
       <label class="form-control w-full">
         <div class="label"><span class="label-text">Name</span></div>
         <input
@@ -81,19 +74,16 @@
           type="button"
           class="btn btn-sm btn-ghost"
           @click="showCalendarModal = false"
-        >Cancel</button>
+        >
+          Cancel
+        </button>
         <button
           type="submit"
           class="btn btn-sm btn-primary"
           :disabled="savingCalendar || !calendarForm.name.trim()"
         >
-          <span
-            class="loading loading-spinner loading-xs"
-            x-show="savingCalendar"
-          ></span>
-          <span
-            x-text="calendarModalMode === 'create' ? 'Create' : 'Save'"
-          ></span>
+          <span class="loading loading-spinner loading-xs" x-show="savingCalendar"></span>
+          <span x-text="calendarModalMode === 'create' ? 'Create' : 'Save'"></span>
         </button>
       </div>
     </form>
@@ -108,12 +98,8 @@
   @keydown.escape.window="showExternalModal && (showExternalModal = false)"
 >
   <div class="modal-box w-11/12 max-w-sm">
-    <div
-      class="flex items-center justify-between mb-4"
-    >
-      <h3
-        class="font-bold text-lg flex items-center gap-2"
-      >
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg flex items-center gap-2">
         <span
           class="w-8 h-8 rounded-full flex items-center justify-center bg-info/10 text-info"
         >
@@ -130,10 +116,7 @@
       </button>
     </div>
 
-    <form
-      @submit.prevent="saveExternalCalendar()"
-      class="space-y-4"
-    >
+    <form @submit.prevent="saveExternalCalendar()" class="space-y-4">
       <label class="form-control w-full">
         <div class="label"><span class="label-text">ICS URL</span></div>
         <input
@@ -186,19 +169,16 @@
           class="btn btn-sm btn-ghost"
           @click="showExternalModal = false"
           :disabled="savingExternal"
-        >Cancel</button>
+        >
+          Cancel
+        </button>
         <button
           type="submit"
           class="btn btn-sm btn-primary"
           :disabled="!externalForm.url.trim() || savingExternal"
         >
-          <span
-            class="loading loading-spinner loading-xs"
-            x-show="savingExternal"
-          ></span>
-          <span
-            x-text="savingExternal ? 'Adding...' : 'Add'"
-          ></span>
+          <span class="loading loading-spinner loading-xs" x-show="savingExternal"></span>
+          <span x-text="savingExternal ? 'Adding...' : 'Add'"></span>
         </button>
       </div>
     </form>

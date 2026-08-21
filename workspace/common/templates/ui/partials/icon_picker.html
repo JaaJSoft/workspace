@@ -10,13 +10,8 @@ Optional: colors, selectedColor, selectColor(), saving, saved.
 <div class="space-y-3">
   <!-- Icon Selection -->
   <div>
-    <label
-      class="text-xs text-base-content/60 mb-1.5 block"
-    >Icon</label>
-    <div
-      class="flex flex-wrap gap-1"
-      x-ref="iconGrid"
-    >
+    <label class="text-xs text-base-content/60 mb-1.5 block">Icon</label>
+    <div class="flex flex-wrap gap-1" x-ref="iconGrid">
       <template x-for="icon in icons" :key="icon">
         <button
           type="button"
@@ -25,31 +20,17 @@ Optional: colors, selectedColor, selectColor(), saving, saved.
           @click="selectIcon(icon)"
           :title="icon"
         >
-          <i
-            :data-lucide="icon"
-            class="w-3.5 h-3.5 pointer-events-none"
-          ></i>
+          <i :data-lucide="icon" class="w-3.5 h-3.5 pointer-events-none"></i>
         </button>
       </template>
     </div>
   </div>
 
   <!-- Color Selection (hidden when colors is empty) -->
-  <div
-    x-show="colors && colors.length"
-    x-cloak
-  >
-    <label
-      class="text-xs text-base-content/60 mb-1.5 block"
-    >Color</label>
-    <div
-      class="flex flex-wrap gap-1"
-      x-ref="colorGrid"
-    >
-      <template
-        x-for="color in (colors || [])"
-        :key="color.class"
-      >
+  <div x-show="colors && colors.length" x-cloak>
+    <label class="text-xs text-base-content/60 mb-1.5 block">Color</label>
+    <div class="flex flex-wrap gap-1" x-ref="colorGrid">
+      <template x-for="color in (colors || [])" :key="color.class">
         <button
           type="button"
           class="btn btn-xs btn-square btn-ghost"
@@ -72,9 +53,7 @@ Optional: colors, selectedColor, selectColor(), saving, saved.
     x-show="saving"
     class="text-xs text-base-content/60 flex items-center gap-1"
   >
-    <span
-      class="loading loading-spinner loading-xs"
-    ></span>
+    <span class="loading loading-spinner loading-xs"></span>
     Saving...
   </div>
   <div

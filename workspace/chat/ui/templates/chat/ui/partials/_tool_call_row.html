@@ -9,9 +9,7 @@
       class="w-3 h-3 flex-shrink-0 transition-transform group-open/call:rotate-180"
     ></i>
   </summary>
-  <div
-    class="mt-1 mb-1.5 ml-5 flex flex-col gap-1 min-w-0"
-  >
+  <div class="mt-1 mb-1.5 ml-5 flex flex-col gap-1 min-w-0">
     {% if call.args %}
       <div class="flex flex-col gap-0.5">
         {% for key, value in call.args %}
@@ -19,9 +17,7 @@
         {% endfor %}
       </div>
     {% elif call.args_raw %}
-      <pre
-        class="whitespace-pre-wrap break-words font-mono text-[0.7rem]"
-      >{{ call.args_raw }}</pre>
+      <pre class="whitespace-pre-wrap break-words font-mono text-[0.7rem]">{{ call.args_raw }}</pre>
     {% endif %}
     {% if call.result %}
       <pre

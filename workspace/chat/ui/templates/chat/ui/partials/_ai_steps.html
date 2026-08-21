@@ -6,23 +6,15 @@ Alpine state would not survive the swap.
 {% endcomment %}
 {% if steps %}
   {% if collapsed %}
-    <details
-      class="group/tools mt-2 text-xs text-base-content/40"
-    >
+    <details class="group/tools mt-2 text-xs text-base-content/40">
       <summary
         class="flex items-center gap-1 cursor-pointer list-none select-none hover:text-base-content/60 transition-colors"
       >
         {% if has_reasoning %}
-          <i
-            data-lucide="brain"
-            class="w-3 h-3 flex-shrink-0"
-          ></i>
+          <i data-lucide="brain" class="w-3 h-3 flex-shrink-0"></i>
           <span>Reasoned{% if tool_count %} - used {{ tool_count }} tool{{ tool_count|pluralize }}{% endif %}</span>
         {% else %}
-          <i
-            data-lucide="wrench"
-            class="w-3 h-3 flex-shrink-0"
-          ></i>
+          <i data-lucide="wrench" class="w-3 h-3 flex-shrink-0"></i>
           <span>Used {{ tool_count }} tools</span>
         {% endif %}
         <i
@@ -37,9 +29,7 @@ Alpine state would not survive the swap.
       </div>
     </details>
   {% else %}
-    <div
-      class="mt-2 text-xs text-base-content/40 flex flex-col gap-0.5"
-    >
+    <div class="mt-2 text-xs text-base-content/40 flex flex-col gap-0.5">
       {% for step in steps %}
         {% include "chat/ui/partials/_ai_step.html" %}
       {% endfor %}

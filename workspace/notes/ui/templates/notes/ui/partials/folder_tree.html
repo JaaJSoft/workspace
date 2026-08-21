@@ -7,10 +7,7 @@
     rows      - name of the Alpine root folder list (e.g. "sidebarFolders")
     view_type - "folder" (personal) or "group_folder"
 {% endcomment %}
-<template
-  x-for="row in visibleFolderRows({{ rows }})"
-  :key="row.uuid"
->
+<template x-for="row in visibleFolderRows({{ rows }})" :key="row.uuid">
   <li
     class="relative"
     :style="row.depth ? 'padding-left:' + row.depth + 'rem' : ''"
@@ -18,11 +15,7 @@
     {# `hidden` because daisyUI's `.menu :where(li > *)` styles every direct #}
     {# child of a li - including this inert template placeholder, which would #}
     {# otherwise render as an empty 8px menu item above the row. #}
-    <template
-      x-for="lvl in row.depth"
-      :key="lvl"
-      class="hidden"
-    >
+    <template x-for="lvl in row.depth" :key="lvl" class="hidden">
       {# With the item's pl-2, the parent icon centre sits 1rem into its row #}
       {# (0.5rem padding + half the 1rem icon) - one indent step, so guides #}
       {# align under the icons. Pulled 2px left so the innermost guide stays #}
@@ -50,19 +43,13 @@
         class="w-4 h-4"
         :class="row.color || ''"
       ></i>
-      <span
-        class="truncate flex-1"
-        x-text="row.name"
-      ></span>
+      <span class="truncate flex-1" x-text="row.name"></span>
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100"
         @click.stop="openCtxMenu($event, '{{ view_type }}', row)"
       >
-        <i
-          data-lucide="ellipsis-vertical"
-          class="w-3.5 h-3.5"
-        ></i>
+        <i data-lucide="ellipsis-vertical" class="w-3.5 h-3.5"></i>
       </button>
       <span
         x-show="loadingChildren.indexOf(row.uuid) !== -1"

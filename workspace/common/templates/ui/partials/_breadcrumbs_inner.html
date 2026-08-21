@@ -1,9 +1,7 @@
 {% load ui_filters %}
 {% with threshold=collapse_after|default:"4" %}
   <nav class="text-sm min-w-0">
-    <ul
-      class="flex items-center flex-nowrap min-w-0 bc-sep {{ sep_class }}"
-    >
+    <ul class="flex items-center flex-nowrap min-w-0 bc-sep {{ sep_class }}">
       {% if collapse and breadcrumbs|length|gt:threshold %}
         {% for item in breadcrumbs %}
           {% if forloop.first %}
@@ -32,9 +30,7 @@
             </li>
           {% elif forloop.revcounter == 2 %}
             <li class="flex items-center shrink-0">
-              <div
-                class="dropdown dropdown-hover dropdown-bottom dropdown-center"
-              >
+              <div class="dropdown dropdown-hover dropdown-bottom dropdown-center">
                 <button
                   tabindex="0"
                   class="flex items-center hover:opacity-70 cursor-pointer"

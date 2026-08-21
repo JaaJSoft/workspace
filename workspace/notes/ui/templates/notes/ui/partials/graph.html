@@ -1,15 +1,9 @@
-<div
-  class="flex flex-col h-full w-full bg-base-100"
->
+<div class="flex flex-col h-full w-full bg-base-100">
   <!-- Toolbar: controls live here (not floating over the canvas), so the graph
        gets the full area below. Two rows, like the note-list header + filters. -->
-  <div
-    class="flex-shrink-0 border-b border-base-300"
-  >
+  <div class="flex-shrink-0 border-b border-base-300">
     <!-- Row 1: mobile menu toggle + title + scope -->
-    <div
-      class="flex items-center gap-2 px-3 pt-3 pb-2"
-    >
+    <div class="flex items-center gap-2 px-3 pt-3 pb-2">
       {% include "ui/partials/drawer_toggle.html" with drawer_id="notes-drawer" class="lg:hidden" %}
       <h3
         class="text-sm font-semibold text-base-content/60 truncate flex-1"
@@ -20,26 +14,24 @@
           class="btn btn-xs join-item flex-1"
           :class="graphScope === 'mine' ? 'btn-success' : 'btn-ghost'"
           @click="setGraphScope('mine')"
-        >My notes</button>
+        >
+          My notes
+        </button>
         <button
           class="btn btn-xs join-item flex-1"
           :class="graphScope === 'all' ? 'btn-success' : 'btn-ghost'"
           @click="setGraphScope('all')"
-        >All</button>
+        >
+          All
+        </button>
       </div>
     </div>
     <!-- Row 2: search + kind + legend popover -->
-    <div
-      class="flex items-center gap-2 px-3 pb-3"
-    >
+    <div class="flex items-center gap-2 px-3 pb-3">
       <!-- search + kind grouped on the left; the group grows so the legend
            popover sits at the far right of the toolbar -->
-      <div
-        class="flex items-center gap-2 flex-1 min-w-0"
-      >
-        <div
-          class="relative flex-1 min-w-0 max-w-xs"
-        >
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <div class="relative flex-1 min-w-0 max-w-xs">
           <i
             data-lucide="search"
             class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40"
@@ -79,10 +71,7 @@
               class="truncate max-w-24"
               x-text="graphTags.length > 0 ? selectedGraphTagNames() : 'Tags'"
             ></span>
-            <i
-              data-lucide="chevron-down"
-              class="w-3.5 h-3.5"
-            ></i>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
           </button>
           <div
             class="absolute left-0 top-full mt-1 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg w-56 max-h-72 overflow-hidden flex flex-col"
@@ -105,11 +94,10 @@
                 class="w-full text-left px-3 py-1.5 hover:bg-base-200 text-xs text-base-content/60"
                 x-show="graphTags.length > 0"
                 @click="clearGraphTags()"
-              >Clear filter</button>
-              <template
-                x-for="tag in filteredGraphTags()"
-                :key="tag.uuid"
               >
+                Clear filter
+              </button>
+              <template x-for="tag in filteredGraphTags()" :key="tag.uuid">
                 <label
                   class="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-sm"
                 >
@@ -125,7 +113,9 @@
               <div
                 x-show="filteredGraphTags().length === 0"
                 class="px-3 py-2 text-xs text-base-content/40"
-              >No tags found</div>
+              >
+                No tags found
+              </div>
             </div>
           </div>
         </div>
@@ -138,9 +128,7 @@
       >
         <i data-lucide="maximize" class="w-4 h-4"></i>
       </button>
-      <div
-        class="dropdown dropdown-end flex-shrink-0"
-      >
+      <div class="dropdown dropdown-end flex-shrink-0">
         <button
           tabindex="0"
           class="btn btn-ghost btn-sm btn-square"
@@ -153,15 +141,9 @@
           tabindex="0"
           class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-3 mt-1 w-40 text-xs space-y-1.5"
         >
-          <div class="flex items-center gap-2"><span
-  class="w-2.5 h-2.5 rounded-full bg-warning"
-></span> Favorite</div>
-          <div class="flex items-center gap-2"><span
-  class="w-2.5 h-2.5 rounded-full bg-success"
-></span> Journal</div>
-          <div class="flex items-center gap-2"><span
-  class="w-2.5 h-2.5 rounded-full bg-base-content/50"
-></span> Note</div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-warning"></span> Favorite</div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-success"></span> Journal</div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-base-content/50"></span> Note</div>
         </div>
       </div>
     </div>
@@ -169,10 +151,7 @@
 
   <!-- Canvas mount (force-graph draws here, sized to this area by notes.js) -->
   <div class="relative flex-1 min-h-0">
-    <div
-      x-ref="graphCanvas"
-      class="absolute inset-0"
-    ></div>
+    <div x-ref="graphCanvas" class="absolute inset-0"></div>
     <!-- Loading overlay: shown while the graph module imports force-graph and
          fetches the (scope + filters)-filtered data. Driven by graphLoading,
          toggled through the onLoading callback wired in _openGraph(). -->
@@ -182,9 +161,7 @@
       x-transition.opacity
       class="absolute inset-0 z-10 flex items-center justify-center bg-base-100/60 pointer-events-none"
     >
-      <span
-        class="loading loading-spinner loading-lg text-base-content/50"
-      ></span>
+      <span class="loading loading-spinner loading-lg text-base-content/50"></span>
     </div>
   </div>
 </div>

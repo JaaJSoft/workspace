@@ -1,8 +1,5 @@
 <!-- Image Viewer -->
-<div
-  class="flex flex-col h-full"
-  x-data="imageViewerData()"
->
+<div class="flex flex-col h-full" x-data="imageViewerData()">
   <!-- Toolbar -->
   <div
     class="flex items-center justify-center gap-2 p-4 bg-base-100 border-b border-base-300"
@@ -42,10 +39,7 @@
       @click="reset()"
       title="Reset (0)"
     >
-      <i
-        data-lucide="refresh-cw"
-        class="w-4 h-4"
-      ></i>
+      <i data-lucide="refresh-cw" class="w-4 h-4"></i>
     </button>
     {% if user_can_edit %}
       <div class="divider divider-horizontal mx-2"></div>
@@ -101,9 +95,7 @@
         class="w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-y-auto shrink-0"
       >
         <div class="p-4 flex flex-col gap-4 h-full">
-          <h4
-            class="font-semibold text-sm flex items-center gap-2"
-          >
+          <h4 class="font-semibold text-sm flex items-center gap-2">
             <i data-lucide="wand-2" class="w-4 h-4"></i>
             AI Image Edit
           </h4>
@@ -142,21 +134,12 @@
             @click="generateEdit()"
             :disabled="editLoading || !editPrompt.trim()"
           >
-            <span
-              x-show="!editLoading"
-              class="flex items-center gap-2"
-            >
+            <span x-show="!editLoading" class="flex items-center gap-2">
               <i data-lucide="sparkles" class="w-4 h-4"></i>
               Generate
             </span>
-            <span
-              x-show="editLoading"
-              class="flex items-center gap-2"
-              x-cloak
-            >
-              <span
-                class="loading loading-spinner loading-xs"
-              ></span>
+            <span x-show="editLoading" class="flex items-center gap-2" x-cloak>
+              <span class="loading loading-spinner loading-xs"></span>
               Generating...
             </span>
           </button>
@@ -219,10 +202,7 @@
                     :disabled="saveAsLoading"
                   >
                     <option value="">Root</option>
-                    <template
-                      x-for="folder in folders"
-                      :key="folder.uuid"
-                    >
+                    <template x-for="folder in folders" :key="folder.uuid">
                       <option
                         :value="folder.uuid"
                         x-text="folder.path || folder.name"
@@ -237,7 +217,9 @@
                     class="btn btn-ghost btn-sm flex-1"
                     @click="showSaveAs = false"
                     :disabled="saveAsLoading"
-                  >Cancel</button>
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="button"
                     class="btn btn-success btn-sm flex-1"

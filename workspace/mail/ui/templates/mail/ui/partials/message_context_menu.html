@@ -18,10 +18,7 @@ Rows of the message context menu. The panel around them is
   <hr class="my-1 border-base-300" />
   {% comment %}Label toggles: a leading icon in the label's own color and a
   trailing check for the ones already applied, so not a plain action row.{% endcomment %}
-  <template
-    x-for="label in _getMsgCtxAccountLabels()"
-    :key="label.uuid"
-  >
+  <template x-for="label in _getMsgCtxAccountLabels()" :key="label.uuid">
     <li>
       <button
         type="button"
@@ -31,10 +28,7 @@ Rows of the message context menu. The panel around them is
         <span
           :class="label.color && label.color !== 'ghost' ? 'text-' + label.color : 'text-base-content/50'"
         >
-          <i
-            :data-lucide="label.icon || 'tag'"
-            class="w-4 h-4"
-          ></i>
+          <i :data-lucide="label.icon || 'tag'" class="w-4 h-4"></i>
         </span>
         <span class="truncate" x-text="label.name"></span>
         <i

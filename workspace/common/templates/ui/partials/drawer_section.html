@@ -18,16 +18,15 @@ Usage Example:
 {% endinclude %}
 {% endcomment %}
 
-<div
-  class="flex-1 overflow-y-auto"
-  :class="collapsed ? 'p-2' : 'p-4'"
->
+<div class="flex-1 overflow-y-auto" :class="collapsed ? 'p-2' : 'p-4'">
   {% if title %}
     <h3
       class="text-sm font-semibold text-base-content/60 uppercase tracking-wider mb-4"
       x-show="!collapsed"
       x-transition
-    >{{ title }}</h3>
+    >
+      {{ title }}
+    </h3>
   {% endif %}
   <ul class="menu p-0 gap-2">
     {{ content }}

@@ -1,7 +1,5 @@
 <!-- Note list header -->
-<div
-  class="flex items-center gap-2 p-3 border-b border-base-300"
->
+<div class="flex items-center gap-2 p-3 border-b border-base-300">
   {% include "ui/partials/drawer_toggle.html" with drawer_id="notes-drawer" class="lg:hidden" %}
   <h3
     class="text-sm font-semibold text-base-content/60 truncate flex-1"
@@ -22,11 +20,7 @@
     title="Refresh"
     :disabled="loadingNotes"
   >
-    <i
-      data-lucide="refresh-cw"
-      class="w-3.5 h-3.5"
-      x-show="!loadingNotes"
-    ></i>
+    <i data-lucide="refresh-cw" class="w-3.5 h-3.5" x-show="!loadingNotes"></i>
     <span
       class="loading loading-spinner loading-xs"
       x-show="loadingNotes"
@@ -36,9 +30,7 @@
 </div>
 
 <!-- Filter bar -->
-<div
-  class="px-3 py-2 border-b border-base-300 bg-base-100/80 space-y-1.5"
->
+<div class="px-3 py-2 border-b border-base-300 bg-base-100/80 space-y-1.5">
   <!-- Search input -->
   <div class="relative">
     <i
@@ -63,9 +55,7 @@
     </button>
   </div>
   <!-- Toggle filters -->
-  <div
-    class="flex items-center gap-1.5 flex-wrap"
-  >
+  <div class="flex items-center gap-1.5 flex-wrap">
     <button
       class="btn btn-xs gap-1"
       :class="filters.favorites ? 'btn-warning' : 'btn-ghost'"
@@ -87,13 +77,8 @@
         @click="showTagDropdown = !showTagDropdown"
       >
         <i data-lucide="tag" class="w-3 h-3"></i>
-        <span
-          x-text="filters.tags.length > 0 ? selectedTagNames() : 'Tags'"
-        ></span>
-        <i
-          data-lucide="chevron-down"
-          class="w-3 h-3"
-        ></i>
+        <span x-text="filters.tags.length > 0 ? selectedTagNames() : 'Tags'"></span>
+        <i data-lucide="chevron-down" class="w-3 h-3"></i>
       </button>
       <div
         class="absolute left-0 top-full mt-1 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg min-w-48 max-h-64 overflow-y-auto py-1"
@@ -126,7 +111,9 @@
       class="btn btn-ghost btn-xs text-xs"
       x-show="_hasActiveFilters()"
       @click="clearFilters()"
-    >Clear</button>
+    >
+      Clear
+    </button>
   </div>
 </div>
 
@@ -157,10 +144,7 @@
           class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity flex-shrink-0"
           @click.stop="openCtxMenu($event, 'note', { uuid: note.uuid, name: note.name, is_favorite: note.is_favorite, parent: note.parent })"
         >
-          <i
-            data-lucide="ellipsis-vertical"
-            class="w-3.5 h-3.5"
-          ></i>
+          <i data-lucide="ellipsis-vertical" class="w-3.5 h-3.5"></i>
         </span>
       </div>
       <div
@@ -181,7 +165,9 @@
   <div
     x-show="notes.length === 0 && !loadingNotes"
     class="p-4 text-center text-sm text-base-content/40"
-  >No notes found</div>
+  >
+    No notes found
+  </div>
   <!-- Skeleton loading -->
   <template x-if="loadingNotes">
     <div>

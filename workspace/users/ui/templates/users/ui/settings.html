@@ -22,17 +22,13 @@
     <!-- Page header -->
     <div class="mb-6">
       <h1 class="text-2xl font-bold">Settings</h1>
-      <p
-        class="text-base-content/60 text-sm mt-1"
-      >Manage your profile, preferences and security settings.</p>
+      <p class="text-base-content/60 text-sm mt-1">Manage your profile, preferences and security settings.</p>
     </div>
 
     <div class="flex flex-col md:flex-row gap-6">
       <!-- Sidebar -->
       <nav class="md:w-64 flex-shrink-0">
-        <div
-          class="border border-base-300 rounded-lg p-3 space-y-1 w-full"
-        >
+        <div class="border border-base-300 rounded-lg p-3 space-y-1 w-full">
           <button
             @click="tab = 'profile'; updateHash()"
             class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
@@ -40,10 +36,7 @@
             ? 'bg-primary/10 text-primary font-semibold'
             : 'hover:bg-base-200 text-base-content'"
           >
-            <i
-              data-lucide="user-circle"
-              class="w-4 h-4"
-            ></i>
+            <i data-lucide="user-circle" class="w-4 h-4"></i>
             Profile
           </button>
           <button
@@ -93,10 +86,7 @@
             ? 'bg-primary/10 text-primary font-semibold'
             : 'hover:bg-base-200 text-base-content'"
           >
-            <i
-              data-lucide="bar-chart-3"
-              class="w-4 h-4"
-            ></i>
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
             Usage
           </button>
         </div>

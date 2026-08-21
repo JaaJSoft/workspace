@@ -29,27 +29,21 @@
   >
     <!-- Left: info -->
     <div class="flex items-center gap-2 min-w-0">
-      <span
-        class="badge badge-sm badge-ghost font-mono"
-      >{{ language }}</span>
+      <span class="badge badge-sm badge-ghost font-mono">{{ language }}</span>
       {% if can_edit %}
         <span
           x-show="isDirty"
           x-cloak
           class="flex items-center gap-1 text-warning text-xs whitespace-nowrap"
         >
-          <span
-            class="w-1.5 h-1.5 rounded-full bg-warning inline-block"
-          ></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
           Modified
         </span>
       {% endif %}
     </div>
 
     <!-- Right: actions -->
-    <div
-      class="flex items-center gap-0.5 flex-wrap"
-    >
+    <div class="flex items-center gap-0.5 flex-wrap">
       {% if can_edit %}
         <!-- Undo / Redo -->
         <button
@@ -58,10 +52,7 @@
           @click="editorAction('undo')"
           title="Undo (Ctrl+Z)"
         >
-          <i
-            data-lucide="undo-2"
-            class="w-3.5 h-3.5"
-          ></i>
+          <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
         </button>
         <button
           type="button"
@@ -69,10 +60,7 @@
           @click="editorAction('redo')"
           title="Redo (Ctrl+Y)"
         >
-          <i
-            data-lucide="redo-2"
-            class="w-3.5 h-3.5"
-          ></i>
+          <i data-lucide="redo-2" class="w-3.5 h-3.5"></i>
         </button>
 
         <div class="w-px h-4 bg-base-300 mx-0.5"></div>
@@ -85,10 +73,7 @@
         @click="editorAction('find')"
         title="Find (Ctrl+F)"
       >
-        <i
-          data-lucide="search"
-          class="w-3.5 h-3.5"
-        ></i>
+        <i data-lucide="search" class="w-3.5 h-3.5"></i>
       </button>
       {% if can_edit %}
         <button
@@ -97,10 +82,7 @@
           @click="editorAction('replace')"
           title="Replace (Ctrl+H)"
         >
-          <i
-            data-lucide="replace"
-            class="w-3.5 h-3.5"
-          ></i>
+          <i data-lucide="replace" class="w-3.5 h-3.5"></i>
         </button>
       {% endif %}
 
@@ -113,10 +95,7 @@
         @click="changeFontSize(-1)"
         title="Decrease font size"
       >
-        <i
-          data-lucide="a-arrow-down"
-          class="w-3.5 h-3.5"
-        ></i>
+        <i data-lucide="a-arrow-down" class="w-3.5 h-3.5"></i>
       </button>
       <span
         class="text-xs font-mono w-6 text-center select-none"
@@ -128,10 +107,7 @@
         @click="changeFontSize(1)"
         title="Increase font size"
       >
-        <i
-          data-lucide="a-arrow-up"
-          class="w-3.5 h-3.5"
-        ></i>
+        <i data-lucide="a-arrow-up" class="w-3.5 h-3.5"></i>
       </button>
 
       <div class="w-px h-4 bg-base-300 mx-0.5"></div>
@@ -143,10 +119,7 @@
         @click="cycleTabSize()"
         title="Tab size (click to cycle)"
       >
-        <i
-          data-lucide="indent-increase"
-          class="w-3.5 h-3.5"
-        ></i>
+        <i data-lucide="indent-increase" class="w-3.5 h-3.5"></i>
         <span class="text-xs" x-text="tabSize"></span>
       </button>
 
@@ -160,10 +133,7 @@
         @click="toggleWhitespace()"
         title="Toggle whitespace characters"
       >
-        <i
-          data-lucide="pilcrow"
-          class="w-3.5 h-3.5"
-        ></i>
+        <i data-lucide="pilcrow" class="w-3.5 h-3.5"></i>
       </button>
       <!-- Line numbers -->
       <button
@@ -173,10 +143,7 @@
         @click="toggleLineNumbers()"
         title="Toggle line numbers"
       >
-        <i
-          data-lucide="list-ordered"
-          class="w-3.5 h-3.5"
-        ></i>
+        <i data-lucide="list-ordered" class="w-3.5 h-3.5"></i>
       </button>
       <!-- Word wrap -->
       <button
@@ -186,10 +153,7 @@
         @click="toggleWordWrap()"
         title="Toggle word wrap"
       >
-        <i
-          data-lucide="wrap-text"
-          class="w-3.5 h-3.5"
-        ></i>
+        <i data-lucide="wrap-text" class="w-3.5 h-3.5"></i>
       </button>
       <!-- Minimap -->
       <button
@@ -212,20 +176,10 @@
             class="btn btn-ghost btn-xs gap-1"
             :class="aiProcessing ? 'btn-disabled' : ''"
           >
-            <span
-              x-show="aiProcessing"
-              class="loading loading-spinner loading-xs"
-            ></span>
-            <i
-              x-show="!aiProcessing"
-              data-lucide="sparkles"
-              class="w-3.5 h-3.5"
-            ></i>
+            <span x-show="aiProcessing" class="loading loading-spinner loading-xs"></span>
+            <i x-show="!aiProcessing" data-lucide="sparkles" class="w-3.5 h-3.5"></i>
             AI
-            <i
-              data-lucide="chevron-down"
-              class="w-3 h-3"
-            ></i>
+            <i data-lucide="chevron-down" class="w-3 h-3"></i>
           </label>
           <ul
             tabindex="0"
@@ -247,10 +201,7 @@
                 class="gap-3 rounded"
                 @click="aiAction('explain'); document.activeElement.blur()"
               >
-                <i
-                  data-lucide="message-square-text"
-                  class="w-4 h-4"
-                ></i>
+                <i data-lucide="message-square-text" class="w-4 h-4"></i>
                 <span>Explain</span>
               </button>
             </li>
@@ -290,15 +241,8 @@
           @click="save()"
           title="Save (Ctrl+S)"
         >
-          <span
-            x-show="saving"
-            class="loading loading-spinner loading-xs"
-          ></span>
-          <i
-            x-show="!saving"
-            data-lucide="save"
-            class="w-3.5 h-3.5"
-          ></i>
+          <span x-show="saving" class="loading loading-spinner loading-xs"></span>
+          <i x-show="!saving" data-lucide="save" class="w-3.5 h-3.5"></i>
           Save
         </button>
       {% endif %}
@@ -311,23 +255,13 @@
     x-cloak
     class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-warning-content text-sm"
   >
-    <i
-      data-lucide="lock"
-      class="w-4 h-4 text-warning shrink-0"
-    ></i>
+    <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
     <span class="flex-1"><strong x-text="lockOwner"></strong> is editing this file</span>
-    <button
-      type="button"
-      class="btn btn-warning btn-xs"
-      @click="forceUnlock()"
-    >Force unlock</button>
+    <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">Force unlock</button>
   </div>
 
   <!-- Monaco Container -->
-  <div
-    x-ref="monacoContainer"
-    class="flex-1 min-h-0"
-  ></div>
+  <div x-ref="monacoContainer" class="flex-1 min-h-0"></div>
 </div>
 
 <script>

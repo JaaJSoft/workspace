@@ -4,19 +4,13 @@
   @ajax:missing="_viewerMissing($event)"
   @ajax:merge="_viewerMerge($event)"
 >
-  <dialog
-    x-ref="dialog"
-    class="modal"
-    @close="_onDialogClose()"
-  >
+  <dialog x-ref="dialog" class="modal" @close="_onDialogClose()">
     <div
       class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col relative transition-[max-width] duration-200"
       :class="expanded ? 'max-w-[90vw]' : 'max-w-5xl'"
     >
       <!-- Actions (Top Right) -->
-      <div
-        class="absolute top-4 right-4 z-10 flex items-center gap-1"
-      >
+      <div class="absolute top-4 right-4 z-10 flex items-center gap-1">
         <!-- Expand / Collapse -->
         <button
           type="button"
@@ -25,17 +19,8 @@
           :title="expanded ? 'Compact view' : 'Expand view'"
           x-show="fileUuid"
         >
-          <i
-            x-show="!expanded"
-            data-lucide="maximize-2"
-            class="w-4 h-4"
-          ></i>
-          <i
-            x-show="expanded"
-            data-lucide="minimize-2"
-            class="w-4 h-4"
-            x-cloak
-          ></i>
+          <i x-show="!expanded" data-lucide="maximize-2" class="w-4 h-4"></i>
+          <i x-show="expanded" data-lucide="minimize-2" class="w-4 h-4" x-cloak></i>
         </button>
 
         <!-- Download -->
@@ -65,15 +50,9 @@
         class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100"
       >
         <div class="flex-1 min-w-0">
-          <h3
-            class="font-bold text-lg truncate"
-            x-text="fileName"
-          ></h3>
+          <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
           <div class="flex items-center gap-2">
-            <p
-              class="text-sm text-base-content/60"
-              x-text="fileType"
-            ></p>
+            <p class="text-sm text-base-content/60" x-text="fileType"></p>
             <span
               class="text-xs text-base-content/40"
               x-show="_totalViewable() > 1"
@@ -89,10 +68,7 @@
         class="flex-1 overflow-auto bg-base-200"
         x-show="!viewerLoading && !viewerError"
       >
-        <div
-          id="viewer-panel"
-          style="display: contents"
-        ></div>
+        <div id="viewer-panel" style="display: contents"></div>
       </div>
 
       <!-- Loading State -->
@@ -101,9 +77,7 @@
         class="flex-1 flex items-center justify-center"
         x-cloak
       >
-        <span
-          class="loading loading-spinner loading-lg"
-        ></span>
+        <span class="loading loading-spinner loading-lg"></span>
       </div>
 
       <!-- Error State -->
@@ -113,15 +87,9 @@
         x-cloak
       >
         <div class="text-center">
-          <i
-            data-lucide="alert-circle"
-            class="w-12 h-12 text-error mx-auto mb-4"
-          ></i>
+          <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
           <p class="text-lg font-medium mb-2">Failed to load file</p>
-          <p
-            class="text-sm text-base-content/60"
-            x-text="viewerError"
-          ></p>
+          <p class="text-sm text-base-content/60" x-text="viewerError"></p>
         </div>
       </div>
 
@@ -134,10 +102,7 @@
         x-cloak
         @click="navigatePrev()"
       >
-        <i
-          data-lucide="chevron-left"
-          class="w-5 h-5"
-        ></i>
+        <i data-lucide="chevron-left" class="w-5 h-5"></i>
       </button>
       <button
         type="button"
@@ -147,10 +112,7 @@
         x-cloak
         @click="navigateNext()"
       >
-        <i
-          data-lucide="chevron-right"
-          class="w-5 h-5"
-        ></i>
+        <i data-lucide="chevron-right" class="w-5 h-5"></i>
       </button>
     </div>
 

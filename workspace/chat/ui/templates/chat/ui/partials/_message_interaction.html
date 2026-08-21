@@ -38,9 +38,7 @@
       {% endif %}
     {% endfor %}
     {% if msg.conversation.kind == 'group' %}
-      <div
-        class="text-xs text-base-content/40 mt-0.5"
-      >
+      <div class="text-xs text-base-content/40 mt-0.5">
         Répondu par {{ msg.interaction.interacted_by.get_full_name|default:msg.interaction.interacted_by.username }}
       </div>
     {% endif %}

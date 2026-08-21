@@ -10,17 +10,11 @@
   <div class="flex-1 min-w-0">
     <div class="flex items-center gap-2">
       <div class="font-medium truncate min-w-0">{{ event.description }}</div>
-      <span
-        class="badge badge-ghost badge-xs whitespace-nowrap flex-shrink-0"
-      >{{ event.label }}</span>
+      <span class="badge badge-ghost badge-xs whitespace-nowrap flex-shrink-0">{{ event.label }}</span>
     </div>
-    <div
-      class="text-xs text-base-content/60 truncate flex items-center gap-1"
-    >
+    <div class="text-xs text-base-content/60 truncate flex items-center gap-1">
       {% if event.meta_text %}
-        <span
-          class="inline-flex items-center gap-1 flex-shrink-0"
-        >
+        <span class="inline-flex items-center gap-1 flex-shrink-0">
           <i
             data-lucide="{{ event.meta_icon|default:'calendar' }}"
             class="w-3 h-3"
@@ -37,10 +31,7 @@
   </div>
   {% if not activity_hide_view %}
     <div class="flex-shrink-0">
-      <a
-        href="{{ event.url }}"
-        class="btn btn-ghost btn-xs"
-      >View</a>
+      <a href="{{ event.url }}" class="btn btn-ghost btn-xs">View</a>
     </div>
   {% endif %}
 </li>

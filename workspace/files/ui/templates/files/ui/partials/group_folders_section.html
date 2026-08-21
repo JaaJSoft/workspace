@@ -14,16 +14,9 @@ Context variables:
 
 <div id="group-folders-section">
   {% if group_folders or available_groups %}
-    <hr
-      class="my-2 border-base-300"
-      x-show="!collapsed"
-    />
+    <hr class="my-2 border-base-300" x-show="!collapsed" />
     <!-- Expanded: title + create button -->
-    <div
-      class="flex items-center mb-1"
-      x-show="!collapsed"
-      x-transition
-    >
+    <div class="flex items-center mb-1" x-show="!collapsed" x-transition>
       <h3
         class="text-sm font-semibold text-base-content/60 uppercase tracking-wider flex-1"
       >
@@ -43,10 +36,7 @@ Context variables:
     </div>
     <!-- Collapsed: thin separator if there are folders -->
     {% if group_folders %}
-      <hr
-        class="my-1 border-base-300"
-        x-show="collapsed"
-      />
+      <hr class="my-1 border-base-300" x-show="collapsed" />
     {% endif %}
     <ul class="space-y-0.5">
       {% for folder in group_folders %}
@@ -63,9 +53,7 @@ Context variables:
           class="list-none px-2 py-2 text-sm text-base-content/40"
           x-show="!collapsed"
         >
-          <span
-            class="flex items-center gap-2 justify-center"
-          >
+          <span class="flex items-center gap-2 justify-center">
             <i data-lucide="users" class="w-4 h-4"></i>
             No group folders
           </span>

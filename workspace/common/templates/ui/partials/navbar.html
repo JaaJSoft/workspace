@@ -9,7 +9,9 @@
       <a
         href="/"
         class="btn btn-ghost normal-case hover:bg-primary/10 transition-all"
-      >{% include 'ui/partials/app_logo.html' with size='sm' %}</a>
+      >
+        {% include 'ui/partials/app_logo.html' with size='sm' %}
+      </a>
     </div>
 
     <!-- Command palette dropdown -->
@@ -65,10 +67,7 @@
               title="Close"
               aria-label="Close search results"
             >
-              <i
-                data-lucide="chevron-down"
-                class="w-4 h-4"
-              ></i>
+              <i data-lucide="chevron-down" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
@@ -100,9 +99,7 @@
           x-transition:leave-end="opacity-0 -translate-y-2"
         >
           <!-- Mobile search header -->
-          <div
-            class="px-3 py-2.5 border-b border-base-300 flex items-center gap-2"
-          >
+          <div class="px-3 py-2.5 border-b border-base-300 flex items-center gap-2">
             {% include 'ui/partials/search/search_input.html' with on_escape='mobileSearchOpen = false' %}
             <button
               @click="mobileSearchOpen = false"
@@ -113,9 +110,7 @@
           </div>
 
           <!-- Mobile search content -->
-          <div
-            class="flex-1 overflow-y-auto overscroll-contain"
-          >
+          <div class="flex-1 overflow-y-auto overscroll-contain">
             {% include 'ui/partials/search/quick_actions.html' with on_click='mobileSearchOpen = false' %}
             {% include 'ui/partials/search/search_results.html' with on_click='mobileSearchOpen = false' container_class='p-2' %}
           </div>
@@ -143,10 +138,7 @@
               title="Close"
               aria-label="Close search results"
             >
-              <i
-                data-lucide="chevron-down"
-                class="w-4 h-4"
-              ></i>
+              <i data-lucide="chevron-down" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
@@ -154,44 +146,27 @@
     </div>
 
     <!-- Right side actions -->
-    <div
-      class="flex-1 flex items-center justify-end gap-1.5"
-    >
+    <div class="flex-1 flex items-center justify-end gap-1.5">
       <!-- Theme toggle -->
       <label
         class="swap swap-rotate btn btn-ghost btn-circle btn-sm hover:bg-warning/10 transition-all"
         title="Toggle theme"
       >
-        <input
-          id="themeToggle"
-          type="checkbox"
-          aria-label="Toggle theme"
-        />
+        <input id="themeToggle" type="checkbox" aria-label="Toggle theme" />
         <!-- Sun icon (light) -->
         <div class="swap-off">
-          <i
-            data-lucide="sun"
-            class="w-5 h-5 text-warning"
-          ></i>
+          <i data-lucide="sun" class="w-5 h-5 text-warning"></i>
         </div>
         <!-- Moon icon (dark) -->
         <div class="swap-on">
-          <i
-            data-lucide="moon"
-            class="w-5 h-5 text-info"
-          ></i>
+          <i data-lucide="moon" class="w-5 h-5 text-info"></i>
         </div>
       </label>
       {% include 'ui/partials/notifications.html' %}
 
       <!-- User menu dropdown -->
-      <div
-        class="dropdown dropdown-end leading-[0]"
-      >
-        <label
-          tabindex="0"
-          class="btn btn-ghost btn-circle btn-sm cursor-pointer"
-        >
+      <div class="dropdown dropdown-end leading-[0]">
+        <label tabindex="0" class="btn btn-ghost btn-circle btn-sm cursor-pointer">
           <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="sm" presence ring></user-avatar>
         </label>
         <ul
@@ -200,17 +175,11 @@
         >
           {% if user.is_authenticated %}
             <!-- User info header -->
-            <li
-              class="menu-title px-3 py-2 flex-row items-center gap-2"
-            >
+            <li class="menu-title px-3 py-2 flex-row items-center gap-2">
               <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="md" presence></user-avatar>
               <div class="flex-1 min-w-0">
-                <div
-                  class="font-semibold text-base-content truncate"
-                >{{ user.username }}</div>
-                <div
-                  class="text-xs text-base-content/60 truncate"
-                >{{ user.email|default:"No email" }}</div>
+                <div class="font-semibold text-base-content truncate">{{ user.username }}</div>
+                <div class="text-xs text-base-content/60 truncate">{{ user.email|default:"No email" }}</div>
               </div>
             </li>
             <div class="divider my-1"></div>
@@ -263,14 +232,8 @@
                   class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
                   @click="open = !open"
                 >
-                  <span
-                    class="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    :class="currentDot()"
-                  ></span>
-                  <span
-                    class="font-medium"
-                    x-text="currentLabel()"
-                  >Online</span>
+                  <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="currentDot()"></span>
+                  <span class="font-medium" x-text="currentLabel()">Online</span>
                   <i
                     data-lucide="chevron-down"
                     class="w-3.5 h-3.5 ml-auto transition-transform duration-200"
@@ -278,11 +241,7 @@
                   ></i>
                 </button>
               </li>
-              <div
-                x-show="open"
-                x-collapse
-                class="px-2 pb-1 space-y-0.5"
-              >
+              <div x-show="open" x-collapse class="px-2 pb-1 space-y-0.5">
                 <template x-for="s in statuses" :key="s.value">
                   <button
                     type="button"
@@ -290,10 +249,7 @@
                     :class="isActive(s.value) ? 'bg-base-200 font-semibold' : 'hover:bg-base-200/60 opacity-70 hover:opacity-100'"
                     @click="setStatus(s.value)"
                   >
-                    <span
-                      class="w-2 h-2 rounded-full flex-shrink-0"
-                      :class="s.dot"
-                    ></span>
+                    <span class="w-2 h-2 rounded-full flex-shrink-0" :class="s.dot"></span>
                     <span x-text="s.label"></span>
                   </button>
                 </template>
@@ -333,22 +289,15 @@
             {# Modules kept off the dashboard (tools, not apps) are reached from here. #}
             {% for module in workspace_active_modules %}
               {% if module.show_on_dashboard is False and module.url %}
-                <li
-                  class="{% if request.path == module.url %}disabled{% endif %}"
-                >
+                <li class="{% if request.path == module.url %}disabled{% endif %}">
                   <a
                     href="{{ module.url }}"
                     class="gap-3 {% if request.path != module.url %}hover:bg-{{ module.color }}/10 hover:text-{{ module.color }}{% endif %} transition-colors"
                     {% if request.path == module.url %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
                   >
-                    <i
-                      data-lucide="{{ module.icon }}"
-                      class="w-4 h-4"
-                    ></i>
+                    <i data-lucide="{{ module.icon }}" class="w-4 h-4"></i>
                     <span class="font-medium">{{ module.name }}</span>
-                    {% if module.preview %}<span
-  class="badge badge-xs badge-warning ml-auto"
->Preview</span>{% endif %}
+                    {% if module.preview %}<span class="badge badge-xs badge-warning ml-auto">Preview</span>{% endif %}
                   </a>
                 </li>
               {% endif %}
@@ -363,9 +312,7 @@
               >
                 <i data-lucide="sparkles" class="w-4 h-4"></i>
                 <span class="font-medium">What's new</span>
-                <span
-                  class="badge badge-xs badge-ghost text-base-content/50 ml-auto"
-                >{{ APP_VERSION }}</span>
+                <span class="badge badge-xs badge-ghost text-base-content/50 ml-auto">{{ APP_VERSION }}</span>
               </button>
             </li>
 
@@ -383,9 +330,7 @@
 
             {% if user.is_staff or user.is_superuser %}
               <div class="divider my-1">
-                <span
-                  class="text-xs text-base-content/40 uppercase tracking-wider"
-                >Admin</span>
+                <span class="text-xs text-base-content/40 uppercase tracking-wider">Admin</span>
               </div>
 
               <!-- Admin -->
@@ -478,18 +423,13 @@
           }
         "
   >
-    <div
-      class="modal-box w-11/12 max-w-3xl max-h-[80vh] p-0 flex flex-col"
-    >
+    <div class="modal-box w-11/12 max-w-3xl max-h-[80vh] p-0 flex flex-col">
       <!-- Header -->
       <div
         class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0"
       >
         <div class="rounded-lg bg-warning/10 p-2">
-          <i
-            data-lucide="sparkles"
-            class="w-5 h-5 text-warning"
-          ></i>
+          <i data-lucide="sparkles" class="w-5 h-5 text-warning"></i>
         </div>
         <div class="flex-1">
           <h3 class="font-bold text-lg">What's new</h3>
@@ -503,17 +443,10 @@
       </div>
 
       <!-- Body -->
-      <div
-        class="flex-1 overflow-y-auto overscroll-contain"
-        data-cl-scroller
-      >
+      <div class="flex-1 overflow-y-auto overscroll-contain" data-cl-scroller>
         <template x-if="loading && !loaded">
-          <div
-            class="flex items-center justify-center py-12"
-          >
-            <span
-              class="loading loading-spinner loading-md text-base-content/30"
-            ></span>
+          <div class="flex items-center justify-center py-12">
+            <span class="loading loading-spinner loading-md text-base-content/30"></span>
           </div>
         </template>
         <div id="changelog-content"></div>

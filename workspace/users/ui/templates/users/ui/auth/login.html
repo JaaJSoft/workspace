@@ -5,9 +5,7 @@
 {% block body_class %}bg-gradient-to-br from-base-200 to-base-300 min-h-screen{% endblock %}
 
 {% block body %}
-  <div
-    class="min-h-screen flex items-center justify-center p-4"
-  >
+  <div class="min-h-screen flex items-center justify-center p-4">
     <div
       class="card w-full max-w-md bg-base-100 shadow-2xl border border-base-300"
     >
@@ -38,9 +36,7 @@
             <i data-lucide="key-round" class="w-5 h-5"></i>
             Sign in with {{ oidc_provider_name }}
           </a>
-          <div
-            class="divider text-xs text-base-content/40 my-2"
-          >OR</div>
+          <div class="divider text-xs text-base-content/40 my-2">OR</div>
         {% endif %}
 
         <!-- Login Form -->
@@ -54,19 +50,13 @@
 
           <!-- Username Field -->
           <div class="form-control w-full mb-4">
-            <label
-              class="label"
-              for="{{ form.username.id_for_label }}"
-            >
+            <label class="label" for="{{ form.username.id_for_label }}">
               <span class="label-text font-medium">Username</span>
             </label>
             <label
               class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
             >
-              <i
-                data-lucide="user"
-                class="w-4 h-4 text-base-content/40"
-              ></i>
+              <i data-lucide="user" class="w-4 h-4 text-base-content/40"></i>
               <input
                 type="text"
                 name="username"
@@ -81,19 +71,13 @@
 
           <!-- Password Field -->
           <div class="form-control w-full mb-6">
-            <label
-              class="label"
-              for="{{ form.password.id_for_label }}"
-            >
+            <label class="label" for="{{ form.password.id_for_label }}">
               <span class="label-text font-medium">Password</span>
             </label>
             <label
               class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
             >
-              <i
-                data-lucide="lock"
-                class="w-4 h-4 text-base-content/40"
-              ></i>
+              <i data-lucide="lock" class="w-4 h-4 text-base-content/40"></i>
               <input
                 type="password"
                 name="password"
@@ -106,11 +90,7 @@
           </div>
 
           <!-- Hidden next field -->
-          <input
-            type="hidden"
-            name="next"
-            value="{{ next }}"
-          />
+          <input type="hidden" name="next" value="{{ next }}" />
 
           <!-- Submit Button -->
           <div class="form-control mt-6">
@@ -122,13 +102,8 @@
               <span x-show="!isSubmitting">
                 <i data-lucide="log-in" class="w-5 h-5"></i>
               </span>
-              <span
-                x-show="isSubmitting"
-                class="loading loading-spinner loading-md"
-              ></span>
-              <span
-                x-text="isSubmitting ? 'Signing in...' : 'Sign In'"
-              ></span>
+              <span x-show="isSubmitting" class="loading loading-spinner loading-md"></span>
+              <span x-text="isSubmitting ? 'Signing in...' : 'Sign In'"></span>
             </button>
           </div>
         </form>
@@ -139,10 +114,7 @@
             href="/admin/"
             class="text-xs text-base-content/50 hover:text-base-content transition-colors inline-flex items-center gap-1.5"
           >
-            <i
-              data-lucide="shield"
-              class="w-3.5 h-3.5"
-            ></i>
+            <i data-lucide="shield" class="w-3.5 h-3.5"></i>
             Admin Login
           </a>
         </div>

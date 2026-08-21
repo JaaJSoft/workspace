@@ -12,43 +12,29 @@
   @keydown="if ($event.key === 'ArrowRight') { next() } else if ($event.key === 'ArrowLeft') { prev() }"
   @close="markCompleteIfNeeded()"
 >
-  <div
-    class="modal-box w-11/12 max-w-2xl p-0 flex flex-col"
-  >
+  <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col">
     <!-- Header -->
     <div
       class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0"
     >
       <div class="rounded-lg bg-primary/10 p-2">
-        <i
-          data-lucide="rocket"
-          class="w-5 h-5 text-primary"
-        ></i>
+        <i data-lucide="rocket" class="w-5 h-5 text-primary"></i>
       </div>
       <div class="flex-1">
-        <h3
-          id="onboarding-title"
-          class="font-bold text-lg"
-        >Welcome aboard</h3>
+        <h3 id="onboarding-title" class="font-bold text-lg">Welcome aboard</h3>
         <p class="text-xs text-base-content/50">
           Step <span x-text="step"></span> of 3
         </p>
       </div>
       <form method="dialog">
-        <button
-          class="btn btn-ghost btn-sm btn-square"
-          aria-label="Close"
-        >
+        <button class="btn btn-ghost btn-sm btn-square" aria-label="Close">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </form>
     </div>
 
     <!-- Progress bar -->
-    <div
-      class="h-1 bg-base-200"
-      aria-hidden="true"
-    >
+    <div class="h-1 bg-base-200" aria-hidden="true">
       <div
         class="h-full bg-primary transition-all duration-300 motion-reduce:transition-none"
         :style="`width: ${(step / 3) * 100}%`"
@@ -61,49 +47,24 @@
       aria-live="polite"
     >
       <!-- Step 1: Welcome -->
-      <div
-        x-show="step === 1"
-        data-step="1"
-        class="text-center"
-      >
+      <div x-show="step === 1" data-step="1" class="text-center">
         <div
           class="mx-auto w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4"
         >
-          <i
-            data-lucide="sparkles"
-            class="w-10 h-10 text-primary"
-          ></i>
+          <i data-lucide="sparkles" class="w-10 h-10 text-primary"></i>
         </div>
-        <h2
-          data-step-title
-          tabindex="-1"
-          class="text-2xl font-bold mb-2"
-        >Welcome{% if user.first_name %}, {{ user.first_name }}{% endif %}</h2>
-        <p
-          class="text-base-content/70 max-w-md mx-auto"
-        >
+        <h2 data-step-title tabindex="-1" class="text-2xl font-bold mb-2">Welcome{% if user.first_name %}, {{ user.first_name }}{% endif %}</h2>
+        <p class="text-base-content/70 max-w-md mx-auto">
           JaaJ Workspace is your all-in-one space for files, notes, mail, calendar, chat, and more.
           Let's take a quick tour so you know where everything lives.
         </p>
       </div>
 
       <!-- Step 2: Modules -->
-      <div
-        x-show="step === 2"
-        data-step="2"
-        x-cloak
-      >
-        <h2
-          data-step-title
-          tabindex="-1"
-          class="text-xl font-bold mb-1"
-        >Everything in one place</h2>
-        <p
-          class="text-sm text-base-content/60 mb-4"
-        >Each module lives in its own page. Pick one to jump straight in - you can always come back here later.</p>
-        <div
-          class="grid grid-cols-1 sm:grid-cols-2 gap-3"
-        >
+      <div x-show="step === 2" data-step="2" x-cloak>
+        <h2 data-step-title tabindex="-1" class="text-xl font-bold mb-1">Everything in one place</h2>
+        <p class="text-sm text-base-content/60 mb-4">Each module lives in its own page. Pick one to jump straight in - you can always come back here later.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {% for module in workspace_active_modules %}
             {% if module.show_on_dashboard is False %}
             {% elif module.url %}
@@ -112,9 +73,7 @@
                 @click.prevent="goTo('{{ module.url|escapejs }}')"
                 class="flex items-start gap-3 p-3 rounded-lg border border-base-300 hover:border-primary hover:bg-base-200 transition-colors"
               >
-                <div
-                  class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0"
-                >
+                <div class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0">
                   <i
                     data-lucide="{{ module.icon }}"
                     class="w-5 h-5 text-{{ module.color }}"
@@ -130,12 +89,8 @@
                 ></i>
               </a>
             {% else %}
-              <div
-                class="flex items-start gap-3 p-3 rounded-lg border border-base-300"
-              >
-                <div
-                  class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0"
-                >
+              <div class="flex items-start gap-3 p-3 rounded-lg border border-base-300">
+                <div class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0">
                   <i
                     data-lucide="{{ module.icon }}"
                     class="w-5 h-5 text-{{ module.color }}"
@@ -154,28 +109,13 @@
       </div>
 
       <!-- Step 3: Ready -->
-      <div
-        x-show="step === 3"
-        data-step="3"
-        x-cloak
-      >
-        <h2
-          data-step-title
-          tabindex="-1"
-          class="text-xl font-bold mb-1"
-        >You're all set</h2>
-        <p
-          class="text-sm text-base-content/60 mb-4"
-        >A few tips to get the most out of the app:</p>
+      <div x-show="step === 3" data-step="3" x-cloak>
+        <h2 data-step-title tabindex="-1" class="text-xl font-bold mb-1">You're all set</h2>
+        <p class="text-sm text-base-content/60 mb-4">A few tips to get the most out of the app:</p>
         <ul class="space-y-3">
           <li class="flex items-start gap-3">
-            <div
-              class="rounded-lg bg-info/10 p-2 shrink-0"
-            >
-              <i
-                data-lucide="search"
-                class="w-4 h-4 text-info"
-              ></i>
+            <div class="rounded-lg bg-info/10 p-2 shrink-0">
+              <i data-lucide="search" class="w-4 h-4 text-info"></i>
             </div>
             <div>
               <div class="font-medium text-sm">Search everything from the top bar</div>
@@ -185,13 +125,8 @@
             </div>
           </li>
           <li class="flex items-start gap-3">
-            <div
-              class="rounded-lg bg-warning/10 p-2 shrink-0"
-            >
-              <i
-                data-lucide="settings"
-                class="w-4 h-4 text-warning"
-              ></i>
+            <div class="rounded-lg bg-warning/10 p-2 shrink-0">
+              <i data-lucide="settings" class="w-4 h-4 text-warning"></i>
             </div>
             <div>
               <div class="font-medium text-sm">Personalize your workspace</div>
@@ -201,13 +136,8 @@
             </div>
           </li>
           <li class="flex items-start gap-3">
-            <div
-              class="rounded-lg bg-success/10 p-2 shrink-0"
-            >
-              <i
-                data-lucide="rotate-ccw"
-                class="w-4 h-4 text-success"
-              ></i>
+            <div class="rounded-lg bg-success/10 p-2 shrink-0">
+              <i data-lucide="rotate-ccw" class="w-4 h-4 text-success"></i>
             </div>
             <div>
               <div class="font-medium text-sm">Re-open this tour anytime</div>
@@ -215,13 +145,8 @@
             </div>
           </li>
           <li class="flex items-start gap-3">
-            <div
-              class="rounded-lg bg-primary/10 p-2 shrink-0"
-            >
-              <i
-                data-lucide="sparkles"
-                class="w-4 h-4 text-primary"
-              ></i>
+            <div class="rounded-lg bg-primary/10 p-2 shrink-0">
+              <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
             </div>
             <div class="flex-1 min-w-0">
               <div class="font-medium text-sm">See what's new in each release</div>
@@ -233,10 +158,7 @@
               @click="openChangelog()"
             >
               View changelog
-              <i
-                data-lucide="external-link"
-                class="w-3 h-3"
-              ></i>
+              <i data-lucide="external-link" class="w-3 h-3"></i>
             </button>
           </li>
         </ul>
@@ -254,17 +176,11 @@
           class="btn btn-ghost btn-sm"
           @click="prev()"
         >
-          <i
-            data-lucide="chevron-left"
-            class="w-4 h-4"
-          ></i>
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
           Back
         </button>
         <form method="dialog" x-show="step < 3">
-          <button
-            type="submit"
-            class="btn btn-ghost btn-sm text-base-content/50"
-          >Skip tour</button>
+          <button type="submit" class="btn btn-ghost btn-sm text-base-content/50">Skip tour</button>
         </form>
       </div>
       <div class="flex gap-2" aria-hidden="true">
@@ -282,10 +198,7 @@
         @click="next()"
       >
         Next
-        <i
-          data-lucide="chevron-right"
-          class="w-4 h-4"
-        ></i>
+        <i data-lucide="chevron-right" class="w-4 h-4"></i>
       </button>
       <a
         x-show="step === 3"

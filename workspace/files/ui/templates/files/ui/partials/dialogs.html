@@ -2,13 +2,8 @@
 
 <!-- Create File Dialog -->
 <dialog id="create-file-dialog" class="modal">
-  <div
-    class="modal-box"
-    x-data="{ fileType: 'txt' }"
-  >
-    <h3
-      class="font-bold text-lg mb-4 flex items-center gap-3"
-    >
+  <div class="modal-box" x-data="{ fileType: 'txt' }">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
       <div
         class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary/10 text-primary"
       >
@@ -38,10 +33,7 @@
         <label class="label">
           <span class="label-text">Type</span>
         </label>
-        <select
-          x-model="fileType"
-          class="select select-bordered w-full"
-        >
+        <select x-model="fileType" class="select select-bordered w-full">
           <option value="txt">Text (.txt)</option>
           <option value="md">Markdown (.md)</option>
           <option value="json">JSON (.json)</option>
@@ -49,11 +41,7 @@
           <option value="custom">Custom extension</option>
         </select>
       </div>
-      <div
-        class="form-control mt-3"
-        x-show="fileType === 'custom'"
-        x-cloak
-      >
+      <div class="form-control mt-3" x-show="fileType === 'custom'" x-cloak>
         <label class="label">
           <span class="label-text">Extension</span>
         </label>
@@ -69,11 +57,10 @@
           type="button"
           class="btn btn-sm"
           onclick="document.getElementById('create-file-dialog').close()"
-        >Cancel</button>
-        <button
-          type="submit"
-          class="btn btn-primary btn-sm"
-        >Create</button>
+        >
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">Create</button>
       </div>
     </form>
   </div>
@@ -169,9 +156,7 @@
   ---
   hard-drive | WebDAV Access
   <p>Mount your files as a network drive using WebDAV. Your WebDAV URL is:</p>
-  <code
-    class="block bg-base-300 px-3 py-2 rounded text-sm mb-3"
-  >https://&lt;your-domain&gt;/dav/</code>
+  <code class="block bg-base-300 px-3 py-2 rounded text-sm mb-3">https://&lt;your-domain&gt;/dav/</code>
   <p class="mb-3">Sign in with your username and password. If your account uses single sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> and enter it as the password.</p>
   <h4 class="font-semibold mt-3 mb-1">Windows</h4>
   <ol>
@@ -180,9 +165,7 @@
     <li>Check <em>Connect using different credentials</em> and enter your username and password.</li>
     <li>
       If connecting over HTTP, add a registry key to allow Basic auth:
-      <code
-        class="block bg-base-300 px-3 py-2 rounded text-xs mt-1"
-      >HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\BasicAuthLevel = 2</code>
+      <code class="block bg-base-300 px-3 py-2 rounded text-xs mt-1">HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\BasicAuthLevel = 2</code>
       then restart the <em>WebClient</em> service.
     </li>
   </ol>
@@ -225,10 +208,7 @@
   <ul>
     <li><strong>Base URL:</strong> <code>/api/v1/files</code></li>
     <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
-    <li><strong>Documentation:</strong> Full API docs are available at <a
-   href="/schema/swagger-ui/"
-   class="link link-primary"
- >/schema/swagger-ui/</a>.</li>
+    <li><strong>Documentation:</strong> Full API docs are available at <a href="/schema/swagger-ui/" class="link link-primary">/schema/swagger-ui/</a>.</li>
   </ul>
 {% endhelp_items %}
 {% include "ui/partials/help_dialog.html" with dialog_id="help-dialog" accent_color="primary" items=help_items %}

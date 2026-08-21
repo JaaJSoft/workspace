@@ -1,7 +1,5 @@
 <div class="space-y-3">
-  <label
-    class="flex items-center justify-between gap-4"
-  >
+  <label class="flex items-center justify-between gap-4">
     <div>
       <div class="font-medium text-sm">Show upcoming events</div>
       <div class="text-xs text-base-content/60">Display today's calendar events on the dashboard.</div>
@@ -32,9 +30,7 @@
   </label>
 
   {% if my_tasks_available %}
-    <label
-      class="flex items-center justify-between gap-4"
-    >
+    <label class="flex items-center justify-between gap-4">
       <div>
         <div class="font-medium text-sm">Show my tasks</div>
         <div class="text-xs text-base-content/60">Display your assigned project tasks on the dashboard.</div>
@@ -53,16 +49,10 @@
     x-init="$nextTick(() => window.lucide && window.lucide.createIcons())"
   >
     <div class="font-medium text-sm">Apps</div>
-    <div
-      class="text-xs text-base-content/60 mb-3"
-    >Choose which apps appear on your dashboard.</div>
-    <div
-      class="space-y-2 max-h-72 overflow-y-auto"
-    >
+    <div class="text-xs text-base-content/60 mb-3">Choose which apps appear on your dashboard.</div>
+    <div class="space-y-2 max-h-72 overflow-y-auto">
       <template x-for="app in apps" :key="app.slug">
-        <label
-          class="flex items-center justify-between gap-4"
-        >
+        <label class="flex items-center justify-between gap-4">
           <div class="flex items-center gap-2">
             <span
               class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -70,10 +60,7 @@
             >
               <i :data-lucide="app.icon" class="w-4 h-4"></i>
             </span>
-            <span
-              class="font-medium text-sm"
-              x-text="app.name"
-            ></span>
+            <span class="font-medium text-sm" x-text="app.name"></span>
           </div>
           <input
             type="checkbox"

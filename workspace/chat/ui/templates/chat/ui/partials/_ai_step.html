@@ -6,13 +6,8 @@
     <summary
       class="flex items-center gap-1 cursor-pointer list-none select-none min-w-0 hover:text-base-content/60 transition-colors"
     >
-      <i
-        data-lucide="brain"
-        class="w-3 h-3 flex-shrink-0"
-      ></i>
-      <span
-        class="truncate min-w-0 italic opacity-80"
-      >{{ step.text|truncatechars:100 }}</span>
+      <i data-lucide="brain" class="w-3 h-3 flex-shrink-0"></i>
+      <span class="truncate min-w-0 italic opacity-80">{{ step.text|truncatechars:100 }}</span>
       <i
         data-lucide="chevron-down"
         class="w-3 h-3 flex-shrink-0 transition-transform group-open/think:rotate-180"
@@ -23,7 +18,5 @@
     >{{ step.text }}</pre>
   </details>
 {% else %}
-  <div
-    class="italic opacity-80 whitespace-pre-wrap break-words"
-  >{{ step.text }}</div>
+  <div class="italic opacity-80 whitespace-pre-wrap break-words">{{ step.text }}</div>
 {% endif %}

@@ -1,9 +1,9 @@
 {% comment %}
-Shared board/backlog filter bar. Filter state lives on the root
-projectBoard component (not in this partial), so it survives the
-alpine-ajax content swaps when switching between board and backlog.
-Matching is client-side against the data-* attributes on each task
-card/row (see taskMatchesFilters in board.js).
+Shared board/backlog filter bar. Filtering is server-side: every change
+re-fetches the current view with the filters as query parameters (see
+applyFilters in board.js), so a filtered view is shareable by URL. The
+filter state lives on the root projectBoard component and is re-synced
+from the URL after each content swap.
 {% endcomment %}
 <div id="task-filters" class="flex flex-wrap items-center gap-2">
   <label
@@ -15,6 +15,7 @@ card/row (see taskMatchesFilters in board.js).
       class="grow min-w-0"
       placeholder="Search tasks"
       x-model="filters.q"
+      @input.debounce.300ms="applyFilters()"
     />
   </label>
   {% comment %}
@@ -30,6 +31,7 @@ card/row (see taskMatchesFilters in board.js).
     <select
       class="select select-bordered select-sm shrink-0"
       x-model="filters.assignee"
+      @change="applyFilters()"
       aria-label="Filter by assignee"
     >
       <option value="">All assignees</option>
@@ -42,6 +44,7 @@ card/row (see taskMatchesFilters in board.js).
       <select
         class="select select-bordered select-sm shrink-0"
         x-model="filters.label"
+        @change="applyFilters()"
         aria-label="Filter by label"
       >
         <option value="">All labels</option>
@@ -53,6 +56,7 @@ card/row (see taskMatchesFilters in board.js).
     <select
       class="select select-bordered select-sm shrink-0"
       x-model="filters.priority"
+      @change="applyFilters()"
       aria-label="Filter by priority"
     >
       <option value="">All priorities</option>
@@ -65,6 +69,7 @@ card/row (see taskMatchesFilters in board.js).
       <select
         class="select select-bordered select-sm shrink-0"
         x-model="filters.status"
+        @change="applyFilters()"
         aria-label="Filter by status"
       >
         <option value="">All statuses</option>

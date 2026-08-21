@@ -1,5 +1,8 @@
 <div id="board" class="flex flex-col gap-3 min-h-0">
   {% include "projects/ui/partials/_task_filters.html" %}
+  {% if tasks_truncated %}
+    <inline-alert type="warning" message="Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest."></inline-alert>
+  {% endif %}
   <div class="flex gap-4 overflow-x-auto items-start pb-4">
     {% for column in columns %}
       <section
@@ -19,10 +22,7 @@
             {{ column.status.name }}
           </h3>
           <div class="flex items-center gap-1">
-            <span
-              class="badge badge-ghost badge-sm"
-              x-text="columnCount('{{ column.status.uuid }}', {{ column.tasks|length }})"
-            >{{ column.tasks|length }}</span>
+            <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
             {% if writable %}
               <button
                 class="btn btn-ghost btn-xs btn-square"

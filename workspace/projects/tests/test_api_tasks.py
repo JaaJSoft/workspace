@@ -1,3 +1,5 @@
+from datetime import date
+
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -105,6 +107,159 @@ class TaskListCreateTests(TaskApiMixin, APITestCase):
         self.client.force_authenticate(self.member)
         response = self.client.post(self.tasks_url, {"title": "Nope"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class TaskListFilteringTests(TaskApiMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.bug = self.project.labels.create(name="bug", color="#ff0000")
+        self.ui = self.project.labels.create(name="ui", color="#00ff00")
+        self.alpha = create_task(
+            self.project,
+            self.admin,
+            title="alpha",
+            priority="high",
+            due_date=date(2026, 8, 10),
+            assignees=[self.member],
+            labels=[self.bug],
+        )
+        self.beta = create_task(
+            self.project,
+            self.member,
+            title="beta",
+            status=self.todo,
+            priority="low",
+            due_date=date(2026, 8, 20),
+            labels=[self.ui],
+        )
+        self.gamma = create_task(
+            self.project,
+            self.admin,
+            title="gamma",
+            status=self.done,
+            priority="urgent",
+        )
+        self.client.force_authenticate(self.member)
+
+    def _titles(self, params):
+        response = self.client.get(self.tasks_url, params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return [t["title"] for t in response.data]
+
+    def test_multi_value_status_ors_the_columns(self):
+        titles = self._titles({"status": [str(self.todo.uuid), str(self.done.uuid)]})
+        self.assertEqual(sorted(titles), ["beta", "gamma"])
+
+    def test_multi_value_label_ors_without_duplicating_rows(self):
+        self.alpha.labels.add(self.ui)
+        titles = self._titles({"label": [str(self.bug.uuid), str(self.ui.uuid)]})
+        self.assertEqual(sorted(titles), ["alpha", "beta"])
+
+    def test_assignee_none_matches_unassigned_tasks(self):
+        titles = self._titles({"assignee": "none"})
+        self.assertEqual(sorted(titles), ["beta", "gamma"])
+
+    def test_assignee_mixes_ids_and_none(self):
+        titles = self._titles({"assignee": [str(self.member.pk), "none"]})
+        self.assertEqual(sorted(titles), ["alpha", "beta", "gamma"])
+
+    def test_priority_filter(self):
+        self.assertEqual(self._titles({"priority": "high"}), ["alpha"])
+        response = self.client.get(self.tasks_url, {"priority": "blocker"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_due_date_range_bounds_are_inclusive(self):
+        self.assertEqual(self._titles({"due_before": "2026-08-10"}), ["alpha"])
+        self.assertEqual(self._titles({"due_after": "2026-08-20"}), ["beta"])
+        self.assertEqual(
+            sorted(
+                self._titles({"due_after": "2026-08-10", "due_before": "2026-08-20"})
+            ),
+            ["alpha", "beta"],
+        )
+
+    def test_malformed_and_impossible_dates_are_400(self):
+        for value in ("not-a-date", "2026-13-01"):
+            response = self.client.get(self.tasks_url, {"due_before": value})
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_created_by_filter(self):
+        self.assertEqual(self._titles({"created_by": str(self.member.pk)}), ["beta"])
+        response = self.client.get(self.tasks_url, {"created_by": "abc"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_completed_filter_follows_the_status_category(self):
+        self.assertEqual(self._titles({"completed": "true"}), ["gamma"])
+        self.assertEqual(
+            sorted(self._titles({"completed": "false"})), ["alpha", "beta"]
+        )
+        # is_truthy is permissive: an unknown value reads as false, not 400.
+        self.assertEqual(
+            sorted(self._titles({"completed": "maybe"})), ["alpha", "beta"]
+        )
+
+    def test_filters_compose(self):
+        titles = self._titles({"assignee": "none", "priority": "low"})
+        self.assertEqual(titles, ["beta"])
+
+
+class TaskListOrderingTests(TaskApiMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.low = create_task(self.project, self.admin, title="low", priority="low")
+        self.urgent = create_task(
+            self.project,
+            self.admin,
+            title="urgent",
+            priority="urgent",
+            due_date=date(2026, 8, 20),
+        )
+        self.medium = create_task(
+            self.project,
+            self.admin,
+            title="medium",
+            priority="medium",
+            due_date=date(2026, 8, 10),
+        )
+        self.client.force_authenticate(self.member)
+
+    def _titles(self, params):
+        response = self.client.get(self.tasks_url, params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return [t["title"] for t in response.data]
+
+    def test_priority_ordering_puts_most_important_first(self):
+        self.assertEqual(
+            self._titles({"ordering": "priority"}), ["urgent", "medium", "low"]
+        )
+        self.assertEqual(
+            self._titles({"ordering": "-priority"}), ["low", "medium", "urgent"]
+        )
+
+    def test_due_date_ordering_sorts_tasks_without_a_due_date_last(self):
+        self.assertEqual(
+            self._titles({"ordering": "due_date"}), ["medium", "urgent", "low"]
+        )
+        self.assertEqual(
+            self._titles({"ordering": "-due_date"}), ["urgent", "medium", "low"]
+        )
+
+    def test_created_at_ordering(self):
+        self.assertEqual(
+            self._titles({"ordering": "-created_at"}), ["medium", "urgent", "low"]
+        )
+
+    def test_unknown_ordering_field_is_400(self):
+        response = self.client.get(self.tasks_url, {"ordering": "title"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_ordering_composes_with_filters_and_pagination(self):
+        response = self.client.get(
+            self.tasks_url,
+            {"ordering": "priority", "completed": "false", "limit": "2"},
+        )
+        self.assertEqual([t["title"] for t in response.data], ["urgent", "medium"])
+        self.assertEqual(response.headers["X-Has-More"], "true")
 
 
 class TaskListPaginationTests(TaskApiMixin, APITestCase):

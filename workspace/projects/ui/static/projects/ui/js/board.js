@@ -36,32 +36,28 @@ function emptyTaskFilters() {
   return { q: '', assignee: '', label: '', priority: '', status: '' };
 }
 
-function taskMatchesFilters(dataset, filters) {
-  const query = (filters.q || '').trim().toLowerCase();
-  if (query && !(dataset.search || '').includes(query)) return false;
-  if (filters.priority && dataset.priority !== filters.priority) return false;
-  if (
-    filters.label &&
-    !(dataset.labels || '').split(' ').includes(filters.label)
-  ) {
-    return false;
-  }
-  if (filters.assignee) {
-    const ids = (dataset.assignees || '').split(' ').filter(Boolean);
-    if (filters.assignee === 'none') {
-      if (ids.length) return false;
-    } else if (!ids.includes(filters.assignee)) {
-      return false;
-    }
-  }
-  if (
-    filters.status &&
-    dataset.status !== undefined &&
-    dataset.status !== filters.status
-  ) {
-    return false;
-  }
-  return true;
+// Filtering is server-side; the filter state lives in the URL so a filtered
+// view is shareable. These two helpers translate between the filters object
+// and the query string, leaving non-filter params (the ?task= deep link)
+// untouched.
+function taskFiltersFromUrl(href) {
+  const filters = emptyTaskFilters();
+  const params = new URL(href).searchParams;
+  Object.keys(filters).forEach((key) => {
+    const value = params.get(key);
+    if (value) filters[key] = value;
+  });
+  return filters;
+}
+
+function taskFilterUrl(href, filters) {
+  const url = new URL(href);
+  Object.keys(emptyTaskFilters()).forEach((key) => {
+    const value = (filters[key] || '').trim();
+    if (value) url.searchParams.set(key, value);
+    else url.searchParams.delete(key);
+  });
+  return url.pathname + url.search;
 }
 
 function emptyTaskForm() {
@@ -243,6 +239,7 @@ function projectBoard(config) {
       this.labels = JSON.parse(
         document.getElementById('labels-data').textContent
       );
+      this.filters = taskFiltersFromUrl(window.location.href);
 
       // Catch up on board changes made elsewhere while the stream was down
       // (resumed tab, or a bfcache restore after a mobile back).
@@ -290,7 +287,13 @@ function projectBoard(config) {
     },
 
     onDragStart(event, uuid) {
-      if (!config.writable) return;
+      // Reordering a filtered subset would push every unlisted task of the
+      // column after the visible ones server-side, so dragging is disabled
+      // while filters narrow the list.
+      if (!config.writable || this.filtersActive()) {
+        event.preventDefault();
+        return;
+      }
       this.dragging = uuid;
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', uuid);
@@ -349,15 +352,27 @@ function projectBoard(config) {
       else if (this.currentView === 'settings') url += '/settings';
       else if (this.currentView === 'analytics') url += '/analytics';
       else if (this.currentView !== 'overview') url += '/board';
-      this.$ajax(url, { target: 'project-content' });
+      // The active filters ride along so a refresh keeps the filtered view.
+      this.$ajax(taskFilterUrl(window.location.origin + url, this.filters), {
+        target: 'project-content',
+      });
       // Board-level changes (drag moves, send-to-board, field edits) also
       // change the open task's panel content: reload it alongside so its
       // status, activity and metadata stay in sync with the cards.
       if (this.panelTaskUuid) this._loadPanel(this.panelTaskUuid);
     },
 
-    taskVisible(dataset) {
-      return taskMatchesFilters(dataset, this.filters);
+    applyFilters() {
+      const next = taskFilterUrl(window.location.href, this.filters);
+      history.replaceState(null, '', next);
+      this.$ajax(next, { target: 'project-content' });
+    },
+
+    syncFiltersFromUrl() {
+      // After any content swap the URL is the source of truth: a drawer
+      // navigation carries no filter params, so this is what resets the
+      // filter bar when the user switches views.
+      this.filters = taskFiltersFromUrl(window.location.href);
     },
 
     filtersActive() {
@@ -372,30 +387,14 @@ function projectBoard(config) {
 
     clearFilters() {
       this.filters = emptyTaskFilters();
-    },
-
-    _visibleTaskEls(scope) {
-      return Array.from(
-        document.querySelectorAll(scope + ' [data-task-uuid]')
-      ).filter((el) => taskMatchesFilters(el.dataset, this.filters));
-    },
-
-    columnCount(statusUuid, total) {
-      if (!this.filtersActive()) return total;
-      return this._visibleTaskEls('[data-status-uuid="' + statusUuid + '"]')
-        .length;
-    },
-
-    backlogVisibleCount() {
-      return this._visibleTaskEls('#backlog').length;
-    },
-
-    allTasksVisibleCount() {
-      return this._visibleTaskEls('#all-tasks').length;
+      this.applyFilters();
     },
 
     visibleBacklogUuids() {
-      return this._visibleTaskEls('#backlog').map((el) => el.dataset.taskUuid);
+      // Rendered rows already match the active filters server-side.
+      return Array.from(
+        document.querySelectorAll('#backlog [data-task-uuid]')
+      ).map((el) => el.dataset.taskUuid);
     },
 
     isSelected(uuid) {
@@ -509,6 +508,7 @@ function projectBoard(config) {
     },
 
     onPopState() {
+      this.filters = taskFiltersFromUrl(window.location.href);
       const path = window.location.pathname;
       this.currentView = path.endsWith('/backlog')
         ? 'backlog'
@@ -815,6 +815,7 @@ window.projectBoardHelpers = {
   listOrder: listOrder,
   taskParamUrl: taskParamUrl,
   fieldAction: fieldAction,
-  taskMatchesFilters: taskMatchesFilters,
+  taskFiltersFromUrl: taskFiltersFromUrl,
+  taskFilterUrl: taskFilterUrl,
   pickLabelColor: pickLabelColor,
 };

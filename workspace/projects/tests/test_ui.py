@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -144,6 +145,32 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(response, 'id="task-filters"')
         self.assertContains(response, 'x-model="filters.q"')
 
+    def test_board_filters_apply_server_side(self):
+        todo_status = self.project.statuses.get(name="To do")
+        kept = create_task(
+            self.project,
+            self.admin,
+            title="Fix login",
+            status=todo_status,
+            priority="high",
+        )
+        dropped = create_task(
+            self.project, self.admin, title="Polish styles", status=todo_status
+        )
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/board", {"priority": "high"}
+        )
+        self.assertContains(response, f'data-task-uuid="{kept.uuid}"')
+        self.assertNotContains(response, f'data-task-uuid="{dropped.uuid}"')
+
+    def test_board_malformed_filter_is_400(self):
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/board", {"assignee": "abc"}
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_members_data_exposes_user_ids(self):
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/board")
@@ -274,22 +301,50 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(response, 'x-model="filters.q"')
         self.assertContains(response, "toggleSelectAll()")
 
-    def test_backlog_rows_expose_filter_metadata(self):
+    def test_backlog_filters_apply_server_side(self):
         label = self.project.labels.create(name="Bug", color="#ff0000")
-        task = create_task(
+        kept = create_task(
             self.project,
             self.admin,
             title="Fix Login",
+            priority="high",
             assignees=[self.member],
             labels=[label],
         )
+        dropped = create_task(self.project, self.admin, title="Polish styles")
         self.client.force_login(self.member)
-        response = self.client.get(f"/projects/{self.project.uuid}/backlog")
-        self.assertContains(response, f'data-task-uuid="{task.uuid}"')
-        self.assertContains(response, 'data-priority="medium"')
-        self.assertContains(response, "fix login bug")
-        self.assertContains(response, f'data-assignees="{self.member.pk} "')
-        self.assertContains(response, f'data-labels="{label.uuid} "')
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/backlog",
+            {"priority": "high", "assignee": str(self.member.pk)},
+        )
+        self.assertContains(response, f'data-task-uuid="{kept.uuid}"')
+        self.assertNotContains(response, f'data-task-uuid="{dropped.uuid}"')
+
+    def test_backlog_search_filters_server_side(self):
+        kept = create_task(self.project, self.admin, title="Fix login flow")
+        dropped = create_task(self.project, self.admin, title="Polish styles")
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/backlog", {"q": "login"}
+        )
+        self.assertContains(response, f'data-task-uuid="{kept.uuid}"')
+        self.assertNotContains(response, f'data-task-uuid="{dropped.uuid}"')
+
+    def test_backlog_no_match_shows_filtered_empty_state(self):
+        create_task(self.project, self.admin, title="Queued work")
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/backlog", {"priority": "urgent"}
+        )
+        self.assertContains(response, "No tasks match the current filters.")
+        self.assertNotContains(response, "The backlog is empty.")
+
+    def test_backlog_malformed_filter_uuid_is_400(self):
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/backlog", {"label": "not-a-uuid"}
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_backlog_filter_options_come_from_project_data(self):
         self.project.labels.create(name="Bug", color="#ff0000")
@@ -557,15 +612,33 @@ class AllTasksViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertLess(html.index("Queued work"), html.index("Active work"))
         self.assertLess(html.index("Active work"), html.index("Shipped work"))
 
-    def test_rows_are_readonly_with_status_metadata(self):
+    def test_rows_are_readonly(self):
         self._seed_one_task_per_category()
-        todo = self.project.statuses.get(name="To do")
         self.client.force_login(self.admin)
         response = self.client.get(f"/projects/{self.project.uuid}/tasks")
         self.assertNotContains(response, "Select task")
         self.assertNotContains(response, "Send to board")
         self.assertNotContains(response, 'draggable="true"')
-        self.assertContains(response, f'data-status="{todo.uuid}"')
+
+    def test_status_filter_applies_server_side(self):
+        self._seed_one_task_per_category()
+        todo = self.project.statuses.get(name="To do")
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/tasks", {"status": str(todo.uuid)}
+        )
+        self.assertContains(response, "Active work")
+        self.assertNotContains(response, "Queued work")
+        self.assertNotContains(response, "Shipped work")
+
+    def test_no_match_shows_filtered_empty_state(self):
+        self._seed_one_task_per_category()
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/tasks", {"priority": "urgent"}
+        )
+        self.assertContains(response, "No tasks match the current filters.")
+        self.assertNotContains(response, "This project has no tasks yet.")
 
     def test_partial_returns_content_wrapper(self):
         self.client.force_login(self.member)
@@ -580,6 +653,14 @@ class AllTasksViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/tasks")
         self.assertContains(response, "This project has no tasks yet.")
+
+    def test_render_cap_truncates_with_a_notice(self):
+        self._seed_one_task_per_category()
+        self.client.force_login(self.member)
+        with patch("workspace.projects.ui.views.TASK_RENDER_LIMIT", 2):
+            response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        self.assertEqual(len(response.context["all_tasks"]), 2)
+        self.assertContains(response, "Only the first 2 tasks are shown")
 
     def test_outsider_gets_404(self):
         self.client.force_login(self.outsider)

@@ -22,7 +22,7 @@
   })"
   @popstate.window="onPopState()"
   @keydown.window="handleKeydown($event)"
-  @ajax:after="ensureTaskParam()"
+  @ajax:after="ensureTaskParam(); syncFiltersFromUrl()"
   @project-label-created.window="onLabelCreated($event.detail.label)"
 {% endblock %}
 

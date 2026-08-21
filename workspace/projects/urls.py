@@ -9,6 +9,7 @@ from .viewsets import (
     ProjectViewSet,
     StatusViewSet,
     SubtaskViewSet,
+    TaskAttachmentViewSet,
     TaskCommentViewSet,
     TaskViewSet,
 )
@@ -38,6 +39,8 @@ task_comments = TaskCommentViewSet.as_view({"get": "list", "post": "create"})
 task_comment_detail = TaskCommentViewSet.as_view(
     {"patch": "partial_update", "delete": "destroy"}
 )
+task_attachments = TaskAttachmentViewSet.as_view({"get": "list", "post": "create"})
+task_attachment_detail = TaskAttachmentViewSet.as_view({"delete": "destroy"})
 
 urlpatterns = [
     path(
@@ -129,6 +132,16 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/comments/<uuid:uuid>",
         task_comment_detail,
         name="project-task-comment-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/attachments",
+        task_attachments,
+        name="project-task-attachments",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/attachments/<uuid:uuid>",
+        task_attachment_detail,
+        name="project-task-attachment-detail",
     ),
     path("api/v1/", include(router.urls)),
 ]

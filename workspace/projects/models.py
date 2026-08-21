@@ -290,6 +290,48 @@ class TaskComment(models.Model):
         return f"{self.author} on {self.task} ({self.created_at})"
 
 
+class TaskAttachment(models.Model):
+    """Link row between a task and a workspace file.
+
+    Pure reference: the file keeps living in the files module with its own
+    permissions - seeing the attachment requires both task access and file
+    permission, the link itself never widens file access. Unlinking never
+    deletes the file; deleting the file cascades onto this row only.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    file = models.ForeignKey(
+        "files.File",
+        on_delete=models.CASCADE,
+        related_name="task_attachments",
+    )
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "uuid"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["task", "file"],
+                name="unique_task_attachment",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.file_id} on {self.task_id}"
+
+
 class TaskEvent(models.Model):
     class Type(models.TextChoices):
         CREATED = "created", "Created"
@@ -300,6 +342,8 @@ class TaskEvent(models.Model):
         DELETED = "deleted", "Deleted"
         COMMENTED = "commented", "Commented"
         ESTIMATED = "estimate", "Estimated"
+        ATTACHED = "attached", "Attached"
+        DETACHED = "detached", "Detached"
 
     _ICONS = {
         Type.CREATED: "plus",
@@ -310,6 +354,8 @@ class TaskEvent(models.Model):
         Type.DELETED: "trash-2",
         Type.COMMENTED: "message-square",
         Type.ESTIMATED: "ruler",
+        Type.ATTACHED: "paperclip",
+        Type.DETACHED: "paperclip",
     }
     _LABELS = {
         Type.CREATED: "Task created",
@@ -320,6 +366,8 @@ class TaskEvent(models.Model):
         Type.DELETED: "Task deleted",
         Type.COMMENTED: "Comment added",
         Type.ESTIMATED: "Estimate changed",
+        Type.ATTACHED: "File attached",
+        Type.DETACHED: "File removed",
     }
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)

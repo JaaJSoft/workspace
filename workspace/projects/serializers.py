@@ -13,6 +13,7 @@ from .models import (
     ProjectMember,
     Subtask,
     Task,
+    TaskAttachment,
     TaskComment,
     TaskStatus,
 )
@@ -377,3 +378,37 @@ class TaskCommentSerializer(serializers.ModelSerializer):
 
 class TaskCommentBodySerializer(serializers.Serializer):
     body = serializers.CharField()
+
+
+class TaskAttachmentSerializer(serializers.ModelSerializer):
+    file = serializers.SerializerMethodField()
+    added_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TaskAttachment
+        fields = ["uuid", "file", "added_by", "created_at"]
+        read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_file(self, obj):
+        f = obj.file
+        return {
+            "uuid": str(f.uuid),
+            "name": f.name,
+            "size": f.size,
+            "mime_type": f.mime_type,
+            "type": f.type,
+            "category": f.category,
+        }
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_added_by(self, obj):
+        return obj.added_by.username if obj.added_by else None
+
+
+class TaskAttachmentCreateSerializer(serializers.Serializer):
+    file_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+    )

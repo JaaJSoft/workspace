@@ -157,29 +157,33 @@ test('taskParamUrl removes the task param when uuid is null', () => {
   );
 });
 
-test('taskFiltersFromUrl reads only the filter params', () => {
+test('taskFiltersFromUrl reads single and repeated filter params', () => {
   const filters = ctx.projectBoardHelpers.taskFiltersFromUrl(
-    'http://x.test/projects/p/board?q=bug&assignee=none&task=u1&label=l1'
+    'http://x.test/projects/p/board?q=bug&assignee=none&assignee=7&task=u1&label=l1'
   );
-  assert.deepStrictEqual(
-    { ...filters },
-    { q: 'bug', assignee: 'none', label: 'l1', priority: '', status: '' }
-  );
+  assert.equal(filters.q, 'bug');
+  assert.deepStrictEqual(Array.from(filters.assignee), ['none', '7']);
+  assert.deepStrictEqual(Array.from(filters.label), ['l1']);
+  assert.equal(filters.priority, '');
+  assert.equal(filters.status, '');
 });
 
 test('taskFilterUrl writes the filters and preserves the task param', () => {
   const url = ctx.projectBoardHelpers.taskFilterUrl(
     'http://x.test/projects/p/board?task=u1&priority=low',
-    { q: ' bug ', assignee: '', label: '', priority: 'high', status: '' }
+    { q: ' bug ', assignee: ['none', '7'], label: [], priority: 'high', status: '' }
   );
-  assert.equal(url, '/projects/p/board?task=u1&priority=high&q=bug');
+  assert.equal(
+    url,
+    '/projects/p/board?task=u1&priority=high&q=bug&assignee=none&assignee=7'
+  );
 });
 
 test('taskFilterUrl drops every filter param when the filters are empty', () => {
   assert.equal(
     ctx.projectBoardHelpers.taskFilterUrl(
-      'http://x.test/projects/p/board?q=bug&priority=high&task=u1',
-      { q: '', assignee: '', label: '', priority: '', status: '' }
+      'http://x.test/projects/p/board?q=bug&priority=high&assignee=7&task=u1',
+      { q: '', assignee: [], label: [], priority: '', status: '' }
     ),
     '/projects/p/board?task=u1'
   );
@@ -197,8 +201,45 @@ test('filtersActive and clearFilters track filter state', () => {
   board.clearFilters();
   assert.equal(board.filtersActive(), false);
   assert.deepStrictEqual(Array.from(fetched), ['/projects/p/board?task=u1']);
-  board.filters.assignee = 'none';
+  board.filters.assignee = ['none'];
   assert.equal(board.filtersActive(), true);
+});
+
+test('assignee filter toggles, chips exclude the none pseudo-user', () => {
+  const board = panelBoard();
+  const fetched = [];
+  board.$ajax = (url) => fetched.push(url);
+  board.members = [{ id: '7', username: 'alice' }];
+  board.toggleAssigneeFilter('none');
+  board.addAssigneeFilter({ id: '7', username: 'alice' });
+  board.addAssigneeFilter({ id: '7', username: 'alice' }); // no duplicate
+  assert.deepStrictEqual(Array.from(board.filters.assignee), ['none', '7']);
+  assert.deepStrictEqual(Array.from(board.assigneeFilterChips()), ['7']);
+  assert.equal(board.filterAssigneeName('7'), 'alice');
+  assert.deepStrictEqual(Array.from(board.unfilteredMembers()), []);
+  assert.equal(
+    fetched[fetched.length - 1],
+    '/projects/p/board?task=u1&assignee=none&assignee=7'
+  );
+  board.removeAssigneeFilter('7');
+  assert.deepStrictEqual(Array.from(board.filters.assignee), ['none']);
+});
+
+test('label filter adds once and removes', () => {
+  const board = panelBoard();
+  const fetched = [];
+  board.$ajax = (url) => fetched.push(url);
+  board.addLabelFilter({ uuid: 'l1' });
+  board.addLabelFilter({ uuid: 'l1' });
+  board.addLabelFilter({ uuid: 'l2' });
+  assert.deepStrictEqual(Array.from(board.filters.label), ['l1', 'l2']);
+  assert.equal(fetched.length, 2);
+  board.removeLabelFilter('l1');
+  assert.deepStrictEqual(Array.from(board.filters.label), ['l2']);
+  assert.equal(
+    fetched[fetched.length - 1],
+    '/projects/p/board?task=u1&label=l2'
+  );
 });
 
 test('applyFilters rewrites the URL and refetches the content', () => {

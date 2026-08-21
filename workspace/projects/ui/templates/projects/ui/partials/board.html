@@ -3,7 +3,7 @@
   {% if tasks_truncated %}
     <inline-alert type="warning" message="Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest."></inline-alert>
   {% endif %}
-  <div class="flex gap-4 overflow-x-auto items-start pb-4">
+  <div class="flex gap-3 overflow-x-auto items-start pb-4">
     {% for column in columns %}
       <section
         class="flex-1 min-w-72 rounded-box bg-base-200 p-3"

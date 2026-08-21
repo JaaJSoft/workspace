@@ -22,10 +22,11 @@
   class="relative"
 >
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">
-    <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+    {# shrink-0 + min-w-0: in a narrow container the input's intrinsic min width otherwise flex-crushes the icon to zero width. #}
+    <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
     <input
       type="text"
-      class="grow"
+      class="grow min-w-0"
       placeholder="{{ placeholder|default:'Search users...' }}"
       x-model="query"
       @input.debounce.300ms="search()"

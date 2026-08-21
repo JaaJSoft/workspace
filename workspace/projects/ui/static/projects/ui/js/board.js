@@ -33,7 +33,9 @@ function fieldAction(field) {
 }
 
 function emptyTaskFilters() {
-  return { q: '', assignee: '', label: '', priority: '', status: '' };
+  // assignee and label are multi-value (repeated query params, OR'd
+  // server-side); assignee also accepts the literal 'none' for unassigned.
+  return { q: '', assignee: [], label: [], priority: '', status: '' };
 }
 
 // Filtering is server-side; the filter state lives in the URL so a filtered
@@ -44,18 +46,29 @@ function taskFiltersFromUrl(href) {
   const filters = emptyTaskFilters();
   const params = new URL(href).searchParams;
   Object.keys(filters).forEach((key) => {
-    const value = params.get(key);
-    if (value) filters[key] = value;
+    if (Array.isArray(filters[key])) {
+      filters[key] = params.getAll(key).filter(Boolean);
+    } else {
+      const value = params.get(key);
+      if (value) filters[key] = value;
+    }
   });
   return filters;
 }
 
 function taskFilterUrl(href, filters) {
   const url = new URL(href);
-  Object.keys(emptyTaskFilters()).forEach((key) => {
-    const value = (filters[key] || '').trim();
-    if (value) url.searchParams.set(key, value);
-    else url.searchParams.delete(key);
+  Object.entries(emptyTaskFilters()).forEach(([key, empty]) => {
+    if (Array.isArray(empty)) {
+      url.searchParams.delete(key);
+      (filters[key] || []).forEach((value) =>
+        url.searchParams.append(key, value)
+      );
+    } else {
+      const value = (filters[key] || '').trim();
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    }
   });
   return url.pathname + url.search;
 }
@@ -378,8 +391,8 @@ function projectBoard(config) {
     filtersActive() {
       return Boolean(
         this.filters.q.trim() ||
-          this.filters.assignee ||
-          this.filters.label ||
+          this.filters.assignee.length ||
+          this.filters.label.length ||
           this.filters.priority ||
           this.filters.status
       );
@@ -387,6 +400,53 @@ function projectBoard(config) {
 
     clearFilters() {
       this.filters = emptyTaskFilters();
+      this.applyFilters();
+    },
+
+    isAssigneeFilter(id) {
+      return this.filters.assignee.includes(String(id));
+    },
+
+    toggleAssigneeFilter(id) {
+      id = String(id);
+      this.filters.assignee = this.isAssigneeFilter(id)
+        ? this.filters.assignee.filter((v) => v !== id)
+        : this.filters.assignee.concat(id);
+      this.applyFilters();
+    },
+
+    addAssigneeFilter(user) {
+      if (!this.isAssigneeFilter(user.id)) this.toggleAssigneeFilter(user.id);
+    },
+
+    removeAssigneeFilter(id) {
+      if (this.isAssigneeFilter(id)) this.toggleAssigneeFilter(id);
+    },
+
+    // The 'none' pseudo-assignee is rendered by the Unassigned toggle, so
+    // the chips row only carries real users.
+    assigneeFilterChips() {
+      return this.filters.assignee.filter((id) => id !== 'none');
+    },
+
+    unfilteredMembers() {
+      return this.members.filter((m) => !this.isAssigneeFilter(m.id));
+    },
+
+    filterAssigneeName(id) {
+      const user = this.members.find((m) => String(m.id) === String(id));
+      return user ? user.username : 'Unknown user';
+    },
+
+    addLabelFilter(label) {
+      if (!this.filters.label.includes(label.uuid)) {
+        this.filters.label = this.filters.label.concat(label.uuid);
+        this.applyFilters();
+      }
+    },
+
+    removeLabelFilter(uuid) {
+      this.filters.label = this.filters.label.filter((v) => v !== uuid);
       this.applyFilters();
     },
 

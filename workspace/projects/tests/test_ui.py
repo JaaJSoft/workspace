@@ -346,15 +346,20 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_backlog_filter_options_come_from_project_data(self):
+    def test_backlog_filter_bar_reuses_the_task_form_pickers(self):
         self.project.labels.create(name="Bug", color="#ff0000")
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/backlog")
-        self.assertContains(
-            response, f'<option value="{self.member.pk}">member1</option>'
-        )
-        self.assertContains(response, "All labels")
+        self.assertContains(response, 'placeholder="Filter by assignee"')
+        self.assertContains(response, 'placeholder="Filter by label"')
         self.assertContains(response, "Unassigned")
+        # The filter picker must not offer label creation, even to admins.
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/backlog")
+        html = response.content.decode()
+        filter_bar = html.split('id="task-filters"')[1].split("</select>")[0]
+        self.assertIn("labelSelector('filter-label-selected'", filter_bar)
+        self.assertIn(", '')", filter_bar)
 
     def test_archived_project_backlog_has_no_bulk_controls(self):
         from django.utils import timezone

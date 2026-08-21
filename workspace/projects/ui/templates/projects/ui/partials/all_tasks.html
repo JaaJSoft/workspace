@@ -1,7 +1,5 @@
 <div id="all-tasks" class="w-full flex flex-col gap-3">
-  <div class="flex flex-wrap items-center gap-2">
-    {% include "projects/ui/partials/_task_filters.html" with show_status_filter=True %}
-  </div>
+  {% include "projects/ui/partials/_task_filters.html" with show_status_filter=True %}
 
   {% if all_tasks %}
     <div

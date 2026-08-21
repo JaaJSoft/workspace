@@ -41,11 +41,11 @@ would clip them.
     {% endif %}
     {# These live with the pickers, not the scrollable row below: their dropdowns would be clipped by the overflow-x-auto ancestor. #}
     <div class="flex-1 min-w-40 sm:flex-none sm:w-44">
-      {% include "projects/ui/partials/_priority_selector.html" with model_expr="filters.priority" on_change="applyFilters()" with_all=True %}
+      {% include "projects/ui/partials/_priority_selector.html" with model_expr="filters.priority" on_change="applyFilters()" with_all=True label="Filter by priority" %}
     </div>
     {% if show_status_filter %}
       <div class="flex-1 min-w-40 sm:flex-none sm:w-44">
-        {% include "projects/ui/partials/_status_selector.html" with model_expr="filters.status" on_change="applyFilters()" with_all=True %}
+        {% include "projects/ui/partials/_status_selector.html" with model_expr="filters.status" on_change="applyFilters()" with_all=True label="Filter by status" %}
       </div>
     {% endif %}
   </div>

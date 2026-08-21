@@ -13,24 +13,31 @@ Params:
   - with_all:   Django flag - prepend an "All priorities" empty-value row
                 (filter bars, where the field is optional).
   - disabled:   Django flag - render the trigger disabled (permission gating).
+  - label:      accessible field name, prepended to the trigger's visible value
+                as screen-reader-only text (e.g. "Priority" -> "Priority Medium").
 
 Every icon is static in the markup (x-show, never x-if) so it exists at
 createIcons time.
 {% endcomment %}
 <div
-  x-data="{ open: false }"
+  x-data="selectDropdown()"
   class="relative"
   @click.outside="open = false"
-  @keydown.escape="open = false"
+  @keydown.arrow-down.prevent="move(1)"
+  @keydown.arrow-up.prevent="move(-1)"
+  @keydown.escape="if (open) { $event.preventDefault(); closeAndFocus() }"
+  @keydown.tab="open = false"
 >
   <button
     type="button"
     class="input input-sm input-bordered flex items-center gap-2 w-full cursor-pointer text-left disabled:cursor-not-allowed"
-    aria-haspopup="listbox"
+    x-ref="trigger"
+    aria-haspopup="menu"
     :aria-expanded="open"
-    @click="open = !open"
+    @click="toggle()"
     {% if disabled %}disabled{% endif %}
   >
+    {% if label %}<span class="sr-only">{{ label }}</span>{% endif %}
     {% if with_all %}
       <span
         x-show="!{{ model_expr }}"
@@ -83,13 +90,15 @@ createIcons time.
     x-cloak
     class="absolute z-50 mt-1 w-full min-w-40 bg-base-100 border border-base-300 rounded-lg shadow-lg"
   >
-    <ul class="menu menu-sm p-1">
+    <ul class="menu menu-sm p-1" role="menu">
       {% if with_all %}
-        <li>
+        <li role="none">
           <button
             type="button"
             class="flex items-center gap-2 rounded"
             :class="!{{ model_expr }} ? 'active' : ''"
+            role="menuitemradio"
+            :aria-checked="!{{ model_expr }}"
             @click="{{ model_expr }} = ''; open = false; {{ on_change|default:'' }}"
           >
             <i data-lucide="flag" class="w-4 h-4 opacity-60"></i>
@@ -97,44 +106,52 @@ createIcons time.
           </button>
         </li>
       {% endif %}
-      <li>
+      <li role="none">
         <button
           type="button"
           class="flex items-center gap-2 rounded"
           :class="{{ model_expr }} === 'urgent' ? 'active' : ''"
+          role="menuitemradio"
+          :aria-checked="{{ model_expr }} === 'urgent'"
           @click="{{ model_expr }} = 'urgent'; open = false; {{ on_change|default:'' }}"
         >
           <i data-lucide="flame" class="w-4 h-4 text-error"></i>
           <span class="text-sm">Urgent</span>
         </button>
       </li>
-      <li>
+      <li role="none">
         <button
           type="button"
           class="flex items-center gap-2 rounded"
           :class="{{ model_expr }} === 'high' ? 'active' : ''"
+          role="menuitemradio"
+          :aria-checked="{{ model_expr }} === 'high'"
           @click="{{ model_expr }} = 'high'; open = false; {{ on_change|default:'' }}"
         >
           <i data-lucide="arrow-up" class="w-4 h-4 text-warning"></i>
           <span class="text-sm">High</span>
         </button>
       </li>
-      <li>
+      <li role="none">
         <button
           type="button"
           class="flex items-center gap-2 rounded"
           :class="{{ model_expr }} === 'medium' ? 'active' : ''"
+          role="menuitemradio"
+          :aria-checked="{{ model_expr }} === 'medium'"
           @click="{{ model_expr }} = 'medium'; open = false; {{ on_change|default:'' }}"
         >
           <i data-lucide="equal" class="w-4 h-4 text-info"></i>
           <span class="text-sm">Medium</span>
         </button>
       </li>
-      <li>
+      <li role="none">
         <button
           type="button"
           class="flex items-center gap-2 rounded"
           :class="{{ model_expr }} === 'low' ? 'active' : ''"
+          role="menuitemradio"
+          :aria-checked="{{ model_expr }} === 'low'"
           @click="{{ model_expr }} = 'low'; open = false; {{ on_change|default:'' }}"
         >
           <i data-lucide="arrow-down" class="w-4 h-4 opacity-60"></i>

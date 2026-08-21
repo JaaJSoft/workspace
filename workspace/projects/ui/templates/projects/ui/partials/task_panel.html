@@ -96,17 +96,17 @@
       <div class="form-control">
         <div class="label py-1"><span class="label-text text-xs">Status</span></div>
         {% if "move" in panel_action_ids %}
-          {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" on_change="commitField('status', data.status)" %}
+          {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" on_change="commitField('status', data.status)" label="Status" %}
         {% else %}
-          {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" disabled=True %}
+          {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" disabled=True label="Status" %}
         {% endif %}
       </div>
       <div class="form-control">
         <div class="label py-1"><span class="label-text text-xs">Priority</span></div>
         {% if "edit" in panel_action_ids %}
-          {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" on_change="commitField('priority', data.priority)" %}
+          {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" on_change="commitField('priority', data.priority)" label="Priority" %}
         {% else %}
-          {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" disabled=True %}
+          {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" disabled=True label="Priority" %}
         {% endif %}
       </div>
       <label class="form-control col-span-2">

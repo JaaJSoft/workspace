@@ -47,11 +47,11 @@
       <div class="grid grid-cols-2 gap-2 mt-2">
         <div class="form-control">
           <div class="label"><span class="label-text">Status</span></div>
-          {% include "projects/ui/partials/_status_selector.html" with model_expr="form.status" %}
+          {% include "projects/ui/partials/_status_selector.html" with model_expr="form.status" label="Status" %}
         </div>
         <div class="form-control">
           <div class="label"><span class="label-text">Priority</span></div>
-          {% include "projects/ui/partials/_priority_selector.html" with model_expr="form.priority" %}
+          {% include "projects/ui/partials/_priority_selector.html" with model_expr="form.priority" label="Priority" %}
         </div>
         <label class="form-control">
           <div class="label"><span class="label-text">Due date</span></div>

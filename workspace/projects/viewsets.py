@@ -9,6 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
 
 from .models import (
@@ -375,7 +376,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     lookup_field = "uuid"
     lookup_url_kwarg = "task_uuid"
-    pagination_class = None
+    pagination_class = OptInLimitOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):

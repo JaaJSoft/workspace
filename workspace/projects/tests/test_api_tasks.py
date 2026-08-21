@@ -107,6 +107,44 @@ class TaskListCreateTests(TaskApiMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class TaskListPaginationTests(TaskApiMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        for i in range(5):
+            create_task(self.project, self.admin, title=f"task {i}")
+        self.client.force_authenticate(self.member)
+
+    def test_without_limit_the_full_array_is_returned(self):
+        response = self.client.get(self.tasks_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+        self.assertEqual(len(response.data), 5)
+        self.assertNotIn("X-Has-More", response.headers)
+
+    def test_limit_returns_a_bare_array_page_with_has_more_header(self):
+        response = self.client.get(self.tasks_url, {"limit": "2"})
+        self.assertIsInstance(response.data, list)
+        self.assertEqual([t["title"] for t in response.data], ["task 0", "task 1"])
+        self.assertEqual(response.headers["X-Has-More"], "true")
+
+    def test_offset_pages_through_to_the_end(self):
+        response = self.client.get(self.tasks_url, {"limit": "2", "offset": "4"})
+        self.assertEqual([t["title"] for t in response.data], ["task 4"])
+        self.assertEqual(response.headers["X-Has-More"], "false")
+
+    def test_exact_boundary_does_not_claim_more(self):
+        response = self.client.get(self.tasks_url, {"limit": "5"})
+        self.assertEqual(len(response.data), 5)
+        self.assertEqual(response.headers["X-Has-More"], "false")
+
+    def test_pagination_composes_with_filters(self):
+        response = self.client.get(
+            self.tasks_url, {"status": str(self.backlog.uuid), "limit": "3"}
+        )
+        self.assertEqual(len(response.data), 3)
+        self.assertEqual(response.headers["X-Has-More"], "true")
+
+
 class TaskDetailTests(TaskApiMixin, APITestCase):
     def setUp(self):
         super().setUp()

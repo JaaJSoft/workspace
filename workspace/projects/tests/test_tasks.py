@@ -1,6 +1,7 @@
 """Tests for the due-task notification cron and the hooks that settle it."""
 
 from datetime import timedelta
+from unittest import mock
 
 from django.core.cache import cache
 from django.test import TestCase
@@ -15,8 +16,19 @@ from workspace.projects.services.tasks import (
     move_tasks,
 )
 from workspace.projects.tasks import notify_due_tasks
+from workspace.users.services.settings import set_setting
 
 from .base import ProjectTestMixin
+
+
+def _time_travel(delta_or_now):
+    """Freeze ``django.utils.timezone.now`` (and everything built on it)."""
+    frozen = (
+        timezone.now() + delta_or_now
+        if isinstance(delta_or_now, timedelta)
+        else delta_or_now
+    )
+    return mock.patch("django.utils.timezone.now", return_value=frozen)
 
 
 class NotifyDueTasksMixin(ProjectTestMixin):
@@ -29,7 +41,7 @@ class NotifyDueTasksMixin(ProjectTestMixin):
         cache.clear()
 
     def _task(self, due_days=0, assignees=None, **kwargs):
-        return create_task(
+        task = create_task(
             self.project,
             self.admin,
             title=kwargs.pop("title", "Ship it"),
@@ -38,6 +50,10 @@ class NotifyDueTasksMixin(ProjectTestMixin):
             assignees=assignees if assignees is not None else [self.member],
             **kwargs,
         )
+        # create_task notifies the new assignees; these tests target the
+        # due-date reminders only.
+        Notification.objects.all().delete()
+        return task
 
     def _unread(self, task, user):
         return Notification.objects.filter(
@@ -84,7 +100,7 @@ class NotifyDueTasksCronTests(NotifyDueTasksMixin, TestCase):
         self.assertEqual(Notification.objects.count(), 0)
         self.assertFalse(self._unread(departed_task, self.member).exists())
 
-    def test_rerun_merges_instead_of_stacking(self):
+    def test_rerun_does_not_stack(self):
         task = self._task(due_days=0)
 
         notify_due_tasks()
@@ -115,14 +131,53 @@ class NotifyDueTasksCronTests(NotifyDueTasksMixin, TestCase):
         reminder = self._unread(task, self.member).exclude(pk=mention.pk).get()
         self.assertEqual(reminder.stream, "reminder")
 
-    def test_read_notification_is_recreated_on_next_run(self):
+    def test_read_reminder_is_not_resent(self):
         task = self._task(due_days=-1)
 
         notify_due_tasks()
         Notification.objects.update(read_at=timezone.now())
         notify_due_tasks()
 
-        self.assertEqual(self._unread(task, self.member).count(), 1)
+        self.assertFalse(self._unread(task, self.member).exists())
+
+    def test_becoming_overdue_sends_exactly_one_more_reminder(self):
+        task = self._task(due_days=0)
+        notify_due_tasks()
+        Notification.objects.update(read_at=timezone.now())
+
+        with _time_travel(timedelta(days=1)):
+            notify_due_tasks()
+            notify_due_tasks()
+
+        notif = self._unread(task, self.member).get()
+        self.assertIn("Overdue since", notif.body)
+
+    def test_moved_due_date_rearms_the_reminder(self):
+        task = self._task(due_days=0)
+        notify_due_tasks()
+        Notification.objects.update(read_at=timezone.now())
+
+        task.due_date = timezone.localdate() + timedelta(days=1)
+        task.save(update_fields=["due_date"])
+        with _time_travel(timedelta(days=1)):
+            notify_due_tasks()
+
+        notif = self._unread(task, self.member).get()
+        self.assertIn("Due today", notif.body)
+
+    def test_due_today_follows_the_recipients_timezone(self):
+        task = self._task(due_days=1, assignees=[self.member, self.admin])
+        # UTC+14: at 15:00 UTC the local date is already the server's tomorrow.
+        set_setting(self.member, "core", "timezone", "Pacific/Kiritimati")
+
+        afternoon_utc = timezone.now().replace(hour=15, minute=0)
+        with _time_travel(afternoon_utc):
+            notify_due_tasks()
+
+        notif = self._unread(task, self.member).get()
+        self.assertIn("Due today", notif.body)
+        # The admin (UTC) is still a day early.
+        self.assertFalse(self._unread(task, self.admin).exists())
 
 
 class SettleOnResolutionTests(NotifyDueTasksMixin, TestCase):

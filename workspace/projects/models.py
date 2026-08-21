@@ -269,6 +269,7 @@ class TaskEvent(models.Model):
     class Type(models.TextChoices):
         CREATED = "created", "Created"
         UPDATED = "updated", "Updated"
+        ASSIGNED = "assigned", "Assigned"
         MOVED = "moved", "Moved"
         COMPLETED = "completed", "Completed"
         DELETED = "deleted", "Deleted"
@@ -278,6 +279,7 @@ class TaskEvent(models.Model):
     _ICONS = {
         Type.CREATED: "plus",
         Type.UPDATED: "pencil",
+        Type.ASSIGNED: "user-plus",
         Type.MOVED: "move-right",
         Type.COMPLETED: "circle-check",
         Type.DELETED: "trash-2",
@@ -287,6 +289,7 @@ class TaskEvent(models.Model):
     _LABELS = {
         Type.CREATED: "Task created",
         Type.UPDATED: "Task updated",
+        Type.ASSIGNED: "Task assigned",
         Type.MOVED: "Task moved",
         Type.COMPLETED: "Task completed",
         Type.DELETED: "Task deleted",
@@ -356,3 +359,44 @@ class TaskEvent(models.Model):
     @property
     def short_label(self):
         return self._LABELS.get(self.type, "Task updated")
+
+
+class TaskReminder(models.Model):
+    """One row per due-date reminder actually sent to an assignee.
+
+    The reminder cron consults these to send each reminder exactly once per
+    task/user/kind: hourly reruns skip recorded rows instead of re-notifying.
+    ``due_date`` snapshots the date the reminder was for - a task whose due
+    date moved no longer matches its rows, which re-arms both reminders for
+    the new date.
+    """
+
+    class Kind(models.TextChoices):
+        DUE = "due", "Due"
+        OVERDUE = "overdue", "Overdue"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="reminders",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="+",
+    )
+    kind = models.CharField(max_length=7, choices=Kind.choices)
+    due_date = models.DateField()
+    sent_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["task", "user", "kind"],
+                name="taskreminder_once_per_kind",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.kind}: {self.task_id} -> {self.user_id}"

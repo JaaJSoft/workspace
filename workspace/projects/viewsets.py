@@ -37,6 +37,7 @@ from .serializers import (
     TaskSerializer,
     TaskStatusSerializer,
 )
+from .services.assignments import notify_assigned
 from .services.comments import notify_comment_added, notify_comment_edited
 from .services.estimates import format_estimate
 from .services.events import record_task_event
@@ -479,6 +480,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         old_status = serializer.instance.status
         old_due_date = serializer.instance.due_date
         old_estimate = serializer.instance.estimate
+        old_assignee_ids = {u.pk for u in serializer.instance.assignees.all()}
         # Compared before save: afterwards the instance already carries the
         # new values and every edit would look like a no-op.
         fields_updated = has_field_updates(
@@ -487,6 +489,16 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         task = serializer.save()
         if task.status_id != old_status.pk:
             apply_status_change(task, actor=self.request.user, old_status=old_status)
+        added_assignees = [
+            u
+            for u in serializer.validated_data.get("assignees", [])
+            if u.pk not in old_assignee_ids
+        ]
+        if added_assignees:
+            record_task_event(
+                task, type=TaskEvent.Type.ASSIGNED, actor=self.request.user
+            )
+            notify_assigned(task, self.request.user, added_assignees)
         if fields_updated:
             record_task_event(
                 task, type=TaskEvent.Type.UPDATED, actor=self.request.user

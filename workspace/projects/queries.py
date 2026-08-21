@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.db.models import Case, F, IntegerField, Value, When
 from django.utils import timezone
@@ -47,16 +49,19 @@ def user_project_ids(user, *, role=None):
 
 
 def due_open_tasks():
-    """Open tasks across all projects that are overdue or due today.
+    """Open tasks across all projects that are overdue, due today or tomorrow.
 
     Feeds the due-task notification cron: archived projects are excluded
-    because nobody can act on their tasks anymore. Access is not filtered
-    here - the cron resolves each task's audience per project.
+    because nobody can act on their tasks anymore. The horizon runs one day
+    past the server's date because a recipient's local date can be ahead of
+    it - the cron re-checks each task against each recipient's timezone.
+    Access is not filtered here - the cron resolves each task's audience per
+    project.
     """
     return (
         Task.objects.filter(
             project__archived_at__isnull=True,
-            due_date__lte=timezone.localdate(),
+            due_date__lte=timezone.localdate() + timedelta(days=1),
         )
         .exclude(status__category=TaskStatus.Category.DONE)
         .select_related("project")

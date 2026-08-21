@@ -148,6 +148,13 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(response, 'id="task-filters"')
         self.assertContains(response, 'x-model="filters.q"')
 
+    def test_board_wraps_tasks_in_the_filter_swap_target(self):
+        # applyFilters targets #task-collection so a filter change never
+        # re-renders the filter bar (it would rebuild the open popover).
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertContains(response, 'id="task-collection"')
+
     def test_board_filters_apply_server_side(self):
         todo_status = self.project.statuses.get(name="To do")
         kept = create_task(
@@ -368,6 +375,9 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         )
         self.assertContains(response, "No tasks match the current filters.")
         self.assertNotContains(response, "The backlog is empty.")
+        # The filter swap target must exist even with zero matching rows,
+        # or the next applyFilters has nothing to swap back into.
+        self.assertContains(response, 'id="task-collection"')
 
     def test_backlog_malformed_filter_uuid_is_400(self):
         self.client.force_login(self.member)
@@ -654,6 +664,11 @@ class AllTasksViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertNotContains(response, "Select task")
         self.assertNotContains(response, "Send to board")
         self.assertNotContains(response, 'draggable="true"')
+
+    def test_wraps_tasks_in_the_filter_swap_target(self):
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        self.assertContains(response, 'id="task-collection"')
 
     def test_status_filter_applies_server_side(self):
         self._seed_one_task_per_category()

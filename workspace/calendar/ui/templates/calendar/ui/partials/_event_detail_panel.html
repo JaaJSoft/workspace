@@ -185,10 +185,7 @@
               </div>
               <template x-for="member in eventMembers" :key="member.uuid">
                 <div class="flex items-center justify-between text-sm">
-                  <div class="flex items-center gap-2.5">
-                    <user-avatar :user-id="member.user.id" :username="member.user.username" size="sm" presence card></user-avatar>
-                    <span class="truncate" x-text="member.user.username"></span>
-                  </div>
+                  <user-avatar :user-id="member.user.id" :username="member.user.username" size="sm" presence card name></user-avatar>
                   <span
                     class="badge badge-xs"
                     :class="{'badge-success': member.status==='accepted','badge-warning': member.status==='pending','badge-error': member.status==='declined'}"

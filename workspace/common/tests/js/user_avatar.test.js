@@ -5,8 +5,8 @@ const { test } = require('node:test');
 const { loadScript } = require('./loader');
 
 // The element itself needs a DOM and is covered by
-// workspace/files/tests/e2e/test_user_avatar.py. What is testable here is the
-// size scale, the host geometry and the palette both rendering paths share.
+// workspace/common/tests/e2e/test_user_avatar.py. What is testable here is
+// the size scale, the host geometry and the palette both paths share.
 function load() {
   const noop = () => {};
   return loadScript('workspace/common/static/ui/js/user_avatar.js', {
@@ -84,6 +84,36 @@ test('the host carries the box, so a flex parent measures the avatar itself', ()
   assert.ok(classes.includes('shrink-0'));
 });
 
+test('every size step names a gap, so a named avatar spaces itself', () => {
+  const { USER_AVATAR_SIZES } = load();
+  for (const [name, step] of Object.entries(USER_AVATAR_SIZES)) {
+    assert.match(step.gap, /^gap-/, `${name} has no gap for its name`);
+  }
+});
+
+test('with a name the host becomes the row and the box moves inside', () => {
+  const ctx = load();
+  const host = ctx.userAvatarHostClasses('sm', true);
+  const box = ctx.userAvatarBoxClasses('sm');
+
+  // The row must not carry the picture's dimensions, or the name would be
+  // laid out inside an 8x8 square.
+  assert.ok(!host.includes('w-8'));
+  assert.ok(!host.includes('h-8'));
+  assert.ok(host.includes('items-center'));
+  assert.ok(host.includes(ctx.USER_AVATAR_SIZES.sm.gap));
+  // min-w-0: without it the row refuses to shrink and the name's `truncate`
+  // never fires - it overflows its container instead.
+  assert.ok(host.includes('min-w-0'));
+
+  // relative travels with the box: the presence dot and the image are
+  // positioned against it, and in named mode the host is no longer it.
+  assert.ok(box.includes('relative'));
+  assert.ok(box.includes('shrink-0'));
+  assert.ok(box.includes('w-8'));
+  assert.ok(box.includes('h-8'));
+});
+
 test('an unknown or missing size falls back to md rather than losing its box', () => {
   const ctx = load();
   const fallback = ctx.userAvatarHostClasses(undefined);
@@ -109,8 +139,30 @@ test('userAvatarTag emits the flags only when asked', () => {
   const plain = ctx.userAvatarTag(1, 'Bob', { size: 'sm' });
   assert.ok(!plain.includes(' presence'));
   assert.ok(!plain.includes(' card'));
+  assert.ok(!plain.includes(' name'));
+  assert.ok(!plain.includes('display-name'));
+  assert.ok(!plain.includes('href'));
 
-  const full = ctx.userAvatarTag(1, 'Bob', { size: 'sm', presence: true, card: true });
+  const full = ctx.userAvatarTag(1, 'Bob', {
+    size: 'sm', presence: true, card: true, name: true,
+    displayName: 'Bob Smith', href: '/users/profile/bob', nameClass: 'text-sm',
+  });
   assert.ok(full.includes(' presence'));
   assert.ok(full.includes(' card'));
+  assert.ok(full.includes(' name'));
+  assert.ok(full.includes('display-name="Bob Smith"'));
+  assert.ok(full.includes('href="/users/profile/bob"'));
+  assert.ok(full.includes('name-class="text-sm"'));
+});
+
+test('userAvatarTag escapes the name options too', () => {
+  const ctx = load();
+  const tag = ctx.userAvatarTag(1, 'bob', {
+    name: true,
+    displayName: '"><img src=x onerror=alert(1)>',
+    href: '"><script>alert(1)</script>',
+  });
+
+  assert.ok(!tag.includes('<img'));
+  assert.ok(!tag.includes('<script>'));
 });

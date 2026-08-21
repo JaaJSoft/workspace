@@ -214,6 +214,7 @@
 
   {% include "projects/ui/partials/task_modal.html" %}
   {% include "projects/ui/partials/help_dialog.html" %}
+  {% include "files/ui/partials/file_viewer_modal.html" %}
 
   <dialog id="new-project-dialog" class="modal">
     <div
@@ -296,6 +297,8 @@
       <button>close</button>
     </form>
   </dialog>
+  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'ui/js/attachment_input.js' %}"></script>
   <script src="{% static 'projects/ui/js/board.js' %}"></script>
   <script src="{% static 'projects/ui/js/preferences.js' %}"></script>
   <script src="{% static 'projects/ui/js/settings.js' %}"></script>

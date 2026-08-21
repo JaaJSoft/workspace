@@ -7,6 +7,7 @@ Params:
 - menu_class: dropdown positioning classes (default "dropdown-top")
 - button_class: trigger button classes (default "btn btn-ghost btn-sm btn-square")
 - icon_class: paperclip icon size classes (default "w-4 h-4")
+- label: optional text rendered next to the paperclip (icon-only otherwise)
 {% endcomment %}
 <div class="dropdown {{ menu_class|default:'dropdown-top' }}">
   <button
@@ -16,6 +17,7 @@ Params:
     title="Attach files"
   >
     <i data-lucide="paperclip" class="{{ icon_class|default:'w-4 h-4' }}"></i>
+    {% if label %}<span>{{ label }}</span>{% endif %}
   </button>
   <ul
     tabindex="0"

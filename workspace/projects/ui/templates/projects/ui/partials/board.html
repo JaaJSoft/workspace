@@ -1,61 +1,64 @@
 <div id="board" class="flex flex-col gap-3 min-h-0">
   {% include "projects/ui/partials/_task_filters.html" %}
-  {% if tasks_truncated %}
-    <inline-alert type="warning" message="Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest."></inline-alert>
-  {% endif %}
-  <div class="flex gap-3 overflow-x-auto items-start pb-4">
-    {% for column in columns %}
-      <section
-        class="flex-1 min-w-72 rounded-box bg-base-200 p-3"
-        data-status-uuid="{{ column.status.uuid }}"
-        @dragover.prevent="onDragOver($event)"
-        @drop.prevent="onDrop($event, '{{ column.status.uuid }}')"
-      >
-        <header class="flex items-center justify-between mb-2">
-          <h3 class="text-sm font-medium flex items-center gap-2">
-            {% if column.status.color %}
-              <span
-                class="w-2.5 h-2.5 rounded-full shrink-0"
-                style="background-color: {{ column.status.color }}"
-              ></span>
-            {% endif %}
-            {{ column.status.name }}
-          </h3>
-          <div class="flex items-center gap-1">
-            {% if project.estimate_unit %}
-              {# One combined chip: the united number is the estimate total, the bare one the task count. #}
-              <span
-                class="badge badge-ghost badge-sm font-mono"
-                title="Estimate total · task count"
-              >
-                {{ column.estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ column.tasks|length }}
-              </span>
-            {% else %}
-              <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
-            {% endif %}
-            {% if writable %}
-              <button
-                class="btn btn-ghost btn-xs btn-square"
-                title="New task"
-                @click="newTask('{{ column.status.uuid }}')"
-              >
-                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-              </button>
-            {% endif %}
-          </div>
-        </header>
-        <ul class="flex flex-col gap-2 min-h-8" data-column-list>
-          {% for task in column.tasks %}
-            {% include "projects/ui/partials/task_card.html" %}
-          {% endfor %}
-        </ul>
-        {% if column.hidden_count %}
-          <p class="text-xs text-base-content/50 mt-2 flex items-center gap-1.5">
-            <i data-lucide="eye-off" class="w-3 h-3"></i>
-            {{ column.hidden_count }} hidden
-          </p>
-        {% endif %}
-      </section>
-    {% endfor %}
+  {# Filter changes swap this wrapper only (see applyFilters in board.js), so the filter bar above - and its open popover - keep their DOM. #}
+  <div id="task-collection" class="flex flex-col gap-3 min-h-0">
+    {% if tasks_truncated %}
+      <inline-alert type="warning" message="Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest."></inline-alert>
+    {% endif %}
+    <div class="flex gap-3 overflow-x-auto items-start pb-4">
+      {% for column in columns %}
+        <section
+          class="flex-1 min-w-72 rounded-box bg-base-200 p-3"
+          data-status-uuid="{{ column.status.uuid }}"
+          @dragover.prevent="onDragOver($event)"
+          @drop.prevent="onDrop($event, '{{ column.status.uuid }}')"
+        >
+          <header class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium flex items-center gap-2">
+              {% if column.status.color %}
+                <span
+                  class="w-2.5 h-2.5 rounded-full shrink-0"
+                  style="background-color: {{ column.status.color }}"
+                ></span>
+              {% endif %}
+              {{ column.status.name }}
+            </h3>
+            <div class="flex items-center gap-1">
+              {% if project.estimate_unit %}
+                {# One combined chip: the united number is the estimate total, the bare one the task count. #}
+                <span
+                  class="badge badge-ghost badge-sm font-mono"
+                  title="Estimate total · task count"
+                >
+                  {{ column.estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ column.tasks|length }}
+                </span>
+              {% else %}
+                <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
+              {% endif %}
+              {% if writable %}
+                <button
+                  class="btn btn-ghost btn-xs btn-square"
+                  title="New task"
+                  @click="newTask('{{ column.status.uuid }}')"
+                >
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                </button>
+              {% endif %}
+            </div>
+          </header>
+          <ul class="flex flex-col gap-2 min-h-8" data-column-list>
+            {% for task in column.tasks %}
+              {% include "projects/ui/partials/task_card.html" %}
+            {% endfor %}
+          </ul>
+          {% if column.hidden_count %}
+            <p class="text-xs text-base-content/50 mt-2 flex items-center gap-1.5">
+              <i data-lucide="eye-off" class="w-3 h-3"></i>
+              {{ column.hidden_count }} hidden
+            </p>
+          {% endif %}
+        </section>
+      {% endfor %}
+    </div>
   </div>
 </div>

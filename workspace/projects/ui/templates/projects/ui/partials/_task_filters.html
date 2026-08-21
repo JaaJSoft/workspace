@@ -7,14 +7,18 @@ from the URL after each content swap.
 
 The bar itself is a single compact row (search + Filters button + Clear)
 so it degrades gracefully at any width; the pickers all live in a popover
-panel anchored under the bar. The open flag (filtersPanelOpen) lives on
-the root projectBoard component, outside the swap target, so the panel
-survives the content swap that every filter change triggers.
+panel anchored under the bar. Filter changes swap #task-collection only,
+so the open panel keeps its DOM (and picker state) across them; the open
+flag (filtersPanelOpen) additionally lives on the root projectBoard
+component so the panel also survives the full content swaps of view
+navigations and SSE refreshes.
 
 Assignee and label are multi-value (repeated query params, OR'd
 server-side) and reuse the same picker components as the task form. Every
-active filter renders as a removable chip on its own row, so the state
-stays readable while the panel is closed.
+active filter renders as a removable chip twice: inside the panel under
+its picker (the pickers themselves are search inputs and show nothing
+once a value is chosen), and on a row under the bar so the state stays
+readable while the panel is closed.
 {% endcomment %}
 <div
   id="task-filters"
@@ -66,6 +70,15 @@ stays readable while the panel is closed.
         <div class="flex flex-col gap-1.5">
           <span class="text-xs font-medium text-base-content/60">Assignee</span>
           {% include "ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" icon="users" %}
+          <div
+            class="flex flex-wrap items-center gap-1.5"
+            x-show="assigneeFilterChips().length"
+            x-cloak
+          >
+            <template x-for="id in assigneeFilterChips()" :key="id">
+              {% include "ui/partials/user_chip.html" with user_id_expr="id" username_expr="filterAssigneeName(id)" remove_expr="removeAssigneeFilter(id)" %}
+            </template>
+          </div>
           <label class="flex items-center gap-2 cursor-pointer py-0.5">
             <input
               type="checkbox"
@@ -80,6 +93,15 @@ stays readable while the panel is closed.
           <div class="flex flex-col gap-1.5">
             <span class="text-xs font-medium text-base-content/60">Label</span>
             {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-label-selected" all_source="labels" selected_source="filters.label" placeholder="Filter by label" no_create=True %}
+            <div
+              class="flex flex-wrap items-center gap-1.5"
+              x-show="filters.label.length"
+              x-cloak
+            >
+              <template x-for="id in filters.label" :key="id">
+                <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabelFilter(id)"></tag-chip>
+              </template>
+            </div>
           </div>
         {% endif %}
         <div class="flex flex-col gap-1.5">

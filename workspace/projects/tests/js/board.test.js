@@ -268,7 +268,7 @@ test('priority and status filter chips resolve their display name and color', ()
   assert.equal(board.filterStatusColor(), '');
 });
 
-test('applyFilters rewrites the URL and refetches the content', () => {
+test('applyFilters rewrites the URL and refetches the task list only', () => {
   const board = panelBoard();
   const fetched = [];
   const replaced = [];
@@ -279,8 +279,10 @@ test('applyFilters rewrites the URL and refetches the content', () => {
   assert.deepStrictEqual(Array.from(replaced), [
     '/projects/p/board?task=u1&priority=high',
   ]);
+  // 'task-collection', not 'project-content': swapping the filter bar
+  // along with the list would rebuild the open filters popover.
   assert.deepStrictEqual(Array.from(fetched.map((f) => Array.from(f))), [
-    ['/projects/p/board?task=u1&priority=high', 'project-content'],
+    ['/projects/p/board?task=u1&priority=high', 'task-collection'],
   ]);
 });
 

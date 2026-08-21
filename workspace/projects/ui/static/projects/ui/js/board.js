@@ -283,9 +283,10 @@ function projectBoard(config) {
     panelTaskUuid: config.initialTask || null,
     _panelGeneration: 0,
     filters: emptyTaskFilters(),
-    // The filter bar sits inside the content swap every filter change
-    // triggers; the panel only stays open across a swap because this
-    // flag is on the root component, which the swap never re-renders.
+    // Filter changes only swap #task-collection, but view navigations and
+    // SSE refreshes still swap the whole content, filter bar included; the
+    // panel survives those because this flag is on the root component,
+    // which no swap ever re-renders.
     filtersPanelOpen: false,
     selected: [],
 
@@ -429,7 +430,10 @@ function projectBoard(config) {
     applyFilters() {
       const next = taskFilterUrl(window.location.href, this.filters);
       history.replaceState(null, '', next);
-      this.$ajax(next, { target: 'project-content' });
+      // Swap the task list only, never the filter bar above it: replacing
+      // the bar would rebuild the open filters panel and throw away its
+      // in-progress picker state (assignee search text, open dropdowns).
+      this.$ajax(next, { target: 'task-collection' });
     },
 
     syncFiltersFromUrl() {

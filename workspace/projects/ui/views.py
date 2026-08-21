@@ -19,11 +19,13 @@ from workspace.projects.queries import (
     project_users,
     user_project_ids,
 )
+from workspace.projects.serializers import TaskAttachmentSerializer
 from workspace.projects.services.analytics import (
     flow_summary,
     open_task_distribution,
     weekly_flow,
 )
+from workspace.projects.services.attachments import visible_attachments
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.projects import get_or_create_personal_project
@@ -237,6 +239,9 @@ def _task_panel_context(user, project, role, task):
         "panel_events": events,
         "panel_action_ids": action_ids,
         "panel_can_comment": "comment" in action_ids,
+        "panel_attachments": TaskAttachmentSerializer(
+            visible_attachments(user, task), many=True
+        ).data,
         "panel_description_html": render_task_description(task.description),
         "panel_task_data": {
             "uuid": str(task.uuid),

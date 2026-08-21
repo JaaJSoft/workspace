@@ -45,26 +45,20 @@ class MailSendView(APIView):
 
         attachments = list(request.FILES.getlist("attachments", []))
 
-        file_uuids = list(dict.fromkeys(d.get("file_uuids", [])))
+        file_uuids = d.get("file_uuids", [])
         ws_file_handles = []
         if file_uuids:
-            from workspace.files.models import File as WorkspaceFile
             from workspace.files.services.files import FileService
 
-            qs = WorkspaceFile.objects.filter(
-                uuid__in=file_uuids,
-                node_type=WorkspaceFile.NodeType.FILE,
-                deleted_at__isnull=True,
-            )
-            accessible = [f for f in qs if FileService.can_access(request.user, f)]
-            if len(accessible) != len(file_uuids):
+            ws_files = FileService.resolve_accessible_files(request.user, file_uuids)
+            if ws_files is None:
                 return Response(
                     {
                         "detail": "One or more workspace files not found or not accessible."
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            for ws_file in accessible:
+            for ws_file in ws_files:
                 try:
                     handle = ws_file.content.open("rb")
                     handle.name = ws_file.name

@@ -7,6 +7,7 @@ window.mailComposeMixin = function mailComposeMixin() {
     async showCompose(defaults = {}) {
       let restored = false;
       this.compose = { ..._defaultCompose(), ...defaults };
+      this.clearAttachments();
       // Normalize to/cc/bcc to arrays
       this.compose.to = _parseEmails(this.compose.to);
       this.compose.cc = _parseEmails(this.compose.cc);
@@ -68,6 +69,7 @@ window.mailComposeMixin = function mailComposeMixin() {
       }
       document.getElementById('mail-compose-dialog').close();
       this.compose = _defaultCompose();
+      this.clearAttachments();
     },
 
     onComposeAccountChange() {
@@ -182,29 +184,6 @@ window.mailComposeMixin = function mailComposeMixin() {
       for (const e of emails) this.addTag(field, e);
     },
 
-    handleComposeFiles(event) {
-      this.compose.attachments = [...this.compose.attachments, ...event.target.files];
-    },
-
-    async attachPickedFiles() {
-      const files = await AppDialog.filePicker({
-        title: 'Attach from Workspace',
-        message: 'Select files to attach to the email.',
-        okLabel: 'Attach',
-        okClass: 'btn-warning',
-        icon: 'hard-drive',
-        iconClass: 'bg-warning/10 text-warning',
-        multiple: true,
-      });
-      if (!files || files.length === 0) return;
-      const existing = new Set((this.compose.picked_files || []).map(f => f.uuid));
-      for (const f of files) {
-        if (!existing.has(f.uuid)) {
-          this.compose.picked_files.push(f);
-        }
-      }
-    },
-
     // ----- Autocomplete -----
     _acSearch(field) {
       if (this._autocomplete._timer) clearTimeout(this._autocomplete._timer);
@@ -296,8 +275,7 @@ window.mailComposeMixin = function mailComposeMixin() {
       for (const addr of this.compose.to) formData.append('to', addr);
       for (const addr of this.compose.cc) formData.append('cc', addr);
       for (const addr of this.compose.bcc) formData.append('bcc', addr);
-      for (const file of this.compose.attachments) formData.append('attachments', file);
-      for (const wf of (this.compose.picked_files || [])) formData.append('file_uuids', wf.uuid);
+      this.appendAttachmentsTo(formData, 'attachments', 'file_uuids');
 
       try {
         const res = await this._fetch('/api/v1/mail/messages/send', {
@@ -311,6 +289,7 @@ window.mailComposeMixin = function mailComposeMixin() {
           this._clearLocalStorageDraft();
           document.getElementById('mail-compose-dialog').close();
           this.compose = _defaultCompose();
+          this.clearAttachments();
           // Delete the draft after sending
           if (draftId) this._deleteDraft(draftId);
         } else {

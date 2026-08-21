@@ -6,9 +6,11 @@
   id="task-panel"
   class="flex flex-col min-h-0 h-full"
   x-data="taskPanel()"
+  data-attachments-url="{% url 'project-task-attachments' project_uuid=project.uuid task_uuid=panel_task.uuid %}"
 >
   {{ panel_task_data|json_script:"task-panel-data" }}
   {{ panel_action_ids|json_script:"task-panel-actions" }}
+  {{ panel_attachments|json_script:"task-panel-attachments" }}
 
   {# Meta strip: navigation, reference and task actions on a tinted band, #}
   {# visually separated from the editable content below. #}
@@ -337,6 +339,59 @@
         {% endif %}
       </section>
     {% endif %}
+
+    <section>
+      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Attachments</h3>
+      <ul class="flex flex-col gap-1 mb-2" x-show="attachments.length" x-cloak>
+        <template x-for="att in attachments" :key="att.uuid">
+          <li
+            class="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-base-300 bg-base-200/50 text-sm"
+          >
+            <i data-lucide="file" class="w-4 h-4 flex-shrink-0 text-base-content/60"></i>
+            <button
+              type="button"
+              class="flex-1 min-w-0 text-left truncate hover:underline"
+              x-text="att.file.name"
+              :title="att.file.name"
+              @click="openAttachment(att)"
+            ></button>
+            <span
+              class="text-xs text-base-content/50 flex-shrink-0"
+              x-text="formatFileSize(att.file.size)"
+            ></span>
+            <a
+              :href="`/api/v1/files/${att.file.uuid}/content`"
+              download
+              class="btn btn-ghost btn-xs btn-square"
+              title="Download"
+            >
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            </a>
+            {% if "attach" in panel_action_ids %}
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square text-error/70 hover:text-error"
+                title="Remove attachment"
+                @click="unlinkAttachment(att)"
+              >
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+              </button>
+            {% endif %}
+          </li>
+        </template>
+      </ul>
+      <p
+        class="text-sm text-base-content/50 italic mb-2"
+        x-show="!attachments.length && !hasPendingAttachments()"
+        x-cloak
+      >
+        No attachments.
+      </p>
+      {% if "attach" in panel_action_ids %}
+        {% include "ui/partials/attachment_chips.html" with chips_class="flex flex-wrap gap-2 mb-2" %}
+        {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-bottom" button_class="btn btn-outline btn-xs gap-1.5" icon_class="w-3.5 h-3.5" label="Attach" %}
+      {% endif %}
+    </section>
 
     <section>
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Comments</h3>

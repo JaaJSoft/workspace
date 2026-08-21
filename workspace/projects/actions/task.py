@@ -48,6 +48,15 @@ class SetLabelsAction(BaseProjectAction):
 
 
 @ProjectActionRegistry.register
+class AttachFileAction(BaseProjectAction):
+    id = "attach"
+    label = "Attach files"
+    icon = "paperclip"
+    category = ActionCategory.EDIT
+    target_types = ("task",)
+
+
+@ProjectActionRegistry.register
 class CommentTaskAction(BaseProjectAction):
     id = "comment"
     label = "Comment"

@@ -277,6 +277,7 @@ be defined before the parser reaches the markup using it, or server-rendered
     crossorigin="anonymous"
   ></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'ui/js/attachment_input.js' %}"></script>
   <!-- Initial preferences embedded server-side so JS doesn't need to fetch
      /api/v1/settings/chat/preferences on page load. -->
   {{ chat_prefs|json_script:"chat-prefs-data" }}

@@ -1,8 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
-const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/input.js');
+const ctx = loadScripts([
+  'workspace/common/static/ui/js/attachment_input.js',
+  'workspace/chat/ui/static/chat/ui/js/input.js',
+]);
 
 // Minimal composer: handleMentionInput only reads selectionStart/value from the
 // textarea and needs a member list for filterMentionResults.

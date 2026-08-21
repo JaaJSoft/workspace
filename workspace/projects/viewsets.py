@@ -12,6 +12,7 @@ from rest_framework.response import Response
 
 from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.files.services import FileService
 
 from .models import (
     Label,
@@ -19,6 +20,7 @@ from .models import (
     ProjectMember,
     Subtask,
     Task,
+    TaskAttachment,
     TaskComment,
     TaskEvent,
     TaskStatus,
@@ -32,6 +34,8 @@ from .serializers import (
     ProjectSerializer,
     ReorderSerializer,
     SubtaskSerializer,
+    TaskAttachmentCreateSerializer,
+    TaskAttachmentSerializer,
     TaskCommentBodySerializer,
     TaskCommentSerializer,
     TaskMoveSerializer,
@@ -40,6 +44,13 @@ from .serializers import (
     TaskStatusSerializer,
 )
 from .services.assignments import notify_assigned
+from .services.attachments import (
+    MAX_ATTACHMENTS_PER_REQUEST,
+    MAX_UPLOAD_BYTES,
+    attach_files,
+    uploads_folder,
+    visible_attachments,
+)
 from .services.comments import notify_comment_added, notify_comment_edited
 from .services.estimates import format_estimate
 from .services.events import record_task_event
@@ -721,3 +732,85 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         if comment.author_id != request.user.pk:
             raise PermissionDenied("You can only modify your own comments.")
         return comment
+
+
+@extend_schema(tags=["Projects"])
+class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
+    serializer_class = TaskAttachmentSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        try:
+            self.task = self.project.tasks.get(uuid=kwargs["task_uuid"])
+        except Task.DoesNotExist:
+            raise Http404 from None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return TaskAttachment.objects.none()
+        return self.task.attachments.select_related("file", "added_by")
+
+    def _visible(self):
+        return visible_attachments(self.request.user, self.task)
+
+    def list(self, request, *args, **kwargs):
+        return Response(
+            {"attachments": self.get_serializer(self._visible(), many=True).data}
+        )
+
+    @extend_schema(request=TaskAttachmentCreateSerializer)
+    def create(self, request, *args, **kwargs):
+        self._require_writable()
+        ser = TaskAttachmentCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        uploads = request.FILES.getlist("files")
+        file_uuids = ser.validated_data["file_uuids"]
+
+        if not uploads and not file_uuids:
+            return Response(
+                {"detail": "Provide files or file_uuids."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(uploads) + len(file_uuids) > MAX_ATTACHMENTS_PER_REQUEST:
+            return Response(
+                {
+                    "detail": "Maximum "
+                    f"{MAX_ATTACHMENTS_PER_REQUEST} attachments per request."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        for f in uploads:
+            if f.size > MAX_UPLOAD_BYTES:
+                return Response(
+                    {"detail": f'File "{f.name}" exceeds the 50 MB limit.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        picked = FileService.resolve_accessible_files(request.user, file_uuids)
+        if picked is None:
+            return Response(
+                {"detail": "One or more files not found or not accessible."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        folder = uploads_folder(request.user) if uploads else None
+        uploaded = [
+            FileService.create_file(request.user, f.name, folder, content=f)
+            for f in uploads
+        ]
+        attach_files(request.user, self.task, uploaded + picked)
+        return Response(
+            {"attachments": self.get_serializer(self._visible(), many=True).data},
+            status=status.HTTP_201_CREATED,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_writable()
+        link = self.get_queryset().filter(uuid=kwargs["uuid"]).first()
+        if link is None:
+            raise Http404
+        link.delete()
+        record_task_event(self.task, type=TaskEvent.Type.DETACHED, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)

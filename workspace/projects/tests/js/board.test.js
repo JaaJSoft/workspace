@@ -11,6 +11,7 @@ const {
 const ctx = loadScripts(
   [
     'workspace/common/static/ui/js/tag_chip.js',
+    'workspace/common/static/ui/js/attachment_input.js',
     'workspace/projects/ui/static/projects/ui/js/board.js',
   ],
   { ...CUSTOM_ELEMENT_STUBS, URL }

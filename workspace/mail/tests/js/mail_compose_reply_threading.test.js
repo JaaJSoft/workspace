@@ -74,6 +74,9 @@ function makeInstance() {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
     },
     _refreshDraftsFolderCounts() {},
+    // From attachmentInputMixin, spread into mailApp's root in production.
+    appendAttachmentsTo() {},
+    clearAttachments() {},
     ...mixin(),
   };
   for (const key of Object.keys(instance)) {

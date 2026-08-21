@@ -771,6 +771,9 @@ function projectBoard(config) {
 
 function taskPanel() {
   return {
+    ...window.attachmentInputMixin({
+      pickerMessage: 'Select files to attach to the task.',
+    }),
     data: {
       uuid: null,
       title: '',
@@ -794,6 +797,9 @@ function taskPanel() {
     editingSubtask: null,
     subtaskDraft: '',
     draggingSubtask: null,
+    attachments: [],
+    _attachmentsUrl: '',
+    _attachmentsSaving: false,
 
     init() {
       this.data = JSON.parse(
@@ -803,6 +809,11 @@ function taskPanel() {
       this.actions = JSON.parse(
         document.getElementById('task-panel-actions').textContent
       );
+      this._attachmentsUrl = this.$el.dataset.attachmentsUrl;
+      const attachmentsEl = document.getElementById('task-panel-attachments');
+      this.attachments = attachmentsEl
+        ? JSON.parse(attachmentsEl.textContent)
+        : [];
       // members-data lives on the page shell, not in the swapped panel, so
       // it survives alpine-ajax panel reloads.
       const membersEl = document.getElementById('members-data');
@@ -1054,6 +1065,69 @@ function taskPanel() {
         if (window.AppAlert) AppAlert.error('Could not reorder the checklist.');
         this.refresh();
       }
+    },
+
+    // ── Attachments ──────────────────────────────────────────
+    // Immediate mode: staged files (local uploads and picked workspace
+    // files alike) are flushed to the server as soon as they land.
+    attachmentsAdded() {
+      this.flushAttachments();
+    },
+
+    async flushAttachments() {
+      if (!this.can('attach')) {
+        this.clearAttachments();
+        return;
+      }
+      if (this._attachmentsSaving || !this.hasPendingAttachments()) return;
+      this._attachmentsSaving = true;
+      const formData = new FormData();
+      this.appendAttachmentsTo(formData);
+      try {
+        const resp = await fetch(this._attachmentsUrl, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          credentials: 'same-origin',
+          body: formData,
+        });
+        if (!resp.ok) throw new Error('attach failed');
+        const data = await resp.json();
+        this.attachments = data.attachments;
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not attach the files.');
+      } finally {
+        this.clearAttachments();
+        this._attachmentsSaving = false;
+        // Anything staged while the request was in flight.
+        if (this.hasPendingAttachments()) this.flushAttachments();
+      }
+    },
+
+    async unlinkAttachment(att) {
+      if (!this.can('attach')) return;
+      try {
+        const resp = await fetch(`${this._attachmentsUrl}/${att.uuid}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          credentials: 'same-origin',
+        });
+        if (!resp.ok && resp.status !== 404) throw new Error('unlink failed');
+        this.attachments = this.attachments.filter((a) => a.uuid !== att.uuid);
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not remove the attachment.');
+      }
+    },
+
+    openAttachment(att) {
+      window.dispatchEvent(
+        new CustomEvent('open-file-viewer', {
+          detail: {
+            uuid: att.file.uuid,
+            name: att.file.name,
+            type: att.file.type,
+          },
+        })
+      );
     },
 
     copyLink(reference) {

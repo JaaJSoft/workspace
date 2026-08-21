@@ -30,9 +30,56 @@
       </div>
     </div>
   </div>
+
+  <div class="card bg-base-100 border border-base-300 shadow-sm mt-6" x-data="reminderHourForm({{ reminder_hour }})">
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="alarm-clock" class="w-5 h-5"></i>
+        Task reminders
+      </h2>
+      <p class="text-sm text-base-content/60 mt-1">Reminders for tasks assigned to you are sent once when they fall due and once when they become overdue, after this hour of your day.</p>
+      <div class="mt-4">
+        <select
+          class="select select-bordered w-full max-w-xs"
+          x-model.number="hour"
+          @change="save()"
+        >
+          <template x-for="h in 24" :key="h">
+            <option :value="h - 1" x-text="String(h - 1).padStart(2, '0') + ':00'" :selected="h - 1 === hour"></option>
+          </template>
+        </select>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
+  function reminderHourForm(initial) {
+    return {
+      hour: initial,
+      previous: initial,
+      save() {
+        const revert = () => {
+          this.hour = this.previous;
+          if (window.AppAlert) window.AppAlert.error('Failed to save reminder hour');
+        };
+        fetch('/api/v1/settings/projects/reminder_hour', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+          },
+          body: JSON.stringify({
+            value: this.hour
+          }),
+        }).then((resp) => {
+          if (!resp.ok) revert();
+          else this.previous = this.hour;
+        }).catch(revert);
+      },
+    };
+  }
+
   function timezonePickerForm() {
     const html = document.documentElement;
     return {

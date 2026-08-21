@@ -507,6 +507,23 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["value"], "dark")
 
+    def test_put_rejects_out_of_range_reminder_hour(self):
+        for value in [-1, 24, "8", 7.5, True]:
+            resp = self.client.put(
+                self._url("projects", "reminder_hour"),
+                {"value": value},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 400, value)
+
+    def test_put_accepts_valid_reminder_hour(self):
+        resp = self.client.put(
+            self._url("projects", "reminder_hour"),
+            {"value": 10},
+            format="json",
+        )
+        self.assertIn(resp.status_code, (200, 201))
+
     def test_put_creates_setting(self):
         resp = self.client.put(
             self._url("core", "theme"),

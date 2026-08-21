@@ -508,34 +508,10 @@ window.mailMessagesMixin = function mailMessagesMixin() {
     },
 
     // ----- Save attachment to Files -----
-    async saveAttachmentToFiles(attachmentUuid) {
-      const folder = await AppDialog.folderPicker({
-        title: 'Save to Files',
-        message: 'Choose a destination folder.',
-        okLabel: 'Save',
-        okClass: 'btn-warning',
-        icon: 'folder-down',
-        iconClass: 'bg-warning/10 text-warning',
-      });
-      if (!folder) return;
-
-      const body = {};
-      if (folder.uuid) body.folder_id = folder.uuid;
-
-      try {
-        const res = await this._fetch(`/api/v1/mail/attachments/${attachmentUuid}/save-to-files`, {
-          method: 'POST',
-          body,
-        });
-        if (res.ok) {
-          AppDialog.message({ title: 'Saved', message: 'Attachment saved to Files.', icon: 'check-circle', iconClass: 'bg-success/10 text-success' });
-        } else {
-          const err = await res.json().catch(() => ({}));
-          AppDialog.error({ message: err.detail || 'Failed to save attachment.' });
-        }
-      } catch (e) {
-        AppDialog.error({ message: 'Failed to save attachment.' });
-      }
+    saveAttachmentToFiles(attachmentUuid) {
+      return this.promptSaveAttachmentToFiles(
+        `/api/v1/mail/attachments/${attachmentUuid}/save-to-files`
+      );
     },
 
     // ----- Message navigation -----

@@ -142,6 +142,9 @@ function mailApp() {
     // ── Compose mailApp from domain mixins ─────────────────
     // Each mixin returns an object literal with its own methods. They all
     // share the same `this` at runtime — state stays in this root object.
+    ...window.attachmentInputMixin({
+      pickerMessage: 'Select files to attach to the email.',
+    }),
     ...mailAccountsMixin(),
     ...mailFoldersMixin(),
     ...mailMessagesMixin(),
@@ -503,7 +506,7 @@ function _defaultCompose() {
   return {
     account_id: '', to: [], cc: [], bcc: [],
     subject: '', body: '', is_reply: false, reply_message_id: null,
-    attachments: [], picked_files: [], sending: false, error: '',
+    sending: false, error: '',
     draft_id: null, saving: false, last_saved: null,
     _saveTimer: null, _sigBlock: '',
   };

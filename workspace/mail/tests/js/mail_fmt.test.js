@@ -11,6 +11,7 @@ function makeApp(userTz) {
     document: { getElementById: () => null },
     // Domain mixins live in separate files; the formatters under test are
     // defined in mail.js itself, so empty stubs are enough.
+    attachmentInputMixin: mixinStub,
     mailAccountsMixin: mixinStub,
     mailFoldersMixin: mixinStub,
     mailMessagesMixin: mixinStub,

@@ -1,0 +1,27 @@
+{% comment %}
+Dual-source attach menu: local upload + "From workspace" picker. Requires
+the enclosing component to spread attachmentInputMixin() and the
+attachment_chips.html partial (which carries the hidden file input).
+
+Params:
+- menu_class: dropdown positioning classes (default "dropdown-top")
+- button_class: trigger button classes (default "btn btn-ghost btn-sm btn-square")
+- icon_class: paperclip icon size classes (default "w-4 h-4")
+{% endcomment %}
+<div class="dropdown {{ menu_class|default:'dropdown-top' }}">
+  <button
+    type="button"
+    tabindex="0"
+    class="{{ button_class|default:'btn btn-ghost btn-sm btn-square' }}"
+    title="Attach files"
+  >
+    <i data-lucide="paperclip" class="{{ icon_class|default:'w-4 h-4' }}"></i>
+  </button>
+  <ul
+    tabindex="0"
+    class="dropdown-content menu menu-sm gap-1 bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50"
+  >
+    <li><a @click="document.activeElement.blur(); openFileDialog()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
+    <li><a @click="document.activeElement.blur(); attachFromWorkspace()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
+  </ul>
+</div>

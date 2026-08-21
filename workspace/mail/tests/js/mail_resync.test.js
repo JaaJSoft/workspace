@@ -12,6 +12,7 @@ const { loadScript } = require('../../../common/tests/js/loader');
 function makeApp() {
   const ctx = loadScript('workspace/mail/ui/static/mail/ui/js/mail.js', {
     document: { getElementById: () => null },
+    attachmentInputMixin: () => ({}),
     mailAccountsMixin: () => ({}),
     mailFoldersMixin: () => ({}),
     mailMessagesMixin: () => ({}),

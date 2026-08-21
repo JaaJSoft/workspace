@@ -3,11 +3,10 @@
 // indicator, save-attachment-to-files action.
 window.chatInputMixin = function chatInputMixin() {
   return {
-    // ── Pending file uploads ─────────────────────────────────
-    pendingFiles: [],
-    pendingPickedFiles: [],
-    isDraggingOver: false,
-    _dragCounter: 0,
+    // ── Pending file uploads (shared dual-source input) ──────
+    ...window.attachmentInputMixin({
+      pickerMessage: 'Select files to attach to the message.',
+    }),
 
     // ── Typing indicator ─────────────────────────────────────
     typingUsers: {},
@@ -338,141 +337,12 @@ window.chatInputMixin = function chatInputMixin() {
     },
 
     // ── File upload (composer) ────────────────────────────────
-    openFileDialog() {
-      this.$refs.fileInput?.click();
-    },
-
-    handleFileSelect(e) {
-      const files = e.target.files;
-      if (files?.length) this.addFiles(files);
-      e.target.value = '';
-    },
-
-    addFiles(fileList) {
-      const existing = new Set(this.pendingFiles.map(f => f.name + f.size));
-      for (const f of fileList) {
-        if (existing.has(f.name + f.size)) continue;
-        // Generate preview URL for images and videos
-        if (f.type.startsWith('image/') || f.type.startsWith('video/')) {
-          f._preview = URL.createObjectURL(f);
-        }
-        this.pendingFiles.push(f);
-      }
-    },
-
-    removeFile(idx) {
-      const file = this.pendingFiles[idx];
-      if (file?._preview) URL.revokeObjectURL(file._preview);
-      this.pendingFiles.splice(idx, 1);
-    },
-
-    isImageFile(file) {
-      return file.type?.startsWith('image/');
-    },
-
-    isVideoFile(file) {
-      return file.type?.startsWith('video/');
-    },
-
-    handleDragEnter(e) {
-      if (!e.dataTransfer?.types?.includes('Files')) return;
-      this._dragCounter++;
-      this.isDraggingOver = true;
-    },
-
-    handleDragOver(e) {
-      e.dataTransfer.dropEffect = 'copy';
-    },
-
-    handleDragLeave(e) {
-      this._dragCounter--;
-      if (this._dragCounter <= 0) {
-        this._dragCounter = 0;
-        this.isDraggingOver = false;
-      }
-    },
-
-    handleDrop(e) {
-      this._dragCounter = 0;
-      this.isDraggingOver = false;
-      const files = e.dataTransfer?.files;
-      if (files?.length) this.addFiles(files);
-    },
-
-    async saveAttachmentToFiles(attachmentUuid) {
-      const folder = await AppDialog.folderPicker({
-        title: 'Save to Files',
-        message: 'Choose a destination folder.',
-        okLabel: 'Save',
-        okClass: 'btn-warning',
-        icon: 'folder-down',
-        iconClass: 'bg-warning/10 text-warning',
-      });
-      if (!folder) return;
-
-      try {
-        const body = {};
-        if (folder.uuid) body.folder_id = folder.uuid;
-        const resp = await fetch(`/api/v1/chat/attachments/${attachmentUuid}/save-to-files`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken(),
-          },
-          credentials: 'same-origin',
-          body: JSON.stringify(body),
-        });
-        if (resp.ok) {
-          AppDialog.message({ title: 'Saved', message: 'File saved to your Files.', icon: 'check-circle', iconClass: 'bg-success/10 text-success' });
-        } else {
-          const data = await resp.json().catch(() => ({}));
-          AppDialog.error({ message: data.detail || 'Failed to save file.' });
-        }
-      } catch (e) {
-        console.error('Failed to save attachment to files', e);
-      }
-    },
-
-    async attachFromWorkspace() {
-      const files = await AppDialog.filePicker({
-        title: 'Attach from Workspace',
-        message: 'Select files to attach to the message.',
-        okLabel: 'Attach',
-        okClass: 'btn-info',
-        icon: 'hard-drive',
-        iconClass: 'bg-info/10 text-info',
-        multiple: true,
-      });
-      if (!files || files.length === 0) return;
-      if (!this.pendingPickedFiles) this.pendingPickedFiles = [];
-      const existing = new Set(this.pendingPickedFiles.map(f => f.uuid));
-      for (const f of files) {
-        if (!existing.has(f.uuid)) {
-          this.pendingPickedFiles.push(f);
-        }
-      }
-    },
-
-    removePickedFile(idx) {
-      if (this.pendingPickedFiles) {
-        this.pendingPickedFiles.splice(idx, 1);
-      }
-    },
-
-    handlePaste(e) {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const files = [];
-      for (const item of items) {
-        if (item.kind === 'file') {
-          const f = item.getAsFile();
-          if (f) files.push(f);
-        }
-      }
-      if (files.length > 0) {
-        e.preventDefault();
-        this.addFiles(files);
-      }
+    // Staging, drag-drop, paste and the workspace picker come from
+    // attachmentInputMixin (spread above).
+    saveAttachmentToFiles(attachmentUuid) {
+      return this.promptSaveAttachmentToFiles(
+        `/api/v1/chat/attachments/${attachmentUuid}/save-to-files`
+      );
     },
 
     // ── Typing indicator ─────────────────────────────────────

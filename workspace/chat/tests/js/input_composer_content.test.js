@@ -1,8 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
-const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/input.js');
+const ctx = loadScripts([
+  'workspace/common/static/ui/js/attachment_input.js',
+  'workspace/chat/ui/static/chat/ui/js/input.js',
+]);
 
 // hasComposerContent drives the mobile mic/send swap: the mic shows only while
 // the composer has nothing to send, the send button only once it has.

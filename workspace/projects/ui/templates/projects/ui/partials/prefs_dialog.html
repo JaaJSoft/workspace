@@ -38,12 +38,18 @@ Preferences item; rendered once per full page load.
         @change="save()"
       >
         <template x-for="h in 24" :key="h">
-          <option :value="h - 1" x-text="String(h - 1).padStart(2, '0') + ':00'" :selected="h - 1 === hour"></option>
+          <option
+            :value="h - 1"
+            x-text="String(h - 1).padStart(2, '0') + ':00'"
+            :selected="h - 1 === hour"
+          ></option>
         </template>
       </select>
     </label>
   </div>
-  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
 </dialog>
 
 <script>

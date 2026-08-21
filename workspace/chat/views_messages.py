@@ -224,21 +224,14 @@ class MessageListView(CacheControlMixin, APIView):
 
         picked_files = []
         if file_uuids:
-            file_uuids = list(dict.fromkeys(file_uuids))
-            from workspace.files.models import File as WorkspaceFile
-
-            qs = WorkspaceFile.objects.filter(
-                uuid__in=file_uuids,
-                node_type=WorkspaceFile.NodeType.FILE,
-                deleted_at__isnull=True,
+            picked_files = FileService.resolve_accessible_files(
+                request.user, file_uuids
             )
-            accessible = [f for f in qs if FileService.can_access(request.user, f)]
-            if len(accessible) != len(file_uuids):
+            if picked_files is None:
                 return Response(
                     {"detail": "One or more files not found or not accessible."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            picked_files = accessible
 
         # Extract mentions and resolve to real usernames
         mention_map = {}

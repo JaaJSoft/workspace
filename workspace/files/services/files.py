@@ -597,6 +597,32 @@ class FileService:
         """Check whether *user* can access *file_obj*."""
         return FileService.get_permission(user, file_obj) is not None
 
+    @staticmethod
+    def resolve_accessible_files(user, file_uuids):
+        """Resolve *file_uuids* to live, accessible ``File`` rows, or None.
+
+        Deduplicates the input, keeps only non-trashed regular files the
+        user can access (permissions checked in one bulk pass), and returns
+        None as soon as a single uuid is unknown, trashed, a folder or out
+        of reach - callers attach all-or-nothing and must not leak which of
+        the three it was.
+        """
+        file_uuids = list(dict.fromkeys(file_uuids))
+        if not file_uuids:
+            return []
+        candidates = list(
+            File.objects.filter(
+                uuid__in=file_uuids,
+                node_type=File.NodeType.FILE,
+                deleted_at__isnull=True,
+            )
+        )
+        permissions = FileService.get_permissions_bulk(user, candidates)
+        accessible = [f for f in candidates if permissions[f.pk] is not None]
+        if len(accessible) != len(file_uuids):
+            return None
+        return accessible
+
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------

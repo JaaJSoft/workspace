@@ -19,6 +19,7 @@ need the handler taught about this filter as well.
 
 import logging
 import re
+from collections.abc import Mapping
 
 from django.views.debug import SafeExceptionReporterFilter
 
@@ -44,8 +45,14 @@ def is_sensitive_name(name) -> bool:
 
 
 def redact(value):
-    """Redact *value*, walking into mappings and sequences by key name."""
-    if isinstance(value, dict):
+    """Redact *value*, walking into mappings and sequences by key name.
+
+    Every Mapping, not only dict: logging accepts any of them as a record's
+    named arguments, and a read-only or custom one is still a mapping whose
+    keys name secrets. A plain dict comes back - the redacted copy has no
+    reason to keep the original's type, and some cannot be rebuilt anyway.
+    """
+    if isinstance(value, Mapping):
         return {
             key: REDACTED if is_sensitive_name(key) else redact(inner)
             for key, inner in value.items()
@@ -69,7 +76,7 @@ class SecretRedactingFilter(logging.Filter):
     """
 
     def filter(self, record):
-        if isinstance(record.args, dict):
+        if isinstance(record.args, Mapping):
             record.args = redact(record.args)
         elif isinstance(record.args, tuple):
             if self._names_a_secret_positionally(record.msg):

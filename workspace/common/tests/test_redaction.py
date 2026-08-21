@@ -1,4 +1,5 @@
 import logging
+from types import MappingProxyType
 
 from django.conf import settings
 from django.test import RequestFactory, TestCase
@@ -41,6 +42,57 @@ class SensitiveNameTests(TestCase):
 
 
 class SecretRedactingFilterTests(TestCase):
+    def _render_through_logger(self, msg, args):
+        """The production path, which a hand-built LogRecord does not reproduce.
+
+        logging turns a lone Mapping argument into ``record.args`` itself, and
+        passing one straight to ``LogRecord(...)`` raises instead. A test
+        written on that shortcut proves nothing about what ships.
+        """
+        rendered = []
+
+        class _Sink(logging.Handler):
+            def emit(self, record):
+                rendered.append(record.getMessage())
+
+        logger = logging.getLogger("workspace.test.redaction")
+        logger.handlers.clear()
+        logger.filters.clear()
+        logger.propagate = False
+        logger.setLevel(logging.DEBUG)
+        handler = _Sink()
+        handler.addFilter(SecretRedactingFilter())
+        logger.addHandler(handler)
+        self.addCleanup(logger.handlers.clear)
+
+        logger.warning(msg, args)
+        return rendered[0]
+
+    def test_redacts_a_secret_in_a_mapping_that_is_not_a_dict(self):
+        """logging accepts any collections.abc.Mapping as named arguments, so
+        a filter that only knows dict lets the rest through untouched - and
+        silently, which is the worst way for a redaction filter to fail."""
+        rendered = self._render_through_logger(
+            "wrapped_sig_priv=%(wrapped_sig_priv)s",
+            MappingProxyType({"wrapped_sig_priv": "SECRETVALUE"}),
+        )
+        self.assertNotIn("SECRETVALUE", rendered)
+        self.assertIn(REDACTED, rendered)
+
+    def test_redacts_a_secret_in_a_plain_dict_through_the_same_path(self):
+        rendered = self._render_through_logger(
+            "wrapped_sig_priv=%(wrapped_sig_priv)s",
+            {"wrapped_sig_priv": "SECRETVALUE"},
+        )
+        self.assertNotIn("SECRETVALUE", rendered)
+
+    def test_redacts_a_mapping_nested_inside_a_dict(self):
+        rendered = self._render_through_logger(
+            "body=%(body)s",
+            {"body": MappingProxyType({"wrapped_kex_priv": "SECRETVALUE"})},
+        )
+        self.assertNotIn("SECRETVALUE", rendered)
+
     def _render(self, msg, *args):
         record = logging.LogRecord(
             "workspace.test", logging.INFO, __file__, 1, msg, args or None, None

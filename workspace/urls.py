@@ -64,6 +64,7 @@ api_urlpatterns = [
     path("", include("workspace.projects.urls")),
     path("", include("workspace.ai.urls")),
     path("", include("workspace.imports.urls")),
+    path("", include("workspace.vault.urls")),
 ]
 
 ui_urlpatterns = [

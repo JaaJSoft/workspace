@@ -1,18 +1,23 @@
-"""Two traps live here, and both fail silently in production.
+"""Two traps live here, and both fail silently rather than loudly.
 
-`AnonRateThrottle` returns no cache key for an authenticated request, so a
-per-IP limit built on it never fires. And `override_settings(REST_FRAMEWORK=…)`
-replaces the whole dictionary while DRF caches its own view of it, so a test
-that pins only the rates strips the authentication classes and reads stale
-values unless `api_settings` is reloaded.
+`AnonRateThrottle` returns no cache key once a request is authenticated, so a
+per-IP limit built on it never fires on an authenticated endpoint - it reads
+as a limit and is not one.
+
+And a test cannot retune a rate with `override_settings` alone:
+`SimpleRateThrottle.THROTTLE_RATES` is a class attribute read once when
+`rest_framework.throttling` is imported, so the setting change never reaches
+it and the test silently exercises the production rate.
 """
+
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase, override_settings
-from rest_framework.settings import api_settings
+from django.test import TestCase
 from rest_framework.test import APIRequestFactory
+from rest_framework.throttling import SimpleRateThrottle
 
 from workspace.vault import throttling
 from workspace.vault.throttling import IpRateThrottle
@@ -22,22 +27,16 @@ User = get_user_model()
 ENVELOPE_URL = "/api/v1/vault/account/envelope"
 
 
-def rest_framework_with(rates):
-    """The real REST_FRAMEWORK setting with *rates* merged into its own."""
-    merged = dict(settings.REST_FRAMEWORK)
-    merged["DEFAULT_THROTTLE_RATES"] = {
-        **settings.REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {}),
-        **rates,
-    }
-    return merged
+def with_rates(**rates):
+    """Patch the throttle rate table where DRF actually reads it."""
+    return patch.dict(SimpleRateThrottle.THROTTLE_RATES, rates)
 
 
 class IpRateThrottleTests(TestCase):
     def tearDown(self):
         cache.clear()
-        api_settings.reload()
 
-    def test_the_cache_key_ignores_the_authenticated_user(self):
+    def test_the_cache_key_is_the_ip_and_not_the_user(self):
         class _Probe(IpRateThrottle):
             scope = "vault.account.envelope.ip"
 
@@ -56,15 +55,13 @@ class IpRateThrottleTests(TestCase):
         self.assertNotEqual(keys[0], _Probe().get_cache_key(elsewhere, None))
 
     def test_two_users_behind_one_ip_share_the_budget(self):
-        """The per-IP limit exists to catch exfiltration spread across stolen
-        cookies. Keyed on the user it would just be the per-user limit again."""
+        """The per-IP limit exists to catch an exfiltration spread across
+        stolen session cookies. Keyed on the user it would just be the
+        per-user limit again."""
         alice = User.objects.create_user(username="alice", password="pw")
         bob = User.objects.create_user(username="bob", password="pw")
 
-        with override_settings(
-            REST_FRAMEWORK=rest_framework_with({"vault.account.envelope.ip": "1/hour"})
-        ):
-            api_settings.reload()
+        with with_rates(**{"vault.account.envelope.ip": "1/hour"}):
             self.client.force_login(alice)
             first = self.client.get(ENVELOPE_URL)
             self.client.force_login(bob)
@@ -73,6 +70,17 @@ class IpRateThrottleTests(TestCase):
         self.assertNotEqual(first.status_code, 429)
         self.assertEqual(second.status_code, 429)
         self.assertIn("Retry-After", second)
+
+    def test_the_per_user_limit_does_not_follow_the_user_to_another_ip(self):
+        alice = User.objects.create_user(username="alice2", password="pw")
+        self.client.force_login(alice)
+
+        with with_rates(**{"vault.account.envelope.user": "1/hour"}):
+            first = self.client.get(ENVELOPE_URL, REMOTE_ADDR="10.0.0.9")
+            second = self.client.get(ENVELOPE_URL, REMOTE_ADDR="10.0.0.10")
+
+        self.assertNotEqual(first.status_code, 429)
+        self.assertEqual(second.status_code, 429)
 
 
 class ScopeTests(TestCase):

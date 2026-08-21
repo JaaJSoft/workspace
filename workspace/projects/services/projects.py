@@ -3,11 +3,13 @@ from django.db import IntegrityError, transaction
 from ..models import Project, ProjectMember, TaskStatus
 from .references import generate_base_key, personal_key_base, unique_project_key
 
+# Colors come from the shared tag-chip palette (TAG_CHIP_COLORS) so the
+# column settings picker highlights them as the selected swatch.
 DEFAULT_STATUSES = [
-    ("Backlog", TaskStatus.Category.BACKLOG),
-    ("To do", TaskStatus.Category.ACTIVE),
-    ("In progress", TaskStatus.Category.ACTIVE),
-    ("Done", TaskStatus.Category.DONE),
+    ("Backlog", TaskStatus.Category.BACKLOG, "#a855f7"),
+    ("To do", TaskStatus.Category.ACTIVE, "#3b82f6"),
+    ("In progress", TaskStatus.Category.ACTIVE, "#eab308"),
+    ("Done", TaskStatus.Category.DONE, "#22c55e"),
 ]
 
 
@@ -36,8 +38,8 @@ def create_project(
         if groups:
             project.groups.set(groups)
         TaskStatus.objects.bulk_create(
-            TaskStatus(project=project, name=n, category=c, position=i)
-            for i, (n, c) in enumerate(DEFAULT_STATUSES)
+            TaskStatus(project=project, name=n, category=c, color=color, position=i)
+            for i, (n, c, color) in enumerate(DEFAULT_STATUSES)
         )
         ProjectMember.objects.create(
             project=project, user=user, role=ProjectMember.Role.ADMIN

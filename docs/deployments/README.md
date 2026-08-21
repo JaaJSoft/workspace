@@ -60,21 +60,17 @@ Some proxies - notably Cloudflare, AWS ALB, GCP Load Balancer, Azure Front Door 
 
 ### Per-IP rate limits behind a proxy
 
-A few endpoints carry a per-IP limit on top of their per-user one, so that abuse spread across
-several stolen session cookies is still visible. Behind a proxy every request arrives from the
-proxy's own address, and `X-Forwarded-For` is the only thing naming the real client - but that
-header is written by the caller, and a different value per request would hand out a fresh limit
-bucket every time. It is therefore ignored unless you declare how many hops are in front:
+Some endpoints limit by client IP as well as by user. Behind a proxy every request arrives from the
+proxy's address, so `X-Forwarded-For` is ignored - a caller-supplied header would buy a fresh bucket
+per request - until you declare how many hops are in front:
 
-| Variable      | Default | Effect                                                                  |
-|---------------|---------|-------------------------------------------------------------------------|
-| `NUM_PROXIES` | unset   | Number of proxies between client and app; the peer address is used when unset |
+| Variable      | Default | Effect                                                            |
+|---------------|---------|--------------------------------------------------------------------|
+| `NUM_PROXIES` | unset   | Hops between client and app; the peer address is used when unset  |
 
-**Set it if you run behind a proxy.** Leaving it unset there is safe but blunt: every user shares
-the proxy's single bucket, so a busy instance will hand legitimate people `429` responses. Set it
-to the length of your proxy chain, and make sure that chain **overwrites** `X-Forwarded-For` rather
-than appending to whatever the client sent - otherwise the hop you end up trusting is the client's
-own invention.
+Leaving it unset behind a proxy is safe but blunt: every user shares one bucket, so a busy instance
+answers legitimate people with `429`. Set it to the length of your chain, and make sure that chain
+**overwrites** `X-Forwarded-For` rather than appending to it.
 
 ### ⚠️ Deploying without a reverse proxy is unsafe
 

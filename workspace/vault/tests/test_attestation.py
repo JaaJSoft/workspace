@@ -111,10 +111,10 @@ class VerifyKexPubAttestationTests(SimpleTestCase):
         with self.assertRaises(AttestationError):
             verify_kex_pub_attestation(ACCOUNT_UUID, kex_pub, sig_pub, "!!!not base64")
 
-    def test_refuses_base64url_that_decodes_to_no_bytes(self):
-        """`urlsafe_b64decode` discards characters outside the alphabet, so
-        "====" and "!!!!" both decode to b"" - and an empty signature reaches
-        the algorithm-byte check as an index into nothing."""
+    def test_refuses_a_signature_that_would_decode_to_nothing(self):
+        """Under a permissive decoder these discard down to b"", and an empty
+        signature reaches the algorithm-byte check as an index into nothing.
+        The strict alphabet refuses them outright instead."""
         kex_pub, sig_pub, _ = build_attestation()
         for text in ("====", "!!!!"):
             with self.subTest(text=text):
@@ -167,6 +167,19 @@ class DecodeHelperTests(SimpleTestCase):
         short buffer instead of a refusal."""
         with self.assertRaises(AttestationError):
             decode_base64url("AA!!AA")
+
+    def test_refuses_standard_base64_characters(self):
+        """`+` and `/` survive the translation to the standard alphabet and
+        are valid there, so they decoded to the same bytes as their base64url
+        spellings - one value with two accepted spellings."""
+        for text in ("AA+A", "AA/A"):
+            with self.subTest(text=text):
+                with self.assertRaises(AttestationError):
+                    decode_base64url(text)
+
+    def test_accepts_the_base64url_spellings_of_the_same_bytes(self):
+        self.assertEqual(decode_base64url("AA-A"), bytes([0x00, 0x0F, 0x80]))
+        self.assertEqual(decode_base64url("AA_A"), bytes([0x00, 0x0F, 0xC0]))
 
     def test_refuses_a_value_that_is_not_text(self):
         for value in (None, 42, b"bytes"):

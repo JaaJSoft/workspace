@@ -38,15 +38,23 @@ class AttestationError(ValueError):
 
 
 def decode_base64url(text) -> bytes:
-    """Decode *text*, refusing anything that is not exactly base64url.
+    """Decode *text*: the base64url alphabet, padding optional, nothing else.
 
-    ``validate=True`` matters: the default silently drops every character
-    outside the alphabet, so ``"===="`` and ``"!!!!"`` both decode to no bytes
-    at all and arrive downstream as an empty key or an empty signature rather
-    than as a refusal.
+    Two refusals the defaults do not give. ``validate=True``, because the
+    default silently drops every character outside the alphabet, so ``"===="``
+    and ``"!!!!"`` decode to no bytes at all and reach the callers as an empty
+    key or an empty signature rather than as a refusal. And the standard
+    alphabet's ``+`` and ``/``, which survive the translation below and are
+    valid on the far side of it: accepting them would give one value two
+    accepted spellings, and base64url is the transport form.
+
+    Between them there is no input left that decodes to nothing, so no guard
+    against an empty result follows.
     """
     if not isinstance(text, str) or not text:
         raise AttestationError("expected non-empty base64url text")
+    if "+" in text or "/" in text:
+        raise AttestationError("value is standard base64, not base64url")
     try:
         raw = base64.b64decode(
             text.translate(_URLSAFE_TO_STANDARD) + "=" * (-len(text) % 4),
@@ -54,8 +62,6 @@ def decode_base64url(text) -> bytes:
         )
     except ValueError as exc:
         raise AttestationError("value is not valid base64url") from exc
-    if not raw:
-        raise AttestationError("value decodes to no bytes")
     return raw
 
 

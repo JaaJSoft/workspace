@@ -106,7 +106,9 @@ class IpRateThrottleTests(TestCase):
         self.assertNotEqual(first.status_code, 429)
         self.assertEqual(second.status_code, 429)
 
-    def test_the_per_user_limit_does_not_follow_the_user_to_another_ip(self):
+    def test_changing_ip_does_not_escape_the_per_user_limit(self):
+        """The counterpart to the per-IP limit above: neither dimension can be
+        dodged by moving along the other."""
         alice = User.objects.create_user(username="alice2", password="pw")
         self.client.force_login(alice)
 

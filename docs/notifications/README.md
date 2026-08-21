@@ -2,6 +2,8 @@
 
 In-app and Web Push notifications with priority levels and read tracking.
 
+![Notification center](../images/notifications_1.png)
+
 ## Features
 
 - **In-app notifications** - A notification center with an unread badge, delivered live so the badge updates without a page reload.

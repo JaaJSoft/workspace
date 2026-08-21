@@ -2,6 +2,8 @@
 
 Configurable chat bots backed by any OpenAI-compatible provider, with tool calling, vision, memory, and scheduled messages.
 
+![AI assistant conversation](../images/ai_1.png)
+
 ## Features
 
 - **Bot profiles** - Each bot is a real user with its own avatar, system prompt, model override, and description. Bots appear in chat like any other member.

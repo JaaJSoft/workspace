@@ -498,6 +498,13 @@ def _validate_setting_value(module, key, value):
             ZoneInfo(str(value))
         except ZoneInfoNotFoundError, ValueError:
             return "Invalid timezone."
+    if module == "projects" and key == "reminder_hour" and value is not None:
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or not 0 <= value <= 23
+        ):
+            return "reminder_hour must be an integer between 0 and 23."
     return None
 
 

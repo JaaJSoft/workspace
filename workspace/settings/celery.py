@@ -114,12 +114,15 @@ CELERY_BEAT_SCHEDULE = {
         "task": "calendar.sync_all_external_calendars",
         "schedule": 900.0,  # Every 15 minutes
     },
-    # Both morning crons merge into any still-unread notification
-    # (notify_stream keys on the task/event row), so replaying them is safe.
+    # Hourly, not daily: "due today" is judged against each assignee's local
+    # date, which rolls over at a different UTC hour per timezone.
+    # TaskReminder rows keep reruns from re-notifying.
     "notify-due-tasks": {
         "task": "projects.notify_due_tasks",
-        "schedule": crontab(hour=7, minute=0),  # Every day at 7:00 AM
+        "schedule": crontab(minute=15),  # Every hour at :15
     },
+    # Merges into any still-unread notification (notify_stream keys on the
+    # event row), so replaying it is safe.
     "notify-today-events": {
         "task": "calendar.notify_today_events",
         "schedule": crontab(hour=7, minute=15),  # Every day at 7:15 AM

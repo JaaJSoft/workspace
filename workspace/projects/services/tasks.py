@@ -5,6 +5,7 @@ from django.utils import timezone
 from workspace.notifications.services.notifications import settle_sources
 
 from ..models import Task, TaskEvent, TaskStatus
+from .assignments import notify_assigned
 from .events import move_event_type, record_task_event
 from .references import allocate_task_number
 
@@ -84,6 +85,8 @@ def create_task(
         record_task_event(
             task, type=TaskEvent.Type.CREATED, actor=user, to_status=status
         )
+    if assignees:
+        notify_assigned(task, user, assignees)
     return task
 
 
@@ -102,16 +105,20 @@ def has_field_updates(task, validated_data):
 
     Status changes are excluded on purpose: they get their own MOVED or
     COMPLETED event via apply_status_change, and a no-op PATCH must not
-    pollute the activity feed.
+    pollute the activity feed. Assignee additions are excluded for the same
+    reason - they get their own ASSIGNED event.
     """
     for field in _UPDATE_EVENT_FIELDS:
         if field not in validated_data:
             continue
         new = validated_data[field]
-        if field in ("assignees", "labels"):
-            if {obj.pk for obj in new} != {
-                obj.pk for obj in getattr(task, field).all()
-            }:
+        if field == "assignees":
+            # Additions get their own ASSIGNED event (see perform_update);
+            # only removals count as a plain update.
+            if {obj.pk for obj in task.assignees.all()} - {obj.pk for obj in new}:
+                return True
+        elif field == "labels":
+            if {obj.pk for obj in new} != {obj.pk for obj in task.labels.all()}:
                 return True
         elif getattr(task, field) != new:
             return True

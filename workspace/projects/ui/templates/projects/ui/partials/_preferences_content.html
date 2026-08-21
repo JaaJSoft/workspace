@@ -1,0 +1,13 @@
+<div class="space-y-3">
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Due-date reminder time</label>
+    <select
+      class="select select-bordered select-sm w-full"
+      :value="prefs.reminder_hour"
+      @change="update('reminder_hour', parseInt($event.target.value))"
+    >
+      {% for value, label in reminder_hours %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+    </select>
+    <p class="text-xs text-base-content/60 mt-1">Tasks assigned to you remind you once when they fall due and once more when overdue, after this hour of your day.</p>
+  </div>
+</div>

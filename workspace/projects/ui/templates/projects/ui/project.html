@@ -51,6 +51,32 @@
             <i data-lucide="square-kanban" class="w-6 h-6 text-accent"></i>
             <span x-show="!sidebarCollapsed()" x-transition>Projects</span>
           </h2>
+          <div
+            class="dropdown dropdown-end"
+            x-data="projectsPreferences()"
+            x-show="!sidebarCollapsed()"
+            x-transition
+          >
+            <button
+              type="button"
+              tabindex="0"
+              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-accent"
+              aria-label="Preferences"
+              title="Preferences"
+            >
+              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+            </button>
+            <div
+              tabindex="0"
+              class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1"
+            >
+              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4 text-accent"></i>
+                Preferences
+              </h4>
+              {% include "projects/ui/partials/_preferences_content.html" %}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -163,6 +189,7 @@
   {{ statuses_data|json_script:"statuses-data" }}
   {{ members_data|json_script:"members-data" }}
   {{ labels_data|json_script:"labels-data" }}
+  {{ projects_prefs|json_script:"projects-prefs-data" }}
   <div class="flex h-full min-h-0">
     <div
       class="p-4 flex flex-col gap-4 flex-1 min-w-0"
@@ -270,6 +297,7 @@
     </form>
   </dialog>
   <script src="{% static 'projects/ui/js/board.js' %}"></script>
+  <script src="{% static 'projects/ui/js/preferences.js' %}"></script>
   <script src="{% static 'projects/ui/js/settings.js' %}"></script>
   <script src="{% static 'ui/js/comments.js' %}"></script>
 {% endblock %}

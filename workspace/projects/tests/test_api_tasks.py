@@ -387,12 +387,26 @@ class TaskUpdateEventTests(TaskApiMixin, APITestCase):
         self.assertEqual(self._updated_events().count(), 0)
 
     def test_m2m_edit_records_updated_event(self):
+        label = self.project.labels.create(name="bug", color="#ff0000")
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            self.task_url, {"labels": [str(label.uuid)]}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._updated_events().count(), 1)
+
+    def test_assignee_addition_records_assigned_not_updated(self):
         self.client.force_authenticate(self.member)
         response = self.client.patch(
             self.task_url, {"assignees": [str(self.admin.pk)]}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(self._updated_events().count(), 1)
+        self.assertEqual(self._updated_events().count(), 0)
+        self.assertTrue(
+            TaskEvent.objects.filter(
+                task=self.task, type=TaskEvent.Type.ASSIGNED
+            ).exists()
+        )
 
     def test_same_m2m_set_records_nothing(self):
         self.task.assignees.set([self.admin])

@@ -47,7 +47,8 @@ permissions:
 
 jobs:
   # Detects which parts of the tree changed so jobs that only exercise a
-  # slice of it (ruff, JS unit tests, the davfs2 mount) can be skipped.
+  # slice of it (ruff, djlint, JS unit tests, the davfs2 mount) can be
+  # skipped.
   # The Django and E2E matrices always run: they load templates and read
   # static assets, so nearly any non-doc change can affect them.
   changes:
@@ -56,6 +57,7 @@ jobs:
     outputs:
       python: ${{ steps.filter.outputs.python }}
       js: ${{ steps.filter.outputs.js }}
+      templates: ${{ steps.filter.outputs.templates }}
       webdav: ${{ steps.filter.outputs.webdav }}
     steps:
       - name: Checkout repository
@@ -73,6 +75,12 @@ jobs:
               - '.github/workflows/tests.yml'
             js:
               - 'workspace/**/*.js'
+              - '.github/workflows/tests.yml'
+            # djlint only reads HTML files and its config in pyproject.toml.
+            templates:
+              - 'workspace/**/*.html'
+              - 'pyproject.toml'
+              - 'uv.lock'
               - '.github/workflows/tests.yml'
             # Everything the WebDAV server and its auth path import from,
             # plus the shared dependency manifests.
@@ -108,6 +116,31 @@ jobs:
         uses: astral-sh/ruff-action@v4.1.0
         with:
           args: format --check --diff
+
+  djlint:
+    runs-on: ubuntu-latest
+    name: Lint (djlint)
+    needs: changes
+    if: needs.changes.outputs.templates == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: djlint check
+        run: |
+          uv run djlint workspace --lint
+          uv run djlint workspace --check
 
   test:
     runs-on: ubuntu-latest

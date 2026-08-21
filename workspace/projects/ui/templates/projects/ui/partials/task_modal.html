@@ -53,15 +53,10 @@
             </template>
           </select>
         </label>
-        <label class="form-control">
+        <div class="form-control">
           <div class="label"><span class="label-text">Priority</span></div>
-          <select class="select select-bordered select-sm" x-model="form.priority">
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </label>
+          {% include "projects/ui/partials/_priority_selector.html" with model_expr="form.priority" %}
+        </div>
         <label class="form-control">
           <div class="label"><span class="label-text">Due date</span></div>
           <input

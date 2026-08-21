@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Case, Count, IntegerField, Q, Value, When
-from django.http import Http404
+from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -27,7 +27,18 @@ from workspace.projects.services.events import events_for_project, serialize_tas
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.references import REFERENCE_RE
 from workspace.projects.services.rendering import render_task_description
+from workspace.projects.services.task_filters import (
+    TaskFilterError,
+    apply_task_filters,
+    task_filters_active,
+)
 from workspace.users.services.settings import get_setting, set_setting
+
+# The board, backlog and all-tasks views deliberately render whole columns
+# (drag-and-drop and bulk selection need every row of a column in the DOM)
+# instead of paginating, so this explicit cap is the bound on how much one
+# request renders. The templates show a notice when it truncates.
+TASK_RENDER_LIMIT = 500
 
 VIEW_OVERVIEW = "overview"
 VIEW_BOARD = "board"
@@ -160,6 +171,17 @@ def _base_context(request, project, role, view):
     return context
 
 
+def _filtered_tasks(request, qs):
+    """Apply the shared task filters and the render cap to a task queryset.
+
+    Returns (tasks, truncated); the one extra fetched row is what detects
+    truncation without a COUNT query.
+    """
+    qs = apply_task_filters(qs, request.GET).distinct()
+    tasks = list(qs[: TASK_RENDER_LIMIT + 1])
+    return tasks[:TASK_RENDER_LIMIT], len(tasks) > TASK_RENDER_LIMIT
+
+
 def _record_visit(user, project_uuid):
     set_setting(user, "projects", "last_project", str(project_uuid))
 
@@ -279,8 +301,15 @@ def board(request, project_uuid):
             .values_list("status_id", "n")
         )
         tasks_qs = tasks_qs.exclude(expired)
+    try:
+        tasks, truncated = _filtered_tasks(request, tasks_qs)
+    except TaskFilterError as exc:
+        return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
+    context["filters_active"] = task_filters_active(request.GET)
+    context["tasks_truncated"] = truncated
+    context["task_render_limit"] = TASK_RENDER_LIMIT
     tasks_by_status = defaultdict(list)
-    for task in tasks_qs:
+    for task in tasks:
         tasks_by_status[task.status_id].append(task)
     context["columns"] = [
         {
@@ -304,13 +333,24 @@ def backlog(request, project_uuid):
         s for s in context["statuses"] if s.category == TaskStatus.Category.BACKLOG
     ]
     context["backlog_status"] = backlog_statuses[0] if backlog_statuses else None
-    context["backlog_tasks"] = list(
-        project.tasks.filter(status__category=TaskStatus.Category.BACKLOG)
-        .select_related("status")
-        .prefetch_related("assignees", "labels")
-        .order_by("position", "created_at")
-    )
-    context["backlog_count"] = len(context["backlog_tasks"])
+    try:
+        backlog_tasks, truncated = _filtered_tasks(
+            request,
+            project.tasks.filter(status__category=TaskStatus.Category.BACKLOG)
+            .select_related("status")
+            .prefetch_related("assignees", "labels")
+            .order_by("position", "created_at"),
+        )
+    except TaskFilterError as exc:
+        return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
+    context["backlog_tasks"] = backlog_tasks
+    context["filters_active"] = task_filters_active(request.GET)
+    context["tasks_truncated"] = truncated
+    context["task_render_limit"] = TASK_RENDER_LIMIT
+    # The sidebar badge counts the whole backlog, not the filtered slice.
+    context["backlog_count"] = project.tasks.filter(
+        status__category=TaskStatus.Category.BACKLOG
+    ).count()
     return _render_project_view(request, context)
 
 
@@ -323,11 +363,21 @@ def all_tasks(request, project_uuid):
     context["backlog_count"] = project.tasks.filter(
         status__category=TaskStatus.Category.BACKLOG
     ).count()
-    context["all_tasks"] = list(
-        project.tasks.select_related("status")
-        .prefetch_related("assignees", "labels")
-        .order_by("status__position", "status__created_at", "position", "created_at")
-    )
+    try:
+        all_tasks_list, truncated = _filtered_tasks(
+            request,
+            project.tasks.select_related("status")
+            .prefetch_related("assignees", "labels")
+            .order_by(
+                "status__position", "status__created_at", "position", "created_at"
+            ),
+        )
+    except TaskFilterError as exc:
+        return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
+    context["all_tasks"] = all_tasks_list
+    context["filters_active"] = task_filters_active(request.GET)
+    context["tasks_truncated"] = truncated
+    context["task_render_limit"] = TASK_RENDER_LIMIT
     return _render_project_view(request, context)
 
 

@@ -33,35 +33,44 @@ function fieldAction(field) {
 }
 
 function emptyTaskFilters() {
-  return { q: '', assignee: '', label: '', priority: '', status: '' };
+  // assignee and label are multi-value (repeated query params, OR'd
+  // server-side); assignee also accepts the literal 'none' for unassigned.
+  return { q: '', assignee: [], label: [], priority: '', status: '' };
 }
 
-function taskMatchesFilters(dataset, filters) {
-  const query = (filters.q || '').trim().toLowerCase();
-  if (query && !(dataset.search || '').includes(query)) return false;
-  if (filters.priority && dataset.priority !== filters.priority) return false;
-  if (
-    filters.label &&
-    !(dataset.labels || '').split(' ').includes(filters.label)
-  ) {
-    return false;
-  }
-  if (filters.assignee) {
-    const ids = (dataset.assignees || '').split(' ').filter(Boolean);
-    if (filters.assignee === 'none') {
-      if (ids.length) return false;
-    } else if (!ids.includes(filters.assignee)) {
-      return false;
+// Filtering is server-side; the filter state lives in the URL so a filtered
+// view is shareable. These two helpers translate between the filters object
+// and the query string, leaving non-filter params (the ?task= deep link)
+// untouched.
+function taskFiltersFromUrl(href) {
+  const filters = emptyTaskFilters();
+  const params = new URL(href).searchParams;
+  Object.keys(filters).forEach((key) => {
+    if (Array.isArray(filters[key])) {
+      filters[key] = params.getAll(key).filter(Boolean);
+    } else {
+      const value = params.get(key);
+      if (value) filters[key] = value;
     }
-  }
-  if (
-    filters.status &&
-    dataset.status !== undefined &&
-    dataset.status !== filters.status
-  ) {
-    return false;
-  }
-  return true;
+  });
+  return filters;
+}
+
+function taskFilterUrl(href, filters) {
+  const url = new URL(href);
+  Object.entries(emptyTaskFilters()).forEach(([key, empty]) => {
+    if (Array.isArray(empty)) {
+      url.searchParams.delete(key);
+      (filters[key] || []).forEach((value) =>
+        url.searchParams.append(key, value)
+      );
+    } else {
+      const value = (filters[key] || '').trim();
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    }
+  });
+  return url.pathname + url.search;
 }
 
 function emptyTaskForm() {
@@ -243,6 +252,7 @@ function projectBoard(config) {
       this.labels = JSON.parse(
         document.getElementById('labels-data').textContent
       );
+      this.filters = taskFiltersFromUrl(window.location.href);
 
       // Catch up on board changes made elsewhere while the stream was down
       // (resumed tab, or a bfcache restore after a mobile back).
@@ -290,7 +300,13 @@ function projectBoard(config) {
     },
 
     onDragStart(event, uuid) {
-      if (!config.writable) return;
+      // Reordering a filtered subset would push every unlisted task of the
+      // column after the visible ones server-side, so dragging is disabled
+      // while filters narrow the list.
+      if (!config.writable || this.filtersActive()) {
+        event.preventDefault();
+        return;
+      }
       this.dragging = uuid;
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', uuid);
@@ -349,22 +365,34 @@ function projectBoard(config) {
       else if (this.currentView === 'settings') url += '/settings';
       else if (this.currentView === 'analytics') url += '/analytics';
       else if (this.currentView !== 'overview') url += '/board';
-      this.$ajax(url, { target: 'project-content' });
+      // The active filters ride along so a refresh keeps the filtered view.
+      this.$ajax(taskFilterUrl(window.location.origin + url, this.filters), {
+        target: 'project-content',
+      });
       // Board-level changes (drag moves, send-to-board, field edits) also
       // change the open task's panel content: reload it alongside so its
       // status, activity and metadata stay in sync with the cards.
       if (this.panelTaskUuid) this._loadPanel(this.panelTaskUuid);
     },
 
-    taskVisible(dataset) {
-      return taskMatchesFilters(dataset, this.filters);
+    applyFilters() {
+      const next = taskFilterUrl(window.location.href, this.filters);
+      history.replaceState(null, '', next);
+      this.$ajax(next, { target: 'project-content' });
+    },
+
+    syncFiltersFromUrl() {
+      // After any content swap the URL is the source of truth: a drawer
+      // navigation carries no filter params, so this is what resets the
+      // filter bar when the user switches views.
+      this.filters = taskFiltersFromUrl(window.location.href);
     },
 
     filtersActive() {
       return Boolean(
         this.filters.q.trim() ||
-          this.filters.assignee ||
-          this.filters.label ||
+          this.filters.assignee.length ||
+          this.filters.label.length ||
           this.filters.priority ||
           this.filters.status
       );
@@ -372,30 +400,61 @@ function projectBoard(config) {
 
     clearFilters() {
       this.filters = emptyTaskFilters();
+      this.applyFilters();
     },
 
-    _visibleTaskEls(scope) {
-      return Array.from(
-        document.querySelectorAll(scope + ' [data-task-uuid]')
-      ).filter((el) => taskMatchesFilters(el.dataset, this.filters));
+    isAssigneeFilter(id) {
+      return this.filters.assignee.includes(String(id));
     },
 
-    columnCount(statusUuid, total) {
-      if (!this.filtersActive()) return total;
-      return this._visibleTaskEls('[data-status-uuid="' + statusUuid + '"]')
-        .length;
+    toggleAssigneeFilter(id) {
+      id = String(id);
+      this.filters.assignee = this.isAssigneeFilter(id)
+        ? this.filters.assignee.filter((v) => v !== id)
+        : this.filters.assignee.concat(id);
+      this.applyFilters();
     },
 
-    backlogVisibleCount() {
-      return this._visibleTaskEls('#backlog').length;
+    addAssigneeFilter(user) {
+      if (!this.isAssigneeFilter(user.id)) this.toggleAssigneeFilter(user.id);
     },
 
-    allTasksVisibleCount() {
-      return this._visibleTaskEls('#all-tasks').length;
+    removeAssigneeFilter(id) {
+      if (this.isAssigneeFilter(id)) this.toggleAssigneeFilter(id);
+    },
+
+    // The 'none' pseudo-assignee is rendered by the Unassigned toggle, so
+    // the chips row only carries real users.
+    assigneeFilterChips() {
+      return this.filters.assignee.filter((id) => id !== 'none');
+    },
+
+    unfilteredMembers() {
+      return this.members.filter((m) => !this.isAssigneeFilter(m.id));
+    },
+
+    filterAssigneeName(id) {
+      const user = this.members.find((m) => String(m.id) === String(id));
+      return user ? user.username : 'Unknown user';
+    },
+
+    addLabelFilter(label) {
+      if (!this.filters.label.includes(label.uuid)) {
+        this.filters.label = this.filters.label.concat(label.uuid);
+        this.applyFilters();
+      }
+    },
+
+    removeLabelFilter(uuid) {
+      this.filters.label = this.filters.label.filter((v) => v !== uuid);
+      this.applyFilters();
     },
 
     visibleBacklogUuids() {
-      return this._visibleTaskEls('#backlog').map((el) => el.dataset.taskUuid);
+      // Rendered rows already match the active filters server-side.
+      return Array.from(
+        document.querySelectorAll('#backlog [data-task-uuid]')
+      ).map((el) => el.dataset.taskUuid);
     },
 
     isSelected(uuid) {
@@ -509,6 +568,7 @@ function projectBoard(config) {
     },
 
     onPopState() {
+      this.filters = taskFiltersFromUrl(window.location.href);
       const path = window.location.pathname;
       this.currentView = path.endsWith('/backlog')
         ? 'backlog'
@@ -815,6 +875,7 @@ window.projectBoardHelpers = {
   listOrder: listOrder,
   taskParamUrl: taskParamUrl,
   fieldAction: fieldAction,
-  taskMatchesFilters: taskMatchesFilters,
+  taskFiltersFromUrl: taskFiltersFromUrl,
+  taskFilterUrl: taskFilterUrl,
   pickLabelColor: pickLabelColor,
 };

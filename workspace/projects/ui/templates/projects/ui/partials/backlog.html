@@ -100,14 +100,16 @@
           {% include "projects/ui/partials/_backlog_row.html" %}
         {% endfor %}
       </ul>
-      <div
-        x-show="filtersActive() && backlogVisibleCount() === 0"
-        x-cloak
-        class="px-3 py-8 text-center text-sm text-base-content/60"
-      >
-        No tasks match the current filters.
-      </div>
+      {% if tasks_truncated %}
+        <p
+          class="px-3 py-2 border-t border-base-300 text-xs text-base-content/60"
+        >
+          Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest.
+        </p>
+      {% endif %}
     </div>
+  {% elif filters_active %}
+    <inline-alert type="info" message="No tasks match the current filters."></inline-alert>
   {% else %}
     <inline-alert type="info" message="The backlog is empty."></inline-alert>
   {% endif %}

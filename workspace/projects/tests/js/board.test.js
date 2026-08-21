@@ -157,48 +157,42 @@ test('taskParamUrl removes the task param when uuid is null', () => {
   );
 });
 
-test('taskMatchesFilters matches everything with empty filters', () => {
-  const match = ctx.projectBoardHelpers.taskMatchesFilters;
-  const empty = { q: '', assignee: '', label: '', priority: '' };
-  assert.equal(match({}, empty), true);
-  assert.equal(match({ search: 'fix login', priority: 'high' }, empty), true);
+test('taskFiltersFromUrl reads single and repeated filter params', () => {
+  const filters = ctx.projectBoardHelpers.taskFiltersFromUrl(
+    'http://x.test/projects/p/board?q=bug&assignee=none&assignee=7&task=u1&label=l1'
+  );
+  assert.equal(filters.q, 'bug');
+  assert.deepStrictEqual(Array.from(filters.assignee), ['none', '7']);
+  assert.deepStrictEqual(Array.from(filters.label), ['l1']);
+  assert.equal(filters.priority, '');
+  assert.equal(filters.status, '');
 });
 
-test('taskMatchesFilters searches case-insensitively', () => {
-  const match = ctx.projectBoardHelpers.taskMatchesFilters;
-  const dataset = { search: 'fix the login flow bug' };
-  assert.equal(match(dataset, { q: 'LOGIN' }), true);
-  assert.equal(match(dataset, { q: '  bug ' }), true);
-  assert.equal(match(dataset, { q: 'payment' }), false);
+test('taskFilterUrl writes the filters and preserves the task param', () => {
+  const url = ctx.projectBoardHelpers.taskFilterUrl(
+    'http://x.test/projects/p/board?task=u1&priority=low',
+    { q: ' bug ', assignee: ['none', '7'], label: [], priority: 'high', status: '' }
+  );
+  assert.equal(
+    url,
+    '/projects/p/board?task=u1&priority=high&q=bug&assignee=none&assignee=7'
+  );
 });
 
-test('taskMatchesFilters filters by priority, label and assignee', () => {
-  const match = ctx.projectBoardHelpers.taskMatchesFilters;
-  const dataset = { priority: 'high', labels: 'l1 l2', assignees: '7 9' };
-  assert.equal(match(dataset, { priority: 'high' }), true);
-  assert.equal(match(dataset, { priority: 'low' }), false);
-  assert.equal(match(dataset, { label: 'l2' }), true);
-  assert.equal(match(dataset, { label: 'l3' }), false);
-  assert.equal(match(dataset, { assignee: '9' }), true);
-  assert.equal(match(dataset, { assignee: '8' }), false);
-});
-
-test('taskMatchesFilters assignee "none" matches only unassigned tasks', () => {
-  const match = ctx.projectBoardHelpers.taskMatchesFilters;
-  assert.equal(match({ assignees: '' }, { assignee: 'none' }), true);
-  assert.equal(match({}, { assignee: 'none' }), true);
-  assert.equal(match({ assignees: '7' }, { assignee: 'none' }), false);
-});
-
-test('taskMatchesFilters requires every active filter to match', () => {
-  const match = ctx.projectBoardHelpers.taskMatchesFilters;
-  const dataset = { search: 'fix login', priority: 'high', labels: 'l1' };
-  assert.equal(match(dataset, { q: 'login', priority: 'high' }), true);
-  assert.equal(match(dataset, { q: 'login', priority: 'low' }), false);
+test('taskFilterUrl drops every filter param when the filters are empty', () => {
+  assert.equal(
+    ctx.projectBoardHelpers.taskFilterUrl(
+      'http://x.test/projects/p/board?q=bug&priority=high&assignee=7&task=u1',
+      { q: '', assignee: [], label: [], priority: '', status: '' }
+    ),
+    '/projects/p/board?task=u1'
+  );
 });
 
 test('filtersActive and clearFilters track filter state', () => {
   const board = panelBoard();
+  const fetched = [];
+  board.$ajax = (url) => fetched.push(url);
   assert.equal(board.filtersActive(), false);
   board.filters.q = '   ';
   assert.equal(board.filtersActive(), false);
@@ -206,8 +200,71 @@ test('filtersActive and clearFilters track filter state', () => {
   assert.equal(board.filtersActive(), true);
   board.clearFilters();
   assert.equal(board.filtersActive(), false);
-  board.filters.assignee = 'none';
+  assert.deepStrictEqual(Array.from(fetched), ['/projects/p/board?task=u1']);
+  board.filters.assignee = ['none'];
   assert.equal(board.filtersActive(), true);
+});
+
+test('assignee filter toggles, chips exclude the none pseudo-user', () => {
+  const board = panelBoard();
+  const fetched = [];
+  board.$ajax = (url) => fetched.push(url);
+  board.members = [{ id: '7', username: 'alice' }];
+  board.toggleAssigneeFilter('none');
+  board.addAssigneeFilter({ id: '7', username: 'alice' });
+  board.addAssigneeFilter({ id: '7', username: 'alice' }); // no duplicate
+  assert.deepStrictEqual(Array.from(board.filters.assignee), ['none', '7']);
+  assert.deepStrictEqual(Array.from(board.assigneeFilterChips()), ['7']);
+  assert.equal(board.filterAssigneeName('7'), 'alice');
+  assert.deepStrictEqual(Array.from(board.unfilteredMembers()), []);
+  assert.equal(
+    fetched[fetched.length - 1],
+    '/projects/p/board?task=u1&assignee=none&assignee=7'
+  );
+  board.removeAssigneeFilter('7');
+  assert.deepStrictEqual(Array.from(board.filters.assignee), ['none']);
+});
+
+test('label filter adds once and removes', () => {
+  const board = panelBoard();
+  const fetched = [];
+  board.$ajax = (url) => fetched.push(url);
+  board.addLabelFilter({ uuid: 'l1' });
+  board.addLabelFilter({ uuid: 'l1' });
+  board.addLabelFilter({ uuid: 'l2' });
+  assert.deepStrictEqual(Array.from(board.filters.label), ['l1', 'l2']);
+  assert.equal(fetched.length, 2);
+  board.removeLabelFilter('l1');
+  assert.deepStrictEqual(Array.from(board.filters.label), ['l2']);
+  assert.equal(
+    fetched[fetched.length - 1],
+    '/projects/p/board?task=u1&label=l2'
+  );
+});
+
+test('applyFilters rewrites the URL and refetches the content', () => {
+  const board = panelBoard();
+  const fetched = [];
+  const replaced = [];
+  ctx.history.replaceState = (a, b, url) => replaced.push(url);
+  board.$ajax = (url, opts) => fetched.push([url, opts.target]);
+  board.filters.priority = 'high';
+  board.applyFilters();
+  assert.deepStrictEqual(Array.from(replaced), [
+    '/projects/p/board?task=u1&priority=high',
+  ]);
+  assert.deepStrictEqual(Array.from(fetched.map((f) => Array.from(f))), [
+    ['/projects/p/board?task=u1&priority=high', 'project-content'],
+  ]);
+});
+
+test('onDragStart is cancelled while filters are active', () => {
+  const board = panelBoard();
+  let prevented = false;
+  board.filters.priority = 'high';
+  board.onDragStart({ preventDefault: () => (prevented = true) }, 'u1');
+  assert.equal(prevented, true);
+  assert.equal(board.dragging, null);
 });
 
 test('toggleSelect adds then removes a uuid', () => {
@@ -222,25 +279,18 @@ test('toggleSelect adds then removes a uuid', () => {
   assert.deepStrictEqual(Array.from(board.selected), []);
 });
 
-function backlogDom(rows) {
+function backlogDom(uuids) {
   return {
     querySelectorAll: (selector) => {
       assert.equal(selector, '#backlog [data-task-uuid]');
-      return rows.map(([uuid, dataset]) => ({
-        dataset: { taskUuid: uuid, ...dataset },
-      }));
+      return uuids.map((uuid) => ({ dataset: { taskUuid: uuid } }));
     },
   };
 }
 
-test('toggleSelectAll selects only the rows matching the filters', () => {
-  ctx.document = backlogDom([
-    ['u1', { priority: 'high' }],
-    ['u2', { priority: 'low' }],
-    ['u3', { priority: 'high' }],
-  ]);
+test('toggleSelectAll selects every rendered row', () => {
+  ctx.document = backlogDom(['u1', 'u3']);
   const board = panelBoard();
-  board.filters.priority = 'high';
   board.toggleSelectAll();
   assert.deepStrictEqual(Array.from(board.selected), ['u1', 'u3']);
   assert.equal(board.allVisibleSelected(), true);
@@ -248,14 +298,11 @@ test('toggleSelectAll selects only the rows matching the filters', () => {
   assert.deepStrictEqual(Array.from(board.selected), []);
 });
 
-test('toggleSelectAll keeps selections outside the current filter', () => {
-  ctx.document = backlogDom([
-    ['u1', { priority: 'high' }],
-    ['u2', { priority: 'low' }],
-    ['u3', { priority: 'high' }],
-  ]);
+test('toggleSelectAll keeps selections made under another filter', () => {
+  // u2 was selected before a server-side filter removed its row from the
+  // DOM; select-all/deselect-all here must not touch it.
+  ctx.document = backlogDom(['u1', 'u3']);
   const board = panelBoard();
-  board.filters.priority = 'high';
   board.selected = ['u2'];
   board.toggleSelectAll();
   assert.deepStrictEqual(Array.from(board.selected), ['u2', 'u1', 'u3']);
@@ -263,33 +310,12 @@ test('toggleSelectAll keeps selections outside the current filter', () => {
   assert.deepStrictEqual(Array.from(board.selected), ['u2']);
 });
 
-test('toggleSelectAll leaves the selection alone when nothing is visible', () => {
-  ctx.document = backlogDom([['u1', { priority: 'high' }]]);
+test('toggleSelectAll leaves the selection alone when nothing is rendered', () => {
+  ctx.document = backlogDom([]);
   const board = panelBoard();
-  board.filters.priority = 'low';
   board.selected = ['u1'];
   board.toggleSelectAll();
   assert.deepStrictEqual(Array.from(board.selected), ['u1']);
-});
-
-test('columnCount returns the server total when no filter is active', () => {
-  const board = panelBoard();
-  assert.equal(board.columnCount('s1', 5), 5);
-});
-
-test('columnCount counts only matching cards when filtering', () => {
-  ctx.document = {
-    querySelectorAll: (selector) => {
-      assert.equal(selector, '[data-status-uuid="s1"] [data-task-uuid]');
-      return [
-        { dataset: { taskUuid: 'u1', priority: 'high' } },
-        { dataset: { taskUuid: 'u2', priority: 'low' } },
-      ];
-    },
-  };
-  const board = panelBoard();
-  board.filters.priority = 'high';
-  assert.equal(board.columnCount('s1', 2), 1);
 });
 
 test('moveTasks posts to the bulk endpoint and prunes the selection', async () => {
@@ -596,7 +622,10 @@ test('closePanel clears state and strips the param', () => {
 function panelBoard() {
   ctx.getCSRFToken = () => 'token';
   ctx.localStorage = { getItem: () => null, setItem: () => {} };
-  ctx.location = { href: 'http://x.test/projects/p/board?task=u1' };
+  ctx.location = {
+    origin: 'http://x.test',
+    href: 'http://x.test/projects/p/board?task=u1',
+  };
   ctx.history = { pushState: () => {}, replaceState: () => {} };
   return ctx.projectBoard({
     apiBase: '/api',
@@ -982,33 +1011,12 @@ test('panel addLabel is gated on the set_labels action', () => {
   assert.equal(calls.length, 0);
 });
 
-test('taskMatchesFilters filters by status', () => {
-  const dataset = { search: 'wr-1 fix login', priority: 'high', status: 's1' };
-  assert.equal(
-    ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: 's1' }),
-    true
-  );
-  assert.equal(
-    ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: 's2' }),
-    false
-  );
-});
-
-test('taskMatchesFilters ignores an empty status filter', () => {
-  const dataset = { search: 'wr-1 fix login', status: 's1' };
-  assert.equal(ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: '' }), true);
-});
-
-test('taskMatchesFilters skips rows without status metadata', () => {
-  const dataset = { search: 'wr-1 fix login' };
-  assert.equal(
-    ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: 's1' }),
-    true
-  );
-});
-
 test('refresh targets the all-tasks partial when viewing tasks', () => {
   ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.location = {
+    origin: 'http://x.test',
+    href: 'http://x.test/projects/p/tasks',
+  };
   const calls = [];
   const board = ctx.projectBoard({
     apiBase: '/api',
@@ -1038,6 +1046,10 @@ test('onPopState recognizes the tasks view', () => {
 
 test('refresh targets the analytics partial when viewing analytics', () => {
   ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.location = {
+    origin: 'http://x.test',
+    href: 'http://x.test/projects/p/analytics',
+  };
   const calls = [];
   const board = ctx.projectBoard({
     apiBase: '/api',

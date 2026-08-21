@@ -3,12 +3,14 @@ from django.db import IntegrityError, transaction
 from django.db.models import OuterRef, Subquery
 from django.http import Http404
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
 
 from .models import (
@@ -44,8 +46,13 @@ from .services.members import (
     remove_member,
 )
 from .services.projects import create_project
-from .services.search import fts_tasks
 from .services.statuses import create_status, delete_status, reorder_statuses
+from .services.task_filters import (
+    ORDERABLE_FIELDS,
+    TaskFilterError,
+    apply_task_filters,
+    apply_task_ordering,
+)
 from .services.tasks import (
     apply_status_change,
     create_task,
@@ -371,11 +378,72 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
 
 
 @extend_schema(tags=["Projects"])
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "q",
+                OpenApiTypes.STR,
+                description="Full-text search on title and description.",
+            ),
+            OpenApiParameter(
+                "status",
+                OpenApiTypes.UUID,
+                many=True,
+                description="Only tasks in these columns.",
+            ),
+            OpenApiParameter(
+                "assignee",
+                OpenApiTypes.STR,
+                many=True,
+                description="Only tasks assigned to these user IDs; the literal `none` matches unassigned tasks.",
+            ),
+            OpenApiParameter(
+                "label",
+                OpenApiTypes.UUID,
+                many=True,
+                description="Only tasks carrying these labels.",
+            ),
+            OpenApiParameter(
+                "priority",
+                OpenApiTypes.STR,
+                enum=Task.Priority.values,
+                description="Only tasks with this priority.",
+            ),
+            OpenApiParameter(
+                "due_before",
+                OpenApiTypes.DATE,
+                description="Only tasks due on or before this date.",
+            ),
+            OpenApiParameter(
+                "due_after",
+                OpenApiTypes.DATE,
+                description="Only tasks due on or after this date.",
+            ),
+            OpenApiParameter(
+                "created_by",
+                OpenApiTypes.INT,
+                description="Only tasks created by this user ID.",
+            ),
+            OpenApiParameter(
+                "completed",
+                OpenApiTypes.BOOL,
+                description="True keeps only tasks in a done column, false only open tasks.",
+            ),
+            OpenApiParameter(
+                "ordering",
+                OpenApiTypes.STR,
+                enum=sorted([*ORDERABLE_FIELDS, *(f"-{f}" for f in ORDERABLE_FIELDS)]),
+                description="Sort field, descending with a `-` prefix. `priority` sorts most important first; tasks without a due date always sort last.",
+            ),
+        ]
+    )
+)
 class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     lookup_field = "uuid"
     lookup_url_kwarg = "task_uuid"
-    pagination_class = None
+    pagination_class = OptInLimitOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
@@ -388,28 +456,11 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         )
         if self.action != "list":
             return qs
-        status_param = self.request.query_params.get("status")
-        if status_param:
-            parsed = parse_uuid_or_none(status_param)
-            if parsed is None:
-                raise ValidationError({"status": "Malformed UUID."})
-            qs = qs.filter(status_id=parsed)
-        assignee_param = self.request.query_params.get("assignee")
-        if assignee_param:
-            try:
-                user_id = int(assignee_param)
-            except (ValueError, TypeError) as exc:
-                raise ValidationError({"assignee": "Invalid user ID."}) from exc
-            qs = qs.filter(assignees=user_id)
-        label_param = self.request.query_params.get("label")
-        if label_param:
-            parsed = parse_uuid_or_none(label_param)
-            if parsed is None:
-                raise ValidationError({"label": "Malformed UUID."})
-            qs = qs.filter(labels=parsed)
-        query = self.request.query_params.get("q")
-        if query:
-            qs = fts_tasks(qs, query)
+        try:
+            qs = apply_task_filters(qs, self.request.query_params)
+            qs = apply_task_ordering(qs, self.request.query_params)
+        except TaskFilterError as exc:
+            raise ValidationError({exc.field: exc.message}) from exc
         return qs.distinct()
 
     def create(self, request, *args, **kwargs):

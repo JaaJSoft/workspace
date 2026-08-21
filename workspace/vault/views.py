@@ -24,11 +24,13 @@ from rest_framework.views import APIView
 from workspace.common.mixins import CacheControlMixin
 
 from .models import AccountIdentity
-from .serializers import AccountEnvelopeSerializer
+from .serializers import AccountEnvelopeSerializer, AccountFinalizeSerializer
+from .services.attestation import AttestationError, verify_kex_pub_attestation
 from .throttling import (
     AccountEnvelopeBurstThrottle,
     AccountEnvelopeIpThrottle,
     AccountEnvelopeUserThrottle,
+    AccountFinalizeIpThrottle,
     AccountInitIpThrottle,
     AccountInitUserThrottle,
 )
@@ -105,3 +107,52 @@ class AccountEnvelopeView(CacheControlMixin, APIView):
         if identity is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(AccountEnvelopeSerializer(identity).data)
+
+
+@method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
+class AccountFinalizeView(APIView):
+    throttle_classes = [AccountFinalizeIpThrottle]
+
+    @extend_schema(
+        tags=["Vault"],
+        summary="Finalize the account identity",
+        description=(
+            "Stores the account public keys, the sealed private keys and the "
+            "attestation over the key exchange public key, and activates the "
+            "identity. Refused once the identity is active."
+        ),
+        request=AccountFinalizeSerializer,
+        responses={201: None},
+    )
+    def post(self, request):
+        identity = AccountIdentity.objects.filter(user=request.user).first()
+        if identity is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if identity.state == AccountIdentity.State.ACTIVE:
+            return Response(status=status.HTTP_409_CONFLICT)
+
+        serializer = AccountFinalizeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # The server opens nothing, but it refuses to store an identity whose
+        # public key nobody vouched for: every other client would reject what
+        # this account signs, and only at unlock time, far from here.
+        try:
+            verify_kex_pub_attestation(
+                identity.uuid,
+                data["kex_public"],
+                data["sig_public"],
+                data["sig_over_kex_pub"],
+            )
+        except AttestationError:
+            return Response(
+                {"detail": "The account attestation does not verify."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        for field, value in data.items():
+            setattr(identity, field, value)
+        identity.state = AccountIdentity.State.ACTIVE
+        identity.save()
+        return Response(status=status.HTTP_201_CREATED)

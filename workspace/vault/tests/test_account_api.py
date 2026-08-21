@@ -5,11 +5,37 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.vault.models import AccountIdentity
+from workspace.vault.tests.reference import ad, primitives
+from workspace.vault.tests.reference.encoding import to_base64url
 
 User = get_user_model()
 
 INIT_URL = "/api/v1/vault/account/init"
 ENVELOPE_URL = "/api/v1/vault/account/envelope"
+FINALIZE_URL = "/api/v1/vault/account/finalize"
+
+
+def build_identity_payload(account_uuid):
+    """The body the browser posts at the end of onboarding."""
+    kex = primitives.generate_kex_keypair()
+    sig = primitives.generate_sig_keypair()
+    kex_public = to_base64url(
+        primitives.encode_public_key(kex.public_key(), primitives.PUBKEY_ALG_X25519)
+    )
+    sig_public = to_base64url(
+        primitives.encode_public_key(sig.public_key(), primitives.PUBKEY_ALG_ED25519)
+    )
+    return {
+        "kdf_algo": "argon2id",
+        "kdf_params": {"m": 65536, "t": 3, "p": 2},
+        "kex_public": kex_public,
+        "sig_public": sig_public,
+        "wrapped_kex_priv": "WKEXAAAABBBBCCCC",
+        "wrapped_sig_priv": "WSIGAAAABBBBCCCC",
+        "sig_over_kex_pub": to_base64url(
+            primitives.sign_bytes(sig, ad.kex_pub_payload(account_uuid, kex_public))
+        ),
+    }
 
 
 class AccountInitTests(TestCase):
@@ -135,3 +161,100 @@ class AccountEnvelopeTests(TestCase):
         self._identity(self.user)
         self.client.logout()
         self.assertIn(self.client.get(ENVELOPE_URL).status_code, (401, 403))
+
+
+class AccountFinalizeTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.client.force_login(self.user)
+        self.identity = AccountIdentity.objects.create(user=self.user, kdf_salt="SALT")
+        self.payload = build_identity_payload(str(self.identity.uuid))
+
+    def tearDown(self):
+        cache.clear()
+
+    def _post(self, payload=None):
+        return self.client.post(
+            FINALIZE_URL,
+            data=self.payload if payload is None else payload,
+            content_type="application/json",
+        )
+
+    def test_activates_the_identity(self):
+        response = self._post()
+        self.assertEqual(response.status_code, 201)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.state, AccountIdentity.State.ACTIVE)
+        self.assertEqual(self.identity.kex_public, self.payload["kex_public"])
+        self.assertEqual(
+            self.identity.wrapped_sig_priv, self.payload["wrapped_sig_priv"]
+        )
+
+    def test_keeps_the_same_row_and_the_same_salt(self):
+        original_pk = self.identity.pk
+        self._post()
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.pk, original_pk)
+        self.assertEqual(self.identity.kdf_salt, "SALT")
+        self.assertEqual(AccountIdentity.objects.filter(user=self.user).count(), 1)
+
+    def test_refuses_an_attestation_bound_to_another_account(self):
+        payload = build_identity_payload("0192f3a4-9999-7d8e-9f01-23456789abcd")
+        response = self._post(payload)
+        self.assertEqual(response.status_code, 400)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.state, AccountIdentity.State.PENDING)
+        self.assertEqual(self.identity.kex_public, "")
+
+    def test_refuses_a_signature_that_does_not_verify(self):
+        payload = dict(self.payload)
+        payload["sig_over_kex_pub"] = build_identity_payload(str(self.identity.uuid))[
+            "sig_over_kex_pub"
+        ]
+        self.assertEqual(self._post(payload).status_code, 400)
+
+    def test_refuses_an_unsigned_payload(self):
+        payload = dict(self.payload)
+        payload["sig_over_kex_pub"] = ""
+        self.assertEqual(self._post(payload).status_code, 400)
+
+    def test_refuses_a_sig_public_labelled_as_a_kex_key(self):
+        payload = dict(self.payload)
+        sig = primitives.generate_sig_keypair()
+        payload["sig_public"] = to_base64url(
+            bytes([primitives.PUBKEY_ALG_X25519])
+            + primitives.public_bytes(sig.public_key())
+        )
+        self.assertEqual(self._post(payload).status_code, 400)
+
+    def test_refuses_a_second_finalize(self):
+        """Re-finalizing would overwrite the sealed private keys with a fresh
+        pair, and every existing key wrap points at the old one."""
+        self._post()
+        response = self._post(build_identity_payload(str(self.identity.uuid)))
+        self.assertEqual(response.status_code, 409)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.kex_public, self.payload["kex_public"])
+
+    def test_answers_404_without_an_init(self):
+        AccountIdentity.objects.all().delete()
+        self.assertEqual(self._post().status_code, 404)
+
+    def test_requires_authentication(self):
+        self.client.logout()
+        self.assertIn(self._post().status_code, (401, 403))
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.state, AccountIdentity.State.PENDING)
+
+    def test_leaves_no_wrapped_key_in_the_logs(self):
+        import logging
+
+        with self.assertLogs("django", level="DEBUG") as captured:
+            self._post()
+            logging.getLogger("django").debug("finalize done")
+        blob = "\n".join(captured.output)
+        for value in (
+            self.payload["wrapped_kex_priv"],
+            self.payload["wrapped_sig_priv"],
+        ):
+            self.assertNotIn(value, blob)

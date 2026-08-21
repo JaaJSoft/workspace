@@ -315,7 +315,7 @@ class CryptoBundleBrowserTests(EngineChecks, PlaywrightTestCase):
               return performance.now() - started;
             }
         """)
-        print(f"[e2e] derivation de la cle maitresse : {elapsed:.0f} ms")
+        print(f"[e2e] master key derivation: {elapsed:.0f} ms")
         self.assertLess(
             elapsed, 5000, f"key derivation took {elapsed:.0f} ms, budget is 5000 ms"
         )

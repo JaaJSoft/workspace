@@ -18,10 +18,14 @@ export class UnsupportedVersionError extends Error {}
 // algorithm lands without a data migration. The attestation signs the prefixed
 // form: an unsigned label would be the server's to change at will.
 export const PUBKEY_ALG_X25519 = 0x01;
+// Ed25519 carries its own label even though both keys are 32 raw bytes:
+// without it, decodePublicKey would hand a signature key back as a key
+// exchange key and nothing downstream would notice.
+export const PUBKEY_ALG_ED25519 = 0x02;
 
 // Raw key length per algorithm: a stored key of the wrong size is refused
 // rather than truncated.
-const PUBKEY_LENGTHS = { [PUBKEY_ALG_X25519]: 32 };
+const PUBKEY_LENGTHS = { [PUBKEY_ALG_X25519]: 32, [PUBKEY_ALG_ED25519]: 32 };
 
 export function encodePublicKey(raw, algId = PUBKEY_ALG_X25519) {
   const expected = PUBKEY_LENGTHS[algId];

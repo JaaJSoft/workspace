@@ -34,10 +34,14 @@ ARGON2_PARAMS = {"algo": "argon2id", "v": "1.3", "m": 65536, "t": 3, "p": 2}
 # algorithm lands without a data migration.
 SIG_ALG_ED25519 = 0x01
 PUBKEY_ALG_X25519 = 0x01
+# Ed25519 carries its own label even though both keys are 32 raw bytes:
+# without it, decode_public_key would hand a signature key back as a key
+# exchange key and nothing downstream would notice.
+PUBKEY_ALG_ED25519 = 0x02
 
 # Raw key length per algorithm: a stored key of the wrong size is refused
 # rather than truncated.
-_PUBKEY_LENGTHS = {PUBKEY_ALG_X25519: 32}
+_PUBKEY_LENGTHS = {PUBKEY_ALG_X25519: 32, PUBKEY_ALG_ED25519: 32}
 
 SECRET_KEY_LENGTH = 32
 SALT_LENGTH = 32

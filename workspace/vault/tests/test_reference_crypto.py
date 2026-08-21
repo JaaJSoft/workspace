@@ -338,7 +338,35 @@ class PublicKeyEncodingTests(SimpleTestCase):
             primitives.generate_kex_keypair().public_key()
         )
         with self.assertRaises(ValueError):
-            primitives.decode_public_key(bytes([0x02]) + stored[1:])
+            primitives.decode_public_key(bytes([0x7F]) + stored[1:])
+
+    def test_swapping_two_known_labels_of_equal_length_is_not_the_decoders_job(self):
+        """X25519 and Ed25519 are both 32 raw bytes, so relabelling one as the
+        other decodes cleanly. That is not a hole in the decoder: the label is
+        signed as part of the stored form the attestation covers, and it is the
+        signature that refuses the swap. Pinned so nobody later "fixes" the
+        decoder by guessing at key material it cannot inspect.
+        """
+        stored = primitives.encode_public_key(
+            primitives.generate_kex_keypair().public_key()
+        )
+        relabelled = bytes([primitives.PUBKEY_ALG_ED25519]) + stored[1:]
+        self.assertEqual(primitives.decode_public_key(relabelled), stored[1:])
+
+    def test_encodes_an_ed25519_public_key_under_its_own_algorithm_byte(self):
+        key = primitives.generate_sig_keypair().public_key()
+        stored = primitives.encode_public_key(key, primitives.PUBKEY_ALG_ED25519)
+        self.assertEqual(stored[0], 0x02)
+        self.assertEqual(len(stored), 33)
+        self.assertEqual(
+            primitives.decode_public_key(stored), primitives.public_bytes(key)
+        )
+
+    def test_refuses_an_ed25519_key_of_the_wrong_length(self):
+        with self.assertRaises(ValueError):
+            primitives.decode_public_key(
+                bytes([primitives.PUBKEY_ALG_ED25519]) + bytes(31)
+            )
 
     def test_a_truncated_key_is_refused(self):
         stored = primitives.encode_public_key(

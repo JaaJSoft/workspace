@@ -221,6 +221,28 @@ def build_vectors() -> dict:
                 ),
             },
         ],
+        "public_keys": [
+            {
+                # X25519 and Ed25519 are both 32 raw bytes; only the label
+                # separates them once stored, so the label is what is frozen.
+                "id": "x25519-public-key-encoding",
+                "raw_b64": to_base64url(
+                    primitives.public_bytes(recipient.public_key())
+                ),
+                "alg": primitives.PUBKEY_ALG_X25519,
+                "expected_stored_b64": to_base64url(kex_pub_stored),
+            },
+            {
+                "id": "ed25519-public-key-encoding",
+                "raw_b64": to_base64url(primitives.public_bytes(signer.public_key())),
+                "alg": primitives.PUBKEY_ALG_ED25519,
+                "expected_stored_b64": to_base64url(
+                    primitives.encode_public_key(
+                        signer.public_key(), primitives.PUBKEY_ALG_ED25519
+                    )
+                ),
+            },
+        ],
     }
 
 

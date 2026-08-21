@@ -136,5 +136,19 @@
       "sender_sk_b64": "ERERERERERERERERERERERERERERERERERERERERERE"
     }
   ],
+  "public_keys": [
+    {
+      "alg": 1,
+      "expected_stored_b64": "AQ-qaE7SiGe5f0pqLe5d-M6XTna3AY4_IqHEzyZ4Vw8g",
+      "id": "x25519-public-key-encoding",
+      "raw_b64": "D6poTtKIZ7l_Smot7l34zpdOdrcBjj8iocTPJnhXDyA"
+    },
+    {
+      "alg": 2,
+      "expected_stored_b64": "AhfLefsrQSDysexl5BmNbgiyjoE_6wHkpACDm4XhgIDO",
+      "id": "ed25519-public-key-encoding",
+      "raw_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4"
+    }
+  ],
   "version": 1
 }

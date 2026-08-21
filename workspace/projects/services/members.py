@@ -58,7 +58,6 @@ def add_member(project, user, *, role=ProjectMember.Role.MEMBER):
     )
     if not created:
         if member.left_at is not None:
-            # Reactivate a departed membership row.
             member.role = role
             member.left_at = None
             member.save(update_fields=["role", "left_at"])

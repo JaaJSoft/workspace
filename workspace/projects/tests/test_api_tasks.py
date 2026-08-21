@@ -85,8 +85,8 @@ class TaskListCreateTests(TaskApiMixin, APITestCase):
         self.assertEqual([t["title"] for t in response.data], ["alpha"])
 
     def test_task_search_matches_description(self):
-        # `?q=` used to be a title-only icontains; full-text search must
-        # also match words that appear only in the description.
+        # `?q=` must also match words that appear only in the description,
+        # not just in the title.
         task = create_task(self.project, self.admin, title="Quarterly review")
         task.description = "prepare the pelican slides"
         task.save(update_fields=["description"])

@@ -7,9 +7,7 @@ Parameters:
 - entries: list of {label, count, color, css_class, max_count} as produced by
   open_task_distribution() and widened by _with_bar_maximum() in the view.
 
-Bar widths use widthratio rather than the SVG chart primitive: this is the
-one-dimensional case Django already handles without geometry. A status
-column carries a raw CSS colour, everything else a daisyUI class.
+A status column carries a raw CSS colour, everything else a daisyUI class.
 {% endcomment %}
 <section class="rounded-box bg-base-200 p-4">
   <h2 class="font-semibold mb-3 flex items-center gap-2">

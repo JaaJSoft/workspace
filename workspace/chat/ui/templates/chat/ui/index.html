@@ -109,7 +109,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               aria-label="Preferences"
               title="Preferences"
             >
-              <i data-lucide="settings" class="w-4 h-4"></i>
+              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
             </button>
             {% if ai_enabled %}
               <button
@@ -138,7 +138,7 @@ be defined before the parser reaches the markup using it, or server-rendered
           class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4"
         >
           <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-            <i data-lucide="settings" class="w-4 h-4 text-info"></i>
+            <i data-lucide="sliders-horizontal" class="w-4 h-4 text-info"></i>
             Preferences
           </h4>
           {% include "chat/ui/partials/_preferences_content.html" %}
@@ -258,7 +258,7 @@ be defined before the parser reaches the markup using it, or server-rendered
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
         </ul>
         <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
         </ul>
       </div>
     </aside>

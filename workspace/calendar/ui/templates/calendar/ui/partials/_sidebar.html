@@ -44,16 +44,16 @@
               type="button"
               tabindex="0"
               class="btn btn-ghost btn-sm btn-square hover:text-accent"
-              title="Settings"
+              title="Preferences"
             >
-              <i data-lucide="settings" class="w-4 h-4"></i>
+              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
             </button>
             <div
               tabindex="0"
               class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1"
             >
               <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-                <i data-lucide="settings" class="w-4 h-4 text-accent"></i>
+                <i data-lucide="sliders-horizontal" class="w-4 h-4 text-accent"></i>
                 Preferences
               </h4>
               {% include "calendar/ui/partials/_preferences_content.html" %}
@@ -414,7 +414,7 @@
         {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" %}
       </ul>
       <ul class="menu p-0 lg:hidden">
-        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="accent" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" %}
+        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="accent" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" %}
       </ul>
     </div>
   </aside>

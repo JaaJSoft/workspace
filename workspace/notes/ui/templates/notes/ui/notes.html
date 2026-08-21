@@ -59,17 +59,17 @@
                 type="button"
                 tabindex="0"
                 class="btn btn-ghost btn-sm btn-square hover:text-success"
-                aria-label="Settings"
-                title="Settings"
+                aria-label="Preferences"
+                title="Preferences"
               >
-                <i data-lucide="settings" class="w-4 h-4"></i>
+                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
               </button>
               <div
                 tabindex="0"
                 class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1"
               >
                 <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-                  <i data-lucide="settings" class="w-4 h-4 text-success"></i>
+                  <i data-lucide="sliders-horizontal" class="w-4 h-4 text-success"></i>
                   Preferences
                 </h4>
                 {% include "notes/ui/partials/_preferences_content.html" %}
@@ -98,7 +98,7 @@
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="success" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
         </ul>
         <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="success" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="success" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" %}
         </ul>
       </div>
     </aside>
@@ -332,7 +332,7 @@
   <dialog id="notes-prefs-dialog" class="modal" x-data="notesPreferences()">
     <div class="modal-box">
       <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="settings" class="w-5 h-5 text-success"></i>
+        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-success"></i>
         Preferences
       </h3>
       <div class="mt-4">{% include "notes/ui/partials/_preferences_content.html" %}</div>

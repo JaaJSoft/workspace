@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.projects.models import Project, Task, TaskEvent
+from workspace.projects.services.links import create_link
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.subtasks import create_subtask
 from workspace.projects.services.tasks import create_task, delete_task
@@ -861,3 +862,34 @@ class SettingsEstimateUnitContextTests(
         self.client.force_login(self.admin)
         resp = self.client.get(f"/projects/{self.project.uuid}/settings")
         self.assertEqual(resp.context["project_data"]["estimate_unit"], "points")
+
+
+class BoardBlockedBadgeTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        todo = self.project.statuses.get(name="To do")
+        self.blocker = create_task(
+            self.project, self.admin, title="Blocker", status=todo
+        )
+        self.blocked = create_task(
+            self.project, self.admin, title="Blocked one", status=todo
+        )
+        create_link(self.blocker, self.blocked, "blocks")
+
+    def _board(self):
+        self.client.force_login(self.member)
+        return self.client.get(f"/projects/{self.project.uuid}/board")
+
+    def test_card_carries_the_badge_when_blocked_by_an_open_task(self):
+        response = self._board()
+        self.assertContains(response, "data-blocked-badge", count=1)
+        tasks = {t.title: t for c in response.context["columns"] for t in c["tasks"]}
+        self.assertTrue(tasks["Blocked one"].is_blocked)
+        self.assertFalse(tasks["Blocker"].is_blocked)
+
+    def test_done_blocker_clears_the_badge(self):
+        done = self.project.statuses.get(name="Done")
+        self.blocker.status = done
+        self.blocker.save(update_fields=["status"])
+        response = self._board()
+        self.assertNotContains(response, "data-blocked-badge")

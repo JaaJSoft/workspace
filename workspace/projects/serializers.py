@@ -18,6 +18,7 @@ from .models import (
     TaskStatus,
 )
 from .queries import get_project_role
+from .services.links import RELATIONS
 from .services.references import KEY_RE
 
 User = get_user_model()
@@ -340,6 +341,11 @@ class SubtaskSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError("Title cannot be blank.")
         return value
+
+
+class TaskLinkCreateSerializer(serializers.Serializer):
+    target = serializers.UUIDField()
+    relation = serializers.ChoiceField(choices=sorted(RELATIONS))
 
 
 class TaskCommentAuthorSerializer(serializers.Serializer):

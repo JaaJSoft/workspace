@@ -28,6 +28,7 @@ from workspace.projects.services.analytics import (
 from workspace.projects.services.attachments import visible_attachments
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
+from workspace.projects.services.links import annotate_blocked, links_for_task
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.references import REFERENCE_RE
 from workspace.projects.services.rendering import render_task_description
@@ -243,8 +244,15 @@ def _task_panel_context(user, project, role, task):
             visible_attachments(user, task), many=True
         ).data,
         "panel_description_html": render_task_description(task.description),
+        "panel_links": links_for_task(user, task),
         "panel_task_data": {
             "uuid": str(task.uuid),
+            "project": str(project.uuid),
+            "links_url": reverse(
+                "project-task-links",
+                kwargs={"project_uuid": project.uuid, "task_uuid": task.uuid},
+            ),
+            "link_search_url": reverse("project-tasks-search"),
             "title": task.title,
             "description": task.description,
             "status": str(task.status_id),
@@ -320,7 +328,7 @@ def board(request, project_uuid):
     context["backlog_count"] = project.tasks.filter(
         status__category=TaskStatus.Category.BACKLOG
     ).count()
-    tasks_qs = (
+    tasks_qs = annotate_blocked(
         project.tasks.exclude(status__category=TaskStatus.Category.BACKLOG)
         .select_related("status")
         .prefetch_related("assignees", "labels")

@@ -1119,3 +1119,30 @@ test('handleKeydown ignores "?" while typing or with a dialog open', () => {
   board.handleKeydown(helpKeyEvent({}));
   assert.deepStrictEqual(shown, []);
 });
+
+test('searchLinkTasks: clearing the input invalidates an in-flight search', async () => {
+  const panel = ctx.taskPanel();
+  panel.data = { uuid: 'anchor-uuid', link_search_url: '/api/v1/projects/tasks/search' };
+  panel.links = [];
+
+  let resolveFetch;
+  ctx.fetch = () => new Promise((resolve) => { resolveFetch = resolve; });
+
+  panel.linkQuery = 'exp';
+  const pending = panel.searchLinkTasks();
+
+  // The user clears the input before the response lands.
+  panel.linkQuery = '';
+  await panel.searchLinkTasks();
+  assert.equal(panel.linkDropdown, false);
+
+  resolveFetch({
+    ok: true,
+    json: async () => [{ uuid: 'other', reference: 'IT-1', title: 'Stale' }],
+  });
+  await pending;
+
+  // The stale response must not reopen the dropdown nor restore results.
+  assert.equal(panel.linkDropdown, false);
+  assert.equal(panel.linkResults.length, 0);
+});

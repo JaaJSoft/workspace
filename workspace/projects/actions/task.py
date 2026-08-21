@@ -57,6 +57,15 @@ class AttachFileAction(BaseProjectAction):
 
 
 @ProjectActionRegistry.register
+class LinkTaskAction(BaseProjectAction):
+    id = "link"
+    label = "Link"
+    icon = "link"
+    category = ActionCategory.ORGANIZE
+    target_types = ("task",)
+
+
+@ProjectActionRegistry.register
 class CommentTaskAction(BaseProjectAction):
     id = "comment"
     label = "Comment"

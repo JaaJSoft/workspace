@@ -11,6 +11,7 @@
   {{ panel_task_data|json_script:"task-panel-data" }}
   {{ panel_action_ids|json_script:"task-panel-actions" }}
   {{ panel_attachments|json_script:"task-panel-attachments" }}
+  {{ panel_links|json_script:"task-panel-links" }}
 
   {# Meta strip: navigation, reference and task actions on a tinted band, #}
   {# visually separated from the editable content below. #}
@@ -390,6 +391,127 @@
       {% if "attach" in panel_action_ids %}
         {% include "ui/partials/attachment_chips.html" with chips_class="flex flex-wrap gap-2 mb-2" %}
         {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-bottom" button_class="btn btn-outline btn-xs gap-1.5" icon_class="w-3.5 h-3.5" label="Attach" %}
+      {% endif %}
+    </section>
+
+    <section>
+      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Linked tasks</h3>
+      <ul class="flex flex-col gap-1.5 mb-2" x-show="links.length" x-cloak>
+        <template x-for="link in links" :key="link.uuid">
+          {# items-baseline, not items-center: the smaller label and mono #}
+          {# reference would paint high against the text-sm title; the #}
+          {# remove button opts back out via self-center. #}
+          <li
+            class="flex items-baseline gap-2 min-w-0 rounded-lg border border-base-300/60 bg-base-200/40 px-2.5 py-1.5"
+          >
+            <span class="text-xs text-base-content/60 shrink-0" x-text="link.label"></span>
+            <a
+              :href="link.task.url"
+              class="group flex items-baseline gap-2 min-w-0"
+              @click.prevent="openLinkedTask(link.task)"
+            >
+              <span
+                class="font-mono text-xs text-base-content/50 shrink-0"
+                x-text="link.task.reference"
+              ></span>
+              <span
+                class="text-sm truncate group-hover:underline"
+                :class="link.task.is_done && 'line-through opacity-60'"
+                x-text="link.task.title"
+              ></span>
+            </a>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square ml-auto self-center shrink-0"
+              x-show="can('link')"
+              @click="removeLink(link.uuid)"
+              aria-label="Remove link"
+              title="Remove link"
+            >
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </li>
+        </template>
+      </ul>
+      <p
+        class="text-sm text-base-content/50 italic mb-2"
+        x-show="!links.length"
+        x-cloak
+      >
+        No linked tasks.
+      </p>
+      {% if "link" in panel_action_ids %}
+        {# Stacked full-width rows: side by side the panel leaves the search #}
+        {# input too narrow to read a reference and a title fragment. #}
+        <div class="flex flex-col gap-1.5">
+          <select
+            class="select select-sm select-bordered w-full"
+            x-model="linkRel"
+            aria-label="Link type"
+          >
+            <option value="blocks">blocks</option>
+            <option value="blocked_by">is blocked by</option>
+            <option value="duplicates">duplicates</option>
+            <option value="duplicated_by">is duplicated by</option>
+            <option value="relates_to">relates to</option>
+          </select>
+          <div class="relative min-w-0" @click.outside="linkDropdown = false">
+            <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+              {# shrink-0 + min-w-0: the label-selector precedent - keeps the icon from flex-crushing. #}
+              <i data-lucide="link" class="w-4 h-4 opacity-60 shrink-0"></i>
+              <input
+                type="text"
+                class="grow min-w-0"
+                placeholder="Reference or title..."
+                x-model="linkQuery"
+                maxlength="255"
+                autocomplete="off"
+                @input.debounce.300ms="searchLinkTasks()"
+                @focus="searchLinkTasks()"
+                @keydown.escape="linkDropdown = false"
+              />
+              <span
+                x-show="linkSaving"
+                x-cloak
+                class="loading loading-spinner loading-xs"
+              ></span>
+            </label>
+            <div
+              x-show="linkDropdown"
+              x-cloak
+              class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-64 overflow-y-auto overflow-x-hidden thin-scrollbar"
+            >
+              <ul class="menu p-1" x-show="linkResults.length">
+                <template x-for="result in linkResults" :key="result.uuid">
+                  <li class="w-full min-w-0">
+                    <button
+                      type="button"
+                      class="flex w-full min-w-0 items-baseline gap-2 rounded"
+                      @click="addLink(result)"
+                    >
+                      <span
+                        class="font-mono text-xs text-base-content/50 shrink-0"
+                        x-text="result.reference"
+                      ></span>
+                      <span class="text-sm min-w-0 truncate" x-text="result.title"></span>
+                      <span
+                        class="ml-auto text-xs text-base-content/40 truncate max-w-24"
+                        x-text="result.project_name"
+                      ></span>
+                    </button>
+                  </li>
+                </template>
+              </ul>
+              <p
+                x-show="!linkResults.length"
+                x-cloak
+                class="p-3 text-sm text-base-content/60 text-center"
+              >
+                No matching tasks
+              </p>
+            </div>
+          </div>
+        </div>
       {% endif %}
     </section>
 

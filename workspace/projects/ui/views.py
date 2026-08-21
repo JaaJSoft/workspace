@@ -169,7 +169,8 @@ def _base_context(request, project, role, view):
     }
     if not request.headers.get("X-Alpine-Request"):
         context["projects"] = _sidebar_projects(request.user)
-        context["reminder_hour"] = reminder_hour(request.user)
+        context["projects_prefs"] = {"reminder_hour": reminder_hour(request.user)}
+        context["reminder_hours"] = [(h, f"{h:02d}:00") for h in range(24)]
         context.update(_deep_link_panel(request, project, role))
     return context
 

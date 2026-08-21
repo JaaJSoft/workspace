@@ -92,8 +92,11 @@
         <span class="flex-1 flex items-center gap-2">
           Task
           {% if project.estimate_unit %}
-            <span class="badge badge-ghost badge-sm font-mono normal-case" title="Total estimate">
-              &Sigma;&nbsp;{{ estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% endif %}
+            <span
+              class="badge badge-ghost badge-sm font-mono normal-case"
+              title="Estimate total · task count"
+            >
+              {{ estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ backlog_tasks|length }}
             </span>
           {% endif %}
         </span>

@@ -1,7 +1,10 @@
 {# Estimate chip shared by the board card, backlog row and popover card. #}
 {# Renders nothing when the project doesn't estimate or the task is unestimated. #}
 {% if project.estimate_unit and task.estimate is not None %}
-  <span class="badge badge-ghost badge-xs font-mono shrink-0" title="Estimate">
+  <span
+    class="badge badge-ghost badge-xs font-mono shrink-0"
+    title="Estimate"
+  >
     {{ task.estimate|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% endif %}
   </span>
 {% endif %}

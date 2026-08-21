@@ -23,11 +23,16 @@
           </h3>
           <div class="flex items-center gap-1">
             {% if project.estimate_unit %}
-              <span class="badge badge-ghost badge-sm font-mono" title="Total estimate">
-                &Sigma;&nbsp;{{ column.estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% endif %}
+              {# One combined chip: the united number is the estimate total, the bare one the task count. #}
+              <span
+                class="badge badge-ghost badge-sm font-mono"
+                title="Estimate total · task count"
+              >
+                {{ column.estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ column.tasks|length }}
               </span>
+            {% else %}
+              <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
             {% endif %}
-            <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
             {% if writable %}
               <button
                 class="btn btn-ghost btn-xs btn-square"

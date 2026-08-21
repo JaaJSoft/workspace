@@ -109,7 +109,9 @@
           {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" disabled=True label="Priority" %}
         {% endif %}
       </div>
-      <label class="form-control {% if not project.estimate_unit %}col-span-2{% endif %}">
+      <label
+        class="form-control {% if not project.estimate_unit %}col-span-2{% endif %}"
+      >
         <div class="label py-1"><span class="label-text text-xs">Due date</span></div>
         <input
           type="date"

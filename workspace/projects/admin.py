@@ -6,6 +6,7 @@ from .models import (
     Label,
     Project,
     ProjectMember,
+    Subtask,
     Task,
     TaskComment,
     TaskEvent,
@@ -80,6 +81,16 @@ class TaskAdmin(ModelAdmin):
     )
     def priority_badge(self, obj):
         return obj.priority
+
+
+@admin.register(Subtask)
+class SubtaskAdmin(ModelAdmin):
+    list_display = ("title", "task", "done", "position", "created_at")
+    list_filter = ("done",)
+    list_select_related = ("task",)
+    search_fields = ("title", "task__title")
+    autocomplete_fields = ("task",)
+    readonly_fields = ("uuid", "created_at")
 
 
 @admin.register(TaskComment)

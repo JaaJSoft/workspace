@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Case, Count, IntegerField, Q, Sum, Value, When
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -250,6 +251,13 @@ def _task_panel_context(user, project, role, task):
                 {"id": str(u.pk), "username": u.username} for u in task.assignees.all()
             ],
             "labels": [str(label.uuid) for label in task.labels.all()],
+            "subtasks": [
+                {"uuid": str(s.uuid), "title": s.title, "done": s.done}
+                for s in task.subtasks.all()
+            ],
+            "subtasks_url": reverse(
+                "project-task-subtasks", args=[project.uuid, task.uuid]
+            ),
         },
     }
 
@@ -311,6 +319,14 @@ def board(request, project_uuid):
         project.tasks.exclude(status__category=TaskStatus.Category.BACKLOG)
         .select_related("status")
         .prefetch_related("assignees", "labels")
+        # distinct=True: the task filters may join M2Ms, and duplicated rows
+        # would otherwise inflate the checklist counters on the cards.
+        .annotate(
+            subtask_count=Count("subtasks", distinct=True),
+            subtask_done_count=Count(
+                "subtasks", filter=Q(subtasks__done=True), distinct=True
+            ),
+        )
         .order_by("position", "created_at")
     )
     hidden_counts = {}

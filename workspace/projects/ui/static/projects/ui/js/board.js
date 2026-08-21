@@ -401,7 +401,7 @@ function projectBoard(config) {
       }
     },
 
-    refresh() {
+    refreshContent() {
       let url = config.projectBase;
       if (this.currentView === 'backlog') url += '/backlog';
       else if (this.currentView === 'tasks') url += '/tasks';
@@ -412,6 +412,10 @@ function projectBoard(config) {
       this.$ajax(taskFilterUrl(window.location.origin + url, this.filters), {
         target: 'project-content',
       });
+    },
+
+    refresh() {
+      this.refreshContent();
       // Board-level changes (drag moves, send-to-board, field edits) also
       // change the open task's panel content: reload it alongside so its
       // status, activity and metadata stay in sync with the cards.
@@ -784,11 +788,18 @@ function taskPanel() {
     users: [],
     assigneeNames: {},
     linkCopied: false,
+    subtasks: [],
+    newSubtask: '',
+    savingSubtask: false,
+    editingSubtask: null,
+    subtaskDraft: '',
+    draggingSubtask: null,
 
     init() {
       this.data = JSON.parse(
         document.getElementById('task-panel-data').textContent
       );
+      this.subtasks = this.data.subtasks || [];
       this.actions = JSON.parse(
         document.getElementById('task-panel-actions').textContent
       );
@@ -896,6 +907,153 @@ function taskPanel() {
     removeTask() {
       if (!this.can('delete')) return;
       this.deletePanelTask(this.data.uuid, this.data.title);
+    },
+
+    // ── Checklist ─────────────────────────────────────────
+    // Mutations keep the checklist in local state and only re-render the
+    // board content (refreshContent, for the card counters) instead of
+    // reloading the whole panel: a panel reload would steal focus from the
+    // add input between two quick entries.
+
+    subtasksDone() {
+      return this.subtasks.filter((s) => s.done).length;
+    },
+
+    subtaskUrl(uuid) {
+      return this.data.subtasks_url + '/' + uuid;
+    },
+
+    async addSubtask() {
+      const title = this.newSubtask.trim();
+      if (!title || !this.can('edit') || this.savingSubtask) return;
+      this.savingSubtask = true;
+      try {
+        const resp = await fetch(this.data.subtasks_url, {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({ title: title }),
+        });
+        if (!resp.ok) throw new Error('Create failed');
+        this.subtasks.push(await resp.json());
+        this.newSubtask = '';
+        this.refreshContent();
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not add the item.');
+      } finally {
+        this.savingSubtask = false;
+      }
+    },
+
+    async toggleSubtask(st) {
+      if (!this.can('edit')) return;
+      st.done = !st.done;
+      try {
+        const resp = await fetch(this.subtaskUrl(st.uuid), {
+          method: 'PATCH',
+          headers: this.headers(),
+          body: JSON.stringify({ done: st.done }),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+        this.refreshContent();
+      } catch (e) {
+        st.done = !st.done;
+        if (window.AppAlert) AppAlert.error('Could not save the item.');
+      }
+    },
+
+    startSubtaskEdit(st) {
+      if (!this.can('edit')) return;
+      this.editingSubtask = st.uuid;
+      this.subtaskDraft = st.title;
+    },
+
+    async commitSubtaskEdit(st) {
+      // Escape clears editingSubtask before blur fires; the guard makes
+      // the trailing blur commit a no-op (same shape as commitDraft).
+      if (this.editingSubtask !== st.uuid) return;
+      this.editingSubtask = null;
+      const title = this.subtaskDraft.trim();
+      if (!title || title === st.title) return;
+      const previous = st.title;
+      st.title = title;
+      try {
+        const resp = await fetch(this.subtaskUrl(st.uuid), {
+          method: 'PATCH',
+          headers: this.headers(),
+          body: JSON.stringify({ title: title }),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+      } catch (e) {
+        st.title = previous;
+        if (window.AppAlert) AppAlert.error('Could not save the item.');
+      }
+    },
+
+    async removeSubtask(st) {
+      if (!this.can('edit')) return;
+      try {
+        const resp = await fetch(this.subtaskUrl(st.uuid), {
+          method: 'DELETE',
+          headers: this.headers(),
+        });
+        if (!resp.ok) throw new Error('Delete failed');
+        this.subtasks = this.subtasks.filter((s) => s.uuid !== st.uuid);
+        this.refreshContent();
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not remove the item.');
+      }
+    },
+
+    onSubtaskDragStart(event, uuid) {
+      if (!this.can('edit')) {
+        event.preventDefault();
+        return;
+      }
+      this.draggingSubtask = uuid;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', uuid);
+    },
+
+    onSubtaskDragOver(event) {
+      if (!this.draggingSubtask) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    },
+
+    onSubtaskDrop(event) {
+      const uuid = this.draggingSubtask;
+      this.draggingSubtask = null;
+      if (!uuid) return;
+      event.preventDefault();
+      const target = event.target.closest('[data-subtask-uuid]');
+      const targetUuid = target ? target.dataset.subtaskUuid : null;
+      if (targetUuid === uuid) return;
+      // Optimistic local reorder (board onDrop precedent); the endpoint is
+      // idempotent, and any failure refreshes back to server truth.
+      const items = this.subtasks.slice();
+      const from = items.findIndex((s) => s.uuid === uuid);
+      if (from === -1) return;
+      const moved = items.splice(from, 1)[0];
+      const to = targetUuid
+        ? items.findIndex((s) => s.uuid === targetUuid)
+        : items.length;
+      items.splice(to === -1 ? items.length : to, 0, moved);
+      this.subtasks = items;
+      this.saveSubtaskOrder();
+    },
+
+    async saveSubtaskOrder() {
+      try {
+        const resp = await fetch(this.data.subtasks_url + '/reorder', {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({ order: this.subtasks.map((s) => s.uuid) }),
+        });
+        if (!resp.ok) throw new Error('Reorder failed');
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not reorder the checklist.');
+        this.refresh();
+      }
     },
 
     copyLink(reference) {

@@ -177,6 +177,111 @@
       </template>
     </section>
 
+    <section>
+      <h3
+        class="text-xs font-semibold uppercase text-base-content/50 mb-1 flex items-center gap-2"
+      >
+        <span>Checklist</span>
+        <span
+          class="font-mono normal-case"
+          x-show="subtasks.length"
+          x-cloak
+          x-text="subtasksDone() + '/' + subtasks.length"
+        ></span>
+      </h3>
+      <progress
+        class="progress progress-success w-full h-1 mb-1.5"
+        x-show="subtasks.length"
+        x-cloak
+        :value="subtasksDone()"
+        :max="subtasks.length"
+      ></progress>
+      <ul
+        class="flex flex-col"
+        x-show="subtasks.length"
+        x-cloak
+        @dragover="onSubtaskDragOver($event)"
+        @drop="onSubtaskDrop($event)"
+      >
+        <template x-for="st in subtasks" :key="st.uuid">
+          <li
+            class="group flex items-center gap-2 py-0.5 rounded {% if "edit" in panel_action_ids %}cursor-grab{% endif %}"
+            :class="draggingSubtask === st.uuid && 'opacity-50'"
+            :data-subtask-uuid="st.uuid"
+            {% if "edit" in panel_action_ids %} draggable="true" @dragstart="onSubtaskDragStart($event, st.uuid)" @dragend="draggingSubtask = null" {% endif %}
+          >
+            <input
+              type="checkbox"
+              class="checkbox checkbox-sm shrink-0"
+              :checked="st.done"
+              @change="toggleSubtask(st)"
+              :aria-label="st.title"
+              {% if "edit" not in panel_action_ids %}disabled{% endif %}
+            />
+            <template x-if="editingSubtask !== st.uuid">
+              <span
+                class="flex-1 min-w-0 text-sm break-words"
+                :class="st.done && 'line-through text-base-content/50'"
+                {% if "edit" in panel_action_ids %}@click="startSubtaskEdit(st)"{% endif %}
+                x-text="st.title"
+              ></span>
+            </template>
+            <template x-if="editingSubtask === st.uuid">
+              <input
+                type="text"
+                maxlength="255"
+                class="input input-bordered input-xs flex-1 min-w-0"
+                x-model="subtaskDraft"
+                x-init="$nextTick(() => $el.focus())"
+                @keydown.enter.prevent="$el.blur()"
+                @keydown.escape="editingSubtask = null"
+                @blur="commitSubtaskEdit(st)"
+              />
+            </template>
+            {% if "edit" in panel_action_ids %}
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                @click="removeSubtask(st)"
+                aria-label="Remove item"
+              >
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+              </button>
+            {% endif %}
+          </li>
+        </template>
+      </ul>
+      {% if "edit" in panel_action_ids %}
+        <div class="flex items-center gap-2 mt-1.5">
+          <input
+            type="text"
+            maxlength="255"
+            class="input input-bordered input-sm flex-1"
+            placeholder="Add an item..."
+            x-model="newSubtask"
+            @keydown.enter.prevent="addSubtask()"
+          />
+          <button
+            type="button"
+            class="btn btn-sm btn-square"
+            @click="addSubtask()"
+            :disabled="!newSubtask.trim() || savingSubtask"
+            aria-label="Add item"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        </div>
+      {% else %}
+        <p
+          class="text-sm text-base-content/50 italic"
+          x-show="!subtasks.length"
+          x-cloak
+        >
+          No checklist.
+        </p>
+      {% endif %}
+    </section>
+
     <section @panel-assignee-selected.window="addAssignee($event.detail.user)">
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Assignees</h3>
       <div

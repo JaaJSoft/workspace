@@ -109,7 +109,7 @@
           {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" disabled=True label="Priority" %}
         {% endif %}
       </div>
-      <label class="form-control col-span-2">
+      <label class="form-control {% if not project.estimate_unit %}col-span-2{% endif %}">
         <div class="label py-1"><span class="label-text text-xs">Due date</span></div>
         <input
           type="date"
@@ -119,6 +119,22 @@
           {% if "set_due" not in panel_action_ids %}disabled{% endif %}
         />
       </label>
+      {% if project.estimate_unit %}
+        <label class="form-control">
+          <div class="label py-1"><span class="label-text text-xs">Estimate ({{ project.get_estimate_unit_display|lower }})</span></div>
+          {# '' commits as null (unestimated); '0' is a real value, hence the explicit check. #}
+          <input
+            type="number"
+            class="input input-bordered input-sm"
+            min="0"
+            step="0.5"
+            inputmode="decimal"
+            x-model="data.estimate"
+            @change="commitField('estimate', data.estimate === '' ? null : data.estimate)"
+            {% if "edit" not in panel_action_ids %}disabled{% endif %}
+          />
+        </label>
+      {% endif %}
     </div>
 
     <section>

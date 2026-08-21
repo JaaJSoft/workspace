@@ -49,6 +49,7 @@ def create_task(
     status=None,
     priority=Task.Priority.MEDIUM,
     due_date=None,
+    estimate=None,
     assignees=(),
     labels=(),
 ):
@@ -69,6 +70,7 @@ def create_task(
             status=status,
             priority=priority,
             due_date=due_date,
+            estimate=estimate,
             created_by=user,
             position=_locked_tail_position(project, status),
         )

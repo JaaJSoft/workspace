@@ -61,6 +61,19 @@
             x-model="form.due_date"
           />
         </label>
+        {% if project.estimate_unit %}
+          <label class="form-control">
+            <div class="label"><span class="label-text">Estimate ({{ project.get_estimate_unit_display|lower }})</span></div>
+            <input
+              type="number"
+              class="input input-bordered input-sm"
+              min="0"
+              step="0.5"
+              inputmode="decimal"
+              x-model="form.estimate"
+            />
+          </label>
+        {% endif %}
       </div>
       <div
         class="mt-2"

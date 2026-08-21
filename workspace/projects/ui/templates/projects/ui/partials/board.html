@@ -22,6 +22,11 @@
             {{ column.status.name }}
           </h3>
           <div class="flex items-center gap-1">
+            {% if project.estimate_unit %}
+              <span class="badge badge-ghost badge-sm font-mono" title="Total estimate">
+                &Sigma;&nbsp;{{ column.estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% endif %}
+              </span>
+            {% endif %}
             <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
             {% if writable %}
               <button

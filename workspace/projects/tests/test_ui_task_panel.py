@@ -1,5 +1,6 @@
 import re
 import uuid as uuid_module
+from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
@@ -240,3 +241,24 @@ class TaskDeepLinkTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.client.get(f"/projects/{self.project.uuid}?task=blah")
         self.assertEqual(resp.status_code, 200)
         self.assertNotIn("panel_task", resp.context)
+
+
+class TaskPanelEstimateTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def test_panel_payload_carries_the_estimate(self):
+        self.project.estimate_unit = "points"
+        self.project.save(update_fields=["estimate_unit"])
+        task = create_task(
+            self.project, self.admin, title="Sized", estimate=Decimal("3.5")
+        )
+        self.client.force_login(self.member)
+        resp = self.client.get(f"/projects/{self.project.uuid}/tasks/{task.uuid}/panel")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["panel_task_data"]["estimate"], "3.5")
+        self.assertContains(resp, "Estimate (story points)")
+
+    def test_estimate_field_absent_when_estimation_is_disabled(self):
+        task = create_task(self.project, self.admin, title="Plain")
+        self.client.force_login(self.member)
+        resp = self.client.get(f"/projects/{self.project.uuid}/tasks/{task.uuid}/panel")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "Estimate (")

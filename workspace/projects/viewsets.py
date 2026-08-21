@@ -38,6 +38,7 @@ from .serializers import (
     TaskStatusSerializer,
 )
 from .services.comments import notify_comment_added, notify_comment_edited
+from .services.estimates import format_estimate
 from .services.events import record_task_event
 from .services.members import (
     ProjectRuleError,
@@ -477,6 +478,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def perform_update(self, serializer):
         old_status = serializer.instance.status
         old_due_date = serializer.instance.due_date
+        old_estimate = serializer.instance.estimate
         # Compared before save: afterwards the instance already carries the
         # new values and every edit would look like a no-op.
         fields_updated = has_field_updates(
@@ -488,6 +490,14 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         if fields_updated:
             record_task_event(
                 task, type=TaskEvent.Type.UPDATED, actor=self.request.user
+            )
+        if task.estimate != old_estimate:
+            record_task_event(
+                task,
+                type=TaskEvent.Type.ESTIMATED,
+                actor=self.request.user,
+                from_value=format_estimate(old_estimate),
+                to_value=format_estimate(task.estimate),
             )
         if task.due_date != old_due_date and (
             task.due_date is None or task.due_date > timezone.localdate()

@@ -5,6 +5,7 @@ from workspace.projects.services.events import (
     events_for_project,
     move_event_type,
     record_task_event,
+    serialize_task_event,
 )
 from workspace.projects.services.tasks import (
     apply_status_change,
@@ -233,3 +234,43 @@ class ReorderEventTests(ProjectTestMixin, TestCase):
         reorder_tasks(self.project, self.done, [self.task.uuid], actor=self.admin)
         reorder_tasks(self.project, self.done, [self.task.uuid], actor=self.admin)
         self.assertEqual(TaskEvent.objects.count(), 1)
+
+
+class EstimateEventTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(self.project, self.admin, title="Sized")
+
+    def _event(self, from_value="", to_value=""):
+        return record_task_event(
+            self.task,
+            type=TaskEvent.Type.ESTIMATED,
+            actor=self.admin,
+            from_value=from_value,
+            to_value=to_value,
+        )
+
+    def test_record_stores_value_snapshots(self):
+        event = self._event(from_value="3", to_value="5")
+        event.refresh_from_db()
+        self.assertEqual(event.from_value, "3")
+        self.assertEqual(event.to_value, "5")
+        self.assertEqual(event.icon, "ruler")
+        self.assertEqual(event.short_label, "Estimate changed")
+
+    def test_serialized_label_names_the_change(self):
+        cases = [
+            ("3", "5", "Estimate changed: 3 → 5"),
+            ("", "5", "Estimate set to 5"),
+            ("3", "", "Estimate removed"),
+            ("", "", "Estimate changed"),
+        ]
+        for from_value, to_value, label in cases:
+            event = self._event(from_value=from_value, to_value=to_value)
+            self.assertEqual(serialize_task_event(event)["label"], label)
+
+    def test_other_event_labels_are_untouched(self):
+        event = record_task_event(
+            self.task, type=TaskEvent.Type.UPDATED, actor=self.admin
+        )
+        self.assertEqual(serialize_task_event(event)["label"], "Task updated")

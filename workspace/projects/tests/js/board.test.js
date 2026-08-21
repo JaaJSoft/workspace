@@ -421,6 +421,7 @@ test('fieldAction maps each editable field to its action id', () => {
     title: 'edit',
     description: 'edit',
     priority: 'edit',
+    estimate: 'edit',
     status: 'move',
     due_date: 'set_due',
     assignees: 'assign',

@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -401,3 +402,80 @@ class TaskUpdateEventTests(TaskApiMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(self._updated_events().count(), 0)
+
+
+class TaskEstimateApiTests(TaskApiMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.project.estimate_unit = "points"
+        self.project.save(update_fields=["estimate_unit"])
+
+    def test_create_with_estimate(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.tasks_url, {"title": "Sized", "estimate": "3.5"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["estimate"], "3.5")
+        task = Task.objects.get(uuid=response.data["uuid"])
+        self.assertEqual(task.estimate, Decimal("3.5"))
+
+    def test_estimate_change_records_a_dedicated_event(self):
+        task = create_task(
+            self.project, self.admin, title="Sized", estimate=Decimal("3")
+        )
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            f"{self.tasks_url}/{task.uuid}", {"estimate": "5"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        event = task.events.get(type=TaskEvent.Type.ESTIMATED)
+        self.assertEqual(event.from_value, "3")
+        self.assertEqual(event.to_value, "5")
+        # No generic UPDATED noise on top: the estimate has its own event.
+        self.assertFalse(task.events.filter(type=TaskEvent.Type.UPDATED).exists())
+
+    def test_equal_estimate_records_no_event(self):
+        task = create_task(
+            self.project, self.admin, title="Sized", estimate=Decimal("3.0")
+        )
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            f"{self.tasks_url}/{task.uuid}", {"estimate": "3"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(task.events.filter(type=TaskEvent.Type.ESTIMATED).exists())
+
+    def test_clearing_the_estimate_snapshots_an_empty_to_value(self):
+        task = create_task(
+            self.project, self.admin, title="Sized", estimate=Decimal("2")
+        )
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            f"{self.tasks_url}/{task.uuid}", {"estimate": None}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        task.refresh_from_db()
+        self.assertIsNone(task.estimate)
+        event = task.events.get(type=TaskEvent.Type.ESTIMATED)
+        self.assertEqual(event.from_value, "2")
+        self.assertEqual(event.to_value, "")
+
+    def test_invalid_estimates_are_rejected(self):
+        task = create_task(self.project, self.admin, title="Sized")
+        self.client.force_authenticate(self.member)
+        for bad in ("-1", "abc", "3.55", "123456"):
+            response = self.client.patch(
+                f"{self.tasks_url}/{task.uuid}", {"estimate": bad}, format="json"
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad)
+
+    def test_estimate_ordering_sorts_unestimated_last(self):
+        create_task(self.project, self.admin, title="five", estimate=Decimal("5"))
+        create_task(self.project, self.admin, title="one", estimate=Decimal("1"))
+        create_task(self.project, self.admin, title="none")
+        self.client.force_authenticate(self.member)
+        response = self.client.get(self.tasks_url, {"ordering": "estimate"})
+        self.assertEqual([t["title"] for t in response.data], ["one", "five", "none"])
+        response = self.client.get(self.tasks_url, {"ordering": "-estimate"})
+        self.assertEqual([t["title"] for t in response.data], ["five", "one", "none"])

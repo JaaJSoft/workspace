@@ -95,6 +95,21 @@
           <span class="label-text-alt">Tasks completed longer ago than this are hidden from the board's Done columns. They are not deleted and still count everywhere else.</span>
         </div>
       </div>
+      <label class="form-control w-full">
+        <div class="label py-1"><span class="label-text">Task estimation</span></div>
+        <select
+          class="select select-bordered select-sm"
+          x-model="estimateUnit"
+          {% if not writable %}disabled{% endif %}
+        >
+          <option value="">Disabled</option>
+          <option value="points">Story points</option>
+          <option value="hours">Hours</option>
+        </select>
+        <div class="label py-1">
+          <span class="label-text-alt">Adds an estimate field to tasks, with totals per board column. Switching the unit keeps the stored numbers and only relabels them.</span>
+        </div>
+      </label>
       <div class="flex justify-end">
         <button
           type="button"

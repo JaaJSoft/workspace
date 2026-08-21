@@ -27,6 +27,7 @@
     <div class="flex items-center gap-1.5 flex-wrap">
       <span class="badge badge-sm badge-ghost">{{ task.status.name }}</span>
       {% include "projects/ui/partials/_priority_badge.html" %}
+      {% include "projects/ui/partials/_estimate_badge.html" %}
     </div>
     {% if task.labels.all %}
       <div class="flex flex-wrap gap-1">

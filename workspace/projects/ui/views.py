@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.db.models import Case, Count, IntegerField, Q, Sum, Value, When
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -23,6 +23,7 @@ from workspace.projects.services.analytics import (
     open_task_distribution,
     weekly_flow,
 )
+from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.references import REFERENCE_RE
@@ -182,6 +183,26 @@ def _filtered_tasks(request, qs):
     return tasks[:TASK_RENDER_LIMIT], len(tasks) > TASK_RENDER_LIMIT
 
 
+def _estimate_totals(request, project, qs):
+    """Per-status estimate sums for the tasks of *qs* matching the filters.
+
+    Aggregated over the full filtered queryset, not the rendered slice, so
+    the totals stay true past the render cap. The uuid subquery flattens the
+    M2M joins the filters may add - summing over duplicated rows would
+    inflate the totals. A status whose tasks are all unestimated maps to
+    None; callers fall back to 0.
+    """
+    if not project.estimate_unit:
+        return {}
+    filtered = apply_task_filters(qs, request.GET).values("uuid")
+    return dict(
+        project.tasks.filter(uuid__in=filtered)
+        .values_list("status_id")
+        .annotate(total=Sum("estimate"))
+        .values_list("status_id", "total")
+    )
+
+
 def _record_visit(user, project_uuid):
     set_setting(user, "projects", "last_project", str(project_uuid))
 
@@ -220,6 +241,7 @@ def _task_panel_context(user, project, role, task):
             "status": str(task.status_id),
             "priority": task.priority,
             "due_date": task.due_date.isoformat() if task.due_date else "",
+            "estimate": format_estimate(task.estimate),
             "assignees": [str(u.pk) for u in task.assignees.all()],
             "assignee_users": [
                 {"id": str(u.pk), "username": u.username} for u in task.assignees.all()
@@ -303,6 +325,7 @@ def board(request, project_uuid):
         tasks_qs = tasks_qs.exclude(expired)
     try:
         tasks, truncated = _filtered_tasks(request, tasks_qs)
+        estimate_totals = _estimate_totals(request, project, tasks_qs)
     except TaskFilterError as exc:
         return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
     context["filters_active"] = task_filters_active(request.GET)
@@ -316,6 +339,7 @@ def board(request, project_uuid):
             "status": s,
             "tasks": tasks_by_status[s.pk],
             "hidden_count": hidden_counts.get(s.pk, 0),
+            "estimate_total": estimate_totals.get(s.pk) or 0,
         }
         for s in context["statuses"]
         if s.category != TaskStatus.Category.BACKLOG
@@ -333,17 +357,21 @@ def backlog(request, project_uuid):
         s for s in context["statuses"] if s.category == TaskStatus.Category.BACKLOG
     ]
     context["backlog_status"] = backlog_statuses[0] if backlog_statuses else None
+    backlog_qs = (
+        project.tasks.filter(status__category=TaskStatus.Category.BACKLOG)
+        .select_related("status")
+        .prefetch_related("assignees", "labels")
+        .order_by("position", "created_at")
+    )
     try:
-        backlog_tasks, truncated = _filtered_tasks(
-            request,
-            project.tasks.filter(status__category=TaskStatus.Category.BACKLOG)
-            .select_related("status")
-            .prefetch_related("assignees", "labels")
-            .order_by("position", "created_at"),
-        )
+        backlog_tasks, truncated = _filtered_tasks(request, backlog_qs)
+        estimate_totals = _estimate_totals(request, project, backlog_qs)
     except TaskFilterError as exc:
         return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
     context["backlog_tasks"] = backlog_tasks
+    context["estimate_total"] = sum(
+        total for total in estimate_totals.values() if total
+    )
     context["filters_active"] = task_filters_active(request.GET)
     context["tasks_truncated"] = truncated
     context["task_render_limit"] = TASK_RENDER_LIMIT
@@ -464,6 +492,7 @@ def settings_view(request, project_uuid):
         "description": project.description,
         "key": project.key,
         "done_retention_days": project.done_retention_days,
+        "estimate_unit": project.estimate_unit,
         "groups": [
             {"id": group.pk, "name": group.name}
             for group in project.groups.order_by("name")

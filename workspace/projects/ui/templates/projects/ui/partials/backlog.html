@@ -89,7 +89,17 @@
             @change="toggleSelectAll()"
           />
         {% endif %}
-        <span class="flex-1">Task</span>
+        <span class="flex-1 flex items-center gap-2">
+          Task
+          {% if project.estimate_unit %}
+            <span class="badge badge-ghost badge-sm font-mono normal-case" title="Total estimate">
+              &Sigma;&nbsp;{{ estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% endif %}
+            </span>
+          {% endif %}
+        </span>
+        {% if project.estimate_unit %}
+          <span class="w-14 hidden sm:block shrink-0 text-right">Est.</span>
+        {% endif %}
         <span class="w-24 hidden sm:block shrink-0">Priority</span>
         <span class="w-24 hidden md:block shrink-0">Due</span>
         <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>

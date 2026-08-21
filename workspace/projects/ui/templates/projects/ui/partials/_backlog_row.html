@@ -43,6 +43,11 @@
       <span class="truncate">{{ task.status.name }}</span>
     </span>
   {% endif %}
+  {% if project.estimate_unit %}
+    <span class="w-14 hidden sm:flex items-center justify-end shrink-0">
+      {% include "projects/ui/partials/_estimate_badge.html" %}
+    </span>
+  {% endif %}
   <span class="w-24 hidden sm:flex items-center shrink-0">
     {% include "projects/ui/partials/_priority_badge.html" %}
   </span>

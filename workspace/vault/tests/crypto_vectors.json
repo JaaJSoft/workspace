@@ -150,5 +150,22 @@
       "raw_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4"
     }
   ],
+  "recovery_secrets": [
+    {
+      "expected_text": "00000000000000000000000000000000000000000000000000000",
+      "id": "recovery-zeroes",
+      "raw_b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "expected_text": "0001081G81860W40J2GB1G6GW3RG2491650N2RBHG68T3CE1T7GZ2",
+      "id": "recovery-counting",
+      "raw_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    },
+    {
+      "expected_text": "1ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZF",
+      "id": "recovery-high-bits",
+      "raw_b64": "__________________________________________8"
+    }
+  ],
   "version": 1
 }

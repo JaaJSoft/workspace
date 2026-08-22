@@ -96,12 +96,25 @@ class SecretRedactingFilter(logging.Filter):
             record.args = redact(record.args)
         elif isinstance(record.args, tuple):
             if scannable and self._names_a_secret_positionally(record.msg):
-                record.args = tuple(REDACTED for _ in record.args)
+                # Redacted into the message, not into the arguments: a
+                # "[redacted]" handed to a %d makes getMessage() raise, and
+                # logging then drops the record instead of writing a blunt one.
+                record.msg = self._blank_conversions(record.msg)
+                record.args = ()
             else:
                 record.args = tuple(redact(arg) for arg in record.args)
         if scannable:
             record.msg = self._redact_assignments(record.msg)
         return True
+
+    @staticmethod
+    def _blank_conversions(message):
+        """Every conversion replaced by the substitute, ``%%`` by the percent
+        it would have rendered as - the message is its own final form once the
+        arguments are gone."""
+        return _CONVERSION.sub(
+            lambda match: "%" if match.group(0) == "%%" else REDACTED, message
+        )
 
     @staticmethod
     def _names_a_secret_positionally(message):

@@ -183,6 +183,24 @@ class SecretRedactingFilterTests(TestCase):
         SecretRedactingFilter().filter(record)
         self.assertNotIn("SECRETVALUE", record.getMessage())
 
+    def test_a_secret_beside_a_numeric_conversion_still_renders(self):
+        """A redacted string handed to a %d makes getMessage() raise, and
+        logging drops the whole record - the line the call existed to write is
+        simply lost, silently."""
+        record = logging.LogRecord(
+            "workspace.test",
+            logging.INFO,
+            __file__,
+            1,
+            "attempts=%d password=%s",
+            (3, "SECRETVALUE"),
+            None,
+        )
+        SecretRedactingFilter().filter(record)
+        rendered = record.getMessage()
+        self.assertNotIn("SECRETVALUE", rendered)
+        self.assertIn("attempts=", rendered)
+
     def test_leaves_an_ordinary_message_untouched(self):
         self.assertEqual(self._render("synced %s folders", 3), "synced 3 folders")
 

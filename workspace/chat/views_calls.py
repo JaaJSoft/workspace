@@ -22,7 +22,7 @@ from .services.conversations import (
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Calls"])
 class CallStateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -36,7 +36,7 @@ class CallStateView(APIView):
         return Response(calls.serialize_call_state(session))
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Calls"])
 class CallJoinView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -63,7 +63,7 @@ class CallJoinView(APIView):
         )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Calls"])
 class CallLeaveView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -76,7 +76,7 @@ class CallLeaveView(APIView):
         return Response({"status": "ok"})
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Calls"])
 class CallSignalView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -115,7 +115,7 @@ class CallSignalView(APIView):
         return Response({"status": "ok"})
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Calls"])
 class CallHeartbeatView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -146,7 +146,7 @@ class CallHeartbeatView(APIView):
         return Response({"status": "ok"})
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Calls"])
 class CallDiagnosticSignalView(APIView):
     permission_classes = [IsAuthenticated]
 

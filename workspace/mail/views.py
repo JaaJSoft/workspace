@@ -150,7 +150,7 @@ def _refresh_message_label_counts(message):
         _refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Accounts"])
 class MailAutodiscoverView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -208,7 +208,7 @@ class MailAutodiscoverView(APIView):
         )
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Accounts"])
 class MailAccountListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -234,7 +234,7 @@ class MailAccountListView(APIView):
         )
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Accounts"])
 class MailAccountDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -278,7 +278,7 @@ class MailAccountDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Accounts"])
 class MailAccountTestView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -318,7 +318,7 @@ class MailAccountTestView(APIView):
         )
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Accounts"])
 class MailAccountSyncView(APIView):
     permission_classes = [IsAuthenticated]
 

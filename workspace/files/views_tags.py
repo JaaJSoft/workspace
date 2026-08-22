@@ -12,12 +12,12 @@ from .serializers_tags import TagSerializer
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List tags", tags=["Tags"]),
-    create=extend_schema(summary="Create a tag", tags=["Tags"]),
-    partial_update=extend_schema(summary="Update a tag", tags=["Tags"]),
-    destroy=extend_schema(summary="Delete a tag", tags=["Tags"]),
+    list=extend_schema(summary="List tags", tags=["Files - Tags"]),
+    create=extend_schema(summary="Create a tag", tags=["Files - Tags"]),
+    partial_update=extend_schema(summary="Update a tag", tags=["Files - Tags"]),
+    destroy=extend_schema(summary="Delete a tag", tags=["Files - Tags"]),
 )
-@extend_schema(tags=["Tags"])
+@extend_schema(tags=["Files - Tags"])
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
     lookup_field = "uuid"
@@ -31,7 +31,7 @@ class TagViewSet(viewsets.ModelViewSet):
 class FileTagView(APIView):
     """Add or remove tags on a file."""
 
-    @extend_schema(summary="Add a tag to a file", tags=["Tags"])
+    @extend_schema(summary="Add a tag to a file", tags=["Files - Tags"])
     def post(self, request, file_uuid):
         file_obj = get_object_or_404(
             FileService.user_files_qs(request.user),
@@ -60,7 +60,7 @@ class FileTagView(APIView):
         FileTag.objects.create(file=file_obj, tag=tag)
         return Response(TagSerializer(tag).data, status=status.HTTP_201_CREATED)
 
-    @extend_schema(summary="Remove a tag from a file", tags=["Tags"])
+    @extend_schema(summary="Remove a tag from a file", tags=["Files - Tags"])
     def delete(self, request, file_uuid, tag_uuid):
         file_obj = get_object_or_404(
             FileService.user_files_qs(request.user),

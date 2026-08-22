@@ -21,7 +21,7 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Folders & Labels"])
 class MailFolderListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -91,7 +91,7 @@ class MailFolderListView(APIView):
             )
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Folders & Labels"])
 class MailFolderUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -219,7 +219,7 @@ class MailFolderUpdateView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Folders & Labels"])
 class MailFolderMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 

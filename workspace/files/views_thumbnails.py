@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from workspace.common.booleans import is_truthy
 
 
-@extend_schema_view(post=extend_schema(tags=["Thumbnails"]))
+@extend_schema_view(post=extend_schema(tags=["Files - Thumbnails"]))
 class GenerateThumbnailsView(APIView):
     """Trigger thumbnail generation for image files missing a thumbnail."""
 

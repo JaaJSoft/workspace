@@ -27,7 +27,7 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Messages"])
 class MailMessageListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
@@ -169,7 +169,7 @@ class MailMessageListView(CacheControlMixin, APIView):
         )
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Messages"])
 class MailMessageDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -280,7 +280,7 @@ class MailMessageDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Messages"])
 class MailBatchActionView(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -40,18 +40,27 @@ SPECTACULAR_SETTINGS = {
     # Ensure file uploads are correctly rendered as multipart/form-data in Swagger UI
     "COMPONENT_SPLIT_REQUEST": True,
     "SCHEMA_PATH_PREFIX": r"/v[1-9]",
+    "SERVE_INCLUDE_SCHEMA": False,
     "TAGS": [
         {
-            "name": "Auth",
-            "description": "API token management for programmatic access.",
+            "name": "Activity",
+            "description": "Cross-module activity feed and usage statistics.",
         },
         {
             "name": "AI",
             "description": "AI-powered tasks: summarize, compose, reply, and editor actions.",
         },
         {
+            "name": "Auth",
+            "description": "API token management for programmatic access.",
+        },
+        {
             "name": "Calendar",
             "description": "Calendars and events.",
+        },
+        {
+            "name": "Calendar - External",
+            "description": "Subscriptions to external ICS calendar feeds.",
         },
         {
             "name": "Calendar - Polls",
@@ -62,20 +71,56 @@ SPECTACULAR_SETTINGS = {
             "description": "Public endpoints for guest poll participation.",
         },
         {
-            "name": "Chat",
-            "description": "Real-time messaging with direct and group conversations.",
+            "name": "Chat - Conversations",
+            "description": "Direct and group conversations: membership, read state, pins, avatars, schedules, and goals.",
+        },
+        {
+            "name": "Chat - Messages",
+            "description": "Messages within a conversation: sending, editing, reactions, pins, threads, and search.",
+        },
+        {
+            "name": "Chat - Calls",
+            "description": "Audio/video call signaling and state.",
+        },
+        {
+            "name": "Chat - Attachments",
+            "description": "Message attachments and the conversation media gallery.",
         },
         {
             "name": "Files",
             "description": "Browse and manage files and folders.",
         },
         {
-            "name": "Thumbnails",
+            "name": "Files - Tags",
+            "description": "File tags and their assignment to files.",
+        },
+        {
+            "name": "Files - Shared Links",
+            "description": "Public share links for files.",
+        },
+        {
+            "name": "Files - Thumbnails",
             "description": "File thumbnail generation.",
         },
         {
-            "name": "Mail",
-            "description": "Read and send emails from external mail accounts.",
+            "name": "Imports",
+            "description": "Import data from other clouds: connections and import jobs.",
+        },
+        {
+            "name": "Mail - Accounts",
+            "description": "External mail accounts: setup, OAuth2, autodiscover, and sync.",
+        },
+        {
+            "name": "Mail - Messages",
+            "description": "Reading, sending, and drafting emails, with attachments and contact autocomplete.",
+        },
+        {
+            "name": "Mail - Folders & Labels",
+            "description": "Mailbox folders and user-defined labels.",
+        },
+        {
+            "name": "Mail - Rules",
+            "description": "Automatic filing rules for incoming mail.",
         },
         {
             "name": "Modules",
@@ -87,7 +132,15 @@ SPECTACULAR_SETTINGS = {
         },
         {
             "name": "Projects",
-            "description": "Collaborative projects with kanban boards and backlogs.",
+            "description": "Collaborative projects: settings, members, archiving, and actions.",
+        },
+        {
+            "name": "Projects - Tasks",
+            "description": "Tasks with subtasks, comments, attachments, links, search, and calendar feed.",
+        },
+        {
+            "name": "Projects - Statuses & Labels",
+            "description": "Kanban board statuses and task labels.",
         },
         {
             "name": "Search",

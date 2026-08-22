@@ -12,7 +12,7 @@ MAX_RESULTS = 10
 
 
 @extend_schema(
-    tags=["Projects"],
+    tags=["Projects - Tasks"],
     summary="Search tasks across accessible projects",
     description=(
         "Compact task lookup for pickers (the task-link picker). Exact "

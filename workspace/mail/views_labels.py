@@ -20,7 +20,7 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Folders & Labels"])
 class MailLabelListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -78,7 +78,7 @@ class MailLabelListView(APIView):
         return Response(MailLabelSerializer(label).data, status=status.HTTP_201_CREATED)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Folders & Labels"])
 class MailLabelDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -129,7 +129,7 @@ class MailLabelDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Folders & Labels"])
 class MailMessageLabelView(APIView):
     permission_classes = [IsAuthenticated]
 

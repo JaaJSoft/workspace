@@ -15,7 +15,7 @@ from .services.notifications import notify_conversation_members
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class TypingIndicatorView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -42,7 +42,7 @@ class TypingIndicatorView(APIView):
         return Response({"status": "ok"})
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class UnreadCountsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -51,13 +51,15 @@ class UnreadCountsView(APIView):
         return Response(get_unread_counts(request.user))
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationClearView(APIView):
     """DELETE /api/v1/chat/conversations/<id>/messages - Clear all messages and attachments."""
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(tags=["Chat"], summary="Clear all messages in a conversation")
+    @extend_schema(
+        tags=["Chat - Conversations"], summary="Clear all messages in a conversation"
+    )
     def delete(self, request, conversation_id):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:

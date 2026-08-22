@@ -18,7 +18,7 @@ from .services.message_search import search_messages_qs
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class ConversationMessageSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -168,7 +168,7 @@ class ConversationMessageSearchView(APIView):
         )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Attachments"])
 class ConversationMediaView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
@@ -274,7 +274,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
         )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationStatsView(APIView):
     permission_classes = [IsAuthenticated]
 

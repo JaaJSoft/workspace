@@ -16,7 +16,7 @@ from .queries import user_account_ids
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Messages"])
 class MailAttachmentDownloadView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -57,7 +57,7 @@ class MailAttachmentDownloadView(APIView):
         )
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Messages"])
 class MailAttachmentSaveToFilesView(APIView):
     permission_classes = [IsAuthenticated]
 

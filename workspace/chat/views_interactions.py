@@ -39,7 +39,7 @@ def _refetch_for_serialization(message_pk):
     )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class MessageInteractionAnswerView(APIView):
     permission_classes = [IsAuthenticated]
 

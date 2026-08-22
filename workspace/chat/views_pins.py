@@ -17,7 +17,7 @@ from .services.notifications import notify_conversation_members
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationPinView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -61,7 +61,7 @@ class ConversationPinView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationPinReorderView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -111,7 +111,7 @@ class ConversationPinReorderView(APIView):
         return Response({"status": "ok"})
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class MessagePinToggleView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -187,7 +187,7 @@ class MessagePinToggleView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class ConversationPinnedMessagesView(APIView):
     permission_classes = [IsAuthenticated]
 

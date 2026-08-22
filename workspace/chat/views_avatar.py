@@ -22,7 +22,7 @@ AVATAR_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
 AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class GroupAvatarUploadView(APIView):
     """Upload or delete a group conversation's avatar."""
 
@@ -158,7 +158,7 @@ class GroupAvatarUploadView(APIView):
         return Response({"message": "Group avatar removed."})
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class GroupAvatarRetrieveView(CacheControlMixin, APIView):
     """Serve a group conversation's avatar image (public).
 

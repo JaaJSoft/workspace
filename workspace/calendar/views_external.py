@@ -19,7 +19,7 @@ from .tasks import sync_external_calendar_task
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Calendar"])
+@extend_schema(tags=["Calendar - External"])
 class ExternalCalendarListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -59,7 +59,7 @@ class ExternalCalendarListView(APIView):
         )
 
 
-@extend_schema(tags=["Calendar"])
+@extend_schema(tags=["Calendar - External"])
 class ExternalCalendarDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -102,7 +102,7 @@ class ExternalCalendarDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Calendar"])
+@extend_schema(tags=["Calendar - External"])
 class ExternalCalendarSyncView(APIView):
     permission_classes = [IsAuthenticated]
 

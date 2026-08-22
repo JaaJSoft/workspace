@@ -14,7 +14,7 @@ from workspace.mail.queries import user_account_ids
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Messages"])
 class ExtractionDetailView(APIView):
     """DELETE /api/v1/mail/extractions/<uuid> - dismiss an extraction.
 

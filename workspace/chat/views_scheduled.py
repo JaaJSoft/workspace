@@ -12,7 +12,7 @@ from .services.conversations import get_active_membership
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ScheduledMessageListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -39,7 +39,7 @@ class ScheduledMessageListView(APIView):
         return Response(serializer.data)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ScheduledMessageDetailView(APIView):
     permission_classes = [IsAuthenticated]
 

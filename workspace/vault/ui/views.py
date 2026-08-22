@@ -1,3 +1,5 @@
+from csp.decorators import csp
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -16,6 +18,7 @@ def _has_active_identity(user):
     ).exists()
 
 
+@csp(settings.VAULT_CSP)
 @login_required
 @ensure_csrf_cookie
 def index(request):
@@ -24,6 +27,7 @@ def index(request):
     return render(request, "vault/ui/index.html")
 
 
+@csp(settings.VAULT_CSP)
 @login_required
 @ensure_csrf_cookie
 def onboarding(request):

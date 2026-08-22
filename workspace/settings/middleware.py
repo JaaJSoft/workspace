@@ -5,6 +5,9 @@ from .base import DEBUG, TESTING
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # No project-wide CONTENT_SECURITY_POLICY setting, so this emits nothing
+    # until a view declares its own policy with csp.decorators.csp.
+    "csp.middleware.CSPMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     # HTTP conditional GET support (ETags & Last-Modified headers for browser caching)

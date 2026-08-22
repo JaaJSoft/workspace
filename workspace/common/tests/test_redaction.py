@@ -1,4 +1,5 @@
 import logging
+from collections import namedtuple
 from types import MappingProxyType
 
 from django.conf import settings
@@ -11,6 +12,8 @@ from workspace.common.redaction import (
     SecretRedactingFilter,
     is_sensitive_name,
 )
+
+_Point = namedtuple("_Point", "x y")
 
 
 class SensitiveNameTests(TestCase):
@@ -92,6 +95,21 @@ class SecretRedactingFilterTests(TestCase):
             {"body": MappingProxyType({"wrapped_kex_priv": "SECRETVALUE"})},
         )
         self.assertNotIn("SECRETVALUE", rendered)
+
+    def test_a_namedtuple_argument_leaves_the_logging_call_alive(self):
+        """A tuple subclass cannot be rebuilt from an iterable - a namedtuple
+        takes one positional argument per field. Handlers call filters outside
+        the try/except around emit, so a filter that raises here takes down the
+        logger.warning() call itself, anywhere in the project."""
+        rendered = self._render_through_logger("point %s", _Point(1, 2))
+        self.assertIn("_Point(x=1, y=2)", rendered)
+
+    def test_redacts_a_secret_nested_in_a_namedtuple(self):
+        rendered = self._render_through_logger(
+            "point %s", _Point({"password": "SECRETVALUE"}, 2)
+        )
+        self.assertNotIn("SECRETVALUE", rendered)
+        self.assertIn(REDACTED, rendered)
 
     def _render(self, msg, *args):
         record = logging.LogRecord(

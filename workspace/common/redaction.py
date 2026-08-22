@@ -51,6 +51,11 @@ def redact(value):
     named arguments, and a read-only or custom one is still a mapping whose
     keys name secrets. A plain dict comes back - the redacted copy has no
     reason to keep the original's type, and some cannot be rebuilt anyway.
+
+    A sequence holding nothing sensitive comes back as the very object that
+    went in: a tuple subclass takes one positional argument per field, so
+    rebuilding it from an iterable raises - and a filter that raises inside a
+    handler kills the logging call itself.
     """
     if isinstance(value, Mapping):
         return {
@@ -58,7 +63,10 @@ def redact(value):
             for key, inner in value.items()
         }
     if isinstance(value, (list, tuple)):
-        return type(value)(redact(item) for item in value)
+        rebuilt = [redact(item) for item in value]
+        if all(new is old for new, old in zip(rebuilt, value, strict=True)):
+            return value
+        return rebuilt if isinstance(value, list) else tuple(rebuilt)
     return value
 
 

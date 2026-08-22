@@ -34,9 +34,12 @@ ARGON2_PARAMS = {"algo": "argon2id", "v": "1.3", "m": 65536, "t": 3, "p": 2}
 # algorithm lands without a data migration.
 SIG_ALG_ED25519 = 0x01
 PUBKEY_ALG_X25519 = 0x01
-# Ed25519 carries its own label even though both keys are 32 raw bytes:
-# without it, decode_public_key would hand a signature key back as a key
-# exchange key and nothing downstream would notice.
+# Ed25519 carries its own label even though both keys are 32 raw bytes: under
+# one shared label the two would be indistinguishable once stored. Reading the
+# label back is not this decoder's job - the attestation signs the labelled
+# form, so a swap breaks the signature the client re-checks against the signing
+# key it unwrapped. The server, which only ever sees a pair the client signed
+# itself, pins the expected algorithm instead.
 PUBKEY_ALG_ED25519 = 0x02
 
 # Raw key length per algorithm: a stored key of the wrong size is refused

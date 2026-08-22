@@ -18,9 +18,12 @@ export class UnsupportedVersionError extends Error {}
 // algorithm lands without a data migration. The attestation signs the prefixed
 // form: an unsigned label would be the server's to change at will.
 export const PUBKEY_ALG_X25519 = 0x01;
-// Ed25519 carries its own label even though both keys are 32 raw bytes:
-// without it, decodePublicKey would hand a signature key back as a key
-// exchange key and nothing downstream would notice.
+// Ed25519 carries its own label even though both keys are 32 raw bytes: under
+// one shared label the two would be indistinguishable once stored. Reading the
+// label back is not this decoder's job - the attestation signs the labelled
+// form, so a swap breaks the signature the client re-checks against the signing
+// key it unwrapped. The server, which only ever sees a pair the client signed
+// itself, pins the expected algorithm instead.
 export const PUBKEY_ALG_ED25519 = 0x02;
 
 // Raw key length per algorithm: a stored key of the wrong size is refused

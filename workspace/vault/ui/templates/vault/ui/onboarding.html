@@ -1,0 +1,18 @@
+{% extends "base_with_navbar.html" %}
+{% load static %}
+
+{% block title %}Set up your vault - Workspace{% endblock %}
+
+{% block content %}
+  <div class="mx-auto max-w-2xl px-4 py-10" x-data="vaultOnboarding()">
+    <h1 class="text-2xl font-semibold">Set up your vault</h1>
+    <p class="mt-2 text-base-content/70">
+      Three steps. The last one gives you the only copy of your recovery key.
+    </p>
+  </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
+  <script src="{% static 'vault/ui/js/onboarding.js' %}"></script>
+{% endblock %}

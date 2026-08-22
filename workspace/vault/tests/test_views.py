@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
+from workspace.vault.models import AccountIdentity
+
 User = get_user_model()
 
 
@@ -8,12 +10,20 @@ class VaultIndexViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="owner", password="pw")
 
+    def _finish_onboarding(self):
+        """The index view is gated behind a usable account. These tests are
+        about the view, not about the gate, so they hand it one."""
+        AccountIdentity.objects.create(
+            user=self.user, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE
+        )
+
     def test_anonymous_is_redirected_to_login(self):
         response = self.client.get("/vault")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login", response["Location"])
 
     def test_renders_for_an_authenticated_user(self):
+        self._finish_onboarding()
         self.client.force_login(self.user)
         response = self.client.get("/vault")
         self.assertEqual(response.status_code, 200)
@@ -28,6 +38,7 @@ class VaultIndexViewTests(TestCase):
         so that adopting request-level access control fails here loudly and
         forces a deliberate update instead of silently widening the gate.
         """
+        self._finish_onboarding()
         self.client.force_login(self.user)
         self.assertFalse(self.user.is_staff)
         self.assertEqual(self.client.get("/vault").status_code, 200)

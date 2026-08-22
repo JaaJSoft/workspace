@@ -6,4 +6,5 @@ app_name = "vault_ui"
 
 urlpatterns = [
     path("", views.index, name="index"),
+    path("/onboarding", views.onboarding, name="onboarding"),
 ]

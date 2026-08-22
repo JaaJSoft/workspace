@@ -16,11 +16,18 @@
     data-email="{{ request.user.email }}"
   >
     <h1 class="text-2xl font-semibold">Set up your vault</h1>
-    <ul class="steps w-full my-6">
-      <li class="step" :class="step >= 1 && 'step-primary'">What we cannot do</li>
-      <li class="step" :class="step >= 2 && 'step-primary'">Vault password</li>
-      <li class="step" :class="step >= 3 && 'step-primary'">Emergency kit</li>
-    </ul>
+    {% comment %}
+      The labels overflow the steps box rather than adding to its height, so
+      a margin below leaves them touching whatever follows. The padding on
+      the wrapper is what actually clears them.
+    {% endcomment %}
+    <div class="pt-6 pb-14">
+      <ul class="steps w-full">
+        <li class="step" :class="step >= 1 && 'step-primary'">What we cannot do</li>
+        <li class="step" :class="step >= 2 && 'step-primary'">Vault password</li>
+        <li class="step" :class="step >= 3 && 'step-primary'">Emergency kit</li>
+      </ul>
+    </div>
 
     <inline-alert type="error" x-show="error" x-cloak>
       <span x-text="error"></span>

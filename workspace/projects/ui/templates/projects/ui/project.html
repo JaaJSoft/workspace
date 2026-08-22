@@ -214,7 +214,7 @@
 
   {% include "projects/ui/partials/task_modal.html" %}
   {% include "projects/ui/partials/help_dialog.html" %}
-  {% include "files/ui/partials/file_viewer_modal.html" %}
+  {% include "projects/ui/partials/attachment_viewer_modal.html" %}
 
   <dialog id="new-project-dialog" class="modal">
     <div
@@ -297,8 +297,9 @@
       <button>close</button>
     </form>
   </dialog>
-  {# Attachment preview reuses the files viewer stack: Monaco loader (same #}
-  {# CDN pin as files/ui/index.html), locking, then the panel host mixin. #}
+  {# Attachment preview needs the files viewer stack: Monaco loader (same #}
+  {# CDN pin as files/ui/index.html), locking (the text viewer calls it even #}
+  {# read-only), then the panel host mixin. #}
   <script
     src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"
   ></script>

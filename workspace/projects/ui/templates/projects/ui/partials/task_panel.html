@@ -584,16 +584,16 @@
               <button
                 type="button"
                 class="flex-1 min-w-0 text-left truncate hover:underline"
-                x-text="att.file.name"
-                :title="att.file.name"
+                x-text="att.name"
+                :title="att.name"
                 @click="openAttachment(att)"
               ></button>
               <span
                 class="text-xs text-base-content/50 flex-shrink-0"
-                x-text="formatFileSize(att.file.size)"
+                x-text="formatFileSize(att.size)"
               ></span>
               <a
-                :href="`/api/v1/files/${att.file.uuid}/content`"
+                :href="att.download_url"
                 download
                 class="btn btn-ghost btn-xs btn-square"
                 title="Download"

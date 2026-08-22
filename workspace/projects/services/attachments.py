@@ -1,59 +1,70 @@
-"""Task attachments: link rows between tasks and workspace files."""
+"""Task attachments: files stored on the task itself.
 
-from workspace.files.models import File
-from workspace.files.services import FileService
+The blob belongs to the task - anyone who can open the task sees every
+attachment. Attaching a workspace file copies its content, so the source
+file's own lifecycle (trash, deletion, permission changes) never reaches
+the task copy.
+"""
+
+from django.core.files.base import File as DjangoFile
+
+from workspace.files.services.detection import detect_from_stream
+from workspace.files.services.filetype import pin_viewer_for_upload
 
 from ..models import TaskAttachment, TaskEvent
 from .events import record_task_event
 
-UPLOADS_FOLDER_NAME = "Task attachments"
 MAX_ATTACHMENTS_PER_REQUEST = 10
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
-def visible_attachments(user, task):
-    """Attachments whose file still lives and *user* can access.
+def create_attachments(user, task, uploads, workspace_files):
+    """Store *uploads* and copies of *workspace_files* on *task*.
 
-    The link never widens file access: a project member without permission
-    on the underlying file simply does not see the attachment.
-    """
-    links = list(
-        task.attachments.select_related("file", "added_by").filter(
-            file__deleted_at__isnull=True
-        )
-    )
-    permissions = FileService.get_permissions_bulk(user, [link.file for link in links])
-    return [link for link in links if permissions[link.file.pk] is not None]
-
-
-def uploads_folder(user):
-    """The uploader's "Task attachments" folder, created on first use."""
-    folder = File.objects.filter(
-        owner=user,
-        parent__isnull=True,
-        group__isnull=True,
-        node_type=File.NodeType.FOLDER,
-        name=UPLOADS_FOLDER_NAME,
-        deleted_at__isnull=True,
-    ).first()
-    return folder or FileService.create_folder(user, UPLOADS_FOLDER_NAME)
-
-
-def attach_files(user, task, files):
-    """Link *files* (``File`` rows) to *task*; returns the new links.
-
-    Idempotent per (task, file): re-linking an already attached file is a
-    no-op, and one activity event covers the whole batch.
+    Workspace files are streamed into a fresh blob owned by the task.
+    Raises ``OSError`` (incl. ``FileNotFoundError``) when a workspace
+    file's content is unavailable; callers map that to a 4xx. One
+    activity event covers the whole batch.
     """
     created = []
-    for file_obj in files:
-        link, was_created = TaskAttachment.objects.get_or_create(
-            task=task,
-            file=file_obj,
-            defaults={"added_by": user},
+    for f in uploads:
+        detection = detect_from_stream(f)
+        created.append(
+            TaskAttachment.objects.create(
+                task=task,
+                file=f,
+                original_name=f.name,
+                mime_type=detection.mime_type,
+                type=detection.label,
+                category=detection.group or "unknown",
+                viewer=pin_viewer_for_upload(detection.label, f.content_type),
+                size=f.size,
+                added_by=user,
+            )
         )
-        if was_created:
-            created.append(link)
+    for ws_file in workspace_files:
+        attachment = TaskAttachment(
+            task=task,
+            original_name=ws_file.name,
+            mime_type=ws_file.mime_type or "application/octet-stream",
+            type=ws_file.type or "unknown",
+            category=ws_file.category or "unknown",
+            viewer=ws_file.viewer,
+            size=ws_file.size or 0,
+            added_by=user,
+        )
+        with ws_file.content.open("rb") as fh:
+            attachment.file = DjangoFile(fh, name=ws_file.name)
+            attachment.save()
+        created.append(attachment)
     if created:
         record_task_event(task, type=TaskEvent.Type.ATTACHED, actor=user)
     return created
+
+
+def remove_attachment(attachment, actor):
+    """Delete *attachment* and its blob, recording the activity event."""
+    task = attachment.task
+    attachment.file.delete(save=False)
+    attachment.delete()
+    record_task_event(task, type=TaskEvent.Type.DETACHED, actor=actor)

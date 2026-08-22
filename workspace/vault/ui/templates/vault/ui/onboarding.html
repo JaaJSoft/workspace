@@ -64,8 +64,12 @@
             class="input input-bordered w-full"
             autocomplete="new-password"
             x-model="password"
-            @input.debounce.300ms="evaluateStrength()"
-            @change.debounce.600ms="checkBreachCorpus()"
+            {% comment %}
+              Both on input: the corpus check gates the step, and hanging it
+              off change would leave the button disabled for anyone who never
+              blurs the field.
+            {% endcomment %}
+            @input.debounce.400ms="evaluateStrength(); checkBreachCorpus()"
           />
         </label>
         <label class="form-control w-full">
@@ -88,6 +92,17 @@
           </li>
           <li :class="passwordsMatch() ? 'text-success' : 'text-base-content/60'">
             Both fields match
+          </li>
+          <li
+            :class="breachStatus === 'clean' || breachStatus === 'unavailable'
+              ? 'text-success' : 'text-base-content/60'"
+          >
+            <span x-show="breachStatus !== 'checking'">
+              Checked against known breaches
+            </span>
+            <span x-show="breachStatus === 'checking'" x-cloak>
+              Checking against known breaches...
+            </span>
           </li>
         </ul>
 

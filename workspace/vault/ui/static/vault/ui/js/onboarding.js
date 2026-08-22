@@ -41,6 +41,13 @@ window.vaultOnboarding = function vaultOnboarding() {
 
     // A lookup that could not run is not a password that was found: an
     // unreachable third party must never stop someone protecting their vault.
+    // A lookup that has not run yet is a different matter - treating it as a
+    // pass would drop one of the floor's three criteria for anyone who never
+    // blurs the field.
+    passwordChecked() {
+      return this.breachStatus === 'clean' || this.breachStatus === 'unavailable';
+    },
+
     passwordBlocked() {
       return this.breachStatus === 'found';
     },
@@ -54,6 +61,7 @@ window.vaultOnboarding = function vaultOnboarding() {
         this.passwordLongEnough() &&
         this.passwordStrongEnough() &&
         this.passwordsMatch() &&
+        this.passwordChecked() &&
         !this.passwordBlocked()
       );
     },
@@ -110,6 +118,15 @@ window.vaultOnboarding = function vaultOnboarding() {
       } catch (err) {
         this.breachStatus = 'unavailable';
       }
+    },
+
+    // The norm wipes the vault password and the recovery secret as soon as the
+    // kit has been shown. The text on screen has to survive - the user is
+    // copying it - but nothing else does.
+    forgetSecrets() {
+      this.password = '';
+      this.confirmation = '';
+      if (this.secretBytes) this.secretBytes.fill(0);
     },
 
     groupedSecret() {
@@ -208,6 +225,7 @@ window.vaultOnboarding = function vaultOnboarding() {
           throw new Error('the server refused the account envelope');
         }
         this.step = 3;
+        this.forgetSecrets();
       } catch (err) {
         this.error =
           'Your vault could not be created. Nothing was saved; try again.';

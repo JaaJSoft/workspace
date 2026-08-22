@@ -59,6 +59,7 @@ test('a weak but long password is still refused', () => {
   const app = component();
   app.password = 'a'.repeat(20);
   app.confirmation = app.password;
+  app.breachStatus = 'clean';
   app.score = 1;
   assert.equal(app.passwordAcceptable(), false);
   app.score = 3;
@@ -85,4 +86,42 @@ test('the secret is grouped so it can be copied by hand', () => {
   const app = component();
   app.secretText = 'ABCDEFGHIJ';
   assert.equal(app.groupedSecret(), 'ABCD-EFGH-IJ');
+});
+
+test('a password nobody checked against the corpus cannot pass', () => {
+  // The floor has three criteria and the corpus is one of them. Treating
+  // "not checked yet" as "not found" silently drops it for anyone who never
+  // blurs the field.
+  const app = component();
+  app.password = 'correct horse battery staple';
+  app.confirmation = app.password;
+  app.score = 4;
+  assert.equal(app.breachStatus, 'unchecked');
+  assert.equal(app.passwordAcceptable(), false);
+  app.breachStatus = 'clean';
+  assert.equal(app.passwordAcceptable(), true);
+});
+
+test('a corpus that could not be reached still lets the user through', () => {
+  const app = component();
+  app.password = 'correct horse battery staple';
+  app.confirmation = app.password;
+  app.score = 4;
+  app.breachStatus = 'unavailable';
+  assert.equal(app.passwordAcceptable(), true);
+});
+
+test('the password and the secret bytes are gone once the kit is shown', () => {
+  // The norm wipes the vault password and the recovery secret from memory as
+  // soon as the kit has been shown; only the text on screen survives.
+  const app = component();
+  app.password = 'correct horse battery staple';
+  app.confirmation = app.password;
+  app.secretBytes = new Uint8Array([1, 2, 3]);
+  app.secretText = 'ABCD-EFGH';
+  app.forgetSecrets();
+  assert.equal(app.password, '');
+  assert.equal(app.confirmation, '');
+  assert.deepEqual(Array.from(app.secretBytes), [0, 0, 0]);
+  assert.equal(app.secretText, 'ABCD-EFGH');
 });

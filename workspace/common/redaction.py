@@ -84,20 +84,23 @@ class SecretRedactingFilter(logging.Filter):
     """
 
     def filter(self, record):
+        # Both passes below are full regex scans of the message, and an
+        # assignment is what they look for - one substring test spares that
+        # cost to the records that hold none, which is nearly all of them.
+        scannable = isinstance(record.msg, str) and "=" in record.msg
         if isinstance(record.args, Mapping):
             record.args = redact(record.args)
         elif isinstance(record.args, tuple):
-            if self._names_a_secret_positionally(record.msg):
+            if scannable and self._names_a_secret_positionally(record.msg):
                 record.args = tuple(REDACTED for _ in record.args)
             else:
                 record.args = tuple(redact(arg) for arg in record.args)
-        record.msg = self._redact_assignments(record.msg)
+        if scannable:
+            record.msg = self._redact_assignments(record.msg)
         return True
 
     @staticmethod
     def _names_a_secret_positionally(message):
-        if not isinstance(message, str):
-            return False
         return any(
             is_sensitive_name(match.group("name"))
             and _CONVERSION.fullmatch(match.group("value"))
@@ -106,9 +109,6 @@ class SecretRedactingFilter(logging.Filter):
 
     @staticmethod
     def _redact_assignments(message):
-        if not isinstance(message, str):
-            return message
-
         def replace(match):
             value = match.group("value")
             # A placeholder is left in place. Removing it while its argument

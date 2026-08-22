@@ -457,9 +457,10 @@ secret in a URL.
 
 Name matching cannot reach a frame's locals either - the local holding a wrapped key is called
 `data`, not `wrapped_kex_priv` - so **a view handling secrets must declare it**. On a JSON API that
-means `@sensitive_variables()`, never `@sensitive_post_parameters`: the latter cleanses
-`request.POST`, empty when the body is JSON, so on a DRF endpoint it protects nothing.
-`workspace/vault/views.py` is the worked example.
+means `@sensitive_variables()`: `@sensitive_post_parameters` cleanses `request.POST`, which a JSON
+body leaves empty. It is still worth keeping, because the default parser list also accepts a
+form-encoded body, and on that request it is the only thing standing between the field and the
+technical 500 page. `workspace/vault/views.py` is the worked example.
 
 ### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`
 

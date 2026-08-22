@@ -55,20 +55,24 @@ class AIStreamSSEProvider(SSEProvider):
         replaying their queued steps safe: steps left over from a generation
         that has since finished are skipped, so a reload never resurrects a
         bubble for work that is already done.
+
+        The snapshot is sent even when nothing is running: a reconnecting
+        client (mobile resume opens a brand-new EventSource, so the chat
+        provider replays nothing) may still be showing a bubble raised
+        before the stream dropped, and the empty set is what tells it the
+        generation ended while it was away.
         """
         from workspace.ai.services.stream_steps import read_steps
 
         running = self._conversations_generating()
-        if not running:
-            return []
-
         events = [("bot_generating", {"conversation_ids": sorted(running)}, None)]
-        envelopes, self._cursor = read_steps(self.user.id, None)
-        events.extend(
-            ("bot_step", envelope["data"], None)
-            for envelope in envelopes
-            if envelope["data"].get("conversation_id") in running
-        )
+        if running:
+            envelopes, self._cursor = read_steps(self.user.id, None)
+            events.extend(
+                ("bot_step", envelope["data"], None)
+                for envelope in envelopes
+                if envelope["data"].get("conversation_id") in running
+            )
         return events
 
     def poll(self, cache_value):

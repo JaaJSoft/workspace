@@ -263,9 +263,14 @@ class AIStreamSSEProviderTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def test_initial_events_are_empty_without_a_running_generation(self):
+    def test_no_running_generation_still_announces_the_empty_snapshot(self):
+        # A reconnecting client can be showing a bubble raised before its
+        # stream dropped; the empty set is the only thing that lowers it.
         provider = AIStreamSSEProvider(self.user, None)
-        self.assertEqual(provider.get_initial_events(), [])
+        self.assertEqual(
+            provider.get_initial_events(),
+            [("bot_generating", {"conversation_ids": []}, None)],
+        )
 
     def _start_generation(self, conversation, member=True):
         """A conversation with a bot response under way, as the task leaves it."""
@@ -300,7 +305,25 @@ class AIStreamSSEProviderTests(TestCase):
         )
         self._start_generation(conversation, member=False)
 
-        self.assertEqual(AIStreamSSEProvider(self.user, None).get_initial_events(), [])
+        self.assertEqual(
+            AIStreamSSEProvider(self.user, None).get_initial_events(),
+            [("bot_generating", {"conversation_ids": []}, None)],
+        )
+
+    def test_a_finished_generation_is_absent_from_the_snapshot(self):
+        # The response landed while the user was away: the connection they
+        # reopen on resume must learn the generation is over.
+        conversation = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        task = self._start_generation(conversation)
+        task.status = AITask.Status.COMPLETED
+        task.save(update_fields=["status"])
+
+        self.assertEqual(
+            AIStreamSSEProvider(self.user, None).get_initial_events(),
+            [("bot_generating", {"conversation_ids": []}, None)],
+        )
 
     def test_queued_steps_are_replayed_for_a_running_generation(self):
         conversation = Conversation.objects.create(

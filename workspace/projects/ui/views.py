@@ -240,6 +240,7 @@ def _task_panel_context(user, project, role, task):
         "panel_events": events,
         "panel_action_ids": action_ids,
         "panel_can_comment": "comment" in action_ids,
+        "panel_comment_count": task.comments.count(),
         "panel_attachments": TaskAttachmentSerializer(
             visible_attachments(user, task), many=True
         ).data,

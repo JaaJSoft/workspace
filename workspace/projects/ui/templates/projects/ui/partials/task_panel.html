@@ -2,11 +2,15 @@
 {# Swapped via alpine-ajax (target id "task-panel"); also included by #}
 {# project.html on ?task= deep links. Action availability is rendered #}
 {# server-side from the ActionRegistry; taskPanel() re-checks it in JS. #}
+{# Sections are collapsible; empty ones start collapsed (state lives on #}
+{# the board shell so a field commit's panel swap keeps user choices). #}
 <div
   id="task-panel"
   class="flex flex-col min-h-0 h-full"
   x-data="taskPanel()"
   data-attachments-url="{% url 'project-task-attachments' project_uuid=project.uuid task_uuid=panel_task.uuid %}"
+  data-comment-count="{{ panel_comment_count }}"
+  data-activity-count="{{ panel_events|length }}"
 >
   {{ panel_task_data|json_script:"task-panel-data" }}
   {{ panel_action_ids|json_script:"task-panel-actions" }}
@@ -140,388 +144,527 @@
       {% endif %}
     </div>
 
-    <section>
-      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Description</h3>
-      <template x-if="editing !== 'description'">
-        <div
-          :class="can('edit') && 'cursor-text hover:bg-base-200 rounded p-1 -m-1'"
-          @click="startEdit('description', data.description)"
-        >
-          {% if panel_description_html %}
-            <div class="prose prose-sm max-w-none">{{ panel_description_html|safe }}</div>
-          {% else %}
-            <p class="text-sm text-base-content/50 italic">No description.</p>
-          {% endif %}
-        </div>
-      </template>
-      <template x-if="editing === 'description'">
-        <div>
-          <textarea
-            class="textarea textarea-bordered w-full text-sm"
-            rows="6"
-            x-model="draft"
-            placeholder="Markdown supported"
-            x-init="$el.focus()"
-            @keydown.escape="cancelEdit()"
-          ></textarea>
-          <div class="flex justify-end gap-2 mt-1">
-            <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">Cancel</button>
-            <button
-              type="button"
-              class="btn btn-accent btn-xs"
-              @click="commitDraft('description')"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      </template>
-    </section>
-
-    <section>
-      <h3
-        class="text-xs font-semibold uppercase text-base-content/50 mb-1 flex items-center gap-2"
-      >
-        <span>Checklist</span>
-        <span
-          class="font-mono normal-case"
-          x-show="subtasks.length"
-          x-cloak
-          x-text="subtasksDone() + '/' + subtasks.length"
-        ></span>
-      </h3>
-      {# x-effect, not :value - Alpine's value binding skips the write when #}
-      {# the IDL property already matches (0 on an attribute-less progress), #}
-      {# leaving the bar indeterminate whenever no item is done. The property #}
-      {# setters always reflect to the attributes. #}
-      <progress
-        class="progress progress-success w-full h-1 mb-1.5"
-        x-show="subtasks.length"
-        x-cloak
-        x-effect="$el.value = subtasksDone(); $el.max = subtasks.length || 1"
-      ></progress>
-      <ul
-        class="flex flex-col"
-        x-show="subtasks.length"
-        x-cloak
-        @dragover="onSubtaskDragOver($event)"
-        @drop="onSubtaskDrop($event)"
-      >
-        <template x-for="st in subtasks" :key="st.uuid">
-          <li
-            class="group flex items-center gap-2 py-0.5 rounded {% if "edit" in panel_action_ids %}cursor-grab{% endif %}"
-            :class="draggingSubtask === st.uuid && 'opacity-50'"
-            :data-subtask-uuid="st.uuid"
-            {% if "edit" in panel_action_ids %} draggable="true" @dragstart="onSubtaskDragStart($event, st.uuid)" @dragend="draggingSubtask = null" {% endif %}
-          >
-            <input
-              type="checkbox"
-              class="checkbox checkbox-sm shrink-0"
-              :checked="st.done"
-              @change="toggleSubtask(st)"
-              :aria-label="st.title"
-              {% if "edit" not in panel_action_ids %}disabled{% endif %}
-            />
-            <template x-if="editingSubtask !== st.uuid">
-              <span
-                class="flex-1 min-w-0 text-sm break-words"
-                :class="st.done && 'line-through text-base-content/50'"
-                {% if "edit" in panel_action_ids %}@click="startSubtaskEdit(st)"{% endif %}
-                x-text="st.title"
-              ></span>
-            </template>
-            <template x-if="editingSubtask === st.uuid">
-              <input
-                type="text"
-                maxlength="255"
-                class="input input-bordered input-xs flex-1 min-w-0"
-                x-model="subtaskDraft"
-                x-init="$nextTick(() => $el.focus())"
-                @keydown.enter.prevent="$el.blur()"
-                @keydown.escape="editingSubtask = null"
-                @blur="commitSubtaskEdit(st)"
-              />
-            </template>
-            {% if "edit" in panel_action_ids %}
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs btn-square shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                @click="removeSubtask(st)"
-                aria-label="Remove item"
-              >
-                <i data-lucide="x" class="w-3.5 h-3.5"></i>
-              </button>
-            {% endif %}
-          </li>
-        </template>
-      </ul>
-      {% if "edit" in panel_action_ids %}
-        <div class="flex items-center gap-2 mt-1.5">
-          <input
-            type="text"
-            maxlength="255"
-            class="input input-bordered input-sm flex-1"
-            placeholder="Add an item..."
-            x-model="newSubtask"
-            @keydown.enter.prevent="addSubtask()"
-          />
-          <button
-            type="button"
-            class="btn btn-sm btn-square"
-            @click="addSubtask()"
-            :disabled="!newSubtask.trim() || savingSubtask"
-            aria-label="Add item"
-          >
-            <i data-lucide="plus" class="w-4 h-4"></i>
-          </button>
-        </div>
-      {% else %}
-        <p
-          class="text-sm text-base-content/50 italic"
-          x-show="!subtasks.length"
-          x-cloak
-        >
-          No checklist.
-        </p>
-      {% endif %}
-    </section>
-
     <section @panel-assignee-selected.window="addAssignee($event.detail.user)">
-      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Assignees</h3>
-      <div
-        class="flex flex-wrap gap-1.5 mb-2"
-        x-show="data.assignees.length"
-        x-cloak
-      >
-        <template x-for="id in data.assignees" :key="id">
-          {% include "ui/partials/user_chip.html" with user_id_expr="id" username_expr="assigneeName(id)" remove_expr="removeAssignee(id)" remove_show_expr="can('assign')" %}
-        </template>
-      </div>
-      <p
-        class="text-sm text-base-content/50 italic mb-2"
-        x-show="!data.assignees.length"
-        x-cloak
-      >
-        No assignees.
-      </p>
-      <div x-show="can('assign') && unassignedUsers().length" x-cloak>
-        {% include "ui/partials/user_selector.html" with on_select_event="panel-assignee-selected" placeholder="Add assignee..." local_source="unassignedUsers()" %}
+      <h3 class="mb-1">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+          :aria-expanded="sectionsOpen.assignees"
+          @click="toggleSection('assignees')"
+        >
+          <i
+            :data-lucide="sectionsOpen.assignees ? 'chevron-down' : 'chevron-right'"
+            class="w-3.5 h-3.5 shrink-0"
+          ></i>
+          <span>Assignees</span>
+          <span
+            class="font-mono normal-case"
+            x-show="data.assignees.length"
+            x-cloak
+            x-text="data.assignees.length"
+          ></span>
+        </button>
+      </h3>
+      <div x-show="sectionsOpen.assignees">
+        <div
+          class="flex flex-wrap gap-1.5 mb-2"
+          x-show="data.assignees.length"
+          x-cloak
+        >
+          <template x-for="id in data.assignees" :key="id">
+            {% include "ui/partials/user_chip.html" with user_id_expr="id" username_expr="assigneeName(id)" remove_expr="removeAssignee(id)" remove_show_expr="can('assign')" %}
+          </template>
+        </div>
+        <p
+          class="text-sm text-base-content/50 italic mb-2"
+          x-show="!data.assignees.length"
+          x-cloak
+        >
+          No assignees.
+        </p>
+        <div x-show="can('assign') && unassignedUsers().length" x-cloak>
+          {% include "ui/partials/user_selector.html" with on_select_event="panel-assignee-selected" placeholder="Add assignee..." local_source="unassignedUsers()" %}
+        </div>
       </div>
     </section>
 
     {% if labels_data or role == "admin" %}
       <section @panel-label-selected.window="addLabel($event.detail.label)">
-        <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Labels</h3>
+        <h3 class="mb-1">
+          <button
+            type="button"
+            class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+            :aria-expanded="sectionsOpen.labels"
+            @click="toggleSection('labels')"
+          >
+            <i
+              :data-lucide="sectionsOpen.labels ? 'chevron-down' : 'chevron-right'"
+              class="w-3.5 h-3.5 shrink-0"
+            ></i>
+            <span>Labels</span>
+            <span
+              class="font-mono normal-case"
+              x-show="data.labels.length"
+              x-cloak
+              x-text="data.labels.length"
+            ></span>
+          </button>
+        </h3>
         {{ labels_data|json_script:"panel-labels-data" }}
-        <div
-          class="flex flex-wrap gap-1.5 mb-1.5"
-          x-show="data.labels.length"
-          x-cloak
-        >
-          <template x-for="id in data.labels" :key="id">
-            {% if "set_labels" in panel_action_ids %}
-              <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabel(id)"></tag-chip>
-            {% else %}
-              <tag-chip :name="labelName(id)" :color="labelColor(id)"></tag-chip>
-            {% endif %}
-          </template>
+        <div x-show="sectionsOpen.labels">
+          <div
+            class="flex flex-wrap gap-1.5 mb-1.5"
+            x-show="data.labels.length"
+            x-cloak
+          >
+            <template x-for="id in data.labels" :key="id">
+              {% if "set_labels" in panel_action_ids %}
+                <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabel(id)"></tag-chip>
+              {% else %}
+                <tag-chip :name="labelName(id)" :color="labelColor(id)"></tag-chip>
+              {% endif %}
+            </template>
+          </div>
+          <p
+            class="text-sm text-base-content/50 italic mb-2"
+            x-show="!data.labels.length"
+            x-cloak
+          >
+            No labels.
+          </p>
+          {% if "set_labels" in panel_action_ids %}
+            {% include "projects/ui/partials/_label_selector.html" with on_select_event="panel-label-selected" all_source="labels" selected_source="data.labels" %}
+          {% endif %}
         </div>
-        <p
-          class="text-sm text-base-content/50 italic mb-2"
-          x-show="!data.labels.length"
-          x-cloak
-        >
-          No labels.
-        </p>
-        {% if "set_labels" in panel_action_ids %}
-          {% include "projects/ui/partials/_label_selector.html" with on_select_event="panel-label-selected" all_source="labels" selected_source="data.labels" %}
-        {% endif %}
       </section>
     {% endif %}
 
     <section>
-      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Attachments</h3>
-      <ul class="flex flex-col gap-1 mb-2" x-show="attachments.length" x-cloak>
-        <template x-for="att in attachments" :key="att.uuid">
-          <li
-            class="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-base-300 bg-base-200/50 text-sm"
+      <h3 class="mb-1">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+          :aria-expanded="sectionsOpen.description"
+          @click="toggleSection('description')"
+        >
+          <i
+            :data-lucide="sectionsOpen.description ? 'chevron-down' : 'chevron-right'"
+            class="w-3.5 h-3.5 shrink-0"
+          ></i>
+          <span>Description</span>
+        </button>
+      </h3>
+      <div x-show="sectionsOpen.description">
+        <template x-if="editing !== 'description'">
+          <div
+            :class="can('edit') && 'cursor-text hover:bg-base-200 rounded p-1 -m-1'"
+            @click="startEdit('description', data.description)"
           >
-            <i data-lucide="file" class="w-4 h-4 flex-shrink-0 text-base-content/60"></i>
-            <button
-              type="button"
-              class="flex-1 min-w-0 text-left truncate hover:underline"
-              x-text="att.file.name"
-              :title="att.file.name"
-              @click="openAttachment(att)"
-            ></button>
-            <span
-              class="text-xs text-base-content/50 flex-shrink-0"
-              x-text="formatFileSize(att.file.size)"
-            ></span>
-            <a
-              :href="`/api/v1/files/${att.file.uuid}/content`"
-              download
-              class="btn btn-ghost btn-xs btn-square"
-              title="Download"
-            >
-              <i data-lucide="download" class="w-3.5 h-3.5"></i>
-            </a>
-            {% if "attach" in panel_action_ids %}
+            {% if panel_description_html %}
+              <div class="prose prose-sm max-w-none">{{ panel_description_html|safe }}</div>
+            {% else %}
+              <p class="text-sm text-base-content/50 italic">No description.</p>
+            {% endif %}
+          </div>
+        </template>
+        <template x-if="editing === 'description'">
+          <div>
+            <textarea
+              class="textarea textarea-bordered w-full text-sm"
+              rows="6"
+              x-model="draft"
+              placeholder="Markdown supported"
+              x-init="$el.focus()"
+              @keydown.escape="cancelEdit()"
+            ></textarea>
+            <div class="flex justify-end gap-2 mt-1">
+              <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">Cancel</button>
               <button
                 type="button"
-                class="btn btn-ghost btn-xs btn-square text-error/70 hover:text-error"
-                title="Remove attachment"
-                @click="unlinkAttachment(att)"
+                class="btn btn-accent btn-xs"
+                @click="commitDraft('description')"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="mb-1">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+          :aria-expanded="sectionsOpen.checklist"
+          @click="toggleSection('checklist')"
+        >
+          <i
+            :data-lucide="sectionsOpen.checklist ? 'chevron-down' : 'chevron-right'"
+            class="w-3.5 h-3.5 shrink-0"
+          ></i>
+          <span>Checklist</span>
+          <span
+            class="font-mono normal-case"
+            x-show="subtasks.length"
+            x-cloak
+            x-text="subtasksDone() + '/' + subtasks.length"
+          ></span>
+        </button>
+      </h3>
+      <div x-show="sectionsOpen.checklist">
+        {# x-effect, not :value - Alpine's value binding skips the write when #}
+        {# the IDL property already matches (0 on an attribute-less progress), #}
+        {# leaving the bar indeterminate whenever no item is done. The property #}
+        {# setters always reflect to the attributes. #}
+        <progress
+          class="progress progress-success w-full h-1 mb-1.5"
+          x-show="subtasks.length"
+          x-cloak
+          x-effect="$el.value = subtasksDone(); $el.max = subtasks.length || 1"
+        ></progress>
+        <ul
+          class="flex flex-col"
+          x-show="subtasks.length"
+          x-cloak
+          @dragover="onSubtaskDragOver($event)"
+          @drop="onSubtaskDrop($event)"
+        >
+          <template x-for="st in subtasks" :key="st.uuid">
+            <li
+              class="group flex items-center gap-2 py-0.5 rounded {% if "edit" in panel_action_ids %}cursor-grab{% endif %}"
+              :class="draggingSubtask === st.uuid && 'opacity-50'"
+              :data-subtask-uuid="st.uuid"
+              {% if "edit" in panel_action_ids %} draggable="true" @dragstart="onSubtaskDragStart($event, st.uuid)" @dragend="draggingSubtask = null" {% endif %}
+            >
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm shrink-0"
+                :checked="st.done"
+                @change="toggleSubtask(st)"
+                :aria-label="st.title"
+                {% if "edit" not in panel_action_ids %}disabled{% endif %}
+              />
+              <template x-if="editingSubtask !== st.uuid">
+                <span
+                  class="flex-1 min-w-0 text-sm break-words"
+                  :class="st.done && 'line-through text-base-content/50'"
+                  {% if "edit" in panel_action_ids %}@click="startSubtaskEdit(st)"{% endif %}
+                  x-text="st.title"
+                ></span>
+              </template>
+              <template x-if="editingSubtask === st.uuid">
+                <input
+                  type="text"
+                  maxlength="255"
+                  class="input input-bordered input-xs flex-1 min-w-0"
+                  x-model="subtaskDraft"
+                  x-init="$nextTick(() => $el.focus())"
+                  @keydown.enter.prevent="$el.blur()"
+                  @keydown.escape="editingSubtask = null"
+                  @blur="commitSubtaskEdit(st)"
+                />
+              </template>
+              {% if "edit" in panel_action_ids %}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-square shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  @click="removeSubtask(st)"
+                  aria-label="Remove item"
+                >
+                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+              {% endif %}
+            </li>
+          </template>
+        </ul>
+        {% if "edit" in panel_action_ids %}
+          <div class="flex items-center gap-2 mt-1.5">
+            <input
+              type="text"
+              maxlength="255"
+              class="input input-bordered input-sm flex-1"
+              placeholder="Add an item..."
+              x-model="newSubtask"
+              @keydown.enter.prevent="addSubtask()"
+            />
+            <button
+              type="button"
+              class="btn btn-sm btn-square"
+              @click="addSubtask()"
+              :disabled="!newSubtask.trim() || savingSubtask"
+              aria-label="Add item"
+            >
+              <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+          </div>
+        {% else %}
+          <p
+            class="text-sm text-base-content/50 italic"
+            x-show="!subtasks.length"
+            x-cloak
+          >
+            No checklist.
+          </p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section>
+      <h3 class="mb-1">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+          :aria-expanded="sectionsOpen.links"
+          @click="toggleSection('links')"
+        >
+          <i
+            :data-lucide="sectionsOpen.links ? 'chevron-down' : 'chevron-right'"
+            class="w-3.5 h-3.5 shrink-0"
+          ></i>
+          <span>Linked tasks</span>
+          <span
+            class="font-mono normal-case"
+            x-show="links.length"
+            x-cloak
+            x-text="links.length"
+          ></span>
+        </button>
+      </h3>
+      <div x-show="sectionsOpen.links">
+        <ul class="flex flex-col gap-1.5 mb-2" x-show="links.length" x-cloak>
+          <template x-for="link in links" :key="link.uuid">
+            {# items-baseline, not items-center: the smaller label and mono #}
+            {# reference would paint high against the text-sm title; the #}
+            {# remove button opts back out via self-center. #}
+            <li
+              class="flex items-baseline gap-2 min-w-0 rounded-lg border border-base-300/60 bg-base-200/40 px-2.5 py-1.5"
+            >
+              <span class="text-xs text-base-content/60 shrink-0" x-text="link.label"></span>
+              <a
+                :href="link.task.url"
+                class="group flex items-baseline gap-2 min-w-0"
+                @click.prevent="openLinkedTask(link.task)"
+              >
+                <span
+                  class="font-mono text-xs text-base-content/50 shrink-0"
+                  x-text="link.task.reference"
+                ></span>
+                <span
+                  class="text-sm truncate group-hover:underline"
+                  :class="link.task.is_done && 'line-through opacity-60'"
+                  x-text="link.task.title"
+                ></span>
+              </a>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square ml-auto self-center shrink-0"
+                x-show="can('link')"
+                @click="removeLink(link.uuid)"
+                aria-label="Remove link"
+                title="Remove link"
               >
                 <i data-lucide="x" class="w-3.5 h-3.5"></i>
               </button>
-            {% endif %}
-          </li>
-        </template>
-      </ul>
-      <p
-        class="text-sm text-base-content/50 italic mb-2"
-        x-show="!attachments.length && !hasPendingAttachments()"
-        x-cloak
-      >
-        No attachments.
-      </p>
-      {% if "attach" in panel_action_ids %}
-        {% include "ui/partials/attachment_chips.html" with chips_class="flex flex-wrap gap-2 mb-2" %}
-        {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-bottom" button_class="btn btn-outline btn-xs gap-1.5" icon_class="w-3.5 h-3.5" label="Attach" %}
-      {% endif %}
-    </section>
-
-    <section>
-      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Linked tasks</h3>
-      <ul class="flex flex-col gap-1.5 mb-2" x-show="links.length" x-cloak>
-        <template x-for="link in links" :key="link.uuid">
-          {# items-baseline, not items-center: the smaller label and mono #}
-          {# reference would paint high against the text-sm title; the #}
-          {# remove button opts back out via self-center. #}
-          <li
-            class="flex items-baseline gap-2 min-w-0 rounded-lg border border-base-300/60 bg-base-200/40 px-2.5 py-1.5"
-          >
-            <span class="text-xs text-base-content/60 shrink-0" x-text="link.label"></span>
-            <a
-              :href="link.task.url"
-              class="group flex items-baseline gap-2 min-w-0"
-              @click.prevent="openLinkedTask(link.task)"
+            </li>
+          </template>
+        </ul>
+        <p
+          class="text-sm text-base-content/50 italic mb-2"
+          x-show="!links.length"
+          x-cloak
+        >
+          No linked tasks.
+        </p>
+        {% if "link" in panel_action_ids %}
+          {# Stacked full-width rows: side by side the panel leaves the search #}
+          {# input too narrow to read a reference and a title fragment. #}
+          <div class="flex flex-col gap-1.5">
+            <select
+              class="select select-sm select-bordered w-full"
+              x-model="linkRel"
+              aria-label="Link type"
             >
-              <span
-                class="font-mono text-xs text-base-content/50 shrink-0"
-                x-text="link.task.reference"
-              ></span>
-              <span
-                class="text-sm truncate group-hover:underline"
-                :class="link.task.is_done && 'line-through opacity-60'"
-                x-text="link.task.title"
-              ></span>
-            </a>
-            <button
-              type="button"
-              class="btn btn-ghost btn-xs btn-square ml-auto self-center shrink-0"
-              x-show="can('link')"
-              @click="removeLink(link.uuid)"
-              aria-label="Remove link"
-              title="Remove link"
-            >
-              <i data-lucide="x" class="w-3.5 h-3.5"></i>
-            </button>
-          </li>
-        </template>
-      </ul>
-      <p
-        class="text-sm text-base-content/50 italic mb-2"
-        x-show="!links.length"
-        x-cloak
-      >
-        No linked tasks.
-      </p>
-      {% if "link" in panel_action_ids %}
-        {# Stacked full-width rows: side by side the panel leaves the search #}
-        {# input too narrow to read a reference and a title fragment. #}
-        <div class="flex flex-col gap-1.5">
-          <select
-            class="select select-sm select-bordered w-full"
-            x-model="linkRel"
-            aria-label="Link type"
-          >
-            <option value="blocks">blocks</option>
-            <option value="blocked_by">is blocked by</option>
-            <option value="duplicates">duplicates</option>
-            <option value="duplicated_by">is duplicated by</option>
-            <option value="relates_to">relates to</option>
-          </select>
-          <div class="relative min-w-0" @click.outside="linkDropdown = false">
-            <label class="input input-sm input-bordered flex items-center gap-2 w-full">
-              {# shrink-0 + min-w-0: the label-selector precedent - keeps the icon from flex-crushing. #}
-              <i data-lucide="link" class="w-4 h-4 opacity-60 shrink-0"></i>
-              <input
-                type="text"
-                class="grow min-w-0"
-                placeholder="Reference or title..."
-                x-model="linkQuery"
-                maxlength="255"
-                autocomplete="off"
-                @input.debounce.300ms="searchLinkTasks()"
-                @focus="searchLinkTasks()"
-                @keydown.escape="linkDropdown = false"
-              />
-              <span
-                x-show="linkSaving"
+              <option value="blocks">blocks</option>
+              <option value="blocked_by">is blocked by</option>
+              <option value="duplicates">duplicates</option>
+              <option value="duplicated_by">is duplicated by</option>
+              <option value="relates_to">relates to</option>
+            </select>
+            <div class="relative min-w-0" @click.outside="linkDropdown = false">
+              <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+                {# shrink-0 + min-w-0: the label-selector precedent - keeps the icon from flex-crushing. #}
+                <i data-lucide="link" class="w-4 h-4 opacity-60 shrink-0"></i>
+                <input
+                  type="text"
+                  class="grow min-w-0"
+                  placeholder="Reference or title..."
+                  x-model="linkQuery"
+                  maxlength="255"
+                  autocomplete="off"
+                  @input.debounce.300ms="searchLinkTasks()"
+                  @focus="searchLinkTasks()"
+                  @keydown.escape="linkDropdown = false"
+                />
+                <span
+                  x-show="linkSaving"
+                  x-cloak
+                  class="loading loading-spinner loading-xs"
+                ></span>
+              </label>
+              <div
+                x-show="linkDropdown"
                 x-cloak
-                class="loading loading-spinner loading-xs"
-              ></span>
-            </label>
-            <div
-              x-show="linkDropdown"
-              x-cloak
-              class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-64 overflow-y-auto overflow-x-hidden thin-scrollbar"
-            >
-              <ul class="menu p-1" x-show="linkResults.length">
-                <template x-for="result in linkResults" :key="result.uuid">
-                  <li class="w-full min-w-0">
-                    <button
-                      type="button"
-                      class="flex w-full min-w-0 items-baseline gap-2 rounded"
-                      @click="addLink(result)"
-                    >
-                      <span
-                        class="font-mono text-xs text-base-content/50 shrink-0"
-                        x-text="result.reference"
-                      ></span>
-                      <span class="text-sm min-w-0 truncate" x-text="result.title"></span>
-                      <span
-                        class="ml-auto text-xs text-base-content/40 truncate max-w-24"
-                        x-text="result.project_name"
-                      ></span>
-                    </button>
-                  </li>
-                </template>
-              </ul>
-              <p
-                x-show="!linkResults.length"
-                x-cloak
-                class="p-3 text-sm text-base-content/60 text-center"
+                class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-64 overflow-y-auto overflow-x-hidden thin-scrollbar"
               >
-                No matching tasks
-              </p>
+                <ul class="menu p-1" x-show="linkResults.length">
+                  <template x-for="result in linkResults" :key="result.uuid">
+                    <li class="w-full min-w-0">
+                      <button
+                        type="button"
+                        class="flex w-full min-w-0 items-baseline gap-2 rounded"
+                        @click="addLink(result)"
+                      >
+                        <span
+                          class="font-mono text-xs text-base-content/50 shrink-0"
+                          x-text="result.reference"
+                        ></span>
+                        <span class="text-sm min-w-0 truncate" x-text="result.title"></span>
+                        <span
+                          class="ml-auto text-xs text-base-content/40 truncate max-w-24"
+                          x-text="result.project_name"
+                        ></span>
+                      </button>
+                    </li>
+                  </template>
+                </ul>
+                <p
+                  x-show="!linkResults.length"
+                  x-cloak
+                  class="p-3 text-sm text-base-content/60 text-center"
+                >
+                  No matching tasks
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      {% endif %}
+        {% endif %}
+      </div>
     </section>
 
     <section>
-      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Comments</h3>
-      {% url 'project-task-comments' project_uuid=project.uuid task_uuid=panel_task.uuid as comments_url %}
-      {% include "ui/partials/comments.html" with list_url=comments_url current_user_id=request.user.id can_comment=panel_can_comment %}
+      <h3 class="mb-1">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+          :aria-expanded="sectionsOpen.attachments"
+          @click="toggleSection('attachments')"
+        >
+          <i
+            :data-lucide="sectionsOpen.attachments ? 'chevron-down' : 'chevron-right'"
+            class="w-3.5 h-3.5 shrink-0"
+          ></i>
+          <span>Attachments</span>
+          <span
+            class="font-mono normal-case"
+            x-show="attachments.length"
+            x-cloak
+            x-text="attachments.length"
+          ></span>
+        </button>
+      </h3>
+      <div x-show="sectionsOpen.attachments">
+        <ul class="flex flex-col gap-1 mb-2" x-show="attachments.length" x-cloak>
+          <template x-for="att in attachments" :key="att.uuid">
+            <li
+              class="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-base-300 bg-base-200/50 text-sm"
+            >
+              <i data-lucide="file" class="w-4 h-4 flex-shrink-0 text-base-content/60"></i>
+              <button
+                type="button"
+                class="flex-1 min-w-0 text-left truncate hover:underline"
+                x-text="att.file.name"
+                :title="att.file.name"
+                @click="openAttachment(att)"
+              ></button>
+              <span
+                class="text-xs text-base-content/50 flex-shrink-0"
+                x-text="formatFileSize(att.file.size)"
+              ></span>
+              <a
+                :href="`/api/v1/files/${att.file.uuid}/content`"
+                download
+                class="btn btn-ghost btn-xs btn-square"
+                title="Download"
+              >
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              </a>
+              {% if "attach" in panel_action_ids %}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-square text-error/70 hover:text-error"
+                  title="Remove attachment"
+                  @click="unlinkAttachment(att)"
+                >
+                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+              {% endif %}
+            </li>
+          </template>
+        </ul>
+        <p
+          class="text-sm text-base-content/50 italic mb-2"
+          x-show="!attachments.length && !hasPendingAttachments()"
+          x-cloak
+        >
+          No attachments.
+        </p>
+        {% if "attach" in panel_action_ids %}
+          {% include "ui/partials/attachment_chips.html" with chips_class="flex flex-wrap gap-2 mb-2" %}
+          {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-bottom" button_class="btn btn-outline btn-xs gap-1.5" icon_class="w-3.5 h-3.5" label="Attach" %}
+        {% endif %}
+      </div>
     </section>
 
     <section>
-      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Activity</h3>
-      <ul class="divide-y divide-base-200">
+      <h3 class="mb-1">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+          :aria-expanded="sectionsOpen.comments"
+          @click="toggleSection('comments')"
+        >
+          <i
+            :data-lucide="sectionsOpen.comments ? 'chevron-down' : 'chevron-right'"
+            class="w-3.5 h-3.5 shrink-0"
+          ></i>
+          <span>Comments</span>
+        </button>
+      </h3>
+      <div x-show="sectionsOpen.comments">
+        {% url 'project-task-comments' project_uuid=project.uuid task_uuid=panel_task.uuid as comments_url %}
+        {% include "ui/partials/comments.html" with list_url=comments_url current_user_id=request.user.id can_comment=panel_can_comment %}
+      </div>
+    </section>
+
+    <section>
+      <h3 class="mb-1">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+          :aria-expanded="sectionsOpen.activity"
+          @click="toggleSection('activity')"
+        >
+          <i
+            :data-lucide="sectionsOpen.activity ? 'chevron-down' : 'chevron-right'"
+            class="w-3.5 h-3.5 shrink-0"
+          ></i>
+          <span>Activity</span>
+          {% if panel_events %}<span class="font-mono normal-case">{{ panel_events|length }}</span>{% endif %}
+        </button>
+      </h3>
+      <ul class="divide-y divide-base-200" x-show="sectionsOpen.activity">
         {% for event in panel_events %}
           {% include "dashboard/partials/activity_item.html" with activity_hide_view=True %}
         {% empty %}

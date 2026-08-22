@@ -26,9 +26,13 @@ from django.views.debug import SafeExceptionReporterFilter
 REDACTED = "[redacted]"
 
 # password / secret_key / session_key anywhere in the name; wrapped_, encrypted_
-# and sig_ only as a prefix, so `signature_count` and `designation` stay legible.
+# and sig_ as a prefix only, token and encrypted as a suffix only - so
+# `signature_count`, `designation` and the `prompt_tokens` counters stay
+# legible, while access_token, refresh_token and oauth2_data_encrypted do not.
 _SENSITIVE_NAME = re.compile(
-    r"(password|secret_key|session_key|^wrapped_|^encrypted_|^sig_)", re.IGNORECASE
+    r"(password|secret_key|session_key|^wrapped_|^encrypted_|^sig_"
+    r"|token$|encrypted$)",
+    re.IGNORECASE,
 )
 
 # name=value in a message, whether already formatted or still a format string.

@@ -31,6 +31,16 @@ class SensitiveNameTests(TestCase):
             with self.subTest(name=name):
                 self.assertTrue(is_sensitive_name(name))
 
+    def test_matches_the_names_other_modules_hold_secrets_under(self):
+        for name in (
+            "access_token",
+            "refresh_token",
+            "share_token",
+            "oauth2_data_encrypted",
+        ):
+            with self.subTest(name=name):
+                self.assertTrue(is_sensitive_name(name))
+
     def test_leaves_ordinary_names_alone(self):
         for name in (
             "username",
@@ -39,6 +49,9 @@ class SensitiveNameTests(TestCase):
             "state",
             "signature_count",
             "design",
+            # Counters, not credentials - the suffix rule is singular for them.
+            "prompt_tokens",
+            "completion_tokens",
         ):
             with self.subTest(name=name):
                 self.assertFalse(is_sensitive_name(name))

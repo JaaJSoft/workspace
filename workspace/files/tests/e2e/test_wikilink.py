@@ -161,6 +161,48 @@ class WikilinkEditorTests(PlaywrightTestCase):
             self.page.locator('.ProseMirror a[href*="' + str(self.beta.uuid) + '"]')
         ).to_be_visible(timeout=5000)
 
+    def test_lock_acquire_landing_mid_typing_keeps_the_trigger(self):
+        # Regression: SlashProvider.update is a trailing-edge 200ms debounce
+        # where the last call's arguments win, and its onUpdate early-returns
+        # when prevState equals the current state. The viewer's lock-acquire
+        # callback (setReadonly -> view.setProps) fires a state-neutral plugin
+        # update; landing within 200ms of the last "[[" keystroke it used to
+        # replace the pending update's prevState with the already-typed doc,
+        # so the menu never opened and no search was ever issued. Locally the
+        # lock POST resolves before the first keystroke, which is why this
+        # only flaked on contended CI runners.
+        held = []
+
+        def hold_lock_post(route):
+            if route.request.method == "POST":
+                held.append(route)
+            else:
+                route.fallback()
+
+        self.page.route("**/api/v1/files/*/lock", hold_lock_post)
+
+        with self.page.expect_request(
+            lambda r: "/lock" in r.url and r.method == "POST", timeout=20000
+        ):
+            editor = self._open_editor()
+        editor.click()
+        self.page.keyboard.press("Control+End")
+        self.page.keyboard.type("[[beta")
+
+        # Release the held lock response: it lands within the debounce window
+        # that follows the last keystroke. The trigger must survive it and
+        # still fire the search.
+        with self.page.expect_response(
+            lambda r: "/api/v1/files" in r.url and "search=beta" in r.url,
+            timeout=20000,
+        ):
+            held[0].continue_()
+
+        item = self.page.locator(
+            '[data-testid="wikilink-item"]', has_text="Beta Target"
+        )
+        expect(item).to_be_visible(timeout=5000)
+
     def test_search_error_clears_stale_results(self):
         editor = self._open_editor()
         editor.click()

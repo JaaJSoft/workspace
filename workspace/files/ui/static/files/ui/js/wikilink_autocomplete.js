@@ -143,7 +143,21 @@ export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}
       },
     });
     return {
-      update: (updatedView, prevState) => { view = updatedView; provider.update(updatedView, prevState); },
+      update: (updatedView, prevState) => {
+        view = updatedView;
+        // State-neutral updates (setProps from Crepe.setReadonly, decoration
+        // repaints) must not reach the provider: its debounce keeps only the
+        // last call's arguments, so such an update replaces a pending
+        // keystroke update's prevState with the already-typed doc and the
+        // provider's isSame check then swallows the "[[" trigger entirely.
+        const state = updatedView.state;
+        if (
+          prevState &&
+          prevState.doc.eq(state.doc) &&
+          prevState.selection.eq(state.selection)
+        ) return;
+        provider.update(updatedView, prevState);
+      },
       destroy: () => {
         v.dom.removeEventListener('keydown', onKeydown, true);
         provider.destroy();

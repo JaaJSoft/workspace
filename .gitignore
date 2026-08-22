@@ -128,6 +128,7 @@ test_db.sqlite3*
 /avatars/
 /mail/
 /chat/
+/projects/
 /mail/scripts/node_modules/
 /scripts/node_modules/
 /scripts/package.json

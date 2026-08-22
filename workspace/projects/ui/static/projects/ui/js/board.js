@@ -1207,13 +1207,7 @@ function taskPanel() {
 
     openAttachment(att) {
       window.dispatchEvent(
-        new CustomEvent('open-file-viewer', {
-          detail: {
-            uuid: att.file.uuid,
-            name: att.file.name,
-            type: att.file.type,
-          },
-        })
+        new CustomEvent('open-task-attachment-viewer', { detail: att })
       );
     },
 

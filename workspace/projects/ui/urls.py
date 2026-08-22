@@ -22,4 +22,9 @@ urlpatterns = [
         views.task_card,
         name="task_card",
     ),
+    path(
+        "/view-attachment/<uuid:attachment_uuid>",
+        views.view_attachment,
+        name="view_attachment",
+    ),
 ]

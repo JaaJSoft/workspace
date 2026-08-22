@@ -43,6 +43,7 @@ task_comment_detail = TaskCommentViewSet.as_view(
 )
 task_attachments = TaskAttachmentViewSet.as_view({"get": "list", "post": "create"})
 task_attachment_detail = TaskAttachmentViewSet.as_view({"delete": "destroy"})
+task_attachment_download = TaskAttachmentViewSet.as_view({"get": "download"})
 task_links = TaskLinkViewSet.as_view({"get": "list", "post": "create"})
 task_link_detail = TaskLinkViewSet.as_view({"delete": "destroy"})
 
@@ -151,6 +152,11 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/attachments/<uuid:uuid>",
         task_attachment_detail,
         name="project-task-attachment-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/attachments/<uuid:uuid>/download",
+        task_attachment_download,
+        name="project-task-attachment-download",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/links",

@@ -10,6 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from workspace.common.http_ranges import serve_with_ranges
 from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FileService
@@ -49,9 +50,8 @@ from .services.assignments import notify_assigned
 from .services.attachments import (
     MAX_ATTACHMENTS_PER_REQUEST,
     MAX_UPLOAD_BYTES,
-    attach_files,
-    uploads_folder,
-    visible_attachments,
+    create_attachments,
+    remove_attachment,
 )
 from .services.comments import notify_comment_added, notify_comment_edited
 from .services.estimates import format_estimate
@@ -829,14 +829,11 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return TaskAttachment.objects.none()
-        return self.task.attachments.select_related("file", "added_by")
-
-    def _visible(self):
-        return visible_attachments(self.request.user, self.task)
+        return self.task.attachments.select_related("task", "added_by")
 
     def list(self, request, *args, **kwargs):
         return Response(
-            {"attachments": self.get_serializer(self._visible(), many=True).data}
+            {"attachments": self.get_serializer(self.get_queryset(), many=True).data}
         )
 
     @extend_schema(request=TaskAttachmentCreateSerializer)
@@ -874,22 +871,44 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        folder = uploads_folder(request.user) if uploads else None
-        uploaded = [
-            FileService.create_file(request.user, f.name, folder, content=f)
-            for f in uploads
-        ]
-        attach_files(request.user, self.task, uploaded + picked)
+        try:
+            with transaction.atomic():
+                create_attachments(request.user, self.task, uploads, picked)
+        except FileNotFoundError, OSError:
+            return Response(
+                {"detail": "One or more workspace file contents are unavailable."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(
-            {"attachments": self.get_serializer(self._visible(), many=True).data},
+            {"attachments": self.get_serializer(self.get_queryset(), many=True).data},
             status=status.HTTP_201_CREATED,
         )
 
     def destroy(self, request, *args, **kwargs):
         self._require_writable()
-        link = self.get_queryset().filter(uuid=kwargs["uuid"]).first()
-        if link is None:
+        attachment = self.get_queryset().filter(uuid=kwargs["uuid"]).first()
+        if attachment is None:
             raise Http404
-        link.delete()
-        record_task_event(self.task, type=TaskEvent.Type.DETACHED, actor=request.user)
+        remove_attachment(attachment, request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(summary="Download a task attachment")
+    def download(self, request, *args, **kwargs):
+        attachment = self.get_queryset().filter(uuid=kwargs["uuid"]).first()
+        if attachment is None:
+            raise Http404
+        try:
+            fh = attachment.file.open("rb")
+        except FileNotFoundError, OSError:
+            raise Http404 from None
+        fh.seek(0, 2)
+        size = fh.tell()
+        fh.seek(0)
+        return serve_with_ranges(
+            request,
+            file_handle=fh,
+            file_size=size,
+            content_type=attachment.mime_type,
+            inline_filename=attachment.original_name,
+            cache_control="private, max-age=604800, immutable",
+        )

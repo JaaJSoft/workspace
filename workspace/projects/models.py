@@ -341,13 +341,20 @@ class TaskComment(models.Model):
         return f"{self.author} on {self.task} ({self.created_at})"
 
 
-class TaskAttachment(models.Model):
-    """Link row between a task and a workspace file.
+def task_attachment_upload_path(instance, filename):
+    import os
 
-    Pure reference: the file keeps living in the files module with its own
-    permissions - seeing the attachment requires both task access and file
-    permission, the link itself never widens file access. Unlinking never
-    deletes the file; deleting the file cascades onto this row only.
+    ext = os.path.splitext(filename)[1]
+    return f"projects/tasks/{instance.task_id}/{instance.uuid}{ext}"
+
+
+class TaskAttachment(models.Model):
+    """A file stored on the task itself.
+
+    The blob belongs to the task: anyone who can open the task sees every
+    attachment. Attaching a workspace file copies its content, so the
+    source file's own lifecycle (trash, deletion, permission changes)
+    never reaches the task copy.
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
@@ -356,11 +363,14 @@ class TaskAttachment(models.Model):
         on_delete=models.CASCADE,
         related_name="attachments",
     )
-    file = models.ForeignKey(
-        "files.File",
-        on_delete=models.CASCADE,
-        related_name="task_attachments",
-    )
+    file = models.FileField(upload_to=task_attachment_upload_path, max_length=500)
+    original_name = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=255, default="application/octet-stream")
+    type = models.CharField(max_length=50, default="unknown")
+    category = models.CharField(max_length=20, default="unknown")
+    # Pinned viewer slug. Empty means "derive from the content type".
+    viewer = models.CharField(max_length=32, blank=True, default="")
+    size = models.PositiveBigIntegerField(default=0)
     added_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -372,15 +382,9 @@ class TaskAttachment(models.Model):
 
     class Meta:
         ordering = ["created_at", "uuid"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["task", "file"],
-                name="unique_task_attachment",
-            ),
-        ]
 
     def __str__(self):
-        return f"{self.file_id} on {self.task_id}"
+        return f"{self.original_name} on {self.task_id}"
 
 
 class TaskEvent(models.Model):

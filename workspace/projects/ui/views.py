@@ -13,7 +13,7 @@ from workspace.common.charts import column_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.services.activity import annotate_time_ago
 from workspace.projects.actions import ProjectActionRegistry
-from workspace.projects.models import Project, ProjectMember, TaskStatus
+from workspace.projects.models import Project, ProjectMember, TaskAttachment, TaskStatus
 from workspace.projects.queries import (
     get_project_role,
     project_users,
@@ -25,7 +25,6 @@ from workspace.projects.services.analytics import (
     open_task_distribution,
     weekly_flow,
 )
-from workspace.projects.services.attachments import visible_attachments
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.links import annotate_blocked, links_for_task
@@ -242,7 +241,7 @@ def _task_panel_context(user, project, role, task):
         "panel_can_comment": "comment" in action_ids,
         "panel_comment_count": task.comments.count(),
         "panel_attachments": TaskAttachmentSerializer(
-            visible_attachments(user, task), many=True
+            task.attachments.select_related("task", "added_by"), many=True
         ).data,
         "panel_description_html": render_task_description(task.description),
         "panel_links": links_for_task(user, task),
@@ -534,3 +533,60 @@ def settings_view(request, project_uuid):
         "archived": project.is_archived,
     }
     return _render_project_view(request, context)
+
+
+@login_required
+def view_attachment(request, attachment_uuid):
+    """Render viewer HTML for a task attachment (read-only)."""
+    attachment = (
+        TaskAttachment.objects.select_related("task")
+        .filter(uuid=attachment_uuid)
+        .first()
+    )
+    if attachment is None or attachment.task.project_id not in user_project_ids(
+        request.user
+    ):
+        raise Http404
+
+    from django.http import HttpResponse
+
+    from workspace.files.services.filetype import get_viewer_by_slug
+    from workspace.files.ui.viewers import ViewerRegistry, render_viewer_panel
+
+    # A pinned viewer wins; an unknown pin degrades to content-based
+    # resolution rather than breaking the modal.
+    ViewerClass = get_viewer_by_slug(attachment.viewer) or ViewerRegistry.get_viewer(
+        attachment.type, attachment.original_name
+    )
+    if not ViewerClass:
+        return HttpResponse(
+            render_viewer_panel(
+                '<div class="p-8 text-center text-error">'
+                f"No viewer available for {attachment.type}</div>"
+            ),
+            status=400,
+        )
+
+    class AttachmentAdapter:
+        def __init__(self, att):
+            self.uuid = att.uuid
+            self.name = att.original_name
+            self.mime_type = att.mime_type
+            self.type = att.type
+            self.category = att.category
+            self.content = att.file
+
+        def is_viewable(self):
+            return True
+
+    viewer = ViewerClass(AttachmentAdapter(attachment))
+    viewer._user_can_edit = False
+    viewer._content_url = reverse(
+        "project-task-attachment-download",
+        kwargs={
+            "project_uuid": attachment.task.project_id,
+            "task_uuid": attachment.task_id,
+            "uuid": attachment.uuid,
+        },
+    )
+    return HttpResponse(render_viewer_panel(viewer.render(request)))

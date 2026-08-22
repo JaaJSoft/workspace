@@ -387,29 +387,39 @@ class TaskCommentBodySerializer(serializers.Serializer):
 
 
 class TaskAttachmentSerializer(serializers.ModelSerializer):
-    file = serializers.SerializerMethodField()
+    name = serializers.CharField(source="original_name", read_only=True)
     added_by = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
 
     class Meta:
         model = TaskAttachment
-        fields = ["uuid", "file", "added_by", "created_at"]
+        fields = [
+            "uuid",
+            "name",
+            "size",
+            "mime_type",
+            "type",
+            "category",
+            "download_url",
+            "added_by",
+            "created_at",
+        ]
         read_only_fields = fields
-
-    @extend_schema_field(OpenApiTypes.OBJECT)
-    def get_file(self, obj):
-        f = obj.file
-        return {
-            "uuid": str(f.uuid),
-            "name": f.name,
-            "size": f.size,
-            "mime_type": f.mime_type,
-            "type": f.type,
-            "category": f.category,
-        }
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_added_by(self, obj):
         return obj.added_by.username if obj.added_by else None
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_download_url(self, obj):
+        return reverse(
+            "project-task-attachment-download",
+            kwargs={
+                "project_uuid": obj.task.project_id,
+                "task_uuid": obj.task_id,
+                "uuid": obj.uuid,
+            },
+        )
 
 
 class TaskAttachmentCreateSerializer(serializers.Serializer):

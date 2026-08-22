@@ -86,7 +86,7 @@ urlpatterns = [
     ),
     # Media gallery
     path(
-        "api/v1/chat/conversations/<uuid:conversation_id>/medias",
+        "api/v1/chat/conversations/<uuid:conversation_id>/media",
         views_search.ConversationMediaView.as_view(),
         name="chat-conversation-media",
     ),

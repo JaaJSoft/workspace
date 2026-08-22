@@ -90,7 +90,7 @@ window.chatPanelsMixin = function chatPanelsMixin() {
       const offset = append ? this.conversationMedia.length : 0;
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${conversationId}/medias?type=${this.mediaFilter}&offset=${offset}&limit=24`,
+          `/api/v1/chat/conversations/${conversationId}/media?type=${this.mediaFilter}&offset=${offset}&limit=24`,
           { credentials: 'same-origin' },
         );
         if (resp.ok) {

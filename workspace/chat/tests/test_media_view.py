@@ -33,7 +33,7 @@ class ConversationMediaViewTests(APITestCase):
         self.client.force_authenticate(self.owner)
 
     def url(self, **params):
-        base = f"/api/v1/chat/conversations/{self.conv.uuid}/medias"
+        base = f"/api/v1/chat/conversations/{self.conv.uuid}/media"
         if params:
             qs = "&".join(f"{k}={v}" for k, v in params.items())
             return f"{base}?{qs}"

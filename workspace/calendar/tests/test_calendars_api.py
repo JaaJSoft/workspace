@@ -11,9 +11,9 @@ from .test_calendar import CalendarTestMixin
 
 
 class CalendarListTests(CalendarTestMixin, APITestCase):
-    """Tests for GET /api/v1/calendar/calendars"""
+    """Tests for GET /api/v1/calendars"""
 
-    url = "/api/v1/calendar/calendars"
+    url = "/api/v1/calendars"
 
     def test_unauthenticated_rejected(self):
         resp = self.client.get(self.url)
@@ -43,9 +43,9 @@ class CalendarListTests(CalendarTestMixin, APITestCase):
 
 
 class CalendarCreateTests(CalendarTestMixin, APITestCase):
-    """Tests for POST /api/v1/calendar/calendars"""
+    """Tests for POST /api/v1/calendars"""
 
-    url = "/api/v1/calendar/calendars"
+    url = "/api/v1/calendars"
 
     def test_unauthenticated_rejected(self):
         resp = self.client.post(self.url, {"name": "New"}, format="json")
@@ -79,10 +79,10 @@ class CalendarCreateTests(CalendarTestMixin, APITestCase):
 
 
 class CalendarDetailTests(CalendarTestMixin, APITestCase):
-    """Tests for PUT/DELETE /api/v1/calendar/calendars/<id>"""
+    """Tests for PUT/DELETE /api/v1/calendars/<id>"""
 
     def url(self, calendar_id):
-        return f"/api/v1/calendar/calendars/{calendar_id}"
+        return f"/api/v1/calendars/{calendar_id}"
 
     def test_update_calendar(self):
         self.client.force_authenticate(self.owner)

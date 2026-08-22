@@ -594,7 +594,7 @@ class ExternalCalendarAPITests(APITestCase):
             email="other@test.com",
             password="pass123",
         )
-        self.url = "/api/v1/calendar/external-calendars"
+        self.url = "/api/v1/external-calendars"
 
     def test_unauthenticated_rejected(self):
         resp = self.client.get(self.url)

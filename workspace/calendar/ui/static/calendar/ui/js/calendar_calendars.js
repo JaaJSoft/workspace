@@ -32,7 +32,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       this.savingCalendar = true;
       try {
         if (this.calendarModalMode === 'create') {
-          const resp = await fetch('/api/v1/calendar/calendars', {
+          const resp = await fetch('/api/v1/calendars', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -46,7 +46,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
             this.showCalendarModal = false;
           }
         } else {
-          const resp = await fetch(`/api/v1/calendar/calendars/${uuid}`, {
+          const resp = await fetch(`/api/v1/calendars/${uuid}`, {
             method: 'PUT',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -77,7 +77,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       });
       if (!ok) return;
 
-      const resp = await fetch(`/api/v1/calendar/calendars/${cal.uuid}`, {
+      const resp = await fetch(`/api/v1/calendars/${cal.uuid}`, {
         method: 'DELETE',
         credentials: 'same-origin',
         headers: { 'X-CSRFToken': getCSRFToken() },
@@ -93,7 +93,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
 
     // --- External Calendars ---
     _loadExternalCalendars() {
-      fetch('/api/v1/calendar/external-calendars', { credentials: 'same-origin' })
+      fetch('/api/v1/external-calendars', { credentials: 'same-origin' })
         .then(r => r.ok ? r.json() : [])
         .then(data => {
           this.externalCalendars = data;
@@ -138,7 +138,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
 
       this.savingExternal = true;
       try {
-        const resp = await fetch('/api/v1/calendar/external-calendars', {
+        const resp = await fetch('/api/v1/external-calendars', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -172,7 +172,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       });
       if (!ok) return;
 
-      const resp = await fetch(`/api/v1/calendar/external-calendars/${ext.external_source.uuid}`, {
+      const resp = await fetch(`/api/v1/external-calendars/${ext.external_source.uuid}`, {
         method: 'DELETE',
         credentials: 'same-origin',
         headers: { 'X-CSRFToken': getCSRFToken() },
@@ -190,7 +190,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       if (this.syncingExternal[ext.uuid]) return;
       this.syncingExternal = { ...this.syncingExternal, [ext.uuid]: true };
       try {
-        await fetch(`/api/v1/calendar/external-calendars/${ext.external_source.uuid}/sync`, {
+        await fetch(`/api/v1/external-calendars/${ext.external_source.uuid}/sync`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'X-CSRFToken': getCSRFToken() },

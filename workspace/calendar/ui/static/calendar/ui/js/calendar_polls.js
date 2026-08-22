@@ -29,7 +29,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       this.pollsLoading = true;
       try {
         const status = this.pollShowClosed ? 'all' : 'open';
-        const resp = await fetch(`/api/v1/calendar/polls?filter=${this.pollFilter}&status=${status}`, { credentials: 'same-origin' });
+        const resp = await fetch(`/api/v1/polls?filter=${this.pollFilter}&status=${status}`, { credentials: 'same-origin' });
         if (requestId !== this.pollsRequestId) return;
         if (resp.ok) {
           const polls = await resp.json();
@@ -82,7 +82,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       this.pollFormSubmitting = true;
       this.pollFormError = null;
       try {
-        const resp = await fetch('/api/v1/calendar/polls', {
+        const resp = await fetch('/api/v1/polls', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -150,7 +150,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       }
       this.currentPollLoading = true;
       try {
-        const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, { credentials: 'same-origin' });
+        const resp = await fetch(`/api/v1/polls/${uuid}`, { credentials: 'same-origin' });
         if (requestId !== this._loadPollRequestId) return;
         if (resp.ok) {
           const poll = await resp.json();
@@ -187,7 +187,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       if (votes.length === 0) return;
       this.pollSubmitting = true;
       try {
-        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/vote`, {
+        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}/vote`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -206,7 +206,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       if (!this.currentPoll || !this.pollFinalizeSlotId) return;
       this.pollSubmitting = true;
       try {
-        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/finalize`, {
+        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}/finalize`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -233,7 +233,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       });
       if (!ok) return;
       try {
-        const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, {
+        const resp = await fetch(`/api/v1/polls/${uuid}`, {
           method: 'DELETE',
           credentials: 'same-origin',
           headers: { 'X-CSRFToken': getCSRFToken() },
@@ -292,7 +292,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       // Skip if already invited
       if ((this.currentPoll.invitees || []).find(i => i.user.id === user.id)) return;
       try {
-        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/invite`, {
+        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}/invite`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -309,7 +309,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
     async removePollInvitee(userId) {
       if (!this.currentPoll) return;
       try {
-        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/invite`, {
+        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}/invite`, {
           method: 'DELETE',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -360,7 +360,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       this.pollFormSubmitting = true;
       this.pollFormError = null;
       try {
-        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}`, {
+        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}`, {
           method: 'PATCH',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },

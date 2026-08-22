@@ -51,7 +51,7 @@ def index(request):
 
     # Server-render preferences so calendarApp() boots with correct view/firstDay/etc.
     # without an extra GET /api/v1/settings/calendar/preferences (which would force a
-    # second FullCalendar render — and a second /api/v1/calendar/events fetch).
+    # second FullCalendar render — and a second /api/v1/events fetch).
     prefs = get_setting(request.user, "calendar", "preferences", default={}) or {}
 
     return render(

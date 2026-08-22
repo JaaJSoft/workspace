@@ -22,7 +22,7 @@ class CalendarNotificationTestBase(CalendarTestMixin, APITestCase):
 class EventCreateNotificationTests(CalendarNotificationTestBase):
     """Tests for notifications when creating events with members."""
 
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def test_create_event_with_members_notifies_them(self):
         self.client.force_authenticate(self.owner)
@@ -82,7 +82,7 @@ class EventUpdateNotificationTests(CalendarNotificationTestBase):
     """Tests for notifications when updating events."""
 
     def url(self, event_id):
-        return f"/api/v1/calendar/events/{event_id}"
+        return f"/api/v1/events/{event_id}"
 
     def test_update_event_notifies_members(self):
         self.client.force_authenticate(self.owner)
@@ -134,7 +134,7 @@ class EventDeleteNotificationTests(CalendarNotificationTestBase):
     """Tests for notifications when deleting events."""
 
     def url(self, event_id):
-        return f"/api/v1/calendar/events/{event_id}"
+        return f"/api/v1/events/{event_id}"
 
     def test_delete_event_notifies_members(self):
         self.client.force_authenticate(self.owner)
@@ -188,7 +188,7 @@ class EventRespondNotificationTests(CalendarNotificationTestBase):
     """Tests for notifications when responding to an invitation."""
 
     def url(self, event_id):
-        return f"/api/v1/calendar/events/{event_id}/respond"
+        return f"/api/v1/events/{event_id}/respond"
 
     def test_accept_notifies_owner(self):
         self.client.force_authenticate(self.member)
@@ -243,7 +243,7 @@ class EventDetailAutoReadTests(CalendarNotificationTestBase):
             event=self.event,
         )
         self.client.force_authenticate(self.member)
-        resp = self.client.get(f"/api/v1/calendar/events/{self.event.uuid}")
+        resp = self.client.get(f"/api/v1/events/{self.event.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         notif.refresh_from_db()
         self.assertIsNotNone(notif.read_at)

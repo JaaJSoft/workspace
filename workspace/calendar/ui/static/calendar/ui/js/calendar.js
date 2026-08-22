@@ -132,7 +132,7 @@ window.calendarApp = function calendarApp() {
       // Hydrate preferences from server-rendered JSON (embedded via Django's
       // |json_script filter). Avoids an extra GET /api/v1/settings/calendar/preferences
       // which would resolve after FC is already mounted with default firstDay/weekNumbers/view,
-      // forcing a second render - and a second /api/v1/calendar/events fetch.
+      // forcing a second render - and a second /api/v1/events fetch.
       const prefsEl = document.getElementById('calendar-prefs-data');
       if (prefsEl) {
         try {

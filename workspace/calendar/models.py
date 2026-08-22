@@ -146,8 +146,7 @@ class Event(models.Model):
         indexes = [
             models.Index(fields=["start", "end"]),
             models.Index(fields=["owner", "start"]),
-            # (calendar, start) covered by (calendar, is_cancelled, start) below.
-            # (recurrence_frequency, start) had no caller filtering on it.
+            # (calendar, start) lookups are served by (calendar, is_cancelled, start) below.
             models.Index(fields=["recurrence_parent", "original_start"]),
             models.Index(fields=["ical_uid"], name="event_ical_uid"),
             models.Index(

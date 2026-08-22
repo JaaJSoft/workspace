@@ -422,7 +422,6 @@ window.fileBrowser = function fileBrowser() {
       clearTimeout(this._uploadToastTimer);
       this._uploadToastTimer = null;
 
-      // Dismiss progress toast
       if (this._uploadToastEl) {
         window.AppAlert.dismiss(this._uploadToastEl);
         this._uploadToastEl = null;

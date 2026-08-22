@@ -318,7 +318,7 @@ class NextOccurrencesAfterTests(TestCase):
         self.assertEqual(occs, [])
 
 
-# ---------- Recurrence (split from test_calendar.py) ----------
+# ---------- Recurrence ----------
 
 
 class RecurrenceCreateTests(CalendarTestMixin, APITestCase):

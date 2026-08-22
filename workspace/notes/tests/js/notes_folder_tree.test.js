@@ -3,8 +3,7 @@
 // The sidebar folder tree renders as a single flat x-for over
 // visibleFolderRows(): the preorder walk of the lazy-loaded tree, pruned
 // at collapsed folders and (unless showHidden) at hidden folders. Depth
-// is unbounded - these tests pin the row computation that replaced the
-// hardcoded 4-level template (issue #271).
+// is unbounded - these tests pin the row computation.
 
 const assert = require('node:assert');
 const { test } = require('node:test');

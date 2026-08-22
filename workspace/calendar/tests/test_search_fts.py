@@ -162,8 +162,8 @@ class ProviderAndToolTests(TestCase):
         )
 
     def test_provider_matches_description(self):
-        # The provider used to be a title-only icontains; a word that only
-        # appears in the description must now match.
+        # A word that appears only in the description must match, not just
+        # title words.
         from workspace.calendar.search import search_events
 
         results = search_events("flamingo", self.alice, 10)

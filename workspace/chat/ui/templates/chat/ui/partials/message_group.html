@@ -151,7 +151,6 @@
             >
               <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
             </button>
-            {# Reply #}
             <button
               class="btn btn-ghost btn-xs btn-square"
               @click="startReply('{{ msg.uuid }}', '{{ msg.author.get_full_name|default:msg.author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"

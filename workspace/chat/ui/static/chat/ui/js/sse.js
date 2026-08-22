@@ -45,7 +45,6 @@ window.chatSseMixin = function chatSseMixin() {
           this.botTyping = false;
           this.clearBotStep();
         }
-        // Check if message already exists in the DOM
         if (!document.getElementById(`${this._messageIdPrefix()}-${detail.message.uuid}`)) {
           const wasAtBottom = this._isNearBottom();
           await this._refreshCurrentMessages();

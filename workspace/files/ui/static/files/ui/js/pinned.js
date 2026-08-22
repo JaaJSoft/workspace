@@ -175,7 +175,6 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
       const targetIndex = uuids.indexOf(targetUuid);
       if (sourceIndex === -1 || targetIndex === -1) return;
 
-      // Remove source and insert at target position
       uuids.splice(sourceIndex, 1);
       uuids.splice(targetIndex, 0, sourceUuid);
 

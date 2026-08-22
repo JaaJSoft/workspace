@@ -17,12 +17,11 @@ class FilesIndexSmokeTests(PlaywrightTestCase):
         self.login_as(user)
 
         # Anti-regression guard, scoped to the two endpoints this test
-        # actually cares about. Before this commit, both URLs 404'd for any
-        # fresh user because the JS fetched them on init; the JS swallowed
-        # the failure but the browser still logged it as a console error.
-        # The base test case has STRICT_NO_JS_ERRORS=False (opt-in for an
-        # unrelated navbar race), so the regression was invisible until we
-        # watched the responses directly.
+        # actually cares about: they must not 404 for a fresh user. The JS
+        # fetches them on init and swallows any failure, leaving a browser
+        # console error as the only symptom - and the base test case has
+        # STRICT_NO_JS_ERRORS=False (opt-in for an unrelated navbar race),
+        # so only watching the responses directly makes a 404 visible.
         #
         # The watcher is intentionally narrow rather than "any 4xx on a
         # same-origin URL": a generic guard belongs in the base harness

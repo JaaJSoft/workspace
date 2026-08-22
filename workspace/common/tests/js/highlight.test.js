@@ -75,11 +75,10 @@ test('escape: false hands back a falsy body unchanged', () => {
   assert.equal(highlightMatch('<p>hi</p>', '', { escape: false }), '<p>hi</p>');
 });
 
-// Regression: the query used to be regex-escaped but not HTML-escaped, so it
-// was matched against text that had been. A term holding an HTML
-// metacharacter therefore either missed entirely or landed inside an entity
-// and split it, emitting `<mark>&</mark>amp;` - which renders as the literal
-// text "&amp;".
+// The query must be HTML-escaped like the text it is matched against: an
+// unescaped term holding an HTML metacharacter either misses entirely or
+// lands inside an entity and splits it, emitting `<mark>&</mark>amp;` -
+// which renders as the literal text "&amp;".
 test('matches a query whose HTML metacharacters are entities in the text', () => {
   assert.equal(highlightMatch('Say "hi"', '"hi"'), `Say ${mark('&quot;hi&quot;')}`);
   assert.equal(highlightMatch('a < b', '<'), `a ${mark('&lt;')} b`);
@@ -121,9 +120,10 @@ test('escape: false matches the entities a pre-escaped body carries', () => {
   );
 });
 
-// Regression: the match used to run over the whole pre-escaped string, tags
-// included, so an everyday term cut the markup in half - `strong` reached
-// x-html as `<<mark>strong</mark>>`, and `http` rewrote every href.
+// The match must only run over text segments, never inside tags: matched
+// against the whole pre-escaped string, an everyday term cuts the markup in
+// half - `strong` reaches x-html as `<<mark>strong</mark>>`, and `http`
+// rewrites every href.
 test('escape: false marks text nodes only, never tag names', () => {
   assert.equal(
     highlightMatch('<p><strong>strong</strong></p>', 'strong', { escape: false }),

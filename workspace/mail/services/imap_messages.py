@@ -231,8 +231,8 @@ def save_draft(account, raw_message_bytes, old_uid=None):
     if msg_id:
         # Identify the exact draft we just appended.
         return qs.filter(message_id=msg_id).first()
-    # Fallback: a draft built without a Message-ID header is anomalous, but
-    # don't regress vs. the previous behavior in that case.
+    # A draft built without a Message-ID header is anomalous; the newest
+    # draft is the best available guess for the one just appended.
     return qs.order_by("-created_at").first()
 
 

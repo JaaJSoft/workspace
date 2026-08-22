@@ -27,7 +27,6 @@ class ChatSSEProvider(SSEProvider):
     def __init__(self, user, last_event_id):
         super().__init__(user, last_event_id)
 
-        # Get conversations user is a member of
         self._member_conv_ids = set(user_conversation_ids(user))
 
         # Determine "since" timestamp. A malformed Last-Event-ID header

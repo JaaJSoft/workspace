@@ -13,17 +13,14 @@ window.contextMenu = function contextMenu() {
     },
 
     init() {
-      // Listen for context menu events (on files/folders)
       window.addEventListener('open-context-menu', (e) => {
         this.open(e.detail.event, e.detail.nodeData);
       });
 
-      // Listen for background context menu events (on empty area)
       window.addEventListener('open-background-context-menu', (e) => {
         this.openBackground(e.detail.event);
       });
 
-      // Listen for clipboard changes
       window.addEventListener('clipboard-changed', () => {
         this.hasClipboardItems = window.fileClipboard.hasItems();
       });

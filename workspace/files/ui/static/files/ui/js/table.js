@@ -196,7 +196,6 @@ window.fileTableControls = function fileTableControls() {
         this.lastSelectedUuid = nodeData.uuid;
       }
 
-      // Dispatch event for context menu to listen
       window.dispatchEvent(new CustomEvent('open-context-menu', {
         detail: { event, nodeData }
       }));

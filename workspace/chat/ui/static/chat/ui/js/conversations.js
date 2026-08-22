@@ -569,7 +569,6 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       const newTgtIdx = order.indexOf(targetUuid);
       order.splice(newTgtIdx, 0, srcUuid);
 
-      // Persist reorder
       try {
         await fetch('/api/v1/chat/conversations/pin-reorder', {
           method: 'POST',

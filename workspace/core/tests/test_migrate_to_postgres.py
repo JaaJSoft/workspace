@@ -138,10 +138,9 @@ class DryRunTests(TestCase):
         self.assertIn("dumpdata", call_names)
         self.assertNotIn("loaddata", call_names)
         # --dry-run must leave the target untouched: no schema or seed-data
-        # migrations may run on it. Regression test: an earlier version
-        # called migrate before the dry-run early-return, which created
-        # the full schema and inserted seed rows (default mail labels,
-        # the assistant bot user) on the target.
+        # migrations may run on it. A migrate call before the dry-run
+        # early-return would create the full schema and insert seed rows
+        # (default mail labels, the assistant bot user) on the target.
         self.assertNotIn("migrate", call_names)
 
 
@@ -327,7 +326,7 @@ class SourceMigrationsPrecheckTests(TestCase):
         mock_conns.databases = {}
 
         def fake_call_command(name, *args, **kwargs):
-            # dumpdata uses stdout= kwarg now, write an empty fixture there
+            # dumpdata writes through its stdout= kwarg - hand it an empty fixture
             if name == "dumpdata" and "stdout" in kwargs:
                 kwargs["stdout"].write("[]")
 

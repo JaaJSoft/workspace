@@ -114,6 +114,7 @@ class AccountEnvelopeView(CacheControlMixin, APIView):
         summary="Fetch the account envelope",
         responses=AccountEnvelopeSerializer,
     )
+    @sensitive_variables()
     def get(self, request):
         identity = AccountIdentity.objects.filter(user=request.user).first()
         if identity is None:

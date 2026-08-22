@@ -178,14 +178,30 @@ class AccountEnvelopeTests(TestCase):
 
     @override_settings(DEBUG=True)
     def test_a_crash_renders_no_secret_on_the_technical_500_page(self):
-        """This view is not decorated: its locals hold the identity model, and
-        a traceback renders locals. Django prints a model by its __str__, so
-        the sealed keys never reach the page - a property worth pinning rather
-        than reasoning about."""
+        """A traceback renders every frame's locals, and this response is
+        nothing but key material. Pinned at the two places it can break: here,
+        where the view's own locals hold the identity row, and below, inside
+        the serializer where the assembled envelope lives."""
         self._identity(self.user)
         self.client.raise_request_exception = False
         with patch(
             "workspace.vault.views.AccountEnvelopeSerializer",
+            side_effect=RuntimeError("boom"),
+        ):
+            response = self.client.get(ENVELOPE_URL)
+
+        self.assertEqual(response.status_code, 500)
+        self.assertNotIn("WKEX", response.content.decode())
+
+    @override_settings(DEBUG=True)
+    def test_a_crash_inside_the_serializer_renders_no_secret_either(self):
+        """The frames under .data are DRF's own, and they hold the assembled
+        dict of wrapped keys under names - ret, attribute, value - that name
+        matching cannot flag. Only the decorator reaches them."""
+        self._identity(self.user)
+        self.client.raise_request_exception = False
+        with patch(
+            "rest_framework.fields.DateTimeField.to_representation",
             side_effect=RuntimeError("boom"),
         ):
             response = self.client.get(ENVELOPE_URL)

@@ -3,16 +3,143 @@
 
 {% block title %}Set up your vault - Workspace{% endblock %}
 
+{% comment %}
+  No inline <script> and no inline style= anywhere in this file: the module
+  serves its own Content-Security-Policy, and the point of a per-view policy
+  is that the module holds the line the rest of the project cannot yet.
+{% endcomment %}
+
 {% block content %}
-  <div class="mx-auto max-w-2xl px-4 py-10" x-data="vaultOnboarding()">
+  <div
+    class="mx-auto max-w-2xl px-4 py-10"
+    x-data="vaultOnboarding()"
+    data-email="{{ request.user.email }}"
+  >
     <h1 class="text-2xl font-semibold">Set up your vault</h1>
-    <p class="mt-2 text-base-content/70">
-      Three steps. The last one gives you the only copy of your recovery key.
-    </p>
+    <ul class="steps w-full my-6">
+      <li class="step" :class="step >= 1 && 'step-primary'">What we cannot do</li>
+      <li class="step" :class="step >= 2 && 'step-primary'">Vault password</li>
+      <li class="step" :class="step >= 3 && 'step-primary'">Emergency kit</li>
+    </ul>
+
+    <inline-alert type="error" x-show="error" x-cloak>
+      <span x-text="error"></span>
+    </inline-alert>
+
+    {# Step 1 - what the server cannot read, and cannot recover #}
+    <template x-if="step === 1">
+      <section class="space-y-4">
+        <p>
+          Your vault is encrypted on this device. The server stores what it
+          cannot open: it never sees your vault password, and it cannot reset
+          it for you.
+        </p>
+        <p>
+          There is no "forgot password" here, and that is deliberate. If you
+          lose both your vault password and the recovery key we are about to
+          give you, your vault is gone - for you, for us, for everyone.
+        </p>
+        <button class="btn btn-primary" @click="step = 2">I understand</button>
+      </section>
+    </template>
+
+    {# Step 2 - the vault password, behind the floor #}
+    <template x-if="step === 2">
+      <section class="space-y-4">
+        <p>
+          Pick a password for your vault. It can be the same one you use to
+          log in - it never leaves this browser.
+        </p>
+        <label class="form-control w-full">
+          <span class="label-text">Vault password</span>
+          <input
+            type="password"
+            class="input input-bordered w-full"
+            autocomplete="new-password"
+            x-model="password"
+            @input.debounce.300ms="evaluateStrength()"
+            @change.debounce.600ms="checkBreachCorpus()"
+          />
+        </label>
+        <label class="form-control w-full">
+          <span class="label-text">Confirm it</span>
+          <input
+            type="password"
+            class="input input-bordered w-full"
+            autocomplete="new-password"
+            x-model="confirmation"
+          />
+        </label>
+
+        <ul class="text-sm space-y-1">
+          <li :class="passwordLongEnough() ? 'text-success' : 'text-base-content/60'">
+            At least 12 characters
+          </li>
+          <li :class="passwordStrongEnough() ? 'text-success' : 'text-base-content/60'">
+            Strong enough to resist guessing
+            <span x-show="feedback" x-text="'- ' + feedback" x-cloak></span>
+          </li>
+          <li :class="passwordsMatch() ? 'text-success' : 'text-base-content/60'">
+            Both fields match
+          </li>
+        </ul>
+
+        <inline-alert type="error" x-show="breachStatus === 'found'" x-cloak>
+          This password appears in a public breach corpus. Pick another one.
+        </inline-alert>
+        <inline-alert type="warning" x-show="breachStatus === 'unavailable'" x-cloak>
+          We could not reach the breach corpus, so this password was not
+          checked against it. You can continue.
+        </inline-alert>
+
+        <button
+          class="btn btn-primary"
+          :disabled="!passwordAcceptable() || busy"
+          @click="generateAndSeal()"
+        >
+          <span x-show="busy" class="loading loading-spinner loading-sm" x-cloak></span>
+          Create my vault
+        </button>
+      </section>
+    </template>
+
+    {# Step 3 - the emergency kit, and the box that gates the end #}
+    <template x-if="step === 3">
+      <section class="space-y-4">
+        <h2 class="text-lg font-semibold">Your recovery key</h2>
+        <p>
+          Write it down or keep the PDF somewhere safe and offline. Together
+          with your vault password, it is the only way into your vault. We do
+          not have a copy.
+        </p>
+        <pre
+          class="p-4 rounded-lg bg-base-200 font-mono text-sm break-all"
+          x-text="groupedSecret()"
+        ></pre>
+        <button class="btn btn-outline" @click="downloadKit()">
+          Download the emergency kit (PDF)
+        </button>
+        <label class="label cursor-pointer justify-start gap-3">
+          <input type="checkbox" class="checkbox" x-model="acknowledged" />
+          <span class="label-text">
+            I have saved my recovery key. I understand nobody can recover my
+            vault without it.
+          </span>
+        </label>
+        <a
+          class="btn btn-primary"
+          :class="!canFinish() && 'btn-disabled'"
+          href="{% url 'vault_ui:index' %}"
+        >
+          Open my vault
+        </a>
+      </section>
+    </template>
   </div>
 {% endblock %}
 
 {% block extra_scripts %}
   <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vendor/vault-onboarding.js' %}"></script>
   <script src="{% static 'vault/ui/js/onboarding.js' %}"></script>
 {% endblock %}

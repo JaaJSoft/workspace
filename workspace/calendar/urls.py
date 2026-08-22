@@ -4,73 +4,73 @@ from . import views, views_external, views_polls
 
 urlpatterns = [
     path(
-        "api/v1/calendar/calendars",
+        "api/v1/calendars",
         views.CalendarListView.as_view(),
         name="calendar-list",
     ),
     path(
-        "api/v1/calendar/calendars/<uuid:calendar_id>",
+        "api/v1/calendars/<uuid:calendar_id>",
         views.CalendarDetailView.as_view(),
         name="calendar-detail",
     ),
     path(
-        "api/v1/calendar/events", views.EventListView.as_view(), name="calendar-events"
+        "api/v1/events", views.EventListView.as_view(), name="calendar-events"
     ),
     path(
-        "api/v1/calendar/events/<uuid:event_id>",
+        "api/v1/events/<uuid:event_id>",
         views.EventDetailView.as_view(),
         name="calendar-event-detail",
     ),
     path(
-        "api/v1/calendar/events/<uuid:event_id>/respond",
+        "api/v1/events/<uuid:event_id>/respond",
         views.EventRespondView.as_view(),
         name="calendar-event-respond",
     ),
     # Polls
-    path("api/v1/calendar/polls", views_polls.PollListView.as_view(), name="poll-list"),
+    path("api/v1/polls", views_polls.PollListView.as_view(), name="poll-list"),
     path(
-        "api/v1/calendar/polls/shared/<str:token>",
+        "api/v1/polls/shared/<str:token>",
         views_polls.SharedPollView.as_view(),
         name="poll-shared",
     ),
     path(
-        "api/v1/calendar/polls/shared/<str:token>/vote",
+        "api/v1/polls/shared/<str:token>/vote",
         views_polls.SharedPollVoteView.as_view(),
         name="poll-shared-vote",
     ),
     path(
-        "api/v1/calendar/polls/<uuid:poll_id>",
+        "api/v1/polls/<uuid:poll_id>",
         views_polls.PollDetailView.as_view(),
         name="poll-detail",
     ),
     path(
-        "api/v1/calendar/polls/<uuid:poll_id>/vote",
+        "api/v1/polls/<uuid:poll_id>/vote",
         views_polls.PollVoteView.as_view(),
         name="poll-vote",
     ),
     path(
-        "api/v1/calendar/polls/<uuid:poll_id>/invite",
+        "api/v1/polls/<uuid:poll_id>/invite",
         views_polls.PollInviteView.as_view(),
         name="poll-invite",
     ),
     path(
-        "api/v1/calendar/polls/<uuid:poll_id>/finalize",
+        "api/v1/polls/<uuid:poll_id>/finalize",
         views_polls.PollFinalizeView.as_view(),
         name="poll-finalize",
     ),
     # External calendars
     path(
-        "api/v1/calendar/external-calendars",
+        "api/v1/external-calendars",
         views_external.ExternalCalendarListView.as_view(),
         name="external-calendar-list",
     ),
     path(
-        "api/v1/calendar/external-calendars/<uuid:ext_id>",
+        "api/v1/external-calendars/<uuid:ext_id>",
         views_external.ExternalCalendarDetailView.as_view(),
         name="external-calendar-detail",
     ),
     path(
-        "api/v1/calendar/external-calendars/<uuid:ext_id>/sync",
+        "api/v1/external-calendars/<uuid:ext_id>/sync",
         views_external.ExternalCalendarSyncView.as_view(),
         name="external-calendar-sync",
     ),

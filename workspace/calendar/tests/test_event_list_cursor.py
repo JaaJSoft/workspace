@@ -1,4 +1,4 @@
-"""Tests for the cursor (agenda) mode of /api/v1/calendar/events.
+"""Tests for the cursor (agenda) mode of /api/v1/events.
 
 The endpoint supports two modes:
 - Range mode (existing): ?start=&end=&calendar_ids= → flat JSON array.
@@ -22,7 +22,7 @@ User = get_user_model()
 class CursorModeMixin:
     """Common setup for cursor-mode tests."""
 
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def setUp(self):
         self.owner = User.objects.create_user(

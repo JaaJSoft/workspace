@@ -355,7 +355,7 @@
           async init() {
             this.voterToken = localStorage.getItem('poll_voter_' + token) || '';
             try {
-              const url = '/api/v1/calendar/polls/shared/' + token +
+              const url = '/api/v1/polls/shared/' + token +
                 (this.voterToken ? '?voter_token=' + encodeURIComponent(this.voterToken) : '');
               const resp = await fetch(url);
               if (resp.ok) {
@@ -434,7 +434,7 @@
                 slot_id,
                 choice,
               }));
-              const resp = await fetch('/api/v1/calendar/polls/shared/' + token + '/vote', {
+              const resp = await fetch('/api/v1/polls/shared/' + token + '/vote', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json'

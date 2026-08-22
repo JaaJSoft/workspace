@@ -324,7 +324,7 @@ class NextOccurrencesAfterTests(TestCase):
 class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
     """Tests for creating recurring events."""
 
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def _event_data(self, **overrides):
         data = {
@@ -361,7 +361,7 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
 class RecurrenceExpansionTests(CalendarTestMixin, APITestCase):
     """Tests for recurring event expansion in GET list."""
 
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def _create_recurring(
         self,
@@ -459,7 +459,7 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         )
 
     def url(self, event_id):
-        return f"/api/v1/calendar/events/{event_id}"
+        return f"/api/v1/events/{event_id}"
 
     def test_delete_this_creates_cancelled_exception(self):
         master = self._create_weekly()
@@ -559,7 +559,7 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
             "start": timezone.now().isoformat(),
             "end": (timezone.now() + timedelta(days=21)).isoformat(),
         }
-        resp = self.client.get("/api/v1/calendar/events", params)
+        resp = self.client.get("/api/v1/events", params)
         recurring = [e for e in resp.data if e.get("is_recurring")]
         starts = [e["original_start"] for e in recurring if e.get("original_start")]
         self.assertNotIn(occ_start.isoformat(), starts)
@@ -581,7 +581,7 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
             "start": timezone.now().isoformat(),
             "end": (timezone.now() + timedelta(days=21)).isoformat(),
         }
-        resp = self.client.get("/api/v1/calendar/events", params)
+        resp = self.client.get("/api/v1/events", params)
         titles = [e["title"] for e in resp.data if e.get("is_recurring")]
         self.assertIn("Special Meeting", titles)
 

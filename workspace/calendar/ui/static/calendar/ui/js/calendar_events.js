@@ -194,7 +194,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     async fetchEvents(start, end) {
       const calIds = Object.keys(this.visibleCalendars).filter(k => this.visibleCalendars[k]).join(',');
-      const url = `/api/v1/calendar/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` +
+      const url = `/api/v1/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` +
         `&calendar_ids=${encodeURIComponent(calIds)}`;
 
       const resp = await fetch(url, { credentials: 'same-origin' });
@@ -272,7 +272,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           calendar_ids: calIds,
           show_declined: this.prefs.showDeclined ? 'true' : 'false',
         });
-        const resp = await fetch(`/api/v1/calendar/events?${params}`, {
+        const resp = await fetch(`/api/v1/events?${params}`, {
           credentials: 'same-origin',
         });
         if (requestId !== this.agenda.requestId) return;
@@ -569,7 +569,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.loadingEvent = true;
       this.showPanel = true;
       try {
-        const resp = await fetch(`/api/v1/calendar/events/${eventId}`, { credentials: 'same-origin' });
+        const resp = await fetch(`/api/v1/events/${eventId}`, { credentials: 'same-origin' });
         if (resp.ok) {
           const event = await resp.json();
           // Navigate calendar to the event's date
@@ -644,10 +644,10 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       try {
         let url, method;
         if (this.modalMode === 'create') {
-          url = '/api/v1/calendar/events';
+          url = '/api/v1/events';
           method = 'POST';
         } else {
-          url = `/api/v1/calendar/events/${this.form.uuid}`;
+          url = `/api/v1/events/${this.form.uuid}`;
           method = 'PUT';
         }
 
@@ -661,7 +661,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           }
           // Use master UUID for API call
           const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
-          url = `/api/v1/calendar/events/${targetUuid}`;
+          url = `/api/v1/events/${targetUuid}`;
         }
 
         const resp = await fetch(url, {
@@ -721,7 +721,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         this.deleting = true;
         try {
           const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
-          let url = `/api/v1/calendar/events/${targetUuid}?scope=${scope}`;
+          let url = `/api/v1/events/${targetUuid}?scope=${scope}`;
           if (scope !== 'all') {
             url += `&original_start=${encodeURIComponent(this._panelRaw.original_start)}`;
           }
@@ -752,7 +752,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
       this.deleting = true;
       try {
-        const resp = await fetch(`/api/v1/calendar/events/${this.form.uuid}`, {
+        const resp = await fetch(`/api/v1/events/${this.form.uuid}`, {
           method: 'DELETE',
           credentials: 'same-origin',
           headers: { 'X-CSRFToken': getCSRFToken() },
@@ -770,7 +770,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     async respondToInvitation(newStatus) {
       try {
         const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
-        const resp = await fetch(`/api/v1/calendar/events/${targetUuid}/respond`, {
+        const resp = await fetch(`/api/v1/events/${targetUuid}/respond`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },

@@ -17,9 +17,9 @@ from .test_calendar import CalendarTestMixin
 
 
 class EventListTests(CalendarTestMixin, APITestCase):
-    """Tests for GET /api/v1/calendar/events"""
+    """Tests for GET /api/v1/events"""
 
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def _range_params(self, days_before=7, days_after=7):
         start = (timezone.now() - timedelta(days=days_before)).isoformat()
@@ -109,9 +109,9 @@ class EventListTests(CalendarTestMixin, APITestCase):
 
 
 class EventCreateTests(CalendarTestMixin, APITestCase):
-    """Tests for POST /api/v1/calendar/events"""
+    """Tests for POST /api/v1/events"""
 
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def _event_data(self, **overrides):
         data = {
@@ -180,10 +180,10 @@ class EventCreateTests(CalendarTestMixin, APITestCase):
 
 
 class EventDetailTests(CalendarTestMixin, APITestCase):
-    """Tests for GET/PUT/DELETE /api/v1/calendar/events/<id>"""
+    """Tests for GET/PUT/DELETE /api/v1/events/<id>"""
 
     def url(self, event_id):
-        return f"/api/v1/calendar/events/{event_id}"
+        return f"/api/v1/events/{event_id}"
 
     # --- GET ---
 
@@ -299,10 +299,10 @@ class EventDetailTests(CalendarTestMixin, APITestCase):
 
 
 class EventRespondTests(CalendarTestMixin, APITestCase):
-    """Tests for POST /api/v1/calendar/events/<id>/respond"""
+    """Tests for POST /api/v1/events/<id>/respond"""
 
     def url(self, event_id):
-        return f"/api/v1/calendar/events/{event_id}/respond"
+        return f"/api/v1/events/{event_id}/respond"
 
     def test_unauthenticated_rejected(self):
         resp = self.client.post(
@@ -407,7 +407,7 @@ class AllDayApiContractTests(CalendarTestMixin, APITestCase):
     """All-day events: normalized UTC-midnight storage, date-only API shape,
     and timezone stamping for timed events."""
 
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def tearDown(self):
         dj_timezone.deactivate()
@@ -506,7 +506,7 @@ class AllDayApiContractTests(CalendarTestMixin, APITestCase):
 
 
 class RangeEndpointTimezoneTests(CalendarTestMixin, APITestCase):
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def tearDown(self):
         dj_timezone.deactivate()
@@ -592,7 +592,7 @@ class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
     """Only a series GAINING recurrence adopts the editor's zone; legacy
     recurring series keep UTC expansion whatever else is edited."""
 
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def tearDown(self):
         dj_timezone.deactivate()

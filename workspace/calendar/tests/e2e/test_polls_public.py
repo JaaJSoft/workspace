@@ -38,7 +38,7 @@ class SharedPollVotingTests(PlaywrightTestCase):
         )
 
         # Alpine populates the <h1> via x-text once the
-        # /api/v1/calendar/polls/shared/<token> fetch resolves; waiting on
+        # /api/v1/polls/shared/<token> fetch resolves; waiting on
         # it asserts that both the UI view and the public API endpoint
         # are wired up correctly.
         expect(self.page.locator("h1")).to_have_text("Team lunch")

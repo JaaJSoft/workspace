@@ -126,7 +126,7 @@ class NotifyTodayEventsCronTests(TodayEventNotificationMixin, TestCase):
 
 
 class DisplayedEventsMarkReadTests(TodayEventNotificationMixin, APITestCase):
-    url = "/api/v1/calendar/events"
+    url = "/api/v1/events"
 
     def _range_params(self):
         return {

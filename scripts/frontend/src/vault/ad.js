@@ -24,13 +24,18 @@ export const ENTRY_COLUMN_FIELD_IDS = Object.freeze(['name', 'notes']);
 
 const CUSTOM_PREFIX = 'custom:';
 
+// The account identifier in these strings is the UUID of the account's
+// AccountIdentity row, not a user id: Django's auth.User has an integer
+// primary key, which is enumerable and reassignable after a deletion - an
+// associated data string another human could one day inherit.
 export const AD = {
   unwrapInfo: () => ascii('v1|unwrap'),
   entryKeyInfo: (entryUuid) => ascii(`v1|entry-key|${uuid(entryUuid)}`),
-  kexPrivAd: (userUuid) => ascii(`v1|account-kex-priv|${uuid(userUuid)}`),
-  sigPrivAd: (userUuid) => ascii(`v1|account-sig-priv|${uuid(userUuid)}`),
+  kexPrivAd: (accountUuid) => ascii(`v1|account-kex-priv|${uuid(accountUuid)}`),
+  sigPrivAd: (accountUuid) => ascii(`v1|account-sig-priv|${uuid(accountUuid)}`),
   entryFieldAd: (entryUuid, fieldName) => ascii(`v1|entry-field|${uuid(entryUuid)}|${fieldName}`),
-  kexPubPayload: (userUuid, kexPubB64) => ascii(`v1|account-kex-pub|${uuid(userUuid)}|${kexPubB64}`),
+  kexPubPayload: (accountUuid, kexPubB64) =>
+    ascii(`v1|account-kex-pub|${uuid(accountUuid)}|${kexPubB64}`),
   vaultKeyInfo: (vaultUuid, recipientUuid) =>
     ascii(`v1|vault-key|${uuid(vaultUuid)}|${uuid(recipientUuid)}`),
 };

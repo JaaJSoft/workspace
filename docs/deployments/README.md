@@ -46,7 +46,7 @@ Workspace expects to run behind a TLS-terminating reverse proxy (nginx, Caddy, T
 | Header              | Purpose                                                  |
 |---------------------|----------------------------------------------------------|
 | `X-Forwarded-Proto` | Tells Django the original request was HTTPS              |
-| `X-Forwarded-For`   | Real client IP (used for logs and rate limiting)         |
+| `X-Forwarded-For`   | Real client IP - only believed once `NUM_PROXIES` is set, see below |
 | `Host`              | The public hostname (must match `ALLOWED_HOSTS`)         |
 
 ### Optional settings for proxies that rewrite Host/Port
@@ -57,6 +57,20 @@ Some proxies - notably Cloudflare, AWS ALB, GCP Load Balancer, Azure Front Door 
 |------------------------|---------|-------------------------------------------------------------------|
 | `USE_X_FORWARDED_HOST` | off     | Django trusts `X-Forwarded-Host` instead of `Host`                |
 | `USE_X_FORWARDED_PORT` | off     | Django trusts `X-Forwarded-Port` instead of the connection port   |
+
+### Per-IP rate limits behind a proxy
+
+Some endpoints limit by client IP as well as by user. Behind a proxy every request arrives from the
+proxy's address, so `X-Forwarded-For` is ignored - a caller-supplied header would buy a fresh bucket
+per request - until you declare how many hops are in front:
+
+| Variable      | Default | Effect                                                            |
+|---------------|---------|--------------------------------------------------------------------|
+| `NUM_PROXIES` | unset   | Hops between client and app; the peer address is used when unset  |
+
+Leaving it unset behind a proxy is safe but blunt: every user shares one bucket, so a busy instance
+answers legitimate people with `429`. Set it to the length of your chain, and make sure that chain
+**overwrites** `X-Forwarded-For` rather than appending to it.
 
 ### ⚠️ Deploying without a reverse proxy is unsafe
 

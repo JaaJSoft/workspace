@@ -203,7 +203,7 @@ test('ed25519 vectors replay exactly', async () => {
       // Rebuilt, not replayed: a divergence on what goes into the attestation
       // has to fail here.
       assert.equal(
-        b64(V.AD.kexPubPayload(vector.user_uuid, vector.kex_public_b64)),
+        b64(V.AD.kexPubPayload(vector.account_uuid, vector.kex_public_b64)),
         vector.message_b64,
         vector.id
       );
@@ -341,6 +341,14 @@ test('a stored public key round-trips through its algorithm prefix', () => {
   }
 });
 
+test('public key vectors replay exactly', () => {
+  for (const vector of VECTORS.public_keys) {
+    const stored = V.encodePublicKey(V.fromBase64Url(vector.raw_b64), vector.alg);
+    assert.equal(b64(stored), vector.expected_stored_b64, vector.id);
+    assert.equal(b64(V.decodePublicKey(stored)), vector.raw_b64, vector.id);
+  }
+});
+
 test('the attestation vector publishes the prefixed key, not the bare one', () => {
   // The whole point of signing the stored form: strip the prefix here and the
   // signature would still verify over a relabelled key.
@@ -353,7 +361,7 @@ test('the attestation vector publishes the prefixed key, not the bare one', () =
 test('a relabelled or truncated public key is refused', () => {
   const stored = V.encodePublicKey(new Uint8Array(32));
   const relabelled = stored.slice();
-  relabelled[0] = 0x02;
+  relabelled[0] = 0x7f;
   // A verifier reaching a label it does not implement must stop, not fall back
   // to the one algorithm it happens to know.
   assert.throws(() => V.decodePublicKey(relabelled), /unsupported public key algorithm/);

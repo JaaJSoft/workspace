@@ -24,7 +24,15 @@ class VectorFileTests(SimpleTestCase):
         self.assertEqual(build_vectors(), VECTORS)
 
     def test_every_section_carries_at_least_one_vector(self):
-        for section in ("argon2id", "hkdf", "aead", "hpke", "cbor", "ed25519"):
+        for section in (
+            "argon2id",
+            "hkdf",
+            "aead",
+            "hpke",
+            "cbor",
+            "ed25519",
+            "public_keys",
+        ):
             self.assertTrue(VECTORS[section], f"section {section} is empty")
 
 
@@ -104,7 +112,7 @@ class VectorReplayTests(SimpleTestCase):
                     self.assertEqual(
                         to_base64url(
                             ad.kex_pub_payload(
-                                vector["user_uuid"], vector["kex_public_b64"]
+                                vector["account_uuid"], vector["kex_public_b64"]
                             )
                         ),
                         vector["message_b64"],
@@ -115,6 +123,24 @@ class VectorReplayTests(SimpleTestCase):
                 else:
                     signature = primitives.sign(signer, vector["payload"])
                 self.assertEqual(to_base64url(signature), vector["expected_sig_b64"])
+
+    def test_public_key_vectors_replay(self):
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
+
+        loaders = {
+            primitives.PUBKEY_ALG_X25519: X25519PublicKey.from_public_bytes,
+            primitives.PUBKEY_ALG_ED25519: Ed25519PublicKey.from_public_bytes,
+        }
+        for vector in VECTORS["public_keys"]:
+            with self.subTest(vector["id"]):
+                key = loaders[vector["alg"]](from_base64url(vector["raw_b64"]))
+                stored = primitives.encode_public_key(key, vector["alg"])
+                self.assertEqual(to_base64url(stored), vector["expected_stored_b64"])
+                self.assertEqual(
+                    to_base64url(primitives.decode_public_key(stored)),
+                    vector["raw_b64"],
+                )
 
 
 class FuzzCorpusTests(SimpleTestCase):

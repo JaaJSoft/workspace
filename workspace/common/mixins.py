@@ -22,17 +22,33 @@ class CacheControlMixin:
             ``cache_max_age`` during which the cached copy may be served
             stale while the client revalidates in the background. ``None``
             (default) omits the directive.
+        cache_no_store: When ``True``, the response must not be written to
+            any cache at all, in memory or on disk. For responses carrying
+            ciphertext or other key material. Overrides the other three.
     """
 
     cache_max_age = 0
     cache_private = True
     cache_stale_while_revalidate = None
+    cache_no_store = False
 
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
 
-        # Don't touch errors or responses that already have the header
-        if response.status_code >= 400 or response.get("Cache-Control"):
+        # Don't touch errors
+        if response.status_code >= 400:
+            return response
+
+        # Ahead of the deference to an existing header below, and subsuming the
+        # max-age/revalidate pair rather than joining it. A refusal to cache is
+        # not a caching policy: yielding to whoever set the header first would
+        # let a ciphertext leave under a directive inviting its storage.
+        if self.cache_no_store:
+            response["Cache-Control"] = "no-store"
+            return response
+
+        # Someone upstream already chose a policy; it stands
+        if response.get("Cache-Control"):
             return response
 
         visibility = "private" if self.cache_private else "public"

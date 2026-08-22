@@ -448,6 +448,20 @@ logger.exception("Activity provider '%s' failed", scrub(source))
 - Internal/system values that never touched user input (settings keys, hard-coded enum members, `__name__`, computed counts) don't need `scrub()`. Apply it to the *tainted* fields, not the whole format string.
 - The helper lives in `workspace/common/logging.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` - do not refactor the replaces away or wrap them in another helper.
 
+**Secrets are a separate concern.** `scrub()` stops log injection; it hides nothing. Fields whose
+*name* marks them secret - `password`, `secret_key`, `session_key`, and anything prefixed `wrapped_`,
+`encrypted_` or `sig_` - are redacted by `workspace/common/redaction.py`, on the console log handler
+and on `DEFAULT_EXCEPTION_REPORTER_FILTER`. Extend that catalogue rather than remembering not to log
+a field. It does not reach access logs (`django.server` and gunicorn own theirs), so never put a
+secret in a URL.
+
+Name matching cannot reach a frame's locals either - the local holding a wrapped key is called
+`data`, not `wrapped_kex_priv` - so **a view handling secrets must declare it**. On a JSON API that
+means `@sensitive_variables()`: `@sensitive_post_parameters` cleanses `request.POST`, which a JSON
+body leaves empty. It is still worth keeping, because the default parser list also accepts a
+form-encoded body, and on that request it is the only thing standing between the field and the
+technical 500 page. `workspace/vault/views.py` is the worked example.
+
 ### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`
 
 Two recurring bugs land here, both because Python's loose typing or Django's deep-cleaning layer surface as confusing 500s instead of clean 4xxs:

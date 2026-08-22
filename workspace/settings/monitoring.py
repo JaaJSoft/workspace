@@ -24,12 +24,18 @@ LOGGING = {
             "datefmt": "%Y-%m-%dT%H:%M:%SZ",
         },
     },
+    "filters": {
+        "redact_secrets": {
+            "()": "workspace.common.redaction.SecretRedactingFilter",
+        },
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "level": "DEBUG" if DEBUG else DJANGO_LOG_LEVEL,
             "stream": sys.stdout,
             "formatter": "simple",
+            "filters": ["redact_secrets"],
         },
     },
     "loggers": {
@@ -64,3 +70,10 @@ LOGGING = {
         },
     },
 }
+
+# Applies to tracebacks, the technical 500 page and anything an error reporter
+# renders from a request - places a logging filter never sees, because nothing
+# there goes through a log record.
+DEFAULT_EXCEPTION_REPORTER_FILTER = (
+    "workspace.common.redaction.RedactingExceptionReporterFilter"
+)

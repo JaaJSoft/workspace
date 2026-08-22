@@ -6,6 +6,7 @@ any settings submodule touches before reading ``os.getenv``.
 
 import os
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,3 +29,22 @@ def env_list(name):
     if not raw:
         return []
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def env_non_negative_int(name):
+    """Read a non-negative integer env var, or ``None`` when it is unset.
+
+    Refuses loudly where the project's other numeric settings simply let
+    ``int()`` raise, because the settings read through here have to fail
+    closed. A negative value is the reason: it does not fail at all, it
+    quietly means something else.
+    """
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    # isdigit() alone accepts superscripts that int() then rejects.
+    if not (raw.isascii() and raw.isdigit()):
+        raise ImproperlyConfigured(
+            f"{name} must be a non-negative integer, got {raw!r}"
+        )
+    return int(raw)

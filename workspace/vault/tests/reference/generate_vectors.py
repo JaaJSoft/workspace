@@ -21,7 +21,7 @@ from .encoding import to_base64url
 VECTORS_PATH = pathlib.Path(__file__).resolve().parent.parent / "crypto_vectors.json"
 
 ENTRY_UUID = "0192f3a4-5b6c-7d8e-9f01-23456789abcd"
-USER_UUID = "0192f3a4-1111-7d8e-9f01-23456789abcd"
+ACCOUNT_UUID = "0192f3a4-1111-7d8e-9f01-23456789abcd"
 VAULT_UUID = "0192f3a4-2222-7d8e-9f01-23456789abcd"
 
 # Fixed key material. These are test vectors, not secrets: readability beats
@@ -43,7 +43,7 @@ def build_vectors() -> dict:
     recipient = X25519PrivateKey.from_private_bytes(RECIPIENT_SK)
     signer = Ed25519PrivateKey.from_private_bytes(SIG_SK)
 
-    hpke_info = ad.vault_key_info(VAULT_UUID, USER_UUID)
+    hpke_info = ad.vault_key_info(VAULT_UUID, ACCOUNT_UUID)
     vault_key = bytes(range(0x40, 0x60))
     sealed = primitives.hpke_seal(
         recipient.public_key(), hpke_info, vault_key, sender_private=sender
@@ -124,7 +124,7 @@ def build_vectors() -> dict:
                 "id": "account-kex-priv-wrap",
                 "key_b64": to_base64url(unwrap_key),
                 "iv_b64": to_base64url(AEAD_IV),
-                "ad": ad.kex_priv_ad(USER_UUID).decode("ascii"),
+                "ad": ad.kex_priv_ad(ACCOUNT_UUID).decode("ascii"),
                 "plaintext": "private-key-bytes",
                 "key_version": 0,
                 "kdf_id": 0x00,
@@ -132,7 +132,7 @@ def build_vectors() -> dict:
                     primitives.aead_seal(
                         unwrap_key,
                         b"private-key-bytes",
-                        ad.kex_priv_ad(USER_UUID),
+                        ad.kex_priv_ad(ACCOUNT_UUID),
                         iv=AEAD_IV,
                         key_version=0,
                         kdf_id=0x00,
@@ -208,15 +208,37 @@ def build_vectors() -> dict:
                 "pk_b64": to_base64url(primitives.public_bytes(signer.public_key())),
                 # Both halves are published so each language rebuilds the
                 # payload instead of replaying an opaque string.
-                "user_uuid": USER_UUID,
+                "account_uuid": ACCOUNT_UUID,
                 "kex_public_b64": to_base64url(kex_pub_stored),
                 "message_b64": to_base64url(
-                    ad.kex_pub_payload(USER_UUID, to_base64url(kex_pub_stored))
+                    ad.kex_pub_payload(ACCOUNT_UUID, to_base64url(kex_pub_stored))
                 ),
                 "expected_sig_b64": to_base64url(
                     primitives.sign_bytes(
                         signer,
-                        ad.kex_pub_payload(USER_UUID, to_base64url(kex_pub_stored)),
+                        ad.kex_pub_payload(ACCOUNT_UUID, to_base64url(kex_pub_stored)),
+                    )
+                ),
+            },
+        ],
+        "public_keys": [
+            {
+                # X25519 and Ed25519 are both 32 raw bytes; only the label
+                # separates them once stored, so the label is what is frozen.
+                "id": "x25519-public-key-encoding",
+                "raw_b64": to_base64url(
+                    primitives.public_bytes(recipient.public_key())
+                ),
+                "alg": primitives.PUBKEY_ALG_X25519,
+                "expected_stored_b64": to_base64url(kex_pub_stored),
+            },
+            {
+                "id": "ed25519-public-key-encoding",
+                "raw_b64": to_base64url(primitives.public_bytes(signer.public_key())),
+                "alg": primitives.PUBKEY_ALG_ED25519,
+                "expected_stored_b64": to_base64url(
+                    primitives.encode_public_key(
+                        signer.public_key(), primitives.PUBKEY_ALG_ED25519
                     )
                 ),
             },

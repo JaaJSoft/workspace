@@ -1,6 +1,14 @@
 """REST framework, OpenAPI schema and API token authentication."""
 
 from .base import APP_VERSION, DEBUG
+from .env import env_non_negative_int
+
+# Hops between the client and this application, for the per-IP rate limits.
+# Left unset, X-Forwarded-For is ignored and the peer address is used: the
+# header is written by the caller, so believing it hands out a fresh bucket per
+# request and the limit stops existing. Set it only when a proxy chain of that
+# length is in front AND overwrites rather than appends to the header.
+_NUM_PROXIES = env_non_negative_int("NUM_PROXIES")
 
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
@@ -24,6 +32,20 @@ REST_FRAMEWORK = {
         "drf_orjson_renderer.renderers.ORJSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
+    "NUM_PROXIES": _NUM_PROXIES,
+    # Vault account endpoints. The design's v1 starting values; retune on
+    # telemetry, and raise rather than lower - each one guards key material.
+    "DEFAULT_THROTTLE_RATES": {
+        "vault.account.init.ip": "10/min",
+        "vault.account.init.user": "30/hour",
+        "vault.account.finalize.ip": "10/min",
+        "vault.account.envelope.burst": "10/min",
+        "vault.account.envelope.user": "60/hour",
+        # Deliberately not redundant with the per-user limit above: it catches
+        # an exfiltration spread across several stolen session cookies.
+        "vault.account.envelope.ip": "200/hour",
+        "vault.account.rotate.user": "5/hour",
+    },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",
         "rest_framework.parsers.FormParser",
@@ -153,6 +175,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Users",
             "description": "User profiles, avatars, passwords, and presence status.",
+        },
+        {
+            "name": "Vault",
+            "description": "End-to-end encrypted password vault (preview).",
         },
     ],
     "SWAGGER_UI_SETTINGS": {

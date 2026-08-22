@@ -1,10 +1,13 @@
 import base64
+import logging
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db.models.query import QuerySet
 from django.test import TestCase, override_settings
 
+from workspace.common.redaction import REDACTED, SecretRedactingFilter
 from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
 from workspace.vault.tests.reference import ad, primitives
 from workspace.vault.tests.reference.encoding import to_base64url
@@ -104,17 +107,35 @@ class AccountInitTests(TestCase):
 
     def test_survives_a_concurrent_first_call(self):
         """`user` is a OneToOneField, so two calls that both find no identity
-        and both insert make the loser raise IntegrityError - a 500 on nothing
-        worse than a double-clicked onboarding button. The race window is
-        between the lookup and the insert, which is where the salt is drawn."""
+        and both insert make the loser raise IntegrityError - a 500 earned by
+        double-clicking an onboarding button.
 
-        def competing_write():
-            AccountIdentity.objects.create(user=self.user, kdf_salt="COMPETITOR")
-            return "MINE"
+        The window is between the lookup and the insert, so that is where the
+        competitor has to land: written from `defaults`, it would already exist
+        when the lookup runs, and the retry this pins - the one inside
+        get_or_create - would never be reached. It also has to land outside the
+        atomic block that wraps the insert, or the savepoint rollback would
+        take it back down with the losing insert.
+        """
+        raced = []
+        original_get = QuerySet.get
 
-        with patch("workspace.vault.views._new_salt", side_effect=competing_write):
+        def racing_get(queryset, *args, **kwargs):
+            if queryset.model is AccountIdentity and not raced:
+                raced.append(True)
+                try:
+                    return original_get(queryset, *args, **kwargs)
+                finally:
+                    # bulk_create, not create: the latter would call save().
+                    AccountIdentity.objects.bulk_create(
+                        [AccountIdentity(user=self.user, kdf_salt="COMPETITOR")]
+                    )
+            return original_get(queryset, *args, **kwargs)
+
+        with patch.object(QuerySet, "get", racing_get):
             response = self._post()
 
+        self.assertTrue(raced)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["kdf_salt"], "COMPETITOR")
         self.assertEqual(AccountIdentity.objects.filter(user=self.user).count(), 1)
@@ -342,18 +363,31 @@ class AccountFinalizeTests(TestCase):
         ):
             self.assertNotIn(value, page)
 
-    def test_leaves_no_wrapped_key_in_the_logs(self):
-        import logging
-
+    def test_the_request_itself_writes_no_wrapped_key_to_a_logger(self):
+        """No redaction involved: assertLogs swaps the logger's handlers, and
+        the filter lives on the console handler, so nothing here runs it. What
+        this pins is that the endpoint never hands the body to a logger at all
+        - the case the filter exists to survive, not to excuse."""
         with self.assertLogs("django", level="DEBUG") as captured:
             self._post()
             logging.getLogger("django").debug("finalize done")
-        blob = "\n".join(captured.output)
+        blob = str(captured.output)
         for value in (
             self.payload["wrapped_kex_priv"],
             self.payload["wrapped_sig_priv"],
         ):
             self.assertNotIn(value, blob)
+
+    def test_the_filter_hides_a_wrapped_key_that_does_reach_a_log_line(self):
+        """The other half, and the one that needs the filter put back onto the
+        handler assertLogs installs in place of the console one."""
+        logger = logging.getLogger("django")
+        with self.assertLogs(logger, level="DEBUG") as captured:
+            logger.handlers[0].addFilter(SecretRedactingFilter())
+            logger.debug("finalize body %s", self.payload)
+        blob = str(captured.output)
+        self.assertNotIn(self.payload["wrapped_kex_priv"], blob)
+        self.assertIn(REDACTED, blob)
 
 
 class AccountRotateTests(TestCase):

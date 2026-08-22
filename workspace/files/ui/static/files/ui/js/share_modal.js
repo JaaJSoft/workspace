@@ -1,5 +1,3 @@
-// userSelector is now provided globally by common/static/ui/js/user_selector.js
-
 window.shareModal = function shareModal() {
   return {
     open: false,

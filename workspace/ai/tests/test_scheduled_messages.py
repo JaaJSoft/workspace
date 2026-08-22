@@ -493,9 +493,9 @@ class GenerateScheduledResponseTests(TestCase):
 
         generate_scheduled_response(str(schedule.uuid))
 
-        # The tool was executed exactly once. With the pre-fix code the
-        # retry re-entered run_tool_loop and save_memory would have
-        # fired a second time (mock_execute.call_count == 2).
+        # The tool was executed exactly once: a retry re-entering
+        # run_tool_loop would fire save_memory a second time
+        # (mock_execute.call_count == 2).
         self.assertEqual(mock_execute.call_count, 1)
 
     def test_nonexistent_schedule(self):

@@ -113,7 +113,6 @@ window._setPopoverContent = function _setPopoverContent(el, html) {
 window._userCardShow = function(wrapper, userId) {
   window._userCardCancelHide(wrapper);
 
-  // If popover is already visible, nothing to do
   const existing = wrapper._userCardPopover;
   if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') {
     return;
@@ -122,11 +121,9 @@ window._userCardShow = function(wrapper, userId) {
   // Cancel any existing show timeout (re-entry)
   if (wrapper._showTimeout) clearTimeout(wrapper._showTimeout);
 
-  // Delay show by 1 second
   wrapper._showTimeout = setTimeout(function() {
     wrapper._showTimeout = null;
 
-    // Create popover element if not yet present
     let popover = wrapper._userCardPopover;
     if (!popover) {
       popover = document.createElement('div');
@@ -145,7 +142,6 @@ window._userCardShow = function(wrapper, userId) {
       wrapper._userCardPopover = popover;
     }
 
-    // Position using fixed coordinates
     const pos = _computePopoverPosition(wrapper);
     popover.style.left = pos.left + 'px';
     popover.style.top = pos.top + 'px';

@@ -83,7 +83,6 @@ def get_or_create_dm(user, other_user):
         ).update(left_at=None)
         return existing
 
-    # Create new DM
     conversation = Conversation.objects.create(
         kind=Conversation.Kind.DM,
         created_by=user,

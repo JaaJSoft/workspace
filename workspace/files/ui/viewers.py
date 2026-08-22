@@ -106,7 +106,6 @@ class TextViewer(BaseViewer):
         """Render Monaco Editor for text files."""
         from django.template.loader import render_to_string
 
-        # Read file content
         file_handle = None
         try:
             file_handle = self.file.content.open("rb")

@@ -84,13 +84,11 @@ class ContentMixin:
         except Http404:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Only serve files, not folders
         if file_obj.node_type != File.NodeType.FILE:
             return Response(
                 {"detail": "Not a file."}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # File must have content
         if not file_obj.content:
             return Response({"detail": "No content."}, status=status.HTTP_404_NOT_FOUND)
 

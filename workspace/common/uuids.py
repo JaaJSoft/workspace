@@ -19,8 +19,6 @@ def uuid_v7_or_v4() -> uuid.UUID:
     - Older versions or alternative runtimes will not; we fall back to v4.
     """
     try:
-        # hasattr is slightly faster than try/except on call,
-        # but keep both to be extra safe.
         gen = getattr(uuid, "uuid7", None)
         if callable(gen):
             return gen()

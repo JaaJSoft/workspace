@@ -120,7 +120,6 @@ def fetch_and_extract(url: str, *, max_chars: int = 6000) -> str:
     except httpx2.HTTPError as exc:
         raise ValueError(f"Failed to fetch URL: {exc}") from exc
 
-    # Guard against huge responses (2 MB limit).
     if len(resp.content) > 2 * 1024 * 1024:
         raise ValueError("Response too large (>2 MB)")
 

@@ -174,7 +174,6 @@ def _event_stream_pubsub(request, redis):
             message = pubsub.get_message(timeout=5)
             now = time.monotonic()
 
-            # Keepalive every 15s
             if now - last_keepalive >= 15:
                 yield ":keepalive\n\n"
                 last_keepalive = now
@@ -217,7 +216,6 @@ def _event_stream_polling(request):
 
     providers = _init_providers(user, last_event_id)
 
-    # Track last cache value per provider
     last_cache_values = {slug: None for slug in providers}
 
     start_time = time.time()
@@ -236,12 +234,10 @@ def _event_stream_polling(request):
 
             now = time.time()
 
-            # Keepalive every 15 seconds
             if now - last_keepalive >= 15:
                 yield ":keepalive\n\n"
                 last_keepalive = now
 
-            # Poll every 2 seconds
             if now - last_check >= 2:
                 last_check = now
 

@@ -30,16 +30,13 @@ class NotificationListView(CacheControlMixin, APIView):
             .order_by("-created_at")
         )
 
-        # Filter: unread only
         if request.query_params.get("filter") == "unread":
             qs = qs.filter(read_at__isnull=True)
 
-        # Filter: by origin
         origin = request.query_params.get("origin")
         if origin:
             qs = qs.filter(origin=origin)
 
-        # Search: title or body
         search = request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(body__icontains=search))

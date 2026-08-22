@@ -104,8 +104,6 @@ test('_saveComposeToLocalStorage persists _sigBlock and it round-trips via _getL
   const saved = app._getLocalStorageDraft();
   assert.notEqual(saved, null, 'draft should have been saved to localStorage');
 
-  // This assertion FAILS against the buggy code (where _sigBlock is not
-  // included in the persisted payload) and PASSES after the fix.
   assert.equal(
     saved._sigBlock,
     knownSigBlock,

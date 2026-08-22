@@ -475,12 +475,10 @@ def properties(request, uuid):
         raise Http404
     is_owner = perm >= FilePermission.MANAGE
 
-    # Check if favorite
     is_favorite = FileFavorite.objects.filter(
         owner=request.user, file=file_obj
     ).exists()
 
-    # Check if pinned (folders only)
     is_pinned = False
     if file_obj.node_type == File.NodeType.FOLDER:
         is_pinned = PinnedFolder.objects.filter(

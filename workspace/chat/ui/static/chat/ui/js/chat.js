@@ -225,7 +225,6 @@ function chatApp(currentUserId) {
       }
       this.pendingInitialConvUuid = null;
 
-      // Fetch available AI bots
       this.fetchBots();
 
       // Emoji picker event listener

@@ -56,7 +56,6 @@ class PollSerializer(serializers.ModelSerializer):
         ]
 
     def get_votes(self, obj):
-        # Use prefetched votes if available (via _prefetched_poll_votes)
         if hasattr(obj, "_prefetched_poll_votes"):
             return PollVoteSerializer(obj._prefetched_poll_votes, many=True).data
         votes = PollVote.objects.filter(
@@ -88,7 +87,6 @@ class PollListSerializer(serializers.ModelSerializer):
         ]
 
     def get_participant_count(self, obj):
-        # Use annotation if available (via _participant_count)
         if hasattr(obj, "_participant_count"):
             return obj._participant_count
         # Fallback: distinct authenticated users + distinct guest tokens

@@ -179,8 +179,8 @@ class SyncAllAccountsDispatchTests(TestCase):
 
     # Losing the claim race is covered by
     # workspace.common.tests.test_celery_claim.DispatchDueTests, which owns
-    # that branch now: reaching it requires forcing cas_claim to lose, and
-    # cas_claim is no longer called from this module.
+    # that branch: reaching it requires forcing cas_claim to lose, and this
+    # module has no cas_claim call site to force.
 
     def test_empty_account_list_returns_zero(self):
         with mock.patch.object(mail_tasks.sync_single_account, "delay") as delay:

@@ -145,7 +145,6 @@ class CopyMixin:
                 serializer = self.get_serializer(annotated)
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
-        # Perform the copy
         copied = FileService.copy(
             file_obj, parent, request.user, acting_user=request.user
         )

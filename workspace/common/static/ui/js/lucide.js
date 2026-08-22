@@ -165,7 +165,6 @@ function observeLucideIcons(root = document.body) {
   return () => observer.disconnect();
 }
 
-// Export for use in modules or make globally available
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     initLucideIcons,
@@ -177,7 +176,6 @@ if (typeof module !== 'undefined' && module.exports) {
     observeLucideIcons
   };
 } else {
-  // Make functions globally available
   window.LucideUtils = {
     init: initLucideIcons,
     delayed: initLucideIconsDelayed,

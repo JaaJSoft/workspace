@@ -245,7 +245,6 @@ def move_folder_storage(folder, new_parent, *, new_owner=None):
     if old_storage_path == new_storage_path:
         return
 
-    # Move directory on disk
     try:
         old_full = default_storage.path(old_storage_path)
         new_full = default_storage.path(new_storage_path)

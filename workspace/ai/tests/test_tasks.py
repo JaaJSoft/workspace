@@ -358,8 +358,8 @@ class GenerateChatResponseWithToolsTests(TestCase):
                 "completion_tokens": 0,
             }
 
-        # A third response is available on purpose: without the fix the loop
-        # runs to the end and consumes it, which is what the counts below pin.
+        # A third response is available on purpose: a loop that runs to the
+        # end consumes it, which is what the counts below pin.
         mock_call_llm.side_effect = [
             tool_round("call_1"),
             tool_round("call_2"),
@@ -474,9 +474,9 @@ class GenerateChatResponseWithToolsTests(TestCase):
             self.bot_user.id,
         )
 
-        # The tool was executed exactly once. With the pre-fix code the
-        # retry re-entered run_tool_loop and save_memory would have
-        # fired a second time (mock_execute.call_count == 2).
+        # The tool was executed exactly once: a retry re-entering
+        # run_tool_loop would fire save_memory a second time
+        # (mock_execute.call_count == 2).
         self.assertEqual(mock_execute.call_count, 1)
 
 

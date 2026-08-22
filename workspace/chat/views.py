@@ -70,7 +70,6 @@ class ConversationListView(CacheControlMixin, APIView):
     def get(self, request):
         user = request.user
 
-        # Get conversation IDs where user is an active member
         member_convos = user_conversation_ids(user)
 
         conversations = (

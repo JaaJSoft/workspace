@@ -11,8 +11,7 @@ regenerating its salt destroys every vault the user has. Nothing reports it;
 the failure surfaces the next time they try to unlock.
 """
 
-import base64
-import os
+import secrets
 
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -60,7 +59,7 @@ SENSITIVE_BODY_FIELDS = (
 
 
 def _new_salt() -> str:
-    return base64.urlsafe_b64encode(os.urandom(SALT_LENGTH)).decode("ascii").rstrip("=")
+    return secrets.token_urlsafe(SALT_LENGTH)
 
 
 @method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")

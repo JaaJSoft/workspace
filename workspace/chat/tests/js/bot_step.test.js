@@ -121,6 +121,31 @@ test('bot_generating leaves other conversations alone', () => {
   assert.equal(app.botTyping, false);
 });
 
+test('a snapshot without the active conversation lowers a stale indicator', () => {
+  // The stream dropped mid-generation and the reply landed while the page
+  // was away: the reopened connection replays no message event, so the
+  // fresh snapshot is the only thing that can end the bubble.
+  const { app, timers } = buildApp();
+  app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
+  assert.equal(app.botTyping, true);
+
+  app.handleSSEBotGenerating({ conversation_ids: [] });
+
+  assert.equal(app.botTyping, false);
+  assert.equal(app.botSteps.length, 0);
+  assert.equal(app._botStepTimer, null);
+  assert.equal(timers.cleared, 1, 'the failsafe timer is cancelled');
+});
+
+test('a snapshot naming only other conversations also lowers the stale indicator', () => {
+  const { app } = buildApp();
+  app.botTyping = true;
+
+  app.handleSSEBotGenerating({ conversation_ids: ['conv-9'] });
+
+  assert.equal(app.botTyping, false);
+});
+
 test('bot_generating announced before a conversation is picked is not lost', () => {
   // The stream connects while the page is still booting, so the announcement
   // can land before activeConversation exists.

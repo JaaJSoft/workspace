@@ -174,18 +174,23 @@ window.chatSseMixin = function chatSseMixin() {
       this.refreshConversationItems([detail.conversation_id], { bump: false });
     },
 
-    // A generation was already under way when this connection opened, so a
-    // reload knows to raise the indicator without waiting for the next tool.
-    // Arms the same failsafe as a step: a cancelled generation ends without
-    // posting anything, so nothing else would ever lower the bubble.
+    // Snapshot of the conversations with a generation under way, sent every
+    // time a connection opens. A reload learns to raise the indicator without
+    // waiting for the next tool; arms the same failsafe as a step, because a
+    // cancelled generation ends without posting anything. The reverse matters
+    // just as much: a reconnect (mobile resume) opens a fresh EventSource
+    // that replays no message events, so a bubble raised before the stream
+    // dropped is lowered here when its conversation left the snapshot - the
+    // reply itself lands through the reconnect catch-up refresh.
     handleSSEBotGenerating(detail) {
       this.generatingConversations = new Set(detail?.conversation_ids || []);
-      if (
-        this.activeConversation
-        && this.generatingConversations.has(this.activeConversation.uuid)
-      ) {
+      if (!this.activeConversation) return;
+      if (this.generatingConversations.has(this.activeConversation.uuid)) {
         this.botTyping = true;
         this._armBotStepFailsafe();
+      } else if (this.botTyping) {
+        this.botTyping = false;
+        this.clearBotStep();
       }
     },
 

@@ -289,6 +289,11 @@ function projectBoard(config) {
     // which no swap ever re-renders.
     filtersPanelOpen: false,
     selected: [],
+    // Panel section open/closed choices, kept here because patchTask swaps
+    // the whole panel after every field commit; the shell survives the swap.
+    // Keyed by task so opening another task starts from its own defaults.
+    panelSections: null,
+    panelSectionsTask: null,
 
     init() {
       this.statuses = JSON.parse(
@@ -846,6 +851,9 @@ function taskPanel() {
     linkDropdown: false,
     linkSaving: false,
     _linkSearchGeneration: 0,
+    sectionsOpen: {},
+    _commentCount: 0,
+    _activityCount: 0,
 
     init() {
       this.data = JSON.parse(
@@ -884,6 +892,37 @@ function taskPanel() {
         const fresh = JSON.parse(labelsEl.textContent);
         this.labels.splice(0, this.labels.length, ...fresh);
       }
+      this._commentCount = Number(this.$el.dataset.commentCount || 0);
+      this._activityCount = Number(this.$el.dataset.activityCount || 0);
+      // panelSections lives on the board shell (Alpine scope chain), so the
+      // choices survive the panel swap patchTask triggers on every commit.
+      if (this.panelSectionsTask === this.data.uuid && this.panelSections) {
+        this.sectionsOpen = this.panelSections;
+      } else {
+        this.sectionsOpen = this.sectionDefaults();
+        this.panelSections = this.sectionsOpen;
+        this.panelSectionsTask = this.data.uuid;
+      }
+    },
+
+    // Empty sections start collapsed so the panel leads with what the task
+    // actually has; comments and activity counts come from the server via
+    // data attributes because their lists are not part of panel data.
+    sectionDefaults() {
+      return {
+        assignees: this.data.assignees.length > 0,
+        labels: this.data.labels.length > 0,
+        description: !!(this.data.description || '').trim(),
+        checklist: this.subtasks.length > 0,
+        links: this.links.length > 0,
+        attachments: this.attachments.length > 0,
+        comments: this._commentCount > 0,
+        activity: this._activityCount > 0,
+      };
+    },
+
+    toggleSection(name) {
+      this.sectionsOpen[name] = !this.sectionsOpen[name];
     },
 
     assigneeName(id) {

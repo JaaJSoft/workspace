@@ -557,6 +557,34 @@ test('taskPanel assignee helpers expose names and the unassigned list', () => {
   );
 });
 
+test('sectionDefaults opens filled sections and collapses empty ones', () => {
+  const panel = ctx.taskPanel();
+  panel.data = { assignees: [], labels: ['l1'], description: '   ' };
+  panel.subtasks = [{ uuid: 's1', title: 'a', done: false }];
+  panel.links = [];
+  panel.attachments = [];
+  panel._commentCount = 2;
+  panel._activityCount = 0;
+  assert.deepStrictEqual(
+    { ...panel.sectionDefaults() },
+    {
+      assignees: false,
+      labels: true,
+      description: false,
+      checklist: true,
+      links: false,
+      attachments: false,
+      comments: true,
+      activity: false,
+    }
+  );
+  panel.sectionsOpen = panel.sectionDefaults();
+  panel.toggleSection('links');
+  assert.equal(panel.sectionsOpen.links, true);
+  panel.toggleSection('labels');
+  assert.equal(panel.sectionsOpen.labels, false);
+});
+
 test('addAssignee and removeAssignee patch through toggleMulti', () => {
   const calls = [];
   const panel = panelWithActions(['assign'], calls);

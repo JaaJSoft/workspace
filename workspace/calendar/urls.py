@@ -13,9 +13,7 @@ urlpatterns = [
         views.CalendarDetailView.as_view(),
         name="calendar-detail",
     ),
-    path(
-        "api/v1/events", views.EventListView.as_view(), name="calendar-events"
-    ),
+    path("api/v1/events", views.EventListView.as_view(), name="calendar-events"),
     path(
         "api/v1/events/<uuid:event_id>",
         views.EventDetailView.as_view(),

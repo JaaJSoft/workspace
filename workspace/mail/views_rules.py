@@ -57,7 +57,7 @@ def _get_user_rule(request, uuid):
     return rule
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Rules"])
 class MailRuleListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -105,7 +105,7 @@ class MailRuleListView(APIView):
         return Response(MailRuleSerializer(rule).data, status=status.HTTP_201_CREATED)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Rules"])
 class MailRuleDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -139,7 +139,7 @@ class MailRuleDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Rules"])
 class MailRuleReorderView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -171,7 +171,7 @@ class MailRuleReorderView(APIView):
         return Response(MailRuleSerializer(rule).data)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Rules"])
 class MailRuleTestView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -217,7 +217,7 @@ class MailRuleTestView(APIView):
         return Response({"matched": matched, "message_id": str(message.uuid)})
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Rules"])
 class MailRuleLogsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -251,7 +251,7 @@ class MailRuleLogsView(APIView):
         )
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Rules"])
 class MailRuleApplyView(APIView):
     permission_classes = [IsAuthenticated]
 

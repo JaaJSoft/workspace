@@ -28,7 +28,7 @@ def _get_bot_member(conversation_id):
     return member.user if member else None
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class AgentGoalListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -118,7 +118,7 @@ class AgentGoalListView(APIView):
         return Response(AgentGoalSerializer(goal).data, status=status.HTTP_201_CREATED)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class AgentGoalDetailView(APIView):
     permission_classes = [IsAuthenticated]
 

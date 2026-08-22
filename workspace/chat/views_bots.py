@@ -13,7 +13,7 @@ from .services.conversations import get_active_membership, is_bot_conversation
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class BotRetryView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -64,7 +64,7 @@ class BotRetryView(APIView):
         return Response({"status": "ok"})
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class BotCancelView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -94,7 +94,7 @@ class BotCancelView(APIView):
         return Response({"status": "cancelled"})
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationRegenerateTitleView(APIView):
     permission_classes = [IsAuthenticated]
 

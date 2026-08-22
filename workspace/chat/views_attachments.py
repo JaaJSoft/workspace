@@ -60,7 +60,7 @@ def _attachment_size(fh):
     return size
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Attachments"])
 class AttachmentDownloadView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -91,7 +91,7 @@ class AttachmentDownloadView(APIView):
         )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Attachments"])
 class AttachmentSaveToFilesView(APIView):
     permission_classes = [IsAuthenticated]
 

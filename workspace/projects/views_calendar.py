@@ -38,7 +38,7 @@ def _parse_day(value):
 
 
 @extend_schema(
-    tags=["Projects"],
+    tags=["Projects - Tasks"],
     summary="List task due dates in a date range",
     description=(
         "Return open tasks whose due date falls in [start, end) across every "

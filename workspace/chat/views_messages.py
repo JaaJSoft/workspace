@@ -48,7 +48,7 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class MessageListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, JSONParser]
@@ -378,7 +378,7 @@ class MessageListView(CacheControlMixin, APIView):
         )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class MessageDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -525,7 +525,7 @@ class MessageDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class ReactionToggleView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -590,7 +590,7 @@ class ReactionToggleView(APIView):
         )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class MessageReadersView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -653,7 +653,7 @@ class MessageReadersView(APIView):
         )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class MarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 

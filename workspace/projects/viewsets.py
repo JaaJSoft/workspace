@@ -276,7 +276,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Projects"])
+@extend_schema(tags=["Projects - Statuses & Labels"])
 class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     serializer_class = LabelSerializer
     lookup_field = "uuid"
@@ -321,7 +321,7 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
-@extend_schema(tags=["Projects"])
+@extend_schema(tags=["Projects - Statuses & Labels"])
 class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     serializer_class = TaskStatusSerializer
     lookup_field = "uuid"
@@ -396,7 +396,7 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return Response({"success": True})
 
 
-@extend_schema(tags=["Projects"])
+@extend_schema(tags=["Projects - Tasks"])
 @extend_schema_view(
     list=extend_schema(
         parameters=[
@@ -584,7 +584,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return self.project.statuses.filter(uuid=status_uuid).first()
 
 
-@extend_schema(tags=["Projects"])
+@extend_schema(tags=["Projects - Tasks"])
 class SubtaskViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     """Checklist items nested under a task; any member of a writable
     project can edit them, like comments."""
@@ -639,7 +639,7 @@ class SubtaskViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response({"success": True})
 
 
-@extend_schema(tags=["Projects"])
+@extend_schema(tags=["Projects - Tasks"])
 class TaskLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     """Links anchored on one task: list both directions, create, remove.
 
@@ -715,7 +715,7 @@ class TaskLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Projects"])
+@extend_schema(tags=["Projects - Tasks"])
 class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     serializer_class = TaskCommentSerializer
     lookup_field = "uuid"
@@ -813,7 +813,7 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return comment
 
 
-@extend_schema(tags=["Projects"])
+@extend_schema(tags=["Projects - Tasks"])
 class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     serializer_class = TaskAttachmentSerializer
     lookup_field = "uuid"

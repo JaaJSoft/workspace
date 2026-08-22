@@ -17,7 +17,7 @@ class ThreadReadSerializer(serializers.Serializer):
     cleared = serializers.IntegerField()
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Messages"])
 class ThreadReadView(APIView):
     permission_classes = [IsAuthenticated]
 

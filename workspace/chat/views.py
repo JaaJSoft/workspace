@@ -62,7 +62,7 @@ def _trigger_bot_response(conversation_id, message, sender):
             )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
@@ -270,7 +270,7 @@ class ConversationListView(CacheControlMixin, APIView):
         )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -393,7 +393,7 @@ class MemberAddSerializer(serializers.Serializer):
     )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationMembersView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -492,7 +492,7 @@ class ConversationMembersView(APIView):
         )
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationNotificationLevelView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -518,7 +518,7 @@ class ConversationNotificationLevelView(APIView):
         return Response({"notification_level": level})
 
 
-@extend_schema(tags=["Chat"])
+@extend_schema(tags=["Chat - Conversations"])
 class ConversationMemberRemoveView(APIView):
     permission_classes = [IsAuthenticated]
 

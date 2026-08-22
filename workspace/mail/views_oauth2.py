@@ -23,7 +23,7 @@ from workspace.mail.services.oauth2 import (
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Accounts"])
 class OAuthProvidersView(APIView):
     """List OAuth2 providers that are configured and available."""
 
@@ -33,7 +33,7 @@ class OAuthProvidersView(APIView):
         return Response(get_available_providers())
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Accounts"])
 class OAuthAuthorizeView(APIView):
     """Start OAuth2 flow: redirect to provider's authorization page."""
 

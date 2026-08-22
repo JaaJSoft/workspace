@@ -17,7 +17,7 @@ from .queries import user_account_ids
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Messages"])
 class ContactAutocompleteView(CacheControlMixin, APIView):
     cache_max_age = 300
     permission_classes = [IsAuthenticated]

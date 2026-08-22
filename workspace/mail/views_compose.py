@@ -20,7 +20,7 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Messages"])
 class MailSendView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -126,7 +126,7 @@ class MailSendView(APIView):
             close_all(ws_file_handles)
 
 
-@extend_schema(tags=["Mail"])
+@extend_schema(tags=["Mail - Messages"])
 class MailDraftView(APIView):
     permission_classes = [IsAuthenticated]
 

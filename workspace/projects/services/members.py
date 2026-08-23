@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import Project, ProjectMember
+from ..models import Project, ProjectMember, ProjectNotificationLevel
 
 
 class ProjectRuleError(Exception):
@@ -98,4 +98,12 @@ def remove_member(member):
             )
         member.left_at = timezone.now()
         member.save(update_fields=["left_at"])
+        # Hygiene, not correctness: fan-out already scopes to project_users.
+        # A group grant may still give access, in which case the override
+        # stays. Inside the transaction so departure and cleanup commit
+        # together - a departed member can never keep a stale override.
+        if not member.user.groups.filter(projects=member.project_id).exists():
+            ProjectNotificationLevel.objects.filter(
+                project_id=member.project_id, user_id=member.user_id
+            ).delete()
     return member

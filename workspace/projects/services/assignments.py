@@ -2,6 +2,8 @@
 
 from workspace.notifications.services.notifications import notify_stream
 
+from .notification_levels import apply_levels
+
 
 def _task_url(task):
     return f"/projects/{task.project_id}/board?task={task.uuid}"
@@ -15,6 +17,7 @@ def notify_assigned(task, actor, assignees):
     mention or comment notification sharing the task.
     """
     recipients = [u for u in assignees if u.pk != actor.pk and u.is_active]
+    recipients, priority_map = apply_levels(task.project_id, recipients)
     if not recipients:
         return
     notify_stream(
@@ -24,5 +27,6 @@ def notify_assigned(task, actor, assignees):
         title=f'{actor.username} assigned you to "{task.title}"',
         url=_task_url(task),
         actor=actor,
+        priority_map=priority_map,
         stream="assignment",
     )

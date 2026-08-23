@@ -13,7 +13,13 @@ from workspace.common.charts import column_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.services.activity import annotate_time_ago
 from workspace.projects.actions import ProjectActionRegistry
-from workspace.projects.models import Project, ProjectMember, TaskAttachment, TaskStatus
+from workspace.projects.models import (
+    Project,
+    ProjectMember,
+    ProjectNotificationLevel,
+    TaskAttachment,
+    TaskStatus,
+)
 from workspace.projects.queries import (
     get_project_role,
     project_users,
@@ -28,6 +34,7 @@ from workspace.projects.services.analytics import (
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.links import annotate_blocked, links_for_task
+from workspace.projects.services.notification_levels import module_level
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.references import REFERENCE_RE
 from workspace.projects.services.rendering import render_task_description
@@ -170,10 +177,24 @@ def _base_context(request, project, role, view):
             }
             for u in project_users(project)
         ],
+        # In both render paths: the header bell re-renders on every
+        # alpine-ajax view swap and must reflect the current state.
+        "notification_level": {
+            "override": ProjectNotificationLevel.objects.filter(
+                project=project, user=request.user
+            )
+            .values_list("level", flat=True)
+            .first()
+            or "",
+            "module_level": module_level(request.user),
+        },
     }
     if not request.headers.get("X-Alpine-Request"):
         context["projects"] = _sidebar_projects(request.user)
-        context["projects_prefs"] = {"reminder_hour": reminder_hour(request.user)}
+        context["projects_prefs"] = {
+            "reminder_hour": reminder_hour(request.user),
+            "notify_level": module_level(request.user),
+        }
         context["reminder_hours"] = [(h, f"{h:02d}:00") for h in range(24)]
         context.update(_deep_link_panel(request, project, role))
     return context

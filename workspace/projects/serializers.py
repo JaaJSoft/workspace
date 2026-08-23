@@ -12,6 +12,7 @@ from .models import (
     Label,
     Project,
     ProjectMember,
+    ProjectNotificationLevel,
     Subtask,
     Task,
     TaskAttachment,
@@ -128,6 +129,10 @@ class MemberWriteSerializer(serializers.Serializer):
 
 class MemberRoleSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=ProjectMember.Role.choices)
+
+
+class ProjectNotificationLevelSerializer(serializers.Serializer):
+    level = serializers.ChoiceField(choices=ProjectNotificationLevel.Level.choices)
 
 
 class LabelSerializer(serializers.ModelSerializer):

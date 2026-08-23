@@ -8,6 +8,7 @@ from .viewsets import (
     EpicViewSet,
     LabelViewSet,
     MemberViewSet,
+    ProjectNotificationLevelView,
     ProjectViewSet,
     StatusViewSet,
     SubtaskViewSet,
@@ -75,6 +76,11 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/members/<uuid:uuid>",
         member_detail,
         name="project-member-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/notification-level",
+        ProjectNotificationLevelView.as_view(),
+        name="project-notification-level",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/labels",

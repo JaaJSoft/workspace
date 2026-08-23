@@ -103,7 +103,9 @@ def complete_sprint(sprint, *, move_to=None, actor=None):
                 # order of every other column-append writer.
                 TaskStatus.objects.select_for_update().get(pk=backlog_status.pk)
         unfinished = sorted(
-            current.tasks.select_for_update().exclude(
+            # of=("self",): the category exclude joins TaskStatus, and the
+            # row lock must not spread to the joined status rows.
+            current.tasks.select_for_update(of=("self",)).exclude(
                 status__category=TaskStatus.Category.DONE
             ),
             key=lambda t: (t.position, t.created_at),
@@ -180,7 +182,9 @@ def assign_tasks_to_sprint(project, sprint, task_uuids, *, actor=None):
                 # order of every other column-append writer.
                 TaskStatus.objects.select_for_update().get(pk=board_status.pk)
         tasks = list(
-            project.tasks.select_for_update()
+            # of=("self",): select_related joins sprint and status rows,
+            # and the row lock must not spread to them.
+            project.tasks.select_for_update(of=("self",))
             .select_related("sprint", "status")
             .filter(uuid__in=task_uuids)
         )

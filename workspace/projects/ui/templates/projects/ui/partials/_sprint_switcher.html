@@ -86,8 +86,8 @@ Params:
       </li>
     {% endif %}
     {% for s in options %}
-      {# A query searches the whole list, closed history included; without #}
-      {# one, non-selected closed sprints obey the toggle. #}
+      {% comment %}A query searches the whole list, closed history included;
+      without one, non-selected closed sprints obey the toggle.{% endcomment %}
       <li
         {% if s.state == 'closed' and s.uuid != selected.uuid %} x-show="sprintQuery.trim() ? '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase()) : !hideClosed" {% else %} x-show="!sprintQuery.trim() || '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase())" {% endif %}
       >

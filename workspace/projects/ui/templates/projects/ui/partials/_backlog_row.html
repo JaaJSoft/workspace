@@ -75,14 +75,14 @@
     {% endfor %}
   </span>
   {% if writable and not row_readonly %}
-    {# Kept as a fixed-width slot even when hidden so columns stay aligned #}
-    {# with the header row. #}
+    {% comment %}Kept as a fixed-width slot even when hidden so columns
+    stay aligned with the header row.{% endcomment %}
     {% if hide_send_to_board %}
       <span class="w-8 shrink-0"></span>
     {% elif project.type == 'scrum' %}
-      {# Same landing as the kanban arrow (first active column), and the #}
-      {# backend adds board entrants to the running sprint - which is what #}
-      {# the gesture means on a scrum project. #}
+      {% comment %}Same landing as the kanban arrow (first active column),
+      and the backend adds board entrants to the running sprint - which is
+      what the gesture means on a scrum project.{% endcomment %}
       <button
         class="btn btn-ghost btn-sm btn-square shrink-0"
         title="Send to current sprint"

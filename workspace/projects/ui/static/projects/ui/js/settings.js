@@ -819,6 +819,53 @@ function projectEpics(config) {
   };
 }
 
+// Sprints are ordered by creation, so the last item is the reference for
+// "what comes next": its trailing number is incremented ("Sprint 6" ->
+// "Sprint 7", "2026-S3" -> "2026-S4", padding preserved), skipping names
+// already taken. Without a trailing number the fallback is
+// "Sprint <count+1>", subject to the same collision skip.
+function nextSprintName(sprints) {
+  const taken = new Set(sprints.map((s) => s.name));
+  const last = sprints.length ? sprints[sprints.length - 1].name : '';
+  const m = last.match(/^(.*?)(\d+)\s*$/);
+  const base = m ? m[1] : 'Sprint ';
+  let n = m ? parseInt(m[2], 10) + 1 : sprints.length + 1;
+  const pad = m && m[2][0] === '0' ? m[2].length : 0;
+  let candidate = base + String(n).padStart(pad, '0');
+  while (taken.has(candidate)) {
+    n += 1;
+    candidate = base + String(n).padStart(pad, '0');
+  }
+  return candidate;
+}
+
+function addDays(isoDate, days) {
+  const d = new Date(isoDate + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  const pad2 = (x) => String(x).padStart(2, '0');
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
+
+// Suggested dates for a new sprint: it starts where the running sprint
+// ends (or today), and lasts as long as the previous sprint did (two
+// weeks when no sprint has both dates yet).
+function suggestSprintDates(sprints, today) {
+  const active = sprints.find((s) => s.state === 'active');
+  const start = (active && active.end_date) || today;
+  let length = 14;
+  for (let i = sprints.length - 1; i >= 0; i--) {
+    const s = sprints[i];
+    if (s.start_date && s.end_date) {
+      const days = Math.round(
+        (new Date(s.end_date) - new Date(s.start_date)) / 86400000
+      );
+      if (days > 0) length = days;
+      break;
+    }
+  }
+  return { start_date: start, end_date: addDays(start, length) };
+}
+
 function projectSprints(config) {
   return {
     items: [],
@@ -874,6 +921,27 @@ function projectSprints(config) {
       }
       if (!this.hideClosed) return this.items;
       return this.items.filter((s) => s.state !== 'closed');
+    },
+
+    // The prefills are suggestions only - the name is focused and
+    // selected in the template so typing replaces it wholesale.
+    toggleAdd() {
+      if (this.adding) {
+        this.adding = false;
+        return;
+      }
+      const now = new Date();
+      const pad2 = (x) => String(x).padStart(2, '0');
+      const today =
+        now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
+      const dates = suggestSprintDates(this.items, today);
+      this.addForm = {
+        name: nextSprintName(this.items),
+        goal: '',
+        start_date: dates.start_date,
+        end_date: dates.end_date,
+      };
+      this.adding = true;
     },
 
     async addSprint() {
@@ -1108,4 +1176,6 @@ window.projectSettingsHelpers = {
   normalizeProjectKey: normalizeProjectKey,
   retentionSliderIndex: retentionSliderIndex,
   retentionDaysFromIndex: retentionDaysFromIndex,
+  nextSprintName: nextSprintName,
+  suggestSprintDates: suggestSprintDates,
 };

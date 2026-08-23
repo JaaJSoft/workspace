@@ -472,3 +472,86 @@ test('projectSprints.visibleSprints hides closed by default, search spans all', 
     ['s1', 's2']
   );
 });
+
+test('nextSprintName increments the last sprint trailing number', () => {
+  const { nextSprintName } = ctx().projectSettingsHelpers;
+  assert.equal(
+    nextSprintName([{ name: 'Sprint 6' }, { name: 'Sprint 7' }]),
+    'Sprint 8'
+  );
+  assert.equal(nextSprintName([{ name: '2026-S3' }]), '2026-S4');
+  // Zero padding is part of the pattern and survives the increment.
+  assert.equal(nextSprintName([{ name: 'Sprint 09' }]), 'Sprint 10');
+  assert.equal(nextSprintName([{ name: 'S-007' }]), 'S-008');
+});
+
+test('nextSprintName skips names already taken', () => {
+  const { nextSprintName } = ctx().projectSettingsHelpers;
+  // The most recent sprint is "Sprint 3", but 4 and 5 already exist
+  // (renames can leave the sequence out of creation order).
+  assert.equal(
+    nextSprintName([{ name: 'Sprint 4' }, { name: 'Sprint 5' }, { name: 'Sprint 3' }]),
+    'Sprint 6'
+  );
+});
+
+test('nextSprintName falls back to Sprint <count+1> without a trailing number', () => {
+  const { nextSprintName } = ctx().projectSettingsHelpers;
+  assert.equal(nextSprintName([]), 'Sprint 1');
+  assert.equal(
+    nextSprintName([{ name: 'Kickoff' }, { name: 'Polish pass' }]),
+    'Sprint 3'
+  );
+  // The fallback also dodges collisions.
+  assert.equal(
+    nextSprintName([{ name: 'Sprint 2' }, { name: 'Kickoff' }]),
+    'Sprint 3'
+  );
+});
+
+test('suggestSprintDates chains after the active sprint, reusing its length', () => {
+  const { suggestSprintDates } = ctx().projectSettingsHelpers;
+  const sprints = [
+    { name: 'Sprint 1', state: 'closed', start_date: '2026-07-01', end_date: '2026-07-08' },
+    { name: 'Sprint 2', state: 'active', start_date: '2026-08-10', end_date: '2026-08-20' },
+  ];
+  assert.deepStrictEqual({ ...suggestSprintDates(sprints, '2026-08-23') }, {
+    start_date: '2026-08-20',
+    end_date: '2026-08-30',
+  });
+});
+
+test('suggestSprintDates defaults to today and two weeks', () => {
+  const { suggestSprintDates } = ctx().projectSettingsHelpers;
+  assert.deepStrictEqual({ ...suggestSprintDates([], '2026-08-23') }, {
+    start_date: '2026-08-23',
+    end_date: '2026-09-06',
+  });
+  // Month/year rollover goes through real date arithmetic.
+  assert.deepStrictEqual({ ...suggestSprintDates([], '2026-12-28') }, {
+    start_date: '2026-12-28',
+    end_date: '2027-01-11',
+  });
+});
+
+test('projectSprints.toggleAdd prefills the add form and clears on reopen', () => {
+  const c = ctx().projectSprints({ apiBase: '/x' });
+  c.items = [
+    { uuid: 's1', name: 'Sprint 1', state: 'closed', start_date: null, end_date: null },
+    { uuid: 's2', name: 'Sprint 2', state: 'active', start_date: null, end_date: null },
+  ];
+  c.toggleAdd();
+  assert.equal(c.adding, true);
+  assert.equal(c.addForm.name, 'Sprint 3');
+  assert.match(c.addForm.start_date, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(c.addForm.end_date, /^\d{4}-\d{2}-\d{2}$/);
+  // Second press closes without touching the drafted values.
+  c.addForm.name = 'My own name';
+  c.toggleAdd();
+  assert.equal(c.adding, false);
+  assert.equal(c.addForm.name, 'My own name');
+  // Reopening recomputes the suggestion from scratch.
+  c.toggleAdd();
+  assert.equal(c.addForm.name, 'Sprint 3');
+  assert.equal(c.addForm.goal, '');
+});

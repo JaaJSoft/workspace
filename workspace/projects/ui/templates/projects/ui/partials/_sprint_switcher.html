@@ -49,27 +49,15 @@ Params:
     class="dropdown-content menu z-50 mt-1 w-64 max-h-80 flex-nowrap overflow-y-auto thin-scrollbar bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2 gap-1"
   >
     {% if options|length > 5 %}
-      <li>
-        <label class="input input-bordered input-xs flex items-center gap-2 w-full">
-          <i data-lucide="search" class="w-3.5 h-3.5 opacity-60 shrink-0"></i>
+      {# Sticky: the search must survive scrolling through a long history. #}
+      <li class="sticky top-0 z-10 bg-base-100">
+        <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+          <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
           <input
             type="search"
             class="grow min-w-0"
             placeholder="Search sprints"
             x-model="sprintQuery"
-            @click.stop
-          />
-        </label>
-      </li>
-    {% endif %}
-    {% if with_closed_toggle %}
-      <li>
-        <label class="flex items-center justify-between gap-2 cursor-pointer">
-          <span class="text-sm">Hide closed sprints</span>
-          <input
-            type="checkbox"
-            class="toggle toggle-xs toggle-accent"
-            x-model="hideClosed"
             @click.stop
           />
         </label>
@@ -124,5 +112,21 @@ Params:
         <li class="menu-title">No started sprint yet.</li>
       {% endif %}
     {% endfor %}
+    {% if with_closed_toggle %}
+      {# Sticky: the toggle stays reachable once the unfolded history scrolls. #}
+      <li
+        class="sticky bottom-0 z-10 bg-base-100 border-t border-base-300 pt-1"
+      >
+        <label class="flex items-center justify-between gap-2 cursor-pointer">
+          <span class="text-sm">Hide closed sprints</span>
+          <input
+            type="checkbox"
+            class="toggle toggle-xs toggle-accent"
+            x-model="hideClosed"
+            @click.stop
+          />
+        </label>
+      </li>
+    {% endif %}
   </ul>
 </div>

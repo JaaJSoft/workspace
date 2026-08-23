@@ -90,7 +90,7 @@
           >
             <span class="flex items-center gap-2 min-w-0">
               <i
-                data-lucide="{% if project.type == 'personal' %}circle-user{% elif project.type == 'scrum' %}iteration-cw{% else %}square-kanban{% endif %}"
+                data-lucide="{% if project.type == 'personal' %}circle-user{% elif project.type == 'scrum' %}timer{% else %}square-kanban{% endif %}"
                 class="w-5 h-5 text-accent shrink-0"
               ></i>
               <span class="truncate">{{ project.name }}</span>
@@ -109,7 +109,7 @@
                   class="{% if p.uuid == project.uuid %}active{% endif %}"
                 >
                   <i
-                    data-lucide="{% if p.type == 'personal' %}circle-user{% elif p.type == 'scrum' %}iteration-cw{% else %}square-kanban{% endif %}"
+                    data-lucide="{% if p.type == 'personal' %}circle-user{% elif p.type == 'scrum' %}timer{% else %}square-kanban{% endif %}"
                     class="w-4 h-4 shrink-0"
                   ></i>
                   <span class="truncate flex-1">{{ p.name }}</span>
@@ -142,7 +142,7 @@
           @click="toggleCollapse()"
         >
           <i
-            data-lucide="{% if project.type == 'personal' %}circle-user{% elif project.type == 'scrum' %}iteration-cw{% else %}square-kanban{% endif %}"
+            data-lucide="{% if project.type == 'personal' %}circle-user{% elif project.type == 'scrum' %}timer{% else %}square-kanban{% endif %}"
             class="w-5 h-5 text-accent"
           ></i>
         </button>

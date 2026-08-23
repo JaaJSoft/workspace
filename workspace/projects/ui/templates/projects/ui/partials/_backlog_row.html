@@ -30,7 +30,7 @@
         class="ml-auto self-center hidden lg:flex items-center gap-1 shrink-0"
       >
         {% if task.sprint %}
-          <tag-chip name="{{ task.sprint.name }}" icon="iteration-cw" size="sm" class="shrink-0"></tag-chip>
+          <tag-chip name="{{ task.sprint.name }}" icon="timer" size="sm" class="shrink-0"></tag-chip>
         {% endif %}
         {% if task.epic %}
           <tag-chip name="{{ task.epic.name }}" color="{{ task.epic.color }}" icon="layers" size="sm" class="shrink-0"></tag-chip>
@@ -88,7 +88,7 @@
         title="Send to current sprint"
         @click.stop="sendToBoard('{{ task.uuid }}')"
       >
-        <i data-lucide="iteration-cw" class="w-5 h-5"></i>
+        <i data-lucide="timer" class="w-5 h-5"></i>
       </button>
     {% else %}
       <button

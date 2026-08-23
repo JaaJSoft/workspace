@@ -8,7 +8,7 @@
           tabindex="0"
           class="btn btn-sm btn-ghost border border-base-300 font-normal gap-2"
         >
-          <i data-lucide="iteration-cw" class="w-4 h-4 text-accent"></i>
+          <i data-lucide="timer" class="w-4 h-4 text-accent"></i>
           {% if selected_sprint %}
             <span class="font-medium">{{ selected_sprint.name }}</span>
             {% if selected_sprint.state == 'closed' %}<span class="badge badge-ghost badge-sm">Closed</span>{% endif %}
@@ -74,7 +74,7 @@
       <div
         class="rounded-box border border-base-300 bg-base-100 p-8 flex flex-col items-center gap-3 text-center"
       >
-        <i data-lucide="iteration-cw" class="w-10 h-10 text-base-content/30"></i>
+        <i data-lucide="timer" class="w-10 h-10 text-base-content/30"></i>
         <p class="font-medium">No active sprint</p>
         {% if planned_sprints %}
           <p class="text-sm text-base-content/60">Start a planned sprint to bring its tasks onto the board.</p>

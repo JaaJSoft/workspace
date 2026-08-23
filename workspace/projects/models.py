@@ -582,7 +582,7 @@ class TaskEvent(models.Model):
         Type.COMMENTED: "message-square",
         Type.ESTIMATED: "ruler",
         Type.EPIC: "layers",
-        Type.SPRINT: "iteration-cw",
+        Type.SPRINT: "timer",
         Type.ATTACHED: "paperclip",
         Type.DETACHED: "paperclip",
         Type.LINKED: "link",

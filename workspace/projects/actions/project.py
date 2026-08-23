@@ -46,7 +46,7 @@ class ManageEpicsAction(BaseProjectAction):
 class ManageSprintsAction(BaseProjectAction):
     id = "manage_sprints"
     label = "Manage sprints"
-    icon = "iteration-cw"
+    icon = "timer"
     category = ActionCategory.ORGANIZE
     target_types = ("project",)
     min_role = "admin"

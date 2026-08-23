@@ -1233,7 +1233,7 @@ test('epic filter adds once, removes, and counts as active', () => {
   assert.equal(board.filtersActive(), false);
 });
 
-test('epic lookups resolve filter chip names and colors', () => {
+test('epic lookups resolve names and colors, openEpics drops closed ones', () => {
   const board = panelBoard();
   board.epics = [
     { uuid: 'e1', name: 'Launch', color: '#3b82f6', closed: false },
@@ -1243,6 +1243,45 @@ test('epic lookups resolve filter chip names and colors', () => {
   assert.equal(board.epicColor('e1'), '#3b82f6');
   assert.equal(board.epicName('missing'), 'Unknown epic');
   assert.equal(board.epicColor('e2'), '');
+  assert.deepStrictEqual(
+    Array.from(board.openEpics()).map((e) => e.uuid),
+    ['e1']
+  );
+});
+
+test('createEpic posts name and auto color then joins the shared list', async () => {
+  const board = panelBoard();
+  board.epics = [{ uuid: 'e1', name: 'Launch', color: '#ef4444', closed: false }];
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return {
+      ok: true,
+      json: async () => ({ uuid: 'e9', name: 'Polish', color: '#3b82f6' }),
+    };
+  };
+  const epic = await board.createEpic('  Polish ');
+  assert.equal(epic.uuid, 'e9');
+  // Fixture color #ef4444 is used once, so the least-used palette color wins.
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/epics {"name":"Polish","color":"#f97316"}',
+  ]);
+  assert.deepStrictEqual({ ...board.epics[1] }, {
+    uuid: 'e9',
+    name: 'Polish',
+    color: '#3b82f6',
+    closed: false,
+  });
+});
+
+test('createEpic returns null and leaves the list alone on failure', async () => {
+  const board = panelBoard();
+  board.epics = [];
+  ctx.fetch = async () => ({ ok: false });
+  ctx.AppAlert = { error: () => {} };
+  assert.equal(await board.createEpic('Nope'), null);
+  assert.equal(await board.createEpic('   '), null);
+  assert.equal(board.epics.length, 0);
 });
 
 test('the epic field commits through the set_epic action gate', () => {

@@ -1,9 +1,16 @@
 {% comment %}
 Epic dropdown: single-value selector matching _status_selector.html, since a
-task belongs to at most one epic. Rows are rendered server-side from the
-`epics_data` context variable. The menu only offers open epics plus the
-"No epic" reset; a closed epic already on the task still renders in the
-trigger so the current value never displays blank.
+task belongs to at most one epic. Unlike the status selector the rows are
+Alpine-rendered from the board's shared reactive `epics` list (resolved
+through the scope chain), so an epic created in the settings is pickable
+immediately - no page reload. The menu only offers open epics plus the
+"No epic" reset; a closed epic still on the task renders struck-through in
+the trigger so the current value never displays blank.
+
+Like the label combobox, admins on a writable project get an inline-create
+row at the bottom of the menu (reads `role` and `writable` from the Django
+context); the API enforces admin itself. Creation pushes into the shared
+list and selects the new epic in one move.
 
 Params:
   - model_expr: Alpine l-value holding the current epic uuid or '' (required),
@@ -42,19 +49,21 @@ Params:
       ></span>
       <span class="truncate text-base-content/60">No epic</span>
     </span>
-    {% for epic in epics_data %}
+    <span
+      x-show="{{ model_expr }}"
+      x-cloak
+      class="flex items-center gap-2 min-w-0"
+    >
       <span
-        x-show="{{ model_expr }} === '{{ epic.uuid }}'"
-        x-cloak
-        class="flex items-center gap-2 min-w-0"
-      >
-        <span
-          class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
-          {% if epic.color %}style="background-color: {{ epic.color }}"{% endif %}
-        ></span>
-        <span class="truncate {% if epic.closed %}line-through{% endif %}">{{ epic.name }}</span>
-      </span>
-    {% endfor %}
+        class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
+        :style="epicColor({{ model_expr }}) ? 'background-color: ' + epicColor({{ model_expr }}) : ''"
+      ></span>
+      <span
+        class="truncate"
+        :class="(epicById({{ model_expr }}) || {}).closed ? 'line-through' : ''"
+        x-text="epicName({{ model_expr }})"
+      ></span>
+    </span>
     <i
       data-lucide="chevron-down"
       class="w-3.5 h-3.5 opacity-60 ml-auto shrink-0"
@@ -81,26 +90,43 @@ Params:
           <span class="text-sm">No epic</span>
         </button>
       </li>
-      {% for epic in epics_data %}
-        {% if not epic.closed %}
-          <li class="w-full min-w-0" role="none">
-            <button
-              type="button"
-              class="flex w-full min-w-0 items-center gap-2 rounded"
-              :class="{{ model_expr }} === '{{ epic.uuid }}' ? 'active' : ''"
-              role="menuitemradio"
-              :aria-checked="{{ model_expr }} === '{{ epic.uuid }}'"
-              @click="{{ model_expr }} = '{{ epic.uuid }}'; open = false; {{ on_change|default:'' }}"
-            >
-              <span
-                class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
-                {% if epic.color %}style="background-color: {{ epic.color }}"{% endif %}
-              ></span>
-              <span class="text-sm min-w-0 truncate">{{ epic.name }}</span>
-            </button>
+      <template x-for="epic in openEpics()" :key="epic.uuid">
+        <li class="w-full min-w-0" role="none">
+          <button
+            type="button"
+            class="flex w-full min-w-0 items-center gap-2 rounded"
+            :class="{{ model_expr }} === epic.uuid ? 'active' : ''"
+            role="menuitemradio"
+            :aria-checked="{{ model_expr }} === epic.uuid"
+            @click="{{ model_expr }} = epic.uuid; open = false; {{ on_change|default:'' }}"
+          >
+            <span
+              class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
+              :style="epic.color ? 'background-color: ' + epic.color : ''"
+            ></span>
+            <span class="text-sm min-w-0 truncate" x-text="epic.name"></span>
+          </button>
+        </li>
+      </template>
+      {% if role == "admin" and writable and not disabled %}
+        <li role="none" class="w-full min-w-0" x-data="{ newEpic: '' }">
+          <label class="flex w-full min-w-0 items-center gap-2 rounded cursor-text">
+            <i data-lucide="plus" class="w-4 h-4 shrink-0 opacity-60"></i>
+            <input
+              type="text"
+              class="input input-ghost input-xs h-6 min-h-0 w-full px-0 text-sm"
+              placeholder="New epic..."
+              maxlength="100"
+              x-model="newEpic"
+              @click.stop
+              {# The wrapper's arrow-key roving must not steal focus while typing; Enter creates and selects in one move. #}
+              @keydown.arrow-down.prevent.stop
+              @keydown.arrow-up.prevent.stop
+              @keydown.enter.prevent.stop="createEpic(newEpic).then((epic) => { if (epic) { {{ model_expr }} = epic.uuid; newEpic = ''; open = false; {{ on_change|default:'' }} } })"
+            />
+            </label>
           </li>
-        {% endif %}
-      {% endfor %}
+      {% endif %}
     </ul>
   </div>
 </div>

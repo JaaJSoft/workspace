@@ -74,15 +74,14 @@
             />
           </label>
         {% endif %}
-        {# Hidden when no epic is open to pick; new tasks cannot carry a closed one. #}
-        {% if has_open_epics %}
-          <div
-            class="form-control {% if project.estimate_unit %}col-span-2{% endif %}"
-          >
-            <div class="label"><span class="label-text">Epic</span></div>
-            {% include "projects/ui/partials/_epic_selector.html" with model_expr="form.epic" label="Epic" %}
-          </div>
-        {% endif %}
+        {# Reactive gate: an epic created in the settings surfaces the field without a reload; admins always get it (inline create lives in the menu). #}
+        <div
+          class="form-control col-span-2"
+          {% if role != "admin" %}x-show="openEpics().length" x-cloak{% endif %}
+        >
+          <div class="label"><span class="label-text">Epic</span></div>
+          {% include "projects/ui/partials/_epic_selector.html" with model_expr="form.epic" label="Epic" %}
+        </div>
       </div>
       <div
         class="mt-2"

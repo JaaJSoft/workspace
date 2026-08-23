@@ -813,6 +813,42 @@ function projectBoard(config) {
       return epic && epic.color ? epic.color : '';
     },
 
+    // Feeds the epic dropdown rows; closed epics still resolve by uuid so
+    // a task keeping one renders its name in the trigger and on chips.
+    openEpics() {
+      return this.epics.filter((e) => !e.closed);
+    },
+
+    // Inline create from the epic dropdown (admins; the server enforces it).
+    // Pushing into the shared list is what makes the new epic show up in
+    // every picker and filter without a reload.
+    async createEpic(name) {
+      name = (name || '').trim();
+      if (!name) return null;
+      try {
+        const resp = await fetch(config.apiBase + '/epics', {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({
+            name: name,
+            color: pickLabelColor(this.epics),
+          }),
+        });
+        if (!resp.ok) throw new Error('Create failed');
+        const epic = await resp.json();
+        this.epics.push({
+          uuid: epic.uuid,
+          name: epic.name,
+          color: epic.color,
+          closed: false,
+        });
+        return epic;
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not create the epic.');
+        return null;
+      }
+    },
+
 
     async saveTask() {
       if (this.saving) return;

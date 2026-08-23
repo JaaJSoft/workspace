@@ -94,11 +94,11 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(resp.context["panel_action_ids"], [])
         self.assertNotContains(resp, "Delete task")
         # No action is available on an archived project, so every gated
-        # control must be disabled: the status, priority and due-date fields
-        # and the checklist item checkbox. Assignees and labels render as
-        # chips whose remove controls and selectors are omitted entirely, so
-        # they carry no disabled attribute.
-        self.assertEqual(self._count_disabled(resp), 4)
+        # control must be disabled: the status, priority, epic and due-date
+        # fields and the checklist item checkbox. Assignees and labels render
+        # as chips whose remove controls and selectors are omitted entirely,
+        # so they carry no disabled attribute.
+        self.assertEqual(self._count_disabled(resp), 5)
         # The comment form is gated on the "comment" action, absent when archived.
         self.assertNotContains(resp, "Add a comment...")
 

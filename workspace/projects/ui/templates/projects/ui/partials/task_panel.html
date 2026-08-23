@@ -116,7 +116,7 @@
         {% endif %}
       </div>
       <label
-        class="form-control {% if not project.estimate_unit and not has_open_epics and not panel_task.epic_id %}col-span-2{% endif %}"
+        class="form-control {% if not project.estimate_unit %}col-span-2{% endif %}"
       >
         <div class="label py-1"><span class="label-text text-xs">Due date</span></div>
         <input
@@ -143,19 +143,18 @@
           />
         </label>
       {% endif %}
-      {# Hidden when there is nothing to offer: no open epic to pick and none set on the task. #}
-      {% if has_open_epics or panel_task.epic_id %}
-        <div
-          class="form-control {% if project.estimate_unit %}col-span-2{% endif %}"
-        >
-          <div class="label py-1"><span class="label-text text-xs">Epic</span></div>
-          {% if "set_epic" in panel_action_ids %}
-            {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" on_change="commitField('epic', data.epic || null)" label="Epic" %}
-          {% else %}
-            {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" disabled=True label="Epic" %}
-          {% endif %}
-        </div>
-      {% endif %}
+      {# The reactive gate surfaces an epic created in the settings without a reload; admins always get the field (inline create lives in the menu). #}
+      <div
+        class="form-control col-span-2"
+        {% if role != "admin" %}x-show="openEpics().length || data.epic" x-cloak{% endif %}
+      >
+        <div class="label py-1"><span class="label-text text-xs">Epic</span></div>
+        {% if "set_epic" in panel_action_ids %}
+          {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" on_change="commitField('epic', data.epic || null)" label="Epic" %}
+        {% else %}
+          {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" disabled=True label="Epic" %}
+        {% endif %}
+      </div>
     </div>
 
     <section @panel-assignee-selected.window="addAssignee($event.detail.user)">

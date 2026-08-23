@@ -70,16 +70,21 @@ class BoardEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.member)
         self.assertNotContains(self.board(), 'placeholder="Filter by epic"')
 
-    def test_modal_offers_the_epic_dropdown_only_with_open_epics(self):
-        # The create modal renders a single-value epic dropdown; a project
-        # whose epics are all closed offers nothing to pick, so the field
-        # disappears for every role (epics are created in the settings).
+    def test_modal_epic_dropdown_renders_from_the_reactive_list(self):
+        # The rows are Alpine-rendered from the shared epics list, so an
+        # epic created in the settings (or inline) is pickable with no
+        # reload; members hide the empty field, admins keep it to create
+        # the first epic from the menu.
         self.client.force_login(self.member)
-        self.assertContains(self.board(), "form.epic === ")
-        self.epic.is_closed = True
-        self.epic.save(update_fields=["closed_at"])
+        resp = self.board()
+        self.assertContains(resp, "form.epic === epic.uuid")
+        self.assertContains(resp, 'x-show="openEpics().length"')
+        self.assertNotContains(resp, "New epic...")
         self.client.force_login(self.admin)
-        self.assertNotContains(self.board(), "form.epic")
+        resp = self.board()
+        self.assertNotContains(resp, 'x-show="openEpics().length"')
+        self.assertContains(resp, "New epic...")
+        self.assertContains(resp, "createEpic(newEpic)")
 
 
 class BacklogEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
@@ -109,40 +114,26 @@ class TaskPanelEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     def test_panel_offers_the_epic_dropdown(self):
         # Single-value field: the panel renders the same dropdown as status
         # and priority, committing through the set_epic-gated field patch.
+        # Rows come from the reactive epics list (openEpics()), not the
+        # server, so the menu tracks settings changes without a reload.
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
         self.assertContains(resp, "commitField('epic', data.epic || null)")
         self.assertContains(resp, "No epic")
-        self.assertContains(resp, "Launch")
+        self.assertContains(resp, "data.epic === epic.uuid")
 
-    def test_epic_field_absent_when_project_has_none(self):
-        self.task.epic = None
-        self.task.save(update_fields=["epic"])
-        self.epic.delete()
+    def test_member_field_hides_with_nothing_to_offer_admin_keeps_it(self):
+        # Members only pick, so their field carries the reactive empty gate;
+        # admins always see it - the menu's inline create needs a host.
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'x-show="openEpics().length || data.epic"')
+        self.assertNotContains(resp, "New epic...")
         self.client.force_login(self.admin)
         resp = self.client.get(self.url)
-        self.assertNotContains(resp, "data.epic")
-
-    def test_closed_epic_on_the_task_keeps_the_field(self):
-        # All epics closed but one still set on the task: the dropdown stays
-        # so the value renders and can be cleared, and the menu only offers
-        # the "No epic" reset (closed epics are not pickable).
-        self.epic.is_closed = True
-        self.epic.save(update_fields=["closed_at"])
-        self.client.force_login(self.member)
-        resp = self.client.get(self.url)
-        self.assertContains(resp, "commitField('epic', data.epic || null)")
-        self.assertContains(resp, "No epic")
-        self.assertNotContains(resp, 'aria-checked="data.epic === ')
-
-    def test_epic_field_hidden_when_only_closed_epics_and_none_set(self):
-        self.task.epic = None
-        self.task.save(update_fields=["epic"])
-        self.epic.is_closed = True
-        self.epic.save(update_fields=["closed_at"])
-        self.client.force_login(self.member)
-        resp = self.client.get(self.url)
-        self.assertNotContains(resp, "data.epic")
+        self.assertNotContains(resp, 'x-show="openEpics().length || data.epic"')
+        self.assertContains(resp, "New epic...")
+        self.assertContains(resp, "createEpic(newEpic)")
 
 
 class SettingsEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):

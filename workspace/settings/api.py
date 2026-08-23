@@ -169,6 +169,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Epics grouping tasks into larger initiatives, with progress rollup.",
         },
         {
+            "name": "Projects - Sprints",
+            "description": "Timeboxed sprints of scrum projects: planning, start and completion.",
+        },
+        {
             "name": "Search",
             "description": "Unified search across workspace modules.",
         },

@@ -647,3 +647,40 @@ class TaskReminder(models.Model):
 
     def __str__(self):
         return f"{self.kind}: {self.task_id} -> {self.user_id}"
+
+
+class TaskWatcher(models.Model):
+    """Explicit per-user watch state on a task.
+
+    ``muted=False`` subscribes the user to the task's notifications on top
+    of the implicit recipient set (assignees, creator, prior commenters);
+    ``muted=True`` removes them from that implicit set without deleting any
+    history. No row means the implicit rules alone decide. Mentions and
+    assignment notifications are personal and ignore the muted state.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="watchers",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="task_watches",
+    )
+    muted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["task", "user"],
+                name="unique_task_watcher",
+            ),
+        ]
+
+    def __str__(self):
+        state = "muted" if self.muted else "watching"
+        return f"{self.user_id} {state} {self.task_id}"

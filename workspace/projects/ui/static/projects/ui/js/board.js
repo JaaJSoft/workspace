@@ -1406,3 +1406,58 @@ window.projectBoardHelpers = {
   taskFilterUrl: taskFilterUrl,
   pickLabelColor: pickLabelColor,
 };
+
+// --- Per-task watch state (the eye in the task panel header) ---
+
+function taskWatch(opts) {
+  let initial = [];
+  const el = document.getElementById('task-watchers-data');
+  if (el) {
+    try { initial = JSON.parse(el.textContent); } catch (_) { /* keep empty */ }
+  }
+  const LABELS = { '': 'Default', watching: 'Watching', muted: 'Muted' };
+  return {
+    state: opts.state || '',
+    watchers: initial,
+    // Latest-request-wins guard, same as projectNotificationLevel: a slow
+    // failure may not clobber the state of a newer request.
+    _gen: 0,
+    label(state) { return LABELS[state] || 'Default'; },
+    set(state) {
+      this._send(state, () => fetch(opts.url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ state: state }),
+      }));
+    },
+    reset() {
+      this._send('', () => fetch(opts.url, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+      }));
+    },
+    _syncList() {
+      const listed = this.watchers.some((w) => w.id === opts.userId);
+      if (this.state === 'watching' && !listed) {
+        this.watchers = this.watchers.concat([{ id: opts.userId, username: opts.username }]);
+      } else if (this.state !== 'watching' && listed) {
+        this.watchers = this.watchers.filter((w) => w.id !== opts.userId);
+      }
+    },
+    _send(next, request) {
+      const previousState = this.state;
+      const previousList = this.watchers;
+      this.state = next;
+      this._syncList();
+      const gen = ++this._gen;
+      request().then((resp) => {
+        if (!resp.ok) throw new Error('rejected');
+      }).catch(() => {
+        if (gen !== this._gen) return;
+        this.state = previousState;
+        this.watchers = previousList;
+        if (window.AppAlert) AppAlert.error('Failed to save watch state');
+      });
+    },
+  };
+}

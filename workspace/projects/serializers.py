@@ -135,6 +135,10 @@ class ProjectNotificationLevelSerializer(serializers.Serializer):
     level = serializers.ChoiceField(choices=ProjectNotificationLevel.Level.choices)
 
 
+class TaskWatchSerializer(serializers.Serializer):
+    state = serializers.ChoiceField(choices=["watching", "muted"])
+
+
 class LabelSerializer(serializers.ModelSerializer):
     class Meta:
         model = Label

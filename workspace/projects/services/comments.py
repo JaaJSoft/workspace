@@ -7,6 +7,7 @@ from workspace.notifications.services.notifications import notify_stream
 
 from ..queries import project_users
 from .notification_levels import apply_levels
+from .watchers import apply_watchers
 
 User = get_user_model()
 
@@ -35,10 +36,13 @@ def notify_comment_added(task, actor, body):
     """Notify about a new comment (never the actor).
 
     Project members mentioned in *body* get a high-priority mention
-    notification; the task creator, assignees, and prior commenters get the
-    regular one.
+    notification - a mention is personal, so a muted watch does not block
+    it. The regular one goes to the implicit set (task creator, assignees,
+    prior commenters) plus the task's watchers, minus muted users and
+    anyone who lost project access.
     """
-    mentioned = mentioned_users(project_users(task.project), body, actor)
+    users = project_users(task.project)
+    mentioned = mentioned_users(users, body, actor)
     if mentioned:
         _notify_mentioned(task, actor, mentioned)
     mentioned_ids = {u.pk for u in mentioned}
@@ -53,8 +57,13 @@ def notify_comment_added(task, actor, body):
         .distinct()
     )
     recipients.update(User.objects.filter(pk__in=commenter_ids))
-    recipients.discard(actor)
-    recipients = [u for u in recipients if u.pk not in mentioned_ids]
+    allowed_by_id = {u.pk: u for u in users if u.is_active}
+    recipients = apply_watchers(task, recipients, allowed_by_id)
+    # After the watcher union: an actor or mentioned user watching the
+    # task would otherwise be re-added to the regular set.
+    recipients = [
+        u for u in recipients if u.pk != actor.pk and u.pk not in mentioned_ids
+    ]
     recipients, priority_map = apply_levels(task.project_id, recipients)
     if recipients:
         notify_stream(

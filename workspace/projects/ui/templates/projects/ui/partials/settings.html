@@ -12,7 +12,8 @@
     <p class="text-sm text-base-content/60 mt-0.5">Project details, board setup and access.</p>
   </div>
 
-  <div class="grid gap-4 items-start xl:grid-cols-2">
+  {# Default stretch alignment on purpose: side-by-side cards share their row's height, so a tall neighbor never leaves a floating short card. #}
+  <div class="grid gap-4 xl:grid-cols-2">
     <section
       id="settings-general"
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
@@ -251,8 +252,14 @@
           Columns
         </h3>
         {% if writable %}
-          <button type="button" class="btn btn-ghost btn-sm" @click="adding = !adding">
-            <i data-lucide="plus" class="w-4 h-4"></i> Add column
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            @click="adding = !adding"
+            aria-label="Add column"
+            title="Add column"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
           </button>
         {% endif %}
       </div>
@@ -396,6 +403,277 @@
     </section>
 
     <section
+      id="settings-epics"
+      class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
+      x-data="projectEpics({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h3 class="font-semibold flex items-center gap-2 shrink-0">
+          <i data-lucide="layers" class="w-4 h-4 text-accent"></i>
+          Epics
+        </h3>
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-3" x-show="items.length" x-cloak>
+            <label class="input input-bordered input-sm flex items-center gap-2 w-44">
+              <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
+              <input
+                type="search"
+                class="grow min-w-0"
+                placeholder="Search epics"
+                x-model="query"
+              />
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                class="toggle toggle-sm toggle-accent"
+                x-model="openOnly"
+              />
+              <span class="text-sm">Open only</span>
+            </label>
+          </div>
+          {% if writable %}
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-square shrink-0"
+              @click="adding = !adding"
+              aria-label="Add epic"
+              title="Add epic"
+            >
+              <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+          {% endif %}
+        </div>
+      </div>
+      <template x-if="error">
+        <inline-alert type="error"><span x-text="error"></span></inline-alert>
+      </template>
+      <template x-if="adding">
+        <form
+          class="flex flex-col gap-3 p-3 rounded-box bg-base-100"
+          @submit.prevent="addEpic()"
+          @keydown.escape="adding = false"
+        >
+          <div class="flex flex-wrap items-end gap-3">
+            <label class="form-control">
+              <div class="label py-0"><span class="label-text-alt">Name</span></div>
+              <input
+                type="text"
+                class="input input-bordered input-sm"
+                x-model="addForm.name"
+                required
+                maxlength="100"
+              />
+            </label>
+            <div class="form-control">
+              <div class="label py-0"><span class="label-text-alt">Color</span></div>
+              <div class="flex items-center gap-1.5 h-8">
+                <template x-for="c in colors" :key="c">
+                  <button
+                    type="button"
+                    class="w-6 h-6 rounded-full border border-base-300 shrink-0"
+                    :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
+                    :style="c ? 'background:' + c : ''"
+                    :aria-label="c ? 'Color ' + c : 'No color'"
+                    :aria-pressed="addForm.color === c"
+                    @click="addForm.color = c"
+                  ></button>
+                </template>
+              </div>
+            </div>
+          </div>
+          <label class="form-control">
+            <div class="label py-0"><span class="label-text-alt">Description (optional)</span></div>
+            <textarea
+              class="textarea textarea-bordered textarea-sm"
+              rows="2"
+              x-model="addForm.description"
+            ></textarea>
+          </label>
+          <div class="flex items-center gap-2 ml-auto">
+            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
+            <button
+              type="submit"
+              class="btn btn-accent btn-sm"
+              :disabled="busy || !addForm.name.trim()"
+            >
+              Add
+            </button>
+          </div>
+        </form>
+      </template>
+      <div class="flex flex-col gap-2">
+        <template x-for="epic in visibleEpics()" :key="epic.uuid">
+          <div
+            class="rounded-box bg-base-100 p-3 flex flex-col gap-2"
+            :class="epic.closed ? 'opacity-60' : ''"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              {% if writable %}
+                {% comment %}Inline SVGs on purpose: lucide.createIcons() does
+                not process nodes that Alpine clones out of an x-for
+                template.{% endcomment %}
+                <div class="dropdown">
+                  <button
+                    type="button"
+                    tabindex="0"
+                    class="w-4 h-4 rounded-full border border-base-300 shrink-0"
+                    :style="epic.color ? 'background:' + epic.color : ''"
+                    aria-label="Epic color"
+                  ></button>
+                  <ul
+                    tabindex="0"
+                    class="dropdown-content z-50 mt-1 flex flex-row items-center gap-1.5 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
+                  >
+                    <template x-for="c in colors" :key="c">
+                      <li class="flex">
+                        <button
+                          type="button"
+                          class="w-5 h-5 rounded-full border border-base-300 shrink-0"
+                          :class="epic.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
+                          :style="c ? 'background:' + c : ''"
+                          :aria-label="c ? 'Color ' + c : 'No color'"
+                          @click="setColor(epic, c); document.activeElement.blur()"
+                        ></button>
+                      </li>
+                    </template>
+                  </ul>
+                </div>
+              {% else %}
+                <span
+                  class="w-4 h-4 rounded-full border border-base-300 shrink-0"
+                  :style="epic.color ? 'background:' + epic.color : ''"
+                ></span>
+              {% endif %}
+              <template x-if="editing !== epic.uuid">
+                <button
+                  type="button"
+                  class="font-medium text-sm truncate text-left"
+                  :class="epic.closed ? 'line-through' : ''"
+                  x-text="epic.name"
+                  {% if writable %}@click="startEdit(epic)"{% endif %}
+                ></button>
+              </template>
+              <template x-if="editing === epic.uuid">
+                <input
+                  type="text"
+                  class="input input-ghost input-sm h-6 min-h-0 px-0 text-sm font-medium flex-1"
+                  x-model="editName"
+                  maxlength="100"
+                  @keydown.enter.prevent="saveEdit(epic)"
+                  @keydown.escape="editName = epic.name; editing = null"
+                  @blur="saveEdit(epic)"
+                  x-init="$el.focus()"
+                />
+              </template>
+              <span class="badge badge-ghost badge-sm shrink-0" x-show="epic.closed">Closed</span>
+              <span
+                class="ml-auto text-xs text-base-content/60 font-mono shrink-0"
+                x-text="epic.done_task_count + '/' + epic.task_count + ' done'"
+              ></span>
+              {% if writable %}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-circle btn-xs shrink-0"
+                  :aria-label="epic.closed ? 'Reopen epic' : 'Close epic'"
+                  :title="epic.closed ? 'Reopen epic' : 'Close epic'"
+                  @click="toggleClosed(epic)"
+                >
+                  <template x-if="!epic.closed">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-3.5 h-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+                      <path d="m9 11 3 3L22 4" />
+                    </svg>
+                  </template>
+                  <template x-if="epic.closed">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-3.5 h-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                    </svg>
+                  </template>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-circle btn-xs text-error shrink-0"
+                  aria-label="Delete epic"
+                  @click="removeEpic(epic)"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-3.5 h-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              {% endif %}
+            </div>
+            <div class="h-1.5 rounded-full bg-base-300 overflow-hidden">
+              <div
+                class="h-full rounded-full bg-accent"
+                :style="'width:' + progressPercent(epic) + '%'"
+              ></div>
+            </div>
+            <template x-if="editingDesc !== epic.uuid">
+              <p
+                class="text-xs text-base-content/60 whitespace-pre-line break-words"
+                :class="epic.description ? '' : 'italic'"
+                x-text="epic.description || 'No description.'"
+                {% if writable %}@click="startDescEdit(epic)"{% endif %}
+              ></p>
+            </template>
+            <template x-if="editingDesc === epic.uuid">
+              <textarea
+                class="textarea textarea-bordered textarea-sm text-xs"
+                rows="2"
+                x-model="descDraft"
+                @keydown.escape="editingDesc = null"
+                @blur="saveDescEdit(epic)"
+                x-init="$el.focus()"
+              ></textarea>
+            </template>
+          </div>
+        </template>
+      </div>
+      <p
+        class="text-sm text-base-content/60"
+        x-show="!items.length && !adding"
+      >
+        No epics yet.
+      </p>
+      <p
+        class="text-sm text-base-content/60"
+        x-show="items.length && !visibleEpics().length"
+        x-cloak
+      >
+        No epics match.
+      </p>
+    </section>
+
+    <section
       id="settings-labels"
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
       x-data="projectLabels({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
@@ -406,8 +684,14 @@
           Labels
         </h3>
         {% if writable %}
-          <button type="button" class="btn btn-ghost btn-sm" @click="adding = !adding">
-            <i data-lucide="plus" class="w-4 h-4"></i> Add label
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            @click="adding = !adding"
+            aria-label="Add label"
+            title="Add label"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
           </button>
         {% endif %}
       </div>

@@ -26,6 +26,7 @@ class ProjectActionTests(ProjectTestMixin, TestCase):
                 "rename",
                 "manage_members",
                 "manage_labels",
+                "manage_epics",
                 "attach_group",
                 "archive",
                 "delete",
@@ -49,7 +50,7 @@ class ProjectActionTests(ProjectTestMixin, TestCase):
     def test_personal_project_hides_sharing_and_lifecycle(self):
         personal = get_or_create_personal_project(self.admin)
         ids = action_ids(self.admin, personal, role="admin")
-        self.assertEqual(set(ids), {"rename", "manage_labels"})
+        self.assertEqual(set(ids), {"rename", "manage_labels", "manage_epics"})
 
 
 class RegistryTests(TestCase):
@@ -79,6 +80,7 @@ class TaskActionTests(ProjectTestMixin, TestCase):
                 "assign",
                 "set_due",
                 "set_labels",
+                "set_epic",
                 "attach",
                 "link",
                 "comment",

@@ -20,6 +20,15 @@ class TaskServiceMixin(ProjectTestMixin):
 
 
 class CreateTaskTests(TaskServiceMixin, TestCase):
+    def test_rejects_epic_from_another_project(self):
+        from workspace.projects.services.projects import create_project
+
+        other = create_project(self.admin, name="Other")
+        foreign = other.epics.create(name="Elsewhere")
+        with self.assertRaises(ValueError):
+            create_task(self.project, self.admin, title="t", epic=foreign)
+        self.assertEqual(self.project.tasks.count(), 0)
+
     def test_defaults_to_backlog_status_at_end(self):
         t1 = create_task(self.project, self.admin, title="one")
         t2 = create_task(self.project, self.admin, title="two")

@@ -53,8 +53,13 @@ def create_task(
     estimate=None,
     assignees=(),
     labels=(),
+    epic=None,
 ):
     """Create a task; defaults to the end of the project's backlog column."""
+    # The API serializer scopes the epic per project; this guards the
+    # direct callers (seeds, future tools) against cross-project grouping.
+    if epic is not None and epic.project_id != project.pk:
+        raise ValueError("Epic belongs to another project.")
     if status is None:
         status = (
             project.statuses.filter(category=TaskStatus.Category.BACKLOG)
@@ -72,6 +77,7 @@ def create_task(
             priority=priority,
             due_date=due_date,
             estimate=estimate,
+            epic=epic,
             created_by=user,
             position=_locked_tail_position(project, status),
         )
@@ -106,7 +112,8 @@ def has_field_updates(task, validated_data):
     Status changes are excluded on purpose: they get their own MOVED or
     COMPLETED event via apply_status_change, and a no-op PATCH must not
     pollute the activity feed. Assignee additions are excluded for the same
-    reason - they get their own ASSIGNED event.
+    reason - they get their own ASSIGNED event, as are epic changes (EPIC)
+    and estimate changes (ESTIMATED).
     """
     for field in _UPDATE_EVENT_FIELDS:
         if field not in validated_data:

@@ -5,6 +5,7 @@ from .views_actions import ProjectActionsView
 from .views_calendar import TaskCalendarView
 from .views_search import TaskSearchView
 from .viewsets import (
+    EpicViewSet,
     LabelViewSet,
     MemberViewSet,
     ProjectViewSet,
@@ -23,6 +24,8 @@ member_list = MemberViewSet.as_view({"get": "list", "post": "create"})
 member_detail = MemberViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 label_list = LabelViewSet.as_view({"get": "list", "post": "create"})
 label_detail = LabelViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
+epic_list = EpicViewSet.as_view({"get": "list", "post": "create"})
+epic_detail = EpicViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 status_list = StatusViewSet.as_view({"get": "list", "post": "create"})
 status_reorder = StatusViewSet.as_view({"post": "reorder"})
 status_detail = StatusViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
@@ -82,6 +85,16 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/labels/<uuid:uuid>",
         label_detail,
         name="project-label-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/epics",
+        epic_list,
+        name="project-epics",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/epics/<uuid:uuid>",
+        epic_detail,
+        name="project-epic-detail",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/statuses",

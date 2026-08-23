@@ -454,6 +454,7 @@ test('fieldAction maps each editable field to its action id', () => {
     due_date: 'set_due',
     assignees: 'assign',
     labels: 'set_labels',
+    epic: 'set_epic',
   };
   for (const [field, action] of Object.entries(cases)) {
     assert.equal(ctx.projectBoardHelpers.fieldAction(field), action);
@@ -1200,4 +1201,95 @@ test('searchLinkTasks: clearing the input invalidates an in-flight search', asyn
   // The stale response must not reopen the dropdown nor restore results.
   assert.equal(panel.linkDropdown, false);
   assert.equal(panel.linkResults.length, 0);
+});
+
+test('taskFiltersFromUrl and taskFilterUrl round-trip the epic filter', () => {
+  const filters = ctx.projectBoardHelpers.taskFiltersFromUrl(
+    'http://x.test/projects/p/board?epic=e1&epic=e2&task=u1'
+  );
+  assert.deepStrictEqual(Array.from(filters.epic), ['e1', 'e2']);
+  assert.equal(
+    ctx.projectBoardHelpers.taskFilterUrl(
+      'http://x.test/projects/p/board?task=u1',
+      { ...filters }
+    ),
+    '/projects/p/board?task=u1&epic=e1&epic=e2'
+  );
+});
+
+test('epic filter adds once, removes, and counts as active', () => {
+  const board = panelBoard();
+  const fetched = [];
+  board.$ajax = (url) => fetched.push(url);
+  assert.equal(board.filtersActive(), false);
+  board.addEpicFilter({ uuid: 'e1' });
+  board.addEpicFilter({ uuid: 'e1' });
+  assert.deepStrictEqual(Array.from(board.filters.epic), ['e1']);
+  assert.equal(fetched.length, 1);
+  assert.equal(board.filtersActive(), true);
+  assert.equal(board.activeFilterCount(), 1);
+  board.removeEpicFilter('e1');
+  assert.deepStrictEqual(Array.from(board.filters.epic), []);
+  assert.equal(board.filtersActive(), false);
+});
+
+test('epic lookups resolve names and colors, openEpics drops closed ones', () => {
+  const board = panelBoard();
+  board.epics = [
+    { uuid: 'e1', name: 'Launch', color: '#3b82f6', closed: false },
+    { uuid: 'e2', name: 'Done era', color: '', closed: true },
+  ];
+  assert.equal(board.epicName('e1'), 'Launch');
+  assert.equal(board.epicColor('e1'), '#3b82f6');
+  assert.equal(board.epicName('missing'), 'Unknown epic');
+  assert.equal(board.epicColor('e2'), '');
+  assert.deepStrictEqual(
+    Array.from(board.openEpics()).map((e) => e.uuid),
+    ['e1']
+  );
+});
+
+test('createEpic posts name and auto color then joins the shared list', async () => {
+  const board = panelBoard();
+  board.epics = [{ uuid: 'e1', name: 'Launch', color: '#ef4444', closed: false }];
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return {
+      ok: true,
+      json: async () => ({ uuid: 'e9', name: 'Polish', color: '#3b82f6' }),
+    };
+  };
+  const epic = await board.createEpic('  Polish ');
+  assert.equal(epic.uuid, 'e9');
+  // Fixture color #ef4444 is used once, so the least-used palette color wins.
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/epics {"name":"Polish","color":"#f97316"}',
+  ]);
+  assert.deepStrictEqual({ ...board.epics[1] }, {
+    uuid: 'e9',
+    name: 'Polish',
+    color: '#3b82f6',
+    closed: false,
+  });
+});
+
+test('createEpic returns null and leaves the list alone on failure', async () => {
+  const board = panelBoard();
+  board.epics = [];
+  ctx.fetch = async () => ({ ok: false });
+  ctx.AppAlert = { error: () => {} };
+  assert.equal(await board.createEpic('Nope'), null);
+  assert.equal(await board.createEpic('   '), null);
+  assert.equal(board.epics.length, 0);
+});
+
+test('the epic field commits through the set_epic action gate', () => {
+  const calls = [];
+  const panel = panelWithActions(['set_epic'], calls);
+  panel.commitField('epic', 'e1');
+  assert.deepStrictEqual([calls[0][0], { ...calls[0][1] }], ['u1', { epic: 'e1' }]);
+  const gated = panelWithActions(['edit'], calls);
+  gated.commitField('epic', null);
+  assert.equal(calls.length, 1);
 });

@@ -29,14 +29,15 @@ function fieldAction(field) {
     due_date: 'set_due',
     assignees: 'assign',
     labels: 'set_labels',
+    epic: 'set_epic',
   };
   return map[field] || 'edit';
 }
 
 function emptyTaskFilters() {
-  // assignee and label are multi-value (repeated query params, OR'd
+  // assignee, label and epic are multi-value (repeated query params, OR'd
   // server-side); assignee also accepts the literal 'none' for unassigned.
-  return { q: '', assignee: [], label: [], priority: '', status: '' };
+  return { q: '', assignee: [], label: [], epic: [], priority: '', status: '' };
 }
 
 // Filtering is server-side; the filter state lives in the URL so a filtered
@@ -84,6 +85,7 @@ function emptyTaskForm() {
     estimate: '',
     assignees: [],
     labels: [],
+    epic: '',
   };
 }
 
@@ -278,6 +280,7 @@ function projectBoard(config) {
     statuses: [],
     members: [],
     labels: [],
+    epics: [],
     form: emptyTaskForm(),
     formError: '',
     panelTaskUuid: config.initialTask || null,
@@ -304,6 +307,9 @@ function projectBoard(config) {
       );
       this.labels = JSON.parse(
         document.getElementById('labels-data').textContent
+      );
+      this.epics = JSON.parse(
+        document.getElementById('epics-data').textContent
       );
       this.filters = taskFiltersFromUrl(window.location.href);
 
@@ -453,6 +459,7 @@ function projectBoard(config) {
         this.filters.q.trim() ||
           this.filters.assignee.length ||
           this.filters.label.length ||
+          this.filters.epic.length ||
           this.filters.priority ||
           this.filters.status
       );
@@ -510,12 +517,25 @@ function projectBoard(config) {
       this.applyFilters();
     },
 
+    addEpicFilter(epic) {
+      if (!this.filters.epic.includes(epic.uuid)) {
+        this.filters.epic = this.filters.epic.concat(epic.uuid);
+        this.applyFilters();
+      }
+    },
+
+    removeEpicFilter(uuid) {
+      this.filters.epic = this.filters.epic.filter((v) => v !== uuid);
+      this.applyFilters();
+    },
+
     // Badge on the Filters button: counts the panel-managed filters only.
     // The search box sits on the bar itself, so q stays out of the count.
     activeFilterCount() {
       return (
         this.filters.assignee.length +
         this.filters.label.length +
+        this.filters.epic.length +
         (this.filters.priority ? 1 : 0) +
         (this.filters.status ? 1 : 0)
       );
@@ -779,6 +799,57 @@ function projectBoard(config) {
       this.form.labels = this.form.labels.filter((v) => v !== uuid);
     },
 
+    epicById(uuid) {
+      return this.epics.find((e) => e.uuid === uuid) || null;
+    },
+
+    epicName(uuid) {
+      const epic = this.epicById(uuid);
+      return epic ? epic.name : 'Unknown epic';
+    },
+
+    epicColor(uuid) {
+      const epic = this.epicById(uuid);
+      return epic && epic.color ? epic.color : '';
+    },
+
+    // Feeds the epic dropdown rows; closed epics still resolve by uuid so
+    // a task keeping one renders its name in the trigger and on chips.
+    openEpics() {
+      return this.epics.filter((e) => !e.closed);
+    },
+
+    // Inline create from the epic dropdown (admins; the server enforces it).
+    // Pushing into the shared list is what makes the new epic show up in
+    // every picker and filter without a reload.
+    async createEpic(name) {
+      name = (name || '').trim();
+      if (!name) return null;
+      try {
+        const resp = await fetch(config.apiBase + '/epics', {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({
+            name: name,
+            color: pickLabelColor(this.epics),
+          }),
+        });
+        if (!resp.ok) throw new Error('Create failed');
+        const epic = await resp.json();
+        this.epics.push({
+          uuid: epic.uuid,
+          name: epic.name,
+          color: epic.color,
+          closed: false,
+        });
+        return epic;
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not create the epic.');
+        return null;
+      }
+    },
+
+
     async saveTask() {
       if (this.saving) return;
       this.saving = true;
@@ -796,6 +867,7 @@ function projectBoard(config) {
             estimate: this.form.estimate === '' ? null : this.form.estimate,
             assignees: this.form.assignees,
             labels: this.form.labels,
+            epic: this.form.epic || null,
           }),
         });
         if (!resp.ok) {
@@ -828,6 +900,7 @@ function taskPanel() {
       estimate: '',
       assignees: [],
       labels: [],
+      epic: '',
     },
     editing: null,
     draft: '',
@@ -892,6 +965,12 @@ function taskPanel() {
         const fresh = JSON.parse(labelsEl.textContent);
         this.labels.splice(0, this.labels.length, ...fresh);
       }
+      // Same shell-refresh dance for the epics list.
+      const epicsEl = document.getElementById('panel-epics-data');
+      if (epicsEl && Array.isArray(this.epics)) {
+        const freshEpics = JSON.parse(epicsEl.textContent);
+        this.epics.splice(0, this.epics.length, ...freshEpics);
+      }
       this._commentCount = Number(this.$el.dataset.commentCount || 0);
       this._activityCount = Number(this.$el.dataset.activityCount || 0);
       // panelSections lives on the board shell (Alpine scope chain), so the
@@ -948,6 +1027,7 @@ function taskPanel() {
     removeLabel(uuid) {
       this.toggleMulti('labels', uuid, false);
     },
+
 
     can(actionId) {
       return this.actions.includes(actionId);

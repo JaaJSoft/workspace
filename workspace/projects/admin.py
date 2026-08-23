@@ -3,6 +3,7 @@ from unfold.admin import ModelAdmin
 from unfold.decorators import display
 
 from .models import (
+    Epic,
     Label,
     Project,
     ProjectMember,
@@ -52,6 +53,14 @@ class LabelAdmin(ModelAdmin):
     autocomplete_fields = ("project",)
 
 
+@admin.register(Epic)
+class EpicAdmin(ModelAdmin):
+    list_display = ("name", "project", "color", "closed_at")
+    list_select_related = ("project",)
+    search_fields = ("name", "project__name")
+    autocomplete_fields = ("project",)
+
+
 @admin.register(Task)
 class TaskAdmin(ModelAdmin):
     list_display = (
@@ -67,7 +76,7 @@ class TaskAdmin(ModelAdmin):
     list_filter = ("priority",)
     list_select_related = ("project", "status", "created_by")
     search_fields = ("uuid", "title", "project__key", "project__name")
-    autocomplete_fields = ("project", "status", "created_by")
+    autocomplete_fields = ("project", "status", "created_by", "epic")
     filter_horizontal = ("assignees", "labels")
     readonly_fields = ("uuid", "number", "created_at", "updated_at")
     date_hierarchy = "created_at"

@@ -95,6 +95,32 @@ class TaskModelTests(TestCase):
         )
         self.assertEqual(list(Task.objects.all()), [t2, t1])
 
+    def test_epic_unique_per_project(self):
+        from workspace.projects.models import Epic
+
+        Epic.objects.create(project=self.project, name="Launch")
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Epic.objects.create(project=self.project, name="Launch")
+
+    def test_clean_rejects_epic_from_another_project(self):
+        from django.core.exceptions import ValidationError
+
+        from workspace.projects.models import Epic
+
+        other = Project.objects.create(name="B", key="B2", created_by=self.user)
+        foreign = Epic.objects.create(project=other, name="Elsewhere")
+        task = Task(
+            project=self.project,
+            number=1,
+            title="t",
+            status=self.status,
+            epic=foreign,
+        )
+        with self.assertRaises(ValidationError) as caught:
+            task.full_clean()
+        self.assertIn("epic", caught.exception.message_dict)
+
     def test_label_unique_per_project(self):
         Label.objects.create(project=self.project, name="bug", color="#ff0000")
         with self.assertRaises(IntegrityError):

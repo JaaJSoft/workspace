@@ -71,6 +71,14 @@ def serialize_task_event(ev):
             label = f"Estimate set to {ev.to_value}"
         elif ev.from_value:
             label = "Estimate removed"
+    elif ev.type == TaskEvent.Type.EPIC:
+        # from_value/to_value carry the epic names snapshotted at change time.
+        if ev.from_value and ev.to_value:
+            label = f"Epic changed: {ev.from_value} → {ev.to_value}"
+        elif ev.to_value:
+            label = f"Epic set to {ev.to_value}"
+        elif ev.from_value:
+            label = "Epic removed"
     elif ev.type in (TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED):
         # from_value holds the direction label ("blocks", "is blocked by"),
         # to_value the other end's reference, both snapshotted at link time.

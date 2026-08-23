@@ -29,8 +29,11 @@
       {% include "projects/ui/partials/_priority_badge.html" %}
       {% include "projects/ui/partials/_estimate_badge.html" %}
     </div>
-    {% if task.labels.all %}
+    {% if task.epic or task.labels.all %}
       <div class="flex flex-wrap gap-1">
+        {% if task.epic %}
+          <tag-chip name="{{ task.epic.name }}" color="{{ task.epic.color }}" icon="layers" size="sm"></tag-chip>
+        {% endif %}
         {% for label in task.labels.all %}
           <tag-chip name="{{ label.name }}" color="{{ label.color }}" size="sm"></tag-chip>
         {% endfor %}

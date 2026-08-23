@@ -8,6 +8,7 @@ from rest_framework import serializers
 from workspace.common.services.mentions import render_comment_body
 
 from .models import (
+    Epic,
     Label,
     Project,
     ProjectMember,
@@ -146,6 +147,37 @@ class LabelSerializer(serializers.ModelSerializer):
         return value
 
 
+class EpicSerializer(serializers.ModelSerializer):
+    closed = serializers.BooleanField(source="is_closed", required=False)
+    # Progress rollup, annotated by the viewset; absent on unannotated
+    # instances (create/update responses return 0s there).
+    task_count = serializers.IntegerField(read_only=True, default=0)
+    done_task_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = Epic
+        fields = [
+            "uuid",
+            "name",
+            "color",
+            "description",
+            "closed",
+            "task_count",
+            "done_task_count",
+        ]
+
+    def validate_name(self, value):
+        project = self.context["project"]
+        existing = project.epics.filter(name=value)
+        if self.instance is not None:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError(
+                "An epic with this name already exists in this project."
+            )
+        return value
+
+
 class TaskStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskStatus
@@ -180,6 +212,9 @@ class TaskSerializer(serializers.ModelSerializer):
     labels = serializers.PrimaryKeyRelatedField(
         queryset=Label.objects.none(), many=True, required=False
     )
+    epic = serializers.PrimaryKeyRelatedField(
+        queryset=Epic.objects.none(), required=False, allow_null=True
+    )
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
     reference = serializers.SerializerMethodField()
     estimate = serializers.DecimalField(
@@ -199,6 +234,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "estimate",
             "assignees",
             "labels",
+            "epic",
             "position",
             "number",
             "reference",
@@ -226,6 +262,7 @@ class TaskSerializer(serializers.ModelSerializer):
         if project is not None:
             self.fields["status"].queryset = project.statuses.all()
             self.fields["labels"].child_relation.queryset = project.labels.all()
+            self.fields["epic"].queryset = project.epics.all()
 
     def validate_assignees(self, users):
         project = self.context["project"]

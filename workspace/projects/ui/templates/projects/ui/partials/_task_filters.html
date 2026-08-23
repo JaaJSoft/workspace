@@ -25,6 +25,7 @@ readable while the panel is closed.
   class="relative flex flex-col gap-2"
   @filter-assignee-selected.window="addAssigneeFilter($event.detail.user)"
   @filter-label-selected.window="addLabelFilter($event.detail.label)"
+  @filter-epic-selected.window="addEpicFilter($event.detail.label)"
 >
   <div class="flex items-center gap-2">
     <label
@@ -89,6 +90,21 @@ readable while the panel is closed.
             <span class="text-sm">Unassigned tasks</span>
           </label>
         </div>
+        {% if epics_data %}
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-base-content/60">Epic</span>
+            {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-epic-selected" all_source="epics" selected_source="filters.epic" placeholder="Filter by epic" entity="epic" icon="layers" no_create=True %}
+            <div
+              class="flex flex-wrap items-center gap-1.5"
+              x-show="filters.epic.length"
+              x-cloak
+            >
+              <template x-for="id in filters.epic" :key="id">
+                <tag-chip icon="layers" :name="epicName(id)" :color="epicColor(id)" removable @remove="removeEpicFilter(id)"></tag-chip>
+              </template>
+            </div>
+          </div>
+        {% endif %}
         {% if labels_data %}
           <div class="flex flex-col gap-1.5">
             <span class="text-xs font-medium text-base-content/60">Label</span>
@@ -164,6 +180,9 @@ readable while the panel is closed.
         <i data-lucide="x" class="w-3 h-3"></i>
       </button>
     </span>
+    <template x-for="id in filters.epic" :key="id">
+      <tag-chip icon="layers" :name="epicName(id)" :color="epicColor(id)" removable @remove="removeEpicFilter(id)"></tag-chip>
+    </template>
     <template x-for="id in filters.label" :key="id">
       <tag-chip :name="labelName(id)" :color="labelColor(id)" removable @remove="removeLabelFilter(id)"></tag-chip>
     </template>

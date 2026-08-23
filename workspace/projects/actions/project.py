@@ -33,6 +33,16 @@ class ManageLabelsAction(BaseProjectAction):
 
 
 @ProjectActionRegistry.register
+class ManageEpicsAction(BaseProjectAction):
+    id = "manage_epics"
+    label = "Manage epics"
+    icon = "layers"
+    category = ActionCategory.ORGANIZE
+    target_types = ("project",)
+    min_role = "admin"
+
+
+@ProjectActionRegistry.register
 class AttachGroupAction(NotOnPersonalProjectMixin, BaseProjectAction):
     id = "attach_group"
     label = "Manage groups"

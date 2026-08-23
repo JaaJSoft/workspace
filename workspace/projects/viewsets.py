@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from django.db.models import OuterRef, Q, Subquery
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import Http404
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -16,6 +16,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FileService
 
 from .models import (
+    Epic,
     Label,
     Project,
     ProjectMember,
@@ -29,6 +30,7 @@ from .models import (
 )
 from .queries import get_project_role, project_users, user_project_ids
 from .serializers import (
+    EpicSerializer,
     LabelSerializer,
     MemberRoleSerializer,
     MemberSerializer,
@@ -321,6 +323,58 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+@extend_schema(tags=["Projects - Epics"])
+class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
+    serializer_class = EpicSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Epic.objects.none()
+        # One reverse-FK join serves both rollup counts; no distinct needed
+        # since no other multi-valued relation is joined here.
+        return self.project.epics.annotate(
+            task_count=Count("tasks"),
+            done_task_count=Count(
+                "tasks", filter=Q(tasks__status__category=TaskStatus.Category.DONE)
+            ),
+        ).order_by("name")
+
+    def perform_create(self, serializer):
+        serializer.save(project=self.project)
+
+    def create(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        try:
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {"name": ["An epic with this name already exists in this project."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        try:
+            with transaction.atomic():
+                return super().partial_update(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {"name": ["An epic with this name already exists in this project."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        return super().destroy(request, *args, **kwargs)
+
+
 @extend_schema(tags=["Projects - Statuses & Labels"])
 class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     serializer_class = TaskStatusSerializer
@@ -424,6 +478,12 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 description="Only tasks carrying these labels.",
             ),
             OpenApiParameter(
+                "epic",
+                OpenApiTypes.UUID,
+                many=True,
+                description="Only tasks belonging to these epics.",
+            ),
+            OpenApiParameter(
                 "priority",
                 OpenApiTypes.STR,
                 enum=Task.Priority.values,
@@ -469,7 +529,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         if getattr(self, "swagger_fake_view", False):
             return Task.objects.none()
         qs = (
-            self.project.tasks.select_related("status")
+            self.project.tasks.select_related("status", "epic")
             .prefetch_related("assignees", "labels")
             .order_by("position", "created_at")
         )
@@ -497,6 +557,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         old_status = serializer.instance.status
         old_due_date = serializer.instance.due_date
         old_estimate = serializer.instance.estimate
+        old_epic = serializer.instance.epic
         old_assignee_ids = {u.pk for u in serializer.instance.assignees.all()}
         # Compared before save: afterwards the instance already carries the
         # new values and every edit would look like a no-op.
@@ -527,6 +588,16 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 actor=self.request.user,
                 from_value=format_estimate(old_estimate),
                 to_value=format_estimate(task.estimate),
+            )
+        if task.epic_id != (old_epic.pk if old_epic else None):
+            # Epic *names* snapshotted, same rationale as the status names:
+            # epics are renamable and deletable, a FK would rewrite history.
+            record_task_event(
+                task,
+                type=TaskEvent.Type.EPIC,
+                actor=self.request.user,
+                from_value=old_epic.name if old_epic else "",
+                to_value=task.epic.name if task.epic else "",
             )
         if task.due_date != old_due_date and (
             task.due_date is None or task.due_date > timezone.localdate()

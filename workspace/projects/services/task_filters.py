@@ -41,6 +41,7 @@ TASK_FILTER_FIELDS = (
     "status",
     "assignee",
     "label",
+    "epic",
     "priority",
     "due_before",
     "due_after",
@@ -83,11 +84,11 @@ def _date_or_error(params, field):
 def apply_task_filters(qs, params):
     """Narrow *qs* to the tasks matching the request's query parameters.
 
-    ``status``, ``assignee`` and ``label`` are repeatable; repeated values
-    OR together, distinct filters AND. ``assignee`` also accepts the
-    literal ``none`` for unassigned tasks. Raises TaskFilterError on
-    malformed input. M2M filters can duplicate rows - the caller owns the
-    final ``distinct()``.
+    ``status``, ``assignee``, ``label`` and ``epic`` are repeatable;
+    repeated values OR together, distinct filters AND. ``assignee`` also
+    accepts the literal ``none`` for unassigned tasks. Raises
+    TaskFilterError on malformed input. M2M filters can duplicate rows -
+    the caller owns the final ``distinct()``.
     """
     statuses = _uuid_list(params, "status")
     if statuses:
@@ -96,6 +97,11 @@ def apply_task_filters(qs, params):
     labels = _uuid_list(params, "label")
     if labels:
         qs = qs.filter(labels__in=labels)
+
+    epics = _uuid_list(params, "epic")
+    if epics:
+        # FK, not M2M: no row duplication, the caller's distinct() is moot.
+        qs = qs.filter(epic_id__in=epics)
 
     assignee_values = [raw for raw in params.getlist("assignee") if raw]
     if assignee_values:

@@ -118,7 +118,7 @@ def _deep_link_panel(request, project, role):
     raw = (request.GET.get("task") or "").strip()
     if not raw:
         return {}
-    qs = project.tasks.select_related("status", "created_by").prefetch_related(
+    qs = project.tasks.select_related("status", "created_by", "epic").prefetch_related(
         "assignees", "labels"
     )
     task_uuid = parse_uuid_or_none(raw)
@@ -160,6 +160,7 @@ def _base_context(request, project, role, view):
             {"uuid": str(label.uuid), "name": label.name, "color": label.color}
             for label in project.labels.all()
         ],
+        "epics_data": _epics_data(project),
         "members_data": [
             {
                 "id": str(u.pk),
@@ -176,6 +177,20 @@ def _base_context(request, project, role, view):
         context["reminder_hours"] = [(h, f"{h:02d}:00") for h in range(24)]
         context.update(_deep_link_panel(request, project, role))
     return context
+
+
+def _epics_data(project):
+    # closed rides along so the pickers can offer open epics only while
+    # closed ones still resolve to a name and color on cards and chips.
+    return [
+        {
+            "uuid": str(epic.uuid),
+            "name": epic.name,
+            "color": epic.color,
+            "closed": epic.is_closed,
+        }
+        for epic in project.epics.all()
+    ]
 
 
 def _filtered_tasks(request, qs):
@@ -264,6 +279,7 @@ def _task_panel_context(user, project, role, task):
                 {"id": str(u.pk), "username": u.username} for u in task.assignees.all()
             ],
             "labels": [str(label.uuid) for label in task.labels.all()],
+            "epic": str(task.epic_id) if task.epic_id else "",
             "subtasks": [
                 {"uuid": str(s.uuid), "title": s.title, "done": s.done}
                 for s in task.subtasks.all()
@@ -279,7 +295,7 @@ def _task_panel_context(user, project, role, task):
 def task_panel(request, project_uuid, task_uuid):
     project, role = _get_project_or_404(request.user, project_uuid)
     task = get_object_or_404(
-        project.tasks.select_related("status", "created_by").prefetch_related(
+        project.tasks.select_related("status", "created_by", "epic").prefetch_related(
             "assignees", "labels"
         ),
         uuid=task_uuid,
@@ -293,6 +309,7 @@ def task_panel(request, project_uuid, task_uuid):
             {"uuid": str(label.uuid), "name": label.name, "color": label.color}
             for label in project.labels.all()
         ],
+        "epics_data": _epics_data(project),
     }
     context.update(_task_panel_context(request.user, project, role, task))
     return render(request, "projects/ui/partials/task_panel.html", context)
@@ -304,7 +321,9 @@ def task_card(request, project_uuid, task_uuid):
     other surface that shows a task it cannot render in full)."""
     project, _role = _get_project_or_404(request.user, project_uuid)
     task = get_object_or_404(
-        project.tasks.select_related("status").prefetch_related("assignees", "labels"),
+        project.tasks.select_related("status", "epic").prefetch_related(
+            "assignees", "labels"
+        ),
         uuid=task_uuid,
     )
     return render(
@@ -330,7 +349,7 @@ def board(request, project_uuid):
     ).count()
     tasks_qs = annotate_blocked(
         project.tasks.exclude(status__category=TaskStatus.Category.BACKLOG)
-        .select_related("status")
+        .select_related("status", "epic")
         .prefetch_related("assignees", "labels")
         # distinct=True: the task filters may join M2Ms, and duplicated rows
         # would otherwise inflate the checklist counters on the cards.
@@ -391,7 +410,7 @@ def backlog(request, project_uuid):
     context["backlog_status"] = backlog_statuses[0] if backlog_statuses else None
     backlog_qs = (
         project.tasks.filter(status__category=TaskStatus.Category.BACKLOG)
-        .select_related("status")
+        .select_related("status", "epic")
         .prefetch_related("assignees", "labels")
         .order_by("position", "created_at")
     )
@@ -426,7 +445,7 @@ def all_tasks(request, project_uuid):
     try:
         all_tasks_list, truncated = _filtered_tasks(
             request,
-            project.tasks.select_related("status")
+            project.tasks.select_related("status", "epic")
             .prefetch_related("assignees", "labels")
             .order_by(
                 "status__position", "status__created_at", "position", "created_at"

@@ -44,6 +44,11 @@ class ProjectsConfig(AppConfig):
             )
         )
 
+        from workspace.ai.tool_registry import tool_registry
+        from workspace.projects.ai_tools import ProjectsToolProvider
+
+        tool_registry.register_provider(ProjectsToolProvider())
+
         from workspace.core.activity_registry import (
             ActivityProviderInfo,
             activity_registry,

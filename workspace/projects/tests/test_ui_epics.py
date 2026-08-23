@@ -70,14 +70,16 @@ class BoardEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.member)
         self.assertNotContains(self.board(), 'placeholder="Filter by epic"')
 
-    def test_modal_epic_picker_gating_mirrors_labels(self):
-        # Members can only pick open epics, so the field hides when none is
-        # pickable (no epics, or all closed); admins always see it (they can
-        # create the first epic).
+    def test_modal_offers_the_epic_dropdown_only_with_open_epics(self):
+        # The create modal renders a single-value epic dropdown; a project
+        # whose epics are all closed offers nothing to pick, so the field
+        # disappears for every role (epics are created in the settings).
         self.client.force_login(self.member)
-        self.assertContains(self.board(), 'x-show="openEpics().length"')
+        self.assertContains(self.board(), "form.epic === ")
+        self.epic.is_closed = True
+        self.epic.save(update_fields=["closed_at"])
         self.client.force_login(self.admin)
-        self.assertNotContains(self.board(), 'x-show="openEpics().length"')
+        self.assertNotContains(self.board(), "form.epic")
 
 
 class BacklogEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
@@ -103,48 +105,44 @@ class TaskPanelEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
         self.assertContains(resp, 'id="panel-epics-data"')
-        self.assertContains(resp, "setEpic($event.detail.label)")
 
-    def test_admin_gets_the_epic_selector_with_create_endpoint(self):
-        self.client.force_login(self.admin)
-        resp = self.client.get(self.url)
-        self.assertContains(resp, "labelSelector('panel-epic-selected'")
-        self.assertContains(resp, f"/api/v1/projects/{self.project.uuid}/epics")
-
-    def test_member_gets_the_selector_without_the_create_endpoint(self):
+    def test_panel_offers_the_epic_dropdown(self):
+        # Single-value field: the panel renders the same dropdown as status
+        # and priority, committing through the set_epic-gated field patch.
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
-        self.assertContains(resp, "labelSelector('panel-epic-selected'")
-        self.assertNotContains(resp, f"/api/v1/projects/{self.project.uuid}/epics")
+        self.assertContains(resp, "commitField('epic', data.epic || null)")
+        self.assertContains(resp, "No epic")
+        self.assertContains(resp, "Launch")
 
-    def test_epic_section_hidden_for_member_when_project_has_none(self):
-        self.task.epic = None
-        self.task.save(update_fields=["epic"])
-        self.epic.delete()
-        self.client.force_login(self.member)
-        resp = self.client.get(self.url)
-        self.assertNotContains(resp, "labelSelector('panel-epic-selected'")
-
-    def test_epic_section_rendered_for_admin_when_project_has_none(self):
-        # Admins can create the first epic straight from the task panel.
+    def test_epic_field_absent_when_project_has_none(self):
         self.task.epic = None
         self.task.save(update_fields=["epic"])
         self.epic.delete()
         self.client.force_login(self.admin)
         resp = self.client.get(self.url)
-        self.assertContains(resp, "labelSelector('panel-epic-selected'")
+        self.assertNotContains(resp, "data.epic")
 
-    def test_member_section_and_selector_hide_when_only_closed_epics(self):
-        # Members can only pick open epics: the panel section and its
-        # selector carry the openEpics() gate, admins never do (they can
-        # create an open epic inline).
+    def test_closed_epic_on_the_task_keeps_the_field(self):
+        # All epics closed but one still set on the task: the dropdown stays
+        # so the value renders and can be cleared, and the menu only offers
+        # the "No epic" reset (closed epics are not pickable).
+        self.epic.is_closed = True
+        self.epic.save(update_fields=["closed_at"])
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
-        self.assertContains(resp, 'x-show="openEpics().length || data.epic"')
-        self.assertContains(resp, 'x-show="openEpics().length"')
-        self.client.force_login(self.admin)
+        self.assertContains(resp, "commitField('epic', data.epic || null)")
+        self.assertContains(resp, "No epic")
+        self.assertNotContains(resp, 'aria-checked="data.epic === ')
+
+    def test_epic_field_hidden_when_only_closed_epics_and_none_set(self):
+        self.task.epic = None
+        self.task.save(update_fields=["epic"])
+        self.epic.is_closed = True
+        self.epic.save(update_fields=["closed_at"])
+        self.client.force_login(self.member)
         resp = self.client.get(self.url)
-        self.assertNotContains(resp, 'x-show="openEpics().length || data.epic"')
+        self.assertNotContains(resp, "data.epic")
 
 
 class SettingsEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):

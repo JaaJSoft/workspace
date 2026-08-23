@@ -1,8 +1,9 @@
 {% comment %}
 Label/epic combobox: search-as-you-type over a project-scoped tag list,
 with an admin-only "Create ..." row when the query matches no existing
-entry. Labels are the default; the epic picker reuses it via the resource
-params below.
+entry. Labels are the default; the epic filter picker reuses it via the
+entity/icon params below (always with no_create - epics are managed in
+the project settings).
 
 Params:
   - on_select_event: Django string - CustomEvent dispatched on window with
@@ -12,21 +13,18 @@ Params:
   - placeholder:     Django string (default "Add label...")
   - no_create:       Django flag - hide the admin "Create ..." row (pure picker,
                      e.g. the filter bar, where creating an entry makes no sense)
-  - resource:        API collection under the project (default "labels")
   - entity:          singular noun for the copy (default "label")
   - icon:            lucide icon on the input (default "tag")
-  - created_event:   event dispatched on window after an inline create
-                     (default "project-label-created")
 
 Reads `role`, `writable` and `project` from the Django context: admins on a
 writable project get a create URL, everyone else gets a pure picker. The
 create URL is cosmetic gating only - the API enforces admin itself. On
-creation the component dispatches the created event with the new entry
-(handled once on the board root), then the selection event.
+creation the component dispatches "project-label-created" with the new
+label (handled once on the board root), then the selection event.
 {% endcomment %}
 {% with entity=entity|default:"label" %}
   <div
-    x-data="labelSelector('{{ on_select_event }}', () => {{ all_source }}, () => {{ selected_source }}, '{% if role == "admin" and writable and not no_create %}/api/v1/projects/{{ project.uuid }}/{{ resource|default:"labels" }}{% endif %}'{% if created_event %}, { createdEvent: '{{ created_event }}' }{% endif %})"
+    x-data="labelSelector('{{ on_select_event }}', () => {{ all_source }}, () => {{ selected_source }}, '{% if role == "admin" and writable and not no_create %}/api/v1/projects/{{ project.uuid }}/labels{% endif %}')"
     class="relative"
     @click.outside="showDropdown = false"
   >

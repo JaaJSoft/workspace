@@ -161,6 +161,7 @@ def _base_context(request, project, role, view):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
+        "has_open_epics": project.epics.filter(closed_at__isnull=True).exists(),
         "members_data": [
             {
                 "id": str(u.pk),
@@ -310,6 +311,7 @@ def task_panel(request, project_uuid, task_uuid):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
+        "has_open_epics": project.epics.filter(closed_at__isnull=True).exists(),
     }
     context.update(_task_panel_context(request.user, project, role, task))
     return render(request, "projects/ui/partials/task_panel.html", context)

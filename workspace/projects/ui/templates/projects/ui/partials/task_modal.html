@@ -74,6 +74,15 @@
             />
           </label>
         {% endif %}
+        {# Hidden when no epic is open to pick; new tasks cannot carry a closed one. #}
+        {% if has_open_epics %}
+          <div
+            class="form-control {% if project.estimate_unit %}col-span-2{% endif %}"
+          >
+            <div class="label"><span class="label-text">Epic</span></div>
+            {% include "projects/ui/partials/_epic_selector.html" with model_expr="form.epic" label="Epic" %}
+          </div>
+        {% endif %}
       </div>
       <div
         class="mt-2"
@@ -92,20 +101,6 @@
         </div>
         <div x-show="formUnassignedUsers().length">
           {% include "ui/partials/user_selector.html" with on_select_event="modal-assignee-selected" placeholder="Add assignee..." local_source="formUnassignedUsers()" %}
-        </div>
-      </div>
-      {# Members only pick, so hide the field when every epic is closed; admins keep it to create the first open one inline. #}
-      <div
-        class="mt-2"
-        {% if role != "admin" %}x-show="openEpics().length"{% endif %}
-        @modal-epic-selected.window="setFormEpic($event.detail.label)"
-      >
-        <div class="label"><span class="label-text">Epic</span></div>
-        <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="form.epic" x-cloak>
-          <tag-chip icon="layers" :name="epicName(form.epic)" :color="epicColor(form.epic)" removable @remove="clearFormEpic()"></tag-chip>
-        </div>
-        <div x-show="!form.epic">
-          {% include "projects/ui/partials/_label_selector.html" with on_select_event="modal-epic-selected" all_source="openEpics()" selected_source="form.epic ? [form.epic] : []" placeholder="Set epic..." resource="epics" entity="epic" icon="layers" created_event="project-epic-created" %}
         </div>
       </div>
       <div

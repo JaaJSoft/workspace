@@ -1,0 +1,106 @@
+{% comment %}
+Epic dropdown: single-value selector matching _status_selector.html, since a
+task belongs to at most one epic. Rows are rendered server-side from the
+`epics_data` context variable. The menu only offers open epics plus the
+"No epic" reset; a closed epic already on the task still renders in the
+trigger so the current value never displays blank.
+
+Params:
+  - model_expr: Alpine l-value holding the current epic uuid or '' (required),
+                e.g. "data.epic" or "form.epic".
+  - on_change:  optional Alpine statement run after the value is set.
+  - disabled:   Django flag - render the trigger disabled (permission gating).
+  - label:      accessible field name, prepended to the trigger's visible value
+                as screen-reader-only text.
+{% endcomment %}
+<div
+  x-data="selectDropdown()"
+  class="relative"
+  @click.outside="open = false"
+  @keydown.arrow-down.prevent="move(1)"
+  @keydown.arrow-up.prevent="move(-1)"
+  @keydown.escape="if (open) { $event.preventDefault(); $event.stopPropagation(); closeAndFocus() }"
+  @keydown.tab="open = false"
+>
+  <button
+    type="button"
+    class="input input-sm input-bordered flex items-center gap-2 w-full cursor-pointer text-left disabled:cursor-not-allowed"
+    x-ref="trigger"
+    aria-haspopup="menu"
+    :aria-expanded="open"
+    @click="toggle()"
+    {% if disabled %}disabled{% endif %}
+  >
+    {% if label %}<span class="sr-only">{{ label }}</span>{% endif %}
+    <span
+      x-show="!{{ model_expr }}"
+      x-cloak
+      class="flex items-center gap-2 min-w-0"
+    >
+      <span
+        class="w-2.5 h-2.5 rounded-full border border-dashed border-base-content/40 shrink-0"
+      ></span>
+      <span class="truncate text-base-content/60">No epic</span>
+    </span>
+    {% for epic in epics_data %}
+      <span
+        x-show="{{ model_expr }} === '{{ epic.uuid }}'"
+        x-cloak
+        class="flex items-center gap-2 min-w-0"
+      >
+        <span
+          class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
+          {% if epic.color %}style="background-color: {{ epic.color }}"{% endif %}
+        ></span>
+        <span class="truncate {% if epic.closed %}line-through{% endif %}">{{ epic.name }}</span>
+      </span>
+    {% endfor %}
+    <i
+      data-lucide="chevron-down"
+      class="w-3.5 h-3.5 opacity-60 ml-auto shrink-0"
+    ></i>
+  </button>
+  <div
+    x-show="open"
+    x-cloak
+    class="absolute z-50 mt-1 w-full min-w-40 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-60 overflow-y-auto overflow-x-hidden thin-scrollbar"
+  >
+    <ul class="menu menu-sm p-1" role="menu">
+      <li role="none">
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded"
+          :class="!{{ model_expr }} ? 'active' : ''"
+          role="menuitemradio"
+          :aria-checked="!{{ model_expr }}"
+          @click="{{ model_expr }} = ''; open = false; {{ on_change|default:'' }}"
+        >
+          <span
+            class="w-2.5 h-2.5 rounded-full border border-dashed border-base-content/40 shrink-0"
+          ></span>
+          <span class="text-sm">No epic</span>
+        </button>
+      </li>
+      {% for epic in epics_data %}
+        {% if not epic.closed %}
+          <li class="w-full min-w-0" role="none">
+            <button
+              type="button"
+              class="flex w-full min-w-0 items-center gap-2 rounded"
+              :class="{{ model_expr }} === '{{ epic.uuid }}' ? 'active' : ''"
+              role="menuitemradio"
+              :aria-checked="{{ model_expr }} === '{{ epic.uuid }}'"
+              @click="{{ model_expr }} = '{{ epic.uuid }}'; open = false; {{ on_change|default:'' }}"
+            >
+              <span
+                class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
+                {% if epic.color %}style="background-color: {{ epic.color }}"{% endif %}
+              ></span>
+              <span class="text-sm min-w-0 truncate">{{ epic.name }}</span>
+            </button>
+          </li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+  </div>
+</div>

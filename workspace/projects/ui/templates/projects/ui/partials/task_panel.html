@@ -13,6 +13,7 @@
   data-activity-count="{{ panel_events|length }}"
 >
   {{ panel_task_data|json_script:"task-panel-data" }}
+  {{ epics_data|json_script:"panel-epics-data" }}
   {{ panel_action_ids|json_script:"task-panel-actions" }}
   {{ panel_attachments|json_script:"task-panel-attachments" }}
   {{ panel_links|json_script:"task-panel-links" }}
@@ -115,7 +116,7 @@
         {% endif %}
       </div>
       <label
-        class="form-control {% if not project.estimate_unit %}col-span-2{% endif %}"
+        class="form-control {% if not project.estimate_unit and not has_open_epics and not panel_task.epic_id %}col-span-2{% endif %}"
       >
         <div class="label py-1"><span class="label-text text-xs">Due date</span></div>
         <input
@@ -141,6 +142,19 @@
             {% if "edit" not in panel_action_ids %}disabled{% endif %}
           />
         </label>
+      {% endif %}
+      {# Hidden when there is nothing to offer: no open epic to pick and none set on the task. #}
+      {% if has_open_epics or panel_task.epic_id %}
+        <div
+          class="form-control {% if project.estimate_unit %}col-span-2{% endif %}"
+        >
+          <div class="label py-1"><span class="label-text text-xs">Epic</span></div>
+          {% if "set_epic" in panel_action_ids %}
+            {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" on_change="commitField('epic', data.epic || null)" label="Epic" %}
+          {% else %}
+            {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" disabled=True label="Epic" %}
+          {% endif %}
+        </div>
       {% endif %}
     </div>
 
@@ -187,53 +201,6 @@
         </div>
       </div>
     </section>
-
-    {% if epics_data or role == "admin" %}
-      {# Members only pick: with every epic closed and none on the task, the section has nothing to offer, so hide it. A closed epic already set stays visible. #}
-      <section
-        @panel-epic-selected.window="setEpic($event.detail.label)"
-        {% if role != "admin" %}x-show="openEpics().length || data.epic" x-cloak{% endif %}
-      >
-        <h3 class="mb-1">
-          <button
-            type="button"
-            class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
-            :aria-expanded="sectionsOpen.epic"
-            @click="toggleSection('epic')"
-          >
-            <i
-              :data-lucide="sectionsOpen.epic ? 'chevron-down' : 'chevron-right'"
-              class="w-3.5 h-3.5 shrink-0"
-            ></i>
-            <span>Epic</span>
-          </button>
-        </h3>
-        {{ epics_data|json_script:"panel-epics-data" }}
-        <div x-show="sectionsOpen.epic">
-          <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="data.epic" x-cloak>
-            {% if "set_epic" in panel_action_ids %}
-              <tag-chip icon="layers" :name="epicName(data.epic)" :color="epicColor(data.epic)" removable @remove="removeEpic()"></tag-chip>
-            {% else %}
-              <tag-chip icon="layers" :name="epicName(data.epic)" :color="epicColor(data.epic)"></tag-chip>
-            {% endif %}
-          </div>
-          <p
-            class="text-sm text-base-content/50 italic mb-2"
-            x-show="!data.epic"
-            x-cloak
-          >
-            No epic.
-          </p>
-          {% if "set_epic" in panel_action_ids %}
-            <div
-              {% if role != "admin" %}x-show="openEpics().length" x-cloak{% endif %}
-            >
-              {% include "projects/ui/partials/_label_selector.html" with on_select_event="panel-epic-selected" all_source="openEpics()" selected_source="data.epic ? [data.epic] : []" placeholder="Set epic..." resource="epics" entity="epic" icon="layers" created_event="project-epic-created" %}
-            </div>
-          {% endif %}
-        </div>
-      </section>
-    {% endif %}
 
     {% if labels_data or role == "admin" %}
       <section @panel-label-selected.window="addLabel($event.detail.label)">

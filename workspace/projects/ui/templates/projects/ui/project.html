@@ -24,7 +24,6 @@
   @keydown.window="handleKeydown($event)"
   @ajax:after="ensureTaskParam(); syncFiltersFromUrl()"
   @project-label-created.window="onLabelCreated($event.detail.label)"
-  @project-epic-created.window="onEpicCreated($event.detail.label)"
 {% endblock %}
 
 {% block drawer_sidebar %}

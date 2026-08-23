@@ -148,12 +148,10 @@ function selectDropdown() {
   };
 }
 
-// Combobox over the project's labels (or epics: options.createdEvent points
-// the inline-create announcement at the right board handler). allLabels/
-// selectedUuids are getters so the parent's reactive state is read at call
-// time. An empty createUrl hides the create row (non-admins); the server
-// enforces admin regardless.
-function labelSelector(eventName, allLabels, selectedUuids, createUrl, options) {
+// Combobox over the project's labels. allLabels/selectedUuids are getters so
+// the parent's reactive state is read at call time. An empty createUrl hides
+// the create row (non-admins); the server enforces admin regardless.
+function labelSelector(eventName, allLabels, selectedUuids, createUrl) {
   return {
     query: '',
     results: [],
@@ -165,7 +163,6 @@ function labelSelector(eventName, allLabels, selectedUuids, createUrl, options) 
     allLabels: allLabels,
     selectedUuids: selectedUuids,
     createUrl: createUrl || '',
-    createdEvent: (options && options.createdEvent) || 'project-label-created',
 
     trimmedQuery() {
       return (this.query || '').trim();
@@ -262,7 +259,7 @@ function labelSelector(eventName, allLabels, selectedUuids, createUrl, options) 
         if (!resp.ok) throw new Error('Create failed');
         const label = await resp.json();
         window.dispatchEvent(
-          new CustomEvent(this.createdEvent, { detail: { label: label } })
+          new CustomEvent('project-label-created', { detail: { label: label } })
         );
         this.select(label);
       } catch (e) {
@@ -816,25 +813,6 @@ function projectBoard(config) {
       return epic && epic.color ? epic.color : '';
     },
 
-    // Pickers offer open epics only; closed ones still resolve by uuid so
-    // cards, chips and filters keep their name and color.
-    openEpics() {
-      return this.epics.filter((e) => !e.closed);
-    },
-
-    onEpicCreated(epic) {
-      if (!this.epics.some((e) => e.uuid === epic.uuid)) {
-        this.epics.push(epic);
-      }
-    },
-
-    setFormEpic(epic) {
-      this.form.epic = epic.uuid;
-    },
-
-    clearFormEpic() {
-      this.form.epic = '';
-    },
 
     async saveTask() {
       if (this.saving) return;
@@ -976,7 +954,6 @@ function taskPanel() {
     sectionDefaults() {
       return {
         assignees: this.data.assignees.length > 0,
-        epic: Boolean(this.data.epic),
         labels: this.data.labels.length > 0,
         description: !!(this.data.description || '').trim(),
         checklist: this.subtasks.length > 0,
@@ -1015,15 +992,6 @@ function taskPanel() {
       this.toggleMulti('labels', uuid, false);
     },
 
-    // Single-valued, unlike labels: picking an epic replaces the current one.
-    setEpic(epic) {
-      if (epic.uuid === this.data.epic) return;
-      this.commitField('epic', epic.uuid);
-    },
-
-    removeEpic() {
-      this.commitField('epic', null);
-    },
 
     can(actionId) {
       return this.actions.includes(actionId);

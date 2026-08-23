@@ -273,7 +273,12 @@ def _task_panel_context(user, project, role, task):
             user, task, role=role, archived=project.is_archived
         )
     ]
-    watch_rows = list(task.watchers.select_related("user"))
+    # Same send-time scope as the notification fan-out: watchers who lost
+    # project or group access keep their row but are not shown.
+    allowed_ids = {u.pk for u in project_users(project) if u.is_active}
+    watch_rows = [
+        w for w in task.watchers.select_related("user") if w.user_id in allowed_ids
+    ]
     mine = next((w for w in watch_rows if w.user_id == user.pk), None)
     return {
         "panel_task": task,

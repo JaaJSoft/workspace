@@ -319,3 +319,31 @@ class AutoWatchApiTests(ProjectTestMixin, APITestCase):
         self.assertFalse(
             TaskWatcher.objects.get(task=self.task, user=self.member).muted
         )
+
+
+class PanelWatcherListTests(ProjectTestMixin, TestCase):
+    def tearDown(self):
+        cache.clear()
+
+    def test_departed_watcher_is_not_listed_in_the_panel(self):
+        from django.urls import reverse
+
+        from workspace.projects.services.members import remove_member
+
+        task = create_task(self.project, self.admin, title="Ship it")
+        set_watch_state(task, self.admin, muted=False)
+        set_watch_state(task, self.member, muted=False)
+        remove_member(self.membership)
+
+        self.client.force_login(self.admin)
+        resp = self.client.get(
+            reverse(
+                "projects_ui:task_panel",
+                kwargs={"project_uuid": self.project.uuid, "task_uuid": task.uuid},
+            )
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        usernames = [w["username"] for w in resp.context["panel_watchers"]]
+        self.assertIn("admin1", usernames)
+        self.assertNotIn("member1", usernames)

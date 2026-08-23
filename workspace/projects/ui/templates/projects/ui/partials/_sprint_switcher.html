@@ -14,8 +14,16 @@ Params:
   - with_pool_entries: backlog only - prepend "Whole backlog" and
                        "Unplanned" entries (they ignore the search: they
                        are navigation anchors, not sprints)
+  - with_closed_toggle: board only - add a "Hide closed sprints" switch,
+                       on by default, so the dropdown opens on the current
+                       sprint alone. The selected sprint always stays
+                       visible, and a search query looks through the
+                       closed history regardless.
 {% endcomment %}
-<div class="dropdown" x-data="{ sprintQuery: '' }">
+<div
+  class="dropdown"
+  x-data="{ sprintQuery: '', hideClosed: {% if with_closed_toggle %}true{% else %}false{% endif %} }"
+>
   <button
     type="button"
     tabindex="0"
@@ -54,6 +62,19 @@ Params:
         </label>
       </li>
     {% endif %}
+    {% if with_closed_toggle %}
+      <li class="mb-1">
+        <label class="flex items-center justify-between gap-2 cursor-pointer">
+          <span class="text-sm">Hide closed sprints</span>
+          <input
+            type="checkbox"
+            class="toggle toggle-xs toggle-accent"
+            x-model="hideClosed"
+            @click.stop
+          />
+        </label>
+      </li>
+    {% endif %}
     {% if with_pool_entries %}
       <li>
         <a
@@ -77,8 +98,10 @@ Params:
       </li>
     {% endif %}
     {% for s in options %}
+      {# A query searches the whole list, closed history included; without #}
+      {# one, non-selected closed sprints obey the toggle. #}
       <li
-        x-show="!sprintQuery.trim() || '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase())"
+        {% if s.state == 'closed' and s.uuid != selected.uuid %} x-show="sprintQuery.trim() ? '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase()) : !hideClosed" {% else %} x-show="!sprintQuery.trim() || '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase())" {% endif %}
       >
         <a
           href="{{ base_url }}?sprint={{ s.uuid }}"

@@ -3,7 +3,7 @@
     {% if sprint_data %}{{ sprint_data|json_script:"board-sprint-data" }}{% endif %}
     <div class="flex flex-wrap items-center gap-3">
       {% url 'projects_ui:board' project.uuid as sprint_switcher_url %}
-      {% include "projects/ui/partials/_sprint_switcher.html" with options=sprints selected=selected_sprint base_url=sprint_switcher_url empty_label="No active sprint" %}
+      {% include "projects/ui/partials/_sprint_switcher.html" with options=sprints selected=selected_sprint base_url=sprint_switcher_url empty_label="No active sprint" with_closed_toggle=has_closed_sprints %}
       {% if selected_sprint %}
         <span
           class="text-sm text-base-content/60 hidden sm:flex items-center gap-2 min-w-0"

@@ -405,6 +405,7 @@ def _sprint_context(request, project):
         selected = next((s for s in sprints if s.state == Sprint.State.ACTIVE), None)
     context = {
         "sprints": switchable,
+        "has_closed_sprints": bool(closed),
         "selected_sprint": selected,
         "sprint_read_only": selected is not None
         and selected.state == Sprint.State.CLOSED,

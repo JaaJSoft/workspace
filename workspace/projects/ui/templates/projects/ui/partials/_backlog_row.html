@@ -24,11 +24,14 @@
   <span class="flex-1 min-w-0 flex items-baseline gap-2">
     <span class="text-xs font-mono text-base-content/50 shrink-0">{{ project.key }}-{{ task.number }}</span>
     <span class="text-sm font-medium truncate">{{ task.title }}</span>
-    {% if task.epic or task.labels.all %}
+    {% if task.epic or task.labels.all or task.sprint %}
       {# ml-auto packs the chips against the priority column so they line up across rows. #}
       <span
         class="ml-auto self-center hidden lg:flex items-center gap-1 shrink-0"
       >
+        {% if task.sprint %}
+          <tag-chip name="{{ task.sprint.name }}" icon="timer" size="sm" class="shrink-0"></tag-chip>
+        {% endif %}
         {% if task.epic %}
           <tag-chip name="{{ task.epic.name }}" color="{{ task.epic.color }}" icon="layers" size="sm" class="shrink-0"></tag-chip>
         {% endif %}
@@ -72,12 +75,29 @@
     {% endfor %}
   </span>
   {% if writable and not row_readonly %}
-    <button
-      class="btn btn-ghost btn-sm btn-square shrink-0"
-      title="Send to board"
-      @click.stop="sendToBoard('{{ task.uuid }}')"
-    >
-      <i data-lucide="arrow-right-circle" class="w-5 h-5"></i>
-    </button>
+    {% comment %}Kept as a fixed-width slot even when hidden so columns
+    stay aligned with the header row.{% endcomment %}
+    {% if hide_send_to_board %}
+      <span class="w-8 shrink-0"></span>
+    {% elif project.type == 'scrum' %}
+      {% comment %}Same landing as the kanban arrow (first active column),
+      and the backend adds board entrants to the running sprint - which is
+      what the gesture means on a scrum project.{% endcomment %}
+      <button
+        class="btn btn-ghost btn-sm btn-square shrink-0"
+        title="Send to current sprint"
+        @click.stop="sendToBoard('{{ task.uuid }}')"
+      >
+        <i data-lucide="timer" class="w-5 h-5"></i>
+      </button>
+    {% else %}
+      <button
+        class="btn btn-ghost btn-sm btn-square shrink-0"
+        title="Send to board"
+        @click.stop="sendToBoard('{{ task.uuid }}')"
+      >
+        <i data-lucide="arrow-right-circle" class="w-5 h-5"></i>
+      </button>
+    {% endif %}
   {% endif %}
 </li>

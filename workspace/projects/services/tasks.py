@@ -4,7 +4,7 @@ from django.utils import timezone
 
 from workspace.notifications.services.notifications import settle_sources
 
-from ..models import Task, TaskEvent, TaskStatus
+from ..models import Project, Sprint, Task, TaskEvent, TaskStatus
 from .assignments import notify_assigned
 from .events import move_event_type, record_task_event
 from .references import allocate_task_number
@@ -20,6 +20,22 @@ def settle_task_notifications(tasks):
     mentions were seen.
     """
     settle_sources(tasks, max_priority="normal")
+
+
+def _default_sprint(project, status):
+    """Sprint a task entering *status* without one should default to.
+
+    The scrum board only shows the selected sprint's tasks, so a task
+    landing on a board column with no sprint would be invisible there; it
+    joins the running sprint instead. Backlog columns and non-scrum
+    projects never auto-assign.
+    """
+    if (
+        project.type != Project.Type.SCRUM
+        or status.category == TaskStatus.Category.BACKLOG
+    ):
+        return None
+    return project.sprints.filter(state=Sprint.State.ACTIVE).first()
 
 
 def next_position(project, status):
@@ -55,18 +71,28 @@ def create_task(
     assignees=(),
     labels=(),
     epic=None,
+    sprint=None,
 ):
-    """Create a task; defaults to the end of the project's backlog column."""
-    # The API serializer scopes the epic per project; this guards the
-    # direct callers (seeds, future tools) against cross-project grouping.
+    """Create a task; defaults to the end of the project's backlog column.
+
+    On a scrum project, a task created straight on a board column joins
+    the running sprint unless a sprint is passed explicitly.
+    """
+    # The API serializer scopes the epic and sprint per project; this
+    # guards the direct callers (seeds, future tools) against
+    # cross-project grouping.
     if epic is not None and epic.project_id != project.pk:
         raise ValueError("Epic belongs to another project.")
+    if sprint is not None and sprint.project_id != project.pk:
+        raise ValueError("Sprint belongs to another project.")
     if status is None:
         status = (
             project.statuses.filter(category=TaskStatus.Category.BACKLOG)
             .order_by("position", "created_at")
             .first()
         ) or project.statuses.order_by("position", "created_at").first()
+    if sprint is None:
+        sprint = _default_sprint(project, status)
     with transaction.atomic():
         number = allocate_task_number(project)
         task = Task.objects.create(
@@ -79,6 +105,7 @@ def create_task(
             due_date=due_date,
             estimate=estimate,
             epic=epic,
+            sprint=sprint,
             created_by=user,
             position=_locked_tail_position(project, status),
         )
@@ -92,6 +119,16 @@ def create_task(
         record_task_event(
             task, type=TaskEvent.Type.CREATED, actor=user, to_status=status
         )
+        if sprint is not None:
+            # A born-in-sprint task still needs its own SPRINT row: the
+            # CREATED event carries no sprint context and the reporting
+            # trail must show when every task entered the sprint.
+            record_task_event(
+                task,
+                type=TaskEvent.Type.SPRINT,
+                actor=user,
+                to_value=sprint.name,
+            )
     if assignees:
         auto_watch(task, assignees)
         notify_assigned(task, user, assignees)
@@ -148,7 +185,14 @@ def apply_status_change(task, *, actor=None, old_status=None):
                 task.completed_at = timezone.now()
         else:
             task.completed_at = None
-        task.save(update_fields=["status", "position", "completed_at", "updated_at"])
+        update_fields = ["status", "position", "completed_at", "updated_at"]
+        joined_sprint = None
+        if task.sprint_id is None:
+            joined_sprint = _default_sprint(task.project, task.status)
+            if joined_sprint is not None:
+                task.sprint = joined_sprint
+                update_fields.append("sprint")
+        task.save(update_fields=update_fields)
         record_task_event(
             task,
             type=move_event_type(task.status),
@@ -156,6 +200,13 @@ def apply_status_change(task, *, actor=None, old_status=None):
             from_status=old_status,
             to_status=task.status,
         )
+        if joined_sprint is not None:
+            record_task_event(
+                task,
+                type=TaskEvent.Type.SPRINT,
+                actor=actor,
+                to_value=joined_sprint.name,
+            )
     if task.status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task])
     # After the settle: settling would immediately mark the fresh
@@ -185,12 +236,14 @@ def move_tasks(project, status, task_uuids, *, actor=None):
     """
     with transaction.atomic():
         position = _locked_tail_position(project, status)
+        default_sprint = _default_sprint(project, status)
         tasks = sorted(
             project.tasks.select_for_update().filter(uuid__in=task_uuids),
             key=lambda t: (t.position, t.created_at),
         )
         now = timezone.now()
         moved = []
+        joined_sprint = []
         for task in tasks:
             if task.status_id == status.pk:
                 continue
@@ -203,13 +256,16 @@ def move_tasks(project, status, task_uuids, *, actor=None):
                     task.completed_at = now
             else:
                 task.completed_at = None
+            if default_sprint is not None and task.sprint_id is None:
+                task.sprint = default_sprint
+                joined_sprint.append(task)
             # bulk_update bypasses save(), so auto_now would leave
             # updated_at stale; stamp it by hand.
             task.updated_at = now
         if moved:
             Task.objects.bulk_update(
                 [task for task, _ in moved],
-                ["status", "position", "completed_at", "updated_at"],
+                ["status", "position", "completed_at", "sprint", "updated_at"],
             )
         for task, old_status in moved:
             record_task_event(
@@ -218,6 +274,13 @@ def move_tasks(project, status, task_uuids, *, actor=None):
                 actor=actor,
                 from_status=old_status,
                 to_status=status,
+            )
+        for task in joined_sprint:
+            record_task_event(
+                task,
+                type=TaskEvent.Type.SPRINT,
+                actor=actor,
+                to_value=default_sprint.name,
             )
     if moved and status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task for task, _ in moved])
@@ -266,8 +329,10 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
                 seen.add(t.uuid)
 
         now = timezone.now()
+        default_sprint = _default_sprint(project, status)
         to_update = []
         moved = []
+        joined_sprint = []
         for i, task in enumerate(sequence):
             changed = False
             if task.status_id != status.pk:
@@ -278,6 +343,9 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
                         task.completed_at = now
                 elif task.completed_at is not None:
                     task.completed_at = None
+                if default_sprint is not None and task.sprint_id is None:
+                    task.sprint = default_sprint
+                    joined_sprint.append(task)
                 changed = True
             if task.position != i:
                 task.position = i
@@ -289,7 +357,8 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
                 to_update.append(task)
         if to_update:
             Task.objects.bulk_update(
-                to_update, ["status", "position", "completed_at", "updated_at"]
+                to_update,
+                ["status", "position", "completed_at", "sprint", "updated_at"],
             )
         for task, old_status in moved:
             record_task_event(
@@ -298,6 +367,13 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
                 actor=actor,
                 from_status=old_status,
                 to_status=status,
+            )
+        for task in joined_sprint:
+            record_task_event(
+                task,
+                type=TaskEvent.Type.SPRINT,
+                actor=actor,
+                to_value=default_sprint.name,
             )
     if moved and status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task for task, _ in moved])

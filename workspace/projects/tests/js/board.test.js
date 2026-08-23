@@ -1293,3 +1293,163 @@ test('the epic field commits through the set_epic action gate', () => {
   gated.commitField('epic', null);
   assert.equal(calls.length, 1);
 });
+
+function sprintBoard(calls, islandData) {
+  ctx.getCSRFToken = () => 'token';
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.location = { href: 'http://x.test/projects/p/board?sprint=s1' };
+  ctx.history = {
+    pushState: () => {},
+    replaceState: (state, title, url) => calls.push('replace ' + url),
+  };
+  ctx.document = {
+    getElementById: (id) =>
+      id === 'board-sprint-data' && islandData
+        ? { textContent: JSON.stringify(islandData) }
+        : null,
+  };
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.refresh = () => calls.push('refresh');
+  return board;
+}
+
+test('sendSelectedToSprint posts the selection and clears it', async () => {
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return { ok: true };
+  };
+  const board = sprintBoard(calls, null);
+  board.selected = ['a', 'b'];
+  await board.sendSelectedToSprint('s1');
+  assert.equal(board.selected.length, 0);
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/tasks/assign-sprint {"sprint":"s1","tasks":["a","b"]}',
+    'refresh',
+  ]);
+});
+
+test('sendSelectedToSprint(null) clears the sprint assignment', async () => {
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return { ok: true };
+  };
+  const board = sprintBoard(calls, null);
+  board.selected = ['a'];
+  await board.sendSelectedToSprint(null);
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/tasks/assign-sprint {"sprint":null,"tasks":["a"]}',
+    'refresh',
+  ]);
+});
+
+test('startSprint confirms before posting', async () => {
+  const calls = [];
+  ctx.AppDialog = {
+    confirm: async () => {
+      calls.push('confirm');
+      return true;
+    },
+  };
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url);
+    return { ok: true, json: async () => ({}) };
+  };
+  const board = sprintBoard(calls, null);
+  await board.startSprint('s1', 'Sprint 1');
+  assert.deepStrictEqual(Array.from(calls), [
+    'confirm',
+    'POST /api/sprints/s1/start',
+    'refresh',
+  ]);
+});
+
+test('completeSprint offers backlog and planned sprints, backlog maps to null', async () => {
+  const calls = [];
+  ctx.AppDialog = {
+    select: async (opts) => {
+      calls.push('select:' + opts.options.map((o) => o.value).join(','));
+      return 'backlog';
+    },
+  };
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return { ok: true, json: async () => ({}) };
+  };
+  const board = sprintBoard(calls, {
+    uuid: 's1',
+    name: 'Sprint 1',
+    state: 'active',
+    unfinished_count: 2,
+    planned: [{ uuid: 's2', name: 'Sprint 2' }],
+  });
+  await board.completeSprint('s1', 'Sprint 1');
+  assert.deepStrictEqual(Array.from(calls), [
+    'select:backlog,s2',
+    'POST /api/sprints/s1/complete {"move_to":null}',
+    'replace /projects/p/board',
+    'refresh',
+  ]);
+});
+
+test('completeSprint aborts without a request when the dialog is cancelled', async () => {
+  const calls = [];
+  ctx.AppDialog = {
+    select: async () => {
+      calls.push('select');
+      return null;
+    },
+  };
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url);
+    return { ok: true, json: async () => ({}) };
+  };
+  const board = sprintBoard(calls, {
+    uuid: 's1',
+    name: 'Sprint 1',
+    state: 'active',
+    unfinished_count: 1,
+    planned: [],
+  });
+  await board.completeSprint('s1', 'Sprint 1');
+  assert.deepStrictEqual(Array.from(calls), ['select']);
+});
+
+test('dragging is blocked while the backlog is sprint-scoped', () => {
+  const calls = [];
+  const board = sprintBoard(calls, null);
+  board.currentView = 'backlog';
+  ctx.location = { href: 'http://x.test/projects/p/backlog?sprint=s1' };
+  const event = {
+    preventDefault: () => calls.push('prevented'),
+    dataTransfer: { setData: () => {} },
+  };
+  board.onDragStart(event, 'u1');
+  assert.equal(board.dragging, null);
+  assert.deepStrictEqual(Array.from(calls), ['prevented']);
+  // Dropping the scope re-enables dragging.
+  ctx.location = { href: 'http://x.test/projects/p/backlog' };
+  board.onDragStart(event, 'u1');
+  assert.equal(board.dragging, 'u1');
+});
+
+test('refreshContent keeps the sprint scope on backlog refreshes', () => {
+  const calls = [];
+  const board = sprintBoard(calls, null);
+  board.currentView = 'backlog';
+  ctx.location = {
+    href: 'http://x.test/projects/p/backlog?sprint=none',
+    origin: 'http://x.test',
+  };
+  board.refresh = undefined;
+  board.$ajax = (url, opts) => calls.push(url + ' -> ' + opts.target);
+  board.refreshContent();
+  assert.deepStrictEqual(Array.from(calls), [
+    '/projects/p/backlog?sprint=none -> project-content',
+  ]);
+});

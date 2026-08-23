@@ -1,8 +1,8 @@
 {# concentric radius: board column is rounded-box with p-3, so inner radius = rounded-box - 0.75rem #}
 <li
-  class="card rounded-[max(0px,calc(var(--rounded-box)_-_0.75rem))] bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow select-none {% if writable %}cursor-grab{% endif %}"
+  class="card rounded-[max(0px,calc(var(--rounded-box)_-_0.75rem))] bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow select-none {% if writable and not card_readonly %}cursor-grab{% endif %}"
   :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
-  {% if writable %}draggable="true"{% endif %}
+  {% if writable and not card_readonly %}draggable="true"{% endif %}
   data-task-uuid="{{ task.uuid }}"
   @dragstart="onDragStart($event, '{{ task.uuid }}')"
   @dragend="onDragEnd()"

@@ -449,3 +449,26 @@ test('projectEpics.visibleEpics filters by search and open state', () => {
   c.query = 'nothing';
   assert.equal(c.visibleEpics().length, 0);
 });
+
+test('projectSprints.visibleSprints hides closed by default, search spans all', () => {
+  const c = ctx().projectSprints({ apiBase: '/x' });
+  c.items = [
+    { uuid: 's1', name: 'Sprint 1', state: 'closed' },
+    { uuid: 's2', name: 'Sprint 2', state: 'active' },
+    { uuid: 's3', name: 'Polish pass', state: 'planned' },
+  ];
+  // hideClosed is on by default.
+  assert.deepStrictEqual(
+    Array.from(c.visibleSprints()).map((s) => s.uuid),
+    ['s2', 's3']
+  );
+  c.hideClosed = false;
+  assert.equal(c.visibleSprints().length, 3);
+  // A query searches the whole list, closed included, toggle regardless.
+  c.hideClosed = true;
+  c.query = '  SPRINT ';
+  assert.deepStrictEqual(
+    Array.from(c.visibleSprints()).map((s) => s.uuid),
+    ['s1', 's2']
+  );
+});

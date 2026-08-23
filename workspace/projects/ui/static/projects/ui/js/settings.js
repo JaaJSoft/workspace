@@ -819,6 +819,179 @@ function projectEpics(config) {
   };
 }
 
+function projectSprints(config) {
+  return {
+    items: [],
+    query: '',
+    hideClosed: true,
+    adding: false,
+    addForm: { name: '', goal: '', start_date: '', end_date: '' },
+    editing: null,
+    editName: '',
+    editingGoal: null,
+    goalDraft: '',
+    busy: false,
+    error: '',
+
+    async init() {
+      try {
+        const resp = await fetch(config.apiBase + '/sprints');
+        if (resp.ok) this.items = await resp.json();
+      } catch (e) {
+        this.error = 'Could not load sprints.';
+      }
+    },
+
+    async request(url, options) {
+      this.busy = true;
+      this.error = '';
+      try {
+        const resp = await fetch(url, options);
+        if (!resp.ok) {
+          const data = await resp.json().catch(function () {
+            return {};
+          });
+          throw new Error(
+            data.detail ||
+              (data.name && data.name[0]) ||
+              (data.end_date && data.end_date[0]) ||
+              'Request failed.'
+          );
+        }
+        return resp;
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    // List filter mirroring the sprint switcher: a query searches the
+    // whole list, closed history included; without one, closed sprints
+    // obey the toggle. Purely visual - items stays the full list.
+    visibleSprints() {
+      const needle = this.query.trim().toLowerCase();
+      if (needle) {
+        return this.items.filter((s) => s.name.toLowerCase().includes(needle));
+      }
+      if (!this.hideClosed) return this.items;
+      return this.items.filter((s) => s.state !== 'closed');
+    },
+
+    async addSprint() {
+      try {
+        const resp = await this.request(config.apiBase + '/sprints', {
+          method: 'POST',
+          headers: settingsHeaders(),
+          body: JSON.stringify({
+            name: this.addForm.name.trim(),
+            goal: this.addForm.goal.trim(),
+            start_date: this.addForm.start_date || null,
+            end_date: this.addForm.end_date || null,
+          }),
+        });
+        this.items.push(await resp.json());
+        this.adding = false;
+        this.addForm = { name: '', goal: '', start_date: '', end_date: '' };
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    startEdit(sprint) {
+      this.editing = sprint.uuid;
+      this.editName = sprint.name;
+    },
+
+    async saveEdit(sprint) {
+      if (this.editing !== sprint.uuid) return;
+      const name = this.editName.trim();
+      if (!name || name === sprint.name) {
+        this.editing = null;
+        return;
+      }
+      try {
+        await this.request(config.apiBase + '/sprints/' + sprint.uuid, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ name: name }),
+        });
+        sprint.name = name;
+        this.editing = null;
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    startGoalEdit(sprint) {
+      this.editingGoal = sprint.uuid;
+      this.goalDraft = sprint.goal || '';
+    },
+
+    async saveGoalEdit(sprint) {
+      if (this.editingGoal !== sprint.uuid) return;
+      const goal = this.goalDraft.trim();
+      if (goal === (sprint.goal || '')) {
+        this.editingGoal = null;
+        return;
+      }
+      try {
+        await this.request(config.apiBase + '/sprints/' + sprint.uuid, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ goal: goal }),
+        });
+        sprint.goal = goal;
+        // Only a successful save closes the editor: on failure the open
+        // textarea is what keeps the user's draft from being lost.
+        this.editingGoal = null;
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    async setDate(sprint, field, value) {
+      try {
+        await this.request(config.apiBase + '/sprints/' + sprint.uuid, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ [field]: value || null }),
+        });
+        sprint[field] = value || null;
+      } catch (e) {
+        this.error = e.message;
+        // Refetch from server truth: the rejected date input would
+        // otherwise keep displaying the refused value.
+        await this.init();
+      }
+    },
+
+    async removeSprint(sprint) {
+      const ok = await AppDialog.confirm({
+        title: 'Delete sprint',
+        message:
+          '"' +
+          sprint.name +
+          '" will be deleted; its tasks are kept and leave the sprint.',
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+      try {
+        await this.request(config.apiBase + '/sprints/' + sprint.uuid, {
+          method: 'DELETE',
+          headers: settingsHeaders(),
+        });
+        this.items = this.items.filter(function (s) {
+          return s.uuid !== sprint.uuid;
+        });
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+  };
+}
+
 function projectMembers(config) {
   return {
     items: [],
@@ -928,6 +1101,7 @@ window.projectSettingsDanger = projectSettingsDanger;
 window.projectColumns = projectColumns;
 window.projectLabels = projectLabels;
 window.projectEpics = projectEpics;
+window.projectSprints = projectSprints;
 window.projectMembers = projectMembers;
 window.projectSettingsHelpers = {
   defaultMoveTarget: defaultMoveTarget,

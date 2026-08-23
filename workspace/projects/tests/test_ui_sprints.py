@@ -1,0 +1,214 @@
+from django.core.cache import cache
+from django.test import TestCase
+
+from workspace.projects.models import Project, Sprint
+from workspace.projects.services.members import add_member
+from workspace.projects.services.projects import create_project
+from workspace.projects.services.tasks import create_task
+
+from .base import ProjectTestMixin
+
+
+class ScrumUiTestCase(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.scrum = create_project(
+            self.admin, name="Rocket", project_type=Project.Type.SCRUM
+        )
+        add_member(self.scrum, self.member)
+        self.todo = self.scrum.statuses.get(name="To do")
+        self.board_url = f"/projects/{self.scrum.uuid}/board"
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
+
+class ScrumBoardUiTests(ScrumUiTestCase):
+    def test_board_without_sprint_shows_empty_state(self):
+        self.scrum.sprints.create(name="Sprint 1")
+        self.client.force_login(self.member)
+        response = self.client.get(self.board_url)
+        self.assertContains(response, "No active sprint")
+        self.assertContains(response, "Sprint 1")
+
+    def test_start_button_is_admin_only(self):
+        self.scrum.sprints.create(name="Sprint 1")
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(self.board_url), "startSprint(")
+        self.client.force_login(self.member)
+        self.assertNotContains(self.client.get(self.board_url), "startSprint(")
+
+    def test_board_shows_active_sprint_tasks_only(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        create_task(
+            self.scrum, self.admin, title="In sprint", sprint=sprint, status=self.todo
+        )
+        other = self.scrum.sprints.create(name="Sprint 2")
+        outside = create_task(
+            self.scrum, self.admin, title="Other sprint", status=self.todo
+        )
+        outside.sprint = other
+        outside.save(update_fields=["sprint"])
+        self.client.force_login(self.member)
+        response = self.client.get(self.board_url)
+        self.assertContains(response, "In sprint")
+        self.assertNotContains(response, "Other sprint")
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(self.board_url), "Complete sprint")
+
+    def test_complete_button_is_admin_only(self):
+        self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        self.client.force_login(self.member)
+        self.assertNotContains(self.client.get(self.board_url), "Complete sprint")
+
+    def test_closed_sprint_renders_read_only(self):
+        active = self.scrum.sprints.create(name="Sprint 2", state=Sprint.State.ACTIVE)
+        closed = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.CLOSED)
+        create_task(
+            self.scrum, self.admin, title="Old work", sprint=closed, status=self.todo
+        )
+        self.client.force_login(self.admin)
+        response = self.client.get(f"{self.board_url}?sprint={closed.uuid}")
+        self.assertContains(response, "Old work")
+        # No completion, no card dragging, no per-column task creation on
+        # a closed sprint.
+        self.assertNotContains(response, "Complete sprint")
+        self.assertNotContains(response, 'draggable="true"')
+        self.assertNotContains(response, "newTask(")
+        # The running sprint stays reachable from the switcher.
+        self.assertContains(response, active.name)
+
+    def test_switcher_lists_active_then_newest_closed_without_planned(self):
+        self.scrum.sprints.create(name="Oldest closed", state=Sprint.State.CLOSED)
+        self.scrum.sprints.create(name="Newest closed", state=Sprint.State.CLOSED)
+        self.scrum.sprints.create(name="Running now", state=Sprint.State.ACTIVE)
+        planned = self.scrum.sprints.create(name="Future plan")
+        self.client.force_login(self.member)
+        content = self.client.get(self.board_url).content.decode()
+        # The name may ride along in the board-sprint-data island (complete
+        # dialog options); the switcher must not link to a planned sprint.
+        self.assertNotIn(f"?sprint={planned.uuid}", content)
+        self.assertLess(content.index("Running now"), content.index("Newest closed"))
+        self.assertLess(content.index("Newest closed"), content.index("Oldest closed"))
+
+    def test_switcher_closed_toggle_only_with_history(self):
+        self.scrum.sprints.create(name="Running", state=Sprint.State.ACTIVE)
+        self.client.force_login(self.member)
+        self.assertNotContains(self.client.get(self.board_url), "Hide closed sprints")
+        self.scrum.sprints.create(name="Done one", state=Sprint.State.CLOSED)
+        self.assertContains(self.client.get(self.board_url), "Hide closed sprints")
+
+    def test_switcher_search_appears_past_five_sprints(self):
+        self.scrum.sprints.create(name="Running", state=Sprint.State.ACTIVE)
+        self.client.force_login(self.member)
+        self.assertNotContains(self.client.get(self.board_url), "Search sprints")
+        for i in range(6):
+            self.scrum.sprints.create(name=f"Sprint {i}", state=Sprint.State.CLOSED)
+        self.assertContains(self.client.get(self.board_url), "Search sprints")
+
+    def test_kanban_board_has_no_sprint_bar(self):
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertNotContains(response, "board-sprint-data")
+        self.assertNotContains(response, "No active sprint")
+
+
+class ScrumBacklogUiTests(ScrumUiTestCase):
+    def test_backlog_offers_send_to_sprint(self):
+        self.scrum.sprints.create(name="Sprint 1")
+        create_task(self.scrum, self.admin, title="Plan me")
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.scrum.uuid}/backlog")
+        self.assertContains(response, "Send to sprint")
+        self.assertContains(response, "sendSelectedToSprint(")
+        # Sprint planning replaces the kanban send-to-board gesture, and
+        # without a running sprint the per-row shortcut hides too.
+        self.assertNotContains(response, "Send to board")
+        self.assertNotContains(response, "Send to current sprint")
+
+    def test_backlog_with_active_sprint_shows_row_shortcut(self):
+        self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        create_task(self.scrum, self.admin, title="Plan me")
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.scrum.uuid}/backlog")
+        self.assertContains(response, "Send to sprint")
+        self.assertContains(response, "Send to current sprint")
+        self.assertNotContains(response, "Send to board")
+
+    def test_backlog_row_shows_sprint_chip(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1")
+        create_task(self.scrum, self.admin, title="Planned", sprint=sprint)
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.scrum.uuid}/backlog")
+        self.assertContains(response, 'name="Sprint 1"')
+
+    def test_backlog_scope_by_sprint(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1")
+        create_task(self.scrum, self.admin, title="Planned task", sprint=sprint)
+        create_task(self.scrum, self.admin, title="Unplanned task")
+        self.client.force_login(self.member)
+        url = f"/projects/{self.scrum.uuid}/backlog"
+
+        response = self.client.get(url)
+        self.assertContains(response, "Whole backlog")
+        self.assertContains(response, "Planned task")
+        self.assertContains(response, "Unplanned task")
+
+        response = self.client.get(f"{url}?sprint={sprint.uuid}")
+        self.assertContains(response, "Planned task")
+        self.assertNotContains(response, "Unplanned task")
+
+        response = self.client.get(f"{url}?sprint=none")
+        self.assertContains(response, "Unplanned task")
+        self.assertNotContains(response, "Planned task")
+
+    def test_backlog_switcher_search_appears_past_five_sprints(self):
+        self.client.force_login(self.member)
+        url = f"/projects/{self.scrum.uuid}/backlog"
+        self.assertNotContains(self.client.get(url), "Search sprints")
+        for i in range(6):
+            self.scrum.sprints.create(name=f"Sprint {i}")
+        self.assertContains(self.client.get(url), "Search sprints")
+
+    def test_backlog_scope_ignores_invalid_sprint(self):
+        create_task(self.scrum, self.admin, title="Unplanned task")
+        closed = self.scrum.sprints.create(name="Sprint 0", state=Sprint.State.CLOSED)
+        self.client.force_login(self.member)
+        url = f"/projects/{self.scrum.uuid}/backlog"
+        for param in ("not-a-uuid", str(closed.uuid)):
+            response = self.client.get(f"{url}?sprint={param}")
+            self.assertContains(response, "Unplanned task")
+
+    def test_kanban_backlog_has_no_sprint_controls(self):
+        create_task(self.project, self.admin, title="Plain")
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/backlog")
+        self.assertNotContains(response, "Send to sprint")
+        self.assertNotContains(response, "Whole backlog")
+        self.assertContains(response, "Send to board")
+
+
+class SprintManagementUiTests(ScrumUiTestCase):
+    def test_settings_no_longer_hosts_sprint_management(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.scrum.uuid}/settings")
+        self.assertNotContains(response, "settings-sprints")
+
+    def test_admins_get_the_sprints_dialog(self):
+        self.client.force_login(self.admin)
+        for url in (self.board_url, f"/projects/{self.scrum.uuid}/backlog"):
+            response = self.client.get(url)
+            self.assertContains(response, "sprints-dialog")
+            self.assertContains(response, "Manage sprints")
+
+    def test_members_get_no_sprint_management(self):
+        self.client.force_login(self.member)
+        response = self.client.get(self.board_url)
+        self.assertNotContains(response, "sprints-dialog")
+        self.assertNotContains(response, "Manage sprints")
+
+    def test_kanban_has_no_sprints_dialog(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertNotContains(response, "sprints-dialog")

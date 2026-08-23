@@ -361,8 +361,8 @@ function projectBoard(config) {
     onDragStart(event, uuid) {
       // Reordering a filtered subset would push every unlisted task of the
       // column after the visible ones server-side, so dragging is disabled
-      // while filters narrow the list.
-      if (!config.writable || this.filtersActive()) {
+      // while filters (or the backlog's sprint scope) narrow the list.
+      if (!config.writable || this.filtersActive() || this.sprintScoped()) {
         event.preventDefault();
         return;
       }
@@ -424,8 +424,15 @@ function projectBoard(config) {
       else if (this.currentView === 'settings') url += '/settings';
       else if (this.currentView === 'analytics') url += '/analytics';
       else if (this.currentView !== 'overview') url += '/board';
+      let full = window.location.origin + url;
+      if (this.currentView === 'board' || this.currentView === 'backlog') {
+        // The sprint selection (board switcher, backlog scope) lives in the
+        // URL like the filters; a refresh must keep pointing at it.
+        const sprint = new URL(window.location.href).searchParams.get('sprint');
+        if (sprint) full += '?sprint=' + encodeURIComponent(sprint);
+      }
       // The active filters ride along so a refresh keeps the filtered view.
-      this.$ajax(taskFilterUrl(window.location.origin + url, this.filters), {
+      this.$ajax(taskFilterUrl(full, this.filters), {
         target: 'project-content',
       });
     },
@@ -452,6 +459,17 @@ function projectBoard(config) {
       // navigation carries no filter params, so this is what resets the
       // filter bar when the user switches views.
       this.filters = taskFiltersFromUrl(window.location.href);
+    },
+
+    sprintScoped() {
+      // A sprint-scoped backlog renders a subset of the backlog column; a
+      // reorder from it would misplace every hidden task, same trap as the
+      // task filters. The board's ?sprint= is fine: columns there show the
+      // selected sprint in full.
+      return (
+        this.currentView === 'backlog' &&
+        new URL(window.location.href).searchParams.has('sprint')
+      );
     },
 
     filtersActive() {
@@ -635,6 +653,131 @@ function projectBoard(config) {
         target = firstActive && firstActive.uuid;
       }
       return this.moveTasks(this.selected.slice(), target);
+    },
+
+    sendSelectedToSprint(sprintUuid) {
+      return this.assignSprint(this.selected.slice(), sprintUuid);
+    },
+
+    async assignSprint(uuids, sprintUuid) {
+      if (!config.writable || !uuids.length) return;
+      try {
+        const resp = await fetch(config.apiBase + '/tasks/assign-sprint', {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({ sprint: sprintUuid || null, tasks: uuids }),
+        });
+        if (!resp.ok) throw new Error('Assign failed');
+        this.selected = this.selected.filter((u) => !uuids.includes(u));
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not update the sprint.');
+      } finally {
+        this.refresh();
+      }
+    },
+
+    // Fresh read on purpose: the island re-renders with every board swap,
+    // unlike the page-load data islands init() parses once.
+    _boardSprintData() {
+      const el = document.getElementById('board-sprint-data');
+      return el ? JSON.parse(el.textContent) : null;
+    },
+
+    _clearSprintParam() {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('sprint')) return;
+      url.searchParams.delete('sprint');
+      history.replaceState(null, '', url.pathname + url.search);
+    },
+
+    async startSprint(uuid, name) {
+      const ok = await AppDialog.confirm({
+        title: 'Start sprint',
+        message: 'Start "' + name + '"? Its tasks move onto the board.',
+        okLabel: 'Start',
+        okClass: 'btn-accent',
+        icon: 'play',
+        iconClass: 'bg-accent/10 text-accent',
+      });
+      if (!ok) return;
+      try {
+        const resp = await fetch(
+          config.apiBase + '/sprints/' + uuid + '/start',
+          { method: 'POST', headers: this.headers() }
+        );
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          throw new Error(data.detail || 'Could not start the sprint.');
+        }
+      } catch (e) {
+        if (window.AppAlert) {
+          AppAlert.error(e.message || 'Could not start the sprint.');
+        }
+      } finally {
+        this.refresh();
+      }
+    },
+
+    async completeSprint(uuid, name) {
+      const data = this._boardSprintData();
+      const unfinished = data ? data.unfinished_count : 0;
+      const planned = data ? data.planned : [];
+      let moveTo = null;
+      if (unfinished > 0) {
+        // 'backlog' sentinel rather than '': AppDialog.select resolves null
+        // on cancel, and a '' choice would be indistinguishable from it.
+        const choice = await AppDialog.select({
+          title: 'Complete sprint',
+          message:
+            unfinished +
+            ' unfinished task' +
+            (unfinished === 1 ? '' : 's') +
+            ' will move to:',
+          options: [{ value: 'backlog', label: 'Backlog' }].concat(
+            planned.map((s) => ({ value: s.uuid, label: s.name }))
+          ),
+          value: 'backlog',
+          okLabel: 'Complete',
+          okClass: 'btn-accent',
+          icon: 'flag',
+          iconClass: 'bg-accent/10 text-accent',
+        });
+        if (!choice) return;
+        moveTo = choice === 'backlog' ? null : choice;
+      } else {
+        const ok = await AppDialog.confirm({
+          title: 'Complete sprint',
+          message: 'Complete "' + name + '"?',
+          okLabel: 'Complete',
+          okClass: 'btn-accent',
+          icon: 'flag',
+          iconClass: 'bg-accent/10 text-accent',
+        });
+        if (!ok) return;
+      }
+      try {
+        const resp = await fetch(
+          config.apiBase + '/sprints/' + uuid + '/complete',
+          {
+            method: 'POST',
+            headers: this.headers(),
+            body: JSON.stringify({ move_to: moveTo }),
+          }
+        );
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.detail || 'Could not complete the sprint.');
+        }
+        // The completed sprint is no longer the board's default; drop the
+        // explicit selection so the refresh lands on the current state.
+        this._clearSprintParam();
+      } catch (e) {
+        if (window.AppAlert) {
+          AppAlert.error(e.message || 'Could not complete the sprint.');
+        }
+      } finally {
+        this.refresh();
+      }
     },
 
     newTask(statusUuid) {

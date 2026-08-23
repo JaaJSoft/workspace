@@ -13,6 +13,7 @@ from .models import (
     Project,
     ProjectMember,
     ProjectNotificationLevel,
+    Sprint,
     Subtask,
     Task,
     TaskAttachment,
@@ -39,6 +40,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     estimate_unit = serializers.ChoiceField(
         choices=Project.EstimateUnit.choices, required=False, allow_blank=True
     )
+    type = serializers.ChoiceField(choices=Project.Type.choices, required=False)
     my_role = serializers.SerializerMethodField()
 
     class Meta:
@@ -57,12 +59,21 @@ class ProjectSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["type", "archived_at", "created_at", "updated_at"]
+        read_only_fields = ["archived_at", "created_at", "updated_at"]
 
     def get_my_role(self, obj) -> str:
         # Set by the queryset annotation; group-only access has no
         # membership row and always means plain member.
         return getattr(obj, "_my_role", None) or ProjectMember.Role.MEMBER
+
+    def validate_type(self, value):
+        if self.instance is not None and value != self.instance.type:
+            raise serializers.ValidationError("Project type cannot be changed.")
+        if self.instance is None and value == Project.Type.PERSONAL:
+            raise serializers.ValidationError(
+                "Personal projects are created automatically."
+            )
+        return value
 
     def validate_key(self, value):
         value = value.strip().upper()
@@ -187,6 +198,50 @@ class EpicSerializer(serializers.ModelSerializer):
         return value
 
 
+class SprintSerializer(serializers.ModelSerializer):
+    # Progress rollup, annotated by the viewset; absent on unannotated
+    # instances (create/update responses return 0s there).
+    task_count = serializers.IntegerField(read_only=True, default=0)
+    done_task_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = Sprint
+        fields = [
+            "uuid",
+            "name",
+            "goal",
+            "state",
+            "start_date",
+            "end_date",
+            "task_count",
+            "done_task_count",
+            "created_at",
+        ]
+        read_only_fields = ["state", "created_at"]
+
+    def validate_name(self, value):
+        project = self.context["project"]
+        existing = project.sprints.filter(name=value)
+        if self.instance is not None:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError(
+                "A sprint with this name already exists in this project."
+            )
+        return value
+
+    def validate(self, attrs):
+        start = attrs.get(
+            "start_date", self.instance.start_date if self.instance else None
+        )
+        end = attrs.get("end_date", self.instance.end_date if self.instance else None)
+        if start is not None and end is not None and end < start:
+            raise serializers.ValidationError(
+                {"end_date": "End date cannot be before the start date."}
+            )
+        return attrs
+
+
 class TaskStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskStatus
@@ -224,6 +279,9 @@ class TaskSerializer(serializers.ModelSerializer):
     epic = serializers.PrimaryKeyRelatedField(
         queryset=Epic.objects.none(), required=False, allow_null=True
     )
+    sprint = serializers.PrimaryKeyRelatedField(
+        queryset=Sprint.objects.none(), required=False, allow_null=True
+    )
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
     reference = serializers.SerializerMethodField()
     estimate = serializers.DecimalField(
@@ -244,6 +302,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "assignees",
             "labels",
             "epic",
+            "sprint",
             "position",
             "number",
             "reference",
@@ -272,6 +331,10 @@ class TaskSerializer(serializers.ModelSerializer):
             self.fields["status"].queryset = project.statuses.all()
             self.fields["labels"].child_relation.queryset = project.labels.all()
             self.fields["epic"].queryset = project.epics.all()
+            # Closed sprints are history: tasks can only join open ones.
+            self.fields["sprint"].queryset = project.sprints.exclude(
+                state=Sprint.State.CLOSED
+            )
 
     def validate_assignees(self, users):
         project = self.context["project"]
@@ -365,6 +428,23 @@ class TaskMoveSerializer(serializers.Serializer):
 
     def validate_tasks(self, value):
         return _parse_uuid_list(value, "tasks")
+
+
+class TaskSprintSerializer(serializers.Serializer):
+    """Bulk sprint assignment payload; null sprint returns tasks to the pool."""
+
+    sprint = serializers.UUIDField(allow_null=True)
+    # Same cap rationale as TaskMoveSerializer.
+    tasks = serializers.ListField(allow_empty=False, max_length=1000)
+
+    def validate_tasks(self, value):
+        return _parse_uuid_list(value, "tasks")
+
+
+class SprintCompleteSerializer(serializers.Serializer):
+    """Completion payload; a null/absent move_to sends tasks to the backlog."""
+
+    move_to = serializers.UUIDField(required=False, allow_null=True, default=None)
 
 
 class ReorderSerializer(serializers.Serializer):

@@ -37,6 +37,7 @@ def _reset_process_memo():
     """Test hook: the memo outlives Django's per-test cache clearing."""
     _process_memo.clear()
 
+
 # ``urlsrc`` embeds optional-parameter placeholders such as ``<ui=UI_LLCC&>``;
 # hosts that don't use them must strip them before appending WOPISrc.
 _PLACEHOLDER_RE = re.compile(r"<[^>]*>")

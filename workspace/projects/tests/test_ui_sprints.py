@@ -156,6 +156,14 @@ class ScrumBacklogUiTests(ScrumUiTestCase):
         self.assertContains(response, "Unplanned task")
         self.assertNotContains(response, "Planned task")
 
+    def test_backlog_switcher_search_appears_past_five_sprints(self):
+        self.client.force_login(self.member)
+        url = f"/projects/{self.scrum.uuid}/backlog"
+        self.assertNotContains(self.client.get(url), "Search sprints")
+        for i in range(6):
+            self.scrum.sprints.create(name=f"Sprint {i}")
+        self.assertContains(self.client.get(url), "Search sprints")
+
     def test_backlog_scope_ignores_invalid_sprint(self):
         create_task(self.scrum, self.admin, title="Unplanned task")
         closed = self.scrum.sprints.create(name="Sprint 0", state=Sprint.State.CLOSED)

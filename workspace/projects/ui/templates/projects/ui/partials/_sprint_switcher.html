@@ -1,0 +1,105 @@
+{% comment %}
+Sprint switcher dropdown, shared by the board (active sprint + closed
+history) and the backlog scope (pool entries + open sprints). The caller
+owns the option list and its order; entries link to base_url?sprint=<uuid>
+and swap project-content, so the selection lives in the URL and survives
+refreshes. Past five options the dropdown grows a client-side name search.
+
+Params:
+  - options:           sprints to list, in display order (required)
+  - selected:          the selected sprint, the literal "none" (backlog
+                       unplanned pool), or None
+  - base_url:          view URL the entries link to (required)
+  - empty_label:       button text while nothing is selected (required)
+  - with_pool_entries: backlog only - prepend "Whole backlog" and
+                       "Unplanned" entries (they ignore the search: they
+                       are navigation anchors, not sprints)
+{% endcomment %}
+<div class="dropdown" x-data="{ sprintQuery: '' }">
+  <button
+    type="button"
+    tabindex="0"
+    class="btn btn-sm btn-ghost border border-base-300 font-normal gap-2"
+  >
+    <i data-lucide="timer" class="w-4 h-4 text-accent"></i>
+    {% if selected == 'none' %}
+      <span class="font-medium">Unplanned</span>
+    {% elif selected %}
+      <span class="font-medium">{{ selected.name }}</span>
+      {% if selected.state == 'active' %}
+        <span class="badge badge-accent badge-sm">Active</span>
+      {% elif selected.state == 'closed' %}
+        <span class="badge badge-ghost badge-sm">Closed</span>
+      {% endif %}
+    {% else %}
+      <span>{{ empty_label }}</span>
+    {% endif %}
+    <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 opacity-60"></i>
+  </button>
+  <ul
+    tabindex="0"
+    class="dropdown-content menu z-50 mt-1 w-64 max-h-80 flex-nowrap overflow-y-auto thin-scrollbar bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
+  >
+    {% if options|length > 5 %}
+      <li class="mb-1">
+        <label class="input input-bordered input-xs flex items-center gap-2 w-full">
+          <i data-lucide="search" class="w-3.5 h-3.5 opacity-60 shrink-0"></i>
+          <input
+            type="search"
+            class="grow min-w-0"
+            placeholder="Search sprints"
+            x-model="sprintQuery"
+            @click.stop
+          />
+        </label>
+      </li>
+    {% endif %}
+    {% if with_pool_entries %}
+      <li>
+        <a
+          href="{{ base_url }}"
+          x-target.push="project-content"
+          class="{% if not selected %}active{% endif %}"
+          @click="document.activeElement.blur()"
+        >
+          Whole backlog
+        </a>
+      </li>
+      <li>
+        <a
+          href="{{ base_url }}?sprint=none"
+          x-target.push="project-content"
+          class="{% if selected == 'none' %}active{% endif %}"
+          @click="document.activeElement.blur()"
+        >
+          Unplanned
+        </a>
+      </li>
+    {% endif %}
+    {% for s in options %}
+      <li
+        x-show="!sprintQuery.trim() || '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase())"
+      >
+        <a
+          href="{{ base_url }}?sprint={{ s.uuid }}"
+          x-target.push="project-content"
+          class="{% if selected.uuid == s.uuid %}active{% endif %}"
+          @click="document.activeElement.blur()"
+        >
+          <span class="truncate flex-1">{{ s.name }}</span>
+          {% if s.state == 'active' %}
+            <span class="badge badge-accent badge-sm">Active</span>
+          {% elif s.state == 'closed' %}
+            <span class="badge badge-ghost badge-sm">Closed</span>
+          {% else %}
+            <span class="badge badge-ghost badge-sm">Planned</span>
+          {% endif %}
+        </a>
+      </li>
+    {% empty %}
+      {% if not with_pool_entries %}
+        <li class="menu-title">No started sprint yet.</li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+</div>

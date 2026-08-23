@@ -2,64 +2,8 @@
   {% if project.type == 'scrum' %}
     {% if sprint_data %}{{ sprint_data|json_script:"board-sprint-data" }}{% endif %}
     <div class="flex flex-wrap items-center gap-3">
-      <div class="dropdown" x-data="{ sprintQuery: '' }">
-        <button
-          type="button"
-          tabindex="0"
-          class="btn btn-sm btn-ghost border border-base-300 font-normal gap-2"
-        >
-          <i data-lucide="timer" class="w-4 h-4 text-accent"></i>
-          {% if selected_sprint %}
-            <span class="font-medium">{{ selected_sprint.name }}</span>
-            {% if selected_sprint.state == 'closed' %}<span class="badge badge-ghost badge-sm">Closed</span>{% endif %}
-          {% else %}
-            <span>No active sprint</span>
-          {% endif %}
-          <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 opacity-60"></i>
-        </button>
-        <ul
-          tabindex="0"
-          class="dropdown-content menu z-50 mt-1 w-64 max-h-80 flex-nowrap overflow-y-auto thin-scrollbar bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
-        >
-          {% if sprints|length > 5 %}
-            {# The closed-sprint history grows forever; past a handful of #}
-            {# entries the dropdown gets a client-side name search. #}
-            <li class="mb-1">
-              <label class="input input-bordered input-xs flex items-center gap-2 w-full">
-                <i data-lucide="search" class="w-3.5 h-3.5 opacity-60 shrink-0"></i>
-                <input
-                  type="search"
-                  class="grow min-w-0"
-                  placeholder="Search sprints"
-                  x-model="sprintQuery"
-                  @click.stop
-                />
-              </label>
-            </li>
-          {% endif %}
-          {% for s in sprints %}
-            <li
-              x-show="!sprintQuery.trim() || '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase())"
-            >
-              <a
-                href="{% url 'projects_ui:board' project.uuid %}?sprint={{ s.uuid }}"
-                x-target.push="project-content"
-                class="{% if selected_sprint and s.uuid == selected_sprint.uuid %}active{% endif %}"
-                @click="document.activeElement.blur()"
-              >
-                <span class="truncate flex-1">{{ s.name }}</span>
-                {% if s.state == 'active' %}
-                  <span class="badge badge-accent badge-sm">Active</span>
-                {% else %}
-                  <span class="badge badge-ghost badge-sm">Closed</span>
-                {% endif %}
-              </a>
-            </li>
-          {% empty %}
-            <li class="menu-title">No started sprint yet.</li>
-          {% endfor %}
-        </ul>
-      </div>
+      {% url 'projects_ui:board' project.uuid as sprint_switcher_url %}
+      {% include "projects/ui/partials/_sprint_switcher.html" with options=sprints selected=selected_sprint base_url=sprint_switcher_url empty_label="No active sprint" %}
       {% if selected_sprint %}
         <span
           class="text-sm text-base-content/60 hidden sm:flex items-center gap-2 min-w-0"

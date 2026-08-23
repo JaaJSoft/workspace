@@ -4,68 +4,10 @@
   {% if backlog_status %} data-status-uuid="{{ backlog_status.uuid }}" @dragover.prevent="onDragOver($event)" @drop.prevent="onDrop($event, '{{ backlog_status.uuid }}')" {% endif %}
 >
   {% if project.type == 'scrum' %}
-    {# Same switcher as the board's, scoping the list instead of the columns. #}
+    {# Same switcher component as the board's, scoping the list instead of the columns. #}
     <div class="flex flex-wrap items-center gap-3">
-      <div class="dropdown">
-        <button
-          type="button"
-          tabindex="0"
-          class="btn btn-sm btn-ghost border border-base-300 font-normal gap-2"
-        >
-          <i data-lucide="timer" class="w-4 h-4 text-accent"></i>
-          {% if backlog_scope == 'none' %}
-            <span class="font-medium">Unplanned</span>
-          {% elif backlog_scope %}
-            <span class="font-medium">{{ backlog_scope.name }}</span>
-            {% if backlog_scope.state == 'active' %}<span class="badge badge-accent badge-sm">Active</span>{% endif %}
-          {% else %}
-            <span>Whole backlog</span>
-          {% endif %}
-          <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 opacity-60"></i>
-        </button>
-        <ul
-          tabindex="0"
-          class="dropdown-content menu z-50 mt-1 w-64 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
-        >
-          <li>
-            <a
-              href="{% url 'projects_ui:backlog' project.uuid %}"
-              x-target.push="project-content"
-              class="{% if not backlog_scope %}active{% endif %}"
-              @click="document.activeElement.blur()"
-            >
-              Whole backlog
-            </a>
-          </li>
-          <li>
-            <a
-              href="{% url 'projects_ui:backlog' project.uuid %}?sprint=none"
-              x-target.push="project-content"
-              class="{% if backlog_scope == 'none' %}active{% endif %}"
-              @click="document.activeElement.blur()"
-            >
-              Unplanned
-            </a>
-          </li>
-          {% for s in planning_sprints %}
-            <li>
-              <a
-                href="{% url 'projects_ui:backlog' project.uuid %}?sprint={{ s.uuid }}"
-                x-target.push="project-content"
-                class="{% if backlog_scope.uuid == s.uuid %}active{% endif %}"
-                @click="document.activeElement.blur()"
-              >
-                <span class="truncate flex-1">{{ s.name }}</span>
-                {% if s.state == 'active' %}
-                  <span class="badge badge-accent badge-sm">Active</span>
-                {% else %}
-                  <span class="badge badge-ghost badge-sm">Planned</span>
-                {% endif %}
-              </a>
-            </li>
-          {% endfor %}
-        </ul>
-      </div>
+      {% url 'projects_ui:backlog' project.uuid as sprint_switcher_url %}
+      {% include "projects/ui/partials/_sprint_switcher.html" with options=planning_sprints selected=backlog_scope base_url=sprint_switcher_url empty_label="Whole backlog" with_pool_entries=True %}
     </div>
   {% endif %}
   {# items-start keeps the actions aligned with the first filter row once it wraps on mobile. #}

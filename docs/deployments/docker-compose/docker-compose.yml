@@ -58,6 +58,9 @@ services:
       - AI_IMAGE_MODEL=${AI_IMAGE_MODEL:-dall-e-3}
       - AI_IMAGE_BASE_URL=${AI_IMAGE_BASE_URL:-}
       - SEARXNG_URL=${SEARXNG_URL:-}
+      # Office documents (optional) — in-browser view/edit via a WOPI editor
+      - WOPI_DISCOVERY_URL=${WOPI_DISCOVERY_URL:-}
+      - WOPI_HOST_URL=${WOPI_HOST_URL:-}
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped
@@ -138,6 +141,24 @@ services:
   #   image: searxng/searxng:latest
   #   volumes:
   #     - ./searxng:/etc/searxng
+  #   restart: unless-stopped
+
+  # Office documents (optional) — in-browser view/edit of DOCX/XLSX/PPTX
+  # through Collabora CODE (any WOPI editor works; see the README section).
+  # The browser loads the editor in an iframe, so Collabora must also be
+  # published through your reverse proxy on its own hostname with TLS.
+  # Enable with:
+  #   WOPI_DISCOVERY_URL=http://collabora:9980/hosting/discovery
+  #   WOPI_HOST_URL=http://web:8000
+  # collabora:
+  #   image: collabora/code:latest
+  #   environment:
+  #     # Origins allowed to use this editor, dots regex-escaped: the public
+  #     # one the browser sees, then the internal one WOPI requests use.
+  #     - aliasgroup1=https://workspace\.example\.com:443,http://web:8000
+  #     # server_name = the editor's PUBLIC hostname: it is what ends up in
+  #     # the discovery XML and iframe URLs the browser must reach.
+  #     - extra_params=--o:ssl.enable=false --o:ssl.termination=true --o:server_name=collabora.example.com
   #   restart: unless-stopped
 
 volumes:

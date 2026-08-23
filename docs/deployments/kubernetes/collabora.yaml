@@ -1,0 +1,101 @@
+# Optional: deploy Collabora CODE for in-browser office document editing.
+# Any WOPI editor works (OnlyOffice Docs in WOPI mode, Office Online Server);
+# this manifest covers the free Collabora CODE image.
+#
+# The browser loads the editor in an iframe, so unlike SearXNG it needs its
+# own PUBLIC hostname with TLS (Ingress below; expects a `collabora-tls`
+# secret, or use cert-manager). WOPI requests from the editor to the app stay
+# on the cluster network.
+#
+# After applying, enable it in configmap.yaml:
+#   WOPI_DISCOVERY_URL: "http://collabora.workspace.svc:9980/hosting/discovery"
+#   WOPI_HOST_URL: "http://workspace-web.workspace.svc"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collabora
+  namespace: workspace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collabora
+  template:
+    metadata:
+      labels:
+        app: collabora
+    spec:
+      containers:
+        - name: collabora
+          image: collabora/code:latest
+          ports:
+            - containerPort: 9980
+          env:
+            # Origins allowed to use this editor, dots regex-escaped: the
+            # public origin the browser sees, then the in-cluster origin the
+            # editor's WOPI requests use.
+            - name: aliasgroup1
+              value: 'https://workspace\.example\.com:443,http://workspace-web\.workspace\.svc:80'
+            # TLS terminates at the ingress; the pod itself speaks plain
+            # HTTP. server_name is what the editor writes into its discovery
+            # XML and iframe URLs - it must be the PUBLIC hostname, because
+            # the app fetches discovery over the cluster network but the
+            # browser has to reach the URLs it contains.
+            - name: extra_params
+              value: "--o:ssl.enable=false --o:ssl.termination=true --o:server_name=collabora.example.com"
+          livenessProbe:
+            httpGet:
+              path: /hosting/discovery
+              port: 9980
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: collabora
+  namespace: workspace
+spec:
+  selector:
+    app: collabora
+  ports:
+    - port: 9980
+      targetPort: 9980
+
+---
+# Browser-facing entry point for the editor iframe. Long timeouts: document
+# sessions hold a WebSocket open for as long as the file is being edited.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: collabora-ingress
+  namespace: workspace
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - collabora.example.com
+      secretName: collabora-tls
+  rules:
+    - host: collabora.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: collabora
+                port:
+                  number: 9980

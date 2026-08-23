@@ -37,6 +37,7 @@ An **initContainer** (`migrate`) runs database migrations before the pod starts.
 | `app.yaml`       | Deployment (all containers) + PVC + Service                    |
 | `ingress.yaml`   | Ingress (nginx) with TLS                                       |
 | `searxng.yaml`   | *(optional)* SearXNG deployment + service for AI web search    |
+| `collabora.yaml` | *(optional)* Collabora CODE deployment + service + ingress for in-browser office editing |
 
 ## Prerequisites
 
@@ -131,6 +132,8 @@ kubectl apply -f ingress.yaml
 | `AI_IMAGE_MODEL`       | `dall-e-3`                      | Model for image generation |
 | `SEARXNG_URL`          | *(empty)*                       | SearXNG instance URL for web search (e.g. `http://searxng.workspace.svc:8080`) |
 | `SEARXNG_BLOCKED_DOMAINS` | *(empty)*                    | Comma-separated list of domains the AI cannot fetch (e.g. `evil.com,spam.org`) |
+| `WOPI_DISCOVERY_URL`   | *(empty)*                       | WOPI editor discovery URL (e.g. `http://collabora.workspace.svc:9980/hosting/discovery`). Empty = office files stay download-only |
+| `WOPI_HOST_URL`        | *(empty)*                       | Workspace origin as reachable by the editor (e.g. `http://workspace-web.workspace.svc`) |
 
 ## Storage
 
@@ -172,6 +175,28 @@ kubectl -n workspace rollout restart deployment workspace
 ```
 
 SearXNG requires no API keys - it aggregates results from public search engines.
+
+## Office Documents (optional)
+
+To open and edit DOCX/XLSX/PPTX in the browser, deploy [Collabora CODE](https://www.collaboraonline.com/code/) (or any other WOPI editor) using the provided manifest:
+
+```bash
+# 1. Edit collabora.yaml first:
+#    - aliasgroup1: your public workspace origin (dots regex-escaped)
+#    - the Ingress host and TLS secret (the browser loads the editor in an
+#      iframe, so it needs its own public hostname - collabora.example.com)
+kubectl apply -f collabora.yaml
+
+# 2. Enable it in the ConfigMap - set in configmap.yaml:
+#    WOPI_DISCOVERY_URL: "http://collabora.workspace.svc:9980/hosting/discovery"
+#    WOPI_HOST_URL: "http://workspace-web.workspace.svc"
+kubectl apply -f configmap.yaml
+
+# 3. Restart the workspace pod to pick up the change
+kubectl -n workspace rollout restart deployment workspace
+```
+
+The two URLs stay on the cluster network: the app fetches the discovery XML from the editor Service, and the editor calls the app back through the web Service — only the editor iframe itself goes through the public ingress. Editing follows file permissions (view-only shares open read-only), saves go through the normal upload pipeline, and with the editor absent or down office files simply fall back to download.
 
 ## Scaling Limitations
 

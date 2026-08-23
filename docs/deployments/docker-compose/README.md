@@ -96,6 +96,8 @@ All settings are configurable via environment variables or a `.env` file next to
 | `AI_IMAGE_BASE_URL` | *(empty)* | Custom base URL for image generation (falls back to `AI_BASE_URL`) |
 | `SEARXNG_URL` | *(empty)* | SearXNG instance URL for web search (e.g. `http://searxng:8080`) |
 | `SEARXNG_BLOCKED_DOMAINS` | *(empty)* | Comma-separated list of domains the AI cannot fetch (e.g. `evil.com,spam.org`) |
+| `WOPI_DISCOVERY_URL` | *(empty)* | WOPI editor discovery URL (e.g. `http://collabora:9980/hosting/discovery`). Empty = office files stay download-only |
+| `WOPI_HOST_URL` | *(empty)* | Workspace origin *as reachable by the editor container* (e.g. `http://web:8000`). Empty = derived from the request |
 
 ### Example `.env`
 
@@ -146,6 +148,27 @@ To give the AI web search capabilities, deploy a [SearXNG](https://docs.searxng.
 The `searxng/` directory contains a `settings.yml` that enables the JSON API format required by Workspace. It is mounted into the container automatically.
 
 SearXNG requires no API keys - it aggregates results from public search engines.
+
+## Office Documents (optional)
+
+DOCX, XLSX and PPTX (and their ODF equivalents) open — and save — in the file viewer through a WOPI editor running next to the stack. Any WOPI editor works: [Collabora CODE](https://www.collaboraonline.com/code/) (free, the commented service in `docker-compose.yml`), OnlyOffice Docs in WOPI mode, or an on-premises Office Online Server. Without one, office files stay download-only.
+
+1. Uncomment the `collabora` service in `docker-compose.yml` and put your public origin in `aliasgroup1` (dots regex-escaped, port included). The group lists every origin allowed to use the editor: the public one the browser sees, plus `http://web:8000` for the WOPI requests the editor makes over the compose network.
+2. Set in your `.env`:
+
+   ```env
+   WOPI_DISCOVERY_URL=http://collabora:9980/hosting/discovery
+   WOPI_HOST_URL=http://web:8000
+   ```
+
+3. Publish the editor through your reverse proxy: the browser loads it in an iframe, so it needs its own **public hostname with TLS** (e.g. `collabora.example.com` → `collabora:9980`, WebSocket upgrades included), and that hostname goes in `--o:server_name=...` — it is what the editor writes into the discovery XML and iframe URLs, so the app can fetch discovery internally while the browser still reaches the editor publicly. Collabora documents the exact nginx/Apache/Caddy blocks in its [proxy settings guide](https://sdk.collaboraonline.com/docs/installation/Proxy_settings.html), including serving the editor under a sub-path of the main domain if you prefer avoiding a second hostname.
+4. Restart: `docker compose up -d`
+
+Notes:
+
+- The editor is memory-hungry (LibreOffice under the hood); give the host ~2 GB of headroom.
+- Editing permissions follow file permissions: view-only shares open read-only, and saves go through the normal upload pipeline (thumbnails, events).
+- If the editor is down, office files degrade to a download prompt — nothing else breaks.
 
 ## Limitations
 

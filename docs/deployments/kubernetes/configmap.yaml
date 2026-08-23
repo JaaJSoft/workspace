@@ -23,3 +23,7 @@ data:
   AI_IMAGE_MODEL: "dall-e-3"
   SEARXNG_URL: ""  # e.g. http://searxng.workspace.svc:8080
   SEARXNG_BLOCKED_DOMAINS: ""  # e.g. evil.com,spam.org
+  # Office documents (optional, see collabora.yaml) - empty keeps office
+  # files download-only
+  WOPI_DISCOVERY_URL: ""  # e.g. http://collabora.workspace.svc:9980/hosting/discovery
+  WOPI_HOST_URL: ""  # e.g. http://workspace-web.workspace.svc

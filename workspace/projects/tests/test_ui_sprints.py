@@ -189,13 +189,26 @@ class ScrumBacklogUiTests(ScrumUiTestCase):
         self.assertContains(response, "Send to board")
 
 
-class ScrumSettingsUiTests(ScrumUiTestCase):
-    def test_scrum_settings_show_sprint_section(self):
+class SprintManagementUiTests(ScrumUiTestCase):
+    def test_settings_no_longer_hosts_sprint_management(self):
         self.client.force_login(self.admin)
         response = self.client.get(f"/projects/{self.scrum.uuid}/settings")
-        self.assertContains(response, "projectSprints(")
+        self.assertNotContains(response, "settings-sprints")
 
-    def test_kanban_settings_hide_sprint_section(self):
+    def test_admins_get_the_sprints_dialog(self):
         self.client.force_login(self.admin)
-        response = self.client.get(f"/projects/{self.project.uuid}/settings")
-        self.assertNotContains(response, "projectSprints(")
+        for url in (self.board_url, f"/projects/{self.scrum.uuid}/backlog"):
+            response = self.client.get(url)
+            self.assertContains(response, "sprints-dialog")
+            self.assertContains(response, "Manage sprints")
+
+    def test_members_get_no_sprint_management(self):
+        self.client.force_login(self.member)
+        response = self.client.get(self.board_url)
+        self.assertNotContains(response, "sprints-dialog")
+        self.assertNotContains(response, "Manage sprints")
+
+    def test_kanban_has_no_sprints_dialog(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertNotContains(response, "sprints-dialog")

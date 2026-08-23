@@ -391,7 +391,12 @@ def _sprint_context(request, project):
     sprints = list(
         project.sprints.annotate(task_count=Count("tasks")).order_by("created_at")
     )
-    switchable = [s for s in sprints if s.state != Sprint.State.PLANNED]
+    active = [s for s in sprints if s.state == Sprint.State.ACTIVE]
+    closed = [s for s in sprints if s.state == Sprint.State.CLOSED]
+    # Active first, then history newest first: a retrospective opens the
+    # last sprint, not sprint 1. Planned sprints have no board yet and are
+    # started from the empty state, so they stay out of the switcher.
+    switchable = active + closed[::-1]
     selected = None
     param = parse_uuid_or_none(request.GET.get("sprint") or "")
     if param is not None:

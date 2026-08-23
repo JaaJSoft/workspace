@@ -79,6 +79,27 @@ class ScrumBoardUiTests(ScrumUiTestCase):
         # The running sprint stays reachable from the switcher.
         self.assertContains(response, active.name)
 
+    def test_switcher_lists_active_then_newest_closed_without_planned(self):
+        self.scrum.sprints.create(name="Oldest closed", state=Sprint.State.CLOSED)
+        self.scrum.sprints.create(name="Newest closed", state=Sprint.State.CLOSED)
+        self.scrum.sprints.create(name="Running now", state=Sprint.State.ACTIVE)
+        planned = self.scrum.sprints.create(name="Future plan")
+        self.client.force_login(self.member)
+        content = self.client.get(self.board_url).content.decode()
+        # The name may ride along in the board-sprint-data island (complete
+        # dialog options); the switcher must not link to a planned sprint.
+        self.assertNotIn(f"?sprint={planned.uuid}", content)
+        self.assertLess(content.index("Running now"), content.index("Newest closed"))
+        self.assertLess(content.index("Newest closed"), content.index("Oldest closed"))
+
+    def test_switcher_search_appears_past_five_sprints(self):
+        self.scrum.sprints.create(name="Running", state=Sprint.State.ACTIVE)
+        self.client.force_login(self.member)
+        self.assertNotContains(self.client.get(self.board_url), "Search sprints")
+        for i in range(6):
+            self.scrum.sprints.create(name=f"Sprint {i}", state=Sprint.State.CLOSED)
+        self.assertContains(self.client.get(self.board_url), "Search sprints")
+
     def test_kanban_board_has_no_sprint_bar(self):
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/board")

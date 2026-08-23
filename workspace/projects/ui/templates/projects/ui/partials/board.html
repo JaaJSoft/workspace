@@ -2,7 +2,7 @@
   {% if project.type == 'scrum' %}
     {% if sprint_data %}{{ sprint_data|json_script:"board-sprint-data" }}{% endif %}
     <div class="flex flex-wrap items-center gap-3">
-      <div class="dropdown">
+      <div class="dropdown" x-data="{ sprintQuery: '' }">
         <button
           type="button"
           tabindex="0"
@@ -19,10 +19,28 @@
         </button>
         <ul
           tabindex="0"
-          class="dropdown-content menu z-50 mt-1 w-64 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
+          class="dropdown-content menu z-50 mt-1 w-64 max-h-80 flex-nowrap overflow-y-auto thin-scrollbar bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
         >
+          {% if sprints|length > 5 %}
+            {# The closed-sprint history grows forever; past a handful of #}
+            {# entries the dropdown gets a client-side name search. #}
+            <li class="mb-1">
+              <label class="input input-bordered input-xs flex items-center gap-2 w-full">
+                <i data-lucide="search" class="w-3.5 h-3.5 opacity-60 shrink-0"></i>
+                <input
+                  type="search"
+                  class="grow min-w-0"
+                  placeholder="Search sprints"
+                  x-model="sprintQuery"
+                  @click.stop
+                />
+              </label>
+            </li>
+          {% endif %}
           {% for s in sprints %}
-            <li>
+            <li
+              x-show="!sprintQuery.trim() || '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase())"
+            >
               <a
                 href="{% url 'projects_ui:board' project.uuid %}?sprint={{ s.uuid }}"
                 x-target.push="project-content"

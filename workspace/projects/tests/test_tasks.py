@@ -244,7 +244,11 @@ class SettleOnResolutionTests(NotifyDueTasksMixin, TestCase):
         task.status = self.done
         apply_status_change(task, actor=self.admin, old_status=self.todo)
 
-        self.assertFalse(self._unread(task, self.member).exists())
+        # The reminder is settled; what may remain unread is the completion
+        # notification the auto-watched assignee just gained.
+        self.assertFalse(
+            self._unread(task, self.member).filter(stream="reminder").exists()
+        )
 
     def test_completing_spares_high_priority_rows(self):
         task = self._task(due_days=0)
@@ -269,7 +273,9 @@ class SettleOnResolutionTests(NotifyDueTasksMixin, TestCase):
 
         move_tasks(self.project, self.done, [task.uuid], actor=self.admin)
 
-        self.assertFalse(self._unread(task, self.member).exists())
+        self.assertFalse(
+            self._unread(task, self.member).filter(stream="reminder").exists()
+        )
 
 
 class SettleOnDueDateChangeTests(NotifyDueTasksMixin, APITestCase):

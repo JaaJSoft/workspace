@@ -194,6 +194,9 @@ def _base_context(request, project, role, view):
         context["projects_prefs"] = {
             "reminder_hour": reminder_hour(request.user),
             "notify_level": module_level(request.user),
+            "auto_watch": bool(
+                get_setting(request.user, "projects", "auto_watch", default=True)
+            ),
         }
         context["reminder_hours"] = [(h, f"{h:02d}:00") for h in range(24)]
         context.update(_deep_link_panel(request, project, role))
@@ -270,10 +273,20 @@ def _task_panel_context(user, project, role, task):
             user, task, role=role, archived=project.is_archived
         )
     ]
+    watch_rows = list(task.watchers.select_related("user"))
+    mine = next((w for w in watch_rows if w.user_id == user.pk), None)
     return {
         "panel_task": task,
         "panel_events": events,
         "panel_action_ids": action_ids,
+        "panel_watch_state": (
+            "" if mine is None else ("muted" if mine.muted else "watching")
+        ),
+        "panel_watchers": [
+            {"id": str(w.user_id), "username": w.user.username}
+            for w in watch_rows
+            if not w.muted
+        ],
         "panel_can_comment": "comment" in action_ids,
         "panel_comment_count": task.comments.count(),
         "panel_attachments": TaskAttachmentSerializer(

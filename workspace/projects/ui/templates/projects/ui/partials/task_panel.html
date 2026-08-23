@@ -17,6 +17,7 @@
   {{ panel_action_ids|json_script:"task-panel-actions" }}
   {{ panel_attachments|json_script:"task-panel-attachments" }}
   {{ panel_links|json_script:"task-panel-links" }}
+  {{ panel_watchers|json_script:"task-watchers-data" }}
 
   <div
     class="flex items-center gap-2 px-4 py-1.5 bg-base-200/60 border-b border-base-300"
@@ -32,9 +33,74 @@
     <span
       class="font-mono text-xs tracking-wide text-base-content/50 select-all"
     >{{ project.key }}-{{ panel_task.number }}</span>
+    <div
+      class="dropdown dropdown-end ml-auto"
+      x-data="taskWatch({
+      url: '{% url 'project-task-watch' project_uuid=project.uuid task_uuid=panel_task.uuid %}',
+      state: '{{ panel_watch_state }}',
+      userId: '{{ request.user.pk }}',
+      username: '{{ request.user.username }}',
+      })"
+    >
+      <button
+        type="button"
+        tabindex="0"
+        class="btn btn-sm btn-ghost gap-1 px-2"
+        aria-label="Watch task"
+        :title="'Notifications: ' + label(state)"
+      >
+        <i
+          x-show="state !== 'muted'"
+          data-lucide="eye"
+          class="w-4 h-4"
+          :class="state === 'watching' ? 'text-accent' : 'opacity-60'"
+        ></i>
+        <i x-show="state === 'muted'" data-lucide="eye-off" class="w-4 h-4"></i>
+        <span
+          class="text-xs tabular-nums"
+          x-show="watchers.length"
+          x-text="watchers.length"
+        ></span>
+      </button>
+      <ul
+        tabindex="0"
+        class="dropdown-content menu menu-sm gap-1 bg-base-100 border border-base-300 rounded-box shadow-lg w-64 mt-2 z-50"
+      >
+        <li>
+          <a
+            @click="document.activeElement.blur(); reset()"
+            :class="state === '' ? 'active' : ''"
+          >
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Default · follows involvement
+          </a>
+        </li>
+        <li>
+          <a
+            @click="document.activeElement.blur(); set('watching')"
+            :class="state === 'watching' ? 'active' : ''"
+          >
+            <i data-lucide="eye" class="w-4 h-4"></i> Watching
+          </a>
+        </li>
+        <li>
+          <a
+            @click="document.activeElement.blur(); set('muted')"
+            :class="state === 'muted' ? 'active' : ''"
+          >
+            <i data-lucide="eye-off" class="w-4 h-4"></i> Muted
+          </a>
+        </li>
+        <li x-show="watchers.length" class="menu-title"><span>Watchers</span></li>
+        <template x-for="w in watchers" :key="w.id">
+          <li class="pointer-events-none">
+            <span class="text-base-content/70" x-text="w.username"></span>
+          </li>
+        </template>
+      </ul>
+    </div>
     <button
       type="button"
-      class="btn btn-sm btn-square btn-ghost ml-auto"
+      class="btn btn-sm btn-square btn-ghost"
       @click="copyLink('{{ project.key }}-{{ panel_task.number }}')"
       aria-label="Copy link"
       :title="linkCopied ? 'Copied' : 'Copy link'"

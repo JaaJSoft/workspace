@@ -54,8 +54,9 @@ def _claim_reminder(task, user_id, kind):
 
 @shared_task(name="projects.notify_due_tasks", ignore_result=True)
 def notify_due_tasks():
-    """Send each assignee one reminder when a task falls due and one more
-    when it becomes overdue - never a daily repeat.
+    """Send each assignee and each non-muted watcher one reminder when a
+    task falls due and one more when it becomes overdue - never a daily
+    repeat. A muted watch opts an assignee out of their reminders.
 
     Runs hourly because reminders follow each recipient's wall clock: a
     reminder goes out on the first run after the user's configured morning
@@ -74,6 +75,7 @@ def notify_due_tasks():
         Level,
         user_levels,
     )
+    from workspace.projects.services.watchers import watch_states
     from workspace.users.services.settings import get_user_timezone
 
     now = timezone.now()
@@ -88,18 +90,26 @@ def notify_due_tasks():
         # assignee row; they must not keep receiving reminders.
         allowed = [u for u in project_users(project) if u.is_active]
         allowed_ids = {u.pk for u in allowed}
+        users_by_id = {u.pk: u for u in allowed}
         levels = user_levels(project.uuid, allowed)
+        watch = watch_states(tasks)
         reminded = {
             (r.task_id, r.user_id, r.kind): r.due_date
             for r in TaskReminder.objects.filter(task__in=tasks)
         }
         for task in tasks:
             recipients_by_kind = defaultdict(list)
-            for user in task.assignees.all():
-                if user.pk not in allowed_ids:
+            states = watch.get(task.uuid, {})
+            candidates = {u.pk: u for u in task.assignees.all() if u.pk in allowed_ids}
+            for uid, muted in states.items():
+                if not muted and uid in allowed_ids:
+                    candidates.setdefault(uid, users_by_id[uid])
+            for user in candidates.values():
+                # Skipped before claiming: a user who unmutes the task or
+                # re-enables project notifications still gets the reminder
+                # on the next run.
+                if states.get(user.pk) is True:
                     continue
-                # Skipped before claiming: a user who re-enables project
-                # notifications still gets the reminder on the next run.
                 if levels[user.pk] == Level.NONE:
                     continue
                 if user.pk not in local_times:

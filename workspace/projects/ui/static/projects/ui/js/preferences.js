@@ -3,7 +3,7 @@
 // Initial values are embedded server-side via |json_script (see
 // project.html), so no fetch is needed on page load.
 window.projectsPreferences = function projectsPreferences() {
-  let initial = { reminder_hour: 8, notify_level: 'all' };
+  let initial = { reminder_hour: 8, notify_level: 'all', auto_watch: true };
   const el = document.getElementById('projects-prefs-data');
   if (el) {
     try { initial = { ...initial, ...JSON.parse(el.textContent) }; } catch (_) { /* keep defaults */ }

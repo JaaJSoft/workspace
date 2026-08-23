@@ -16,6 +16,7 @@ from .viewsets import (
     TaskCommentViewSet,
     TaskLinkViewSet,
     TaskViewSet,
+    TaskWatchView,
 )
 
 router = SimpleRouter(trailing_slash=False)
@@ -81,6 +82,11 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/notification-level",
         ProjectNotificationLevelView.as_view(),
         name="project-notification-level",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/watch",
+        TaskWatchView.as_view(),
+        name="project-task-watch",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/labels",

@@ -50,6 +50,7 @@ from .serializers import (
     TaskReorderSerializer,
     TaskSerializer,
     TaskStatusSerializer,
+    TaskWatchSerializer,
 )
 from .services.assignments import notify_assigned
 from .services.attachments import (
@@ -86,6 +87,7 @@ from .services.tasks import (
     reorder_tasks,
     settle_task_notifications,
 )
+from .services.watchers import auto_watch, clear_watch_state, set_watch_state
 
 User = get_user_model()
 
@@ -310,6 +312,34 @@ class ProjectNotificationLevelView(ProjectContextMixin, APIView):
         ProjectNotificationLevel.objects.filter(
             project=self.project, user=request.user
         ).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=["Projects - Tasks"])
+class TaskWatchView(ProjectContextMixin, APIView):
+    """The caller's own watch state on one task.
+
+    Open to any user with project access; archived projects stay writable
+    here - the state is a per-user preference, not project data.
+    """
+
+    def _task(self, task_uuid):
+        try:
+            return self.project.tasks.get(uuid=task_uuid)
+        except Task.DoesNotExist:
+            raise Http404 from None
+
+    @extend_schema(summary="Watch or mute this task", request=TaskWatchSerializer)
+    def put(self, request, project_uuid, task_uuid):
+        serializer = TaskWatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        state = serializer.validated_data["state"]
+        set_watch_state(self._task(task_uuid), request.user, muted=state == "muted")
+        return Response({"state": state})
+
+    @extend_schema(summary="Drop your explicit watch state")
+    def delete(self, request, project_uuid, task_uuid):
+        clear_watch_state(self._task(task_uuid), request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -611,6 +641,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             record_task_event(
                 task, type=TaskEvent.Type.ASSIGNED, actor=self.request.user
             )
+            auto_watch(task, added_assignees)
             notify_assigned(task, self.request.user, added_assignees)
         if fields_updated:
             record_task_event(
@@ -886,6 +917,7 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
             body=body_ser.validated_data["body"],
         )
         record_task_event(self.task, type=TaskEvent.Type.COMMENTED, actor=request.user)
+        auto_watch(self.task, [request.user])
         notify_comment_added(self.task, request.user, comment.body)
         return Response(
             self.get_serializer(comment).data, status=status.HTTP_201_CREATED

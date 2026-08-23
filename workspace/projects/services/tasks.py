@@ -8,6 +8,7 @@ from ..models import Task, TaskEvent, TaskStatus
 from .assignments import notify_assigned
 from .events import move_event_type, record_task_event
 from .references import allocate_task_number
+from .watchers import auto_watch, notify_status_changed
 
 
 def settle_task_notifications(tasks):
@@ -92,6 +93,7 @@ def create_task(
             task, type=TaskEvent.Type.CREATED, actor=user, to_status=status
         )
     if assignees:
+        auto_watch(task, assignees)
         notify_assigned(task, user, assignees)
     return task
 
@@ -156,6 +158,9 @@ def apply_status_change(task, *, actor=None, old_status=None):
         )
     if task.status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task])
+    # After the settle: settling would immediately mark the fresh
+    # status notification read on the done path.
+    notify_status_changed([(task, old_status)], actor)
 
 
 def delete_task(task, actor=None):
@@ -216,6 +221,7 @@ def move_tasks(project, status, task_uuids, *, actor=None):
             )
     if moved and status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task for task, _ in moved])
+    notify_status_changed(moved, actor)
     return [task for task, _ in moved]
 
 
@@ -295,3 +301,4 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
             )
     if moved and status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task for task, _ in moved])
+    notify_status_changed(moved, actor)

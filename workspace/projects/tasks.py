@@ -69,6 +69,11 @@ def notify_due_tasks():
     from workspace.notifications.services.notifications import notify_stream
     from workspace.projects.models import TaskReminder
     from workspace.projects.queries import due_open_tasks, project_users
+    from workspace.projects.services.notification_levels import (
+        IN_APP_PRIORITY,
+        Level,
+        user_levels,
+    )
     from workspace.users.services.settings import get_user_timezone
 
     now = timezone.now()
@@ -81,7 +86,9 @@ def notify_due_tasks():
     for project, tasks in tasks_by_project.items():
         # Assignees who left the project (or lost group access) keep their
         # assignee row; they must not keep receiving reminders.
-        allowed_ids = {u.pk for u in project_users(project) if u.is_active}
+        allowed = [u for u in project_users(project) if u.is_active]
+        allowed_ids = {u.pk for u in allowed}
+        levels = user_levels(project.uuid, allowed)
         reminded = {
             (r.task_id, r.user_id, r.kind): r.due_date
             for r in TaskReminder.objects.filter(task__in=tasks)
@@ -90,6 +97,10 @@ def notify_due_tasks():
             recipients_by_kind = defaultdict(list)
             for user in task.assignees.all():
                 if user.pk not in allowed_ids:
+                    continue
+                # Skipped before claiming: a user who re-enables project
+                # notifications still gets the reminder on the next run.
+                if levels[user.pk] == Level.NONE:
                     continue
                 if user.pk not in local_times:
                     local_times[user.pk] = (
@@ -123,6 +134,11 @@ def notify_due_tasks():
                     title=task.title,
                     body=body,
                     url=f"/projects/{task.project_id}?task={task.uuid}",
+                    priority_map={
+                        uid: IN_APP_PRIORITY
+                        for uid in recipient_ids
+                        if levels[uid] == Level.IN_APP
+                    },
                     stream="reminder",
                 )
                 sent += len(recipient_ids)

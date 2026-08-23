@@ -105,6 +105,54 @@ class ProjectMember(models.Model):
         return f"{self.user} in {self.project} ({self.role})"
 
 
+class ProjectNotificationLevel(models.Model):
+    """Per-user override of the module-wide projects notification level.
+
+    A row exists only while the user overrides their ``projects.notify_level``
+    setting for this project; deleting it falls back to the module-wide value.
+    A dedicated table rather than a ``ProjectMember`` field: users whose
+    access comes from an attached auth.Group have no membership row to carry
+    the override.
+    """
+
+    class Level(models.TextChoices):
+        """How much of a project's activity reaches the bell and push.
+
+        Scopes notifications only: board state, badges and feeds are
+        untouched. ``IN_APP`` caps the notification priority at "low", the
+        one priority the notifications module never pushes; ``NONE`` drops
+        the user from the recipient set entirely.
+        """
+
+        ALL = "all", "All notifications"
+        IN_APP = "in_app", "In-app only"
+        NONE = "none", "Nothing"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="notification_levels",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="project_notification_levels",
+    )
+    level = models.CharField(max_length=6, choices=Level.choices)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "user"],
+                name="unique_project_notification_level",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} on {self.project_id}: {self.level}"
+
+
 class TaskStatus(models.Model):
     class Category(models.TextChoices):
         BACKLOG = "backlog", "Backlog"

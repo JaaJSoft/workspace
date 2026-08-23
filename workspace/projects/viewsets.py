@@ -9,6 +9,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.common.pagination import OptInLimitOffsetPagination
@@ -20,6 +21,7 @@ from .models import (
     Label,
     Project,
     ProjectMember,
+    ProjectNotificationLevel,
     Subtask,
     Task,
     TaskAttachment,
@@ -35,6 +37,7 @@ from .serializers import (
     MemberRoleSerializer,
     MemberSerializer,
     MemberWriteSerializer,
+    ProjectNotificationLevelSerializer,
     ProjectSerializer,
     ReorderSerializer,
     SubtaskSerializer,
@@ -275,6 +278,38 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
             remove_member(member)
         except ProjectRuleError as exc:
             return _rule_error_response(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=["Projects"])
+class ProjectNotificationLevelView(ProjectContextMixin, APIView):
+    """The caller's own notification level override for one project.
+
+    Open to any user with project access, group-granted users included -
+    which is why this is not a member sub-resource. Archived projects stay
+    writable here: the override is per-user preference, not project data.
+    """
+
+    @extend_schema(
+        summary="Override your notification level for this project",
+        request=ProjectNotificationLevelSerializer,
+    )
+    def put(self, request, project_uuid):
+        serializer = ProjectNotificationLevelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        level = serializer.validated_data["level"]
+        ProjectNotificationLevel.objects.update_or_create(
+            project=self.project, user=request.user, defaults={"level": level}
+        )
+        return Response({"level": level})
+
+    @extend_schema(
+        summary="Drop your override and fall back to the module-wide setting"
+    )
+    def delete(self, request, project_uuid):
+        ProjectNotificationLevel.objects.filter(
+            project=self.project, user=request.user
+        ).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

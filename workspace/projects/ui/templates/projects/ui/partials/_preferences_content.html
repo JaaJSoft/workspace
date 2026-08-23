@@ -10,4 +10,17 @@
     </select>
     <p class="text-xs text-base-content/60 mt-1">Tasks assigned to you remind you once when they fall due and once more when overdue, after this hour of your day.</p>
   </div>
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Notifications</label>
+    <select
+      class="select select-bordered select-sm w-full"
+      :value="prefs.notify_level"
+      @change="update('notify_level', $event.target.value)"
+    >
+      <option value="all">All (in-app + push)</option>
+      <option value="in_app">In-app only</option>
+      <option value="none">Nothing</option>
+    </select>
+    <p class="text-xs text-base-content/60 mt-1">Applies to every project; the bell in a project's header can override it per project.</p>
+  </div>
 </div>

@@ -6,6 +6,7 @@ from workspace.common.services.mentions import mentioned_users, newly_mentioned_
 from workspace.notifications.services.notifications import notify_stream
 
 from ..queries import project_users
+from .notification_levels import apply_levels
 
 User = get_user_model()
 
@@ -15,14 +16,18 @@ def _task_url(task):
 
 
 def _notify_mentioned(task, actor, mentioned):
+    recipients, priority_map = apply_levels(task.project_id, mentioned)
+    if not recipients:
+        return
     notify_stream(
-        recipient_ids=[u.pk for u in mentioned],
+        recipient_ids=[u.pk for u in recipients],
         source=task,
         origin="projects",
         title=f'{actor.username} mentioned you in a comment on "{task.title}"',
         url=_task_url(task),
         actor=actor,
         default_priority="high",
+        priority_map=priority_map,
     )
 
 
@@ -50,6 +55,7 @@ def notify_comment_added(task, actor, body):
     recipients.update(User.objects.filter(pk__in=commenter_ids))
     recipients.discard(actor)
     recipients = [u for u in recipients if u.pk not in mentioned_ids]
+    recipients, priority_map = apply_levels(task.project_id, recipients)
     if recipients:
         notify_stream(
             recipient_ids=[u.pk for u in recipients],
@@ -58,6 +64,7 @@ def notify_comment_added(task, actor, body):
             title=f'{actor.username} commented on "{task.title}"',
             url=_task_url(task),
             actor=actor,
+            priority_map=priority_map,
         )
 
 

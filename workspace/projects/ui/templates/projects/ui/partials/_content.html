@@ -10,6 +10,73 @@
     {% include "ui/partials/drawer_toggle.html" with drawer_id="projects-drawer" class="lg:hidden" %}
     <h1 class="text-xl font-semibold truncate">{{ project.name }}</h1>
     {% if project.archived_at %}<span class="badge badge-ghost">Archived</span>{% endif %}
+    <div
+      class="dropdown dropdown-end ml-auto"
+      x-data="projectNotificationLevel({
+      url: '{% url 'project-notification-level' project.uuid %}',
+      override: '{{ notification_level.override }}',
+      moduleLevel: '{{ notification_level.module_level }}',
+      })"
+      @projects-notify-level-changed.window="moduleLevel = $event.detail.level"
+    >
+      <button
+        type="button"
+        tabindex="0"
+        class="btn btn-ghost btn-sm btn-square"
+        aria-label="Notification level"
+        :title="'Notifications: ' + label(effective())"
+      >
+        <i x-show="effective() === 'all'" data-lucide="bell" class="w-4 h-4"></i>
+        <i
+          x-show="effective() === 'in_app'"
+          data-lucide="bell-minus"
+          class="w-4 h-4"
+        ></i>
+        <i
+          x-show="effective() === 'none'"
+          data-lucide="bell-off"
+          class="w-4 h-4"
+        ></i>
+      </button>
+      <ul
+        tabindex="0"
+        class="dropdown-content menu menu-sm gap-1 bg-base-100 border border-base-300 rounded-box shadow-lg w-64 mt-2 z-50"
+      >
+        <li>
+          <a
+            @click="document.activeElement.blur(); reset()"
+            :class="override === '' ? 'active' : ''"
+          >
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            <span>Default · <span x-text="label(moduleLevel)"></span></span>
+          </a>
+        </li>
+        <li>
+          <a
+            @click="document.activeElement.blur(); set('all')"
+            :class="override === 'all' ? 'active' : ''"
+          >
+            <i data-lucide="bell" class="w-4 h-4"></i> All notifications
+          </a>
+        </li>
+        <li>
+          <a
+            @click="document.activeElement.blur(); set('in_app')"
+            :class="override === 'in_app' ? 'active' : ''"
+          >
+            <i data-lucide="bell-minus" class="w-4 h-4"></i> In-app only
+          </a>
+        </li>
+        <li>
+          <a
+            @click="document.activeElement.blur(); set('none')"
+            :class="override === 'none' ? 'active' : ''"
+          >
+            <i data-lucide="bell-off" class="w-4 h-4"></i> Nothing
+          </a>
+        </li>
+      </ul>
+    </div>
   </div>
   {% if view == "backlog" %}
     {% include "projects/ui/partials/backlog.html" %}

@@ -27,7 +27,7 @@ menus without a reload.
             <button
               type="button"
               class="btn btn-ghost btn-sm btn-square"
-              @click="adding = !adding"
+              @click="toggleAdd()"
               aria-label="Add sprint"
               title="Add sprint"
             >
@@ -78,22 +78,23 @@ menus without a reload.
           @submit.prevent="addSprint()"
           @keydown.escape="adding = false"
         >
-          <div class="flex flex-wrap items-end gap-3">
-            <label class="form-control">
-              <div class="label py-0"><span class="label-text-alt">Name</span></div>
-              <input
-                type="text"
-                class="input input-bordered input-sm"
-                x-model="addForm.name"
-                required
-                maxlength="100"
-              />
-            </label>
+          <label class="form-control">
+            <div class="label py-0"><span class="label-text-alt">Name</span></div>
+            <input
+              type="text"
+              class="input input-bordered input-sm w-full"
+              x-model="addForm.name"
+              required
+              maxlength="100"
+              x-init="$el.focus(); $el.select()"
+            />
+          </label>
+          <div class="grid grid-cols-2 gap-3">
             <label class="form-control">
               <div class="label py-0"><span class="label-text-alt">Start</span></div>
               <input
                 type="date"
-                class="input input-bordered input-sm"
+                class="input input-bordered input-sm w-full"
                 x-model="addForm.start_date"
               />
             </label>
@@ -101,7 +102,7 @@ menus without a reload.
               <div class="label py-0"><span class="label-text-alt">End</span></div>
               <input
                 type="date"
-                class="input input-bordered input-sm"
+                class="input input-bordered input-sm w-full"
                 x-model="addForm.end_date"
               />
             </label>

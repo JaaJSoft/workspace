@@ -166,14 +166,14 @@ class LockOperationTests(WopiViewTestBase):
     def test_lock_acquire_refresh_unlock_cycle(self):
         self.assertEqual(self._op("LOCK", lock="abc").status_code, 200)
         self.file.refresh_from_db()
-        self.assertEqual(self.file.wopi_lock, "abc")
+        self.assertEqual(self.file.lock_token, "abc")
         self.assertEqual(self.file.locked_by_id, self.owner.pk)
         self.assertTrue(self.file.is_locked())
 
         self.assertEqual(self._op("REFRESH_LOCK", lock="abc").status_code, 200)
         self.assertEqual(self._op("UNLOCK", lock="abc").status_code, 200)
         self.file.refresh_from_db()
-        self.assertEqual(self.file.wopi_lock, "")
+        self.assertEqual(self.file.lock_token, "")
         self.assertIsNone(self.file.locked_by_id)
 
     def test_get_lock_reports_current_value(self):
@@ -193,7 +193,7 @@ class LockOperationTests(WopiViewTestBase):
         resp = self._op("LOCK", lock="def", old_lock="abc")
         self.assertEqual(resp.status_code, 200)
         self.file.refresh_from_db()
-        self.assertEqual(self.file.wopi_lock, "def")
+        self.assertEqual(self.file.lock_token, "def")
 
     def test_unlock_mismatch_is_409(self):
         self._op("LOCK", lock="abc")

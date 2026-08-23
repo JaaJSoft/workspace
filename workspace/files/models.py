@@ -129,11 +129,11 @@ class File(models.Model):
     )
     locked_at = models.DateTimeField(null=True, blank=True)
     lock_expires_at = models.DateTimeField(null=True, blank=True)
-    # Opaque lock id held by a WOPI editing session (spec allows up to 1024
-    # chars). Non-empty only while locked_by/lock_expires_at carry a WOPI
-    # lock; an app lock (text editor heartbeat) leaves it empty, which is how
-    # the two kinds are told apart.
-    wopi_lock = models.CharField(max_length=1024, blank=True, default="")
+    # Session token of the current lock. Protocols that identify their locks
+    # by an opaque token (WOPI today; WebDAV-style tokens fit too, up to the
+    # 1024 chars the WOPI spec allows) store it here; the in-app editor
+    # heartbeat locks without one and leaves it empty.
+    lock_token = models.CharField(max_length=1024, blank=True, default="")
 
     objects = FileQuerySet.as_manager()
 

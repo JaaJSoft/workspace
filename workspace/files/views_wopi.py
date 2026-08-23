@@ -110,7 +110,7 @@ class WopiFileView(View):
 
         if override == "GET_LOCK":
             response = HttpResponse(status=200)
-            response["X-WOPI-Lock"] = locks.current_wopi_lock(file_obj)
+            response["X-WOPI-Lock"] = locks.current_lock_token(file_obj)
             return response
 
         if not can_write:

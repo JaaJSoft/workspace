@@ -3,8 +3,8 @@
 A WOPI lock is an opaque string the editor supplies; the host stores it and
 answers conflicts with the current value in the ``X-WOPI-Lock`` header. It is
 carried by the same three lock columns the in-app editors use, plus
-``wopi_lock`` for the string itself - so a WOPI editing session looks locked
-to the rest of the app, and an app lock (empty ``wopi_lock``) blocks WOPI
+``lock_token`` for the string itself - so a WOPI editing session looks locked
+to the rest of the app, and an app lock (empty ``lock_token``) blocks WOPI
 operations symmetrically.
 
 Every mutation runs its "is the lock in the expected state?" predicate inside
@@ -36,34 +36,34 @@ def _expired_q(now):
     return Q(lock_expires_at__isnull=True) | Q(lock_expires_at__lte=now)
 
 
-def current_wopi_lock(file_obj) -> str:
+def current_lock_token(file_obj) -> str:
     """Active WOPI lock string, or '' when unlocked / app-locked / expired."""
     file_obj.refresh_from_db(
-        fields=["wopi_lock", "locked_by", "lock_expires_at", "locked_at"]
+        fields=["lock_token", "locked_by", "lock_expires_at", "locked_at"]
     )
-    if not file_obj.wopi_lock or not file_obj.is_locked():
+    if not file_obj.lock_token or not file_obj.is_locked():
         return ""
-    return file_obj.wopi_lock
+    return file_obj.lock_token
 
 
 def has_app_lock_conflict(file_obj, user) -> bool:
     """True when another user's non-WOPI lock is active on the file."""
     return (
         file_obj.is_locked()
-        and not file_obj.wopi_lock
+        and not file_obj.lock_token
         and file_obj.locked_by_id != user.pk
     )
 
 
 def _conflict(file_obj) -> LockOutcome:
-    return LockOutcome(ok=False, current_lock=current_wopi_lock(file_obj))
+    return LockOutcome(ok=False, current_lock=current_lock_token(file_obj))
 
 
 def lock(file_obj, user, lock_id: str, old_lock_id: str = "") -> LockOutcome:
     """LOCK, or UNLOCK_AND_RELOCK when *old_lock_id* is given."""
     now = timezone.now()
     if old_lock_id:
-        expected = Q(wopi_lock=old_lock_id) & Q(lock_expires_at__gt=now)
+        expected = Q(lock_token=old_lock_id) & Q(lock_expires_at__gt=now)
     else:
         # Free, expired, refreshing the same lock, or upgrading the caller's
         # own app lock (the in-app viewer acquires one before the WOPI frame
@@ -71,14 +71,14 @@ def lock(file_obj, user, lock_id: str, old_lock_id: str = "") -> LockOutcome:
         expected = (
             Q(locked_by__isnull=True)
             | _expired_q(now)
-            | Q(wopi_lock=lock_id)
-            | (Q(wopi_lock="") & Q(locked_by=user))
+            | Q(lock_token=lock_id)
+            | (Q(lock_token="") & Q(locked_by=user))
         )
     updated = (
         File.objects.filter(pk=file_obj.pk)
         .filter(expected)
         .update(
-            wopi_lock=lock_id,
+            lock_token=lock_id,
             locked_by=user,
             locked_at=now,
             lock_expires_at=now + WOPI_LOCK_DURATION,
@@ -92,10 +92,10 @@ def lock(file_obj, user, lock_id: str, old_lock_id: str = "") -> LockOutcome:
 def unlock(file_obj, lock_id: str) -> LockOutcome:
     now = timezone.now()
     updated = (
-        File.objects.filter(pk=file_obj.pk, wopi_lock=lock_id)
+        File.objects.filter(pk=file_obj.pk, lock_token=lock_id)
         .filter(Q(lock_expires_at__gt=now))
         .update(
-            wopi_lock="",
+            lock_token="",
             locked_by=None,
             locked_at=None,
             lock_expires_at=None,
@@ -109,7 +109,7 @@ def unlock(file_obj, lock_id: str) -> LockOutcome:
 def refresh(file_obj, lock_id: str) -> LockOutcome:
     now = timezone.now()
     updated = (
-        File.objects.filter(pk=file_obj.pk, wopi_lock=lock_id)
+        File.objects.filter(pk=file_obj.pk, lock_token=lock_id)
         .filter(Q(lock_expires_at__gt=now))
         .update(lock_expires_at=now + WOPI_LOCK_DURATION)
     )
@@ -126,7 +126,7 @@ def put_allowed(file_obj, user, lock_id: str) -> LockOutcome:
     save it makes. Deviation: an unlocked file accepts the write; only an
     actively held mismatching lock (WOPI or another user's app lock) refuses.
     """
-    active_wopi = current_wopi_lock(file_obj)
+    active_wopi = current_lock_token(file_obj)
     if active_wopi:
         if lock_id == active_wopi:
             return LockOutcome(ok=True)

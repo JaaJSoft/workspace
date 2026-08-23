@@ -31,7 +31,8 @@ class ListMyTasksParams(BaseModel):
 
 class SearchTasksParams(BaseModel):
     query: str = Field(
-        description="The search term to look for in task titles and descriptions."
+        description="The search term to look for in task titles and "
+        "descriptions, or an exact task reference like WR-42."
     )
     project: str = Field(
         default="",
@@ -253,36 +254,37 @@ by project or due window. For tasks assigned to other people use search_tasks.""
         params=SearchTasksParams,
     )
     def search_tasks(self, args, user, bot, conversation_id, context):
-        """Search tasks by keyword across every project the user can access — \
-not just their own tasks. Returns up to 20 matches with reference, title, \
-project, status, priority, due date and assignees. Call this when the user \
-asks about a task by topic, or wants an overview like the overdue tasks of a \
-project."""
-        from .services.search import search_tasks_qs
+        """Search tasks by keyword or by reference (e.g. WR-42) across every \
+project the user can access — not just their own tasks. Returns up to 20 \
+matches with reference, title, project, status, priority, due date and \
+assignees. Call this when the user asks about a task by topic or reference, \
+or wants an overview like the overdue tasks of a project."""
+        from django.db.models import Q, prefetch_related_objects
+
+        from .services.search import combined_task_search
 
         query = args.query.strip()
         if not query:
             return "Error: query is required"
 
-        qs = search_tasks_qs(user, query)
+        extra = Q()
         if args.project.strip():
             project, error = _resolve_project(user, args.project)
             if error:
                 return error
-            qs = qs.filter(project=project)
+            extra &= Q(project=project)
         if args.assignee.strip():
-            qs = qs.filter(assignees__username__iexact=args.assignee.strip())
+            extra &= Q(assignees__username__iexact=args.assignee.strip())
         if args.status.strip():
-            qs = qs.filter(status__name__iexact=args.status.strip())
+            extra &= Q(status__name__iexact=args.status.strip())
         if args.due_before.strip():
             due_before, error = _parse_date(args.due_before, "due_before")
             if error:
                 return error
-            qs = qs.filter(due_date__lte=due_before)
+            extra &= Q(due_date__lte=due_before)
 
-        tasks = qs.select_related("project", "status").prefetch_related("assignees")[
-            :20
-        ]
+        tasks, _ = combined_task_search(user, query, limit=20, extra_filter=extra)
+        prefetch_related_objects(tasks, "assignees")
         results = [_task_entry(t) for t in tasks]
         if not results:
             return f'No tasks found matching "{query}".'

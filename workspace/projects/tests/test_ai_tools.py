@@ -144,6 +144,25 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
         data = json.loads(result)
         self.assertEqual([t["title"] for t in data], ["Deploy website"])
 
+    def test_search_tasks_matches_reference_first(self):
+        task = create_task(self.project, self.admin, title="Obscure")
+        result = self._call(
+            "search_tasks",
+            SearchTasksParams(query=task.reference.lower()),
+            self.member,
+        )
+        data = json.loads(result)
+        self.assertEqual([t["uuid"] for t in data], [str(task.uuid)])
+
+    def test_search_tasks_filters_apply_to_reference_matches(self):
+        task = create_task(self.project, self.admin, title="Obscure")
+        result = self._call(
+            "search_tasks",
+            SearchTasksParams(query=task.reference, status="Done"),
+            self.member,
+        )
+        self.assertIn("No tasks found", result)
+
     # -- create_task ---------------------------------------------------------
 
     def test_create_task_in_named_project_with_assignee(self):

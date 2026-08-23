@@ -49,7 +49,7 @@ Params:
     class="dropdown-content menu z-50 mt-1 w-64 max-h-80 flex-nowrap overflow-y-auto thin-scrollbar bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
   >
     {% if options|length > 5 %}
-      <li class="mb-1">
+      <li>
         <label class="input input-bordered input-xs flex items-center gap-2 w-full">
           <i data-lucide="search" class="w-3.5 h-3.5 opacity-60 shrink-0"></i>
           <input
@@ -63,7 +63,7 @@ Params:
       </li>
     {% endif %}
     {% if with_closed_toggle %}
-      <li class="mb-1">
+      <li>
         <label class="flex items-center justify-between gap-2 cursor-pointer">
           <span class="text-sm">Hide closed sprints</span>
           <input

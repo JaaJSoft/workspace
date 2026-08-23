@@ -95,13 +95,9 @@ class ScrumBoardUiTests(ScrumUiTestCase):
     def test_switcher_closed_toggle_only_with_history(self):
         self.scrum.sprints.create(name="Running", state=Sprint.State.ACTIVE)
         self.client.force_login(self.member)
-        self.assertNotContains(
-            self.client.get(self.board_url), "Hide closed sprints"
-        )
+        self.assertNotContains(self.client.get(self.board_url), "Hide closed sprints")
         self.scrum.sprints.create(name="Done one", state=Sprint.State.CLOSED)
-        self.assertContains(
-            self.client.get(self.board_url), "Hide closed sprints"
-        )
+        self.assertContains(self.client.get(self.board_url), "Hide closed sprints")
 
     def test_switcher_search_appears_past_five_sprints(self):
         self.scrum.sprints.create(name="Running", state=Sprint.State.ACTIVE)

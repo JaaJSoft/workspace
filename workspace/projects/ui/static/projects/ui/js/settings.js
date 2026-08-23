@@ -729,9 +729,11 @@ function projectEpics(config) {
 
     async saveDescEdit(epic) {
       if (this.editingDesc !== epic.uuid) return;
-      this.editingDesc = null;
       const description = this.descDraft.trim();
-      if (description === (epic.description || '')) return;
+      if (description === (epic.description || '')) {
+        this.editingDesc = null;
+        return;
+      }
       try {
         await this.request(config.apiBase + '/epics/' + epic.uuid, {
           method: 'PATCH',
@@ -739,6 +741,9 @@ function projectEpics(config) {
           body: JSON.stringify({ description: description }),
         });
         epic.description = description;
+        // Only a successful save closes the editor: on failure the open
+        // textarea is what keeps the user's draft from being lost.
+        this.editingDesc = null;
       } catch (e) {
         this.error = e.message;
       }

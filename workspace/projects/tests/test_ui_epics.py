@@ -71,12 +71,13 @@ class BoardEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertNotContains(self.board(), 'placeholder="Filter by epic"')
 
     def test_modal_epic_picker_gating_mirrors_labels(self):
-        # Members cannot create epics, so an empty project hides the field
-        # client-side; admins always see it (they can create the first epic).
+        # Members can only pick open epics, so the field hides when none is
+        # pickable (no epics, or all closed); admins always see it (they can
+        # create the first epic).
         self.client.force_login(self.member)
-        self.assertContains(self.board(), 'x-show="epics.length"')
+        self.assertContains(self.board(), 'x-show="openEpics().length"')
         self.client.force_login(self.admin)
-        self.assertNotContains(self.board(), 'x-show="epics.length"')
+        self.assertNotContains(self.board(), 'x-show="openEpics().length"')
 
 
 class BacklogEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
@@ -132,6 +133,18 @@ class TaskPanelEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.admin)
         resp = self.client.get(self.url)
         self.assertContains(resp, "labelSelector('panel-epic-selected'")
+
+    def test_member_section_and_selector_hide_when_only_closed_epics(self):
+        # Members can only pick open epics: the panel section and its
+        # selector carry the openEpics() gate, admins never do (they can
+        # create an open epic inline).
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'x-show="openEpics().length || data.epic"')
+        self.assertContains(resp, 'x-show="openEpics().length"')
+        self.client.force_login(self.admin)
+        resp = self.client.get(self.url)
+        self.assertNotContains(resp, 'x-show="openEpics().length || data.epic"')
 
 
 class SettingsEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):

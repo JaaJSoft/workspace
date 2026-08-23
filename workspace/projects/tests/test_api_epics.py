@@ -92,6 +92,7 @@ class EpicApiTests(ProjectTestMixin, APITestCase):
             {"closed": False},
             format="json",
         )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         epic.refresh_from_db()
         self.assertIsNone(epic.closed_at)
         response = self.client.delete(

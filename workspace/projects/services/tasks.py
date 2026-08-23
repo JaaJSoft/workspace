@@ -56,6 +56,10 @@ def create_task(
     epic=None,
 ):
     """Create a task; defaults to the end of the project's backlog column."""
+    # The API serializer scopes the epic per project; this guards the
+    # direct callers (seeds, future tools) against cross-project grouping.
+    if epic is not None and epic.project_id != project.pk:
+        raise ValueError("Epic belongs to another project.")
     if status is None:
         status = (
             project.statuses.filter(category=TaskStatus.Category.BACKLOG)

@@ -410,3 +410,15 @@ test('projectEpics.saveDescEdit skips the API on an unchanged description', asyn
   assert.equal(called, true);
   assert.equal(epic.description, 'Ship v2');
 });
+
+test('projectEpics.saveDescEdit keeps the editor and draft on failure', async () => {
+  const c = ctx().projectEpics({ apiBase: '/x' });
+  c.request = async () => { throw new Error('boom'); };
+  const epic = { uuid: 'e1', description: 'Ship v1' };
+  c.startDescEdit(epic);
+  c.descDraft = 'Ship v2';
+  await c.saveDescEdit(epic);
+  assert.equal(c.editingDesc, 'e1');
+  assert.equal(c.descDraft, 'Ship v2');
+  assert.equal(epic.description, 'Ship v1');
+});

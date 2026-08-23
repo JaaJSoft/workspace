@@ -94,9 +94,10 @@
           {% include "ui/partials/user_selector.html" with on_select_event="modal-assignee-selected" placeholder="Add assignee..." local_source="formUnassignedUsers()" %}
         </div>
       </div>
+      {# Members only pick, so hide the field when every epic is closed; admins keep it to create the first open one inline. #}
       <div
         class="mt-2"
-        {% if role != "admin" %}x-show="epics.length"{% endif %}
+        {% if role != "admin" %}x-show="openEpics().length"{% endif %}
         @modal-epic-selected.window="setFormEpic($event.detail.label)"
       >
         <div class="label"><span class="label-text">Epic</span></div>

@@ -189,7 +189,11 @@
     </section>
 
     {% if epics_data or role == "admin" %}
-      <section @panel-epic-selected.window="setEpic($event.detail.label)">
+      {# Members only pick: with every epic closed and none on the task, the section has nothing to offer, so hide it. A closed epic already set stays visible. #}
+      <section
+        @panel-epic-selected.window="setEpic($event.detail.label)"
+        {% if role != "admin" %}x-show="openEpics().length || data.epic" x-cloak{% endif %}
+      >
         <h3 class="mb-1">
           <button
             type="button"
@@ -221,7 +225,11 @@
             No epic.
           </p>
           {% if "set_epic" in panel_action_ids %}
-            {% include "projects/ui/partials/_label_selector.html" with on_select_event="panel-epic-selected" all_source="openEpics()" selected_source="data.epic ? [data.epic] : []" placeholder="Set epic..." resource="epics" entity="epic" icon="layers" created_event="project-epic-created" %}
+            <div
+              {% if role != "admin" %}x-show="openEpics().length" x-cloak{% endif %}
+            >
+              {% include "projects/ui/partials/_label_selector.html" with on_select_event="panel-epic-selected" all_source="openEpics()" selected_source="data.epic ? [data.epic] : []" placeholder="Set epic..." resource="epics" entity="epic" icon="layers" created_event="project-epic-created" %}
+            </div>
           {% endif %}
         </div>
       </section>

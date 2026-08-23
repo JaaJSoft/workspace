@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
@@ -282,6 +283,12 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+
+    def clean(self):
+        # Runs in ModelForm paths (the Django admin): the API scopes the
+        # epic queryset per project, but the admin offers every epic.
+        if self.epic_id and self.epic.project_id != self.project_id:
+            raise ValidationError({"epic": "Epic belongs to another project."})
 
     @property
     def reference(self):

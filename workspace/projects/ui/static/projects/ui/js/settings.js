@@ -822,6 +822,8 @@ function projectEpics(config) {
 function projectSprints(config) {
   return {
     items: [],
+    query: '',
+    hideClosed: true,
     adding: false,
     addForm: { name: '', goal: '', start_date: '', end_date: '' },
     editing: null,
@@ -860,6 +862,18 @@ function projectSprints(config) {
       } finally {
         this.busy = false;
       }
+    },
+
+    // List filter mirroring the sprint switcher: a query searches the
+    // whole list, closed history included; without one, closed sprints
+    // obey the toggle. Purely visual - items stays the full list.
+    visibleSprints() {
+      const needle = this.query.trim().toLowerCase();
+      if (needle) {
+        return this.items.filter((s) => s.name.toLowerCase().includes(needle));
+      }
+      if (!this.hideClosed) return this.items;
+      return this.items.filter((s) => s.state !== 'closed');
     },
 
     async addSprint() {

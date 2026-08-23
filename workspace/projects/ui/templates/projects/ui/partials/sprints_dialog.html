@@ -44,6 +44,31 @@ menus without a reload.
           </button>
         </div>
       </div>
+      <div
+        class="flex flex-wrap items-center gap-3"
+        x-show="items.length"
+        x-cloak
+      >
+        <label
+          class="input input-bordered input-sm flex items-center gap-2 flex-1 min-w-0 sm:max-w-xs"
+        >
+          <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
+          <input
+            type="search"
+            class="grow min-w-0"
+            placeholder="Search sprints"
+            x-model="query"
+          />
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            class="toggle toggle-sm toggle-accent"
+            x-model="hideClosed"
+          />
+          <span class="text-sm">Hide closed</span>
+        </label>
+      </div>
       <template x-if="error">
         <inline-alert type="error"><span x-text="error"></span></inline-alert>
       </template>
@@ -102,7 +127,7 @@ menus without a reload.
         </form>
       </template>
       <div class="flex flex-col gap-2 max-h-96 overflow-y-auto thin-scrollbar">
-        <template x-for="sprint in items" :key="sprint.uuid">
+        <template x-for="sprint in visibleSprints()" :key="sprint.uuid">
           <div
             class="rounded-box bg-base-200 p-3 flex flex-col gap-2"
             :class="sprint.state === 'closed' ? 'opacity-60' : ''"
@@ -211,6 +236,13 @@ menus without a reload.
         x-show="!items.length && !adding"
       >
         No sprints yet.
+      </p>
+      <p
+        class="text-sm text-base-content/60"
+        x-show="items.length && !visibleSprints().length"
+        x-cloak
+      >
+        No sprints match.
       </p>
     </div>
     <form method="dialog" class="modal-backdrop">

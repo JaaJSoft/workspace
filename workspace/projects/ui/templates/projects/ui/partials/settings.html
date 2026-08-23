@@ -12,7 +12,8 @@
     <p class="text-sm text-base-content/60 mt-0.5">Project details, board setup and access.</p>
   </div>
 
-  <div class="grid gap-4 items-start xl:grid-cols-2">
+  {# Default stretch alignment on purpose: side-by-side cards share their row's height, so a tall neighbor never leaves a floating short card. #}
+  <div class="grid gap-4 xl:grid-cols-2">
     <section
       id="settings-general"
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
@@ -251,8 +252,14 @@
           Columns
         </h3>
         {% if writable %}
-          <button type="button" class="btn btn-ghost btn-sm" @click="adding = !adding">
-            <i data-lucide="plus" class="w-4 h-4"></i> Add column
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            @click="adding = !adding"
+            aria-label="Add column"
+            title="Add column"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
           </button>
         {% endif %}
       </div>
@@ -396,185 +403,47 @@
     </section>
 
     <section
-      id="settings-labels"
-      class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
-      x-data="projectLabels({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
-    >
-      <div class="flex items-center justify-between">
-        <h3 class="font-semibold flex items-center gap-2">
-          <i data-lucide="tags" class="w-4 h-4 text-accent"></i>
-          Labels
-        </h3>
-        {% if writable %}
-          <button type="button" class="btn btn-ghost btn-sm" @click="adding = !adding">
-            <i data-lucide="plus" class="w-4 h-4"></i> Add label
-          </button>
-        {% endif %}
-      </div>
-      <template x-if="error">
-        <inline-alert type="error"><span x-text="error"></span></inline-alert>
-      </template>
-      <template x-if="adding">
-        <form
-          class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-100"
-          @submit.prevent="addLabel()"
-          @keydown.escape="adding = false"
-        >
-          <label class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Name</span></div>
-            <input
-              type="text"
-              class="input input-bordered input-sm"
-              x-model="addForm.name"
-              required
-              maxlength="100"
-            />
-          </label>
-          <div class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Color</span></div>
-            <div class="flex items-center gap-1.5 h-8">
-              <template x-for="c in colors" :key="c">
-                <button
-                  type="button"
-                  class="w-6 h-6 rounded-full border border-base-300 shrink-0"
-                  :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
-                  :style="c ? 'background:' + c : ''"
-                  :aria-label="c ? 'Color ' + c : 'No color'"
-                  :aria-pressed="addForm.color === c"
-                  @click="addForm.color = c"
-                ></button>
-              </template>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 ml-auto">
-            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
-            <button
-              type="submit"
-              class="btn btn-accent btn-sm"
-              :disabled="busy || !addForm.name.trim()"
-            >
-              Add
-            </button>
-          </div>
-        </form>
-      </template>
-      {% comment %}Slot mode: the chip element supplies the pill, this chip
-      supplies its own content (inline rename input, color dropdown, delete
-      button).{% endcomment %}
-      <div class="flex flex-wrap gap-1.5">
-        <template x-for="label in items" :key="label.uuid">
-          <tag-chip :color="label.color"{% if writable %} removable{% endif %}>
-          <template x-if="editing !== label.uuid">
-            <button
-              type="button"
-              class="relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0"
-              x-text="label.name"
-              {% if writable %}@click="startEdit(label)"{% endif %}
-            ></button>
-          </template>
-          <template x-if="editing === label.uuid">
-            {# h-5 keeps the pill at its 26px resting height while editing. #}
-            <input
-              type="text"
-              class="input input-ghost input-xs w-24 h-5 min-h-0 px-0 text-xs"
-              x-model="editName"
-              maxlength="100"
-              @keydown.enter.prevent="saveEdit(label)"
-              @keydown.escape="editName = label.name; editing = null"
-              @blur="saveEdit(label)"
-              x-init="$el.focus()"
-            />
-          </template>
-          {% if writable %}
-            {% comment %}Inline SVGs on purpose: lucide.createIcons() does not
-            process nodes that Alpine clones out of an x-for template.{% endcomment %}
-            {# Opens rightward: chips hug the section's left edge and an end- #}
-            {# aligned popover gets clipped by the overflow-hidden main pane. #}
-            <div class="dropdown">
-              <button
-                type="button"
-                tabindex="0"
-                class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
-                aria-label="Label color"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="w-3 h-3"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
-                  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-                </svg>
-              </button>
-              <ul
-                tabindex="0"
-                class="dropdown-content z-50 mt-1 flex flex-row items-center gap-1.5 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
-              >
-                <template x-for="c in colors" :key="c">
-                  <li class="flex">
-                    <button
-                      type="button"
-                      class="w-5 h-5 rounded-full border border-base-300 shrink-0"
-                      :class="label.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
-                      :style="c ? 'background:' + c : ''"
-                      :aria-label="c ? 'Color ' + c : 'No color'"
-                      @click="setColor(label, c); document.activeElement.blur()"
-                    ></button>
-                  </li>
-                </template>
-              </ul>
-            </div>
-            <button
-              type="button"
-              class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0 text-error"
-              aria-label="Delete label"
-              @click="removeLabel(label)"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="w-3 h-3"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          {% endif %}
-          </tag-chip>
-        </template>
-      </div>
-      <p
-        class="text-sm text-base-content/60"
-        x-show="!items.length && !adding"
-      >
-        No labels yet.
-      </p>
-    </section>
-
-    <section
       id="settings-epics"
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
       x-data="projectEpics({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
     >
-      <div class="flex items-center justify-between">
-        <h3 class="font-semibold flex items-center gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h3 class="font-semibold flex items-center gap-2 shrink-0">
           <i data-lucide="layers" class="w-4 h-4 text-accent"></i>
           Epics
         </h3>
-        {% if writable %}
-          <button type="button" class="btn btn-ghost btn-sm" @click="adding = !adding">
-            <i data-lucide="plus" class="w-4 h-4"></i> Add epic
-          </button>
-        {% endif %}
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-3" x-show="items.length" x-cloak>
+            <label class="input input-bordered input-sm flex items-center gap-2 w-44">
+              <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
+              <input
+                type="search"
+                class="grow min-w-0"
+                placeholder="Search epics"
+                x-model="query"
+              />
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                class="toggle toggle-sm toggle-accent"
+                x-model="openOnly"
+              />
+              <span class="text-sm">Open only</span>
+            </label>
+          </div>
+          {% if writable %}
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-square shrink-0"
+              @click="adding = !adding"
+              aria-label="Add epic"
+              title="Add epic"
+            >
+              <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+          {% endif %}
+        </div>
       </div>
       <template x-if="error">
         <inline-alert type="error"><span x-text="error"></span></inline-alert>
@@ -634,7 +503,7 @@
         </form>
       </template>
       <div class="flex flex-col gap-2">
-        <template x-for="epic in items" :key="epic.uuid">
+        <template x-for="epic in visibleEpics()" :key="epic.uuid">
           <div
             class="rounded-box bg-base-100 p-3 flex flex-col gap-2"
             :class="epic.closed ? 'opacity-60' : ''"
@@ -794,6 +663,184 @@
         x-show="!items.length && !adding"
       >
         No epics yet.
+      </p>
+      <p
+        class="text-sm text-base-content/60"
+        x-show="items.length && !visibleEpics().length"
+        x-cloak
+      >
+        No epics match.
+      </p>
+    </section>
+
+    <section
+      id="settings-labels"
+      class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
+      x-data="projectLabels({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+    >
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold flex items-center gap-2">
+          <i data-lucide="tags" class="w-4 h-4 text-accent"></i>
+          Labels
+        </h3>
+        {% if writable %}
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            @click="adding = !adding"
+            aria-label="Add label"
+            title="Add label"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        {% endif %}
+      </div>
+      <template x-if="error">
+        <inline-alert type="error"><span x-text="error"></span></inline-alert>
+      </template>
+      <template x-if="adding">
+        <form
+          class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-100"
+          @submit.prevent="addLabel()"
+          @keydown.escape="adding = false"
+        >
+          <label class="form-control">
+            <div class="label py-0"><span class="label-text-alt">Name</span></div>
+            <input
+              type="text"
+              class="input input-bordered input-sm"
+              x-model="addForm.name"
+              required
+              maxlength="100"
+            />
+          </label>
+          <div class="form-control">
+            <div class="label py-0"><span class="label-text-alt">Color</span></div>
+            <div class="flex items-center gap-1.5 h-8">
+              <template x-for="c in colors" :key="c">
+                <button
+                  type="button"
+                  class="w-6 h-6 rounded-full border border-base-300 shrink-0"
+                  :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
+                  :style="c ? 'background:' + c : ''"
+                  :aria-label="c ? 'Color ' + c : 'No color'"
+                  :aria-pressed="addForm.color === c"
+                  @click="addForm.color = c"
+                ></button>
+              </template>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 ml-auto">
+            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
+            <button
+              type="submit"
+              class="btn btn-accent btn-sm"
+              :disabled="busy || !addForm.name.trim()"
+            >
+              Add
+            </button>
+          </div>
+        </form>
+      </template>
+      {% comment %}Slot mode: the chip element supplies the pill, this chip
+      supplies its own content (inline rename input, color dropdown, delete
+      button).{% endcomment %}
+      <div class="flex flex-wrap gap-1.5">
+        <template x-for="label in items" :key="label.uuid">
+          <tag-chip :color="label.color"{% if writable %} removable{% endif %}>
+          <template x-if="editing !== label.uuid">
+            <button
+              type="button"
+              class="relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0"
+              x-text="label.name"
+              {% if writable %}@click="startEdit(label)"{% endif %}
+            ></button>
+          </template>
+          <template x-if="editing === label.uuid">
+            {# h-5 keeps the pill at its 26px resting height while editing. #}
+            <input
+              type="text"
+              class="input input-ghost input-xs w-24 h-5 min-h-0 px-0 text-xs"
+              x-model="editName"
+              maxlength="100"
+              @keydown.enter.prevent="saveEdit(label)"
+              @keydown.escape="editName = label.name; editing = null"
+              @blur="saveEdit(label)"
+              x-init="$el.focus()"
+            />
+          </template>
+          {% if writable %}
+            {% comment %}Inline SVGs on purpose: lucide.createIcons() does not
+            process nodes that Alpine clones out of an x-for template.{% endcomment %}
+            {# Opens rightward: chips hug the section's left edge and an end- #}
+            {# aligned popover gets clipped by the overflow-hidden main pane. #}
+            <div class="dropdown">
+              <button
+                type="button"
+                tabindex="0"
+                class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
+                aria-label="Label color"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="w-3 h-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+                  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+                </svg>
+              </button>
+              <ul
+                tabindex="0"
+                class="dropdown-content z-50 mt-1 flex flex-row items-center gap-1.5 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
+              >
+                <template x-for="c in colors" :key="c">
+                  <li class="flex">
+                    <button
+                      type="button"
+                      class="w-5 h-5 rounded-full border border-base-300 shrink-0"
+                      :class="label.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
+                      :style="c ? 'background:' + c : ''"
+                      :aria-label="c ? 'Color ' + c : 'No color'"
+                      @click="setColor(label, c); document.activeElement.blur()"
+                    ></button>
+                  </li>
+                </template>
+              </ul>
+            </div>
+            <button
+              type="button"
+              class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0 text-error"
+              aria-label="Delete label"
+              @click="removeLabel(label)"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="w-3 h-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          {% endif %}
+          </tag-chip>
+        </template>
+      </div>
+      <p
+        class="text-sm text-base-content/60"
+        x-show="!items.length && !adding"
+      >
+        No labels yet.
       </p>
     </section>
 

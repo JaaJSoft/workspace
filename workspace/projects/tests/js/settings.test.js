@@ -422,3 +422,30 @@ test('projectEpics.saveDescEdit keeps the editor and draft on failure', async ()
   assert.equal(c.descDraft, 'Ship v2');
   assert.equal(epic.description, 'Ship v1');
 });
+
+test('projectEpics.visibleEpics filters by search and open state', () => {
+  const c = ctx().projectEpics({ apiBase: '/x' });
+  c.items = [
+    { uuid: 'e1', name: 'Mobile launch', closed: false },
+    { uuid: 'e2', name: 'Performance', closed: false },
+    { uuid: 'e3', name: 'Old mobile era', closed: true },
+  ];
+  assert.equal(c.visibleEpics().length, 3);
+  c.openOnly = true;
+  assert.deepStrictEqual(
+    Array.from(c.visibleEpics()).map((e) => e.uuid),
+    ['e1', 'e2']
+  );
+  c.query = '  MOBILE ';
+  assert.deepStrictEqual(
+    Array.from(c.visibleEpics()).map((e) => e.uuid),
+    ['e1']
+  );
+  c.openOnly = false;
+  assert.deepStrictEqual(
+    Array.from(c.visibleEpics()).map((e) => e.uuid),
+    ['e1', 'e3']
+  );
+  c.query = 'nothing';
+  assert.equal(c.visibleEpics().length, 0);
+});

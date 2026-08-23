@@ -626,6 +626,8 @@ function projectEpics(config) {
   return {
     items: [],
     colors: COLUMN_COLORS,
+    query: '',
+    openOnly: false,
     adding: false,
     addForm: { name: '', color: '', description: '' },
     editing: null,
@@ -674,6 +676,17 @@ function projectEpics(config) {
     progressPercent(epic) {
       if (!epic.task_count) return 0;
       return Math.round((epic.done_task_count / epic.task_count) * 100);
+    },
+
+    // List filter: quick name search + "open only" switch. Purely visual -
+    // items stays the full list so counts and syncBoardEpics see everything.
+    visibleEpics() {
+      const needle = this.query.trim().toLowerCase();
+      return this.items.filter(
+        (e) =>
+          (!this.openOnly || !e.closed) &&
+          (!needle || e.name.toLowerCase().includes(needle))
+      );
     },
 
     async addEpic() {

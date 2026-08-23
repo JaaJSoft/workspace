@@ -153,3 +153,10 @@ class SettingsEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.client.get(f"/projects/{self.project.uuid}/settings")
         self.assertContains(resp, 'id="settings-epics"')
         self.assertContains(resp, "projectEpics(")
+
+    def test_settings_epics_list_has_search_and_open_only_filter(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertContains(resp, 'placeholder="Search epics"')
+        self.assertContains(resp, 'x-model="openOnly"')
+        self.assertContains(resp, 'x-for="epic in visibleEpics()"')

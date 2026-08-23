@@ -52,7 +52,10 @@ class WebSearchParams(BaseModel):
 
 
 class ReadWebpageParams(BaseModel):
-    url: str = Field(description="The URL of the webpage to read.")
+    url: str = Field(
+        description="The URL to read. Absolute http(s) URL, including one taken "
+        "from the links of a page you already read."
+    )
 
 
 class GetWeatherParams(BaseModel):
@@ -429,7 +432,9 @@ class WebToolProvider(ToolProvider):
     def web_search(self, args, user, bot, conversation_id, context):
         """Search the web for current information. \
 Call this when the user asks about recent events, news, facts you're unsure about, \
-or anything that requires up-to-date information you don't have."""
+or anything that requires up-to-date information you don't have. \
+Returns titles, URLs and short snippets — read the promising ones with \
+read_webpage rather than answering from the snippets."""
         from .services.web import search
 
         query = args.query.strip()
@@ -450,9 +455,10 @@ or anything that requires up-to-date information you don't have."""
         params=ReadWebpageParams,
     )
     def read_webpage(self, args, user, bot, conversation_id, context):
-        """Fetch and extract the main text content of a webpage. \
-Call this when you need to read the content of a specific URL shared by the user \
-or found via web_search to get more details."""
+        """Fetch a webpage and return its main content as markdown, links included. \
+Call this on any URL the user shares or that web_search returned, and call it again \
+on the links inside the result to reach details the first page only refers to. \
+JSON URLs are returned as JSON, so a site's API can be read the same way."""
         from .services.web import fetch_and_extract
 
         url = args.url.strip()

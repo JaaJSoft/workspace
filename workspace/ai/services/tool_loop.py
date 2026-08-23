@@ -189,7 +189,15 @@ def run_tool_loop(
             break
         result = call_llm(messages, model=model, tools=tools)
     else:
-        # Max rounds reached - capture the final response
+        # Max rounds reached. The last response is another tool call that will
+        # never run, so returning it hands the caller a reply with no text:
+        # re-ask without tools to turn what was gathered into an answer.
+        tool_context["round_cap_reached"] = True
+        if result.get("tool_calls"):
+            rounds.append(
+                {"response": serialize_response(result), "round_cap_reached": True}
+            )
+            result = call_llm(messages, model=model)
         rounds.append({"response": serialize_response(result)})
 
     return result, tool_context, rounds, tool_data or None

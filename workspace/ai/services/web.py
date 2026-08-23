@@ -1,9 +1,10 @@
 """Web search and page content extraction for AI tools."""
 
+import json
 import logging
 import re
 from ipaddress import ip_address
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx2
 import trafilatura
@@ -97,11 +98,48 @@ def search(query: str, *, max_results: int = 5) -> list[dict]:
     return results
 
 
-def fetch_and_extract(url: str, *, max_chars: int = 6000) -> str:
-    """Fetch a URL and extract its main text content.
+_MD_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)\s]+)\)")
+
+
+def _absolutize_links(markdown: str, base_url: str) -> str:
+    """Rewrite relative markdown link targets against *base_url*.
+
+    Extraction preserves hrefs exactly as the page wrote them, and most sites
+    write them relative — a link the reader cannot fetch is no link at all.
+    """
+    return _MD_LINK_RE.sub(lambda m: f"[{m[1]}]({urljoin(base_url, m[2])})", markdown)
+
+
+def _truncate(text: str, max_chars: int) -> str:
+    """Cap *text*, telling the reader the page continues past the cut."""
+    if len(text) <= max_chars:
+        return text
+    return (
+        text[:max_chars]
+        + f"\n\n[… truncated at {max_chars} characters — the page continues]"
+    )
+
+
+def _json_or_none(resp) -> str | None:
+    """Re-serialize a JSON response compactly, or return None if it isn't JSON.
+
+    HTML extraction yields nothing on a JSON document, and a pretty-printed
+    payload spends most of the character budget on indentation.
+    """
+    if "json" not in resp.headers.get("content-type", "").lower():
+        return None
+    try:
+        return json.dumps(resp.json(), ensure_ascii=False, separators=(",", ":"))
+    except ValueError:
+        return None
+
+
+def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
+    """Fetch a URL and extract its main content as link-preserving markdown.
 
     Uses *trafilatura* for editorial content extraction — strips navigation,
-    ads, footers, and returns clean readable text.
+    ads and footers, but keeps hyperlinks so a follow-up fetch can navigate to
+    the pages this one references. JSON responses are returned as compact JSON.
 
     Raises ``ValueError`` for unsafe URLs or fetch failures.
     """
@@ -123,15 +161,24 @@ def fetch_and_extract(url: str, *, max_chars: int = 6000) -> str:
     if len(resp.content) > 2 * 1024 * 1024:
         raise ValueError("Response too large (>2 MB)")
 
+    payload = _json_or_none(resp)
+    if payload is not None:
+        return _truncate(payload, max_chars)
+
+    # Links are kept: they are how a reader moves from this page to the ones
+    # it references, and a text-only extraction leaves no way back.
     text = (
         trafilatura.extract(
             resp.text,
-            include_links=False,
+            include_links=True,
             include_images=False,
             include_tables=True,
+            output_format="markdown",
+            url=url,
         )
         or ""
     )
+    text = _absolutize_links(text, str(resp.url))
 
     if not text:
         # Fallback: grab raw text stripped of tags.
@@ -149,6 +196,4 @@ def fetch_and_extract(url: str, *, max_chars: int = 6000) -> str:
         parser.feed(resp.text[:200_000])
         text = " ".join(parser.parts).strip()
 
-    if len(text) > max_chars:
-        text = text[:max_chars] + "\n\n[… truncated]"
-    return text
+    return _truncate(text, max_chars)

@@ -51,12 +51,59 @@ class RoundCapTests(TestCase):
                 conversation_id=None,
             )
 
-        # 1 initial call + one re-call per allowed round
-        self.assertEqual(mock_call_llm.call_count, 3)
+        # 1 initial call + one re-call per allowed round + the tool-less call
+        # that turns the exhausted run into an answer
+        self.assertEqual(mock_call_llm.call_count, 4)
         self.assertEqual(reg.execute.call_count, 2)
+        self.assertEqual(ctx["round_cap_reached"], True)
+        self.assertEqual(mock_call_llm.call_args.kwargs.get("tools"), None)
         # The final entry is the captured last response, not a tool round
-        self.assertEqual(len(rounds), 3)
+        self.assertEqual(len(rounds), 4)
         self.assertNotIn("tool_executions", rounds[-1])
+
+    @override_settings(AI_MAX_TOOL_ROUNDS=2)
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
+    def test_no_extra_call_when_cap_lands_on_a_text_answer(
+        self, mock_build, mock_call_llm
+    ):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            type="function",
+            function=SimpleNamespace(name="search", arguments="{}"),
+        )
+        msg = SimpleNamespace(role="assistant", content="", tool_calls=[tool_call])
+        looping_result = {
+            "tool_calls": [tool_call],
+            "content": "",
+            "message": msg,
+            "model": "x",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+        }
+        final_result = {
+            "tool_calls": [],
+            "content": "done",
+            "message": SimpleNamespace(role="assistant", content="done", tool_calls=[]),
+            "model": "x",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+        }
+        mock_call_llm.side_effect = [looping_result, looping_result, final_result]
+
+        with patch("workspace.ai.tool_registry.tool_registry") as reg:
+            reg.get_definitions.return_value = []
+            reg.execute.return_value = "ok"
+            result, ctx, rounds, td = run_tool_loop(
+                messages=[{"role": "user", "content": "go"}],
+                model="x",
+                human_user=self.user,
+                bot_user=self.bot,
+                conversation_id=None,
+            )
+
+        self.assertEqual(mock_call_llm.call_count, 3)
+        self.assertEqual(result["content"], "done")
 
 
 class StopAfterRoundTests(TestCase):

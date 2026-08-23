@@ -19,7 +19,7 @@ AI_VISION_MAX_IMAGES = int(
     os.getenv("AI_VISION_MAX_IMAGES", "8")
 )  # max images injected as pixels into a vision bot's history
 AI_MAX_TOOL_ROUNDS = int(
-    os.getenv("AI_MAX_TOOL_ROUNDS", "10")
+    os.getenv("AI_MAX_TOOL_ROUNDS", "20")
 )  # max tool-call rounds per bot reply before forcing a final answer
 AI_TIMEOUT = int(os.getenv("AI_TIMEOUT", "300"))  # seconds per request
 AI_MAX_RETRIES = int(

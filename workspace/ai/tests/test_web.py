@@ -2,7 +2,12 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 
-from workspace.ai.services.web import _is_url_safe, fetch_and_extract, search
+from workspace.ai.services.web import (
+    _absolutize_links,
+    _is_url_safe,
+    fetch_and_extract,
+    search,
+)
 
 
 class IsUrlSafeTests(TestCase):
@@ -94,6 +99,44 @@ class SearchTests(TestCase):
         self.assertEqual(results, [])
 
 
+def _fake_response(*, text="", url="https://example.com/", content_type="text/html"):
+    """Build a response stub whose headers and url are real strings.
+
+    A bare MagicMock answers every attribute, so the content-type branch and
+    the link base would both be driven by mock objects rather than the values
+    under test.
+    """
+    resp = MagicMock()
+    resp.text = text
+    resp.content = text.encode()
+    resp.url = url
+    resp.headers = {"content-type": content_type}
+    return resp
+
+
+def _client_returning(resp):
+    client = MagicMock()
+    client.__enter__ = MagicMock(return_value=client)
+    client.__exit__ = MagicMock(return_value=False)
+    client.get.return_value = resp
+    return client
+
+
+class AbsolutizeLinksTests(TestCase):
+    def test_relative_link_resolved_against_base(self):
+        md = "see [the files](/owner/repo/pull/2/files) for details"
+        out = _absolutize_links(md, "https://example.com/owner/repo/pull/2")
+        self.assertIn("(https://example.com/owner/repo/pull/2/files)", out)
+
+    def test_absolute_link_untouched(self):
+        md = "[docs](https://other.com/a)"
+        self.assertEqual(_absolutize_links(md, "https://example.com/"), md)
+
+    def test_text_without_links_unchanged(self):
+        md = "no links here (just parentheses)"
+        self.assertEqual(_absolutize_links(md, "https://example.com/"), md)
+
+
 class FetchAndExtractTests(TestCase):
     def test_private_url_raises(self):
         with self.assertRaises(ValueError) as ctx:
@@ -103,14 +146,8 @@ class FetchAndExtractTests(TestCase):
     @patch("workspace.ai.services.web.trafilatura.extract")
     @patch("workspace.ai.services.web.httpx2.Client")
     def test_extracts_content(self, mock_client_cls, mock_extract):
-        mock_resp = MagicMock()
-        mock_resp.text = "<html><body><p>Hello world</p></body></html>"
-        mock_resp.content = b"x" * 100
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.get.return_value = mock_resp
-        mock_client_cls.return_value = mock_client
+        resp = _fake_response(text="<html><body><p>Hello world</p></body></html>")
+        mock_client_cls.return_value = _client_returning(resp)
         mock_extract.return_value = "Hello world"
 
         text = fetch_and_extract("https://example.com/article")
@@ -120,35 +157,107 @@ class FetchAndExtractTests(TestCase):
 
     @patch("workspace.ai.services.web.trafilatura.extract")
     @patch("workspace.ai.services.web.httpx2.Client")
+    def test_extraction_keeps_links_as_markdown(self, mock_client_cls, mock_extract):
+        mock_client_cls.return_value = _client_returning(_fake_response(text="<html/>"))
+        mock_extract.return_value = "text"
+
+        fetch_and_extract("https://example.com/article")
+
+        kwargs = mock_extract.call_args.kwargs
+        self.assertTrue(kwargs["include_links"])
+        self.assertEqual(kwargs["output_format"], "markdown")
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_relative_links_are_absolutized(self, mock_client_cls, mock_extract):
+        resp = _fake_response(text="<html/>", url="https://example.com/a/b")
+        mock_client_cls.return_value = _client_returning(resp)
+        mock_extract.return_value = "read [more](../c) now"
+
+        text = fetch_and_extract("https://example.com/a/b")
+
+        self.assertIn("(https://example.com/c)", text)
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_json_response_returned_as_json(self, mock_client_cls, mock_extract):
+        resp = _fake_response(
+            text='{"title": "PR title", "state": "open"}',
+            content_type="application/json; charset=utf-8",
+        )
+        resp.json.return_value = {"title": "PR title", "state": "open"}
+        mock_client_cls.return_value = _client_returning(resp)
+
+        text = fetch_and_extract("https://example.com/api/pulls/1")
+
+        self.assertEqual(text, '{"title":"PR title","state":"open"}')
+        mock_extract.assert_not_called()
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_malformed_json_falls_back_to_extraction(
+        self, mock_client_cls, mock_extract
+    ):
+        resp = _fake_response(text="not json", content_type="application/json")
+        resp.json.side_effect = ValueError("no")
+        mock_client_cls.return_value = _client_returning(resp)
+        mock_extract.return_value = "not json"
+
+        self.assertEqual(fetch_and_extract("https://example.com/x"), "not json")
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
     def test_truncates_long_content(self, mock_client_cls, mock_extract):
-        mock_resp = MagicMock()
-        mock_resp.text = "<html><body>long</body></html>"
-        mock_resp.content = b"x" * 100
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.get.return_value = mock_resp
-        mock_client_cls.return_value = mock_client
+        mock_client_cls.return_value = _client_returning(_fake_response(text="<html/>"))
         mock_extract.return_value = "A" * 10000
 
         text = fetch_and_extract("https://example.com/", max_chars=100)
 
-        self.assertEqual(len(text), 100 + len("\n\n[… truncated]"))
-        self.assertTrue(text.endswith("[… truncated]"))
+        # The marker counts against the budget, so the caller never gets more
+        # than the number of characters it asked for.
+        self.assertEqual(len(text), 100)
+        self.assertTrue(text.startswith("A"))
+        self.assertIn("the page continues", text)
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_json_truncation_also_respects_the_budget(
+        self, mock_client_cls, mock_extract
+    ):
+        resp = _fake_response(text="{}", content_type="application/json")
+        resp.json.return_value = {"body": "B" * 5000}
+        mock_client_cls.return_value = _client_returning(resp)
+
+        text = fetch_and_extract("https://example.com/api", max_chars=200)
+
+        self.assertEqual(len(text), 200)
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_links_resolve_against_the_redirected_url(
+        self, mock_client_cls, mock_extract
+    ):
+        # httpx exposes the URL the redirects landed on; a link relative to it
+        # resolves to a different page than the same link read against the
+        # URL originally requested.
+        resp = _fake_response(text="<html/>", url="https://cdn.example.com/docs/page")
+        mock_client_cls.return_value = _client_returning(resp)
+        mock_extract.return_value = "see [next](other)"
+
+        text = fetch_and_extract("https://example.com/start")
+
+        self.assertIn("(https://cdn.example.com/docs/other)", text)
+        self.assertEqual(
+            mock_extract.call_args.kwargs["url"], "https://cdn.example.com/docs/page"
+        )
 
     @patch("workspace.ai.services.web.trafilatura.extract")
     @patch("workspace.ai.services.web.httpx2.Client")
     def test_fallback_when_trafilatura_returns_empty(
         self, mock_client_cls, mock_extract
     ):
-        mock_resp = MagicMock()
-        mock_resp.text = "<html><body><p>Fallback text</p></body></html>"
-        mock_resp.content = b"x" * 100
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.get.return_value = mock_resp
-        mock_client_cls.return_value = mock_client
+        resp = _fake_response(text="<html><body><p>Fallback text</p></body></html>")
+        mock_client_cls.return_value = _client_returning(resp)
         mock_extract.return_value = None  # trafilatura failed
 
         text = fetch_and_extract("https://example.com/")
@@ -157,13 +266,9 @@ class FetchAndExtractTests(TestCase):
 
     @patch("workspace.ai.services.web.httpx2.Client")
     def test_rejects_oversized_response(self, mock_client_cls):
-        mock_resp = MagicMock()
-        mock_resp.content = b"x" * (3 * 1024 * 1024)  # 3 MB
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.get.return_value = mock_resp
-        mock_client_cls.return_value = mock_client
+        resp = _fake_response()
+        resp.content = b"x" * (3 * 1024 * 1024)  # 3 MB
+        mock_client_cls.return_value = _client_returning(resp)
 
         with self.assertRaises(ValueError) as ctx:
             fetch_and_extract("https://example.com/huge")

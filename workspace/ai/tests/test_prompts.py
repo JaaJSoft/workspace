@@ -139,3 +139,25 @@ class BuildClassifyMessagesTests(TestCase):
         ]
         result = build_classify_messages(emails, [])
         self.assertEqual(len(result), 2)
+
+
+class MultiStepInstructionsTests(TestCase):
+    """The sections telling the bot to work a request in several tool calls.
+
+    They only steer the model if they reach the system message, and every
+    section here is one f-string away from being silently dropped.
+    """
+
+    def setUp(self):
+        self.system = build_chat_messages("System prompt", [], bot_name="Bot")[0][
+            "content"
+        ]
+
+    def test_task_section_present(self):
+        self.assertIn("## Working through a task", self.system)
+
+    def test_web_research_section_present(self):
+        self.assertIn("## Web research", self.system)
+
+    def test_web_section_directs_reading_beyond_the_first_page(self):
+        self.assertIn("read_webpage again", self.system)

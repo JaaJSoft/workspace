@@ -1,15 +1,31 @@
-"""Notification fan-out for task comments."""
+"""Task comments: creation and notification fan-out."""
 
 from django.contrib.auth import get_user_model
 
 from workspace.common.services.mentions import mentioned_users, newly_mentioned_users
 from workspace.notifications.services.notifications import notify_stream
 
+from ..models import TaskComment, TaskEvent
 from ..queries import project_users
+from .events import record_task_event
 from .notification_levels import apply_levels
-from .watchers import apply_watchers
+from .watchers import apply_watchers, auto_watch
 
 User = get_user_model()
+
+
+def add_comment(task, author, body):
+    """Create a comment with its event, auto-watch and notification fan-out.
+
+    The single write path for comments: the API viewset and the AI tool
+    both go through here so the COMMENTED event, the author's auto-watch
+    and the recipient fan-out can never drift apart.
+    """
+    comment = TaskComment.objects.create(task=task, author=author, body=body)
+    record_task_event(task, type=TaskEvent.Type.COMMENTED, actor=author)
+    auto_watch(task, [author])
+    notify_comment_added(task, author, comment.body)
+    return comment
 
 
 def _task_url(task):

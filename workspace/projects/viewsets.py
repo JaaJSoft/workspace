@@ -59,7 +59,7 @@ from .services.attachments import (
     create_attachments,
     remove_attachment,
 )
-from .services.comments import notify_comment_added, notify_comment_edited
+from .services.comments import add_comment, notify_comment_edited
 from .services.estimates import format_estimate
 from .services.events import record_task_event
 from .services.links import create_link, delete_link, links_for_task
@@ -911,14 +911,7 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         self._require_writable()
         body_ser = TaskCommentBodySerializer(data=request.data)
         body_ser.is_valid(raise_exception=True)
-        comment = TaskComment.objects.create(
-            task=self.task,
-            author=request.user,
-            body=body_ser.validated_data["body"],
-        )
-        record_task_event(self.task, type=TaskEvent.Type.COMMENTED, actor=request.user)
-        auto_watch(self.task, [request.user])
-        notify_comment_added(self.task, request.user, comment.body)
+        comment = add_comment(self.task, request.user, body_ser.validated_data["body"])
         return Response(
             self.get_serializer(comment).data, status=status.HTTP_201_CREATED
         )

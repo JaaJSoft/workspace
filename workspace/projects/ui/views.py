@@ -515,12 +515,27 @@ def backlog(request, project_uuid):
         # scrum): without a running sprint the board shows nothing, so
         # sending a task there would make it invisible.
         context["hide_send_to_board"] = not has_active_sprint
+        # ?sprint= scopes the list like the board switcher: an open sprint's
+        # UUID, or the literal "none" for the unplanned pool. Anything else
+        # (closed, foreign, malformed) falls back to the whole backlog.
+        scope_param = request.GET.get("sprint") or ""
+        if scope_param == "none":
+            context["backlog_scope"] = "none"
+        else:
+            parsed = parse_uuid_or_none(scope_param)
+            context["backlog_scope"] = next(
+                (s for s in planning_sprints if s.uuid == parsed), None
+            )
     backlog_qs = (
         project.tasks.filter(status__category=TaskStatus.Category.BACKLOG)
         .select_related("status", "epic", "sprint")
         .prefetch_related("assignees", "labels")
         .order_by("position", "created_at")
     )
+    if context.get("backlog_scope") == "none":
+        backlog_qs = backlog_qs.filter(sprint__isnull=True)
+    elif context.get("backlog_scope"):
+        backlog_qs = backlog_qs.filter(sprint=context["backlog_scope"])
     try:
         backlog_tasks, truncated = _filtered_tasks(request, backlog_qs)
         estimate_totals = _estimate_totals(request, project, backlog_qs)

@@ -1419,3 +1419,37 @@ test('completeSprint aborts without a request when the dialog is cancelled', asy
   await board.completeSprint('s1', 'Sprint 1');
   assert.deepStrictEqual(Array.from(calls), ['select']);
 });
+
+test('dragging is blocked while the backlog is sprint-scoped', () => {
+  const calls = [];
+  const board = sprintBoard(calls, null);
+  board.currentView = 'backlog';
+  ctx.location = { href: 'http://x.test/projects/p/backlog?sprint=s1' };
+  const event = {
+    preventDefault: () => calls.push('prevented'),
+    dataTransfer: { setData: () => {} },
+  };
+  board.onDragStart(event, 'u1');
+  assert.equal(board.dragging, null);
+  assert.deepStrictEqual(Array.from(calls), ['prevented']);
+  // Dropping the scope re-enables dragging.
+  ctx.location = { href: 'http://x.test/projects/p/backlog' };
+  board.onDragStart(event, 'u1');
+  assert.equal(board.dragging, 'u1');
+});
+
+test('refreshContent keeps the sprint scope on backlog refreshes', () => {
+  const calls = [];
+  const board = sprintBoard(calls, null);
+  board.currentView = 'backlog';
+  ctx.location = {
+    href: 'http://x.test/projects/p/backlog?sprint=none',
+    origin: 'http://x.test',
+  };
+  board.refresh = undefined;
+  board.$ajax = (url, opts) => calls.push(url + ' -> ' + opts.target);
+  board.refreshContent();
+  assert.deepStrictEqual(Array.from(calls), [
+    '/projects/p/backlog?sprint=none -> project-content',
+  ]);
+});

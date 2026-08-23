@@ -361,8 +361,8 @@ function projectBoard(config) {
     onDragStart(event, uuid) {
       // Reordering a filtered subset would push every unlisted task of the
       // column after the visible ones server-side, so dragging is disabled
-      // while filters narrow the list.
-      if (!config.writable || this.filtersActive()) {
+      // while filters (or the backlog's sprint scope) narrow the list.
+      if (!config.writable || this.filtersActive() || this.sprintScoped()) {
         event.preventDefault();
         return;
       }
@@ -425,9 +425,9 @@ function projectBoard(config) {
       else if (this.currentView === 'analytics') url += '/analytics';
       else if (this.currentView !== 'overview') url += '/board';
       let full = window.location.origin + url;
-      if (this.currentView === 'board') {
-        // The sprint selection lives in the URL like the filters; a refresh
-        // must keep pointing the board at the same sprint.
+      if (this.currentView === 'board' || this.currentView === 'backlog') {
+        // The sprint selection (board switcher, backlog scope) lives in the
+        // URL like the filters; a refresh must keep pointing at it.
         const sprint = new URL(window.location.href).searchParams.get('sprint');
         if (sprint) full += '?sprint=' + encodeURIComponent(sprint);
       }
@@ -459,6 +459,17 @@ function projectBoard(config) {
       // navigation carries no filter params, so this is what resets the
       // filter bar when the user switches views.
       this.filters = taskFiltersFromUrl(window.location.href);
+    },
+
+    sprintScoped() {
+      // A sprint-scoped backlog renders a subset of the backlog column; a
+      // reorder from it would misplace every hidden task, same trap as the
+      // task filters. The board's ?sprint= is fine: columns there show the
+      // selected sprint in full.
+      return (
+        this.currentView === 'backlog' &&
+        new URL(window.location.href).searchParams.has('sprint')
+      );
     },
 
     filtersActive() {

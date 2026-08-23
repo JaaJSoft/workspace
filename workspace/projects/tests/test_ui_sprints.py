@@ -115,11 +115,41 @@ class ScrumBacklogUiTests(ScrumUiTestCase):
         response = self.client.get(f"/projects/{self.scrum.uuid}/backlog")
         self.assertContains(response, 'name="Sprint 1"')
 
+    def test_backlog_scope_by_sprint(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1")
+        create_task(self.scrum, self.admin, title="Planned task", sprint=sprint)
+        create_task(self.scrum, self.admin, title="Unplanned task")
+        self.client.force_login(self.member)
+        url = f"/projects/{self.scrum.uuid}/backlog"
+
+        response = self.client.get(url)
+        self.assertContains(response, "Whole backlog")
+        self.assertContains(response, "Planned task")
+        self.assertContains(response, "Unplanned task")
+
+        response = self.client.get(f"{url}?sprint={sprint.uuid}")
+        self.assertContains(response, "Planned task")
+        self.assertNotContains(response, "Unplanned task")
+
+        response = self.client.get(f"{url}?sprint=none")
+        self.assertContains(response, "Unplanned task")
+        self.assertNotContains(response, "Planned task")
+
+    def test_backlog_scope_ignores_invalid_sprint(self):
+        create_task(self.scrum, self.admin, title="Unplanned task")
+        closed = self.scrum.sprints.create(name="Sprint 0", state=Sprint.State.CLOSED)
+        self.client.force_login(self.member)
+        url = f"/projects/{self.scrum.uuid}/backlog"
+        for param in ("not-a-uuid", str(closed.uuid)):
+            response = self.client.get(f"{url}?sprint={param}")
+            self.assertContains(response, "Unplanned task")
+
     def test_kanban_backlog_has_no_sprint_controls(self):
         create_task(self.project, self.admin, title="Plain")
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/backlog")
         self.assertNotContains(response, "Send to sprint")
+        self.assertNotContains(response, "Whole backlog")
         self.assertContains(response, "Send to board")
 
 

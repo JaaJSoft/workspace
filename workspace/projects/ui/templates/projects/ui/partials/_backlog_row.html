@@ -79,6 +79,17 @@
     {# with the header row. #}
     {% if hide_send_to_board %}
       <span class="w-8 shrink-0"></span>
+    {% elif project.type == 'scrum' %}
+      {# Same landing as the kanban arrow (first active column), and the #}
+      {# backend adds board entrants to the running sprint - which is what #}
+      {# the gesture means on a scrum project. #}
+      <button
+        class="btn btn-ghost btn-sm btn-square shrink-0"
+        title="Send to current sprint"
+        @click.stop="sendToBoard('{{ task.uuid }}')"
+      >
+        <i data-lucide="iteration-cw" class="w-5 h-5"></i>
+      </button>
     {% else %}
       <button
         class="btn btn-ghost btn-sm btn-square shrink-0"

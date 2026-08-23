@@ -127,6 +127,34 @@ class AssignTasksTests(SprintServiceTestCase):
             1,  # the creation event, not an assignment one
         )
 
+    def test_assign_to_active_sprint_moves_backlog_tasks_to_board(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        planned = create_task(self.scrum, self.admin, title="planned")
+        doing = create_task(self.scrum, self.admin, title="doing", status=self.doing)
+        doing.sprint = None
+        doing.save(update_fields=["sprint"])
+        assign_tasks_to_sprint(
+            self.scrum, sprint, [planned.uuid, doing.uuid], actor=self.admin
+        )
+        planned.refresh_from_db()
+        self.assertEqual(planned.sprint_id, sprint.pk)
+        # Backlog tasks joining the running sprint land on the board...
+        self.assertEqual(planned.status_id, self.todo.pk)
+        self.assertTrue(
+            TaskEvent.objects.filter(task=planned, type=TaskEvent.Type.MOVED).exists()
+        )
+        # ...while tasks already on the board keep their column.
+        doing.refresh_from_db()
+        self.assertEqual(doing.sprint_id, sprint.pk)
+        self.assertEqual(doing.status_id, self.doing.pk)
+
+    def test_assign_to_planned_sprint_keeps_status(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1")
+        task = create_task(self.scrum, self.admin, title="a")
+        assign_tasks_to_sprint(self.scrum, sprint, [task.uuid], actor=self.admin)
+        task.refresh_from_db()
+        self.assertEqual(task.status_id, self.backlog.pk)
+
     def test_assign_to_closed_sprint_raises(self):
         sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.CLOSED)
         task = create_task(self.scrum, self.admin, title="a")

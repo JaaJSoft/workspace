@@ -94,16 +94,19 @@ class ScrumBacklogUiTests(ScrumUiTestCase):
         response = self.client.get(f"/projects/{self.scrum.uuid}/backlog")
         self.assertContains(response, "Send to sprint")
         self.assertContains(response, "sendSelectedToSprint(")
-        # No active sprint: the board would swallow tasks invisibly.
+        # Sprint planning replaces the kanban send-to-board gesture, and
+        # without a running sprint the per-row shortcut hides too.
         self.assertNotContains(response, "Send to board")
+        self.assertNotContains(response, "Send to current sprint")
 
-    def test_backlog_with_active_sprint_keeps_send_to_board(self):
+    def test_backlog_with_active_sprint_shows_row_shortcut(self):
         self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
         create_task(self.scrum, self.admin, title="Plan me")
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.scrum.uuid}/backlog")
         self.assertContains(response, "Send to sprint")
-        self.assertContains(response, "Send to board")
+        self.assertContains(response, "Send to current sprint")
+        self.assertNotContains(response, "Send to board")
 
     def test_backlog_row_shows_sprint_chip(self):
         sprint = self.scrum.sprints.create(name="Sprint 1")

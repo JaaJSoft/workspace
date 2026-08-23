@@ -156,18 +156,32 @@ def assign_tasks_to_sprint(project, sprint, task_uuids, *, actor=None):
     """Assign the listed tasks to *sprint*; None returns them to the pool.
 
     Backlog planning: tasks already on the target sprint and unknown UUIDs
-    are skipped, the board status never changes. One SPRINT event per
-    changed task with the sprint *names* snapshotted - sprints are
-    renamable and deletable, a FK would rewrite history. Returns the
-    changed tasks.
+    are skipped. Assigning into a planned sprint never touches the board
+    status; assigning into the *running* sprint also moves backlog-column
+    tasks to the first active column, mirroring start_sprint - a task of
+    the running sprint left in a backlog column would be invisible on the
+    sprint board. One SPRINT event per changed task with the sprint
+    *names* snapshotted - sprints are renamable and deletable, a FK would
+    rewrite history. Returns the changed tasks.
     """
     if sprint is not None and sprint.state == Sprint.State.CLOSED:
         raise SprintTargetError("Tasks cannot be assigned to a closed sprint.")
     target_id = sprint.pk if sprint is not None else None
     with transaction.atomic():
+        board_status = None
+        if sprint is not None and sprint.state == Sprint.State.ACTIVE:
+            board_status = (
+                project.statuses.filter(category=TaskStatus.Category.ACTIVE)
+                .order_by("position", "created_at")
+                .first()
+            )
+            if board_status is not None:
+                # Status row locked before the task rows, matching the lock
+                # order of every other column-append writer.
+                TaskStatus.objects.select_for_update().get(pk=board_status.pk)
         tasks = list(
             project.tasks.select_for_update()
-            .select_related("sprint")
+            .select_related("sprint", "status")
             .filter(uuid__in=task_uuids)
         )
         now = timezone.now()
@@ -192,4 +206,15 @@ def assign_tasks_to_sprint(project, sprint, task_uuids, *, actor=None):
                 from_value=old_sprint.name if old_sprint is not None else "",
                 to_value=sprint.name if sprint is not None else "",
             )
+        if board_status is not None:
+            # Every listed task is on the running sprint by now (changed or
+            # already there); pull the ones still in a backlog column onto
+            # the board.
+            to_board = [
+                task.uuid
+                for task in tasks
+                if task.status.category == TaskStatus.Category.BACKLOG
+            ]
+            if to_board:
+                move_tasks(project, board_status, to_board, actor=actor)
     return [task for task, _ in changed]

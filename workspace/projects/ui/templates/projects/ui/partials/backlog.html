@@ -65,7 +65,7 @@
               </ul>
             </div>
           {% endif %}
-          {% if not hide_send_to_board %}
+          {% if project.type != 'scrum' %}
             <div class="join">
               <button
                 type="button"

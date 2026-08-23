@@ -511,8 +511,9 @@ def backlog(request, project_uuid):
         has_active_sprint = any(
             s.state == Sprint.State.ACTIVE for s in planning_sprints
         )
-        # Without a running sprint the board shows nothing, so sending a
-        # task there would make it invisible; planning is the only exit.
+        # Gates the per-row board shortcut (the bulk bar is sprint-only on
+        # scrum): without a running sprint the board shows nothing, so
+        # sending a task there would make it invisible.
         context["hide_send_to_board"] = not has_active_sprint
     backlog_qs = (
         project.tasks.filter(status__category=TaskStatus.Category.BACKLOG)

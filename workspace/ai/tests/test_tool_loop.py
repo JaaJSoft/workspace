@@ -355,3 +355,146 @@ class StepEmissionTests(TestCase):
 
         delivered = [set(call.args[0]) for call in mock_notify.call_args_list]
         self.assertEqual(delivered, [{self.user.id, self.leaver.id}, {self.user.id}])
+
+
+def _tool_call(call_id, name="search", arguments="{}"):
+    return SimpleNamespace(
+        id=call_id,
+        type="function",
+        function=SimpleNamespace(name=name, arguments=arguments),
+    )
+
+
+def _llm_result(tool_calls, content=""):
+    return {
+        "tool_calls": tool_calls,
+        "content": content,
+        "message": SimpleNamespace(
+            role="assistant", content=content, tool_calls=tool_calls
+        ),
+        "model": "x",
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+    }
+
+
+@override_settings(AI_MAX_TOOL_ROUNDS=10, AI_MAX_IDENTICAL_TOOL_CALLS=3)
+class RepeatedToolCallTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="repeat-user", email="ru@test.com", password="pw"
+        )
+        self.bot = User.objects.create_user(
+            username="repeat-bot", email="rb@test.com", password="pw"
+        )
+
+    def _run(self, mock_call_llm, reg_execute="ok"):
+        with patch("workspace.ai.tool_registry.tool_registry") as reg:
+            reg.get_definitions.return_value = []
+            reg.execute.return_value = reg_execute
+            result, ctx, rounds, td = run_tool_loop(
+                messages=[{"role": "user", "content": "go"}],
+                model="x",
+                human_user=self.user,
+                bot_user=self.bot,
+                conversation_id=None,
+            )
+        return reg, result, ctx, rounds
+
+    @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_identical_call_runs_at_most_the_configured_number_of_times(
+        self, mock_call_llm, mock_build
+    ):
+        mock_call_llm.return_value = _llm_result([_tool_call("c1")])
+
+        reg, result, ctx, rounds = self._run(mock_call_llm)
+
+        self.assertEqual(reg.execute.call_count, 3)
+        self.assertEqual(ctx["repeat_loop_stopped"], True)
+
+    @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_refused_call_reports_why_to_the_model(self, mock_call_llm, mock_build):
+        mock_call_llm.return_value = _llm_result([_tool_call("c1")])
+
+        _, _, _, rounds = self._run(mock_call_llm)
+
+        refused = rounds[3]["tool_executions"][0]["result"]
+        self.assertIn("Not executed", refused)
+        self.assertIn("search", refused)
+
+    @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_repeat_loop_ends_on_a_tool_less_answer(self, mock_call_llm, mock_build):
+        looping = _llm_result([_tool_call("c1")])
+        mock_call_llm.side_effect = [looping] * 4 + [_llm_result([], content="done")]
+
+        _, result, ctx, rounds = self._run(mock_call_llm)
+
+        self.assertEqual(result["content"], "done")
+        self.assertIsNone(mock_call_llm.call_args.kwargs.get("tools"))
+        self.assertEqual(rounds[-2]["repeat_loop_stopped"], True)
+
+    @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_same_tool_with_different_arguments_is_not_a_repeat(
+        self, mock_call_llm, mock_build
+    ):
+        mock_call_llm.side_effect = [
+            _llm_result([_tool_call("c1", arguments='{"url": "https://a.com"}')]),
+            _llm_result([_tool_call("c2", arguments='{"url": "https://b.com"}')]),
+            _llm_result([_tool_call("c3", arguments='{"url": "https://c.com"}')]),
+            _llm_result([_tool_call("c4", arguments='{"url": "https://d.com"}')]),
+            _llm_result([], content="done"),
+        ]
+
+        reg, result, ctx, rounds = self._run(mock_call_llm)
+
+        self.assertEqual(reg.execute.call_count, 4)
+        self.assertNotIn("repeat_loop_stopped", ctx)
+        self.assertEqual(result["content"], "done")
+
+    @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_reordered_arguments_count_as_the_same_call(
+        self, mock_call_llm, mock_build
+    ):
+        mock_call_llm.side_effect = [
+            _llm_result([_tool_call("c1", arguments='{"a": 1, "b": 2}')]),
+            _llm_result([_tool_call("c2", arguments='{"b": 2, "a": 1}')]),
+            _llm_result([_tool_call("c3", arguments='{"a": 1, "b": 2}')]),
+            _llm_result([_tool_call("c4", arguments='{"b": 2, "a": 1}')]),
+            _llm_result([], content="done"),
+        ]
+
+        reg, _, ctx, _ = self._run(mock_call_llm)
+
+        self.assertEqual(reg.execute.call_count, 3)
+        self.assertEqual(ctx["repeat_loop_stopped"], True)
+
+    @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_a_round_mixing_a_repeat_and_new_work_continues(
+        self, mock_call_llm, mock_build
+    ):
+        repeated = '{"url": "https://a.com"}'
+        mock_call_llm.side_effect = [
+            _llm_result([_tool_call("c1", arguments=repeated)]),
+            _llm_result([_tool_call("c2", arguments=repeated)]),
+            _llm_result([_tool_call("c3", arguments=repeated)]),
+            _llm_result(
+                [
+                    _tool_call("c4", arguments=repeated),
+                    _tool_call("c5", arguments='{"url": "https://b.com"}'),
+                ]
+            ),
+            _llm_result([], content="done"),
+        ]
+
+        reg, result, ctx, _ = self._run(mock_call_llm)
+
+        # The duplicate is refused, its sibling still runs, the loop goes on.
+        self.assertEqual(reg.execute.call_count, 4)
+        self.assertNotIn("repeat_loop_stopped", ctx)
+        self.assertEqual(result["content"], "done")

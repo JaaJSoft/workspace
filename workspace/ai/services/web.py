@@ -111,13 +111,15 @@ def _absolutize_links(markdown: str, base_url: str) -> str:
 
 
 def _truncate(text: str, max_chars: int) -> str:
-    """Cap *text*, telling the reader the page continues past the cut."""
+    """Cap *text* at *max_chars*, marker included.
+
+    The marker counts against the budget: the caller asked for a page that
+    fits in *max_chars*, and a cap that quietly returns more is not a cap.
+    """
     if len(text) <= max_chars:
         return text
-    return (
-        text[:max_chars]
-        + f"\n\n[… truncated at {max_chars} characters — the page continues]"
-    )
+    marker = f"\n\n[… truncated at {max_chars} characters — the page continues]"
+    return text[: max(max_chars - len(marker), 0)] + marker
 
 
 def _json_or_none(resp) -> str | None:
@@ -166,7 +168,9 @@ def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
         return _truncate(payload, max_chars)
 
     # Links are kept: they are how a reader moves from this page to the ones
-    # it references, and a text-only extraction leaves no way back.
+    # it references, and a text-only extraction leaves no way back. They
+    # resolve against the URL the redirects landed on, not the one asked for.
+    final_url = str(resp.url)
     text = (
         trafilatura.extract(
             resp.text,
@@ -174,11 +178,11 @@ def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
             include_images=False,
             include_tables=True,
             output_format="markdown",
-            url=url,
+            url=final_url,
         )
         or ""
     )
-    text = _absolutize_links(text, str(resp.url))
+    text = _absolutize_links(text, final_url)
 
     if not text:
         # Fallback: grab raw text stripped of tags.

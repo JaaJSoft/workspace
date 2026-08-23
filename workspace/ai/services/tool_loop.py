@@ -58,8 +58,10 @@ def run_tool_loop(
     A tool called more than settings.AI_MAX_IDENTICAL_TOOL_CALLS times with
     the same arguments is refused rather than run again, and a round made
     only of such refusals ends the loop on a final tool-less answer -
-    reported through ``tool_context["repeat_loop_stopped"]``. Exhausting the
-    round cap ends the same way, under ``round_cap_reached``.
+    reported through ``tool_context["repeat_loop_stopped"]``. A round cap
+    exhausted on a pending tool call ends the same way, under
+    ``round_cap_reached``; a run whose last round answered in text is a
+    normal completion and flags nothing.
 
     *rounds* is a list
     of dicts capturing each LLM response and the tool executions that
@@ -252,8 +254,8 @@ def run_tool_loop(
         # Max rounds reached. The last response is another tool call that will
         # never run, so returning it hands the caller a reply with no text:
         # re-ask without tools to turn what was gathered into an answer.
-        tool_context["round_cap_reached"] = True
         if result.get("tool_calls"):
+            tool_context["round_cap_reached"] = True
             rounds.append(
                 {"response": serialize_response(result), "round_cap_reached": True}
             )

@@ -213,8 +213,43 @@ class FetchAndExtractTests(TestCase):
 
         text = fetch_and_extract("https://example.com/", max_chars=100)
 
-        self.assertTrue(text.startswith("A" * 100))
+        # The marker counts against the budget, so the caller never gets more
+        # than the number of characters it asked for.
+        self.assertEqual(len(text), 100)
+        self.assertTrue(text.startswith("A"))
         self.assertIn("the page continues", text)
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_json_truncation_also_respects_the_budget(
+        self, mock_client_cls, mock_extract
+    ):
+        resp = _fake_response(text="{}", content_type="application/json")
+        resp.json.return_value = {"body": "B" * 5000}
+        mock_client_cls.return_value = _client_returning(resp)
+
+        text = fetch_and_extract("https://example.com/api", max_chars=200)
+
+        self.assertEqual(len(text), 200)
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_links_resolve_against_the_redirected_url(
+        self, mock_client_cls, mock_extract
+    ):
+        # httpx exposes the URL the redirects landed on; a link relative to it
+        # resolves to a different page than the same link read against the
+        # URL originally requested.
+        resp = _fake_response(text="<html/>", url="https://cdn.example.com/docs/page")
+        mock_client_cls.return_value = _client_returning(resp)
+        mock_extract.return_value = "see [next](other)"
+
+        text = fetch_and_extract("https://example.com/start")
+
+        self.assertIn("(https://cdn.example.com/docs/other)", text)
+        self.assertEqual(
+            mock_extract.call_args.kwargs["url"], "https://cdn.example.com/docs/page"
+        )
 
     @patch("workspace.ai.services.web.trafilatura.extract")
     @patch("workspace.ai.services.web.httpx2.Client")

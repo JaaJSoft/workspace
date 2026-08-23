@@ -104,6 +104,9 @@ class RoundCapTests(TestCase):
 
         self.assertEqual(mock_call_llm.call_count, 3)
         self.assertEqual(result["content"], "done")
+        # The cap was spent, but the run ended on a real answer: nothing was
+        # cut short, so the flag callers use to spot truncated runs stays off.
+        self.assertFalse(ctx.get("round_cap_reached"))
 
 
 class StopAfterRoundTests(TestCase):

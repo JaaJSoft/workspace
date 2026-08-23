@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('projects', '0024_projectnotificationlevel'),
+        ('projects', '0025_taskwatcher'),
     ]
 
     operations = [

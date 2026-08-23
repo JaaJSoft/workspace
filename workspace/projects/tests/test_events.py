@@ -274,3 +274,44 @@ class EstimateEventTests(ProjectTestMixin, TestCase):
             self.task, type=TaskEvent.Type.UPDATED, actor=self.admin
         )
         self.assertEqual(serialize_task_event(event)["label"], "Task updated")
+
+
+class EpicEventTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(self.project, self.admin, title="Grouped")
+
+    def _event(self, from_value="", to_value=""):
+        return record_task_event(
+            self.task,
+            type=TaskEvent.Type.EPIC,
+            actor=self.admin,
+            from_value=from_value,
+            to_value=to_value,
+        )
+
+    def test_record_stores_name_snapshots(self):
+        event = self._event(from_value="Launch", to_value="Polish")
+        event.refresh_from_db()
+        self.assertEqual(event.from_value, "Launch")
+        self.assertEqual(event.to_value, "Polish")
+        self.assertEqual(event.icon, "layers")
+        self.assertEqual(event.short_label, "Epic changed")
+
+    def test_record_survives_max_length_epic_names(self):
+        # Epic names go to 100 chars; the value snapshots must hold them.
+        long_name = "x" * 100
+        event = self._event(from_value=long_name, to_value=long_name)
+        event.refresh_from_db()
+        self.assertEqual(event.from_value, long_name)
+
+    def test_serialized_label_names_the_change(self):
+        cases = [
+            ("Launch", "Polish", "Epic changed: Launch → Polish"),
+            ("", "Launch", "Epic set to Launch"),
+            ("Launch", "", "Epic removed"),
+            ("", "", "Epic changed"),
+        ]
+        for from_value, to_value, label in cases:
+            event = self._event(from_value=from_value, to_value=to_value)
+            self.assertEqual(serialize_task_event(event)["label"], label)

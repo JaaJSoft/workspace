@@ -188,6 +188,45 @@
       </div>
     </section>
 
+    {% if epics_data or role == "admin" %}
+      <section @panel-epic-selected.window="setEpic($event.detail.label)">
+        <h3 class="mb-1">
+          <button
+            type="button"
+            class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+            :aria-expanded="sectionsOpen.epic"
+            @click="toggleSection('epic')"
+          >
+            <i
+              :data-lucide="sectionsOpen.epic ? 'chevron-down' : 'chevron-right'"
+              class="w-3.5 h-3.5 shrink-0"
+            ></i>
+            <span>Epic</span>
+          </button>
+        </h3>
+        {{ epics_data|json_script:"panel-epics-data" }}
+        <div x-show="sectionsOpen.epic">
+          <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="data.epic" x-cloak>
+            {% if "set_epic" in panel_action_ids %}
+              <tag-chip icon="layers" :name="epicName(data.epic)" :color="epicColor(data.epic)" removable @remove="removeEpic()"></tag-chip>
+            {% else %}
+              <tag-chip icon="layers" :name="epicName(data.epic)" :color="epicColor(data.epic)"></tag-chip>
+            {% endif %}
+          </div>
+          <p
+            class="text-sm text-base-content/50 italic mb-2"
+            x-show="!data.epic"
+            x-cloak
+          >
+            No epic.
+          </p>
+          {% if "set_epic" in panel_action_ids %}
+            {% include "projects/ui/partials/_label_selector.html" with on_select_event="panel-epic-selected" all_source="openEpics()" selected_source="data.epic ? [data.epic] : []" placeholder="Set epic..." resource="epics" entity="epic" icon="layers" created_event="project-epic-created" %}
+          {% endif %}
+        </div>
+      </section>
+    {% endif %}
+
     {% if labels_data or role == "admin" %}
       <section @panel-label-selected.window="addLabel($event.detail.label)">
         <h3 class="mb-1">

@@ -48,6 +48,15 @@ class SetLabelsAction(BaseProjectAction):
 
 
 @ProjectActionRegistry.register
+class SetEpicAction(BaseProjectAction):
+    id = "set_epic"
+    label = "Set epic"
+    icon = "layers"
+    category = ActionCategory.EDIT
+    target_types = ("task",)
+
+
+@ProjectActionRegistry.register
 class AttachFileAction(BaseProjectAction):
     id = "attach"
     label = "Attach files"

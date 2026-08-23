@@ -622,6 +622,185 @@ function projectLabels(config) {
   };
 }
 
+function projectEpics(config) {
+  return {
+    items: [],
+    colors: COLUMN_COLORS,
+    adding: false,
+    addForm: { name: '', color: '', description: '' },
+    editing: null,
+    editName: '',
+    editingDesc: null,
+    descDraft: '',
+    busy: false,
+    error: '',
+
+    async init() {
+      try {
+        const resp = await fetch(config.apiBase + '/epics');
+        if (resp.ok) this.items = await resp.json();
+      } catch (e) {
+        this.error = 'Could not load epics.';
+      }
+    },
+
+    syncBoardEpics() {
+      // this.epics is the parent projectBoard's array via Alpine's scope
+      // chain (same shape as the epics-data payload).
+      this.epics = this.items.map(function (e) {
+        return { uuid: e.uuid, name: e.name, color: e.color, closed: e.closed };
+      });
+    },
+
+    async request(url, options) {
+      this.busy = true;
+      this.error = '';
+      try {
+        const resp = await fetch(url, options);
+        if (!resp.ok) {
+          const data = await resp.json().catch(function () {
+            return {};
+          });
+          throw new Error(
+            data.detail || (data.name && data.name[0]) || 'Request failed.'
+          );
+        }
+        return resp;
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    progressPercent(epic) {
+      if (!epic.task_count) return 0;
+      return Math.round((epic.done_task_count / epic.task_count) * 100);
+    },
+
+    async addEpic() {
+      try {
+        const resp = await this.request(config.apiBase + '/epics', {
+          method: 'POST',
+          headers: settingsHeaders(),
+          body: JSON.stringify({
+            name: this.addForm.name.trim(),
+            color: this.addForm.color,
+            description: this.addForm.description.trim(),
+          }),
+        });
+        this.items.push(await resp.json());
+        this.adding = false;
+        this.addForm = { name: '', color: '', description: '' };
+        this.syncBoardEpics();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    startEdit(epic) {
+      this.editing = epic.uuid;
+      this.editName = epic.name;
+    },
+
+    async saveEdit(epic) {
+      if (this.editing !== epic.uuid) return;
+      const name = this.editName.trim();
+      if (!name || name === epic.name) {
+        this.editing = null;
+        return;
+      }
+      try {
+        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ name: name }),
+        });
+        epic.name = name;
+        this.editing = null;
+        this.syncBoardEpics();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    startDescEdit(epic) {
+      this.editingDesc = epic.uuid;
+      this.descDraft = epic.description || '';
+    },
+
+    async saveDescEdit(epic) {
+      if (this.editingDesc !== epic.uuid) return;
+      this.editingDesc = null;
+      const description = this.descDraft.trim();
+      if (description === (epic.description || '')) return;
+      try {
+        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ description: description }),
+        });
+        epic.description = description;
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    async setColor(epic, color) {
+      try {
+        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ color: color }),
+        });
+        epic.color = color;
+        this.syncBoardEpics();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    async toggleClosed(epic) {
+      try {
+        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ closed: !epic.closed }),
+        });
+        epic.closed = !epic.closed;
+        this.syncBoardEpics();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    async removeEpic(epic) {
+      const ok = await AppDialog.confirm({
+        title: 'Delete epic',
+        message:
+          '"' +
+          epic.name +
+          '" will be deleted; its tasks are kept and ungrouped.',
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+      try {
+        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+          method: 'DELETE',
+          headers: settingsHeaders(),
+        });
+        this.items = this.items.filter(function (e) {
+          return e.uuid !== epic.uuid;
+        });
+        this.syncBoardEpics();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+  };
+}
+
 function projectMembers(config) {
   return {
     items: [],
@@ -730,6 +909,7 @@ window.projectGroupAccess = projectGroupAccess;
 window.projectSettingsDanger = projectSettingsDanger;
 window.projectColumns = projectColumns;
 window.projectLabels = projectLabels;
+window.projectEpics = projectEpics;
 window.projectMembers = projectMembers;
 window.projectSettingsHelpers = {
   defaultMoveTarget: defaultMoveTarget,

@@ -454,6 +454,7 @@ test('fieldAction maps each editable field to its action id', () => {
     due_date: 'set_due',
     assignees: 'assign',
     labels: 'set_labels',
+    epic: 'set_epic',
   };
   for (const [field, action] of Object.entries(cases)) {
     assert.equal(ctx.projectBoardHelpers.fieldAction(field), action);
@@ -569,6 +570,7 @@ test('sectionDefaults opens filled sections and collapses empty ones', () => {
     { ...panel.sectionDefaults() },
     {
       assignees: false,
+      epic: false,
       labels: true,
       description: false,
       checklist: true,
@@ -1200,4 +1202,113 @@ test('searchLinkTasks: clearing the input invalidates an in-flight search', asyn
   // The stale response must not reopen the dropdown nor restore results.
   assert.equal(panel.linkDropdown, false);
   assert.equal(panel.linkResults.length, 0);
+});
+
+test('taskFiltersFromUrl and taskFilterUrl round-trip the epic filter', () => {
+  const filters = ctx.projectBoardHelpers.taskFiltersFromUrl(
+    'http://x.test/projects/p/board?epic=e1&epic=e2&task=u1'
+  );
+  assert.deepStrictEqual(Array.from(filters.epic), ['e1', 'e2']);
+  assert.equal(
+    ctx.projectBoardHelpers.taskFilterUrl(
+      'http://x.test/projects/p/board?task=u1',
+      { ...filters }
+    ),
+    '/projects/p/board?task=u1&epic=e1&epic=e2'
+  );
+});
+
+test('epic filter adds once, removes, and counts as active', () => {
+  const board = panelBoard();
+  const fetched = [];
+  board.$ajax = (url) => fetched.push(url);
+  assert.equal(board.filtersActive(), false);
+  board.addEpicFilter({ uuid: 'e1' });
+  board.addEpicFilter({ uuid: 'e1' });
+  assert.deepStrictEqual(Array.from(board.filters.epic), ['e1']);
+  assert.equal(fetched.length, 1);
+  assert.equal(board.filtersActive(), true);
+  assert.equal(board.activeFilterCount(), 1);
+  board.removeEpicFilter('e1');
+  assert.deepStrictEqual(Array.from(board.filters.epic), []);
+  assert.equal(board.filtersActive(), false);
+});
+
+test('epic lookups resolve names and colors, openEpics drops closed ones', () => {
+  const board = panelBoard();
+  board.epics = [
+    { uuid: 'e1', name: 'Launch', color: '#3b82f6', closed: false },
+    { uuid: 'e2', name: 'Done era', color: '', closed: true },
+  ];
+  assert.equal(board.epicName('e1'), 'Launch');
+  assert.equal(board.epicColor('e1'), '#3b82f6');
+  assert.equal(board.epicName('missing'), 'Unknown epic');
+  assert.equal(board.epicColor('e2'), '');
+  assert.deepStrictEqual(
+    Array.from(board.openEpics()).map((e) => e.uuid),
+    ['e1']
+  );
+  board.onEpicCreated({ uuid: 'e3', name: 'New', color: '' });
+  board.onEpicCreated({ uuid: 'e3', name: 'New', color: '' }); // no duplicate
+  assert.equal(board.epics.length, 3);
+});
+
+test('form epic is single-valued and cleared explicitly', () => {
+  const board = panelBoard();
+  board.setFormEpic({ uuid: 'e1' });
+  assert.equal(board.form.epic, 'e1');
+  board.setFormEpic({ uuid: 'e2' });
+  assert.equal(board.form.epic, 'e2');
+  board.clearFormEpic();
+  assert.equal(board.form.epic, '');
+});
+
+test('labelSelector announces inline creates on the configured event', async () => {
+  const events = [];
+  ctx.getCSRFToken = () => 'token';
+  ctx.CustomEvent = function (name, opts) {
+    return { name: name, detail: opts && opts.detail };
+  };
+  ctx.dispatchEvent = (e) => events.push(e);
+  ctx.fetch = async () => ({
+    ok: true,
+    json: async () => ({ uuid: 'e9', name: 'Launch', color: '#3b82f6' }),
+  });
+  const sel = ctx.labelSelector(
+    'epic-picked',
+    () => [],
+    () => [],
+    '/api/epics',
+    { createdEvent: 'project-epic-created' }
+  );
+  sel.query = 'Launch';
+  await sel.createLabel();
+  assert.deepStrictEqual(
+    Array.from(events).map((e) => e.name),
+    ['project-epic-created', 'epic-picked']
+  );
+});
+
+test('setEpic and removeEpic patch the single epic field', () => {
+  const calls = [];
+  const panel = panelWithActions(['set_epic'], calls);
+  panel.data.epic = '';
+  panel.setEpic({ uuid: 'e1' });
+  // Spread: the patch object is built inside the vm realm (cross-realm
+  // prototypes fail deepStrictEqual otherwise).
+  assert.deepStrictEqual([calls[0][0], { ...calls[0][1] }], ['u1', { epic: 'e1' }]);
+  panel.data.epic = 'e1';
+  panel.setEpic({ uuid: 'e1' }); // no-op: already the task's epic
+  assert.equal(calls.length, 1);
+  panel.removeEpic();
+  assert.deepStrictEqual([calls[1][0], { ...calls[1][1] }], ['u1', { epic: null }]);
+});
+
+test('setEpic is gated on the set_epic action', () => {
+  const calls = [];
+  const panel = panelWithActions(['edit'], calls);
+  panel.data.epic = '';
+  panel.setEpic({ uuid: 'e1' });
+  panel.removeEpic();
+  assert.deepStrictEqual(Array.from(calls), []);
 });

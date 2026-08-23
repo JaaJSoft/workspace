@@ -29,14 +29,15 @@ function fieldAction(field) {
     due_date: 'set_due',
     assignees: 'assign',
     labels: 'set_labels',
+    epic: 'set_epic',
   };
   return map[field] || 'edit';
 }
 
 function emptyTaskFilters() {
-  // assignee and label are multi-value (repeated query params, OR'd
+  // assignee, label and epic are multi-value (repeated query params, OR'd
   // server-side); assignee also accepts the literal 'none' for unassigned.
-  return { q: '', assignee: [], label: [], priority: '', status: '' };
+  return { q: '', assignee: [], label: [], epic: [], priority: '', status: '' };
 }
 
 // Filtering is server-side; the filter state lives in the URL so a filtered
@@ -84,6 +85,7 @@ function emptyTaskForm() {
     estimate: '',
     assignees: [],
     labels: [],
+    epic: '',
   };
 }
 
@@ -146,10 +148,12 @@ function selectDropdown() {
   };
 }
 
-// Combobox over the project's labels. allLabels/selectedUuids are getters so
-// the parent's reactive state is read at call time. An empty createUrl hides
-// the create row (non-admins); the server enforces admin regardless.
-function labelSelector(eventName, allLabels, selectedUuids, createUrl) {
+// Combobox over the project's labels (or epics: options.createdEvent points
+// the inline-create announcement at the right board handler). allLabels/
+// selectedUuids are getters so the parent's reactive state is read at call
+// time. An empty createUrl hides the create row (non-admins); the server
+// enforces admin regardless.
+function labelSelector(eventName, allLabels, selectedUuids, createUrl, options) {
   return {
     query: '',
     results: [],
@@ -161,6 +165,7 @@ function labelSelector(eventName, allLabels, selectedUuids, createUrl) {
     allLabels: allLabels,
     selectedUuids: selectedUuids,
     createUrl: createUrl || '',
+    createdEvent: (options && options.createdEvent) || 'project-label-created',
 
     trimmedQuery() {
       return (this.query || '').trim();
@@ -257,7 +262,7 @@ function labelSelector(eventName, allLabels, selectedUuids, createUrl) {
         if (!resp.ok) throw new Error('Create failed');
         const label = await resp.json();
         window.dispatchEvent(
-          new CustomEvent('project-label-created', { detail: { label: label } })
+          new CustomEvent(this.createdEvent, { detail: { label: label } })
         );
         this.select(label);
       } catch (e) {
@@ -278,6 +283,7 @@ function projectBoard(config) {
     statuses: [],
     members: [],
     labels: [],
+    epics: [],
     form: emptyTaskForm(),
     formError: '',
     panelTaskUuid: config.initialTask || null,
@@ -304,6 +310,9 @@ function projectBoard(config) {
       );
       this.labels = JSON.parse(
         document.getElementById('labels-data').textContent
+      );
+      this.epics = JSON.parse(
+        document.getElementById('epics-data').textContent
       );
       this.filters = taskFiltersFromUrl(window.location.href);
 
@@ -453,6 +462,7 @@ function projectBoard(config) {
         this.filters.q.trim() ||
           this.filters.assignee.length ||
           this.filters.label.length ||
+          this.filters.epic.length ||
           this.filters.priority ||
           this.filters.status
       );
@@ -510,12 +520,25 @@ function projectBoard(config) {
       this.applyFilters();
     },
 
+    addEpicFilter(epic) {
+      if (!this.filters.epic.includes(epic.uuid)) {
+        this.filters.epic = this.filters.epic.concat(epic.uuid);
+        this.applyFilters();
+      }
+    },
+
+    removeEpicFilter(uuid) {
+      this.filters.epic = this.filters.epic.filter((v) => v !== uuid);
+      this.applyFilters();
+    },
+
     // Badge on the Filters button: counts the panel-managed filters only.
     // The search box sits on the bar itself, so q stays out of the count.
     activeFilterCount() {
       return (
         this.filters.assignee.length +
         this.filters.label.length +
+        this.filters.epic.length +
         (this.filters.priority ? 1 : 0) +
         (this.filters.status ? 1 : 0)
       );
@@ -779,6 +802,40 @@ function projectBoard(config) {
       this.form.labels = this.form.labels.filter((v) => v !== uuid);
     },
 
+    epicById(uuid) {
+      return this.epics.find((e) => e.uuid === uuid) || null;
+    },
+
+    epicName(uuid) {
+      const epic = this.epicById(uuid);
+      return epic ? epic.name : 'Unknown epic';
+    },
+
+    epicColor(uuid) {
+      const epic = this.epicById(uuid);
+      return epic && epic.color ? epic.color : '';
+    },
+
+    // Pickers offer open epics only; closed ones still resolve by uuid so
+    // cards, chips and filters keep their name and color.
+    openEpics() {
+      return this.epics.filter((e) => !e.closed);
+    },
+
+    onEpicCreated(epic) {
+      if (!this.epics.some((e) => e.uuid === epic.uuid)) {
+        this.epics.push(epic);
+      }
+    },
+
+    setFormEpic(epic) {
+      this.form.epic = epic.uuid;
+    },
+
+    clearFormEpic() {
+      this.form.epic = '';
+    },
+
     async saveTask() {
       if (this.saving) return;
       this.saving = true;
@@ -796,6 +853,7 @@ function projectBoard(config) {
             estimate: this.form.estimate === '' ? null : this.form.estimate,
             assignees: this.form.assignees,
             labels: this.form.labels,
+            epic: this.form.epic || null,
           }),
         });
         if (!resp.ok) {
@@ -828,6 +886,7 @@ function taskPanel() {
       estimate: '',
       assignees: [],
       labels: [],
+      epic: '',
     },
     editing: null,
     draft: '',
@@ -892,6 +951,12 @@ function taskPanel() {
         const fresh = JSON.parse(labelsEl.textContent);
         this.labels.splice(0, this.labels.length, ...fresh);
       }
+      // Same shell-refresh dance for the epics list.
+      const epicsEl = document.getElementById('panel-epics-data');
+      if (epicsEl && Array.isArray(this.epics)) {
+        const freshEpics = JSON.parse(epicsEl.textContent);
+        this.epics.splice(0, this.epics.length, ...freshEpics);
+      }
       this._commentCount = Number(this.$el.dataset.commentCount || 0);
       this._activityCount = Number(this.$el.dataset.activityCount || 0);
       // panelSections lives on the board shell (Alpine scope chain), so the
@@ -911,6 +976,7 @@ function taskPanel() {
     sectionDefaults() {
       return {
         assignees: this.data.assignees.length > 0,
+        epic: Boolean(this.data.epic),
         labels: this.data.labels.length > 0,
         description: !!(this.data.description || '').trim(),
         checklist: this.subtasks.length > 0,
@@ -947,6 +1013,16 @@ function taskPanel() {
 
     removeLabel(uuid) {
       this.toggleMulti('labels', uuid, false);
+    },
+
+    // Single-valued, unlike labels: picking an epic replaces the current one.
+    setEpic(epic) {
+      if (epic.uuid === this.data.epic) return;
+      this.commitField('epic', epic.uuid);
+    },
+
+    removeEpic() {
+      this.commitField('epic', null);
     },
 
     can(actionId) {

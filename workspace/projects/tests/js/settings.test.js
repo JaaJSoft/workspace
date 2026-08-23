@@ -356,3 +356,57 @@ test('projectColumns.saveEdit treats a whitespace-padded same name as unchanged'
   assert.equal(called, false);
   assert.equal(c.editing, null);
 });
+
+test('projectEpics.saveEdit is a no-op when editing was cancelled', async () => {
+  const c = ctx().projectEpics({ apiBase: '/x' });
+  c.editing = null;
+  c.editName = 'Nope';
+  let called = false;
+  c.request = async () => { called = true; };
+  await c.saveEdit({ uuid: 'e1', name: 'Launch' });
+  assert.equal(called, false);
+});
+
+test('projectEpics.toggleClosed flips the flag through the API', async () => {
+  const c = ctx().projectEpics({ apiBase: '/x' });
+  const calls = [];
+  c.request = async (url, options) => {
+    calls.push([url, JSON.parse(options.body)]);
+    return { json: async () => ({}) };
+  };
+  c.epics = [];
+  const epic = { uuid: 'e1', name: 'Launch', color: '', closed: false };
+  c.items = [epic];
+  await c.toggleClosed(epic);
+  assert.deepStrictEqual(calls[0], ['/x/epics/e1', { closed: true }]);
+  assert.equal(epic.closed, true);
+  assert.deepStrictEqual({ ...c.epics[0] }, {
+    uuid: 'e1',
+    name: 'Launch',
+    color: '',
+    closed: true,
+  });
+});
+
+test('projectEpics.progressPercent divides safely', () => {
+  const c = ctx().projectEpics({ apiBase: '/x' });
+  assert.equal(c.progressPercent({ task_count: 0, done_task_count: 0 }), 0);
+  assert.equal(c.progressPercent({ task_count: 8, done_task_count: 2 }), 25);
+  assert.equal(c.progressPercent({ task_count: 3, done_task_count: 3 }), 100);
+});
+
+test('projectEpics.saveDescEdit skips the API on an unchanged description', async () => {
+  const c = ctx().projectEpics({ apiBase: '/x' });
+  let called = false;
+  c.request = async () => { called = true; };
+  const epic = { uuid: 'e1', description: 'Ship v1' };
+  c.startDescEdit(epic);
+  c.descDraft = ' Ship v1 ';
+  await c.saveDescEdit(epic);
+  assert.equal(called, false);
+  c.startDescEdit(epic);
+  c.descDraft = 'Ship v2';
+  await c.saveDescEdit(epic);
+  assert.equal(called, true);
+  assert.equal(epic.description, 'Ship v2');
+});

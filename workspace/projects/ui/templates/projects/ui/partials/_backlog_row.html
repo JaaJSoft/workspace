@@ -24,11 +24,14 @@
   <span class="flex-1 min-w-0 flex items-baseline gap-2">
     <span class="text-xs font-mono text-base-content/50 shrink-0">{{ project.key }}-{{ task.number }}</span>
     <span class="text-sm font-medium truncate">{{ task.title }}</span>
-    {% if task.labels.all %}
+    {% if task.epic or task.labels.all %}
       {# ml-auto packs the chips against the priority column so they line up across rows. #}
       <span
         class="ml-auto self-center hidden lg:flex items-center gap-1 shrink-0"
       >
+        {% if task.epic %}
+          <tag-chip name="{{ task.epic.name }}" color="{{ task.epic.color }}" icon="layers" size="sm" class="shrink-0"></tag-chip>
+        {% endif %}
         {% for label in task.labels.all %}
           <tag-chip name="{{ label.name }}" color="{{ label.color }}" size="sm" class="shrink-0"></tag-chip>
         {% endfor %}

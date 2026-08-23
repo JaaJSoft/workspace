@@ -96,6 +96,19 @@
       </div>
       <div
         class="mt-2"
+        {% if role != "admin" %}x-show="epics.length"{% endif %}
+        @modal-epic-selected.window="setFormEpic($event.detail.label)"
+      >
+        <div class="label"><span class="label-text">Epic</span></div>
+        <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="form.epic" x-cloak>
+          <tag-chip icon="layers" :name="epicName(form.epic)" :color="epicColor(form.epic)" removable @remove="clearFormEpic()"></tag-chip>
+        </div>
+        <div x-show="!form.epic">
+          {% include "projects/ui/partials/_label_selector.html" with on_select_event="modal-epic-selected" all_source="openEpics()" selected_source="form.epic ? [form.epic] : []" placeholder="Set epic..." resource="epics" entity="epic" icon="layers" created_event="project-epic-created" %}
+        </div>
+      </div>
+      <div
+        class="mt-2"
         {% if role != "admin" %}x-show="labels.length"{% endif %}
         @modal-label-selected.window="addFormLabel($event.detail.label)"
       >

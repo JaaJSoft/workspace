@@ -24,6 +24,7 @@
   @keydown.window="handleKeydown($event)"
   @ajax:after="ensureTaskParam(); syncFiltersFromUrl()"
   @project-label-created.window="onLabelCreated($event.detail.label)"
+  @project-epic-created.window="onEpicCreated($event.detail.label)"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -189,6 +190,7 @@
   {{ statuses_data|json_script:"statuses-data" }}
   {{ members_data|json_script:"members-data" }}
   {{ labels_data|json_script:"labels-data" }}
+  {{ epics_data|json_script:"epics-data" }}
   {{ projects_prefs|json_script:"projects-prefs-data" }}
   <div class="flex h-full min-h-0">
     <div

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
+from django.utils import timezone
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -158,6 +159,52 @@ class Label(models.Model):
         return f"{self.project}: {self.name}"
 
 
+class Epic(models.Model):
+    """A named group of tasks above the board: epic -> task -> checklist.
+
+    Deliberately flat - epics never nest, and a task belongs to at most
+    one epic. ``closed_at`` is the open/done state; closing an epic hides
+    it from the pickers but keeps it on the tasks that carry it.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="epics",
+    )
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=20, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    closed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "name"],
+                name="unique_epic_name_per_project",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.project}: {self.name}"
+
+    @property
+    def is_closed(self):
+        return self.closed_at is not None
+
+    @is_closed.setter
+    def is_closed(self, value):
+        # Settable so serializers can write the boolean; reopening always
+        # clears the timestamp, re-closing keeps the original one.
+        if value and self.closed_at is None:
+            self.closed_at = timezone.now()
+        elif not value:
+            self.closed_at = None
+
+
 class Task(models.Model):
     class Priority(models.TextChoices):
         LOW = "low", "Low"
@@ -196,6 +243,14 @@ class Task(models.Model):
     )
     labels = models.ManyToManyField(
         Label,
+        blank=True,
+        related_name="tasks",
+    )
+    # SET_NULL: deleting an epic ungroups its tasks, it never deletes them.
+    epic = models.ForeignKey(
+        Epic,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
         related_name="tasks",
     )
@@ -397,6 +452,7 @@ class TaskEvent(models.Model):
         DELETED = "deleted", "Deleted"
         COMMENTED = "commented", "Commented"
         ESTIMATED = "estimate", "Estimated"
+        EPIC = "epic", "Epic"
         ATTACHED = "attached", "Attached"
         DETACHED = "detached", "Detached"
         LINKED = "linked", "Linked"
@@ -411,6 +467,7 @@ class TaskEvent(models.Model):
         Type.DELETED: "trash-2",
         Type.COMMENTED: "message-square",
         Type.ESTIMATED: "ruler",
+        Type.EPIC: "layers",
         Type.ATTACHED: "paperclip",
         Type.DETACHED: "paperclip",
         Type.LINKED: "link",
@@ -425,6 +482,7 @@ class TaskEvent(models.Model):
         Type.DELETED: "Task deleted",
         Type.COMMENTED: "Comment added",
         Type.ESTIMATED: "Estimate changed",
+        Type.EPIC: "Epic changed",
         Type.ATTACHED: "File attached",
         Type.DETACHED: "File removed",
         Type.LINKED: "Link added",
@@ -461,11 +519,11 @@ class TaskEvent(models.Model):
     # deletable, a FK would rewrite history.
     from_status = models.CharField(max_length=100, blank=True, default="")
     to_status = models.CharField(max_length=100, blank=True, default="")
-    # Old/new snapshots for scalar field changes (estimate today), as display
-    # strings; empty when the side was unset. Same survive-the-task rationale
-    # as the status name snapshots above.
-    from_value = models.CharField(max_length=32, blank=True, default="")
-    to_value = models.CharField(max_length=32, blank=True, default="")
+    # Old/new snapshots for scalar field changes (estimate and epic name
+    # today), as display strings; empty when the side was unset. Same
+    # survive-the-task rationale as the status name snapshots above.
+    from_value = models.CharField(max_length=100, blank=True, default="")
+    to_value = models.CharField(max_length=100, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

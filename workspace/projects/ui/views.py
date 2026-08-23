@@ -17,6 +17,7 @@ from workspace.projects.models import (
     Project,
     ProjectMember,
     ProjectNotificationLevel,
+    Sprint,
     TaskAttachment,
     TaskStatus,
 )
@@ -377,6 +378,51 @@ def task_card(request, project_uuid, task_uuid):
     )
 
 
+def _sprint_context(request, project):
+    """Sprint switcher context for the scrum board.
+
+    The selection comes from ``?sprint=`` (active or closed sprints only -
+    a planned sprint has no board yet), defaulting to the running sprint.
+    No selectable sprint at all renders the empty state instead of the
+    columns, and a closed selection renders read-only.
+    """
+    if project.type != Project.Type.SCRUM:
+        return {}
+    sprints = list(
+        project.sprints.annotate(task_count=Count("tasks")).order_by("created_at")
+    )
+    switchable = [s for s in sprints if s.state != Sprint.State.PLANNED]
+    selected = None
+    param = parse_uuid_or_none(request.GET.get("sprint") or "")
+    if param is not None:
+        selected = next((s for s in switchable if s.uuid == param), None)
+    if selected is None:
+        selected = next((s for s in sprints if s.state == Sprint.State.ACTIVE), None)
+    context = {
+        "sprints": switchable,
+        "selected_sprint": selected,
+        "sprint_read_only": selected is not None
+        and selected.state == Sprint.State.CLOSED,
+        "planned_sprints": [s for s in sprints if s.state == Sprint.State.PLANNED],
+    }
+    if selected is not None:
+        # Read fresh by completeSprint() at dialog time: the island re-renders
+        # with every board swap, unlike the page-load data islands.
+        context["sprint_data"] = {
+            "uuid": str(selected.uuid),
+            "name": selected.name,
+            "state": selected.state,
+            "unfinished_count": selected.tasks.exclude(
+                status__category=TaskStatus.Category.DONE
+            ).count(),
+            "planned": [
+                {"uuid": str(s.uuid), "name": s.name}
+                for s in context["planned_sprints"]
+            ],
+        }
+    return context
+
+
 @login_required
 @ensure_csrf_cookie
 def board(request, project_uuid):
@@ -386,6 +432,7 @@ def board(request, project_uuid):
     context["backlog_count"] = project.tasks.filter(
         status__category=TaskStatus.Category.BACKLOG
     ).count()
+    context.update(_sprint_context(request, project))
     tasks_qs = annotate_blocked(
         project.tasks.exclude(status__category=TaskStatus.Category.BACKLOG)
         .select_related("status", "epic")
@@ -400,8 +447,17 @@ def board(request, project_uuid):
         )
         .order_by("position", "created_at")
     )
+    if project.type == Project.Type.SCRUM:
+        if context["selected_sprint"] is not None:
+            tasks_qs = tasks_qs.filter(sprint=context["selected_sprint"])
+        else:
+            # No sprint to show: the template renders the empty state, and
+            # an unfiltered queryset must not leak into the columns.
+            tasks_qs = tasks_qs.none()
     hidden_counts = {}
-    if project.done_retention_days is not None:
+    # A closed sprint is browsed as history: retention hiding would blank
+    # out exactly the done tasks the reader came to see.
+    if project.done_retention_days is not None and not context.get("sprint_read_only"):
         cutoff = timezone.now() - timedelta(days=project.done_retention_days)
         # completed_at__lt is null-safe: a done task missing its timestamp
         # never matches and stays visible.
@@ -447,9 +503,20 @@ def backlog(request, project_uuid):
         s for s in context["statuses"] if s.category == TaskStatus.Category.BACKLOG
     ]
     context["backlog_status"] = backlog_statuses[0] if backlog_statuses else None
+    if project.type == Project.Type.SCRUM:
+        planning_sprints = list(
+            project.sprints.exclude(state=Sprint.State.CLOSED).order_by("created_at")
+        )
+        context["planning_sprints"] = planning_sprints
+        has_active_sprint = any(
+            s.state == Sprint.State.ACTIVE for s in planning_sprints
+        )
+        # Without a running sprint the board shows nothing, so sending a
+        # task there would make it invisible; planning is the only exit.
+        context["hide_send_to_board"] = not has_active_sprint
     backlog_qs = (
         project.tasks.filter(status__category=TaskStatus.Category.BACKLOG)
-        .select_related("status", "epic")
+        .select_related("status", "epic", "sprint")
         .prefetch_related("assignees", "labels")
         .order_by("position", "created_at")
     )

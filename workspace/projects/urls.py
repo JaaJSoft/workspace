@@ -10,6 +10,7 @@ from .viewsets import (
     MemberViewSet,
     ProjectNotificationLevelView,
     ProjectViewSet,
+    SprintViewSet,
     StatusViewSet,
     SubtaskViewSet,
     TaskAttachmentViewSet,
@@ -28,12 +29,17 @@ label_list = LabelViewSet.as_view({"get": "list", "post": "create"})
 label_detail = LabelViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 epic_list = EpicViewSet.as_view({"get": "list", "post": "create"})
 epic_detail = EpicViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
+sprint_list = SprintViewSet.as_view({"get": "list", "post": "create"})
+sprint_detail = SprintViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
+sprint_start = SprintViewSet.as_view({"post": "start"})
+sprint_complete = SprintViewSet.as_view({"post": "complete"})
 status_list = StatusViewSet.as_view({"get": "list", "post": "create"})
 status_reorder = StatusViewSet.as_view({"post": "reorder"})
 status_detail = StatusViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 task_list = TaskViewSet.as_view({"get": "list", "post": "create"})
 task_reorder = TaskViewSet.as_view({"post": "reorder"})
 task_move = TaskViewSet.as_view({"post": "move"})
+task_assign_sprint = TaskViewSet.as_view({"post": "assign_sprint"})
 task_detail = TaskViewSet.as_view(
     {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
 )
@@ -109,6 +115,26 @@ urlpatterns = [
         name="project-epic-detail",
     ),
     path(
+        "api/v1/projects/<uuid:project_uuid>/sprints",
+        sprint_list,
+        name="project-sprints",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/sprints/<uuid:uuid>",
+        sprint_detail,
+        name="project-sprint-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/sprints/<uuid:uuid>/start",
+        sprint_start,
+        name="project-sprint-start",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/sprints/<uuid:uuid>/complete",
+        sprint_complete,
+        name="project-sprint-complete",
+    ),
+    path(
         "api/v1/projects/<uuid:project_uuid>/statuses",
         status_list,
         name="project-statuses",
@@ -137,6 +163,11 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/move",
         task_move,
         name="project-tasks-move",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/assign-sprint",
+        task_assign_sprint,
+        name="project-tasks-assign-sprint",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>",

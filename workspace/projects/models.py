@@ -11,6 +11,7 @@ class Project(models.Model):
     class Type(models.TextChoices):
         PERSONAL = "personal", "Personal"
         KANBAN = "kanban", "Kanban"
+        SCRUM = "scrum", "Scrum"
 
     class EstimateUnit(models.TextChoices):
         POINTS = "points", "Story points"
@@ -254,6 +255,52 @@ class Epic(models.Model):
             self.closed_at = None
 
 
+class Sprint(models.Model):
+    """A timeboxed iteration of a scrum project.
+
+    Tasks join a sprint while keeping their board status - the scrum board
+    only shows the selected sprint's tasks. At most one sprint per project
+    is active at a time (partial unique constraint); closed sprints keep
+    their done tasks attached as the history behind future velocity and
+    burndown reports.
+    """
+
+    class State(models.TextChoices):
+        PLANNED = "planned", "Planned"
+        ACTIVE = "active", "Active"
+        CLOSED = "closed", "Closed"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="sprints",
+    )
+    name = models.CharField(max_length=100)
+    goal = models.TextField(blank=True, default="")
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    state = models.CharField(max_length=7, choices=State.choices, default=State.PLANNED)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "name"],
+                name="unique_sprint_name_per_project",
+            ),
+            models.UniqueConstraint(
+                fields=["project"],
+                condition=Q(state="active"),
+                name="unique_active_sprint_per_project",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.project}: {self.name}"
+
+
 class Task(models.Model):
     class Priority(models.TextChoices):
         LOW = "low", "Low"
@@ -303,6 +350,15 @@ class Task(models.Model):
         blank=True,
         related_name="tasks",
     )
+    # SET_NULL: deleting a sprint returns its tasks to the pool, it never
+    # deletes them.
+    sprint = models.ForeignKey(
+        Sprint,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tasks",
+    )
     position = models.IntegerField(default=0)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -334,9 +390,11 @@ class Task(models.Model):
 
     def clean(self):
         # Runs in ModelForm paths (the Django admin): the API scopes the
-        # epic queryset per project, but the admin offers every epic.
+        # epic and sprint querysets per project, but the admin offers all.
         if self.epic_id and self.epic.project_id != self.project_id:
             raise ValidationError({"epic": "Epic belongs to another project."})
+        if self.sprint_id and self.sprint.project_id != self.project_id:
+            raise ValidationError({"sprint": "Sprint belongs to another project."})
 
     @property
     def reference(self):
@@ -508,6 +566,7 @@ class TaskEvent(models.Model):
         COMMENTED = "commented", "Commented"
         ESTIMATED = "estimate", "Estimated"
         EPIC = "epic", "Epic"
+        SPRINT = "sprint", "Sprint"
         ATTACHED = "attached", "Attached"
         DETACHED = "detached", "Detached"
         LINKED = "linked", "Linked"
@@ -523,6 +582,7 @@ class TaskEvent(models.Model):
         Type.COMMENTED: "message-square",
         Type.ESTIMATED: "ruler",
         Type.EPIC: "layers",
+        Type.SPRINT: "iteration-cw",
         Type.ATTACHED: "paperclip",
         Type.DETACHED: "paperclip",
         Type.LINKED: "link",
@@ -538,6 +598,7 @@ class TaskEvent(models.Model):
         Type.COMMENTED: "Comment added",
         Type.ESTIMATED: "Estimate changed",
         Type.EPIC: "Epic changed",
+        Type.SPRINT: "Sprint changed",
         Type.ATTACHED: "File attached",
         Type.DETACHED: "File removed",
         Type.LINKED: "Link added",

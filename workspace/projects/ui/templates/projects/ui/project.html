@@ -90,7 +90,7 @@
           >
             <span class="flex items-center gap-2 min-w-0">
               <i
-                data-lucide="{% if project.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
+                data-lucide="{% if project.type == 'personal' %}circle-user{% elif project.type == 'scrum' %}iteration-cw{% else %}square-kanban{% endif %}"
                 class="w-5 h-5 text-accent shrink-0"
               ></i>
               <span class="truncate">{{ project.name }}</span>
@@ -109,7 +109,7 @@
                   class="{% if p.uuid == project.uuid %}active{% endif %}"
                 >
                   <i
-                    data-lucide="{% if p.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
+                    data-lucide="{% if p.type == 'personal' %}circle-user{% elif p.type == 'scrum' %}iteration-cw{% else %}square-kanban{% endif %}"
                     class="w-4 h-4 shrink-0"
                   ></i>
                   <span class="truncate flex-1">{{ p.name }}</span>
@@ -142,7 +142,7 @@
           @click="toggleCollapse()"
         >
           <i
-            data-lucide="{% if project.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
+            data-lucide="{% if project.type == 'personal' %}circle-user{% elif project.type == 'scrum' %}iteration-cw{% else %}square-kanban{% endif %}"
             class="w-5 h-5 text-accent"
           ></i>
         </button>
@@ -220,7 +220,7 @@
   <dialog id="new-project-dialog" class="modal">
     <div
       class="modal-box max-w-sm"
-      x-data="{ creating: false, name: '', description: '', error: '' }"
+      x-data="{ creating: false, name: '', description: '', type: 'kanban', error: '' }"
     >
       <div class="flex items-start justify-between gap-3 mb-4">
         <div class="flex items-center gap-3 min-w-0">
@@ -250,7 +250,7 @@
       fetch('/api/v1/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ name: name, description: description }),
+        body: JSON.stringify({ name: name, description: description, type: type }),
       }).then(async (resp) => {
         if (!resp.ok) throw new Error('Could not create the project.');
         const data = await resp.json();
@@ -276,6 +276,43 @@
             rows="2"
           ></textarea>
         </label>
+        <div class="form-control w-full mt-2">
+          <div class="label"><span class="label-text">Type</span></div>
+          <div class="grid grid-cols-2 gap-2">
+            <label
+              class="rounded-box border p-3 cursor-pointer flex flex-col gap-1"
+              :class="type === 'kanban' ? 'border-accent bg-accent/5' : 'border-base-300'"
+            >
+              <span class="flex items-center gap-2 font-medium text-sm">
+                <input
+                  type="radio"
+                  class="radio radio-sm radio-accent"
+                  name="new-project-type"
+                  value="kanban"
+                  x-model="type"
+                />
+                Kanban
+              </span>
+              <span class="text-xs text-base-content/60">Continuous board</span>
+            </label>
+            <label
+              class="rounded-box border p-3 cursor-pointer flex flex-col gap-1"
+              :class="type === 'scrum' ? 'border-accent bg-accent/5' : 'border-base-300'"
+            >
+              <span class="flex items-center gap-2 font-medium text-sm">
+                <input
+                  type="radio"
+                  class="radio radio-sm radio-accent"
+                  name="new-project-type"
+                  value="scrum"
+                  x-model="type"
+                />
+                Scrum
+              </span>
+              <span class="text-xs text-base-content/60">Timeboxed sprints</span>
+            </label>
+          </div>
+        </div>
         <div class="modal-action">
           <button
             type="button"

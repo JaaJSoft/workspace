@@ -22,6 +22,7 @@ from .models import (
     Project,
     ProjectMember,
     ProjectNotificationLevel,
+    Sprint,
     Subtask,
     Task,
     TaskAttachment,
@@ -40,6 +41,8 @@ from .serializers import (
     ProjectNotificationLevelSerializer,
     ProjectSerializer,
     ReorderSerializer,
+    SprintCompleteSerializer,
+    SprintSerializer,
     SubtaskSerializer,
     TaskAttachmentCreateSerializer,
     TaskAttachmentSerializer,
@@ -49,6 +52,7 @@ from .serializers import (
     TaskMoveSerializer,
     TaskReorderSerializer,
     TaskSerializer,
+    TaskSprintSerializer,
     TaskStatusSerializer,
     TaskWatchSerializer,
 )
@@ -70,6 +74,7 @@ from .services.members import (
     remove_member,
 )
 from .services.projects import create_project
+from .services.sprints import assign_tasks_to_sprint, complete_sprint, start_sprint
 from .services.statuses import create_status, delete_status, reorder_statuses
 from .services.subtasks import create_subtask, reorder_subtasks
 from .services.task_filters import (
@@ -128,6 +133,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             name=serializer.validated_data["name"],
             description=serializer.validated_data.get("description", ""),
             groups=serializer.validated_data.get("groups"),
+            project_type=serializer.validated_data.get("type", Project.Type.KANBAN),
         )
         project._my_role = ProjectMember.Role.ADMIN
         return Response(
@@ -440,6 +446,94 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+@extend_schema(tags=["Projects - Sprints"])
+class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
+    serializer_class = SprintSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Sprint.objects.none()
+        # One reverse-FK join serves both rollup counts (epics precedent).
+        return self.project.sprints.annotate(
+            task_count=Count("tasks"),
+            done_task_count=Count(
+                "tasks", filter=Q(tasks__status__category=TaskStatus.Category.DONE)
+            ),
+        ).order_by("created_at")
+
+    def perform_create(self, serializer):
+        serializer.save(project=self.project)
+
+    def create(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        try:
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {"name": ["A sprint with this name already exists in this project."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        try:
+            with transaction.atomic():
+                return super().partial_update(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {"name": ["A sprint with this name already exists in this project."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        sprint = self.get_object()
+        if sprint.state == Sprint.State.ACTIVE:
+            return Response(
+                {"detail": "The active sprint must be completed, not deleted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    def start(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        sprint = self.get_object()
+        try:
+            start_sprint(sprint, actor=request.user)
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
+        return Response(self.get_serializer(self.get_object()).data)
+
+    def complete(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        sprint = self.get_object()
+        serializer = SprintCompleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        move_to = None
+        move_to_uuid = serializer.validated_data["move_to"]
+        if move_to_uuid is not None:
+            move_to = self.project.sprints.filter(uuid=move_to_uuid).first()
+            if move_to is None:
+                return Response(
+                    {"detail": "Unknown target sprint for this project."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        try:
+            complete_sprint(sprint, move_to=move_to, actor=request.user)
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
+        return Response(self.get_serializer(self.get_object()).data)
+
+
 @extend_schema(tags=["Projects - Statuses & Labels"])
 class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     serializer_class = TaskStatusSerializer
@@ -623,6 +717,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         old_due_date = serializer.instance.due_date
         old_estimate = serializer.instance.estimate
         old_epic = serializer.instance.epic
+        old_sprint = serializer.instance.sprint
         old_assignee_ids = {u.pk for u in serializer.instance.assignees.all()}
         # Compared before save: afterwards the instance already carries the
         # new values and every edit would look like a no-op.
@@ -664,6 +759,15 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 actor=self.request.user,
                 from_value=old_epic.name if old_epic else "",
                 to_value=task.epic.name if task.epic else "",
+            )
+        if task.sprint_id != (old_sprint.pk if old_sprint else None):
+            # Sprint names snapshotted, same rationale as the epic names.
+            record_task_event(
+                task,
+                type=TaskEvent.Type.SPRINT,
+                actor=self.request.user,
+                from_value=old_sprint.name if old_sprint else "",
+                to_value=task.sprint.name if task.sprint else "",
             )
         if task.due_date != old_due_date and (
             task.due_date is None or task.due_date > timezone.localdate()
@@ -716,6 +820,32 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             actor=request.user,
         )
         return Response({"success": True, "moved": len(moved)})
+
+    def assign_sprint(self, request, *args, **kwargs):
+        """Bulk sprint assignment (backlog planning): sets or clears the
+        sprint of the listed tasks without touching their status. Idempotent."""
+        self._require_writable()
+        serializer = TaskSprintSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        sprint = None
+        sprint_uuid = serializer.validated_data["sprint"]
+        if sprint_uuid is not None:
+            sprint = self.project.sprints.filter(uuid=sprint_uuid).first()
+            if sprint is None:
+                return Response(
+                    {"detail": "Unknown sprint for this project."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        try:
+            changed = assign_tasks_to_sprint(
+                self.project,
+                sprint,
+                serializer.validated_data["tasks"],
+                actor=request.user,
+            )
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
+        return Response({"success": True, "updated": len(changed)})
 
     def _resolve_status(self, status_uuid):
         return self.project.statuses.filter(uuid=status_uuid).first()

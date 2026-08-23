@@ -22,42 +22,87 @@
             <i data-lucide="x" class="w-4 h-4 sm:hidden"></i>
             <span class="hidden sm:inline">Clear</span>
           </button>
-          <div class="join">
-            <button
-              type="button"
-              class="btn btn-accent btn-sm join-item"
-              @click="sendSelected()"
-            >
-              <i data-lucide="arrow-right-circle" class="w-4 h-4"></i>
-              <span class="hidden sm:inline">Send to board</span>
-              <span class="sm:hidden">Send</span>
-            </button>
+          {% if project.type == 'scrum' %}
             <div class="dropdown dropdown-end">
               <button
                 type="button"
                 tabindex="0"
-                class="btn btn-accent btn-sm join-item px-1.5"
-                title="Send to a specific column"
-                aria-label="Send to a specific column"
+                class="btn btn-accent btn-sm"
+                title="Send to a sprint"
               >
+                <i data-lucide="iteration-cw" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">Send to sprint</span>
                 <i data-lucide="chevron-down" class="w-4 h-4"></i>
               </button>
               <ul
                 tabindex="0"
-                class="dropdown-content menu z-50 mt-1 w-52 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
+                class="dropdown-content menu z-50 mt-1 w-56 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
               >
-                <template x-for="s in boardStatuses()" :key="s.uuid">
+                {% for sprint in planning_sprints %}
                   <li>
                     <button
                       type="button"
-                      x-text="s.name"
-                      @click="sendSelected(s.uuid); document.activeElement.blur()"
-                    ></button>
+                      @click="sendSelectedToSprint('{{ sprint.uuid }}'); document.activeElement.blur()"
+                    >
+                      <span class="truncate flex-1">{{ sprint.name }}</span>
+                      {% if sprint.state == 'active' %}<span class="badge badge-accent badge-sm">Active</span>{% endif %}
+                    </button>
                   </li>
-                </template>
+                {% empty %}
+                  <li class="menu-title">No open sprint - create one in the settings.</li>
+                {% endfor %}
+                {% if planning_sprints %}
+                  <li class="border-t border-base-300 pt-1">
+                    <button
+                      type="button"
+                      @click="sendSelectedToSprint(null); document.activeElement.blur()"
+                    >
+                      <i data-lucide="x" class="w-4 h-4"></i>
+                      Remove from sprint
+                    </button>
+                  </li>
+                {% endif %}
               </ul>
             </div>
-          </div>
+          {% endif %}
+          {% if not hide_send_to_board %}
+            <div class="join">
+              <button
+                type="button"
+                class="btn btn-accent btn-sm join-item"
+                @click="sendSelected()"
+              >
+                <i data-lucide="arrow-right-circle" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">Send to board</span>
+                <span class="sm:hidden">Send</span>
+              </button>
+              <div class="dropdown dropdown-end">
+                <button
+                  type="button"
+                  tabindex="0"
+                  class="btn btn-accent btn-sm join-item px-1.5"
+                  title="Send to a specific column"
+                  aria-label="Send to a specific column"
+                >
+                  <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                </button>
+                <ul
+                  tabindex="0"
+                  class="dropdown-content menu z-50 mt-1 w-52 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
+                >
+                  <template x-for="s in boardStatuses()" :key="s.uuid">
+                    <li>
+                      <button
+                        type="button"
+                        x-text="s.name"
+                        @click="sendSelected(s.uuid); document.activeElement.blur()"
+                      ></button>
+                    </li>
+                  </template>
+                </ul>
+              </div>
+            </div>
+          {% endif %}
         </div>
         <button
           type="button"

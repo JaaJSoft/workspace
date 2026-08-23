@@ -79,6 +79,15 @@ def serialize_task_event(ev):
             label = f"Epic set to {ev.to_value}"
         elif ev.from_value:
             label = "Epic removed"
+    elif ev.type == TaskEvent.Type.SPRINT:
+        # from_value/to_value carry the sprint names snapshotted at change
+        # time, same rationale as the epic names.
+        if ev.from_value and ev.to_value:
+            label = f"Sprint changed: {ev.from_value} → {ev.to_value}"
+        elif ev.to_value:
+            label = f"Added to sprint {ev.to_value}"
+        elif ev.from_value:
+            label = f"Removed from sprint {ev.from_value}"
     elif ev.type in (TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED):
         # from_value holds the direction label ("blocks", "is blocked by"),
         # to_value the other end's reference, both snapshotted at link time.

@@ -43,6 +43,23 @@ class ManageEpicsAction(BaseProjectAction):
 
 
 @ProjectActionRegistry.register
+class ManageSprintsAction(BaseProjectAction):
+    id = "manage_sprints"
+    label = "Manage sprints"
+    icon = "iteration-cw"
+    category = ActionCategory.ORGANIZE
+    target_types = ("project",)
+    min_role = "admin"
+
+    def is_available(self, user, obj, *, role, archived):
+        # Sprints only exist on scrum projects; the type is immutable, so
+        # the check stays pure like the personal-project mixin's.
+        if obj.type != "scrum":
+            return False
+        return super().is_available(user, obj, role=role, archived=archived)
+
+
+@ProjectActionRegistry.register
 class AttachGroupAction(NotOnPersonalProjectMixin, BaseProjectAction):
     id = "attach_group"
     label = "Manage groups"

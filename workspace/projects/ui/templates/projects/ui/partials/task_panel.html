@@ -93,7 +93,14 @@
         <li x-show="watchers.length" class="menu-title"><span>Watchers</span></li>
         <template x-for="w in watchers" :key="w.id">
           <li class="pointer-events-none">
-            <span class="text-base-content/70" x-text="w.username"></span>
+            <span class="text-base-content/70">
+              <user-avatar
+                :user-id="w.id"
+                :username="w.username"
+                size="xs"
+                name
+              ></user-avatar>
+            </span>
           </li>
         </template>
       </ul>

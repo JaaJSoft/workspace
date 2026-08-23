@@ -227,6 +227,47 @@ class ViewerResolutionTest(TestCase):
         with override_settings(WOPI_DISCOVERY_URL=""):
             self.assertIsNone(get_viewer_by_slug("office"))
 
+    def test_editor_advertised_document_formats_are_claimed(self):
+        """Coverage widens to whatever the editor's discovery advertises,
+        as long as the KB groups the label as a document."""
+        from unittest.mock import patch
+
+        from workspace.files.ui.viewers import OfficeViewer, PDFViewer, TextViewer
+
+        advertised = frozenset({"docx", "dotx", "xlsb", "csv", "pdf"})
+        with (
+            override_settings(WOPI_DISCOVERY_URL="https://editor/hosting/discovery"),
+            patch(
+                "workspace.files.services.wopi.discovery.supported_extensions",
+                return_value=advertised,
+            ),
+        ):
+            # Document-group labels the static core doesn't know follow the
+            # editor's discovery.
+            self.assertEqual(get_viewer("dotx"), OfficeViewer)
+            self.assertEqual(get_viewer("xlsb"), OfficeViewer)
+            # Text-family labels stay with the code editor even when the
+            # editor advertises them.
+            self.assertEqual(get_viewer("csv"), TextViewer)
+            # PDF keeps the native viewer even when the editor advertises it.
+            self.assertEqual(get_viewer("pdf"), PDFViewer)
+
+    def test_only_the_core_formats_are_claimed_without_discovery(self):
+        from unittest.mock import patch
+
+        from workspace.files.ui.viewers import OfficeViewer
+
+        with (
+            override_settings(WOPI_DISCOVERY_URL="https://editor/hosting/discovery"),
+            patch(
+                "workspace.files.services.wopi.discovery.supported_extensions",
+                return_value=None,
+            ),
+        ):
+            self.assertEqual(get_viewer("docx"), OfficeViewer)
+            self.assertEqual(get_viewer("rtf"), OfficeViewer)
+            self.assertIsNone(get_viewer("dotx"))
+
     def test_css_gets_text_viewer(self):
         self.assertEqual(get_viewer("css"), TextViewer)
 

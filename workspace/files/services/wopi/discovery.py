@@ -10,6 +10,7 @@ knowledge in the integration - everything else is the protocol.
 import hashlib
 import logging
 import re
+import time
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 
@@ -24,6 +25,17 @@ logger = logging.getLogger(__name__)
 _CACHE_TTL = 3600
 _FAILURE_TTL = 60
 _FAILURE_MARKER = "unavailable"
+
+# Viewer resolution consults the discovery map once per office file in folder
+# listings; this short per-process memo keeps that from turning into one
+# Redis round-trip per row.
+_PROCESS_MEMO_TTL = 30.0
+_process_memo: dict = {}
+
+
+def _reset_process_memo():
+    """Test hook: the memo outlives Django's per-test cache clearing."""
+    _process_memo.clear()
 
 # ``urlsrc`` embeds optional-parameter placeholders such as ``<ui=UI_LLCC&>``;
 # hosts that don't use them must strip them before appending WOPISrc.
@@ -55,8 +67,18 @@ def get_actions() -> dict | None:
     Cached for an hour; a fetch/parse failure is cached briefly too, so an
     editor being down doesn't add a network round-trip to every folder render.
     """
-    if not settings.WOPI_DISCOVERY_URL:
+    url = settings.WOPI_DISCOVERY_URL
+    if not url:
         return None
+    memoized = _process_memo.get(url)
+    if memoized is not None and time.monotonic() - memoized[0] < _PROCESS_MEMO_TTL:
+        return memoized[1]
+    actions = _fetch_through_cache(url)
+    _process_memo[url] = (time.monotonic(), actions)
+    return actions
+
+
+def _fetch_through_cache(url: str) -> dict | None:
     key = _cache_key()
     cached = cache.get(key)
     if cached == _FAILURE_MARKER:
@@ -65,17 +87,23 @@ def get_actions() -> dict | None:
         return cached
     try:
         with httpx2.Client(timeout=10, follow_redirects=True) as client:
-            response = client.get(settings.WOPI_DISCOVERY_URL)
+            response = client.get(url)
             response.raise_for_status()
         actions = _parse(response.text)
     except httpx2.HTTPError, ET.ParseError:
-        logger.warning(
-            "WOPI discovery fetch failed for %s", scrub(settings.WOPI_DISCOVERY_URL)
-        )
+        logger.warning("WOPI discovery fetch failed for %s", scrub(url))
         cache.set(key, _FAILURE_MARKER, _FAILURE_TTL)
         return None
     cache.set(key, actions, _CACHE_TTL)
     return actions
+
+
+def supported_extensions() -> frozenset | None:
+    """Extensions the configured editor advertises, or None when unavailable."""
+    actions = get_actions()
+    if not actions:
+        return None
+    return frozenset(actions)
 
 
 def get_action_url(extension: str, action: str) -> str | None:

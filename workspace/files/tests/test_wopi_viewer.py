@@ -57,6 +57,23 @@ class OfficeViewerRenderTests(TestCase):
         self.file.refresh_from_db()
         self.assertTrue(self.file.is_viewable())
 
+    def test_view_only_format_falls_back_to_read_only(self):
+        """A format the editor can only view opens read-only for an editor,
+        instead of hitting the unavailable fallback."""
+
+        def action_url(ext, action):
+            return "https://editor/browser/abc/cool.html?" if action == "view" else None
+
+        with patch(
+            "workspace.files.services.wopi.discovery.get_action_url",
+            side_effect=action_url,
+        ) as mock_action:
+            resp = self._view()
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("access_token", resp.content.decode())
+        mock_action.assert_any_call("docx", "edit")
+        mock_action.assert_any_call("docx", "view")
+
     def test_unreachable_editor_degrades_to_download(self):
         with patch(
             "workspace.files.services.wopi.discovery.get_action_url",

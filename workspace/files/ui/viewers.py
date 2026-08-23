@@ -71,6 +71,16 @@ class BaseViewer(ABC):
         """
         return True
 
+    @classmethod
+    def claimed_labels(cls) -> frozenset:
+        """Labels this viewer claims right now.
+
+        Defaults to the static ``handles_labels``; viewers whose coverage
+        depends on deployment state (the WOPI editor's advertised formats)
+        override this. Same cheapness constraint as ``is_enabled``.
+        """
+        return cls.handles_labels
+
     @abstractmethod
     def render(self, request) -> str:
         """
@@ -316,9 +326,16 @@ class OfficeViewer(BaseViewer):
     viewer is disabled and office files stay download-only.
     """
 
+    # Formats every WOPI editor speaks - claimed even while the discovery
+    # document is unreachable. rtf is here despite Magika grouping it as
+    # text: it is a word-processing format, and the text editor would show
+    # its raw markup.
     handles_labels = frozenset(
-        {"docx", "xlsx", "pptx", "odt", "ods", "odp", "doc", "xls", "ppt"}
+        {"docx", "xlsx", "pptx", "odt", "ods", "odp", "doc", "xls", "ppt", "rtf"}
     )
+    # Never claimed even when the editor advertises them: the browser's own
+    # PDF renderer is lighter and needs no editor round-trip.
+    _never_claimed = frozenset({"pdf"})
     weight = 50
     slug = "office"
 
@@ -327,6 +344,30 @@ class OfficeViewer(BaseViewer):
         from django.conf import settings
 
         return bool(settings.WOPI_DISCOVERY_URL)
+
+    @classmethod
+    def claimed_labels(cls) -> frozenset:
+        """The static core, widened by whatever the editor advertises.
+
+        Discovery keys are extensions; Magika labels for office formats are
+        their extension, so intersecting the advertised set with the KB's
+        ``document`` group claims exactly the document-family formats this
+        deployment's editor can open (dotx, xlsb, legacy suites, ...) while
+        text-family labels the code editor owns (csv, txt) stay with it.
+        """
+        from workspace.files.services.detection import get_all_labels
+        from workspace.files.services.wopi import discovery
+
+        extensions = discovery.supported_extensions()
+        if not extensions:
+            return cls.handles_labels
+        kb = get_all_labels()
+        advertised_documents = {
+            label
+            for label in extensions
+            if kb.get(label, {}).get("group") == "document"
+        }
+        return (cls.handles_labels | advertised_documents) - cls._never_claimed
 
     def can_edit(self) -> bool:
         return True
@@ -351,6 +392,12 @@ class OfficeViewer(BaseViewer):
         action_url = discovery.get_action_url(
             self._extension(), "edit" if can_edit else "view"
         )
+        if action_url is None and can_edit:
+            # The editor only publishes a view action for this format
+            # (legacy types often are view-only): open read-only rather
+            # than not at all.
+            action_url = discovery.get_action_url(self._extension(), "view")
+            can_edit = False
         if not action_url:
             return render_to_string(
                 "files/ui/viewers/office_viewer_unavailable.html",

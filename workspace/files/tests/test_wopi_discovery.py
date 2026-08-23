@@ -49,9 +49,11 @@ class _FakeClient:
 class DiscoveryTests(TestCase):
     def setUp(self):
         cache.clear()
+        discovery._reset_process_memo()
 
     def tearDown(self):
         cache.clear()
+        discovery._reset_process_memo()
 
     def _patch_fetch(self, text=DISCOVERY_XML):
         return patch(
@@ -95,6 +97,15 @@ class DiscoveryTests(TestCase):
     @override_settings(WOPI_DISCOVERY_URL="")
     def test_disabled_editor_yields_none_without_fetching(self):
         self.assertIsNone(discovery.get_actions())
+
+    def test_supported_extensions_lists_advertised_formats(self):
+        with self._patch_fetch():
+            extensions = discovery.supported_extensions()
+        self.assertEqual(extensions, frozenset({"docx", "odt", "doc", "xlsx"}))
+
+    @override_settings(WOPI_DISCOVERY_URL="")
+    def test_supported_extensions_is_none_when_disabled(self):
+        self.assertIsNone(discovery.supported_extensions())
 
 
 class BuildEditorUrlTests(TestCase):

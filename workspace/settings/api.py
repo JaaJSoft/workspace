@@ -165,6 +165,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Kanban board statuses and task labels.",
         },
         {
+            "name": "Projects - Epics",
+            "description": "Epics grouping tasks into larger initiatives, with progress rollup.",
+        },
+        {
             "name": "Search",
             "description": "Unified search across workspace modules.",
         },

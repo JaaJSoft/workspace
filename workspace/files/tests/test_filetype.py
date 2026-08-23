@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from workspace.files.services.filetype import (
     FileTypeInfo,
@@ -204,8 +204,28 @@ class ViewerResolutionTest(TestCase):
     def test_archive_gets_no_viewer(self):
         self.assertIsNone(get_viewer("zip"))
 
-    def test_document_gets_no_viewer(self):
-        self.assertIsNone(get_viewer("docx"))
+    def test_document_gets_no_viewer_without_a_wopi_editor(self):
+        with override_settings(WOPI_DISCOVERY_URL=""):
+            self.assertIsNone(get_viewer("docx"))
+
+    def test_office_labels_get_office_viewer_with_a_wopi_editor(self):
+        from workspace.files.ui.viewers import OfficeViewer
+
+        with override_settings(WOPI_DISCOVERY_URL="https://editor/hosting/discovery"):
+            for label in ("docx", "xlsx", "pptx", "odt", "ods", "odp"):
+                self.assertEqual(get_viewer(label), OfficeViewer, label)
+
+    def test_office_extension_upgrades_generic_label_with_a_wopi_editor(self):
+        from workspace.files.ui.viewers import OfficeViewer
+
+        with override_settings(WOPI_DISCOVERY_URL="https://editor/hosting/discovery"):
+            self.assertEqual(get_viewer("unknown", "report.docx"), OfficeViewer)
+
+    def test_office_pinned_slug_degrades_when_wopi_is_off(self):
+        from workspace.files.services.filetype import get_viewer_by_slug
+
+        with override_settings(WOPI_DISCOVERY_URL=""):
+            self.assertIsNone(get_viewer_by_slug("office"))
 
     def test_css_gets_text_viewer(self):
         self.assertEqual(get_viewer("css"), TextViewer)

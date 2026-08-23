@@ -60,6 +60,17 @@ class BaseViewer(ABC):
         """
         self.file = file_obj
 
+    @classmethod
+    def is_enabled(cls) -> bool:
+        """Whether this viewer may claim files right now.
+
+        Checked on every resolution, so a viewer gated on deployment state
+        (e.g. the WOPI editor being configured) turns whole file types
+        viewable or download-only without any per-file migration. Must stay
+        cheap: it runs once per viewer class per file in folder listings.
+        """
+        return True
+
     @abstractmethod
     def render(self, request) -> str:
         """
@@ -294,3 +305,74 @@ class VideoViewer(BaseViewer):
 
     def render(self, request) -> str:
         return _render_media(self, request, is_audio=False)
+
+
+class OfficeViewer(BaseViewer):
+    """Office documents rendered by the deployer's WOPI editor.
+
+    The iframe URL and the supported actions come from the editor's discovery
+    XML; this class only decides view vs edit from the user's permission and
+    hands the editor a signed access token. With no WOPI editor configured the
+    viewer is disabled and office files stay download-only.
+    """
+
+    handles_labels = frozenset(
+        {"docx", "xlsx", "pptx", "odt", "ods", "odp", "doc", "xls", "ppt"}
+    )
+    weight = 50
+    slug = "office"
+
+    @classmethod
+    def is_enabled(cls) -> bool:
+        from django.conf import settings
+
+        return bool(settings.WOPI_DISCOVERY_URL)
+
+    def can_edit(self) -> bool:
+        return True
+
+    def _extension(self) -> str:
+        name = self.file.name or ""
+        if "." in name:
+            return name.rsplit(".", 1)[1].lower()
+        return self.file.type or ""
+
+    def render(self, request) -> str:
+        from django.conf import settings
+        from django.template.loader import render_to_string
+        from django.urls import reverse
+        from django.utils import timezone
+
+        from workspace.files.services.wopi import discovery
+        from workspace.files.services.wopi.tokens import mint_access_token
+
+        context = self.get_context(request)
+        can_edit = context["can_edit"]
+        action_url = discovery.get_action_url(
+            self._extension(), "edit" if can_edit else "view"
+        )
+        if not action_url:
+            return render_to_string(
+                "files/ui/viewers/office_viewer_unavailable.html",
+                context,
+                request=request,
+            )
+
+        host = settings.WOPI_HOST_URL or request.build_absolute_uri("/").rstrip("/")
+        wopi_src = host + reverse("wopi-file", kwargs={"uuid": self.file.uuid})
+        context.update(
+            {
+                "editor_url": discovery.build_editor_url(action_url, wopi_src),
+                "access_token": mint_access_token(
+                    request.user, self.file.uuid, can_edit
+                ),
+                # Absolute expiry in milliseconds since epoch, per the WOPI
+                # token contract.
+                "access_token_ttl": int(
+                    (timezone.now().timestamp() + settings.WOPI_TOKEN_TTL) * 1000
+                ),
+            }
+        )
+        return render_to_string(
+            "files/ui/viewers/office_viewer.html", context, request=request
+        )

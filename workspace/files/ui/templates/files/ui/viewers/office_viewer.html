@@ -1,0 +1,46 @@
+<!-- Office viewer: WOPI editor iframe (Collabora / OnlyOffice / OOS) -->
+<div class="flex flex-col h-full relative" x-data="officeViewerData()">
+  {# The editor mandates a form POST carrying the access token - a plain iframe src would leak it in the URL #}
+  <form
+    x-ref="wopiForm"
+    action="{{ editor_url }}"
+    method="post"
+    target="wopi-frame-{{ file.uuid }}"
+    class="hidden"
+  >
+    <input type="hidden" name="access_token" value="{{ access_token }}" />
+    <input type="hidden" name="access_token_ttl" value="{{ access_token_ttl }}" />
+  </form>
+  <iframe
+    name="wopi-frame-{{ file.uuid }}"
+    class="flex-1 w-full border-none bg-base-200"
+    title="{{ file.name }}"
+    allow="clipboard-read *; clipboard-write *"
+    @load="onLoad()"
+  ></iframe>
+
+  <!-- Loading overlay (shown until the editor frame loads) -->
+  <div
+    x-show="loading"
+    class="absolute inset-0 flex items-center justify-center bg-base-200/80 z-10"
+    x-cloak
+  >
+    <span class="loading loading-spinner loading-lg"></span>
+  </div>
+</div>
+
+<script>
+  window.officeViewerData = function officeViewerData() {
+    return {
+      loading: true,
+
+      init() {
+        this.$refs.wopiForm.submit();
+      },
+
+      onLoad() {
+        this.loading = false;
+      },
+    };
+  };
+</script>

@@ -13,6 +13,9 @@ from django.conf import settings
 
 from workspace.common.logging import scrub
 
+from .feeds import Feed, looks_like_feed, parse_feed
+from .pdf import MAX_PAGES, PdfDocument, extract_pdf
+
 logger = logging.getLogger(__name__)
 
 # Internal/private IP ranges that must not be fetched (SSRF protection).
@@ -24,7 +27,10 @@ _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (compatible; WorkspaceBot/1.0; +https://github.com/JaaJ-Workspace)"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": (
+        "text/html,application/xhtml+xml,application/pdf,"
+        "application/rss+xml,application/atom+xml,application/xml;q=0.9,*/*;q=0.8"
+    ),
     "Accept-Language": "en-US,en;q=0.5,fr;q=0.3",
 }
 
@@ -163,7 +169,18 @@ def search_many(queries: list[str], **kwargs) -> list[dict]:
     return merged
 
 
+MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+# A PDF carries its fonts and images along with its text, so the budget that
+# fits a whole website's HTML barely fits a ten-page paper.
+MAX_PDF_BYTES = 10 * 1024 * 1024
+
+MAX_LINKS = 25
+ANCHOR_MAX_CHARS = 80
+
+_FEED_CONTENT_TYPES = ("rss+xml", "atom+xml", "rdf+xml", "feed+json")
+
 _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)\s]+)\)")
+_WHITESPACE_RE = re.compile(r"\s+")
 
 
 def _absolutize_links(markdown: str, base_url: str) -> str:
@@ -187,6 +204,94 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[: max(max_chars - len(marker), 0)] + marker
 
 
+def _header(title: str, final_url: str, *fields: str) -> str:
+    """Build the block that opens every result.
+
+    The URL is the one the redirects landed on: it is what a citation has to
+    name, and the bot is otherwise never told the two differ.
+    """
+    lines = [f"# {title}"] if title else []
+    lines.append(f"Source: {final_url}")
+    lines.extend(field for field in fields if field)
+    return "\n".join(lines)
+
+
+def _bare_host(url: str) -> str:
+    return (urlparse(url).hostname or "").lower().removeprefix("www.")
+
+
+def _collect_links(markdown: str, final_url: str) -> tuple[list, list]:
+    """Split the links of an extracted page into same-site and outbound ones.
+
+    Going deeper into a site and leaving it for another source are different
+    decisions, and a bot choosing its next fetch makes them separately.
+    """
+    base_host = _bare_host(final_url)
+    seen = {final_url.split("#", 1)[0]}
+    same: list[tuple[str, str]] = []
+    external: list[tuple[str, str]] = []
+
+    for match in _MD_LINK_RE.finditer(markdown):
+        url = match[2].split("#", 1)[0]
+        anchor = _WHITESPACE_RE.sub(" ", match[1]).strip()
+        # Anchors of one or two characters are pagination and breadcrumb
+        # arrows — navigation chrome that survived extraction.
+        if (
+            not url.startswith(("http://", "https://"))
+            or url in seen
+            or len(anchor) < 3
+        ):
+            continue
+        seen.add(url)
+        if len(anchor) > ANCHOR_MAX_CHARS:
+            anchor = anchor[: ANCHOR_MAX_CHARS - 1].rstrip() + "…"
+        target = same if _bare_host(url) == base_host else external
+        target.append((anchor, url))
+
+    return same, external
+
+
+def _render_links(same: list, external: list, *, max_links: int = MAX_LINKS) -> str:
+    """Render the link list, splitting the cap between the two groups."""
+    if not same and not external:
+        return ""
+
+    half = max_links // 2
+    keep_same = min(len(same), max(half, max_links - len(external)))
+    keep_external = min(len(external), max_links - keep_same)
+    dropped = (len(same) - keep_same) + (len(external) - keep_external)
+
+    lines = ["## Links"]
+    for label, links, keep in (
+        ("On this page's site", same, keep_same),
+        ("Elsewhere", external, keep_external),
+    ):
+        if not keep:
+            continue
+        lines.append(f"{label}:")
+        lines.extend(f"- [{anchor}]({url})" for anchor, url in links[:keep])
+    if dropped:
+        lines.append(f"({dropped} more links not listed)")
+    return "\n".join(lines)
+
+
+def _compose(header: str, body: str, links: str, max_chars: int) -> str:
+    """Assemble header, body and link list within a single *max_chars* budget.
+
+    The body is what was asked for: the link list is dropped whole rather than
+    allowed to eat into the page it belongs to.
+    """
+    body_budget = max_chars - len(header) - len(links) - 4
+    if body_budget < max_chars // 2:
+        links = ""
+        body_budget = max_chars - len(header) - 2
+
+    body = _truncate(body, max(body_budget, 0)) if body else ""
+    return _truncate(
+        "\n\n".join(part for part in (header, body, links) if part), max_chars
+    )
+
+
 def _json_or_none(resp) -> str | None:
     """Re-serialize a JSON response compactly, or return None if it isn't JSON.
 
@@ -201,12 +306,135 @@ def _json_or_none(resp) -> str | None:
         return None
 
 
-def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
-    """Fetch a URL and extract its main content as link-preserving markdown.
+def _is_pdf(content_type: str, content: bytes) -> bool:
+    return "application/pdf" in content_type or content.startswith(b"%PDF-")
 
-    Uses *trafilatura* for editorial content extraction — strips navigation,
-    ads and footers, but keeps hyperlinks so a follow-up fetch can navigate to
-    the pages this one references. JSON responses are returned as compact JSON.
+
+def _is_feed(content_type: str, content: bytes) -> bool:
+    if any(feed_type in content_type for feed_type in _FEED_CONTENT_TYPES):
+        return True
+    # Feeds are routinely served as application/xml, text/xml or even
+    # text/plain, so the document's own root element is the reliable signal.
+    return looks_like_feed(content[:400])
+
+
+def _render_pdf(document: PdfDocument, final_url: str, max_chars: int) -> str:
+    pages = f"Pages: {document.page_count}"
+    if document.pages_read < document.page_count:
+        pages += f" (read the first {document.pages_read})"
+    header = _header(
+        document.title,
+        final_url,
+        f"Published: {document.date}" if document.date else "",
+        pages,
+    )
+    body = document.text or (
+        "This PDF carries no text layer — it is a scan or a set of page "
+        "images, and no reader can extract words from it. Look for an HTML "
+        "version of the same document instead."
+    )
+    return _compose(header, body, "", max_chars)
+
+
+def _render_feed(feed: Feed, final_url: str, max_chars: int) -> str:
+    """Render a feed as a dated list — the entries are the point, not prose."""
+    header = _header(
+        feed.title,
+        final_url,
+        feed.subtitle,
+        f"Entries: {len(feed.entries)}, newest first as the feed ordered them",
+    )
+    lines = []
+    for entry in feed.entries:
+        date = f"{entry.date} — " if entry.date else ""
+        title = entry.title or entry.url or "(untitled)"
+        lines.append(
+            f"- {date}[{title}]({entry.url})" if entry.url else f"- {date}{title}"
+        )
+        if entry.summary:
+            lines.append(f"  {entry.summary}")
+    return _compose(header, "\n".join(lines), "", max_chars)
+
+
+def _page_metadata(html: str, final_url: str) -> tuple[str, str, str]:
+    """Return the title, publication date and author trafilatura can find.
+
+    The date is the field that makes a source datable, and a bot that cannot
+    tell a 2019 article from last week's cites both with the same confidence.
+    """
+    try:
+        metadata = trafilatura.extract_metadata(html, default_url=final_url)
+    except Exception as exc:
+        logger.debug(
+            "Metadata extraction failed for %s: %s", scrub(final_url), scrub(exc)
+        )
+        return "", "", ""
+    if metadata is None:
+        return "", "", ""
+    return (
+        (metadata.title or "").strip(),
+        (metadata.date or "").strip(),
+        (metadata.author or "").strip(),
+    )
+
+
+def _strip_tags(html: str) -> str:
+    """Last-resort extraction: the page's text, tags removed."""
+    from html.parser import HTMLParser
+
+    class _TextExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.parts: list[str] = []
+
+        def handle_data(self, data):
+            self.parts.append(data)
+
+    parser = _TextExtractor()
+    parser.feed(html[:200_000])
+    return " ".join(parser.parts).strip()
+
+
+def _render_html(page: str, final_url: str, max_chars: int) -> str:
+    # Links are kept: they are how a reader moves from this page to the ones
+    # it references, and a text-only extraction leaves no way back. They
+    # resolve against the URL the redirects landed on, not the one asked for.
+    text = _absolutize_links(
+        trafilatura.extract(
+            page,
+            include_links=True,
+            include_images=False,
+            include_tables=True,
+            output_format="markdown",
+            url=final_url,
+        )
+        or "",
+        final_url,
+    )
+    if not text:
+        text = _strip_tags(page)
+
+    title, date, author = _page_metadata(page, final_url)
+    header = _header(
+        title,
+        final_url,
+        f"Published: {date}" if date else "",
+        f"By: {author}" if author else "",
+    )
+    return _compose(
+        header, text, _render_links(*_collect_links(text, final_url)), max_chars
+    )
+
+
+def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
+    """Fetch a URL and extract its content as link-preserving markdown.
+
+    Four kinds of document are read: HTML through *trafilatura* (editorial
+    content, navigation and ads stripped, hyperlinks kept so a follow-up fetch
+    can navigate), PDF through *pypdf*, RSS/Atom feeds as a dated entry list,
+    and JSON as compact JSON. Everything but JSON opens with a header naming
+    the page's title, date and final URL, and HTML closes with its links
+    gathered into a list.
 
     Raises ``ValueError`` for unsafe URLs or fetch failures.
     """
@@ -225,44 +453,29 @@ def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
     except httpx2.HTTPError as exc:
         raise ValueError(f"Failed to fetch URL: {exc}") from exc
 
-    if len(resp.content) > 2 * 1024 * 1024:
-        raise ValueError("Response too large (>2 MB)")
+    content = resp.content
+    final_url = str(resp.url)
+    content_type = resp.headers.get("content-type", "").lower()
+
+    if _is_pdf(content_type, content):
+        if len(content) > MAX_PDF_BYTES:
+            raise ValueError(f"PDF too large (>{MAX_PDF_BYTES // (1024 * 1024)} MB)")
+        return _render_pdf(
+            extract_pdf(content, max_pages=MAX_PAGES), final_url, max_chars
+        )
+
+    if len(content) > MAX_RESPONSE_BYTES:
+        raise ValueError(
+            f"Response too large (>{MAX_RESPONSE_BYTES // (1024 * 1024)} MB)"
+        )
 
     payload = _json_or_none(resp)
     if payload is not None:
         return _truncate(payload, max_chars)
 
-    # Links are kept: they are how a reader moves from this page to the ones
-    # it references, and a text-only extraction leaves no way back. They
-    # resolve against the URL the redirects landed on, not the one asked for.
-    final_url = str(resp.url)
-    text = (
-        trafilatura.extract(
-            resp.text,
-            include_links=True,
-            include_images=False,
-            include_tables=True,
-            output_format="markdown",
-            url=final_url,
-        )
-        or ""
-    )
-    text = _absolutize_links(text, final_url)
+    if _is_feed(content_type, content):
+        feed = parse_feed(content, final_url)
+        if feed is not None:
+            return _render_feed(feed, final_url, max_chars)
 
-    if not text:
-        # Fallback: grab raw text stripped of tags.
-        from html.parser import HTMLParser
-
-        class _TextExtractor(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.parts: list[str] = []
-
-            def handle_data(self, data):
-                self.parts.append(data)
-
-        parser = _TextExtractor()
-        parser.feed(resp.text[:200_000])
-        text = " ".join(parser.parts).strip()
-
-    return _truncate(text, max_chars)
+    return _render_html(resp.text, final_url, max_chars)

@@ -14,6 +14,7 @@ from django.conf import settings
 from workspace.common.logging import scrub
 
 from .feeds import Feed, looks_like_feed, parse_feed
+from .paging import check_part, part_count
 from .pdf import MAX_PAGES, PdfDocument, extract_pdf
 from .reading import read_for_query
 
@@ -177,6 +178,11 @@ MAX_PDF_BYTES = 10 * 1024 * 1024
 
 MAX_LINKS = 25
 ANCHOR_MAX_CHARS = 80
+# Room a part keeps aside for the marker naming the part that follows it. Set
+# rather than measured, so a part covers the same characters whatever the
+# numbers written into that marker cost, and wide enough that a part carries
+# its marker without going over the budget it was asked for.
+PART_MARKER_CHARS = 140
 # Head of the document the tag-stripping fallback parses. Markup outruns text
 # by an order of magnitude, so this still yields far more than any max_chars.
 FALLBACK_PARSE_CHARS = 200_000
@@ -279,9 +285,40 @@ def _render_links(same: list, external: list, *, max_links: int = MAX_LINKS) -> 
     return "\n".join(lines)
 
 
-def _scoped(body: str, query: str, max_chars: int) -> str:
-    """Narrow *body* to what answers *query*, when one was asked."""
-    return read_for_query(body, query, max_chars=max_chars) if body and query else body
+def _paged(text: str, max_chars: int, part: int) -> str:
+    """Return the *part*-th slice of *text*, ending on how to read the next one.
+
+    The marker is where the reader learns the rest is within reach at all: a
+    page cut with nothing said about the cut is a page that ends there.
+    """
+    if len(text) <= max_chars:
+        check_part(part, 1)
+        return text
+
+    size = max(max_chars - PART_MARKER_CHARS, 1)
+    total = part_count(len(text), size)
+    check_part(part, total)
+
+    stretch = text[(part - 1) * size : part * size]
+    if part == total:
+        return f"{stretch}\n\n[… end of the page — part {part} of {total}]"
+    return (
+        f"{stretch}\n\n[… part {part} of {total} — read this URL again with "
+        f"part={part + 1} for what follows]"
+    )
+
+
+def _one_part(body: str, query: str, max_chars: int, part: int) -> str:
+    """Cut *body* down to the one part of it this call returns.
+
+    With a query that is what the stretch of the page the part covers says
+    about it; without one, that stretch itself.
+    """
+    if not body:
+        return ""
+    if query.strip():
+        return read_for_query(body, query, max_chars=max_chars, part=part)
+    return _paged(body, max_chars, part)
 
 
 def _body_budget(header: str, links: str, max_chars: int) -> tuple[int, str]:
@@ -335,7 +372,11 @@ def _is_feed(content_type: str, content: bytes) -> bool:
 
 
 def _render_pdf(
-    document: PdfDocument, final_url: str, max_chars: int, query: str = ""
+    document: PdfDocument,
+    final_url: str,
+    max_chars: int,
+    query: str = "",
+    part: int = 1,
 ) -> str:
     pages = f"Pages: {document.page_count}"
     if document.pages_read < document.page_count:
@@ -352,10 +393,12 @@ def _render_pdf(
         "version of the same document instead."
     )
     budget, _ = _body_budget(header, "", max_chars)
-    return _compose(header, _scoped(body, query, budget), "", max_chars)
+    return _compose(header, _one_part(body, query, budget, part), "", max_chars)
 
 
-def _render_feed(feed: Feed, final_url: str, max_chars: int, query: str = "") -> str:
+def _render_feed(
+    feed: Feed, final_url: str, max_chars: int, query: str = "", part: int = 1
+) -> str:
     """Render a feed as a dated list — the entries are the point, not prose."""
     header = _header(
         feed.title,
@@ -373,7 +416,9 @@ def _render_feed(feed: Feed, final_url: str, max_chars: int, query: str = "") ->
         if entry.summary:
             lines.append(f"  {entry.summary}")
     budget, _ = _body_budget(header, "", max_chars)
-    return _compose(header, _scoped("\n".join(lines), query, budget), "", max_chars)
+    return _compose(
+        header, _one_part("\n".join(lines), query, budget, part), "", max_chars
+    )
 
 
 def _page_metadata(html: str, final_url: str) -> tuple[str, str, str]:
@@ -419,7 +464,9 @@ def _strip_tags(html: str) -> str:
     return " ".join(parser.parts).strip()
 
 
-def _render_html(page: str, final_url: str, max_chars: int, query: str = "") -> str:
+def _render_html(
+    page: str, final_url: str, max_chars: int, query: str = "", part: int = 1
+) -> str:
     # Links are kept: they are how a reader moves from this page to the ones
     # it references, and a text-only extraction leaves no way back. They
     # resolve against the URL the redirects landed on, not the one asked for.
@@ -449,10 +496,12 @@ def _render_html(page: str, final_url: str, max_chars: int, query: str = "") -> 
         f"By: {author}" if author else "",
     )
     budget, _ = _body_budget(header, links, max_chars)
-    return _compose(header, _scoped(text, query, budget), links, max_chars)
+    return _compose(header, _one_part(text, query, budget, part), links, max_chars)
 
 
-def fetch_and_extract(url: str, *, max_chars: int = 12000, query: str = "") -> str:
+def fetch_and_extract(
+    url: str, *, max_chars: int = 12000, query: str = "", part: int = 1
+) -> str:
     """Fetch a URL and extract its content as link-preserving markdown.
 
     Four kinds of document are read: HTML through *trafilatura* (editorial
@@ -467,7 +516,13 @@ def fetch_and_extract(url: str, *, max_chars: int = 12000, query: str = "") -> s
     its sections — JSON excepted, a compact payload having no passages to
     choose between.
 
-    Raises ``ValueError`` for unsafe URLs or fetch failures.
+    A document still too long for one result comes back cut into parts, each
+    of them naming the part that follows it; *part* asks for that one. The
+    budget is then per call rather than per page, and no stretch of a document
+    is out of reach.
+
+    Raises ``ValueError`` for unsafe URLs, fetch failures, and a *part* the
+    document does not have.
     """
     if not _is_url_safe(url):
         raise ValueError("URL points to a private or internal address")
@@ -492,7 +547,7 @@ def fetch_and_extract(url: str, *, max_chars: int = 12000, query: str = "") -> s
         if len(content) > MAX_PDF_BYTES:
             raise ValueError(f"PDF too large (>{MAX_PDF_BYTES // (1024 * 1024)} MB)")
         return _render_pdf(
-            extract_pdf(content, max_pages=MAX_PAGES), final_url, max_chars, query
+            extract_pdf(content, max_pages=MAX_PAGES), final_url, max_chars, query, part
         )
 
     if len(content) > MAX_RESPONSE_BYTES:
@@ -502,11 +557,11 @@ def fetch_and_extract(url: str, *, max_chars: int = 12000, query: str = "") -> s
 
     payload = _json_or_none(resp)
     if payload is not None:
-        return _truncate(payload, max_chars)
+        return _paged(payload, max_chars, part)
 
     if _is_feed(content_type, content):
         feed = parse_feed(content, final_url)
         if feed is not None:
-            return _render_feed(feed, final_url, max_chars, query)
+            return _render_feed(feed, final_url, max_chars, query, part)
 
-    return _render_html(resp.text, final_url, max_chars, query)
+    return _render_html(resp.text, final_url, max_chars, query, part)

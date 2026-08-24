@@ -7,11 +7,9 @@
     <script>
       document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');
     </script>
-    <!-- Literal paths, not {% static %}: this is a static file the service
-       worker serves, never a rendered template. collectstatic keeps the
-       unhashed names next to the hashed ones, so both resolve in production,
-       and the service worker has already cached them - every page of the
-       application loads the same two files. -->
+    <!-- Literal paths, not {% static %}: the service worker serves this file
+       as it is, so a template tag would ship as text. collectstatic keeps the
+       unhashed names beside the hashed ones, so they resolve in production. -->
     <!-- djlint:off D004 -->
     <link href="/static/css/app.css" rel="stylesheet" type="text/css" />
     <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml" />

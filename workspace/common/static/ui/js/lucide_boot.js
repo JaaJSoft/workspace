@@ -1,7 +1,6 @@
 /**
  * Draws the icons the server rendered, then watches for the ones Alpine adds
- * later. Loaded from base.html at the end of <body>, after lucide.js has
- * defined observeLucideIcons.
+ * later. Must load after lucide.js, which defines observeLucideIcons.
  */
 document.addEventListener('DOMContentLoaded', function() {
   if (typeof lucide !== 'undefined') {

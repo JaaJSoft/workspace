@@ -1,14 +1,12 @@
 /**
  * Copies the published Lucide UMD build into the static tree.
  *
- * A copy rather than a bundle: base.html loaded this exact file from unpkg
- * under an SRI hash, and keeping the bytes is what makes the swap provable
- * (workspace/common/tests/js/lucide_bundle.test.js re-checks the digest).
+ * A copy, not a bundle: identical bytes are what let lucide_bundle.test.js
+ * check the artifact against the digest the published build carries.
  *
- * The one edit is the trailing sourceMappingURL comment. The published map is
- * 3.9 MB and we do not ship it, and collectstatic's manifest storage resolves
- * that reference at deploy time - it fails the whole command when the file is
- * missing, so leaving the comment in breaks production builds.
+ * The one edit is the trailing sourceMappingURL comment. collectstatic's
+ * manifest storage resolves that reference at deploy time and fails the whole
+ * command over a map we do not ship.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 

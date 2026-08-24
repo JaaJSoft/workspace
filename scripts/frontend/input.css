@@ -63,9 +63,8 @@
   to { transform: translateY(-100%); opacity: 0; }
 }
 
-/* Application chrome that base.html used to carry in two inline <style>
-   blocks. It lives here so a page can be served under a
-   Content-Security-Policy that refuses inline styles. */
+/* Application chrome. It belongs in the stylesheet rather than a <style>
+   block: a page serving a Content-Security-Policy refuses inline styles. */
 .lucide {
   pointer-events: none;
 }

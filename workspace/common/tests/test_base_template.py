@@ -78,18 +78,16 @@ class BaseTemplateScriptOriginTests(TestCase):
         self.assertIn("ui/js/vendor/alpine/alpine.js", _base_template_source())
 
     def test_lucide_is_not_loaded_from_a_cdn(self):
-        # Lucide runs on every page and draws into the DOM; a tampered build
-        # would have the same reach as a tampered Alpine. It also has to be
-        # same-origin for the vault pages, which serve a policy that refuses
-        # anything else.
+        # Lucide runs on every page and draws into the DOM: a tampered build
+        # has the same reach as a tampered Alpine.
         self.assertNotIn("unpkg.com", _base_template_source())
 
     def test_lucide_is_loaded_from_the_vendored_artifact(self):
         self.assertIn("ui/js/vendor/lucide/lucide.js", _base_template_source())
 
     def test_the_favicon_is_served_from_this_origin(self):
-        # fav.farm renders an emoji server-side, which meant every page load
-        # announced itself to a third party.
+        # fav.farm renders the emoji server-side: every page load would
+        # announce itself to a third party.
         self.assertNotIn("fav.farm", _base_template_source())
 
     def test_the_vendored_bundle_is_deferred(self):
@@ -113,11 +111,10 @@ class BaseTemplateScriptOriginTests(TestCase):
 class StandalonePageOriginTests(TestCase):
     """The two pages that do not extend ``base.html``.
 
-    ``offline.html`` is the one the service worker serves when the network is
-    gone, so an asset it fetches from a CDN is an asset it never gets: the
-    page rendered as unstyled HTML every single time it was shown. ``500.html``
-    is served while the application is already failing, and it announced the
-    failure to two third parties.
+    The service worker serves ``offline.html`` when the network is gone, so an
+    asset it fetches from a CDN is an asset it never gets. ``500.html`` is
+    served while the application is already failing, which is no moment to
+    depend on a third party either.
     """
 
     def _offline_source(self) -> str:
@@ -139,8 +136,7 @@ class StandalonePageOriginTests(TestCase):
             self.assertNotIn(host, source)
 
     def test_the_offline_page_styles_itself_from_this_origin(self):
-        # Both the Tailwind CDN and the DaisyUI stylesheet it used to load are
-        # already inside the built app.css.
+        # app.css already carries both Tailwind and DaisyUI.
         self.assertIn("/static/css/app.css", self._offline_source())
 
     def test_the_error_page_fetches_nothing_from_a_third_party(self):

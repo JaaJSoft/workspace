@@ -1,8 +1,8 @@
 /**
  * Buttons whose only job is to broadcast an event declare it in the markup as
  * `data-dispatch="<event-name>"`; one delegated listener turns that into a
- * window event. Replaces the inline `onclick` handlers that a
- * Content-Security-Policy without 'unsafe-inline' refuses to run.
+ * window event. An inline `onclick` would do the same, and be refused by any
+ * page serving a Content-Security-Policy.
  */
 document.addEventListener('click', function(event) {
   const target = event.target;

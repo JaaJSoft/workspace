@@ -13,8 +13,7 @@
     <title>{% block title %}Workspace{% endblock %}</title>
 
     <!-- Warm up TLS + DNS for jsDelivr. Nothing on this page loads from it;
-       the calendar, chat, files, projects and settings templates that extend
-       this one still do. -->
+       several templates that extend it still do. -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 
     <!-- Tailwind + DaisyUI + Typography - locally built (see scripts/frontend/:
@@ -34,8 +33,7 @@
        scripts that register `alpine:init` listeners. -->
     <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
 
-    <!-- Lucide Icons - locally built (see scripts/frontend/). Same reason as
-       Alpine above: the icon library runs on every page of the application. -->
+    <!-- Lucide Icons - locally built (see scripts/frontend/). -->
     <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
     <script src="{% static 'ui/js/lucide.js' %}"></script>
     <script src="{% static 'ui/js/csrf.js' %}"></script>

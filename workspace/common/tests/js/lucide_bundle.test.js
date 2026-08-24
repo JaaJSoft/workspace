@@ -1,7 +1,6 @@
 // Integrity checks on the vendored Lucide artifact. Unlike the other entries
-// of scripts/frontend, this one is copied out of the npm tarball rather than
-// bundled: base.html used to load the same file from unpkg under an SRI hash,
-// and keeping the bytes identical is what makes the swap provable.
+// of scripts/frontend it is copied out of the npm tarball rather than bundled,
+// so its bytes can be checked against the digest the published build carries.
 const test = require('node:test');
 const assert = require('node:assert');
 const crypto = require('node:crypto');
@@ -14,9 +13,8 @@ const BUNDLE = path.join(
 );
 const MANIFEST = path.join(REPO_ROOT, 'scripts', 'frontend', 'package.json');
 
-// The integrity attribute base.html carried while the library came from the
-// CDN. Update it - from the npm tarball, never from a browser - in the same
-// commit that bumps the pinned version.
+// The published build's SHA-384. Update it - from the npm tarball, never from
+// a browser - in the same commit that bumps the pinned version.
 const PUBLISHED_SHA384 = '7PArHXNzg1s/WgbAH9xkBpx4T6MJ0jPAxaEM9yld+zvdFEjSf+wzzv0hDnem/6rw';
 // What vendor-lucide.mjs strips, and what the digest above needs back.
 const SOURCE_MAP_COMMENT = '//# sourceMappingURL=lucide.min.js.map\n';
@@ -27,10 +25,9 @@ test('the artifact exists and is not empty', () => {
 });
 
 test('the artifact is the published build, minus its source map comment', () => {
-  // Every other check here reads the file as text and would pass on a
-  // hand-patched copy. This one is the reason the library can be trusted at
-  // all: put the stripped comment back and the digest is the one the CDN tag
-  // verified. Nothing else in the file may differ.
+  // Every other check in this file reads the artifact as text and would pass
+  // on a hand-patched copy. Put the stripped comment back and the digest must
+  // be the published one: nothing else may differ.
   const restored = Buffer.concat([
     fs.readFileSync(BUNDLE),
     Buffer.from(SOURCE_MAP_COMMENT, 'utf8'),

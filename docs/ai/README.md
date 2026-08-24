@@ -46,6 +46,8 @@ AI is disabled until `AI_API_KEY` is set. All variables are optional beyond that
 | `AI_MODEL` | Default chat model, used when a bot has no model override. |
 | `AI_SMALL_MODEL` | Fast model for summaries and titles. |
 | `AI_EXTRACT_MODEL` | Model for mail event extraction (defaults to `AI_MODEL`). |
+| `AI_READING_MODEL` | Model that reads a fetched page for what it says about a question. That call answers a 24 000-character chunk with a strict JSON schema and runs up to eight chunks at once, so a model chosen for titles and summaries is often the wrong one for it. Falls back to `AI_SMALL_MODEL`, then `AI_MODEL`. |
+| `AI_VISION_MODEL` | Model that captions image attachments. It is the only call that needs a multimodal model whatever `AI_MODEL` is: without one, images fall out of the vision window with no description to replay. Defaults to `AI_MODEL`. |
 | `AI_MAX_TOKENS` | Maximum tokens per response. |
 | `AI_TIMEOUT` | Seconds per AI request. |
 | `AI_IMAGE_MODEL` / `AI_IMAGE_BASE_URL` | Image generation model and optional separate endpoint. |

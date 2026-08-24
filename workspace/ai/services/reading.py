@@ -249,7 +249,7 @@ def read_for_query(markdown: str, query: str, *, max_chars: int) -> str:
     if not markdown or not query.strip() or len(markdown) <= max_chars:
         return markdown
 
-    model = settings.AI_SMALL_MODEL or settings.AI_MODEL
+    model = settings.AI_READING_MODEL or settings.AI_SMALL_MODEL or settings.AI_MODEL
     if not model:
         logger.warning("Reading a page for a query needs a model; none configured")
         return markdown

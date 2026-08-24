@@ -11,6 +11,13 @@ AI_SMALL_MODEL = (
 AI_EXTRACT_MODEL = os.getenv(
     "AI_EXTRACT_MODEL", ""
 )  # Event extraction. Empty = fall back to AI_MODEL.
+# Reads a fetched page for what it says about a question: 24k characters per
+# chunk, answered as a strict JSON schema, up to eight chunks in flight at
+# once. Empty = fall back to AI_SMALL_MODEL, then AI_MODEL.
+AI_READING_MODEL = os.getenv("AI_READING_MODEL", "")
+# Captions chat image attachments - the only call that requires a multimodal
+# model whatever AI_MODEL is. Empty = fall back to AI_MODEL.
+AI_VISION_MODEL = os.getenv("AI_VISION_MODEL", "")
 AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "2048"))
 AI_CHAT_CONTEXT_SIZE = int(
     os.getenv("AI_CHAT_CONTEXT_SIZE", "30")

@@ -56,7 +56,9 @@ def _answers(*items, missing=""):
     return lambda *a, **kw: (Extraction(findings=findings, missing=missing), {})
 
 
-@override_settings(AI_SMALL_MODEL="small-model", AI_MODEL="big-model")
+@override_settings(
+    AI_READING_MODEL="", AI_SMALL_MODEL="small-model", AI_MODEL="big-model"
+)
 class ReadForQueryTests(SimpleTestCase):
     def setUp(self):
         self.page = _reference_page()
@@ -169,6 +171,18 @@ class ReadForQueryTests(SimpleTestCase):
 
         self.assertEqual(mock_call.call_args.kwargs["model"], "small-model")
 
+    @override_settings(AI_READING_MODEL="reading-model")
+    def test_the_reading_model_wins_over_the_small_one(self):
+        _, mock_call = self._read(_answers(_ANSWER))
+
+        self.assertEqual(mock_call.call_args.kwargs["model"], "reading-model")
+
+    @override_settings(AI_READING_MODEL="reading-model", AI_SMALL_MODEL="")
+    def test_the_reading_model_stands_alone(self):
+        _, mock_call = self._read(_answers(_ANSWER))
+
+        self.assertEqual(mock_call.call_args.kwargs["model"], "reading-model")
+
     @override_settings(AI_SMALL_MODEL="", AI_MODEL="big-model")
     def test_the_main_model_is_used_when_there_is_no_small_one(self):
         _, mock_call = self._read(_answers(_ANSWER))
@@ -233,7 +247,7 @@ class ReadForQueryFallbackTests(SimpleTestCase):
     def test_findings_with_nothing_in_them_fall_back(self):
         self.assertEqual(self._read(_answers("", "   ")), self.page)
 
-    @override_settings(AI_SMALL_MODEL="", AI_MODEL="")
+    @override_settings(AI_READING_MODEL="", AI_SMALL_MODEL="", AI_MODEL="")
     def test_no_model_configured_falls_back(self):
         with patch("workspace.ai.services.reading.call_llm_structured") as mock_call:
             text = read_for_query(self.page, "the cap", max_chars=1500)

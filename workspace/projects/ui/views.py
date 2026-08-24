@@ -60,6 +60,24 @@ VIEW_TASKS = "tasks"
 VIEW_ANALYTICS = "analytics"
 VIEW_SETTINGS = "settings"
 
+# The two board models a project can be converted between, in the order the
+# settings picker shows them. Personal projects are absent on purpose: their
+# type carries the one-per-user constraint, not a board layout.
+BOARD_MODELS = [
+    {
+        "value": Project.Type.KANBAN,
+        "label": "Kanban",
+        "icon": "square-kanban",
+        "description": "A continuous board where every column is always visible.",
+    },
+    {
+        "value": Project.Type.SCRUM,
+        "label": "Scrum",
+        "icon": "timer",
+        "description": "Timeboxed sprints; the board shows one sprint at a time.",
+    },
+]
+
 
 @login_required
 def index(request):
@@ -679,6 +697,7 @@ def settings_view(request, project_uuid):
         "type": project.type,
         "archived": project.is_archived,
     }
+    context["board_models"] = BOARD_MODELS
     return _render_project_view(request, context)
 
 

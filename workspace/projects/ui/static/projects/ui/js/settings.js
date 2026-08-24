@@ -141,6 +141,73 @@ function projectSettingsGeneral(config) {
   };
 }
 
+// Spelled out in the confirmation dialog: the conversion moves tasks and
+// retires sprints, and neither side is a plain field write the user can
+// undo by clicking the other option.
+const BOARD_MODEL_WARNINGS = {
+  scrum: {
+    title: 'Convert to scrum',
+    message:
+      'Every task on a board column joins a new running sprint. Backlog ' +
+      'tasks stay unplanned, and the board shows one sprint at a time.',
+    okLabel: 'Convert to scrum',
+    icon: 'timer',
+  },
+  kanban: {
+    title: 'Convert to kanban',
+    message:
+      'The running sprint is closed and planned sprints are deleted, ' +
+      'returning their tasks to the backlog pool. Tasks keep their ' +
+      'columns and closed sprints stay as history.',
+    okLabel: 'Convert to kanban',
+    icon: 'square-kanban',
+  },
+};
+
+function projectBoardModel(config) {
+  return {
+    type: config.current,
+    busy: false,
+    error: '',
+    writable: config.writable !== false,
+
+    async convertTo(target) {
+      if (!this.writable || target === this.type || this.busy) return;
+      const warning = BOARD_MODEL_WARNINGS[target];
+      const ok = await AppDialog.confirm({
+        title: warning.title,
+        message: warning.message,
+        okLabel: warning.okLabel,
+        okClass: 'btn-accent',
+        icon: warning.icon,
+        iconClass: 'bg-accent/10 text-accent',
+      });
+      if (!ok) return;
+      this.busy = true;
+      this.error = '';
+      try {
+        const resp = await fetch(config.apiBase + '/convert', {
+          method: 'POST',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ type: target }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(function () {
+            return {};
+          });
+          throw new Error(
+            data.detail || (data.type && data.type[0]) || 'Could not convert.'
+          );
+        }
+        window.location.reload();
+      } catch (e) {
+        this.error = e.message;
+        this.busy = false;
+      }
+    },
+  };
+}
+
 // Group attachment lives in the Access section: attached groups render as
 // removable chips, additions come from the shared group selector. Every
 // change PATCHes the full id list, no explicit save button.
@@ -1164,6 +1231,7 @@ function projectMembers(config) {
 }
 
 window.projectSettingsGeneral = projectSettingsGeneral;
+window.projectBoardModel = projectBoardModel;
 window.projectGroupAccess = projectGroupAccess;
 window.projectSettingsDanger = projectSettingsDanger;
 window.projectColumns = projectColumns;
@@ -1178,4 +1246,5 @@ window.projectSettingsHelpers = {
   retentionDaysFromIndex: retentionDaysFromIndex,
   nextSprintName: nextSprintName,
   suggestSprintDates: suggestSprintDates,
+  boardModelWarnings: BOARD_MODEL_WARNINGS,
 };

@@ -67,8 +67,12 @@ class ProjectSerializer(serializers.ModelSerializer):
         return getattr(obj, "_my_role", None) or ProjectMember.Role.MEMBER
 
     def validate_type(self, value):
+        # Switching board models moves tasks and retires sprints, so it goes
+        # through the convert endpoint rather than a field write.
         if self.instance is not None and value != self.instance.type:
-            raise serializers.ValidationError("Project type cannot be changed.")
+            raise serializers.ValidationError(
+                "Use the convert endpoint to change the project type."
+            )
         if self.instance is None and value == Project.Type.PERSONAL:
             raise serializers.ValidationError(
                 "Personal projects are created automatically."
@@ -439,6 +443,14 @@ class TaskSprintSerializer(serializers.Serializer):
 
     def validate_tasks(self, value):
         return _parse_uuid_list(value, "tasks")
+
+
+class ProjectConvertSerializer(serializers.Serializer):
+    """Target board model for a project conversion."""
+
+    type = serializers.ChoiceField(
+        choices=[Project.Type.KANBAN, Project.Type.SCRUM],
+    )
 
 
 class SprintCompleteSerializer(serializers.Serializer):

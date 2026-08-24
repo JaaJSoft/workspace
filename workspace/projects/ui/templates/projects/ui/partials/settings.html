@@ -241,6 +241,61 @@
       </section>
     {% endif %}
 
+    {% if project.type != 'personal' %}
+      <section
+        id="settings-board-model"
+        class="rounded-box bg-base-200 p-4 flex flex-col gap-3 xl:col-span-2"
+        x-data="projectBoardModel({
+                 apiBase: '/api/v1/projects/{{ project.uuid }}',
+                 current: '{{ project.type }}',
+                 writable: {% if writable %}true{% else %}false{% endif %},
+               })"
+      >
+        <div>
+          <h3 class="font-semibold flex items-center gap-2">
+            <i data-lucide="layout-dashboard" class="w-4 h-4 text-accent"></i>
+            Board model
+          </h3>
+          <p class="text-sm text-base-content/60 mt-0.5">Tasks, columns, comments and history are kept either way. Converting takes effect immediately.</p>
+        </div>
+        <template x-if="error">
+          <inline-alert type="error"><span x-text="error"></span></inline-alert>
+        </template>
+        <div class="grid gap-3 sm:grid-cols-2">
+          {% for option in board_models %}
+            <button
+              type="button"
+              class="rounded-box border p-3 text-left flex items-start gap-3 disabled:cursor-default"
+              :class="type === '{{ option.value }}' ? 'border-accent bg-accent/5' : 'border-base-300 bg-base-100 hover:border-accent/50'"
+              :disabled="busy || !writable || type === '{{ option.value }}'"
+              @click="convertTo('{{ option.value }}')"
+            >
+              <i
+                data-lucide="{{ option.icon }}"
+                class="w-5 h-5 mt-0.5 shrink-0 text-accent"
+              ></i>
+              <span class="flex flex-col gap-0.5 min-w-0">
+                <span class="flex items-center gap-2 font-medium">
+                  {{ option.label }}
+                  <span
+                    class="badge badge-accent badge-sm"
+                    x-show="type === '{{ option.value }}'"
+                    x-cloak
+                  >Current</span>
+                </span>
+                <span class="text-sm text-base-content/60">{{ option.description }}</span>
+                <span
+                  class="text-sm text-accent font-medium"
+                  x-show="type !== '{{ option.value }}' && writable"
+                  x-cloak
+                >Convert to {{ option.label|lower }}</span>
+              </span>
+            </button>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
     <section
       id="settings-columns"
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"

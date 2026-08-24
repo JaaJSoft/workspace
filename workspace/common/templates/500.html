@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -7,13 +8,12 @@
     <script>
       document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="{% static 'css/app.css' %}" rel="stylesheet" type="text/css" />
     <link
-      href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css"
-      rel="stylesheet"
-      type="text/css"
+      rel="icon"
+      href="{% static 'icons/favicon.svg' %}"
+      type="image/svg+xml"
     />
-    <link rel="icon" href="https://fav.farm/👥" />
   </head>
   <body class="bg-base-100 h-screen flex items-center justify-center">
     <div class="text-center max-w-md mx-auto px-4">

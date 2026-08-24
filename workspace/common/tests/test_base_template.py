@@ -7,14 +7,24 @@ from django.template import Context, Template
 from django.template.loader import get_template
 from django.test import TestCase
 
+STYLESHEET = (
+    Path(__file__).resolve().parents[2] / "common" / "static" / "css" / "app.css"
+)
+
+
+def _stylesheet_without_whitespace() -> str:
+    """The built stylesheet, with whitespace squeezed out: an assertion on it
+    must not depend on where the minifier chose to break a line."""
+    return re.sub(r"\s+", "", STYLESHEET.read_text(encoding="utf-8"))
+
 
 class NavbarLayoutScrollLockTests(TestCase):
     """DaisyUI emits ``html:has(.drawer-open.drawer-open) { overflow-y: auto }``
     which lets the html element scroll on pages using ``drawer-open`` (files,
     chat). Combined with ``body { overflow: hidden }`` from ``base_with_navbar``,
     a wheel scroll on mobile then dragged the sticky navbar off-screen. The
-    fix is a CSS rule in ``base.html`` that locks ``html { overflow: hidden }``
-    whenever the body opts into the fixed-height layout.
+    fix is a CSS rule locking ``html { overflow: hidden }`` whenever the body
+    opts into the fixed-height layout.
     """
 
     def _render_base_with_navbar(self):
@@ -27,13 +37,12 @@ class NavbarLayoutScrollLockTests(TestCase):
         return set(match.group(1).split())
 
     def test_html_overflow_is_locked_when_body_opts_into_fixed_layout(self):
-        html = self._render_base_with_navbar()
-        self.assertIn("html:has(> body.overflow-hidden.h-dvh)", html)
+        css = _stylesheet_without_whitespace()
+        selector = "html:has(>body.overflow-hidden.h-dvh)"
+        self.assertIn(selector, css)
         # The locking selector must declare overflow:hidden, not auto/visible.
-        # Pull a slice around the selector and verify the declaration is present.
-        idx = html.index("html:has(> body.overflow-hidden.h-dvh)")
-        block = html[idx : idx + 200]
-        self.assertIn("overflow: hidden", block)
+        start = css.index(selector)
+        self.assertIn("overflow:hidden", css[start : start + 120])
 
     def test_body_carries_classes_the_lock_selector_matches(self):
         # The lock fires on `body.overflow-hidden.h-dvh`. If the default body
@@ -68,6 +77,19 @@ class BaseTemplateScriptOriginTests(TestCase):
     def test_alpine_is_loaded_from_the_vendored_bundle(self):
         self.assertIn("ui/js/vendor/alpine/alpine.js", _base_template_source())
 
+    def test_lucide_is_not_loaded_from_a_cdn(self):
+        # Lucide runs on every page and draws into the DOM: a tampered build
+        # has the same reach as a tampered Alpine.
+        self.assertNotIn("unpkg.com", _base_template_source())
+
+    def test_lucide_is_loaded_from_the_vendored_artifact(self):
+        self.assertIn("ui/js/vendor/lucide/lucide.js", _base_template_source())
+
+    def test_the_favicon_is_served_from_this_origin(self):
+        # fav.farm renders the emoji server-side: every page load would
+        # announce itself to a third party.
+        self.assertNotIn("fav.farm", _base_template_source())
+
     def test_the_vendored_bundle_is_deferred(self):
         # Without `defer`, Alpine would start before stores.js (end of <body>,
         # not deferred) has attached its `alpine:init` listener: the stores
@@ -84,3 +106,51 @@ class BaseTemplateScriptOriginTests(TestCase):
         # Match `defer` as a standalone attribute: a bare `assertIn` also
         # accepts `data-defer` or the substring inside a filename.
         self.assertRegex(tag.group(0), r"\sdefer(?=[\s=/>])")
+
+
+class StandalonePageOriginTests(TestCase):
+    """The two pages that do not extend ``base.html``.
+
+    The service worker serves ``offline.html`` when the network is gone, so an
+    asset it fetches from a CDN is an asset it never gets. ``500.html`` is
+    served while the application is already failing, which is no moment to
+    depend on a third party either.
+    """
+
+    def _offline_source(self) -> str:
+        return (
+            Path(__file__).resolve().parents[1] / "static" / "offline.html"
+        ).read_text(encoding="utf-8")
+
+    def _error_page_source(self) -> str:
+        return Path(get_template("500.html").origin.name).read_text(encoding="utf-8")
+
+    def test_the_offline_page_fetches_nothing_from_a_third_party(self):
+        source = self._offline_source()
+        for host in (
+            "cdn.tailwindcss.com",
+            "cdn.jsdelivr.net",
+            "unpkg.com",
+            "fav.farm",
+        ):
+            self.assertNotIn(host, source)
+
+    def test_the_offline_page_styles_itself_from_this_origin(self):
+        # app.css already carries both Tailwind and DaisyUI.
+        self.assertIn("/static/css/app.css", self._offline_source())
+
+    def test_the_error_page_fetches_nothing_from_a_third_party(self):
+        source = self._error_page_source()
+        for host in (
+            "cdn.tailwindcss.com",
+            "cdn.jsdelivr.net",
+            "unpkg.com",
+            "fav.farm",
+        ):
+            self.assertNotIn(host, source)
+
+    def test_the_error_page_renders(self):
+        """It is rendered while the application is already broken: a template
+        error here replaces it with Django's bare fallback text."""
+        html = get_template("500.html").render({})
+        self.assertIn("Something went wrong", html)

@@ -262,10 +262,15 @@
             <li
               class="{% if request.resolver_match.view_name == 'users_ui:profile' %}disabled{% endif %}"
             >
+              {% comment %}
+                No href on the entry for the page already open: an anchor
+                without one is not focusable and cannot be activated, by a
+                pointer, the keyboard or a screen reader alike.
+              {% endcomment %}
               <a
-                href="{% url 'users_ui:profile' %}"
-                class="gap-3 {% if request.resolver_match.view_name != 'users_ui:profile' %}hover:bg-primary/10 hover:text-primary{% endif %} transition-colors"
-                {% if request.resolver_match.view_name == 'users_ui:profile' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
+                {% if request.resolver_match.view_name != 'users_ui:profile' %}href="{% url 'users_ui:profile' %}"{% endif %}
+                class="gap-3 transition-colors {% if request.resolver_match.view_name == 'users_ui:profile' %}opacity-40{% else %}hover:bg-primary/10 hover:text-primary{% endif %}"
+                {% if request.resolver_match.view_name == 'users_ui:profile' %}aria-current="page"{% endif %}
               >
                 <i data-lucide="user" class="w-4 h-4"></i>
                 <span class="font-medium">Profile</span>
@@ -276,10 +281,15 @@
             <li
               class="{% if request.resolver_match.view_name == 'users_ui:settings' %}disabled{% endif %}"
             >
+              {% comment %}
+                No href on the entry for the page already open: an anchor
+                without one is not focusable and cannot be activated, by a
+                pointer, the keyboard or a screen reader alike.
+              {% endcomment %}
               <a
-                href="{% url 'users_ui:settings' %}"
-                class="gap-3 {% if request.resolver_match.view_name != 'users_ui:settings' %}hover:bg-info/10 hover:text-info{% endif %} transition-colors"
-                {% if request.resolver_match.view_name == 'users_ui:settings' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
+                {% if request.resolver_match.view_name != 'users_ui:settings' %}href="{% url 'users_ui:settings' %}"{% endif %}
+                class="gap-3 transition-colors {% if request.resolver_match.view_name == 'users_ui:settings' %}opacity-40{% else %}hover:bg-info/10 hover:text-info{% endif %}"
+                {% if request.resolver_match.view_name == 'users_ui:settings' %}aria-current="page"{% endif %}
               >
                 <i data-lucide="settings" class="w-4 h-4"></i>
                 <span class="font-medium">Settings</span>
@@ -291,9 +301,9 @@
               {% if module.show_on_dashboard is False and module.url %}
                 <li class="{% if request.path == module.url %}disabled{% endif %}">
                   <a
-                    href="{{ module.url }}"
-                    class="gap-3 {% if request.path != module.url %}hover:bg-{{ module.color }}/10 hover:text-{{ module.color }}{% endif %} transition-colors"
-                    {% if request.path == module.url %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
+                    {% if request.path != module.url %}href="{{ module.url }}"{% endif %}
+                    class="gap-3 transition-colors {% if request.path == module.url %}opacity-40{% else %}hover:bg-{{ module.color }}/10 hover:text-{{ module.color }}{% endif %}"
+                    {% if request.path == module.url %}aria-current="page"{% endif %}
                   >
                     <i data-lucide="{{ module.icon }}" class="w-4 h-4"></i>
                     <span class="font-medium">{{ module.name }}</span>
@@ -307,7 +317,7 @@
             <li>
               <button
                 type="button"
-                onclick="window.dispatchEvent(new CustomEvent('changelog-open'))"
+                data-dispatch="changelog-open"
                 class="gap-3 hover:bg-warning/10 hover:text-warning transition-colors"
               >
                 <i data-lucide="sparkles" class="w-4 h-4"></i>
@@ -320,7 +330,7 @@
             <li>
               <button
                 type="button"
-                onclick="window.dispatchEvent(new CustomEvent('onboarding-open'))"
+                data-dispatch="onboarding-open"
                 class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
               >
                 <i data-lucide="rocket" class="w-4 h-4"></i>
@@ -390,8 +400,8 @@
             <!-- Logout -->
             <li>
               <button
-                type="button"
-                onclick="document.getElementById('logout-form').submit();"
+                type="submit"
+                form="logout-form"
                 class="gap-3 hover:bg-error/10 hover:text-error transition-colors font-medium"
               >
                 <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -421,7 +431,7 @@
     id="logout-form"
     method="post"
     action="{% url 'logout' %}"
-    style="display: none"
+    class="hidden"
   >
     {% csrf_token %}
   </form>

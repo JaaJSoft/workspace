@@ -6,6 +6,9 @@ module.exports = {
   // the `safelist` below.
   content: [
     '../../workspace/**/templates/**/*.html',
+    // offline.html is a static file, not a template: the service worker
+    // serves it directly, and its classes are purged without this line.
+    '../../workspace/**/static/**/*.html',
     '../../workspace/**/static/**/*.js',
     // Minified vendored crypto: it carries no utility class, but the extractor
     // finds class-shaped substrings in it and emits dead rules for them.

@@ -1,0 +1,6 @@
+# Vendored and generated frontend artifacts are byte-for-byte copies of a
+# pinned source. Rewriting their line endings on checkout - what
+# core.autocrlf=true does on a Windows clone - hands the working copy a file
+# that differs from the committed blob, so a digest check on one cannot hold.
+workspace/**/static/**/vendor/** -text
+workspace/common/static/css/app.css -text

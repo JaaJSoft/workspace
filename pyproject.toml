@@ -84,7 +84,7 @@ dev = [
     "cbor2>=5.7.0",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
-    "ruff==0.16.3",
+    "ruff==0.16.4",
     # HTML template linter/formatter (djlint workspace --lint / --reformat).
     "djlint>=1.44.2",
 ]

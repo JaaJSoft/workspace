@@ -29,7 +29,11 @@ INLINE_STYLE_BLOCK = re.compile(r"<style[\s>]", re.IGNORECASE)
 # the CSSOM at runtime and are not what style-src-attr sees.
 INLINE_STYLE_ATTR = re.compile(r"\sstyle=[\"']")
 INLINE_EVENT_HANDLER = re.compile(r"\son[a-z]+=[\"']", re.IGNORECASE)
-OFF_ORIGIN_ASSET = re.compile(r"(?:src|href)=[\"']https?://", re.IGNORECASE)
+# Subresources the page fetches, not links the user clicks: an <a href> to
+# another site is navigation, which no directive of this policy governs.
+OFF_ORIGIN_ASSET = re.compile(
+    r"\ssrc=[\"']https?://|<link[^>]+href=[\"']https?://", re.IGNORECASE
+)
 # Resource hints fetch nothing - a preconnect is a TLS handshake the policy
 # does not govern - so they are cut out before the asset scan rather than
 # whitelisted inside it.

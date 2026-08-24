@@ -92,7 +92,7 @@
                 >
                   Vault password
                 </p>
-                <p class="text-xs text-base-content/50">Twelve characters, checked against breaches</p>
+                <p class="text-xs text-base-content/50">Typed every time you unlock</p>
               </div>
             </li>
 
@@ -177,10 +177,7 @@
                 class="space-y-4"
                 x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
               >
-                <p>
-                  Pick a password for your vault. It never leaves this browser,
-                  so it can be the one you already use to log in.
-                </p>
+                <p>Pick a password for your vault. It never leaves this browser.</p>
                 <label class="form-control w-full">
                   <span class="label-text">Vault password</span>
                   {% comment %}

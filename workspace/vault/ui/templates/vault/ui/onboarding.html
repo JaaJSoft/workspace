@@ -25,8 +25,15 @@
     What the dialog sits on. It is the vault the user is on their way to, and
     it stays behind the whole flow rather than being replaced by it.
   {% endcomment %}
-  <div class="flex min-h-[50vh] items-center justify-center">
-    <p class="text-base-content/60">The vault is not available yet.</p>
+  <div class="mx-auto max-w-2xl py-10 text-center">
+    <h1 class="text-2xl font-semibold">Set up your vault</h1>
+    {% comment %}
+      Read only when the dialog failed to open - any of the three scripts
+      below missing leaves x-init unevaluated. Saying the feature does not
+      exist, which is what this page used to say, sends the user away from a
+      page that is merely broken.
+    {% endcomment %}
+    <p class="text-base-content/60 mt-2">The setup screen should have opened here. Reload the page to try again.</p>
   </div>
 
   {% url 'vault_ui:index' as vault_url %}
@@ -37,13 +44,20 @@
     recovery key exists nowhere but this screen, and each of those exits would
     lose it for good.
   {% endcomment %}
+  {% comment %}
+    The welcome tour opens itself on a brand-new account, 400 ms after
+    load, and lands in front of this one - swallowing the clicks meant for
+    it. Which is why the opening reads the server flag rather than the
+    tour's current state: at this point it has not opened yet. The tour
+    introduces the application, so it goes first and this waits for it.
+  {% endcomment %}
   <dialog
     id="vault-onboarding-dialog"
     class="modal"
     aria-labelledby="vault-onboarding-title"
     x-data="vaultOnboarding()"
-    x-init="$el.showModal()"
-    @cancel.prevent
+    {% if ONBOARDING_PENDING %} x-init="document.getElementById('onboarding-dialog').addEventListener('close', () => $el.showModal(), { once: true })" {% else %} x-init="$el.showModal()" {% endif %}
+    @cancel="if (secretText) $event.preventDefault()"
     data-email="{{ request.user.email }}"
   >
     <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col">
@@ -67,11 +81,11 @@
           </span>
         </div>
         <div class="flex-1">
-          <h3 id="vault-onboarding-title" class="font-bold text-lg">
+          <h2 id="vault-onboarding-title" class="font-bold text-lg">
             <span x-show="step === 1">What we cannot do</span>
             <span x-show="step === 2" x-cloak>Vault password</span>
             <span x-show="step === 3" x-cloak>Your recovery key</span>
-          </h3>
+          </h2>
           <p class="text-xs text-base-content/50">
             Step <span x-text="step"></span> of 3 &middot; Setting up your vault
           </p>
@@ -99,10 +113,7 @@
         </span>
       </p>
 
-      <div
-        class="flex-1 overflow-y-auto overscroll-contain px-6 py-6"
-        aria-live="polite"
-      >
+      <div class="flex-1 overflow-y-auto overscroll-contain px-6 py-6">
         <inline-alert type="error" x-show="error" x-cloak>
         <span x-text="error"></span>
         </inline-alert>
@@ -125,7 +136,10 @@
 
         {# Step 2 - the vault password, behind the floor #}
         <template x-if="step === 2">
-          <section class="space-y-4">
+          <section
+            class="space-y-4"
+            x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
+          >
             <p>
               Pick a password for your vault. It can be the same one you use to
               log in - it never leaves this browser.
@@ -142,9 +156,11 @@
                 type="password"
                 class="input input-bordered w-full"
                 autocomplete="new-password"
+                data-step-focus
                 x-model="password"
                 @input="passwordEdited()"
                 @input.debounce.400ms="passwordChanged()"
+                @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
               />
             </label>
             <label class="form-control w-full">
@@ -154,10 +170,16 @@
                 class="input input-bordered w-full"
                 autocomplete="new-password"
                 x-model="confirmation"
+                @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
               />
             </label>
 
-            <ul class="text-sm space-y-1">
+            {% comment %}
+              The live region is the checklist, not the panel around it: every
+              debounce flips these four lines, and announcing the whole step -
+              both field labels included - on each of them talks over itself.
+            {% endcomment %}
+            <ul class="text-sm space-y-1" aria-live="polite">
               <li
                 :class="passwordLongEnough() ? 'text-success' : 'text-base-content/60'"
               >
@@ -191,17 +213,26 @@
 
         {# Step 3 - the emergency kit, and the box that gates the end #}
         <template x-if="step === 3">
-          <section class="space-y-4">
+          <section
+            class="space-y-4"
+            x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
+          >
             <p>
               Write it down or keep the PDF somewhere safe and offline. Together
               with your vault password, it is the only way into your vault. We
               do not have a copy.
             </p>
+            {% comment %}
+              The key takes the focus when the step opens, so a screen reader
+              lands on the one thing this screen exists to hand over.
+            {% endcomment %}
             <pre
               class="p-4 rounded-lg bg-base-200 font-mono text-sm break-all"
+              data-step-focus
+              tabindex="-1"
               x-text="groupedSecret()"
             ></pre>
-            <button class="btn btn-outline btn-sm" @click="downloadKit()">Download the emergency kit (PDF)</button>
+            <button type="button" class="btn btn-outline btn-sm" @click="downloadKit()">Download the emergency kit (PDF)</button>
             <label class="label cursor-pointer justify-start gap-3">
               <input
                 type="checkbox"
@@ -231,6 +262,7 @@
             class="btn btn-ghost btn-sm"
             x-show="step === 2"
             x-cloak
+            :disabled="busy"
             @click="step = 1"
           >
             <i data-lucide="chevron-left" class="w-4 h-4"></i>

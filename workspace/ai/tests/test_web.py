@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase, override_settings
 
 from workspace.ai.services.web import (
+    MAX_LINKS,
     SEARCH_CATEGORIES,
     SEARCH_TIME_RANGES,
     _absolutize_links,
@@ -19,6 +20,8 @@ from workspace.ai.tools import (
     WebSearchParams,
     WebToolProvider,
 )
+
+from .pdf_fixtures import make_pdf
 
 
 class IsUrlSafeTests(TestCase):
@@ -289,7 +292,7 @@ class FetchAndExtractTests(TestCase):
 
         text = fetch_and_extract("https://example.com/article")
 
-        self.assertEqual(text, "Hello world")
+        self.assertIn("Hello world", text)
         mock_extract.assert_called_once()
 
     @patch("workspace.ai.services.web.trafilatura.extract")
@@ -340,7 +343,7 @@ class FetchAndExtractTests(TestCase):
         mock_client_cls.return_value = _client_returning(resp)
         mock_extract.return_value = "not json"
 
-        self.assertEqual(fetch_and_extract("https://example.com/x"), "not json")
+        self.assertIn("not json", fetch_and_extract("https://example.com/x"))
 
     @patch("workspace.ai.services.web.trafilatura.extract")
     @patch("workspace.ai.services.web.httpx2.Client")
@@ -352,8 +355,8 @@ class FetchAndExtractTests(TestCase):
 
         # The marker counts against the budget, so the caller never gets more
         # than the number of characters it asked for.
-        self.assertEqual(len(text), 100)
-        self.assertTrue(text.startswith("A"))
+        self.assertLessEqual(len(text), 100)
+        self.assertIn("AAAA", text)
         self.assertIn("the page continues", text)
 
     @patch("workspace.ai.services.web.trafilatura.extract")
@@ -502,3 +505,228 @@ class WebSearchParamsTests(TestCase):
         self.assertEqual(params.time_range, "")
         self.assertEqual(params.category, "general")
         self.assertEqual(params.site, "")
+
+
+_ARTICLE_HTML = """<html><head>
+<title>The headline</title>
+<meta name="author" content="Jane Doe">
+<meta property="article:published_time" content="2024-05-01T10:00:00Z">
+</head><body><article><p>Body text.</p></article></body></html>"""
+
+
+class PageHeaderTests(TestCase):
+    """The header that opens a result: title, date, author, final URL."""
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_metadata_precedes_the_text(self, mock_client_cls, mock_extract):
+        resp = _fake_response(text=_ARTICLE_HTML, url="https://example.com/article")
+        mock_client_cls.return_value = _client_returning(resp)
+        mock_extract.return_value = "Body text."
+
+        text = fetch_and_extract("https://example.com/article")
+
+        header, _, body = text.partition("\n\n")
+        self.assertIn("# The headline", header)
+        self.assertIn("Source: https://example.com/article", header)
+        self.assertIn("Published: 2024-05-01", header)
+        self.assertIn("By: Jane Doe", header)
+        self.assertEqual(body, "Body text.")
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_header_names_the_url_the_redirects_landed_on(
+        self, mock_client_cls, mock_extract
+    ):
+        # The URL a citation has to name is the one that was read, and the bot
+        # is otherwise never told the two differ.
+        resp = _fake_response(text="<html/>", url="https://cdn.example.com/final")
+        mock_client_cls.return_value = _client_returning(resp)
+        mock_extract.return_value = "text"
+
+        text = fetch_and_extract("https://example.com/start")
+
+        self.assertIn("Source: https://cdn.example.com/final", text)
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_page_without_metadata_still_reports_its_url(
+        self, mock_client_cls, mock_extract
+    ):
+        mock_client_cls.return_value = _client_returning(
+            _fake_response(text="<html><body>x</body></html>")
+        )
+        mock_extract.return_value = "text"
+
+        self.assertIn(
+            "Source: https://example.com/", fetch_and_extract("https://example.com/")
+        )
+
+
+class PageLinkListTests(TestCase):
+    def _fetch(self, markdown, *, url="https://example.com/page", max_chars=12000):
+        with (
+            patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
+            patch("workspace.ai.services.web.trafilatura.extract") as mock_extract,
+        ):
+            mock_client_cls.return_value = _client_returning(
+                _fake_response(text="<html/>", url=url)
+            )
+            mock_extract.return_value = markdown
+            return fetch_and_extract(url, max_chars=max_chars)
+
+    def test_links_are_grouped_by_destination(self):
+        text = self._fetch(
+            "See [the detail page](/detail) and [another source](https://other.org/x)."
+        )
+
+        links = text.partition("## Links")[2]
+        self.assertIn("- [the detail page](https://example.com/detail)", links)
+        self.assertIn("- [another source](https://other.org/x)", links)
+        self.assertLess(
+            links.index("[the detail page]"), links.index("[another source]")
+        )
+
+    def test_repeated_link_is_listed_once(self):
+        text = self._fetch(
+            "[the detail page](/detail) then [the detail page](/detail) again, "
+            "and [the detail page](/detail#section) once more"
+        )
+
+        self.assertEqual(text.count("- [the detail page]"), 1)
+
+    def test_navigation_chrome_is_dropped(self):
+        # Extraction keeps pagination arrows; they are not a place to go next.
+        text = self._fetch("[»](/next) [1](/p/1) [a real link](/article)")
+
+        links = text.partition("## Links")[2]
+        self.assertIn("[a real link]", links)
+        self.assertNotIn("/next", links)
+        self.assertNotIn("/p/1", links)
+
+    def test_link_list_is_capped_and_says_what_it_dropped(self):
+        markdown = " ".join(
+            f"[internal link {i}](/i/{i}) [external link {i}](https://other.org/{i})"
+            for i in range(40)
+        )
+
+        links = self._fetch(markdown).partition("## Links")[2]
+
+        self.assertEqual(links.count("\n- "), MAX_LINKS)
+        self.assertIn("more links not listed", links)
+        # Both destinations survive the cap: one is not a substitute for the other.
+        self.assertIn("https://example.com/i/", links)
+        self.assertIn("https://other.org/", links)
+
+    def test_page_without_links_has_no_link_section(self):
+        self.assertNotIn("## Links", self._fetch("Plain prose, no links."))
+
+    def test_links_never_push_the_result_over_the_budget(self):
+        markdown = "A" * 5000 + " ".join(
+            f"[a link with a long anchor {i}](https://other.org/{i})" for i in range(40)
+        )
+
+        text = self._fetch(markdown, max_chars=1000)
+
+        self.assertLessEqual(len(text), 1000)
+        # The page is what was asked for; the link list is the part that goes.
+        self.assertIn("AAAA", text)
+
+
+class PdfFetchTests(TestCase):
+    def _fetch(self, data, *, content_type="application/pdf", max_chars=12000):
+        resp = _fake_response(
+            url="https://example.com/doc.pdf", content_type=content_type
+        )
+        resp.content = data
+        with patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls:
+            mock_client_cls.return_value = _client_returning(resp)
+            return fetch_and_extract("https://example.com/doc.pdf", max_chars=max_chars)
+
+    def test_pdf_text_is_extracted(self):
+        text = self._fetch(make_pdf(["First page", "Second page"]))
+
+        self.assertIn("First page", text)
+        self.assertIn("Second page", text)
+        self.assertIn("Pages: 2", text)
+        self.assertIn("Source: https://example.com/doc.pdf", text)
+
+    def test_pdf_served_with_the_wrong_content_type_is_still_read(self):
+        # Plenty of servers hand out application/octet-stream; the file itself
+        # says what it is.
+        text = self._fetch(
+            make_pdf(["Body text"]), content_type="application/octet-stream"
+        )
+
+        self.assertIn("Body text", text)
+
+    def test_scanned_pdf_says_so_instead_of_returning_nothing(self):
+        text = self._fetch(make_pdf([""]))
+
+        self.assertIn("no text layer", text)
+
+    def test_pdf_gets_a_larger_size_budget_than_a_web_page(self):
+        text = self._fetch(make_pdf(["Body text"], padding_bytes=3 * 1024 * 1024))
+
+        self.assertIn("Body text", text)
+
+    def test_oversized_pdf_is_refused(self):
+        with self.assertRaises(ValueError) as ctx:
+            self._fetch(make_pdf(["x"], padding_bytes=11 * 1024 * 1024))
+        self.assertIn("PDF too large", str(ctx.exception))
+
+    def test_unreadable_pdf_reports_the_failure(self):
+        with self.assertRaises(ValueError) as ctx:
+            self._fetch(b"%PDF-1.4 truncated right here")
+        self.assertIn("Could not read PDF", str(ctx.exception))
+
+
+_RSS = """<?xml version="1.0"?>
+<rss version="2.0"><channel>
+  <title>The Blog</title>
+  <item>
+    <title>Newest post</title><link>/posts/2</link>
+    <pubDate>Tue, 03 Jun 2025 09:00:00 GMT</pubDate>
+    <description>What it is about</description>
+  </item>
+  <item><title>Older post</title><link>/posts/1</link></item>
+</channel></rss>"""
+
+
+class FeedFetchTests(TestCase):
+    def _fetch(self, body, *, content_type):
+        with patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls:
+            mock_client_cls.return_value = _client_returning(
+                _fake_response(
+                    text=body,
+                    url="https://example.com/feed.xml",
+                    content_type=content_type,
+                )
+            )
+            return fetch_and_extract("https://example.com/feed.xml")
+
+    def test_feed_becomes_a_dated_list_of_links(self):
+        text = self._fetch(_RSS, content_type="application/rss+xml")
+
+        self.assertIn("# The Blog", text)
+        self.assertIn("Entries: 2", text)
+        self.assertIn("- 2025-06-03 — [Newest post](https://example.com/posts/2)", text)
+        self.assertIn("What it is about", text)
+
+    def test_feed_served_as_generic_xml_is_recognized(self):
+        # Feeds are routinely served as text/xml, which says nothing.
+        self.assertIn("Newest post", self._fetch(_RSS, content_type="text/xml"))
+
+    def test_feed_served_as_html_is_recognized(self):
+        self.assertIn("Newest post", self._fetch(_RSS, content_type="text/html"))
+
+    @patch("workspace.ai.services.web.trafilatura.extract")
+    def test_xml_that_is_not_a_feed_falls_back_to_extraction(self, mock_extract):
+        mock_extract.return_value = "Extracted prose"
+
+        text = self._fetch(
+            "<?xml version='1.0'?><sitemap><url>x</url></sitemap>",
+            content_type="application/xml",
+        )
+
+        self.assertIn("Extracted prose", text)

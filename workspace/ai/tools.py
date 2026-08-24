@@ -549,6 +549,11 @@ read_webpage rather than answering from the snippets."""
         """Fetch a webpage and return its main content as markdown, links included. \
 Call this on any URL the user shares or that web_search returned, and call it again \
 on the links inside the result to reach details the first page only refers to. \
+The result opens with the page's title, publication date and final URL — cite that URL, \
+and say how old a source is when the answer depends on it — and closes with the page's \
+links gathered into a list, which is where to pick the next fetch from. \
+PDFs are read as text and RSS/Atom feeds as a dated list of a site's recent pages, \
+so "what has this site published lately" is one fetch on its feed URL. \
 JSON URLs are returned as JSON, so a site's API can be read the same way."""
         from .services.web import fetch_and_extract
 

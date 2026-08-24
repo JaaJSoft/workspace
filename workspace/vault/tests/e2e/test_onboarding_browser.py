@@ -132,6 +132,41 @@ class OnboardingWalkTests(PlaywrightTestCase):
         for confusable in ("I", "L", "O", "U"):
             self.assertNotIn(confusable, body)
 
+    def test_the_dialog_has_no_way_out(self):
+        """Escape, a close control, a backdrop that dismisses: a dialog has
+        three exits a page does not, and past the seal each of them loses the
+        recovery key with nothing able to produce it again."""
+        self.page.goto(f"{self.live_server_url}/vault")
+        self.page.wait_for_url("**/vault/onboarding")
+        dialog = "#vault-onboarding-dialog"
+        self.page.wait_for_selector(f"{dialog}[open]")
+
+        self.assertEqual(self.page.locator(f"{dialog} [aria-label='Close']").count(), 0)
+        self.assertEqual(
+            self.page.locator(f"{dialog} form[method='dialog']").count(), 0
+        )
+        self.page.keyboard.press("Escape")
+        self.page.wait_for_timeout(200)
+        self.assertTrue(self.page.evaluate(f"document.querySelector('{dialog}').open"))
+
+    def test_the_warning_stays_on_screen_through_every_step(self):
+        """It used to live on the first step alone, which is the one people
+        click past - and it is the only thing telling them the key they are
+        about to be shown is the only copy there will ever be."""
+        warning = "text=There is no password reset"
+        self._serve_corpus()
+        self.page.goto(f"{self.live_server_url}/vault")
+        self.page.wait_for_url("**/vault/onboarding")
+        self.page.wait_for_selector("button:has-text('I understand')")
+        self.assertTrue(self.page.is_visible(warning), "step 1")
+
+        self.page.click("button:has-text('I understand')")
+        self.page.wait_for_selector("input[autocomplete='new-password']")
+        self.assertTrue(self.page.is_visible(warning), "step 2")
+
+        self._seal()
+        self.assertTrue(self.page.is_visible(warning), "step 3")
+
     def test_an_unreachable_corpus_warns_without_blocking(self):
         """A third party that is down must not be able to stop someone
         protecting their vault."""

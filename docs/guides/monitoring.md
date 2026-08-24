@@ -97,6 +97,10 @@ Beyond the standard `django_prometheus` series (HTTP requests by view, method an
 | `ai_request_duration_seconds`                 | histogram | `model`, `status`     | Wall-clock time of one LLM completion call       |
 | `ai_tokens_total`                             | counter   | `model`, `kind`       | Tokens reported by the API (prompt / completion) |
 | `ai_image_requests_total`                     | counter   | `model`, `op`, `status` | Image generation and edit requests             |
+| `ai_agent_checkins_total`                     | counter   | `outcome`             | Agent goal check-ins, by what they produced      |
+| `ai_tool_calls_total`                         | counter   | `tool`, `status`      | Tool calls, by outcome (ok/error/repeat)         |
+| `ai_tool_rounds`                              | histogram | `model`               | Rounds of tool calls spent on one reply          |
+| `ai_tool_loop_stops_total`                    | counter   | `reason`              | Replies cut short by the round cap or a repeat loop |
 | `celery_task_duration_seconds`                | histogram | `task`                | Time between task start and completion           |
 | `celery_tasks_total`                          | counter   | `task`, `state`       | Executions by final state (success/failure/retry)|
 | `celery_queue_length`                         | gauge     | `queue`               | Pending messages in each broker queue            |

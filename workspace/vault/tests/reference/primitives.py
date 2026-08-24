@@ -417,6 +417,11 @@ _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 _CROCKFORD_CHECK = _CROCKFORD + "*~$=U"
 _CROCKFORD_DECODE = {c: i for i, c in enumerate(_CROCKFORD)}
 _CROCKFORD_DECODE.update({"O": 0, "I": 1, "L": 1})
+# The check symbol needs the same folding: it is drawn from the wider
+# alphabet, so it can be "0" or "1" - the two the transcriber writes as "O"
+# and "I". Reading it raw refuses the very slip the alphabet exists to absorb.
+_CROCKFORD_CHECK_DECODE = {c: i for i, c in enumerate(_CROCKFORD_CHECK)}
+_CROCKFORD_CHECK_DECODE.update({"O": 0, "I": 1, "L": 1})
 
 
 def crockford_encode(raw: bytes) -> str:
@@ -451,9 +456,10 @@ def crockford_decode(text: str) -> bytes:
         if digit is None:
             raise ValueError(f"illegal character {symbol!r} in recovery secret")
         value = (value << 5) | digit
-    if check not in _CROCKFORD_CHECK:
+    expected = _CROCKFORD_CHECK_DECODE.get(check)
+    if expected is None:
         raise ValueError("illegal check symbol")
-    if _CROCKFORD_CHECK.index(check) != value % 37:
+    if expected != value % 37:
         raise ValueError("recovery secret fails its check symbol")
     length = len(body) * 5 // 8
     if not length:

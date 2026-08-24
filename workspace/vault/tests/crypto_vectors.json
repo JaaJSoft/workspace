@@ -165,6 +165,11 @@
       "expected_text": "1ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZF",
       "id": "recovery-high-bits",
       "raw_b64": "__________________________________________8"
+    },
+    {
+      "expected_text": "00R40M30E209185GR38E1W8124GK2GAHC5RR34D1P70X3RFJ08920",
+      "id": "recovery-confusable-check",
+      "raw_b64": "AwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISI"
     }
   ],
   "version": 1

@@ -71,3 +71,16 @@ test('an illegal character is refused rather than skipped', () => {
   const text = VECTORS.recovery_secrets[1].expected_text;
   assert.throws(() => V.crockfordDecode(text.slice(0, -1) + '!'), /illegal/i);
 });
+
+test('a confusable written in place of the check symbol decodes too', () => {
+  // The check symbol comes from the wider alphabet, so it lands on "0" or "1"
+  // roughly twice in 37 - and those are exactly the two a transcriber writes
+  // as "O" and "I". Folding the body but not the check refuses the very slip
+  // the alphabet exists to absorb.
+  const vector = VECTORS.recovery_secrets.find(
+    (v) => v.id === 'recovery-confusable-check'
+  );
+  assert.equal(vector.expected_text.slice(-1), '0', 'vector no longer checks on a 0');
+  const mangled = vector.expected_text.slice(0, -1) + 'O';
+  assert.equal(V.toBase64Url(V.crockfordDecode(mangled)), vector.raw_b64);
+});

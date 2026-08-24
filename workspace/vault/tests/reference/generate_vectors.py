@@ -240,6 +240,16 @@ def build_vectors() -> dict:
                 "raw_b64": to_base64url(bytes([0xFF] * 32)),
                 "expected_text": primitives.crockford_encode(bytes([0xFF] * 32)),
             },
+            # Chosen because its check symbol is "0": the check is drawn from
+            # the wider alphabet, so it lands on a confusable roughly twice in
+            # 37, and decoding has to fold "O" there exactly as it does in the
+            # body. The other vectors all happen to check on a symbol nobody
+            # mistypes.
+            {
+                "id": "recovery-confusable-check",
+                "raw_b64": to_base64url(bytes(range(3, 35))),
+                "expected_text": primitives.crockford_encode(bytes(range(3, 35))),
+            },
         ],
         "public_keys": [
             {

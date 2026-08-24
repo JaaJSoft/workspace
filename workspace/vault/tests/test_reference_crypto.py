@@ -501,6 +501,15 @@ class CrockfordBase32Tests(SimpleTestCase):
         mangled = text.replace("0", "O").replace("1", "I")
         self.assertEqual(primitives.crockford_decode(mangled), bytes(range(32)))
 
+    def test_a_confusable_written_in_place_of_the_check_symbol_decodes_too(self):
+        """The check symbol comes from the wider alphabet, so it lands on "0"
+        or "1" roughly twice in 37 - and those are exactly the two a
+        transcriber writes as "O" and "I"."""
+        raw = bytes(range(3, 35))
+        text = primitives.crockford_encode(raw)
+        self.assertEqual(text[-1], "0", "vector no longer checks on a 0")
+        self.assertEqual(primitives.crockford_decode(text[:-1] + "O"), raw)
+
     def test_the_input_is_case_insensitive_and_ignores_grouping(self):
         text = primitives.crockford_encode(bytes(range(32)))
         grouped = "-".join(text[i : i + 4] for i in range(0, len(text), 4))

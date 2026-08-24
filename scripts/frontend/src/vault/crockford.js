@@ -12,6 +12,13 @@ const DECODE = new Map([...ALPHABET].map((symbol, index) => [symbol, index]));
 DECODE.set('O', 0);
 DECODE.set('I', 1);
 DECODE.set('L', 1);
+// The check symbol needs the same folding: it is drawn from the wider
+// alphabet, so it can be '0' or '1' - the two the transcriber writes as 'O'
+// and 'I'. Reading it raw refuses the very slip the alphabet exists to absorb.
+const CHECK_DECODE = new Map([...CHECK].map((symbol, index) => [symbol, index]));
+CHECK_DECODE.set('O', 0);
+CHECK_DECODE.set('I', 1);
+CHECK_DECODE.set('L', 1);
 
 function toBigInt(bytes) {
   let value = 0n;
@@ -47,8 +54,9 @@ export function crockfordDecode(text) {
     }
     value = (value << 5n) | BigInt(digit);
   }
-  if (CHECK.indexOf(check) === -1) throw new Error('illegal check symbol');
-  if (BigInt(CHECK.indexOf(check)) !== value % 37n) {
+  const expected = CHECK_DECODE.get(check);
+  if (expected === undefined) throw new Error('illegal check symbol');
+  if (BigInt(expected) !== value % 37n) {
     throw new Error('recovery secret fails its check symbol');
   }
   const length = Math.floor((body.length * 5) / 8);

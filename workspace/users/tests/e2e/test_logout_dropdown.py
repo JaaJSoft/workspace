@@ -3,13 +3,13 @@
 The companion test ``test_logout.py`` shortcuts the UI by submitting
 ``#logout-form`` directly via JS — that proves the *form* works but
 skips everything between the user and the form: the dropdown opening,
-the menu item being hit-testable, and the inline ``onclick`` handler
-that wires the click to ``form.submit()``.
+the menu item being hit-testable, and the ``form`` attribute that ties
+the button to the hidden form it submits.
 
 This test exercises the real click path. It catches the bug class:
 
-  * the inline ``onclick`` is dropped or renamed (the form never submits
-    despite a successful click),
+  * the button loses its ``form`` attribute, or the form loses the id it
+    names (the form never submits despite a successful click),
   * the dropdown content is masked by another element (daisyUI
     ``dropdown-content`` ships with ``z-[1]`` — easy to be hidden
     behind a header / sidebar overlay with a higher stacking context),
@@ -56,8 +56,8 @@ class LogoutDropdownClickTests(PlaywrightTestCase):
         sign_out = self.page.get_by_role("button", name="Sign Out", exact=True)
         expect(sign_out).to_be_visible()
 
-        # Click the real button — exercises the inline
-        # ``onclick="document.getElementById('logout-form').submit()"``.
+        # Click the real button — exercises the ``form="logout-form"``
+        # association with the hidden POST form.
         # ``expect_navigation`` blocks until Django responds to the POST
         # and redirects (LOGOUT_REDIRECT_URL = '/login').
         with self.page.expect_navigation(url=re.compile(r"/login")):

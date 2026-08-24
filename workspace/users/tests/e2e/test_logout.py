@@ -1,9 +1,9 @@
 """E2E test: the logout flow clears the session and protected pages redirect.
 
-The "Sign Out" button in the navbar user dropdown has an
-``onclick="document.getElementById('logout-form').submit()"`` handler
-pointing at a hidden POST form. We submit that form directly from the
-test: it's the exact same side effect as clicking the button, but
+The "Sign Out" button in the navbar user dropdown carries
+``type="submit" form="logout-form"``, which points it at a hidden POST
+form. We submit that form directly from the test: it's the exact same
+side effect as clicking the button, but
 without the CSS/dropdown-opening ceremony — simpler and deterministic.
 """
 

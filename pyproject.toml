@@ -53,7 +53,7 @@ dependencies = [
     "httpx2>=2.10.0",
     "trafilatura>=2.2.0",
     # streaming ZIP generation for bulk downloads (constant RAM)
-    "zipstream-ng>=1.9.2",
+    "zipstream-ng>=1.9.3",
     "faker>=40.36.0",
     # OpenID Connect (SSO) login
     "mozilla-django-oidc>=5.0.2",

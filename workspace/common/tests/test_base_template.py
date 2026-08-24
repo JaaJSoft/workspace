@@ -108,3 +108,53 @@ class BaseTemplateScriptOriginTests(TestCase):
         # Match `defer` as a standalone attribute: a bare `assertIn` also
         # accepts `data-defer` or the substring inside a filename.
         self.assertRegex(tag.group(0), r"\sdefer(?=[\s=/>])")
+
+
+class StandalonePageOriginTests(TestCase):
+    """The two pages that do not extend ``base.html``.
+
+    ``offline.html`` is the one the service worker serves when the network is
+    gone, so an asset it fetches from a CDN is an asset it never gets: the
+    page rendered as unstyled HTML every single time it was shown. ``500.html``
+    is served while the application is already failing, and it announced the
+    failure to two third parties.
+    """
+
+    def _offline_source(self) -> str:
+        return (
+            Path(__file__).resolve().parents[1] / "static" / "offline.html"
+        ).read_text(encoding="utf-8")
+
+    def _error_page_source(self) -> str:
+        return Path(get_template("500.html").origin.name).read_text(encoding="utf-8")
+
+    def test_the_offline_page_fetches_nothing_from_a_third_party(self):
+        source = self._offline_source()
+        for host in (
+            "cdn.tailwindcss.com",
+            "cdn.jsdelivr.net",
+            "unpkg.com",
+            "fav.farm",
+        ):
+            self.assertNotIn(host, source)
+
+    def test_the_offline_page_styles_itself_from_this_origin(self):
+        # Both the Tailwind CDN and the DaisyUI stylesheet it used to load are
+        # already inside the built app.css.
+        self.assertIn("/static/css/app.css", self._offline_source())
+
+    def test_the_error_page_fetches_nothing_from_a_third_party(self):
+        source = self._error_page_source()
+        for host in (
+            "cdn.tailwindcss.com",
+            "cdn.jsdelivr.net",
+            "unpkg.com",
+            "fav.farm",
+        ):
+            self.assertNotIn(host, source)
+
+    def test_the_error_page_renders(self):
+        """It is rendered while the application is already broken: a template
+        error here replaces it with Django's bare fallback text."""
+        html = get_template("500.html").render({})
+        self.assertIn("Something went wrong", html)

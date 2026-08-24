@@ -56,7 +56,11 @@ def generate_attachment_caption(attachment_uuid):
         },
     ]
     try:
-        result = call_llm(messages, max_tokens=150)
+        result = call_llm(
+            messages,
+            model=settings.AI_VISION_MODEL or settings.AI_MODEL,
+            max_tokens=150,
+        )
     except Exception:
         logger.warning("Caption generation failed for %s", scrub(str(attachment_uuid)))
         return

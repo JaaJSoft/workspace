@@ -58,6 +58,26 @@ class CaptionTaskTests(TestCase):
         att.refresh_from_db()
         self.assertEqual(att.ai_description, "A red square on white background.")
 
+    @override_settings(AI_VISION_MODEL="vision-model", AI_MODEL="big-model")
+    def test_captions_go_to_the_vision_model(self):
+        att = make_attachment(self.msg)
+        with patch(
+            "workspace.ai.services.llm.call_llm",
+            return_value={"content": "A red square."},
+        ) as mock_llm:
+            generate_attachment_caption(str(att.uuid))
+        self.assertEqual(mock_llm.call_args.kwargs["model"], "vision-model")
+
+    @override_settings(AI_VISION_MODEL="", AI_MODEL="big-model")
+    def test_the_main_model_captions_when_no_vision_model_is_set(self):
+        att = make_attachment(self.msg)
+        with patch(
+            "workspace.ai.services.llm.call_llm",
+            return_value={"content": "A red square."},
+        ) as mock_llm:
+            generate_attachment_caption(str(att.uuid))
+        self.assertEqual(mock_llm.call_args.kwargs["model"], "big-model")
+
     def test_idempotent_when_caption_exists(self):
         att = make_attachment(self.msg, ai_description="already here")
         with patch("workspace.ai.services.llm.call_llm") as mock_llm:

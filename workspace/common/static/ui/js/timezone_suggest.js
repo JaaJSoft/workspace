@@ -16,15 +16,31 @@
       }),
     });
   };
+  const readDismissed = function() {
+    try {
+      return localStorage.getItem('tz-suggest-dismissed');
+    } catch (err) {
+      return null;
+    }
+  };
   const stored = document.documentElement.getAttribute('data-timezone') || '';
   const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
   if (!detected) return;
   if (!stored) {
-    putTimezone(detected).catch(function() {});
+    // A failure needs no recovery path: the setting stays unset, so the next
+    // page load tries again. It does need to be visible.
+    putTimezone(detected).then(function(resp) {
+      if (!resp.ok) console.warn('Timezone save failed:', resp.status);
+    }).catch(function(err) {
+      console.warn('Timezone save failed:', err);
+    });
     return;
   }
   if (stored === detected) return;
-  if (localStorage.getItem('tz-suggest-dismissed') === detected) return;
+  // Storage throws rather than returning null when the browser refuses it
+  // (private windows, blocked site data). An unreadable dismissal is not a
+  // dismissal, and letting it escape would kill the banner below with it.
+  if (readDismissed() === detected) return;
   document.addEventListener('DOMContentLoaded', function() {
     const banner = document.getElementById('tz-suggest-banner');
     if (!banner) return;
@@ -58,7 +74,15 @@
     ignore.className = 'btn btn-xs btn-ghost';
     ignore.textContent = 'Ignore';
     ignore.addEventListener('click', function() {
-      localStorage.setItem('tz-suggest-dismissed', detected);
+      // Not while a save is in flight: its failure has to be able to reach the
+      // user, and a dismissal stored here would outlive the banner.
+      if (saving) return;
+      try {
+        localStorage.setItem('tz-suggest-dismissed', detected);
+      } catch (err) {
+        // Nothing to do: the prompt comes back next time, which beats losing
+        // the dismissal of the banner in front of the user.
+      }
       // Hide the wrapper instead of dismissing the inner alert, because removing only the alert would leave the opaque wrapper as an empty floating box.
       banner.classList.add('hidden');
     });

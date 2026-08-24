@@ -38,7 +38,13 @@ function onboardingWizard(pending) {
         body: JSON.stringify({
           value: true
         }),
-      }).catch(() => {});
+      }).then((response) => {
+        // Do not record a completion the server never accepted: the flag is
+        // what stops a retry, and the tour reads it from the server anyway.
+        if (!response.ok) this.completed = false;
+      }).catch(() => {
+        this.completed = false;
+      });
     },
     async goTo(url) {
       // Persist completion BEFORE navigating: the destination page runs the

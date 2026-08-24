@@ -71,11 +71,12 @@
             autocomplete="new-password"
             x-model="password"
             {% comment %}
-              Both on input: the corpus check gates the step, and hanging it
-              off change would leave the button disabled for anyone who never
-              blurs the field.
+              On input, not change: the corpus check gates the step, and
+              hanging it off change would leave the button disabled for anyone
+              who never blurs the field. One call, because both lookups have to
+              read the same generation token to discard a stale answer.
             {% endcomment %}
-            @input.debounce.400ms="evaluateStrength(); checkBreachCorpus()"
+            @input.debounce.400ms="passwordChanged()"
           />
         </label>
         <label class="form-control w-full">

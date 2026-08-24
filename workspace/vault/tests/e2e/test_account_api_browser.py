@@ -11,6 +11,7 @@ rather than a fixture, and the session and CSRF path the API sits behind.
 """
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.vault.models import AccountIdentity
@@ -111,6 +112,12 @@ class AccountEnvelopeInteropTests(PlaywrightTestCase):
         self.page.add_script_tag(url=BUNDLE_URL)
         self.result = self.page.evaluate(ONBOARD)
 
+    def tearDown(self):
+        # create_user writes the two modal flags through the settings service,
+        # whose cache is process-global and survives the test database.
+        cache.clear()
+        super().tearDown()
+
     def test_the_server_accepts_an_identity_the_browser_built(self):
         self.assertEqual(self.result["initStatus"], 201)
         self.assertEqual(
@@ -150,6 +157,10 @@ class AccountEnvelopeInteropTests(PlaywrightTestCase):
 
 
 class CsrfTests(PlaywrightTestCase):
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
     def test_a_post_without_the_csrf_token_is_refused(self):
         user = self.create_user(username="owner")
         self.login_as(user)

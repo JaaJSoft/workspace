@@ -25,6 +25,11 @@ window.vaultOnboarding = function vaultOnboarding() {
     acknowledged: false,
     busy: false,
     error: '',
+    // One token per keystroke, read by both lookups. The corpus answer takes
+    // as long as the network wants: without it, a reply about a password the
+    // user has already replaced can overwrite the verdict on the one in the
+    // field, and a stale "clean" lets a breached password through the floor.
+    generation: 0,
 
     // Code points after NFC, not UTF-16 units: someone who typed twelve
     // characters typed twelve characters, whatever the encoding costs.
@@ -70,13 +75,21 @@ window.vaultOnboarding = function vaultOnboarding() {
       return this.acknowledged;
     },
 
+    passwordChanged() {
+      this.generation++;
+      this.evaluateStrength();
+      this.checkBreachCorpus();
+    },
+
     async evaluateStrength() {
+      var generation = this.generation;
       if (!this.password) {
         this.score = null;
         this.feedback = '';
         return;
       }
       var result = await window.VaultOnboarding.estimateStrength(this.password);
+      if (generation !== this.generation) return;
       this.score = result.score;
       this.feedback = (result.feedback && result.feedback.warning) || '';
     },
@@ -85,6 +98,7 @@ window.vaultOnboarding = function vaultOnboarding() {
     // device, and the answer is a list of suffixes we match locally. The
     // password itself never crosses the network.
     async checkBreachCorpus() {
+      var generation = this.generation;
       if (!this.password) {
         this.breachStatus = 'unchecked';
         return;
@@ -110,12 +124,13 @@ window.vaultOnboarding = function vaultOnboarding() {
         );
         if (!response.ok) throw new Error('breach lookup failed');
         var body = await response.text();
-        this.breachStatus = body.split('\n').some(function (line) {
+        var found = body.split('\n').some(function (line) {
           return line.split(':')[0].trim().toUpperCase() === suffix;
-        })
-          ? 'found'
-          : 'clean';
+        });
+        if (generation !== this.generation) return;
+        this.breachStatus = found ? 'found' : 'clean';
       } catch (err) {
+        if (generation !== this.generation) return;
         this.breachStatus = 'unavailable';
       }
     },
@@ -139,13 +154,26 @@ window.vaultOnboarding = function vaultOnboarding() {
       var V = window.VaultCrypto;
       this.busy = true;
       this.error = '';
+      // Whether the finalize request left the browser. What follows a failure
+      // depends entirely on it.
+      var sent = false;
       try {
         var started = await this.post('/api/v1/vault/account/init');
+        if (!started.ok) {
+          throw new Error('the server refused to start an account');
+        }
         var account = await started.json();
         this.accountUuid = account.account_uuid;
 
-        this.secretBytes = V.randomBytes(32);
-        this.secretText = V.crockfordEncode(this.secretBytes);
+        // Minted once, kept across retries. init is idempotent while the
+        // identity is pending, so a second attempt derives the same keys - but
+        // only from the same secret. Drawing a fresh one would put a secret on
+        // screen that does not open the vault the first attempt may have
+        // already sealed.
+        if (!this.secretBytes) {
+          this.secretBytes = V.randomBytes(32);
+          this.secretText = V.crockfordEncode(this.secretBytes);
+        }
 
         var amk = await V.deriveAmk({
           password: this.password.normalize('NFC'),
@@ -217,6 +245,7 @@ window.vaultOnboarding = function vaultOnboarding() {
           ),
         };
 
+        sent = true;
         var finalized = await this.post(
           '/api/v1/vault/account/finalize',
           body
@@ -227,10 +256,35 @@ window.vaultOnboarding = function vaultOnboarding() {
         this.step = 3;
         this.forgetSecrets();
       } catch (err) {
+        // A lost response is not a lost account. finalize may have committed
+        // before the connection died, and the identity it activated can only
+        // ever be opened with the secret this page is still holding: claiming
+        // nothing was saved would send the user away from the one screen that
+        // can still show it. Ask the server which of the two happened.
+        if (sent && (await this.accountIsActive())) {
+          this.step = 3;
+          this.forgetSecrets();
+          return;
+        }
         this.error =
           'Your vault could not be created. Nothing was saved; try again.';
       } finally {
         this.busy = false;
+      }
+    },
+
+    // Pessimistic on purpose: a lookup that cannot answer reads as "not
+    // active", which is the reply that tells the user to try again.
+    async accountIsActive() {
+      try {
+        var response = await fetch('/api/v1/vault/account/envelope', {
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) return false;
+        var envelope = await response.json();
+        return envelope.state === 'active';
+      } catch (err) {
+        return false;
       }
     },
 
@@ -245,7 +299,12 @@ window.vaultOnboarding = function vaultOnboarding() {
       var link = document.createElement('a');
       link.href = url;
       link.download = 'vault-emergency-kit.pdf';
+      // In the document, not detached: Firefox ignores a click on an anchor
+      // that was never inserted, and the user is left with no kit and no
+      // error - on the one screen where the secret cannot be recovered later.
+      document.body.appendChild(link);
       link.click();
+      link.remove();
       URL.revokeObjectURL(url);
     },
 
@@ -254,15 +313,10 @@ window.vaultOnboarding = function vaultOnboarding() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRFToken': this.csrfToken(),
+          'X-CSRFToken': getCSRFToken(),
         },
         body: JSON.stringify(body || {}),
       });
-    },
-
-    csrfToken() {
-      var match = document.cookie.match(/csrftoken=([^;]+)/);
-      return match ? match[1] : '';
     },
   };
 };

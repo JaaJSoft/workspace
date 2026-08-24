@@ -115,10 +115,14 @@ class OnboardingWalkTests(PlaywrightTestCase):
 
         shown = self.page.inner_text("pre")
         self.assertIn("-", shown)
+        # The body only: the trailing check symbol is drawn from a wider
+        # alphabet that includes U, so asserting on the whole string fails on
+        # roughly one freshly minted secret in 37.
+        body = shown.replace("-", "")[:-1]
         # The alphabet is what makes a hand-copied secret survive; letters it
         # excludes must never appear.
         for confusable in ("I", "L", "O", "U"):
-            self.assertNotIn(confusable, shown.replace("-", ""))
+            self.assertNotIn(confusable, body)
 
     def test_an_unreachable_corpus_warns_without_blocking(self):
         """A third party that is down must not be able to stop someone

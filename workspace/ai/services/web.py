@@ -15,6 +15,7 @@ from workspace.common.logging import scrub
 
 from .feeds import Feed, looks_like_feed, parse_feed
 from .pdf import MAX_PAGES, PdfDocument, extract_pdf
+from .reading import read_for_query
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +170,7 @@ def search_many(queries: list[str], **kwargs) -> list[dict]:
     return merged
 
 
-MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 # A PDF carries its fonts and images along with its text, so the budget that
 # fits a whole website's HTML barely fits a ten-page paper.
 MAX_PDF_BYTES = 10 * 1024 * 1024
@@ -278,16 +279,28 @@ def _render_links(same: list, external: list, *, max_links: int = MAX_LINKS) -> 
     return "\n".join(lines)
 
 
-def _compose(header: str, body: str, links: str, max_chars: int) -> str:
-    """Assemble header, body and link list within a single *max_chars* budget.
+def _scoped(body: str, query: str, max_chars: int) -> str:
+    """Narrow *body* to what answers *query*, when one was asked."""
+    return read_for_query(body, query, max_chars=max_chars) if body and query else body
+
+
+def _body_budget(header: str, links: str, max_chars: int) -> tuple[int, str]:
+    """Room left for the body, and the link list that still fits beside it.
 
     The body is what was asked for: the link list is dropped whole rather than
-    allowed to eat into the page it belongs to.
+    allowed to eat into the page it belongs to. Read before the body is built
+    as well as while it is composed, so a body assembled for a question aims
+    at the room it will actually get.
     """
-    body_budget = max_chars - len(header) - len(links) - 4
-    if body_budget < max_chars // 2:
-        links = ""
-        body_budget = max_chars - len(header) - 2
+    budget = max_chars - len(header) - len(links) - 4
+    if budget < max_chars // 2:
+        return max_chars - len(header) - 2, ""
+    return budget, links
+
+
+def _compose(header: str, body: str, links: str, max_chars: int) -> str:
+    """Assemble header, body and link list within a single *max_chars* budget."""
+    body_budget, links = _body_budget(header, links, max_chars)
 
     body = _truncate(body, max(body_budget, 0)) if body else ""
     return _truncate(
@@ -321,7 +334,9 @@ def _is_feed(content_type: str, content: bytes) -> bool:
     return looks_like_feed(content[:400])
 
 
-def _render_pdf(document: PdfDocument, final_url: str, max_chars: int) -> str:
+def _render_pdf(
+    document: PdfDocument, final_url: str, max_chars: int, query: str = ""
+) -> str:
     pages = f"Pages: {document.page_count}"
     if document.pages_read < document.page_count:
         pages += f" (read the first {document.pages_read})"
@@ -336,10 +351,11 @@ def _render_pdf(document: PdfDocument, final_url: str, max_chars: int) -> str:
         "images, and no reader can extract words from it. Look for an HTML "
         "version of the same document instead."
     )
-    return _compose(header, body, "", max_chars)
+    budget, _ = _body_budget(header, "", max_chars)
+    return _compose(header, _scoped(body, query, budget), "", max_chars)
 
 
-def _render_feed(feed: Feed, final_url: str, max_chars: int) -> str:
+def _render_feed(feed: Feed, final_url: str, max_chars: int, query: str = "") -> str:
     """Render a feed as a dated list — the entries are the point, not prose."""
     header = _header(
         feed.title,
@@ -356,7 +372,8 @@ def _render_feed(feed: Feed, final_url: str, max_chars: int) -> str:
         )
         if entry.summary:
             lines.append(f"  {entry.summary}")
-    return _compose(header, "\n".join(lines), "", max_chars)
+    budget, _ = _body_budget(header, "", max_chars)
+    return _compose(header, _scoped("\n".join(lines), query, budget), "", max_chars)
 
 
 def _page_metadata(html: str, final_url: str) -> tuple[str, str, str]:
@@ -402,7 +419,7 @@ def _strip_tags(html: str) -> str:
     return " ".join(parser.parts).strip()
 
 
-def _render_html(page: str, final_url: str, max_chars: int) -> str:
+def _render_html(page: str, final_url: str, max_chars: int, query: str = "") -> str:
     # Links are kept: they are how a reader moves from this page to the ones
     # it references, and a text-only extraction leaves no way back. They
     # resolve against the URL the redirects landed on, not the one asked for.
@@ -420,6 +437,9 @@ def _render_html(page: str, final_url: str, max_chars: int) -> str:
     )
     if not text:
         text = _strip_tags(page)
+    # The link list is gathered before the query narrows the body: it is the
+    # page's map, and a reader scoped to one section still navigates the rest.
+    links = _render_links(*_collect_links(text, final_url))
 
     title, date, author = _page_metadata(page, final_url)
     header = _header(
@@ -428,12 +448,11 @@ def _render_html(page: str, final_url: str, max_chars: int) -> str:
         f"Published: {date}" if date else "",
         f"By: {author}" if author else "",
     )
-    return _compose(
-        header, text, _render_links(*_collect_links(text, final_url)), max_chars
-    )
+    budget, _ = _body_budget(header, links, max_chars)
+    return _compose(header, _scoped(text, query, budget), links, max_chars)
 
 
-def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
+def fetch_and_extract(url: str, *, max_chars: int = 12000, query: str = "") -> str:
     """Fetch a URL and extract its content as link-preserving markdown.
 
     Four kinds of document are read: HTML through *trafilatura* (editorial
@@ -442,6 +461,11 @@ def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
     and JSON as compact JSON. Everything but JSON opens with a header naming
     the page's title, date and final URL, and HTML closes with its links
     gathered into a list.
+
+    A *query* narrows what comes back: a page too long for the budget is
+    reduced to the passages of it that answer the query, plus the outline of
+    its sections — JSON excepted, a compact payload having no passages to
+    choose between.
 
     Raises ``ValueError`` for unsafe URLs or fetch failures.
     """
@@ -468,7 +492,7 @@ def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
         if len(content) > MAX_PDF_BYTES:
             raise ValueError(f"PDF too large (>{MAX_PDF_BYTES // (1024 * 1024)} MB)")
         return _render_pdf(
-            extract_pdf(content, max_pages=MAX_PAGES), final_url, max_chars
+            extract_pdf(content, max_pages=MAX_PAGES), final_url, max_chars, query
         )
 
     if len(content) > MAX_RESPONSE_BYTES:
@@ -483,6 +507,6 @@ def fetch_and_extract(url: str, *, max_chars: int = 12000) -> str:
     if _is_feed(content_type, content):
         feed = parse_feed(content, final_url)
         if feed is not None:
-            return _render_feed(feed, final_url, max_chars)
+            return _render_feed(feed, final_url, max_chars, query)
 
-    return _render_html(resp.text, final_url, max_chars)
+    return _render_html(resp.text, final_url, max_chars, query)

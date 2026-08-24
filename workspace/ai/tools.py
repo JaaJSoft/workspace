@@ -113,6 +113,16 @@ class ReadWebpageParams(BaseModel):
         description="The URL to read. Absolute http(s) URL, including one taken "
         "from the links of a page you already read."
     )
+    query: str = Field(
+        default="",
+        description="What you are looking for on the page, as a plain question or "
+        "description (e.g. 'what happens when the rate limit is hit?'). Write it in "
+        "whatever language you are working in — it does not have to match the page's "
+        "wording or its language. A long page then comes back as what it says on "
+        "that subject, condensed and grouped by the section it comes from, plus an "
+        "outline of its sections, instead of its first characters. Leave empty to "
+        "read the page from the top.",
+    )
 
 
 class GetWeatherParams(BaseModel):
@@ -554,7 +564,15 @@ and say how old a source is when the answer depends on it — and closes with th
 links gathered into a list, which is where to pick the next fetch from. \
 PDFs are read as text and RSS/Atom feeds as a dated list of a site's recent pages, \
 so "what has this site published lately" is one fetch on its feed URL. \
-JSON URLs are returned as JSON, so a site's API can be read the same way."""
+JSON URLs are returned as JSON, so a site's API can be read the same way. \
+Set query when you are after one thing on a long reference page — a spec, a manual, \
+a changelog — as reading it from the top spends the whole result on its introduction; \
+ask for it in plain words, in any language, and you get what the page says on it, \
+condensed and grouped by section, plus an outline of the sections you did not get, \
+which is what to name in the next read. What comes back is reported, not quoted, so \
+read the page whole when its exact wording is what you need. Leave query empty for a \
+short page too, and whenever the answer is the page itself: summarizing or translating \
+an article needs all of it."""
         from .services.web import fetch_and_extract
 
         url = args.url.strip()
@@ -562,7 +580,7 @@ JSON URLs are returned as JSON, so a site's API can be read the same way."""
             return "Error: url is required"
 
         try:
-            text = fetch_and_extract(url)
+            text = fetch_and_extract(url, query=args.query.strip())
         except ValueError as exc:
             return f"Error: {exc}"
 

@@ -690,6 +690,15 @@ function projectBoard(config) {
       history.replaceState(null, '', url.pathname + url.search);
     },
 
+    openSprints({ add = false } = {}) {
+      const dialog = document.getElementById('sprints-dialog');
+      if (!dialog) return;
+      // The dropdown holding the trigger stays open on focus alone.
+      if (document.activeElement) document.activeElement.blur();
+      if (!dialog.open) dialog.showModal();
+      if (add) window.dispatchEvent(new CustomEvent('sprint-add'));
+    },
+
     async startSprint(uuid, name) {
       const ok = await AppDialog.confirm({
         title: 'Start sprint',

@@ -1,8 +1,8 @@
 {% comment %}
 Sprint management dialog (admins on scrum projects). Sprints are workflow
 objects rather than configuration, so their management lives where the
-work happens: the dialog opens from the board and backlog sprint bars and
-from the board's empty state, not from the settings page. Closing it
+work happens: the dialog opens from the sprint switcher's footer and from
+the board's empty state, not from the settings page. Closing it
 refreshes the content so new sprints reach the switchers and planning
 menus without a reload.
 {% endcomment %}
@@ -11,6 +11,7 @@ menus without a reload.
     <div
       class="modal-box max-w-xl flex flex-col gap-3"
       x-data="projectSprints({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+      @sprint-add.window="openAdd()"
     >
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">

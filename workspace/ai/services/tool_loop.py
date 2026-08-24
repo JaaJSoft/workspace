@@ -4,6 +4,7 @@ from collections import Counter
 
 from django.conf import settings
 
+from workspace.ai.metrics import AI_TOOL_CALLS, AI_TOOL_LOOP_STOPS, AI_TOOL_ROUNDS
 from workspace.ai.services.llm import (
     build_tool_content,
     call_llm,
@@ -15,6 +16,15 @@ from workspace.ai.services.stream_steps import notify_tool_step, step_recipients
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
+
+# Tool handlers report a failure to the model as a plain string rather than an
+# exception, so these prefixes are the only signal a call went wrong.
+_FAILED_RESULT_PREFIXES = ("error:", "unknown tool:")
+
+
+def _result_status(tool_result):
+    text = tool_result if isinstance(tool_result, str) else ""
+    return "error" if text.strip().lower().startswith(_FAILED_RESULT_PREFIXES) else "ok"
 
 
 def _call_signature(tool_call):
@@ -84,6 +94,9 @@ def run_tool_loop(
     from workspace.ai.tool_registry import tool_registry
 
     tools = tool_registry.get_definitions()
+    # A model can invent a tool name, and that name reaches a metric label:
+    # anything the registry doesn't know is folded into one series.
+    known_tools = {t["function"]["name"] for t in tools}
     result = call_llm(messages, model=model, tools=tools)
 
     tool_context = context if context is not None else {}
@@ -164,6 +177,9 @@ def run_tool_loop(
                 tool_context["cancelled"] = True
                 break
             signature = _call_signature(tc)
+            metric_tool = (
+                tc.function.name if tc.function.name in known_tools else "unknown"
+            )
             seen_calls[signature] += 1
             if seen_calls[signature] > max_identical_calls:
                 # A model stuck re-issuing one call burns every remaining round
@@ -175,6 +191,7 @@ def run_tool_loop(
                     seen_calls[signature],
                 )
                 tool_result = _repeat_notice(tc, max_identical_calls)
+                AI_TOOL_CALLS.labels(tool=metric_tool, status="repeat").inc()
             else:
                 executed_in_round += 1
                 # Membership is re-read per tool, not snapshotted for the whole
@@ -184,13 +201,20 @@ def run_tool_loop(
                     notify_tool_step(
                         step_recipients(conversation_id, bot_user), conversation_id, tc
                     )
-                tool_result = tool_registry.execute(
-                    tc,
-                    user=human_user,
-                    bot=bot_user,
-                    conversation_id=conversation_id,
-                    context=tool_context,
-                )
+                try:
+                    tool_result = tool_registry.execute(
+                        tc,
+                        user=human_user,
+                        bot=bot_user,
+                        conversation_id=conversation_id,
+                        context=tool_context,
+                    )
+                except Exception:
+                    AI_TOOL_CALLS.labels(tool=metric_tool, status="error").inc()
+                    raise
+                AI_TOOL_CALLS.labels(
+                    tool=metric_tool, status=_result_status(tool_result)
+                ).inc()
             tool_content = build_tool_content(tool_result)
             messages.append(
                 {
@@ -240,6 +264,7 @@ def run_tool_loop(
             # already gathered instead of spending the remaining rounds.
             tool_context["repeat_loop_stopped"] = True
             rounds[-1]["repeat_loop_stopped"] = True
+            AI_TOOL_LOOP_STOPS.labels(reason="repeat_loop").inc()
             result = call_llm(messages, model=model)
             rounds.append({"response": serialize_response(result)})
             break
@@ -256,11 +281,17 @@ def run_tool_loop(
         # re-ask without tools to turn what was gathered into an answer.
         if result.get("tool_calls"):
             tool_context["round_cap_reached"] = True
+            AI_TOOL_LOOP_STOPS.labels(reason="round_cap").inc()
             rounds.append(
                 {"response": serialize_response(result), "round_cap_reached": True}
             )
             result = call_llm(messages, model=model)
         rounds.append({"response": serialize_response(result)})
+
+    if not tool_context.get("cancelled"):
+        # A cancelled run stopped for a reason unrelated to how the model
+        # works, so counting it would flatten the distribution it measures.
+        AI_TOOL_ROUNDS.labels(model=model or settings.AI_MODEL).observe(len(tool_data))
 
     return result, tool_context, rounds, tool_data or None
 

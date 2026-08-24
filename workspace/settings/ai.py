@@ -24,6 +24,16 @@ AI_MAX_TOOL_ROUNDS = int(
 AI_MAX_IDENTICAL_TOOL_CALLS = int(
     os.getenv("AI_MAX_IDENTICAL_TOOL_CALLS", "3")
 )  # times the same tool+arguments may run in one reply before being refused
+AI_TOOL_RESULT_TASK_MAX_CHARS = int(
+    os.getenv("AI_TOOL_RESULT_TASK_MAX_CHARS", "2000")
+)  # tool result kept in AITask.raw_messages, a debug record read by a human
+AI_TOOL_RESULT_STORE_MAX_CHARS = int(
+    os.getenv("AI_TOOL_RESULT_STORE_MAX_CHARS", "12000")
+)  # tool result kept in Message.tool_data and replayed on the next turn;
+# matches the web fetch budget so a fetched page survives whole
+AI_TOOL_RESULT_REPLAY_MIN_CHARS = int(
+    os.getenv("AI_TOOL_RESULT_REPLAY_MIN_CHARS", "1500")
+)  # floor a replayed tool result decays to once its turn is old
 AI_TIMEOUT = int(os.getenv("AI_TIMEOUT", "300"))  # seconds per request
 AI_MAX_RETRIES = int(
     os.getenv("AI_MAX_RETRIES", "2")

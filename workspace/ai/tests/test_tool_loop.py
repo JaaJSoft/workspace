@@ -501,3 +501,62 @@ class RepeatedToolCallTests(TestCase):
         self.assertEqual(reg.execute.call_count, 4)
         self.assertNotIn("repeat_loop_stopped", ctx)
         self.assertEqual(result["content"], "done")
+
+
+@override_settings(
+    AI_MAX_TOOL_ROUNDS=10,
+    AI_TOOL_RESULT_TASK_MAX_CHARS=300,
+    AI_TOOL_RESULT_STORE_MAX_CHARS=3000,
+)
+class ResultTruncationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="trunc-user", email="tu@test.com", password="pw"
+        )
+        self.bot = User.objects.create_user(
+            username="trunc-bot", email="tb@test.com", password="pw"
+        )
+
+    @patch(
+        "workspace.ai.services.tool_loop.build_tool_content", side_effect=lambda r: r
+    )
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_replayable_history_keeps_far_more_than_the_debug_record(
+        self, mock_call_llm, mock_build
+    ):
+        page = "HEAD" + ("p" * 20000) + "TAIL"
+        mock_call_llm.side_effect = [
+            _llm_result(
+                [
+                    _tool_call(
+                        "c1",
+                        name="fetch_url",
+                        arguments='{"url": "https://example.com/doc"}',
+                    )
+                ]
+            ),
+            _llm_result([], content="done"),
+        ]
+
+        with patch("workspace.ai.tool_registry.tool_registry") as reg:
+            reg.get_definitions.return_value = []
+            reg.execute.return_value = page
+            reg.describe_call.return_value = "fetch_url(https://example.com/doc)"
+            _, _, rounds, tool_data = run_tool_loop(
+                messages=[{"role": "user", "content": "go"}],
+                model="x",
+                human_user=self.user,
+                bot_user=self.bot,
+                conversation_id=None,
+            )
+
+        debug_result = rounds[0]["tool_executions"][0]["result"]
+        replayed = tool_data[0]["results"][0]["content"]
+        self.assertLessEqual(len(debug_result), 300)
+        self.assertLessEqual(len(replayed), 3000)
+        self.assertGreater(len(replayed), len(debug_result))
+        # Both are cut in the middle and point back at the call that made them.
+        for text in (debug_result, replayed):
+            self.assertTrue(text.startswith("HEAD"))
+            self.assertTrue(text.endswith("TAIL"))
+            self.assertIn("fetch_url(https://example.com/doc)", text)

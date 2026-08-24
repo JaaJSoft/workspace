@@ -215,6 +215,11 @@ def run_tool_loop(
                 AI_TOOL_CALLS.labels(
                     tool=metric_tool, status=_result_status(tool_result)
                 ).inc()
+            # Rides inside the residue of a trimmed result, so a stub the
+            # model reads later still says which call produced it.
+            call_hint = tool_registry.describe_call(
+                tc.function.name, tc.function.arguments
+            )
             tool_content = build_tool_content(tool_result)
             messages.append(
                 {
@@ -228,7 +233,11 @@ def run_tool_loop(
                     "tool_call_id": tc.id,
                     "name": tc.function.name,
                     "arguments": tc.function.arguments,
-                    "result": truncate_tool_result(tool_result),
+                    "result": truncate_tool_result(
+                        tool_result,
+                        settings.AI_TOOL_RESULT_TASK_MAX_CHARS,
+                        hint=call_hint,
+                    ),
                 }
             )
             # Store a text-only version for history reconstruction
@@ -246,7 +255,11 @@ def run_tool_loop(
             td_round["results"].append(
                 {
                     "tool_call_id": tc.id,
-                    "content": truncate_tool_result(td_result_content),
+                    "content": truncate_tool_result(
+                        td_result_content,
+                        settings.AI_TOOL_RESULT_STORE_MAX_CHARS,
+                        hint=call_hint,
+                    ),
                 }
             )
 

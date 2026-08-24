@@ -215,5 +215,25 @@ class ToolRegistry:
             return ", ".join(str(item) for item in value)
         return str(value)
 
+    def describe_call(self, name: str, raw_arguments: str, max_len: int = 120) -> str:
+        """``name(identifying argument)``, e.g. ``read_webpage(https://a.test)``.
+
+        Reuses the badge's *detail_key* - the one argument that tells a reader
+        which call this was - so a trimmed result can name the call that
+        produces it again. Kept to a single short line: it is quoted inside
+        the residue of a truncated result, not read on its own.
+        """
+        try:
+            args = json.loads(raw_arguments or "{}")
+        except json.JSONDecodeError, TypeError:
+            args = {}
+        detail = self.get_detail(name, args) if isinstance(args, dict) else ""
+        detail = " ".join(detail.split())
+        if not detail:
+            return name
+        if len(detail) > max_len:
+            detail = detail[:max_len] + "…"
+        return f"{name}({detail})"
+
 
 tool_registry = ToolRegistry()

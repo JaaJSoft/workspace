@@ -53,3 +53,10 @@ AI_TOOL_LOOP_STOPS = safe_counter(
     "by reason (round_cap/repeat_loop)",
     ["reason"],
 )
+
+AI_HISTORY_TOOL_CHARS = safe_histogram(
+    f"{_P}_history_tool_chars",
+    "Characters of past tool results replayed into one rebuilt conversation "
+    "history - what the recency-weighted replay budget actually costs",
+    buckets=(0, 500, 2_000, 8_000, 20_000, 50_000, 120_000, float("inf")),
+)

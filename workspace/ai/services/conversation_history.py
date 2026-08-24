@@ -3,10 +3,54 @@ import logging
 
 from django.conf import settings
 
+from workspace.ai.metrics import AI_HISTORY_TOOL_CHARS
+from workspace.ai.services.llm import truncate_tool_result
 from workspace.ai.services.video import extract_video_frames
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
+
+
+def _replay_budget(turn_age):
+    """Characters a tool result keeps, given how many bot turns ago it ran.
+
+    Halving per turn: the turn the user is most likely following up on is
+    replayed whole, while an old round decays towards a stub that still names
+    the call behind it. The number of replayed turns is already bounded by
+    AI_CHAT_CONTEXT_SIZE, so the total stays bounded too.
+    """
+    full = settings.AI_TOOL_RESULT_STORE_MAX_CHARS
+    return max(full >> min(turn_age, 16), settings.AI_TOOL_RESULT_REPLAY_MIN_CHARS)
+
+
+def _replay_results(td_round, budget):
+    """Tool messages for one stored round, trimmed to *budget* characters."""
+    from workspace.ai.tool_registry import tool_registry
+
+    hints = {}
+    messages = []
+    for tr in td_round.get("results", []):
+        content = tr["content"]
+        if isinstance(content, str) and len(content) > budget:
+            if not hints:
+                hints = {
+                    tc.get("id"): tool_registry.describe_call(
+                        (tc.get("function") or {}).get("name") or "",
+                        (tc.get("function") or {}).get("arguments") or "",
+                    )
+                    for tc in td_round.get("tool_calls") or []
+                }
+            content = truncate_tool_result(
+                content, budget, hint=hints.get(tr["tool_call_id"], "")
+            )
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tr["tool_call_id"],
+                "content": content,
+            }
+        )
+    return messages
 
 
 def _image_pixel_part(att):
@@ -150,7 +194,19 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
 
     _user_tz = get_user_timezone(human_user) if human_user else None
 
+    # msgs_to_use is newest first, so enumerating it counts bot turns backwards
+    # from the one being answered - the age each replay budget is derived from.
+    tool_turn_age = {
+        m.uuid: age
+        for age, m in enumerate(
+            m
+            for m in msgs_to_use
+            if isinstance(m.tool_data, list) and hasattr(m.author, "bot_profile")
+        )
+    }
+
     history = []
+    replayed_tool_chars = 0
     for msg in reversed(msgs_to_use):
         is_bot = hasattr(msg.author, "bot_profile")
         role = "assistant" if is_bot else "user"
@@ -175,6 +231,7 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
 
         # Reconstruct tool call history for bot messages
         if is_bot and msg.tool_data:
+            budget = _replay_budget(tool_turn_age.get(msg.uuid, 0))
             for td_round in msg.tool_data:
                 tool_calls = td_round.get("tool_calls")
                 if not tool_calls:
@@ -187,14 +244,9 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
                     "tool_calls": tool_calls,
                 }
                 history.append(assistant_msg)
-                for tr in td_round.get("results", []):
-                    history.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tr["tool_call_id"],
-                            "content": tr["content"],
-                        }
-                    )
+                for tool_msg in _replay_results(td_round, budget):
+                    replayed_tool_chars += len(tool_msg["content"])
+                    history.append(tool_msg)
             history.append({"role": "assistant", "content": body_text})
             if media_parts or caption_notes:
                 history.append(_assistant_images_message(media_parts, caption_notes))
@@ -219,4 +271,5 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
         else:
             history.append({"role": role, "content": body_text})
 
+    AI_HISTORY_TOOL_CHARS.observe(replayed_tool_chars)
     return history, summary_text

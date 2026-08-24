@@ -92,6 +92,8 @@ All settings are configurable via environment variables or a `.env` file next to
 | `AI_MODEL` | `gpt-5` | Default LLM model for chat and tasks |
 | `AI_MAX_TOKENS` | `2048` | Maximum tokens per AI response |
 | `AI_CHAT_CONTEXT_SIZE` | `30` | Recent messages kept in full; older ones are summarized |
+| `AI_TOOL_RESULT_STORE_MAX_CHARS` | `12000` | Characters of a tool result kept for the next turns; the newest turn is replayed in full |
+| `AI_TOOL_RESULT_REPLAY_MIN_CHARS` | `1500` | Floor a replayed tool result decays to as its turn gets older |
 | `AI_IMAGE_MODEL` | `dall-e-3` | Model for image generation |
 | `AI_IMAGE_BASE_URL` | *(empty)* | Custom base URL for image generation (falls back to `AI_BASE_URL`) |
 | `SEARXNG_URL` | *(empty)* | SearXNG instance URL for web search (e.g. `http://searxng:8080`) |

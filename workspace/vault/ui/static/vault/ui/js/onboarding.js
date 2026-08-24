@@ -310,8 +310,8 @@ window.vaultOnboarding = function vaultOnboarding() {
         }
         if (landed === 'elsewhere') {
           this.error =
-            'Your vault was set up somewhere else, with a different recovery ' +
-            'key. Open it there - the key on this page does not belong to it.';
+            'Your vault was already set up elsewhere, with a different ' +
+            'recovery key. The key on this page does not open it.';
         } else if (conflict && !this.sentKexPublic) {
           this.error =
             'Your vault has already been set up. Reload this page to open it.';

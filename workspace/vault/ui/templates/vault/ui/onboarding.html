@@ -27,10 +27,7 @@
     x-data="vaultOnboarding()"
     data-email="{{ request.user.email }}"
   >
-    <h1 class="text-2xl font-semibold">Set up your vault</h1>
-    <p class="text-sm text-base-content/60 mt-1 mb-6">
-      Three steps. The last one hands you a key we cannot hand you twice.
-    </p>
+    <h1 class="text-2xl font-semibold mb-6">Set up your vault</h1>
 
     <div
       class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden"
@@ -68,8 +65,8 @@
                 <span class="w-px flex-1 bg-base-300 my-1"></span>
               </div>
               <div class="pb-5">
-                <p class="text-sm font-medium">What we cannot do</p>
-                <p class="text-xs text-base-content/50">The server never sees your password</p>
+                <p class="text-sm font-medium">Before you start</p>
+                <p class="text-xs text-base-content/50">The server cannot read your vault</p>
               </div>
             </li>
 
@@ -111,9 +108,9 @@
                   class="text-sm font-medium"
                   :class="step < 3 && 'text-base-content/40'"
                 >
-                  Emergency kit
+                  Recovery key
                 </p>
-                <p class="text-xs text-base-content/50">Your recovery key, shown once</p>
+                <p class="text-xs text-base-content/50">Shown once, on this screen</p>
               </div>
             </li>
           </ol>
@@ -147,13 +144,10 @@
               </span>
             </div>
             <h2 class="font-bold text-lg flex-1">
-              <span x-show="step === 1">What we cannot do</span>
+              <span x-show="step === 1">Before you start</span>
               <span x-show="step === 2" x-cloak>Vault password</span>
               <span x-show="step === 3" x-cloak>Your recovery key</span>
             </h2>
-            <span class="text-xs text-base-content/50 shrink-0">
-              Step <span x-text="step"></span> of 3
-            </span>
           </div>
 
           <div class="px-6 py-6 flex-1">
@@ -165,15 +159,14 @@
             <template x-if="step === 1">
               <section class="space-y-4">
                 <p>
-                  Your vault is encrypted on this device. The server stores what
-                  it cannot open: it never sees your vault password, and it
-                  cannot reset it for you.
+                  Your vault is encrypted on this device. The server keeps what
+                  it cannot open: it never sees your password, and it cannot
+                  reset it.
                 </p>
                 <p>
-                  There is no "forgot password" here, and that is deliberate. If
-                  you lose both your vault password and the recovery key we are
-                  about to give you, your vault is gone - for you, for us, for
-                  everyone.
+                  So there is no "forgot password" here. Lose your password and
+                  the recovery key you are about to get, and nobody can open
+                  your vault again.
                 </p>
               </section>
             </template>
@@ -185,8 +178,8 @@
                 x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
               >
                 <p>
-                  Pick a password for your vault. It can be the same one you use
-                  to log in - it never leaves this browser.
+                  Pick a password for your vault. It never leaves this browser,
+                  so it can be the one you already use to log in.
                 </p>
                 <label class="form-control w-full">
                   <span class="label-text">Vault password</span>
@@ -248,11 +241,11 @@
                 </ul>
 
                 <inline-alert type="error" x-show="breachStatus === 'found'" x-cloak>
-                This password appears in a public breach corpus. Pick another one.
+                This password has appeared in a public data breach. Pick another one.
                 </inline-alert>
                 <inline-alert type="warning" x-show="breachStatus === 'unavailable'" x-cloak>
-                We could not reach the breach corpus, so this password was not
-                checked against it. You can continue.
+                We could not check this password against known breaches. You
+                can continue.
                 </inline-alert>
               </section>
             </template>
@@ -264,9 +257,8 @@
                 x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
               >
                 <p>
-                  Write it down or keep the PDF somewhere safe and offline.
-                  Together with your vault password, it is the only way into your
-                  vault. We do not have a copy.
+                  Save it somewhere safe and offline. With your password, it is
+                  the only way into your vault.
                 </p>
                 {% comment %}
                   The key takes the focus when the step opens, so a screen reader
@@ -287,8 +279,8 @@
                     x-model="acknowledged"
                   />
                   <span class="label-text">
-                    I have saved my recovery key. I understand nobody can recover
-                    my vault without it.
+                    I have saved my recovery key. Without it, nobody can open my
+                    vault.
                   </span>
                 </label>
               </section>

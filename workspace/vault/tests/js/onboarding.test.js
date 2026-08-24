@@ -270,7 +270,7 @@ test('an envelope sealed by another tab never shows this page key', async () => 
   });
   await app.generateAndSeal();
   assert.equal(app.step, 1);
-  assert.match(app.error, /somewhere else/);
+  assert.match(app.error, /already set up elsewhere/);
 });
 
 test('an account already set up before this page started says so', async () => {

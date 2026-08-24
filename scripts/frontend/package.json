@@ -1,7 +1,7 @@
 {
   "name": "workspace-frontend",
   "version": "1.0.0",
-  "description": "Build of every vendored frontend asset for the workspace Django project: the Alpine.js bundle loaded by base.html, the Milkdown Crepe editor bundle and its theme CSS, the vault client cryptography bundles, and the Tailwind + DaisyUI stylesheet. Everything is committed to statics and served via whitenoise so no page depends on a CDN at runtime. Rebuild with `npm run build` after bumping any pinned version.",
+  "description": "Build of every vendored frontend asset for the workspace Django project: the Alpine.js bundle and the Lucide icon library loaded by base.html, the Milkdown Crepe editor bundle and its theme CSS, the vault client cryptography bundles, and the Tailwind + DaisyUI stylesheet. Everything is committed to statics and served via whitenoise so no page depends on a CDN at runtime. Rebuild with `npm run build` after bumping any pinned version.",
   "private": true,
   "scripts": {
     "build": "npm run build:alpine && npm run build:lucide && npm run build:editor && npm run build:editor-css && npm run build:vault && npm run build:vault-onboarding && npm run build:css",

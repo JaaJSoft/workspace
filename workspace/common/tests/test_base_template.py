@@ -7,7 +7,6 @@ from django.template import Context, Template
 from django.template.loader import get_template
 from django.test import TestCase
 
-
 STYLESHEET = (
     Path(__file__).resolve().parents[2] / "common" / "static" / "css" / "app.css"
 )

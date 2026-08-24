@@ -16,10 +16,10 @@ uv run coverage run manage.py test workspace.<module>     # with coverage
 uv run celery -A workspace worker -l info
 uv run celery -A workspace beat -l info
 
-# Vendored frontend assets - Alpine bundle, Milkdown editor bundle + theme CSS,
-# vault crypto bundles, Tailwind stylesheet (rebuild after bumping any
-# dependency in scripts/frontend/package.json; templates load the built
-# artifacts, never a CDN)
+# Vendored frontend assets - Alpine bundle, Lucide icons, Milkdown editor
+# bundle + theme CSS, vault crypto bundles, Tailwind stylesheet (rebuild after
+# bumping any dependency in scripts/frontend/package.json; templates load the
+# built artifacts, never a CDN)
 cd scripts/frontend && npm run build
 cd scripts/frontend && npm run build:css      # Tailwind only, after template/JS class changes
 # Vault crypto only - the main bundle has a 75 KB gzipped budget enforced by

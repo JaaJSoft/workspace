@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from ipaddress import ip_address
 from urllib.parse import urljoin, urlparse
 
@@ -56,26 +57,62 @@ def _is_url_safe(url: str) -> bool:
         return True
 
 
-def search(query: str, *, max_results: int = 5) -> list[dict]:
+SEARCH_TIME_RANGES = ("day", "week", "month", "year")
+SEARCH_CATEGORIES = ("general", "news", "science", "it")
+
+
+def _site_domain(site: str) -> str:
+    """Reduce *site* to the bare hostname a ``site:`` operator expects.
+
+    A site is named the way it is read — with a scheme, with a path, or with
+    the operator already typed in — and engines match none of those forms.
+    """
+    site = site.strip().lower().removeprefix("site:").strip()
+    if "//" in site:
+        site = site.split("//", 1)[1]
+    return site.split("/", 1)[0].strip()
+
+
+def search(
+    query: str,
+    *,
+    max_results: int = 5,
+    time_range: str = "",
+    category: str = "general",
+    site: str = "",
+) -> list[dict]:
     """Search the web via SearXNG and return a list of results.
 
     Each result is a dict with keys: ``title``, ``url``, ``snippet``.
+    *time_range* (``day``/``week``/``month``/``year``) and *category*
+    (``general``/``news``/``science``/``it``) are ignored unless they name
+    something SearXNG knows, so an unsupported filter widens the search rather
+    than breaking it. *site* restricts the results to one domain.
+
     Returns an empty list when SearXNG is not configured or unreachable.
     """
     base_url = getattr(settings, "SEARXNG_URL", "")
     if not base_url:
         return []
 
+    domain = _site_domain(site)
+    if domain:
+        query = f"site:{domain} {query}"
+
+    params = {
+        "q": query,
+        "format": "json",
+        "categories": category if category in SEARCH_CATEGORIES else "general",
+        "language": "auto",
+    }
+    if time_range in SEARCH_TIME_RANGES:
+        params["time_range"] = time_range
+
     try:
         with httpx2.Client(timeout=10, follow_redirects=True) as client:
             resp = client.get(
                 f"{base_url.rstrip('/')}/search",
-                params={
-                    "q": query,
-                    "format": "json",
-                    "categories": "general",
-                    "language": "auto",
-                },
+                params=params,
                 headers={
                     "Accept": "application/json",
                     "User-Agent": _HEADERS["User-Agent"],
@@ -96,6 +133,34 @@ def search(query: str, *, max_results: int = 5) -> list[dict]:
         if _is_url_safe(r.get("url", ""))
     ][:max_results]
     return results
+
+
+def search_many(queries: list[str], **kwargs) -> list[dict]:
+    """Search several queries at once and merge their results.
+
+    Each query keeps its own *max_results* budget and runs concurrently with
+    the others, so a question asked from several angles costs one round of
+    latency. A URL several queries return is listed once, under the first of
+    them, and every result carries the ``query`` that found it. A lone query
+    returns the plain :func:`search` shape.
+    """
+    if not queries:
+        return []
+    if len(queries) == 1:
+        return search(queries[0], **kwargs)
+
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        batches = pool.map(lambda q: search(q, **kwargs), queries)
+
+    seen: set[str] = set()
+    merged = []
+    for query, batch in zip(queries, batches, strict=True):
+        for result in batch:
+            if result["url"] in seen:
+                continue
+            seen.add(result["url"])
+            merged.append({**result, "query": query})
+    return merged
 
 
 _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)\s]+)\)")

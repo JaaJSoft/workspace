@@ -5,9 +5,10 @@ import json
 import logging
 import uuid as uuid_lib
 from datetime import UTC, datetime
+from typing import Literal
 
 from django.conf import settings
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from workspace.common.limits import clamp_limit
 from workspace.common.logging import scrub
@@ -47,8 +48,64 @@ class SearchEverythingParams(BaseModel):
     )
 
 
+WEB_SEARCH_DEFAULT_RESULTS = 5
+WEB_SEARCH_MAX_RESULTS = 20
+WEB_SEARCH_MAX_QUERIES = 4
+
+
 class WebSearchParams(BaseModel):
-    query: str = Field(description="The search query.")
+    queries: list[str] = Field(
+        description=(
+            "The search queries. Pass several phrasings or angles of the same "
+            f"question at once (up to {WEB_SEARCH_MAX_QUERIES}, extra ones are "
+            "dropped) — they are searched in parallel and cost one call instead "
+            "of one per angle. Pass a single one for a narrow lookup."
+        )
+    )
+    time_range: Literal["", "day", "week", "month", "year"] = Field(
+        default="",
+        description=(
+            "Restrict results to what was published within the last day, week, "
+            "month or year. Use it for questions about what is happening now "
+            "('this week', 'latest release'), where the best-ranked page is "
+            "usually an old one. Leave empty otherwise: the filter drops every "
+            "page whose date the engine could not read, so on anything that "
+            "isn't news it often returns nothing at all."
+        ),
+    )
+    category: Literal["general", "news", "science", "it"] = Field(
+        default="general",
+        description=(
+            "Which engines to query: 'news' for current events, 'science' for "
+            "papers and research, 'it' for software, packages and error "
+            "messages, 'general' (the default) for everything else."
+        ),
+    )
+    max_results: int = Field(
+        default=WEB_SEARCH_DEFAULT_RESULTS,
+        description=(
+            f"Results per query, {WEB_SEARCH_DEFAULT_RESULTS} by default and "
+            f"{WEB_SEARCH_MAX_RESULTS} at most. Raise it for a survey of a "
+            "topic, keep it low for a fact you only need one source for."
+        ),
+    )
+    site: str = Field(
+        default="",
+        description=(
+            "Restrict results to one domain, e.g. 'docs.python.org'. Use it to "
+            "find a page on a site you know rather than guessing its URL. "
+            "Applies to every query in the call."
+        ),
+    )
+
+    @field_validator("queries", mode="before")
+    @classmethod
+    def _wrap_lone_string(cls, value):
+        """Read a bare string as a one-query list.
+
+        Models routinely answer an array schema with the scalar it wraps.
+        """
+        return [value] if isinstance(value, str) else value
 
 
 class ReadWebpageParams(BaseModel):
@@ -419,6 +476,27 @@ they alone support filters like unread-only, attachments or date ranges."""
         return json.dumps(results, ensure_ascii=False)
 
 
+def _no_results_message(args) -> str:
+    """Report an empty search, naming the filters that could have emptied it.
+
+    A narrowed search that found nothing and a web that holds nothing look the
+    same from the outside, and only the first one is worth retrying.
+    """
+    narrowings = []
+    if args.time_range:
+        narrowings.append(f"the last {args.time_range}")
+    if args.category != "general":
+        narrowings.append(f"the {args.category} category")
+    if args.site.strip():
+        narrowings.append(args.site.strip())
+    if not narrowings:
+        return "No results found."
+    return (
+        f"No results found within {', '.join(narrowings)}. "
+        "Retry without that restriction before concluding there is nothing."
+    )
+
+
 class WebToolProvider(ToolProvider):
     """Web search and page reading. Registered only when SEARXNG_URL is set."""
 
@@ -426,24 +504,37 @@ class WebToolProvider(ToolProvider):
         badge_icon="🔍",
         badge_label="Searched the web",
         badge_running_label="Searching the web",
-        detail_key="query",
+        detail_key="queries",
         params=WebSearchParams,
     )
     def web_search(self, args, user, bot, conversation_id, context):
         """Search the web for current information. \
 Call this when the user asks about recent events, news, facts you're unsure about, \
 or anything that requires up-to-date information you don't have. \
+Search several phrasings of a broad question in one call rather than one per call, \
+and narrow it with time_range, category or site when the plain search would rank \
+the wrong kind of page first. \
 Returns titles, URLs and short snippets — read the promising ones with \
 read_webpage rather than answering from the snippets."""
-        from .services.web import search
+        from .services.web import search_many
 
-        query = args.query.strip()
-        if not query:
-            return "Error: query is required"
+        queries = list(dict.fromkeys(q.strip() for q in args.queries if q.strip()))
+        if not queries:
+            return "Error: at least one query is required"
 
-        results = search(query, max_results=5)
+        results = search_many(
+            queries[:WEB_SEARCH_MAX_QUERIES],
+            max_results=clamp_limit(
+                args.max_results,
+                default=WEB_SEARCH_DEFAULT_RESULTS,
+                maximum=WEB_SEARCH_MAX_RESULTS,
+            ),
+            time_range=args.time_range,
+            category=args.category,
+            site=args.site,
+        )
         if not results:
-            return "No results found."
+            return _no_results_message(args)
 
         return json.dumps(results, ensure_ascii=False)
 

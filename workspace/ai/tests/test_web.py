@@ -1,12 +1,23 @@
+import json
+from typing import get_args
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 
 from workspace.ai.services.web import (
+    SEARCH_CATEGORIES,
+    SEARCH_TIME_RANGES,
     _absolutize_links,
     _is_url_safe,
+    _site_domain,
     fetch_and_extract,
     search,
+    search_many,
+)
+from workspace.ai.tools import (
+    WEB_SEARCH_MAX_RESULTS,
+    WebSearchParams,
+    WebToolProvider,
 )
 
 
@@ -97,6 +108,132 @@ class SearchTests(TestCase):
         results = search("failing query")
 
         self.assertEqual(results, [])
+
+    def _capture_params(self, mock_client_cls, results=()):
+        """Wire a client stub returning *results* and hand back its GET params."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"results": list(results)}
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.get.return_value = mock_resp
+        mock_client_cls.return_value = mock_client
+        return mock_client
+
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_defaults_send_no_time_filter(self, mock_client_cls):
+        client = self._capture_params(mock_client_cls)
+
+        search("test")
+
+        params = client.get.call_args.kwargs["params"]
+        self.assertNotIn("time_range", params)
+        self.assertEqual(params["categories"], "general")
+        self.assertEqual(params["q"], "test")
+
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_time_range_and_category_are_forwarded(self, mock_client_cls):
+        client = self._capture_params(mock_client_cls)
+
+        search("test", time_range="week", category="news")
+
+        params = client.get.call_args.kwargs["params"]
+        self.assertEqual(params["time_range"], "week")
+        self.assertEqual(params["categories"], "news")
+
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_unknown_filters_are_dropped_rather_than_sent(self, mock_client_cls):
+        # SearXNG answers an unknown time_range with a 4xx, which would turn a
+        # slightly wrong filter into no results at all.
+        client = self._capture_params(mock_client_cls)
+
+        search("test", time_range="fortnight", category="recipes")
+
+        params = client.get.call_args.kwargs["params"]
+        self.assertNotIn("time_range", params)
+        self.assertEqual(params["categories"], "general")
+
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_site_becomes_a_site_operator(self, mock_client_cls):
+        client = self._capture_params(mock_client_cls)
+
+        search("release notes", site="https://docs.python.org/3/")
+
+        self.assertEqual(
+            client.get.call_args.kwargs["params"]["q"],
+            "site:docs.python.org release notes",
+        )
+
+    @patch("workspace.ai.services.web.httpx2.Client")
+    def test_max_results_caps_the_returned_list(self, mock_client_cls):
+        self._capture_params(
+            mock_client_cls,
+            [{"title": f"r{i}", "url": f"https://a.com/{i}"} for i in range(9)],
+        )
+
+        self.assertEqual(len(search("test", max_results=3)), 3)
+
+
+class SiteDomainTests(TestCase):
+    def test_bare_domain_kept(self):
+        self.assertEqual(_site_domain("example.com"), "example.com")
+
+    def test_scheme_and_path_stripped(self):
+        self.assertEqual(_site_domain("https://example.com/a/b?c=1"), "example.com")
+
+    def test_operator_prefix_stripped(self):
+        self.assertEqual(_site_domain("site: Example.COM"), "example.com")
+
+    def test_empty_stays_empty(self):
+        self.assertEqual(_site_domain("   "), "")
+
+
+@override_settings(SEARXNG_URL="http://searxng:8080")
+class SearchManyTests(TestCase):
+    def test_single_query_returns_the_plain_search_shape(self):
+        with patch(
+            "workspace.ai.services.web.search",
+            return_value=[{"title": "t", "url": "https://a.com", "snippet": "s"}],
+        ) as mock_search:
+            results = search_many(["only"], max_results=3)
+
+        mock_search.assert_called_once_with("only", max_results=3)
+        self.assertNotIn("query", results[0])
+
+    def test_no_query_searches_nothing(self):
+        # ThreadPoolExecutor rejects a pool of zero workers.
+        self.assertEqual(search_many([]), [])
+
+    def test_results_are_tagged_with_the_query_that_found_them(self):
+        by_query = {
+            "alpha": [{"title": "A", "url": "https://a.com", "snippet": ""}],
+            "beta": [{"title": "B", "url": "https://b.com", "snippet": ""}],
+        }
+        with patch(
+            "workspace.ai.services.web.search", side_effect=lambda q, **kw: by_query[q]
+        ):
+            results = search_many(["alpha", "beta"])
+
+        self.assertEqual(
+            [(r["url"], r["query"]) for r in results],
+            [("https://a.com", "alpha"), ("https://b.com", "beta")],
+        )
+
+    def test_url_found_twice_is_listed_once(self):
+        shared = [{"title": "Shared", "url": "https://a.com", "snippet": ""}]
+        with patch("workspace.ai.services.web.search", return_value=list(shared)):
+            results = search_many(["alpha", "beta"])
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["query"], "alpha")
+
+    def test_every_query_gets_the_same_filters(self):
+        with patch("workspace.ai.services.web.search", return_value=[]) as mock_search:
+            search_many(["alpha", "beta"], time_range="day", site="a.com")
+
+        for call in mock_search.call_args_list:
+            self.assertEqual(call.kwargs["time_range"], "day")
+            self.assertEqual(call.kwargs["site"], "a.com")
 
 
 def _fake_response(*, text="", url="https://example.com/", content_type="text/html"):
@@ -273,3 +410,95 @@ class FetchAndExtractTests(TestCase):
         with self.assertRaises(ValueError) as ctx:
             fetch_and_extract("https://example.com/huge")
         self.assertIn("too large", str(ctx.exception))
+
+
+class WebSearchToolTests(TestCase):
+    """The tool layer: argument normalisation and the empty-result message."""
+
+    def _run(self, **kwargs):
+        provider = WebToolProvider()
+        args = WebSearchParams(**kwargs)
+        return provider.web_search(args, None, None, None, {})
+
+    def test_queries_are_deduplicated_stripped_and_capped(self):
+        with patch(
+            "workspace.ai.services.web.search_many", return_value=[]
+        ) as mock_search:
+            self._run(queries=["  a  ", "a", "", "b", "c", "d", "e"])
+
+        self.assertEqual(mock_search.call_args.args[0], ["a", "b", "c", "d"])
+
+    def test_blank_queries_are_refused(self):
+        result = self._run(queries=["   ", ""])
+        self.assertTrue(result.startswith("Error:"))
+
+    def test_filters_reach_the_service(self):
+        with patch(
+            "workspace.ai.services.web.search_many", return_value=[]
+        ) as mock_search:
+            self._run(
+                queries=["q"],
+                time_range="week",
+                category="news",
+                site="example.com",
+                max_results=12,
+            )
+
+        kwargs = mock_search.call_args.kwargs
+        self.assertEqual(kwargs["time_range"], "week")
+        self.assertEqual(kwargs["category"], "news")
+        self.assertEqual(kwargs["site"], "example.com")
+        self.assertEqual(kwargs["max_results"], 12)
+
+    def test_max_results_is_clamped_to_the_ceiling(self):
+        with patch(
+            "workspace.ai.services.web.search_many", return_value=[]
+        ) as mock_search:
+            self._run(queries=["q"], max_results=500)
+
+        self.assertEqual(
+            mock_search.call_args.kwargs["max_results"], WEB_SEARCH_MAX_RESULTS
+        )
+
+    def test_empty_unfiltered_search_reports_nothing_found(self):
+        with patch("workspace.ai.services.web.search_many", return_value=[]):
+            self.assertEqual(self._run(queries=["q"]), "No results found.")
+
+    def test_empty_filtered_search_names_the_restrictions(self):
+        # A narrowed search that found nothing reads like an empty web unless
+        # the filters are named, and the model then stops instead of widening.
+        with patch("workspace.ai.services.web.search_many", return_value=[]):
+            result = self._run(
+                queries=["q"], time_range="day", category="news", site="example.com"
+            )
+
+        self.assertIn("the last day", result)
+        self.assertIn("news category", result)
+        self.assertIn("example.com", result)
+        self.assertIn("Retry", result)
+
+    def test_results_are_returned_as_json(self):
+        payload = [{"title": "T", "url": "https://a.com", "snippet": "s"}]
+        with patch("workspace.ai.services.web.search_many", return_value=payload):
+            result = self._run(queries=["q"])
+
+        self.assertEqual(json.loads(result), payload)
+
+
+class WebSearchParamsTests(TestCase):
+    def test_schema_offers_exactly_the_filters_the_service_honours(self):
+        # The service drops a filter it doesn't know, so a value advertised
+        # here but absent there would be accepted and then silently ignored.
+        time_ranges = get_args(WebSearchParams.model_fields["time_range"].annotation)
+        categories = get_args(WebSearchParams.model_fields["category"].annotation)
+        self.assertEqual(set(time_ranges) - {""}, set(SEARCH_TIME_RANGES))
+        self.assertEqual(set(categories), set(SEARCH_CATEGORIES))
+
+    def test_a_bare_string_is_read_as_one_query(self):
+        self.assertEqual(WebSearchParams(queries="cats").queries, ["cats"])
+
+    def test_defaults_leave_the_search_unfiltered(self):
+        params = WebSearchParams(queries=["cats"])
+        self.assertEqual(params.time_range, "")
+        self.assertEqual(params.category, "general")
+        self.assertEqual(params.site, "")

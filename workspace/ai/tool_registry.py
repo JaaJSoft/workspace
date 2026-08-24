@@ -200,11 +200,20 @@ class ToolRegistry:
         }
 
     def get_detail(self, name: str, args: dict) -> str:
-        """Extract the detail string shown next to the badge label."""
+        """Extract the detail string shown next to the badge label.
+
+        The badge is one truncated line, so a list-valued argument is read out
+        rather than shown as its repr.
+        """
         info = self._tools.get(name)
         if not info or not info.detail_key:
             return ""
-        return args.get(info.detail_key, "")
+        value = args.get(info.detail_key)
+        if value is None:
+            return ""
+        if isinstance(value, list):
+            return ", ".join(str(item) for item in value)
+        return str(value)
 
 
 tool_registry = ToolRegistry()

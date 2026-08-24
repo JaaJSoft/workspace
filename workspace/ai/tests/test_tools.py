@@ -84,6 +84,31 @@ class BadgeLabelTests(TestCase):
         self.assertEqual(registry.get_badge("wait")["running_label"], "Waited")
 
 
+class BadgeDetailTests(TestCase):
+    def _registry_with_detail_key(self, key):
+        registry = ToolRegistry()
+
+        class Provider(ToolProvider):
+            @tool(detail_key=key)
+            def run(self, args, user, bot, conversation_id, context):
+                """Run."""
+
+        registry.register_provider(Provider())
+        return registry
+
+    def test_list_argument_is_read_out_on_the_badge(self):
+        registry = self._registry_with_detail_key("queries")
+
+        detail = registry.get_detail("run", {"queries": ["alpha", "beta"]})
+
+        self.assertEqual(detail, "alpha, beta")
+
+    def test_missing_argument_yields_no_detail(self):
+        registry = self._registry_with_detail_key("queries")
+
+        self.assertEqual(registry.get_detail("run", {}), "")
+
+
 class ExecuteToolCallTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="user", password="pass123")

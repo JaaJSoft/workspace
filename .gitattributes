@@ -1,0 +1,7 @@
+# Vendored and generated frontend artifacts are copied or built byte for byte
+# from a pinned source. Git must not rewrite their line endings on checkout:
+# core.autocrlf=true on a Windows clone otherwise hands the working copy a file
+# that differs from the committed blob, which breaks the integrity check on the
+# vendored Lucide build and makes every rebuilt artifact look modified.
+workspace/**/static/**/vendor/** -text
+workspace/common/static/css/app.css -text

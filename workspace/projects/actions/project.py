@@ -52,8 +52,7 @@ class ManageSprintsAction(BaseProjectAction):
     min_role = "admin"
 
     def is_available(self, user, obj, *, role, archived):
-        # Sprints only exist on scrum projects; the type is immutable, so
-        # the check stays pure like the personal-project mixin's.
+        # Sprints only exist on scrum projects.
         if obj.type != "scrum":
             return False
         return super().is_available(user, obj, role=role, archived=archived)

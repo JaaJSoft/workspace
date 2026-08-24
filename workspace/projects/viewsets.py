@@ -38,6 +38,7 @@ from .serializers import (
     MemberRoleSerializer,
     MemberSerializer,
     MemberWriteSerializer,
+    ProjectConvertSerializer,
     ProjectNotificationLevelSerializer,
     ProjectSerializer,
     ReorderSerializer,
@@ -64,6 +65,7 @@ from .services.attachments import (
     remove_attachment,
 )
 from .services.comments import add_comment, notify_comment_edited
+from .services.conversion import convert_project_type
 from .services.estimates import format_estimate
 from .services.events import record_task_event
 from .services.links import create_link, delete_link, links_for_task
@@ -163,6 +165,22 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"])
+    def convert(self, request, uuid=None):
+        project = self.get_object()
+        self._require_admin(project)
+        if project.is_archived:
+            raise PermissionDenied("Project is archived.")
+        serializer = ProjectConvertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            convert_project_type(
+                project, serializer.validated_data["type"], actor=request.user
+            )
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
+        return Response(self.get_serializer(project).data)
 
     @action(detail=True, methods=["post"])
     def archive(self, request, uuid=None):
@@ -467,9 +485,16 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(project=self.project)
 
+    def _require_scrum(self):
+        """Sprints are the scrum board model; a kanban project only ever
+        holds the closed ones a conversion left behind, as frozen history."""
+        if self.project.type != Project.Type.SCRUM:
+            raise PermissionDenied("Sprints require a scrum project.")
+
     def create(self, request, *args, **kwargs):
         self._require_admin()
         self._require_writable()
+        self._require_scrum()
         try:
             with transaction.atomic():
                 return super().create(request, *args, **kwargs)
@@ -482,6 +507,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         self._require_admin()
         self._require_writable()
+        self._require_scrum()
         try:
             with transaction.atomic():
                 return super().partial_update(request, *args, **kwargs)
@@ -494,6 +520,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         self._require_admin()
         self._require_writable()
+        self._require_scrum()
         sprint = self.get_object()
         if sprint.state == Sprint.State.ACTIVE:
             return Response(
@@ -505,6 +532,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def start(self, request, *args, **kwargs):
         self._require_admin()
         self._require_writable()
+        self._require_scrum()
         sprint = self.get_object()
         try:
             start_sprint(sprint, actor=request.user)
@@ -515,6 +543,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def complete(self, request, *args, **kwargs):
         self._require_admin()
         self._require_writable()
+        self._require_scrum()
         sprint = self.get_object()
         serializer = SprintCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

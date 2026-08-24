@@ -577,6 +577,14 @@ class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(response, 'id="settings-danger"')
         self.assertContains(response, "writable: true")
 
+    def test_settings_page_offers_both_board_models(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertContains(response, 'id="settings-board-model"')
+        self.assertContains(response, "convertTo('kanban')")
+        self.assertContains(response, "convertTo('scrum')")
+        self.assertContains(response, "current: 'kanban'")
+
     def test_personal_project_hides_danger_zone_and_group(self):
         personal = get_or_create_personal_project(self.admin)
         self.client.force_login(self.admin)
@@ -584,6 +592,7 @@ class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'id="settings-danger"')
         self.assertNotContains(response, 'id="settings-group"')
+        self.assertNotContains(response, 'id="settings-board-model"')
 
     def test_archived_project_passes_writable_false_to_general(self):
         from django.utils import timezone

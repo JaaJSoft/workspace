@@ -555,3 +555,62 @@ test('projectSprints.toggleAdd prefills the add form and clears on reopen', () =
   assert.equal(c.addForm.name, 'Sprint 3');
   assert.equal(c.addForm.goal, '');
 });
+
+function boardModelWith({ confirmResult = true, fetchImpl, current = 'kanban', writable = true } = {}) {
+  const calls = { fetch: [], confirm: [], reloaded: 0 };
+  const c = settingsWith({
+    AppDialog: {
+      confirm: (options) => {
+        calls.confirm.push(options);
+        return Promise.resolve(confirmResult);
+      },
+    },
+    fetch: fetchImpl || ((url, options) => {
+      calls.fetch.push({ url, options });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }),
+    location: { reload: () => { calls.reloaded += 1; } },
+  }).projectBoardModel({ apiBase: '/api/v1/projects/p1', current, writable });
+  return { c, calls };
+}
+
+test('projectBoardModel.convertTo confirms then posts the target type', async () => {
+  const { c, calls } = boardModelWith();
+  await c.convertTo('scrum');
+  assert.equal(calls.confirm.length, 1);
+  assert.match(calls.confirm[0].message, /new running sprint/);
+  assert.equal(calls.fetch.length, 1);
+  assert.equal(calls.fetch[0].url, '/api/v1/projects/p1/convert');
+  assert.equal(calls.fetch[0].options.method, 'POST');
+  assert.deepStrictEqual(JSON.parse(calls.fetch[0].options.body), { type: 'scrum' });
+  assert.equal(calls.reloaded, 1);
+});
+
+test('projectBoardModel.convertTo does nothing when the dialog is dismissed', async () => {
+  const { c, calls } = boardModelWith({ confirmResult: false });
+  await c.convertTo('scrum');
+  assert.equal(calls.fetch.length, 0);
+  assert.equal(c.busy, false);
+});
+
+test('projectBoardModel.convertTo skips the current type and a read-only project', async () => {
+  const { c, calls } = boardModelWith();
+  await c.convertTo('kanban');
+  const readOnly = boardModelWith({ writable: false });
+  await readOnly.c.convertTo('scrum');
+  assert.equal(calls.confirm.length, 0);
+  assert.equal(readOnly.calls.confirm.length, 0);
+});
+
+test('projectBoardModel.convertTo surfaces the API error and stays usable', async () => {
+  const { c } = boardModelWith({
+    fetchImpl: () =>
+      Promise.resolve({
+        ok: false,
+        json: () => Promise.resolve({ detail: 'Personal projects cannot change type.' }),
+      }),
+  });
+  await c.convertTo('scrum');
+  assert.equal(c.error, 'Personal projects cannot change type.');
+  assert.equal(c.busy, false);
+});

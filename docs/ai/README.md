@@ -30,7 +30,7 @@ When tool calling is enabled, bots can invoke:
 | `get_current_user_info` | Read the current user's profile (name, email, join date) |
 | `get_my_avatar` | Inspect the bot's own avatar |
 | `save_memory` / `delete_memory` | Store or forget a persistent fact about the user |
-| `web_search` / `read_webpage` | Search the web (requires a SearXNG instance) and read a page |
+| `web_search` / `read_webpage` | Search the web (requires a SearXNG instance) and read a page. A search takes several queries at once and can be narrowed by time range, category (news, science, IT) or site. |
 | `get_weather` | Current weather by place name (Open-Meteo, keyless) |
 | `generate_image` / `edit_image` | Create or edit images |
 | `schedule_message` / `cancel_schedule` / `list_schedules` | Manage bot-initiated scheduled messages |

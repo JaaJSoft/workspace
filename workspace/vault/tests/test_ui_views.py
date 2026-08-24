@@ -1,9 +1,7 @@
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
-from workspace.users.services.settings import set_setting
 from workspace.vault.models import AccountIdentity
 
 User = get_user_model()
@@ -57,34 +55,3 @@ class OnboardingRoutingTests(TestCase):
                 response = self.client.get(reverse(name))
                 self.assertEqual(response.status_code, 302)
                 self.assertIn("/login", response["Location"])
-
-
-class OnboardingDialogOpeningTests(TestCase):
-    """When the setup dialog opens itself.
-
-    The application's welcome tour opens itself too, 400 ms after load, and
-    lands in front - swallowing the clicks meant for this one. The tour
-    introduces the application, so it goes first.
-    """
-
-    def setUp(self):
-        self.user = User.objects.create_user(username="owner", password="pw")
-        self.client.force_login(self.user)
-
-    def tearDown(self):
-        cache.clear()
-        super().tearDown()
-
-    def _page(self):
-        return self.client.get(reverse("vault_ui:onboarding")).content.decode()
-
-    def test_it_waits_for_the_tour_when_the_tour_is_still_pending(self):
-        html = self._page()
-        self.assertIn("addEventListener('close'", html)
-        self.assertNotIn('x-init="$el.showModal()"', html)
-
-    def test_it_opens_at_once_for_an_account_that_has_seen_the_tour(self):
-        set_setting(self.user, "core", "onboarding_completed", True)
-        html = self._page()
-        self.assertIn('x-init="$el.showModal()"', html)
-        self.assertNotIn("addEventListener('close'", html)

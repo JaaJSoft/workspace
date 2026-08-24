@@ -24,6 +24,7 @@ window.vaultOnboarding = function vaultOnboarding() {
     accountUuid: '',
     sentKexPublic: '',
     acknowledged: false,
+    leaveGuard: null,
     busy: false,
     error: '',
     // One token per keystroke, read by both lookups. The corpus answer takes
@@ -165,6 +166,22 @@ window.vaultOnboarding = function vaultOnboarding() {
       if (this.secretBytes) this.secretBytes.fill(0);
     },
 
+    // The recovery key lives in this page and nowhere else - not on the
+    // server, not in storage - until the box is ticked. The browser's own
+    // prompt is the only thing that reaches a reload or a closed tab, which
+    // is more than any amount of markup can do.
+    guardAgainstLeaving() {
+      if (this.leaveGuard) return;
+      this.leaveGuard = function (event) {
+        if (!this.secretText || this.acknowledged) return;
+        event.preventDefault();
+        // Chrome still wants the legacy property set; the string it carries
+        // is ignored, every browser shows its own wording.
+        event.returnValue = '';
+      }.bind(this);
+      window.addEventListener('beforeunload', this.leaveGuard);
+    },
+
     groupedSecret() {
       return (this.secretText.match(/.{1,4}/g) || []).join('-');
     },
@@ -188,6 +205,7 @@ window.vaultOnboarding = function vaultOnboarding() {
         var account = await started.json();
         this.accountUuid = account.account_uuid;
 
+        this.guardAgainstLeaving();
         // Minted once, kept across retries. init is idempotent while the
         // identity is pending, so a second attempt derives the same keys - but
         // only from the same secret. Drawing a fresh one would put a secret on

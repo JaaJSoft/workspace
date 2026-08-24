@@ -21,306 +21,339 @@
 {% block main_layout_class %}{% endblock %}
 
 {% block content %}
-  {% comment %}
-    What the dialog sits on. It is the vault the user is on their way to, and
-    it stays behind the whole flow rather than being replaced by it.
-  {% endcomment %}
-  <div class="mx-auto max-w-2xl py-10 text-center">
-    <h1 class="text-2xl font-semibold">Set up your vault</h1>
-    {% comment %}
-      Read only when the dialog failed to open - any of the three scripts
-      below missing leaves x-init unevaluated. Saying the feature does not
-      exist, which is what this page used to say, sends the user away from a
-      page that is merely broken.
-    {% endcomment %}
-    <p class="text-base-content/60 mt-2">The setup screen should have opened here. Reload the page to try again.</p>
-  </div>
-
   {% url 'vault_ui:index' as vault_url %}
-  {% comment %}
-    A native dialog, for showModal's focus trap and background inertness, with
-    every way out taken away: cancel is prevented so Escape does nothing, and
-    there is no close control and no backdrop form. Past the second step the
-    recovery key exists nowhere but this screen, and each of those exits would
-    lose it for good.
-  {% endcomment %}
-  {% comment %}
-    The welcome tour opens itself on a brand-new account, 400 ms after
-    load, and lands in front of this one - swallowing the clicks meant for
-    it. Which is why the opening reads the server flag rather than the
-    tour's current state: at this point it has not opened yet. The tour
-    introduces the application, so it goes first and this waits for it.
-  {% endcomment %}
-  <dialog
-    id="vault-onboarding-dialog"
-    class="modal"
-    aria-labelledby="vault-onboarding-title"
+  <div
+    class="mx-auto max-w-4xl w-full py-8"
     x-data="vaultOnboarding()"
-    {% if ONBOARDING_PENDING %} x-init="document.getElementById('onboarding-dialog').addEventListener('close', () => $el.showModal(), { once: true })" {% else %} x-init="$el.showModal()" {% endif %}
-    @cancel="if (secretText) $event.preventDefault()"
     data-email="{{ request.user.email }}"
   >
-    <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col">
-      <div
-        class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0"
-      >
-        <div class="rounded-lg bg-primary/10 p-2">
-          {% comment %}
-            The toggle sits on the span, never on the i: Lucide swaps the i
-            for an svg and copies its inline style across, so anything Alpine
-            binds to the i is frozen at whatever the first render decided.
-          {% endcomment %}
-          <span x-show="step === 1">
-            <i data-lucide="shield-alert" class="w-5 h-5 text-primary"></i>
-          </span>
-          <span x-show="step === 2" x-cloak>
-            <i data-lucide="key-round" class="w-5 h-5 text-primary"></i>
-          </span>
-          <span x-show="step === 3" x-cloak>
-            <i data-lucide="shield-check" class="w-5 h-5 text-primary"></i>
-          </span>
-        </div>
-        <div class="flex-1">
-          <h2 id="vault-onboarding-title" class="font-bold text-lg">
-            <span x-show="step === 1">What we cannot do</span>
-            <span x-show="step === 2" x-cloak>Vault password</span>
-            <span x-show="step === 3" x-cloak>Your recovery key</span>
-          </h2>
-          <p class="text-xs text-base-content/50">
-            Step <span x-text="step"></span> of 3 &middot; Setting up your vault
-          </p>
-        </div>
-      </div>
+    <h1 class="text-2xl font-semibold">Set up your vault</h1>
+    <p class="text-sm text-base-content/60 mt-1 mb-6">
+      Three steps. The last one hands you a key we cannot hand you twice.
+    </p>
 
-      <div class="h-1 bg-base-200 shrink-0" aria-hidden="true">
-        <div
-          class="h-full bg-primary transition-all duration-300 motion-reduce:transition-none"
-          :style="`width: ${(step / 3) * 100}%`"
-        ></div>
-      </div>
-
-      {% comment %}
-        On every step, not only the first. The whole risk of this flow is that
-        someone clicks past the screen that explains there is no way back.
-      {% endcomment %}
-      <p
-        class="flex items-start gap-2 px-5 py-2 text-xs text-base-content/60 bg-base-200 border-b border-base-300 shrink-0"
-      >
-        <i data-lucide="lock" class="w-4 h-4 shrink-0 text-primary"></i>
-        <span>
-          Encrypted on this device. There is no password reset: lose both your
-          password and your recovery key and the vault is gone.
-        </span>
-      </p>
-
-      <div class="flex-1 overflow-y-auto overscroll-contain px-6 py-6">
-        <inline-alert type="error" x-show="error" x-cloak>
-        <span x-text="error"></span>
-        </inline-alert>
-
-        {# Step 1 - what the server cannot read, and cannot recover #}
-        <template x-if="step === 1">
-          <section class="space-y-4">
-            <p>
-              Your vault is encrypted on this device. The server stores what it
-              cannot open: it never sees your vault password, and it cannot
-              reset it for you.
-            </p>
-            <p>
-              There is no "forgot password" here, and that is deliberate. If you
-              lose both your vault password and the recovery key we are about to
-              give you, your vault is gone - for you, for us, for everyone.
-            </p>
-          </section>
-        </template>
-
-        {# Step 2 - the vault password, behind the floor #}
-        <template x-if="step === 2">
-          <section
-            class="space-y-4"
-            x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
-          >
-            <p>
-              Pick a password for your vault. It can be the same one you use to
-              log in - it never leaves this browser.
-            </p>
-            <label class="form-control w-full">
-              <span class="label-text">Vault password</span>
-              {% comment %}
-                On input, not change: the corpus check gates the step, and
-                hanging it off change would leave the button disabled for anyone
-                who never blurs the field. One call, because both lookups have
-                to read the same generation token to discard a stale answer.
-              {% endcomment %}
-              <input
-                type="password"
-                class="input input-bordered w-full"
-                autocomplete="new-password"
-                data-step-focus
-                x-model="password"
-                @input="passwordEdited()"
-                @input.debounce.400ms="passwordChanged()"
-                @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
-              />
-            </label>
-            <label class="form-control w-full">
-              <span class="label-text">Confirm it</span>
-              <input
-                type="password"
-                class="input input-bordered w-full"
-                autocomplete="new-password"
-                x-model="confirmation"
-                @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
-              />
-            </label>
-
-            {% comment %}
-              The live region is the checklist, not the panel around it: every
-              debounce flips these four lines, and announcing the whole step -
-              both field labels included - on each of them talks over itself.
-            {% endcomment %}
-            <ul class="text-sm space-y-1" aria-live="polite">
-              <li
-                :class="passwordLongEnough() ? 'text-success' : 'text-base-content/60'"
-              >
-                At least 12 characters
-              </li>
-              <li
-                :class="passwordStrongEnough() ? 'text-success' : 'text-base-content/60'"
-              >
-                Strong enough to resist guessing
-                <span x-show="feedback" x-text="'- ' + feedback" x-cloak></span>
-              </li>
-              <li :class="passwordsMatch() ? 'text-success' : 'text-base-content/60'">Both fields match</li>
-              <li
-                :class="breachStatus === 'clean' || breachStatus === 'unavailable'
-                  ? 'text-success' : 'text-base-content/60'"
-              >
-                <span x-show="breachStatus !== 'checking'">Checked against known breaches</span>
-                <span x-show="breachStatus === 'checking'" x-cloak>Checking against known breaches...</span>
-              </li>
-            </ul>
-
-            <inline-alert type="error" x-show="breachStatus === 'found'" x-cloak>
-            This password appears in a public breach corpus. Pick another one.
-            </inline-alert>
-            <inline-alert type="warning" x-show="breachStatus === 'unavailable'" x-cloak>
-            We could not reach the breach corpus, so this password was not
-            checked against it. You can continue.
-            </inline-alert>
-          </section>
-        </template>
-
-        {# Step 3 - the emergency kit, and the box that gates the end #}
-        <template x-if="step === 3">
-          <section
-            class="space-y-4"
-            x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
-          >
-            <p>
-              Write it down or keep the PDF somewhere safe and offline. Together
-              with your vault password, it is the only way into your vault. We
-              do not have a copy.
-            </p>
-            {% comment %}
-              The key takes the focus when the step opens, so a screen reader
-              lands on the one thing this screen exists to hand over.
-            {% endcomment %}
-            <pre
-              class="p-4 rounded-lg bg-base-200 font-mono text-sm break-all"
-              data-step-focus
-              tabindex="-1"
-              x-text="groupedSecret()"
-            ></pre>
-            <button type="button" class="btn btn-outline btn-sm" @click="downloadKit()">Download the emergency kit (PDF)</button>
-            <label class="label cursor-pointer justify-start gap-3">
-              <input
-                type="checkbox"
-                id="recovery-key-acknowledged"
-                class="checkbox"
-                x-model="acknowledged"
-              />
-              <span class="label-text">
-                I have saved my recovery key. I understand nobody can recover my
-                vault without it.
-              </span>
-            </label>
-          </section>
-        </template>
-      </div>
-
-      <div
-        class="flex items-center gap-2 px-5 py-4 border-t border-base-300 shrink-0"
-      >
+    <div
+      class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden"
+    >
+      <div class="flex flex-col md:flex-row">
         {% comment %}
-          Three slots of equal weight, not justify-between: what flanks the dots
-          changes with the step, and they have to stay put.
+          The rail carries the progress on its own, which is why there is no bar
+          and no dots anywhere else. It also keeps the third step in view from
+          the start: knowing a key is coming is what makes someone stop and find
+          something to write on.
         {% endcomment %}
-        <div class="flex-1 flex justify-start">
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            x-show="step === 2"
-            x-cloak
-            :disabled="busy"
-            @click="step = 1"
-          >
-            <i data-lucide="chevron-left" class="w-4 h-4"></i>
-            Back
-          </button>
-        </div>
+        <aside
+          class="md:w-72 shrink-0 bg-base-200/40 border-b md:border-b-0 md:border-r border-base-300 p-5"
+        >
+          <ol>
+            <li class="flex gap-3">
+              <div class="flex flex-col items-center">
+                <span
+                  class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                  :class="step === 1 ? 'bg-primary text-primary-content' : 'bg-success/20 text-success'"
+                >
+                  {% comment %}
+                    Two icons behind x-show rather than one bound data-lucide:
+                    Lucide swaps the i element for an svg and copies its inline
+                    style across, so a binding on the i is frozen at whatever
+                    the first render decided.
+                  {% endcomment %}
+                  <span x-show="step === 1">
+                    <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                  </span>
+                  <span x-show="step > 1" x-cloak>
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                  </span>
+                </span>
+                <span class="w-px flex-1 bg-base-300 my-1"></span>
+              </div>
+              <div class="pb-5">
+                <p class="text-sm font-medium">What we cannot do</p>
+                <p class="text-xs text-base-content/50">The server never sees your password</p>
+              </div>
+            </li>
 
-        <div class="flex gap-2" aria-hidden="true">
-          <template x-for="i in 3" :key="i">
-            <span
-              class="w-2 h-2 rounded-full transition-colors motion-reduce:transition-none"
-              :class="i <= step ? 'bg-primary' : 'bg-base-300'"
-            ></span>
-          </template>
-        </div>
+            <li class="flex gap-3">
+              <div class="flex flex-col items-center">
+                <span
+                  class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                  :class="step === 2 ? 'bg-primary text-primary-content' : step > 2 ? 'bg-success/20 text-success' : 'bg-base-200 text-base-content/40'"
+                >
+                  <span x-show="step <= 2">
+                    <i data-lucide="key-round" class="w-4 h-4"></i>
+                  </span>
+                  <span x-show="step > 2" x-cloak>
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                  </span>
+                </span>
+                <span class="w-px flex-1 bg-base-300 my-1"></span>
+              </div>
+              <div class="pb-5">
+                <p
+                  class="text-sm font-medium"
+                  :class="step < 2 && 'text-base-content/40'"
+                >
+                  Vault password
+                </p>
+                <p class="text-xs text-base-content/50">Twelve characters, checked against breaches</p>
+              </div>
+            </li>
 
-        <div class="flex-1 flex justify-end">
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            x-show="step === 1"
-            @click="step = 2"
-          >
-            I understand
-            <i data-lucide="chevron-right" class="w-4 h-4"></i>
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            x-show="step === 2"
-            x-cloak
-            :disabled="!passwordAcceptable() || busy"
-            @click="generateAndSeal()"
-          >
-            <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
-            Create my vault
-          </button>
+            <li class="flex gap-3">
+              <span
+                class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                :class="step === 3 ? 'bg-primary text-primary-content' : 'bg-base-200 text-base-content/40'"
+              >
+                <i data-lucide="shield-check" class="w-4 h-4"></i>
+              </span>
+              <div>
+                <p
+                  class="text-sm font-medium"
+                  :class="step < 3 && 'text-base-content/40'"
+                >
+                  Emergency kit
+                </p>
+                <p class="text-xs text-base-content/50">Your recovery key, shown once</p>
+              </div>
+            </li>
+          </ol>
+
           {% comment %}
-          No href until the box is ticked: btn-disabled only sets
-          pointer-events, which leaves the link in the tab order and Enter
-          following it - and this is the step the page calls impossible to skip.
+            In the rail, so it is on screen at every step rather than on the
+            first alone - the first being the one people click past.
           {% endcomment %}
-          <a
-            class="btn btn-primary btn-sm"
-            x-show="step === 3"
-            x-cloak
-            :class="!canFinish() && 'btn-disabled'"
-            :href="canFinish() ? '{{ vault_url }}' : null"
-            :tabindex="canFinish() ? null : -1"
-            :aria-disabled="!canFinish()"
+          <p
+            class="flex items-start gap-2 mt-5 p-3 rounded-lg bg-base-100 border border-base-300 text-xs text-base-content/60"
           >
-            Open my vault
-            <i data-lucide="check" class="w-4 h-4"></i>
-          </a>
-        </div>
+            <i data-lucide="lock" class="w-4 h-4 shrink-0 text-primary"></i>
+            <span>
+              Encrypted on this device. There is no password reset: lose both
+              your password and your recovery key and the vault is gone.
+            </span>
+          </p>
+        </aside>
+
+        <section class="flex-1 min-w-0 flex flex-col">
+          <div class="flex items-center gap-3 px-6 py-4 border-b border-base-300">
+            <div class="rounded-lg bg-primary/10 p-2">
+              <span x-show="step === 1">
+                <i data-lucide="shield-alert" class="w-5 h-5 text-primary"></i>
+              </span>
+              <span x-show="step === 2" x-cloak>
+                <i data-lucide="key-round" class="w-5 h-5 text-primary"></i>
+              </span>
+              <span x-show="step === 3" x-cloak>
+                <i data-lucide="shield-check" class="w-5 h-5 text-primary"></i>
+              </span>
+            </div>
+            <h2 class="font-bold text-lg flex-1">
+              <span x-show="step === 1">What we cannot do</span>
+              <span x-show="step === 2" x-cloak>Vault password</span>
+              <span x-show="step === 3" x-cloak>Your recovery key</span>
+            </h2>
+            <span class="text-xs text-base-content/50 shrink-0">
+              Step <span x-text="step"></span> of 3
+            </span>
+          </div>
+
+          <div class="px-6 py-6 flex-1">
+            <inline-alert type="error" x-show="error" x-cloak>
+            <span x-text="error"></span>
+            </inline-alert>
+
+            {# Step 1 - what the server cannot read, and cannot recover #}
+            <template x-if="step === 1">
+              <section class="space-y-4">
+                <p>
+                  Your vault is encrypted on this device. The server stores what
+                  it cannot open: it never sees your vault password, and it
+                  cannot reset it for you.
+                </p>
+                <p>
+                  There is no "forgot password" here, and that is deliberate. If
+                  you lose both your vault password and the recovery key we are
+                  about to give you, your vault is gone - for you, for us, for
+                  everyone.
+                </p>
+              </section>
+            </template>
+
+            {# Step 2 - the vault password, behind the floor #}
+            <template x-if="step === 2">
+              <section
+                class="space-y-4"
+                x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
+              >
+                <p>
+                  Pick a password for your vault. It can be the same one you use
+                  to log in - it never leaves this browser.
+                </p>
+                <label class="form-control w-full">
+                  <span class="label-text">Vault password</span>
+                  {% comment %}
+                    On input, not change: the corpus check gates the step, and
+                    hanging it off change would leave the button disabled for
+                    anyone who never blurs the field. One call, because both
+                    lookups have to read the same generation token to discard a
+                    stale answer.
+                  {% endcomment %}
+                  <input
+                    type="password"
+                    class="input input-bordered w-full"
+                    autocomplete="new-password"
+                    data-step-focus
+                    x-model="password"
+                    @input="passwordEdited()"
+                    @input.debounce.400ms="passwordChanged()"
+                    @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
+                  />
+                </label>
+                <label class="form-control w-full">
+                  <span class="label-text">Confirm it</span>
+                  <input
+                    type="password"
+                    class="input input-bordered w-full"
+                    autocomplete="new-password"
+                    x-model="confirmation"
+                    @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
+                  />
+                </label>
+
+                {% comment %}
+                  The live region is the checklist, not the panel around it:
+                  every debounce flips these four lines, and announcing the whole
+                  step - both field labels included - on each of them talks over
+                  itself.
+                {% endcomment %}
+                <ul class="text-sm space-y-1" aria-live="polite">
+                  <li
+                    :class="passwordLongEnough() ? 'text-success' : 'text-base-content/60'"
+                  >
+                    At least 12 characters
+                  </li>
+                  <li
+                    :class="passwordStrongEnough() ? 'text-success' : 'text-base-content/60'"
+                  >
+                    Strong enough to resist guessing
+                    <span x-show="feedback" x-text="'- ' + feedback" x-cloak></span>
+                  </li>
+                  <li :class="passwordsMatch() ? 'text-success' : 'text-base-content/60'">Both fields match</li>
+                  <li
+                    :class="breachStatus === 'clean' || breachStatus === 'unavailable'
+                      ? 'text-success' : 'text-base-content/60'"
+                  >
+                    <span x-show="breachStatus !== 'checking'">Checked against known breaches</span>
+                    <span x-show="breachStatus === 'checking'" x-cloak>Checking against known breaches...</span>
+                  </li>
+                </ul>
+
+                <inline-alert type="error" x-show="breachStatus === 'found'" x-cloak>
+                This password appears in a public breach corpus. Pick another one.
+                </inline-alert>
+                <inline-alert type="warning" x-show="breachStatus === 'unavailable'" x-cloak>
+                We could not reach the breach corpus, so this password was not
+                checked against it. You can continue.
+                </inline-alert>
+              </section>
+            </template>
+
+            {# Step 3 - the emergency kit, and the box that gates the end #}
+            <template x-if="step === 3">
+              <section
+                class="space-y-4"
+                x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
+              >
+                <p>
+                  Write it down or keep the PDF somewhere safe and offline.
+                  Together with your vault password, it is the only way into your
+                  vault. We do not have a copy.
+                </p>
+                {% comment %}
+                  The key takes the focus when the step opens, so a screen reader
+                  lands on the one thing this screen exists to hand over.
+                {% endcomment %}
+                <pre
+                  class="p-4 rounded-lg bg-base-200 font-mono text-sm break-all"
+                  data-step-focus
+                  tabindex="-1"
+                  x-text="groupedSecret()"
+                ></pre>
+                <button type="button" class="btn btn-outline btn-sm" @click="downloadKit()">Download the emergency kit (PDF)</button>
+                <label class="label cursor-pointer justify-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="recovery-key-acknowledged"
+                    class="checkbox"
+                    x-model="acknowledged"
+                  />
+                  <span class="label-text">
+                    I have saved my recovery key. I understand nobody can recover
+                    my vault without it.
+                  </span>
+                </label>
+              </section>
+            </template>
+          </div>
+
+          <div
+            class="flex items-center justify-between gap-2 px-6 py-4 border-t border-base-300"
+          >
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              x-show="step === 2"
+              x-cloak
+              :disabled="busy"
+              @click="step = 1"
+            >
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              Back
+            </button>
+            <span x-show="step !== 2"></span>
+
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              x-show="step === 1"
+              @click="step = 2"
+            >
+              I understand
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              x-show="step === 2"
+              x-cloak
+              :disabled="!passwordAcceptable() || busy"
+              @click="generateAndSeal()"
+            >
+              <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
+              Create my vault
+            </button>
+            {% comment %}
+              No href until the box is ticked: btn-disabled only sets
+              pointer-events, which leaves the link in the tab order and Enter
+              following it - and this is the step the page calls impossible to
+              skip.
+            {% endcomment %}
+            <a
+              class="btn btn-primary btn-sm"
+              x-show="step === 3"
+              x-cloak
+              :class="!canFinish() && 'btn-disabled'"
+              :href="canFinish() ? '{{ vault_url }}' : null"
+              :tabindex="canFinish() ? null : -1"
+              :aria-disabled="!canFinish()"
+            >
+              Open my vault
+              <i data-lucide="check" class="w-4 h-4"></i>
+            </a>
+          </div>
+        </section>
       </div>
     </div>
-  </dialog>
+  </div>
 {% endblock %}
 
 {% block extra_scripts %}

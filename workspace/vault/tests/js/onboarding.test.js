@@ -14,6 +14,7 @@ function component(extra = {}) {
     getCSRFToken: () => 'test-csrf-token',
     fetch: async () => ({ ok: true, status: 201, json: async () => ({}) }),
     setTimeout: (fn) => fn(),
+    addEventListener: () => {},
     ...extra,
   });
   return ctx.vaultOnboarding();
@@ -477,4 +478,38 @@ test('the kit download outlives the click that starts it', () => {
   app.downloadKit();
   // 'revoke' only ever after 'deferred': never in the task that clicked.
   assert.deepEqual(events, ['append', 'click', 'remove', 'deferred', 'revoke']);
+});
+
+test('leaving the page is guarded until the key is acknowledged', async () => {
+  // The key is on this page and nowhere else - not on the server, not in
+  // storage. A reload or a closed tab takes it, and only the browser's own
+  // prompt reaches those.
+  const listeners = {};
+  const { app } = sealing({
+    responses: {
+      '/api/v1/vault/account/init': INIT_OK,
+      '/api/v1/vault/account/finalize': { ok: true, status: 201 },
+    },
+    addEventListener: (type, fn) => {
+      listeners[type] = fn;
+    },
+  });
+
+  assert.equal(listeners.beforeunload, undefined, 'nothing to lose yet');
+  await app.generateAndSeal();
+  assert.equal(typeof listeners.beforeunload, 'function');
+
+  const prevented = () => {
+    let stopped = false;
+    listeners.beforeunload({
+      preventDefault: () => {
+        stopped = true;
+      },
+    });
+    return stopped;
+  };
+  assert.equal(prevented(), true, 'the key is on screen and unacknowledged');
+
+  app.acknowledged = true;
+  assert.equal(prevented(), false, 'the user says they have saved it');
 });

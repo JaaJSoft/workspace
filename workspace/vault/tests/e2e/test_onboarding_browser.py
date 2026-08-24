@@ -70,7 +70,10 @@ class OnboardingWalkTests(PlaywrightTestCase):
             "button:has-text('Create my vault'):not([disabled])", timeout=15000
         )
         self.page.click("button:has-text('Create my vault')")
-        self.page.wait_for_selector("text=Your recovery key", timeout=60000)
+        # The acknowledgement box, not the heading: the rail names every step
+        # from the start, so "Your recovery key" is on screen well before the
+        # step that shows one.
+        self.page.wait_for_selector("#recovery-key-acknowledged", timeout=60000)
 
     def test_a_user_without_an_identity_lands_on_onboarding(self):
         self.page.goto(f"{self.live_server_url}/vault")
@@ -131,41 +134,6 @@ class OnboardingWalkTests(PlaywrightTestCase):
         # excludes must never appear.
         for confusable in ("I", "L", "O", "U"):
             self.assertNotIn(confusable, body)
-
-    def test_the_way_out_closes_only_once_the_key_exists(self):
-        """The lock belongs to the recovery key, not to the flow. Before the
-        seal nothing is at stake and trapping the user would be gratuitous;
-        after it, the key lives on this screen alone and Escape would take it
-        with no way to ask for it again."""
-        dialog = "#vault-onboarding-dialog"
-        self._serve_corpus()
-        self.page.goto(f"{self.live_server_url}/vault")
-        self.page.wait_for_url("**/vault/onboarding")
-        self.page.wait_for_selector(f"{dialog}[open]")
-
-        # No control offers to close it either way: the exits a dialog has and
-        # a page does not are the ones this flow cannot afford.
-        self.assertEqual(self.page.locator(f"{dialog} [aria-label='Close']").count(), 0)
-        self.assertEqual(
-            self.page.locator(f"{dialog} form[method='dialog']").count(), 0
-        )
-
-        self.page.keyboard.press("Escape")
-        self.page.wait_for_timeout(200)
-        self.assertFalse(
-            self.page.evaluate(f"document.querySelector('{dialog}').open"),
-            "nothing is at stake yet, so the user may leave",
-        )
-
-        self.page.goto(f"{self.live_server_url}/vault/onboarding")
-        self._walk_to_the_password_step()
-        self._seal()
-        self.page.keyboard.press("Escape")
-        self.page.wait_for_timeout(200)
-        self.assertTrue(
-            self.page.evaluate(f"document.querySelector('{dialog}').open"),
-            "the recovery key is on screen and nowhere else",
-        )
 
     def test_each_step_hands_the_keyboard_somewhere(self):
         """A modal makes the page behind inert, so focus falling to the body

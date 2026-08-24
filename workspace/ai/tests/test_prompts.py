@@ -161,3 +161,6 @@ class MultiStepInstructionsTests(TestCase):
 
     def test_web_section_directs_reading_beyond_the_first_page(self):
         self.assertIn("read_webpage again", self.system)
+
+    def test_web_section_offers_the_query_for_a_long_page(self):
+        self.assertIn("optional query", self.system)

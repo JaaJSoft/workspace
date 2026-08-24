@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 
+from workspace.ai.services.reading import Extraction, Finding
 from workspace.ai.services.web import (
     MAX_LINKS,
     SEARCH_CATEGORIES,
@@ -17,6 +18,7 @@ from workspace.ai.services.web import (
 )
 from workspace.ai.tools import (
     WEB_SEARCH_MAX_RESULTS,
+    ReadWebpageParams,
     WebSearchParams,
     WebToolProvider,
 )
@@ -730,3 +732,214 @@ class FeedFetchTests(TestCase):
         )
 
         self.assertIn("Extracted prose", text)
+
+
+_ANSWER = (
+    "The API answers a 429 status once the cap is exceeded, and names the "
+    "delay to wait in a Retry-After header."
+)
+
+
+def _manual_markdown() -> str:
+    """A reference page whose answer sits well past the first characters."""
+    return "\n\n".join(
+        [
+            "# Widget API reference",
+            "Everything the service exposes is documented on this single page.",
+            "## Authentication",
+            *(
+                f"Token note {i}: the credential is sent on every call, and the "
+                "paragraph explaining it runs on."
+                for i in range(20)
+            ),
+            "## Rate limiting",
+            _ANSWER,
+            "## Webhooks",
+            *(
+                f"Callback note {i}: the delivery contract spelled out at the "
+                "length documentation is written at."
+                for i in range(20)
+            ),
+        ]
+    )
+
+
+def _extracting(*findings):
+    """Stand in for the extraction model, reporting *findings* for every chunk."""
+    return lambda *a, **kw: (
+        Extraction(findings=[Finding(text=f) for f in findings], missing=""),
+        {},
+    )
+
+
+class QueryScopedFetchTests(TestCase):
+    """The query threaded from the tool down to each renderer."""
+
+    def _fetch_html(self, markdown, *, query="", says=(), max_chars=1600):
+        url = "https://example.com/manual"
+        with (
+            patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
+            patch("workspace.ai.services.web.trafilatura.extract") as mock_extract,
+            patch(
+                "workspace.ai.services.reading.call_llm_structured",
+                side_effect=_extracting(*says),
+            ),
+        ):
+            mock_client_cls.return_value = _client_returning(
+                _fake_response(text="<html/>", url=url)
+            )
+            mock_extract.return_value = markdown
+            return fetch_and_extract(url, max_chars=max_chars, query=query)
+
+    def test_query_returns_the_section_that_answers_it(self):
+        text = self._fetch_html(
+            _manual_markdown(), query="what happens at the cap?", says=(_ANSWER,)
+        )
+
+        self.assertIn(_ANSWER, text)
+        self.assertNotIn("Token note 0", text)
+
+    def test_scoped_read_still_names_its_source_and_its_links(self):
+        markdown = _manual_markdown() + (
+            "\n\n## See also\n\n[the rate limit policy](/policy) and "
+            "[the status page](https://status.example.com/)"
+        )
+
+        text = self._fetch_html(
+            markdown, query="what happens at the cap?", says=(_ANSWER,)
+        )
+
+        self.assertIn("Source: https://example.com/manual", text)
+        self.assertIn("- [the rate limit policy](https://example.com/policy)", text)
+        self.assertIn("- [the status page](https://status.example.com/)", text)
+
+    def test_the_outline_says_what_the_query_left_out(self):
+        text = self._fetch_html(
+            _manual_markdown(), query="what happens at the cap?", says=(_ANSWER,)
+        )
+
+        self.assertIn("## Page outline", text)
+        self.assertIn("- Webhooks", text)
+
+    def test_without_a_query_the_page_is_read_from_the_top(self):
+        text = self._fetch_html(_manual_markdown())
+
+        self.assertIn("Everything the service exposes", text)
+        self.assertIn("Token note 0", text)
+        self.assertNotIn("## Page outline", text)
+        self.assertIn("truncated at", text)
+
+    def test_without_a_query_the_result_is_what_it_was_before_the_feature(self):
+        with patch("workspace.ai.services.web.read_for_query") as mock_read:
+            text = self._fetch_html(_manual_markdown())
+
+        mock_read.assert_not_called()
+        self.assertEqual(text, self._fetch_html(_manual_markdown()))
+
+    def test_a_scoped_read_still_honours_the_budget(self):
+        text = self._fetch_html(
+            _manual_markdown(),
+            query="what happens at the cap?",
+            says=(_ANSWER,),
+            max_chars=900,
+        )
+
+        self.assertLessEqual(len(text), 900)
+
+    def _fetch_pdf(self, data, *, query="", says=(), max_chars=900):
+        resp = _fake_response(
+            url="https://example.com/doc.pdf", content_type="application/pdf"
+        )
+        resp.content = data
+        with (
+            patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
+            patch(
+                "workspace.ai.services.reading.call_llm_structured",
+                side_effect=_extracting(*says),
+            ),
+        ):
+            mock_client_cls.return_value = _client_returning(resp)
+            return fetch_and_extract(
+                "https://example.com/doc.pdf", max_chars=max_chars, query=query
+            )
+
+    def test_pdf_is_read_for_the_query_too(self):
+        answer = "The daemon listens on port 8443 by default"
+        pages = [f"Filler page {i} about nothing in particular" for i in range(30)]
+        pages.insert(25, answer)
+
+        text = self._fetch_pdf(
+            make_pdf(pages), query="which port does it listen on?", says=(answer,)
+        )
+
+        self.assertIn("port 8443", text)
+        self.assertNotIn("Filler page 0 ", text)
+
+    def _fetch_feed(self, body, *, query="", says=(), max_chars=900):
+        with (
+            patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
+            patch(
+                "workspace.ai.services.reading.call_llm_structured",
+                side_effect=_extracting(*says),
+            ),
+        ):
+            mock_client_cls.return_value = _client_returning(
+                _fake_response(
+                    text=body,
+                    url="https://example.com/feed.xml",
+                    content_type="application/rss+xml",
+                )
+            )
+            return fetch_and_extract(
+                "https://example.com/feed.xml", max_chars=max_chars, query=query
+            )
+
+    def test_feed_is_read_for_the_query_too(self):
+        items = "".join(
+            f"<item><title>Gardening tips, part {i}</title>"
+            f"<link>/posts/{i}</link></item>"
+            for i in range(30)
+        )
+        rss = (
+            "<?xml version='1.0'?><rss version='2.0'><channel>"
+            "<title>The Blog</title>"
+            "<item><title>Mounting a share over WebDAV</title>"
+            "<link>/posts/webdav</link></item>" + items + "</channel></rss>"
+        )
+
+        text = self._fetch_feed(
+            rss,
+            query="has anything been written about network shares?",
+            says=(
+                "- [Mounting a share over WebDAV](https://example.com/posts/webdav)",
+            ),
+        )
+
+        self.assertIn("Mounting a share over WebDAV", text)
+        self.assertNotIn("Gardening tips, part 20]", text)
+
+
+class ReadWebpageToolTests(TestCase):
+    def _run(self, **kwargs):
+        provider = WebToolProvider()
+        return provider.read_webpage(ReadWebpageParams(**kwargs), None, None, None, {})
+
+    def test_the_query_reaches_the_service(self):
+        with patch(
+            "workspace.ai.services.web.fetch_and_extract", return_value="page"
+        ) as mock_fetch:
+            self._run(url=" https://example.com/manual ", query="  rate limit  ")
+
+        self.assertEqual(mock_fetch.call_args.args, ("https://example.com/manual",))
+        self.assertEqual(mock_fetch.call_args.kwargs, {"query": "rate limit"})
+
+    def test_omitting_the_query_reads_the_whole_page(self):
+        with patch(
+            "workspace.ai.services.web.fetch_and_extract", return_value="page"
+        ) as mock_fetch:
+            self._run(url="https://example.com/manual")
+
+        self.assertEqual(mock_fetch.call_args.kwargs, {"query": ""})
+
+    def test_a_blank_url_is_refused(self):
+        self.assertTrue(self._run(url="   ").startswith("Error:"))

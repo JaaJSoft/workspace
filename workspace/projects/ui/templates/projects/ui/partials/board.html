@@ -4,17 +4,6 @@
     <div class="flex flex-wrap items-center gap-3">
       {% url 'projects_ui:board' project.uuid as sprint_switcher_url %}
       {% include "projects/ui/partials/_sprint_switcher.html" with options=sprints selected=selected_sprint base_url=sprint_switcher_url empty_label="No active sprint" with_closed_toggle=has_closed_sprints %}
-      {% if role == 'admin' and writable %}
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm btn-square"
-          title="Manage sprints"
-          aria-label="Manage sprints"
-          @click="document.getElementById('sprints-dialog').showModal()"
-        >
-          <i data-lucide="settings-2" class="w-4 h-4"></i>
-        </button>
-      {% endif %}
       {% if selected_sprint %}
         <span
           class="text-sm text-base-content/60 hidden sm:flex items-center gap-2 min-w-0"
@@ -75,7 +64,7 @@
             <button
               type="button"
               class="btn btn-accent btn-sm"
-              @click="document.getElementById('sprints-dialog').showModal()"
+              @click="openSprints({ add: true })"
             >
               <i data-lucide="plus" class="w-4 h-4"></i>
               New sprint

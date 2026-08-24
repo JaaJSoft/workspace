@@ -992,6 +992,10 @@ function projectSprints(config) {
 
     // The prefills are suggestions only - the name is focused and
     // selected in the template so typing replaces it wholesale.
+    openAdd() {
+      if (!this.adding) this.toggleAdd();
+    },
+
     toggleAdd() {
       if (this.adding) {
         this.adding = false;

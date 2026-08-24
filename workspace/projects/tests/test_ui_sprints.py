@@ -1,5 +1,6 @@
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 
 from workspace.projects.models import Project, Sprint
 from workspace.projects.services.members import add_member
@@ -207,6 +208,28 @@ class SprintManagementUiTests(ScrumUiTestCase):
         response = self.client.get(self.board_url)
         self.assertNotContains(response, "sprints-dialog")
         self.assertNotContains(response, "Manage sprints")
+
+    def test_switcher_offers_sprint_creation_to_admins(self):
+        self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        self.client.force_login(self.admin)
+        for url in (self.board_url, f"/projects/{self.scrum.uuid}/backlog"):
+            response = self.client.get(url)
+            self.assertContains(response, "openSprints({ add: true })")
+            self.assertContains(response, "Manage sprints")
+
+    def test_switcher_hides_sprint_actions_from_members(self):
+        self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        self.client.force_login(self.member)
+        for url in (self.board_url, f"/projects/{self.scrum.uuid}/backlog"):
+            self.assertNotContains(self.client.get(url), "openSprints(")
+
+    def test_switcher_hides_sprint_actions_on_an_archived_project(self):
+        self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        self.scrum.archived_at = timezone.now()
+        self.scrum.save(update_fields=["archived_at"])
+        self.client.force_login(self.admin)
+        for url in (self.board_url, f"/projects/{self.scrum.uuid}/backlog"):
+            self.assertNotContains(self.client.get(url), "openSprints(")
 
     def test_kanban_has_no_sprints_dialog(self):
         self.client.force_login(self.admin)

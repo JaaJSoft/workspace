@@ -3,7 +3,11 @@ Sprint switcher dropdown, shared by the board (active sprint + closed
 history) and the backlog scope (pool entries + open sprints). The caller
 owns the option list and its order; entries link to base_url?sprint=<uuid>
 and swap project-content, so the selection lives in the URL and survives
-refreshes. Past five options the dropdown grows a client-side name search.
+refreshes. Past five options the dropdown grows a name search, and admins
+get the sprint actions (create, manage) in its footer.
+
+The panel is a flex column rather than a plain menu: the search and the
+footer must stay put while a long sprint history scrolls between them.
 
 Params:
   - options:           sprints to list, in display order (required)
@@ -44,89 +48,105 @@ Params:
     {% endif %}
     <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 opacity-60"></i>
   </button>
-  <ul
+  <div
     tabindex="0"
-    class="dropdown-content menu z-50 mt-1 w-64 max-h-80 flex-nowrap overflow-y-auto thin-scrollbar bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2 gap-1"
+    class="dropdown-content z-50 mt-1 w-64 max-h-96 flex flex-col gap-1 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
   >
     {% if options|length > 5 %}
-      {# Sticky: the search must survive scrolling through a long history. #}
-      <li class="sticky top-0 z-10 bg-base-100">
-        <label class="input input-bordered input-sm flex items-center gap-2 w-full">
-          <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
-          <input
-            type="search"
-            class="grow min-w-0"
-            placeholder="Search sprints"
-            x-model="sprintQuery"
-            @click.stop
-          />
-        </label>
-      </li>
+      <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+        <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
+        <input
+          type="search"
+          class="grow min-w-0"
+          placeholder="Search sprints"
+          x-model="sprintQuery"
+          @click.stop
+        />
+      </label>
     {% endif %}
-    {% if with_pool_entries %}
-      <li>
-        <a
-          href="{{ base_url }}"
-          x-target.push="project-content"
-          class="{% if not selected %}active{% endif %}"
-          @click="document.activeElement.blur()"
-        >
-          Whole backlog
-        </a>
-      </li>
-      <li>
-        <a
-          href="{{ base_url }}?sprint=none"
-          x-target.push="project-content"
-          class="{% if selected == 'none' %}active{% endif %}"
-          @click="document.activeElement.blur()"
-        >
-          Unplanned
-        </a>
-      </li>
-    {% endif %}
-    {% for s in options %}
-      {% comment %}A query searches the whole list, closed history included;
-      without one, non-selected closed sprints obey the toggle.{% endcomment %}
-      <li
-        {% if s.state == 'closed' and s.uuid != selected.uuid %} x-show="sprintQuery.trim() ? '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase()) : !hideClosed" {% else %} x-show="!sprintQuery.trim() || '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase())" {% endif %}
-      >
-        <a
-          href="{{ base_url }}?sprint={{ s.uuid }}"
-          x-target.push="project-content"
-          class="{% if selected.uuid == s.uuid %}active{% endif %}"
-          @click="document.activeElement.blur()"
-        >
-          <span class="truncate flex-1">{{ s.name }}</span>
-          {% if s.state == 'active' %}
-            <span class="badge badge-accent badge-sm">Active</span>
-          {% elif s.state == 'closed' %}
-            <span class="badge badge-ghost badge-sm">Closed</span>
-          {% else %}
-            <span class="badge badge-ghost badge-sm">Planned</span>
-          {% endif %}
-        </a>
-      </li>
-    {% empty %}
-      {% if not with_pool_entries %}
-        <li class="menu-title">No started sprint yet.</li>
+    <ul
+      class="menu w-full flex-nowrap min-h-0 overflow-y-auto thin-scrollbar p-0 gap-1"
+    >
+      {% if with_pool_entries %}
+        <li>
+          <a
+            href="{{ base_url }}"
+            x-target.push="project-content"
+            class="{% if not selected %}active{% endif %}"
+            @click="document.activeElement.blur()"
+          >
+            Whole backlog
+          </a>
+        </li>
+        <li>
+          <a
+            href="{{ base_url }}?sprint=none"
+            x-target.push="project-content"
+            class="{% if selected == 'none' %}active{% endif %}"
+            @click="document.activeElement.blur()"
+          >
+            Unplanned
+          </a>
+        </li>
       {% endif %}
-    {% endfor %}
-    {% if with_closed_toggle %}
-      {# Sticky: the toggle stays reachable once the unfolded history scrolls. #}
-      <li
-        class="sticky bottom-0 z-10 bg-base-100 border-t border-base-300 pt-1"
-      >
-        <label class="flex items-center justify-between gap-2 cursor-pointer">
-          <span class="text-sm">Hide closed sprints</span>
-          <input
-            type="checkbox"
-            class="toggle toggle-xs toggle-accent"
-            x-model="hideClosed"
-            @click.stop
-          />
-        </label>
-      </li>
+      {% for s in options %}
+        {% comment %}A query searches the whole list, closed history included;
+        without one, non-selected closed sprints obey the toggle.{% endcomment %}
+        <li
+          {% if s.state == 'closed' and s.uuid != selected.uuid %} x-show="sprintQuery.trim() ? '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase()) : !hideClosed" {% else %} x-show="!sprintQuery.trim() || '{{ s.name|lower|escapejs }}'.includes(sprintQuery.trim().toLowerCase())" {% endif %}
+        >
+          <a
+            href="{{ base_url }}?sprint={{ s.uuid }}"
+            x-target.push="project-content"
+            class="{% if selected.uuid == s.uuid %}active{% endif %}"
+            @click="document.activeElement.blur()"
+          >
+            <span class="truncate flex-1">{{ s.name }}</span>
+            {% if s.state == 'active' %}
+              <span class="badge badge-accent badge-sm">Active</span>
+            {% elif s.state == 'closed' %}
+              <span class="badge badge-ghost badge-sm">Closed</span>
+            {% else %}
+              <span class="badge badge-ghost badge-sm">Planned</span>
+            {% endif %}
+          </a>
+        </li>
+      {% empty %}
+        {% if not with_pool_entries %}
+          <li class="menu-title">No started sprint yet.</li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+    {% if with_closed_toggle or role == 'admin' and writable %}
+      <ul class="menu w-full p-0 gap-1 border-t border-base-300 pt-1">
+        {% if with_closed_toggle %}
+          <li>
+            <label class="flex items-center justify-between gap-2 cursor-pointer">
+              <span class="text-sm">Hide closed sprints</span>
+              <input
+                type="checkbox"
+                class="toggle toggle-xs toggle-accent"
+                x-model="hideClosed"
+                @click.stop
+              />
+            </label>
+          </li>
+        {% endif %}
+        {% if role == 'admin' and writable %}
+          <li>
+            <button type="button" @click="openSprints({ add: true })">
+              <i data-lucide="plus" class="w-4 h-4 text-accent"></i>
+              New sprint
+            </button>
+          </li>
+          <li>
+            <button type="button" @click="openSprints()">
+              <i data-lucide="settings-2" class="w-4 h-4 opacity-70"></i>
+              Manage sprints
+            </button>
+          </li>
+        {% endif %}
+      </ul>
     {% endif %}
-  </ul>
+  </div>
 </div>

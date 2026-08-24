@@ -8,17 +8,6 @@
     <div class="flex flex-wrap items-center gap-3">
       {% url 'projects_ui:backlog' project.uuid as sprint_switcher_url %}
       {% include "projects/ui/partials/_sprint_switcher.html" with options=planning_sprints selected=backlog_scope base_url=sprint_switcher_url empty_label="Whole backlog" with_pool_entries=True %}
-      {% if role == 'admin' and writable %}
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm btn-square"
-          title="Manage sprints"
-          aria-label="Manage sprints"
-          @click="document.getElementById('sprints-dialog').showModal()"
-        >
-          <i data-lucide="settings-2" class="w-4 h-4"></i>
-        </button>
-      {% endif %}
     </div>
   {% endif %}
   {# items-start keeps the actions aligned with the first filter row once it wraps on mobile. #}
@@ -67,7 +56,7 @@
                     </button>
                   </li>
                 {% empty %}
-                  <li class="menu-title">No open sprint - create one with Manage sprints.</li>
+                  <li class="menu-title">No open sprint - create one from the sprint menu.</li>
                 {% endfor %}
                 {% if planning_sprints %}
                   <li class="border-t border-base-300 pt-1">

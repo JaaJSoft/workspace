@@ -262,10 +262,15 @@
             <li
               class="{% if request.resolver_match.view_name == 'users_ui:profile' %}disabled{% endif %}"
             >
+              {% comment %}
+                No href on the entry for the page already open: an anchor
+                without one is not focusable and cannot be activated, by a
+                pointer, the keyboard or a screen reader alike.
+              {% endcomment %}
               <a
-                href="{% url 'users_ui:profile' %}"
-                class="gap-3 transition-colors {% if request.resolver_match.view_name == 'users_ui:profile' %}opacity-40 pointer-events-none{% else %}hover:bg-primary/10 hover:text-primary{% endif %}"
-                {% if request.resolver_match.view_name == 'users_ui:profile' %}tabindex="-1" aria-disabled="true"{% endif %}
+                {% if request.resolver_match.view_name != 'users_ui:profile' %}href="{% url 'users_ui:profile' %}"{% endif %}
+                class="gap-3 transition-colors {% if request.resolver_match.view_name == 'users_ui:profile' %}opacity-40{% else %}hover:bg-primary/10 hover:text-primary{% endif %}"
+                {% if request.resolver_match.view_name == 'users_ui:profile' %}aria-current="page"{% endif %}
               >
                 <i data-lucide="user" class="w-4 h-4"></i>
                 <span class="font-medium">Profile</span>
@@ -276,10 +281,15 @@
             <li
               class="{% if request.resolver_match.view_name == 'users_ui:settings' %}disabled{% endif %}"
             >
+              {% comment %}
+                No href on the entry for the page already open: an anchor
+                without one is not focusable and cannot be activated, by a
+                pointer, the keyboard or a screen reader alike.
+              {% endcomment %}
               <a
-                href="{% url 'users_ui:settings' %}"
-                class="gap-3 transition-colors {% if request.resolver_match.view_name == 'users_ui:settings' %}opacity-40 pointer-events-none{% else %}hover:bg-info/10 hover:text-info{% endif %}"
-                {% if request.resolver_match.view_name == 'users_ui:settings' %}tabindex="-1" aria-disabled="true"{% endif %}
+                {% if request.resolver_match.view_name != 'users_ui:settings' %}href="{% url 'users_ui:settings' %}"{% endif %}
+                class="gap-3 transition-colors {% if request.resolver_match.view_name == 'users_ui:settings' %}opacity-40{% else %}hover:bg-info/10 hover:text-info{% endif %}"
+                {% if request.resolver_match.view_name == 'users_ui:settings' %}aria-current="page"{% endif %}
               >
                 <i data-lucide="settings" class="w-4 h-4"></i>
                 <span class="font-medium">Settings</span>
@@ -291,9 +301,9 @@
               {% if module.show_on_dashboard is False and module.url %}
                 <li class="{% if request.path == module.url %}disabled{% endif %}">
                   <a
-                    href="{{ module.url }}"
-                    class="gap-3 transition-colors {% if request.path == module.url %}opacity-40 pointer-events-none{% else %}hover:bg-{{ module.color }}/10 hover:text-{{ module.color }}{% endif %}"
-                    {% if request.path == module.url %}tabindex="-1" aria-disabled="true"{% endif %}
+                    {% if request.path != module.url %}href="{{ module.url }}"{% endif %}
+                    class="gap-3 transition-colors {% if request.path == module.url %}opacity-40{% else %}hover:bg-{{ module.color }}/10 hover:text-{{ module.color }}{% endif %}"
+                    {% if request.path == module.url %}aria-current="page"{% endif %}
                   >
                     <i data-lucide="{{ module.icon }}" class="w-4 h-4"></i>
                     <span class="font-medium">{{ module.name }}</span>

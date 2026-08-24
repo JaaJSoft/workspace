@@ -87,8 +87,37 @@ def sanitize_messages_for_storage(messages):
     return sanitized
 
 
-def truncate_tool_result(text, max_len=2000):
-    """Truncate tool result strings for storage, stripping image data."""
+def truncate_middle(text, max_len, hint=""):
+    """Cap *text* at *max_len* characters by removing its middle.
+
+    A fetched page, a JSON payload or a task list carries its conclusion at
+    the end, so a head-only cut drops exactly what the text was read for.
+    *hint* names the call that produced the text, which leaves the residue a
+    pointer to something obtainable again instead of a dead end. The marker
+    counts against the budget: a cap that quietly returns more is not a cap.
+    """
+    if len(text) <= max_len:
+        return text
+    source = f" of {hint}" if hint else ""
+
+    def marker(omitted):
+        return (
+            f"\n\n[… {omitted} characters omitted from the middle{source}; "
+            "call the tool again to read the full result …]\n\n"
+        )
+
+    # len(text) is an upper bound on the omitted count, hence on the marker's
+    # width: sizing on it keeps the result within budget once the real (never
+    # longer) number is written in.
+    keep = max_len - len(marker(len(text)))
+    if keep <= 0:
+        return text[:max_len]
+    head, tail = keep - keep // 2, keep // 2
+    return text[:head] + marker(len(text) - keep) + text[len(text) - tail :]
+
+
+def truncate_tool_result(text, max_len, *, hint=""):
+    """Truncate a tool result string for storage, stripping image data."""
     if not text:
         return text
     try:
@@ -102,9 +131,7 @@ def truncate_tool_result(text, max_len=2000):
         # Not an image payload (most tool results are plain text JSON or raw
         # strings) - fall through to plain length-based truncation.
         pass
-    if len(text) > max_len:
-        return text[:max_len] + "… [truncated]"
-    return text
+    return truncate_middle(text, max_len, hint)
 
 
 def build_tool_content(tool_result: str):

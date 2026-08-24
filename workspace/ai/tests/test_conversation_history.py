@@ -272,3 +272,83 @@ class VisualWindowTests(TestCase):
         self.assertEqual([e for e in history if image_parts(e)], [])
         self.assertNotIn("[image:", str(history))
         mock_delay.assert_not_called()
+
+
+def tool_round(call_id, content, name="search_everything", query="alpha migration"):
+    return {
+        "assistant_content": "",
+        "tool_calls": [
+            {
+                "id": call_id,
+                "type": "function",
+                "function": {"name": name, "arguments": f'{{"query": "{query}"}}'},
+            }
+        ],
+        "results": [{"tool_call_id": call_id, "content": content}],
+    }
+
+
+def tool_contents(history):
+    return [e["content"] for e in history if e.get("role") == "tool"]
+
+
+@override_settings(
+    AI_TOOL_RESULT_STORE_MAX_CHARS=8000, AI_TOOL_RESULT_REPLAY_MIN_CHARS=500
+)
+class ReplayBudgetTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="fran", email="f@test.com", password="pw"
+        )
+        self.bot_user = User.objects.create_user(
+            username="budgetbot", email="bb@test.com", password="pw"
+        )
+        self.bot_profile = BotProfile.objects.create(user=self.bot_user)
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        self.page = "HEAD" + ("p" * 6000) + "TAIL"
+
+    def _bot_turn(self, content):
+        Message.objects.create(conversation=self.conv, author=self.user, body="?")
+        Message.objects.create(
+            conversation=self.conv,
+            author=self.bot_user,
+            body="here",
+            tool_data=[tool_round("c1", content)],
+        )
+
+    def _history(self):
+        history, _ = build_conversation_history(
+            self.conv.pk, self.bot_profile, self.user
+        )
+        return history
+
+    def test_latest_turn_is_replayed_whole(self):
+        self._bot_turn(self.page)
+        self.assertEqual(tool_contents(self._history()), [self.page])
+
+    def test_older_turns_are_trimmed_harder_the_further_back_they_are(self):
+        for _ in range(4):
+            self._bot_turn(self.page)
+        sizes = [len(c) for c in tool_contents(self._history())]
+        # Oldest first in the history, so each turn holds more than the one before.
+        self.assertEqual(sizes, sorted(sizes))
+        self.assertLess(sizes[0], sizes[-1])
+        self.assertEqual(sizes[-1], len(self.page))
+
+    def test_trimmed_result_keeps_its_ends_and_names_the_call(self):
+        self._bot_turn(self.page)
+        self._bot_turn("short")
+        old = tool_contents(self._history())[0]
+        self.assertLess(len(old), len(self.page))
+        self.assertTrue(old.startswith("HEAD"))
+        self.assertTrue(old.endswith("TAIL"))
+        self.assertIn("search_everything(alpha migration)", old)
+
+    def test_replay_never_decays_below_the_floor(self):
+        for _ in range(12):
+            self._bot_turn(self.page)
+        self.assertGreaterEqual(
+            min(len(c) for c in tool_contents(self._history())), 500
+        )

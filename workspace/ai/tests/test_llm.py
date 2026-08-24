@@ -12,6 +12,7 @@ from workspace.ai.services.llm import (
     call_llm_structured,
     extract_text_tool_calls,
     serialize_response,
+    truncate_middle,
     truncate_tool_result,
 )
 
@@ -351,6 +352,38 @@ class ImagePayloadTextTests(TestCase):
             {"type": "image", "data": "QUJD", "text": "Image edited: darker"}
         )
         self.assertEqual(
-            json.loads(truncate_tool_result(payload)),
+            json.loads(truncate_tool_result(payload, 2000)),
             {"type": "image", "data": "[stripped]", "text": "Image edited: darker"},
         )
+
+
+class TruncateMiddleTests(TestCase):
+    def test_short_text_is_untouched(self):
+        self.assertEqual(truncate_middle("hello", 100), "hello")
+
+    def test_head_and_tail_survive_the_cut(self):
+        text = "START" + ("x" * 5000) + "CONCLUSION"
+        out = truncate_middle(text, 500)
+        self.assertLessEqual(len(out), 500)
+        self.assertTrue(out.startswith("START"))
+        self.assertTrue(out.endswith("CONCLUSION"))
+        self.assertIn("characters omitted from the middle", out)
+
+    def test_hint_names_the_call_in_the_residue(self):
+        out = truncate_middle(
+            "y" * 5000, 500, hint="fetch_url(https://example.com/doc)"
+        )
+        self.assertIn("of fetch_url(https://example.com/doc)", out)
+        self.assertLessEqual(len(out), 500)
+
+    def test_budget_too_small_for_a_marker_falls_back_to_a_hard_cut(self):
+        out = truncate_middle("z" * 500, 20)
+        self.assertEqual(out, "z" * 20)
+
+    def test_tool_result_is_cut_in_the_middle_not_at_the_tail(self):
+        text = "HEAD" + ("m" * 9000) + "TAIL"
+        out = truncate_tool_result(text, 1000, hint="fetch_url(https://x.test)")
+        self.assertLessEqual(len(out), 1000)
+        self.assertTrue(out.startswith("HEAD"))
+        self.assertTrue(out.endswith("TAIL"))
+        self.assertIn("fetch_url(https://x.test)", out)

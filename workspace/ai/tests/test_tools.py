@@ -109,6 +109,43 @@ class BadgeDetailTests(TestCase):
         self.assertEqual(registry.get_detail("run", {}), "")
 
 
+class DescribeCallTests(TestCase):
+    def _registry(self):
+        registry = ToolRegistry()
+
+        class Provider(ToolProvider):
+            @tool(detail_key="url")
+            def read(self, args, user, bot, conversation_id, context):
+                """Read."""
+
+        registry.register_provider(Provider())
+        return registry
+
+    def test_identifying_argument_names_the_call(self):
+        registry = self._registry()
+
+        self.assertEqual(
+            registry.describe_call("read", '{"url": "https://a.test/doc"}'),
+            "read(https://a.test/doc)",
+        )
+
+    def test_unknown_tool_and_unparsable_arguments_degrade_to_the_name(self):
+        registry = self._registry()
+
+        self.assertEqual(registry.describe_call("read", "not json"), "read")
+        self.assertEqual(registry.describe_call("nope", '{"url": "x"}'), "nope")
+
+    def test_long_detail_is_cut_to_stay_one_short_line(self):
+        registry = self._registry()
+
+        described = registry.describe_call(
+            "read", json.dumps({"url": "https://a.test/" + "x" * 400})
+        )
+
+        self.assertLessEqual(len(described), 140)
+        self.assertTrue(described.endswith("…)"))
+
+
 class ExecuteToolCallTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="user", password="pass123")

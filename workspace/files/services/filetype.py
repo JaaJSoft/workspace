@@ -101,11 +101,14 @@ def _resolve_viewers(
     for viewer_cls in BaseViewer.__subclasses__():
         if not hasattr(viewer_cls, "handles_labels"):
             continue
+        if not viewer_cls.is_enabled():
+            continue
         if getattr(viewer_cls, "requires_extension", False) and not file_has_extension:
             continue
-        if label and label in viewer_cls.handles_labels:
+        claimed = viewer_cls.claimed_labels()
+        if label and label in claimed:
             tiers[0].append((viewer_cls.weight, viewer_cls))
-        elif ext_label and ext_label in viewer_cls.handles_labels:
+        elif ext_label and ext_label in claimed:
             tiers[1].append((viewer_cls.weight, viewer_cls))
         elif group and group in viewer_cls.handles_groups:
             tiers[2].append((viewer_cls.weight, viewer_cls))
@@ -222,7 +225,7 @@ def get_viewer_by_slug(slug: str):
     from workspace.files.ui.viewers import BaseViewer
 
     for viewer_cls in BaseViewer.__subclasses__():
-        if viewer_cls.slug == slug:
+        if viewer_cls.slug == slug and viewer_cls.is_enabled():
             return viewer_cls
     return None
 

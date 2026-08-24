@@ -11,6 +11,7 @@ from .views_share_links import (
 )
 from .views_tags import FileTagView, TagViewSet
 from .views_thumbnails import GenerateThumbnailsView
+from .views_wopi import WopiFileContentsView, WopiFileView
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r"files", FileViewSet, basename="file")
@@ -46,6 +47,14 @@ urlpatterns = [
         name="file-tag-remove",
     ),
     path("api/v1/files/graph", FileGraphView.as_view(), name="file-graph"),
+    # WOPI host endpoints - the path shape is fixed by the protocol: the
+    # editor appends /contents to the WOPISrc it was handed.
+    path("api/wopi/files/<uuid:uuid>", WopiFileView.as_view(), name="wopi-file"),
+    path(
+        "api/wopi/files/<uuid:uuid>/contents",
+        WopiFileContentsView.as_view(),
+        name="wopi-file-contents",
+    ),
     path("api/v1/", include(router.urls)),
     path(
         "api/v1/thumbnails/generate",

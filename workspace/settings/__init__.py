@@ -37,3 +37,4 @@ from .oidc import *  # noqa: F403
 from .security import *  # noqa: F403
 from .storage import *  # noqa: F403
 from .templates import *  # noqa: F403
+from .wopi import *  # noqa: F403

@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from workspace.files.services.filetype import (
     FileTypeInfo,
@@ -204,8 +204,69 @@ class ViewerResolutionTest(TestCase):
     def test_archive_gets_no_viewer(self):
         self.assertIsNone(get_viewer("zip"))
 
-    def test_document_gets_no_viewer(self):
-        self.assertIsNone(get_viewer("docx"))
+    def test_document_gets_no_viewer_without_a_wopi_editor(self):
+        with override_settings(WOPI_DISCOVERY_URL=""):
+            self.assertIsNone(get_viewer("docx"))
+
+    def test_office_labels_get_office_viewer_with_a_wopi_editor(self):
+        from workspace.files.ui.viewers import OfficeViewer
+
+        with override_settings(WOPI_DISCOVERY_URL="https://editor/hosting/discovery"):
+            for label in ("docx", "xlsx", "pptx", "odt", "ods", "odp"):
+                self.assertEqual(get_viewer(label), OfficeViewer, label)
+
+    def test_office_extension_upgrades_generic_label_with_a_wopi_editor(self):
+        from workspace.files.ui.viewers import OfficeViewer
+
+        with override_settings(WOPI_DISCOVERY_URL="https://editor/hosting/discovery"):
+            self.assertEqual(get_viewer("unknown", "report.docx"), OfficeViewer)
+
+    def test_office_pinned_slug_degrades_when_wopi_is_off(self):
+        from workspace.files.services.filetype import get_viewer_by_slug
+
+        with override_settings(WOPI_DISCOVERY_URL=""):
+            self.assertIsNone(get_viewer_by_slug("office"))
+
+    def test_editor_advertised_document_formats_are_claimed(self):
+        """Coverage widens to whatever the editor's discovery advertises,
+        as long as the KB groups the label as a document."""
+        from unittest.mock import patch
+
+        from workspace.files.ui.viewers import OfficeViewer, PDFViewer, TextViewer
+
+        advertised = frozenset({"docx", "dotx", "xlsb", "csv", "pdf"})
+        with (
+            override_settings(WOPI_DISCOVERY_URL="https://editor/hosting/discovery"),
+            patch(
+                "workspace.files.services.wopi.discovery.supported_extensions",
+                return_value=advertised,
+            ),
+        ):
+            # Document-group labels the static core doesn't know follow the
+            # editor's discovery.
+            self.assertEqual(get_viewer("dotx"), OfficeViewer)
+            self.assertEqual(get_viewer("xlsb"), OfficeViewer)
+            # Text-family labels stay with the code editor even when the
+            # editor advertises them.
+            self.assertEqual(get_viewer("csv"), TextViewer)
+            # PDF keeps the native viewer even when the editor advertises it.
+            self.assertEqual(get_viewer("pdf"), PDFViewer)
+
+    def test_only_the_core_formats_are_claimed_without_discovery(self):
+        from unittest.mock import patch
+
+        from workspace.files.ui.viewers import OfficeViewer
+
+        with (
+            override_settings(WOPI_DISCOVERY_URL="https://editor/hosting/discovery"),
+            patch(
+                "workspace.files.services.wopi.discovery.supported_extensions",
+                return_value=None,
+            ),
+        ):
+            self.assertEqual(get_viewer("docx"), OfficeViewer)
+            self.assertEqual(get_viewer("rtf"), OfficeViewer)
+            self.assertIsNone(get_viewer("dotx"))
 
     def test_css_gets_text_viewer(self):
         self.assertEqual(get_viewer("css"), TextViewer)

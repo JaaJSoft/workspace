@@ -268,11 +268,6 @@ def read_for_query(markdown: str, query: str, *, max_chars: int, part: int = 1) 
     chunks = chunks[(part - 1) * MAX_CHUNKS : part * MAX_CHUNKS]
     covered = "\n\n".join(chunks)
 
-    model = settings.AI_READING_MODEL or settings.AI_SMALL_MODEL or settings.AI_MODEL
-    if not model:
-        logger.warning("Reading a page for a query needs a model; none configured")
-        return covered
-
     unread = ""
     if total > 1:
         logger.info(
@@ -297,6 +292,11 @@ def read_for_query(markdown: str, query: str, *, max_chars: int, part: int = 1) 
             f"what follows was read from {len(covered)} of its {len(markdown)} "
             f"characters. The outline below covers all of it.{following}"
         )
+
+    model = settings.AI_READING_MODEL or settings.AI_SMALL_MODEL or settings.AI_MODEL
+    if not model:
+        logger.warning("Reading a page for a query needs a model; none configured")
+        return f"{unread}\n\n{covered}" if unread else covered
 
     with ThreadPoolExecutor(max_workers=min(len(chunks), MAX_PARALLEL_READS)) as pool:
         results = list(pool.map(lambda c: _extract(c, query, model), chunks))

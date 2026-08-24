@@ -180,7 +180,8 @@ MAX_LINKS = 25
 ANCHOR_MAX_CHARS = 80
 # Room a part keeps aside for the marker naming the part that follows it. Set
 # rather than measured, so a part covers the same characters whatever the
-# numbers written into that marker cost.
+# numbers written into that marker cost, and wide enough that a part carries
+# its marker without going over the budget it was asked for.
 PART_MARKER_CHARS = 140
 # Head of the document the tag-stripping fallback parses. Markup outruns text
 # by an order of magnitude, so this still yields far more than any max_chars.
@@ -294,7 +295,7 @@ def _paged(text: str, max_chars: int, part: int) -> str:
         check_part(part, 1)
         return text
 
-    size = max(max_chars - PART_MARKER_CHARS, max_chars // 2, 1)
+    size = max(max_chars - PART_MARKER_CHARS, 1)
     total = part_count(len(text), size)
     check_part(part, total)
 

@@ -18,7 +18,7 @@ def check_part(part: int, total: int) -> None:
     Returning the last part instead would have the reader take a stretch it
     has already read for the one that follows it.
     """
-    if part > total:
+    if not 1 <= part <= total:
         raise ValueError(
             f"This page has {total} part{'s' if total > 1 else ''} — "
             f"there is no part {part}."

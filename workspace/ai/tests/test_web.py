@@ -354,13 +354,13 @@ class FetchAndExtractTests(TestCase):
         mock_client_cls.return_value = _client_returning(_fake_response(text="<html/>"))
         mock_extract.return_value = "A" * 10000
 
-        text = fetch_and_extract("https://example.com/", max_chars=100)
+        text = fetch_and_extract("https://example.com/", max_chars=400)
 
         # The marker counts against the budget, so the caller never gets more
         # than the number of characters it asked for.
-        self.assertLessEqual(len(text), 100)
+        self.assertLessEqual(len(text), 400)
         self.assertIn("AAAA", text)
-        self.assertIn("the page continues", text)
+        self.assertIn("read this URL again with part=2", text)
 
     @patch("workspace.ai.services.web.trafilatura.extract")
     @patch("workspace.ai.services.web.httpx2.Client")
@@ -1027,6 +1027,14 @@ class PagedFetchTests(TestCase):
 
         self.assertIn("there is no part 999", str(ctx.exception))
 
+    def test_a_part_below_the_first_is_refused(self):
+        # Parts are numbered from one, and a slice taken from zero reads the
+        # page backwards.
+        with self.assertRaises(ValueError) as ctx:
+            self._fetch(self._page(), part=0)
+
+        self.assertIn("there is no part 0", str(ctx.exception))
+
     def test_a_page_that_fits_is_a_single_part(self):
         short = "short enough to be read in one go"
 
@@ -1034,6 +1042,17 @@ class PagedFetchTests(TestCase):
         with self.assertRaises(ValueError) as ctx:
             self._fetch(short, part=2)
         self.assertIn("This page has 1 part", str(ctx.exception))
+
+    def test_a_part_holds_to_a_budget_too_small_to_carry_a_marker(self):
+        # Nothing composes the JSON path afterwards, so the room the marker is
+        # given is the only thing keeping a part inside the budget.
+        resp = _fake_response(text="{}", content_type="application/json")
+        resp.json.return_value = {"body": "B" * 5000}
+        with patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls:
+            mock_client_cls.return_value = _client_returning(resp)
+            text = fetch_and_extract("https://example.com/api", max_chars=120)
+
+        self.assertLessEqual(len(text), 120)
 
     def test_json_is_paged_too(self):
         payload = {"body": "".join(f"{i:06d}" for i in range(400))}

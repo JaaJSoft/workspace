@@ -362,6 +362,7 @@ class ReadForQueryChunkingTests(SimpleTestCase):
         text, mock_call = self._read(page, part=2)
 
         mock_call.assert_not_called()
+        self.assertIn("Part 2 of 2", text)
         self.assertIn("Block 99:", text)
         self.assertNotIn("Block 0:", text)
 

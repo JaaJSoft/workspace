@@ -54,6 +54,9 @@ dependencies = [
     "trafilatura>=2.2.0",
     # PDF text extraction for the AI web fetcher (pure Python, no extra deps)
     "pypdf>=6.16.2",
+    # RSS/Atom parsing; also a trafilatura dependency, declared because the
+    # feed parser imports it directly
+    "lxml>=5.3.0",
     # streaming ZIP generation for bulk downloads (constant RAM)
     "zipstream-ng>=1.9.3",
     "faker>=40.36.0",

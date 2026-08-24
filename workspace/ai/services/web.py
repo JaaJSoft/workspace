@@ -176,6 +176,9 @@ MAX_PDF_BYTES = 10 * 1024 * 1024
 
 MAX_LINKS = 25
 ANCHOR_MAX_CHARS = 80
+# Head of the document the tag-stripping fallback parses. Markup outruns text
+# by an order of magnitude, so this still yields far more than any max_chars.
+FALLBACK_PARSE_CHARS = 200_000
 
 _FEED_CONTENT_TYPES = ("rss+xml", "atom+xml", "rdf+xml", "feed+json")
 
@@ -379,7 +382,11 @@ def _page_metadata(html: str, final_url: str) -> tuple[str, str, str]:
 
 
 def _strip_tags(html: str) -> str:
-    """Last-resort extraction: the page's text, tags removed."""
+    """Last-resort extraction: the page's text, tags removed.
+
+    Only the head of the document is parsed: past that point every remaining
+    character competes for a budget the visible text has already used up.
+    """
     from html.parser import HTMLParser
 
     class _TextExtractor(HTMLParser):
@@ -391,7 +398,7 @@ def _strip_tags(html: str) -> str:
             self.parts.append(data)
 
     parser = _TextExtractor()
-    parser.feed(html[:200_000])
+    parser.feed(html[:FALLBACK_PARSE_CHARS])
     return " ".join(parser.parts).strip()
 
 

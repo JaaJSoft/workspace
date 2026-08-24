@@ -37,6 +37,7 @@ class MailToolProvider(ToolProvider):
         badge_running_label="Reading email",
         detail_key="uuid",
         params=ReadEmailParams,
+        concurrent=True,
     )
     def read_email(self, args, user, bot, conversation_id, context):
         """Read the full content of an email by its UUID: subject, sender, recipients, date, and body text. \
@@ -90,6 +91,7 @@ or when the user asks to read, open, or see the details of a specific email."""
         badge_running_label="Searching emails",
         detail_key="query",
         params=SearchEmailsParams,
+        concurrent=True,
     )
     def search_emails(self, args, user, bot, conversation_id, context):
         """Search through your emails by subject, content, or sender. \

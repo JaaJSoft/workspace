@@ -29,6 +29,7 @@ class FilesToolProvider(ToolProvider):
         badge_running_label="Reading file",
         detail_key="uuid",
         params=ReadFileParams,
+        concurrent=True,
     )
     def read_file(self, args, user, bot, conversation_id, context):
         """Read the content of a file by its UUID. Supports text files (returns text) and images (returns the image). \
@@ -68,6 +69,7 @@ or when the user asks to read, open, view, or see a specific file."""
         badge_running_label="Searching files",
         detail_key="query",
         params=SearchFilesParams,
+        concurrent=True,
     )
     def search_files(self, args, user, bot, conversation_id, context):
         """Search through your files and folders by name. \

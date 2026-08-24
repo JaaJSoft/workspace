@@ -63,6 +63,7 @@ class CalendarToolProvider(ToolProvider):
         badge_running_label="Searching events",
         detail_key="query",
         params=SearchEventsParams,
+        concurrent=True,
     )
     def search_events(self, args, user, bot, conversation_id, context):
         """Search your calendar events by title, description or location, and \
@@ -120,6 +121,7 @@ scheduling polls."""
         badge_label="Checked availability",
         badge_running_label="Checking availability",
         params=CheckAvailabilityParams,
+        concurrent=True,
     )
     def check_availability(self, args, user, bot, conversation_id, context):
         """Check whether the user is available (free) during a given time range. \
@@ -274,6 +276,7 @@ Call this when the user asks if they are free, available, or have any events dur
         badge_icon="📅",
         badge_label="Listed calendars",
         badge_running_label="Listing calendars",
+        concurrent=True,
     )
     def list_calendars(self, args, user, bot, conversation_id, context):
         """List the user's own calendars (the ones you can add events to). \
@@ -292,6 +295,7 @@ or when the user asks which calendars they have."""
         badge_label="Checked agenda",
         badge_running_label="Checking agenda",
         params=ListUpcomingEventsParams,
+        concurrent=True,
     )
     def list_upcoming_events(self, args, user, bot, conversation_id, context):
         """List the user's upcoming events, including recurring occurrences. \

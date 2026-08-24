@@ -1,3 +1,4 @@
+import threading
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -560,3 +561,294 @@ class ResultTruncationTests(TestCase):
             self.assertTrue(text.startswith("HEAD"))
             self.assertTrue(text.endswith("TAIL"))
             self.assertIn("fetch_url(https://example.com/doc)", text)
+
+
+class _StubRegistry:
+    """Tool registry recording when each call starts and ends.
+
+    Handlers run for real (in a pool thread when the loop batches them), so
+    the recorded spans are the actual execution order rather than a
+    reconstruction of it.
+    """
+
+    def __init__(self, concurrent=(), handler=None):
+        self._concurrent = frozenset(concurrent)
+        self._handler = handler or (lambda tc: f"result {tc.id}")
+        self.spans = []
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self._lock = threading.Lock()
+
+    def get_definitions(self):
+        return []
+
+    def concurrent_names(self):
+        return self._concurrent
+
+    def describe_call(self, name, raw_arguments, max_len=120):
+        return name
+
+    def execute(self, tool_call, user, bot, conversation_id=None, context=None):
+        self._enter(tool_call.id)
+        try:
+            return self._handler(tool_call)
+        finally:
+            self._leave(tool_call.id)
+
+    def _enter(self, call_id):
+        with self._lock:
+            self.spans.append((call_id, "start"))
+            self.in_flight += 1
+            self.peak_in_flight = max(self.peak_in_flight, self.in_flight)
+
+    def _leave(self, call_id):
+        with self._lock:
+            self.in_flight -= 1
+            self.spans.append((call_id, "end"))
+
+
+@override_settings(AI_MAX_TOOL_ROUNDS=10, AI_MAX_IDENTICAL_TOOL_CALLS=3)
+class ConcurrentToolCallTests(TestCase):
+    """Read-only calls of one round share a dispatch; everything else doesn't."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="conc-user", email="cu@test.com", password="pw"
+        )
+        self.bot = User.objects.create_user(
+            username="conc-bot", email="cb@test.com", password="pw"
+        )
+
+    def _run(self, registry, calls, is_cancelled=None):
+        messages = [{"role": "user", "content": "go"}]
+        with patch("workspace.ai.services.tool_loop.call_llm") as mock_call_llm:
+            mock_call_llm.side_effect = [
+                _llm_result(calls),
+                _llm_result([], content="done"),
+            ]
+            with patch("workspace.ai.tool_registry.tool_registry", registry):
+                _, ctx, rounds, tool_data = run_tool_loop(
+                    messages=messages,
+                    model="x",
+                    human_user=self.user,
+                    bot_user=self.bot,
+                    conversation_id=None,
+                    is_cancelled=is_cancelled,
+                )
+        return ctx, rounds, tool_data, messages
+
+    def _tool_messages(self, messages):
+        return [
+            (m["tool_call_id"], m["content"]) for m in messages if m["role"] == "tool"
+        ]
+
+    def test_reads_in_one_round_run_at_the_same_time(self):
+        # Both calls must be in flight together for the barrier to release;
+        # a sequential loop breaks it and the run fails instead of passing
+        # slowly.
+        barrier = threading.Barrier(2, timeout=10)
+        registry = _StubRegistry(
+            concurrent={"read_webpage"},
+            handler=lambda tc: barrier.wait() and "" or "read",
+        )
+        calls = [
+            _tool_call(
+                "c1", name="read_webpage", arguments='{"url": "https://a.test"}'
+            ),
+            _tool_call(
+                "c2", name="read_webpage", arguments='{"url": "https://b.test"}'
+            ),
+        ]
+
+        self._run(registry, calls)
+
+        self.assertEqual(registry.peak_in_flight, 2)
+
+    def test_results_follow_call_order_not_completion_order(self):
+        finished_second = threading.Event()
+
+        def handler(tool_call):
+            if tool_call.id == "c1":
+                finished_second.wait(10)
+                return "first"
+            finished_second.set()
+            return "second"
+
+        registry = _StubRegistry(concurrent={"read_webpage"}, handler=handler)
+        calls = [
+            _tool_call(
+                "c1", name="read_webpage", arguments='{"url": "https://a.test"}'
+            ),
+            _tool_call(
+                "c2", name="read_webpage", arguments='{"url": "https://b.test"}'
+            ),
+        ]
+
+        _, rounds, tool_data, messages = self._run(registry, calls)
+
+        # c2 finished first, yet the model reads the results in the order it
+        # asked for them.
+        self.assertEqual(registry.spans[-2], ("c2", "end"))
+        self.assertEqual(
+            self._tool_messages(messages), [("c1", "first"), ("c2", "second")]
+        )
+        self.assertEqual(
+            [e["tool_call_id"] for e in rounds[0]["tool_executions"]], ["c1", "c2"]
+        )
+        self.assertEqual(
+            [r["tool_call_id"] for r in tool_data[0]["results"]], ["c1", "c2"]
+        )
+
+    def test_a_write_splits_the_round_and_keeps_its_place(self):
+        registry = _StubRegistry(concurrent={"read_webpage"})
+        calls = [
+            _tool_call(
+                "r1", name="read_webpage", arguments='{"url": "https://a.test"}'
+            ),
+            _tool_call("w1", name="send_user_message", arguments="{}"),
+            _tool_call(
+                "r2", name="read_webpage", arguments='{"url": "https://b.test"}'
+            ),
+        ]
+
+        _, _, _, messages = self._run(registry, calls)
+
+        self.assertEqual(
+            registry.spans,
+            [
+                ("r1", "start"),
+                ("r1", "end"),
+                ("w1", "start"),
+                ("w1", "end"),
+                ("r2", "start"),
+                ("r2", "end"),
+            ],
+        )
+        self.assertEqual(
+            [call_id for call_id, _ in self._tool_messages(messages)],
+            ["r1", "w1", "r2"],
+        )
+
+    @override_settings(AI_TOOL_CONCURRENCY=2)
+    def test_a_batch_never_grows_past_the_configured_width(self):
+        registry = _StubRegistry(concurrent={"read_webpage"})
+        calls = [
+            _tool_call(
+                f"c{i}", name="read_webpage", arguments=f'{{"url": "https://{i}.test"}}'
+            )
+            for i in range(5)
+        ]
+
+        self._run(registry, calls)
+
+        self.assertLessEqual(registry.peak_in_flight, 2)
+        # The sixth call waits for the pair before it: batches are dispatched
+        # one after another, only their members overlap.
+        starts = [call_id for call_id, event in registry.spans if event == "start"]
+        self.assertEqual(starts, ["c0", "c1", "c2", "c3", "c4"])
+        third_start = registry.spans.index(("c2", "start"))
+        self.assertLess(registry.spans.index(("c0", "end")), third_start)
+        self.assertLess(registry.spans.index(("c1", "end")), third_start)
+
+    @override_settings(AI_TOOL_CONCURRENCY=1)
+    def test_concurrency_of_one_runs_reads_one_by_one(self):
+        registry = _StubRegistry(concurrent={"read_webpage"})
+        calls = [
+            _tool_call(
+                "c1", name="read_webpage", arguments='{"url": "https://a.test"}'
+            ),
+            _tool_call(
+                "c2", name="read_webpage", arguments='{"url": "https://b.test"}'
+            ),
+        ]
+
+        self._run(registry, calls)
+
+        self.assertEqual(registry.peak_in_flight, 1)
+
+    @override_settings(AI_TOOL_CONCURRENCY=2)
+    def test_a_cancellation_stops_the_next_batch_from_starting(self):
+        cancelled = threading.Event()
+
+        def handler(tool_call):
+            if tool_call.id == "c2":
+                cancelled.set()
+            return "ok"
+
+        registry = _StubRegistry(concurrent={"read_webpage"}, handler=handler)
+        calls = [
+            _tool_call(
+                f"c{i}", name="read_webpage", arguments=f'{{"url": "https://{i}.test"}}'
+            )
+            for i in range(1, 5)
+        ]
+
+        ctx, _, tool_data, messages = self._run(
+            registry, calls, is_cancelled=cancelled.is_set
+        )
+
+        self.assertTrue(ctx["cancelled"])
+        self.assertEqual(
+            [call_id for call_id, _ in self._tool_messages(messages)], ["c1", "c2"]
+        )
+        self.assertEqual(
+            [r["tool_call_id"] for r in tool_data[0]["results"]], ["c1", "c2"]
+        )
+
+    def test_a_cancelled_run_dispatches_nothing(self):
+        registry = _StubRegistry(concurrent={"read_webpage"})
+        calls = [
+            _tool_call(
+                "c1", name="read_webpage", arguments='{"url": "https://a.test"}'
+            ),
+            _tool_call(
+                "c2", name="read_webpage", arguments='{"url": "https://b.test"}'
+            ),
+        ]
+
+        ctx, _, _, _ = self._run(registry, calls, is_cancelled=lambda: True)
+
+        self.assertTrue(ctx["cancelled"])
+        self.assertEqual(registry.spans, [])
+
+    def test_a_repeated_call_is_still_refused_inside_a_batch(self):
+        registry = _StubRegistry(concurrent={"read_webpage"})
+        repeated = '{"url": "https://a.test"}'
+        calls = [
+            _tool_call("c1", name="read_webpage", arguments=repeated),
+            _tool_call("c2", name="read_webpage", arguments=repeated),
+            _tool_call("c3", name="read_webpage", arguments=repeated),
+            _tool_call("c4", name="read_webpage", arguments=repeated),
+            _tool_call(
+                "c5", name="read_webpage", arguments='{"url": "https://b.test"}'
+            ),
+        ]
+
+        _, _, _, messages = self._run(registry, calls)
+
+        executed = [call_id for call_id, event in registry.spans if event == "start"]
+        self.assertEqual(sorted(executed), ["c1", "c2", "c3", "c5"])
+        recorded = self._tool_messages(messages)
+        self.assertEqual(
+            [call_id for call_id, _ in recorded], ["c1", "c2", "c3", "c4", "c5"]
+        )
+        self.assertIn("Not executed", dict(recorded)["c4"])
+
+    def test_a_failing_call_takes_the_batch_down_with_it(self):
+        def handler(tool_call):
+            if tool_call.id == "c2":
+                raise RuntimeError("tool exploded")
+            return "ok"
+
+        registry = _StubRegistry(concurrent={"read_webpage"}, handler=handler)
+        calls = [
+            _tool_call(
+                "c1", name="read_webpage", arguments='{"url": "https://a.test"}'
+            ),
+            _tool_call(
+                "c2", name="read_webpage", arguments='{"url": "https://b.test"}'
+            ),
+        ]
+
+        with self.assertRaises(RuntimeError):
+            self._run(registry, calls)

@@ -39,6 +39,7 @@ TOOL_MODULES = [
     "workspace.chat.ai_tools",
     "workspace.files.ai_tools",
     "workspace.mail.ai_tools",
+    "workspace.projects.ai_tools",
     "workspace.users.ai_tools",
 ]
 
@@ -453,3 +454,77 @@ class GenerateImageVisionTests(TestCase):
     def test_bot_without_profile_gets_plain_text(self):
         result = self._generate({})
         self.assertEqual(result, "Image generated successfully for: a cat")
+
+
+class ConcurrentToolFlagTests(TestCase):
+    """Which tools the loop is allowed to run alongside each other."""
+
+    # Everything that writes, sends, schedules, bills or waits on the user.
+    # Running two of these at once, or one of them out of the order the model
+    # asked for, is a side effect nobody requested.
+    SIDE_EFFECTING = {
+        "save_memory",
+        "delete_memory",
+        "generate_image",
+        "edit_image",
+        "create_agent_goal",
+        "update_agent_goal",
+        "complete_agent_goal",
+        "send_user_message",
+        "schedule_message",
+        "cancel_schedule",
+        "ask_user_question",
+        "summarize_conversation",
+        "create_event",
+        "create_task",
+        "move_task",
+        "update_task",
+        "comment_on_task",
+    }
+
+    def _declared_flags(self):
+        """Map every declared tool to its concurrency flag.
+
+        Walks the declarations rather than the registry: the image and web
+        providers only register when their settings are configured.
+        """
+        flags = {}
+        for module_name in TOOL_MODULES:
+            module = import_module(module_name)
+            for _, cls in inspect.getmembers(module, inspect.isclass):
+                if not issubclass(cls, ToolProvider) or cls is ToolProvider:
+                    continue
+                for name, member in vars(cls).items():
+                    meta = getattr(member, "_tool_meta", None)
+                    if meta:
+                        flags[name] = meta["concurrent"]
+        return flags
+
+    def test_no_side_effecting_tool_is_marked_concurrent(self):
+        flags = self._declared_flags()
+
+        parallel = {name for name in self.SIDE_EFFECTING if flags.get(name)}
+
+        self.assertEqual(parallel, set())
+
+    def test_reading_tools_are_marked_concurrent(self):
+        flags = self._declared_flags()
+
+        for name in ("web_search", "read_webpage", "get_weather", "search_tasks"):
+            self.assertTrue(flags[name], f"{name} should run alongside its neighbours")
+
+    def test_a_tool_is_sequential_unless_it_says_otherwise(self):
+        registry = ToolRegistry()
+
+        class Provider(ToolProvider):
+            @tool()
+            def write(self, args, user, bot, conversation_id, context):
+                """Write."""
+
+            @tool(concurrent=True)
+            def read(self, args, user, bot, conversation_id, context):
+                """Read."""
+
+        registry.register_provider(Provider())
+
+        self.assertEqual(registry.concurrent_names(), frozenset({"read"}))

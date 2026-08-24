@@ -30,6 +30,7 @@ class UsersToolProvider(ToolProvider):
         badge_running_label="Checking status",
         detail_key="username",
         params=CheckUserStatusParams,
+        concurrent=True,
     )
     def check_user_status(self, args, user, bot, conversation_id, context):
         """Check whether a specific colleague is online, away, busy, or offline. \
@@ -68,6 +69,7 @@ Call this when the user asks if someone is available, reachable, or what their s
         badge_running_label="Searching people",
         detail_key="query",
         params=SearchUsersParams,
+        concurrent=True,
     )
     def search_users(self, args, user, bot, conversation_id, context):
         """Find colleagues by a partial name or username, returning their exact username \
@@ -100,6 +102,7 @@ task assignment, file sharing."""
         badge_label="Listed online users",
         badge_running_label="Listing online users",
         params=ListOnlineUsersParams,
+        concurrent=True,
     )
     def list_online_users(self, args, user, bot, conversation_id, context):
         """List all users who are currently online, away, or busy (excludes offline users and bots). \

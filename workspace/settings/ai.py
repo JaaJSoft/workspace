@@ -31,6 +31,9 @@ AI_MAX_TOOL_ROUNDS = int(
 AI_MAX_IDENTICAL_TOOL_CALLS = int(
     os.getenv("AI_MAX_IDENTICAL_TOOL_CALLS", "3")
 )  # times the same tool+arguments may run in one reply before being refused
+AI_TOOL_CONCURRENCY = int(
+    os.getenv("AI_TOOL_CONCURRENCY", "4")
+)  # read-only tool calls a single round may run at once; 1 runs them one by one
 AI_TOOL_RESULT_TASK_MAX_CHARS = int(
     os.getenv("AI_TOOL_RESULT_TASK_MAX_CHARS", "2000")
 )  # tool result kept in AITask.raw_messages, a debug record read by a human

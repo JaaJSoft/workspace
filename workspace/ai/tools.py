@@ -343,6 +343,7 @@ class CoreToolProvider(ToolProvider):
         badge_icon="👤",
         badge_label="Looked up profile",
         badge_running_label="Looking up profile",
+        concurrent=True,
     )
     def get_current_user_info(self, args, user, bot, conversation_id, context):
         """Get the profile of the user you are chatting with: username, full name, email, and join date. \
@@ -416,6 +417,7 @@ Call this when the user explicitly asks you to forget something or when a stored
         badge_icon="🖼️",
         badge_label="Viewed own avatar",
         badge_running_label="Viewing own avatar",
+        concurrent=True,
     )
     def get_my_avatar(self, args, user, bot, conversation_id, context):
         """Retrieve your own avatar image so you can see or describe it. \
@@ -453,6 +455,7 @@ class SearchToolProvider(ToolProvider):
         badge_running_label="Searching the workspace",
         detail_key="query",
         params=SearchEverythingParams,
+        concurrent=True,
     )
     def search_everything(self, args, user, bot, conversation_id, context):
         """Search the whole workspace at once — files, notes, emails, contacts, \
@@ -525,6 +528,7 @@ class WebToolProvider(ToolProvider):
         badge_running_label="Searching the web",
         detail_key="queries",
         params=WebSearchParams,
+        concurrent=True,
     )
     def web_search(self, args, user, bot, conversation_id, context):
         """Search the web for current information. \
@@ -563,6 +567,7 @@ read_webpage rather than answering from the snippets."""
         badge_running_label="Reading webpage",
         detail_key="url",
         params=ReadWebpageParams,
+        concurrent=True,
     )
     def read_webpage(self, args, user, bot, conversation_id, context):
         """Fetch a webpage and return its main content as markdown, links included. \
@@ -610,6 +615,7 @@ class WeatherToolProvider(ToolProvider):
         badge_running_label="Checking the weather",
         detail_key="location",
         params=GetWeatherParams,
+        concurrent=True,
     )
     def get_weather(self, args, user, bot, conversation_id, context):
         """Get the current weather for a place given its name. \
@@ -865,6 +871,7 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
         badge_icon="\U0001f3af",
         badge_label="Listed goals",
         badge_running_label="Listing goals",
+        concurrent=True,
     )
     def list_agent_goals(self, args, user, bot, conversation_id, context):
         """List your active and paused long-term goals in this conversation, including \
@@ -1260,6 +1267,7 @@ Call this when the user wants to stop or remove a previously scheduled message."
         badge_icon="\U0001f4cb",
         badge_label="Listed schedules",
         badge_running_label="Listing schedules",
+        concurrent=True,
     )
     def list_schedules(self, args, user, bot, conversation_id, context):
         """List all active scheduled messages in this conversation. \

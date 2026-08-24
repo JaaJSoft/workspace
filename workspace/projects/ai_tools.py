@@ -186,6 +186,7 @@ class ProjectsToolProvider(ToolProvider):
         badge_icon="📋",
         badge_label="Listed projects",
         badge_running_label="Listing projects",
+        concurrent=True,
     )
     def list_projects(self, args, user, bot, conversation_id, context):
         """List the user's projects with their board statuses (column names). \
@@ -220,6 +221,7 @@ project name or status name — statuses are per-project, never guess them."""
         badge_label="Checked tasks",
         badge_running_label="Checking tasks",
         params=ListMyTasksParams,
+        concurrent=True,
     )
     def list_my_tasks(self, args, user, bot, conversation_id, context):
         """List the open tasks assigned to the user, most urgent first \
@@ -252,6 +254,7 @@ by project or due window. For tasks assigned to other people use search_tasks.""
         badge_running_label="Searching tasks",
         detail_key="query",
         params=SearchTasksParams,
+        concurrent=True,
     )
     def search_tasks(self, args, user, bot, conversation_id, context):
         """Search tasks by keyword or by reference (e.g. WR-42) across every \

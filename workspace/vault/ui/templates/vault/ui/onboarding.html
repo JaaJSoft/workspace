@@ -4,11 +4,16 @@
 {% block title %}Set up your vault - Workspace{% endblock %}
 
 {% comment %}
-  No inline <script> and no inline style= anywhere in this file, nor in
+  No inline script and no inline style attribute anywhere in this file, nor in
   anything base.html pulls in: the module serves its own
   Content-Security-Policy, and an inline block on a page it covers is a blank
-  screen rather than a warning.
+  screen rather than a warning. Naming the tag here would be enough to send
+  djlint's formatter into javascript mode for the rest of the file.
 {% endcomment %}
+
+{% block navbar %}
+  {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+{% endblock %}
 
 {% block body_class %}bg-base-100 min-h-screen flex flex-col{% endblock %}
 {% block drawer_wrapper_class %}{% endblock %}
@@ -36,7 +41,7 @@
     </div>
 
     <inline-alert type="error" x-show="error" x-cloak>
-      <span x-text="error"></span>
+    <span x-text="error"></span>
     </inline-alert>
 
     {# Step 1 - what the server cannot read, and cannot recover #}
@@ -65,17 +70,17 @@
         </p>
         <label class="form-control w-full">
           <span class="label-text">Vault password</span>
+          {% comment %}
+            On input, not change: the corpus check gates the step, and hanging
+            it off change would leave the button disabled for anyone who never
+            blurs the field. One call, because both lookups have to read the
+            same generation token to discard a stale answer.
+          {% endcomment %}
           <input
             type="password"
             class="input input-bordered w-full"
             autocomplete="new-password"
             x-model="password"
-            {% comment %}
-              On input, not change: the corpus check gates the step, and
-              hanging it off change would leave the button disabled for anyone
-              who never blurs the field. One call, because both lookups have to
-              read the same generation token to discard a stale answer.
-            {% endcomment %}
             @input.debounce.400ms="passwordChanged()"
           />
         </label>
@@ -90,35 +95,33 @@
         </label>
 
         <ul class="text-sm space-y-1">
-          <li :class="passwordLongEnough() ? 'text-success' : 'text-base-content/60'">
+          <li
+            :class="passwordLongEnough() ? 'text-success' : 'text-base-content/60'"
+          >
             At least 12 characters
           </li>
-          <li :class="passwordStrongEnough() ? 'text-success' : 'text-base-content/60'">
+          <li
+            :class="passwordStrongEnough() ? 'text-success' : 'text-base-content/60'"
+          >
             Strong enough to resist guessing
             <span x-show="feedback" x-text="'- ' + feedback" x-cloak></span>
           </li>
-          <li :class="passwordsMatch() ? 'text-success' : 'text-base-content/60'">
-            Both fields match
-          </li>
+          <li :class="passwordsMatch() ? 'text-success' : 'text-base-content/60'">Both fields match</li>
           <li
             :class="breachStatus === 'clean' || breachStatus === 'unavailable'
               ? 'text-success' : 'text-base-content/60'"
           >
-            <span x-show="breachStatus !== 'checking'">
-              Checked against known breaches
-            </span>
-            <span x-show="breachStatus === 'checking'" x-cloak>
-              Checking against known breaches...
-            </span>
+            <span x-show="breachStatus !== 'checking'">Checked against known breaches</span>
+            <span x-show="breachStatus === 'checking'" x-cloak>Checking against known breaches...</span>
           </li>
         </ul>
 
         <inline-alert type="error" x-show="breachStatus === 'found'" x-cloak>
-          This password appears in a public breach corpus. Pick another one.
+        This password appears in a public breach corpus. Pick another one.
         </inline-alert>
         <inline-alert type="warning" x-show="breachStatus === 'unavailable'" x-cloak>
-          We could not reach the breach corpus, so this password was not
-          checked against it. You can continue.
+        We could not reach the breach corpus, so this password was not
+        checked against it. You can continue.
         </inline-alert>
 
         <button
@@ -145,9 +148,7 @@
           class="p-4 rounded-lg bg-base-200 font-mono text-sm break-all"
           x-text="groupedSecret()"
         ></pre>
-        <button class="btn btn-outline" @click="downloadKit()">
-          Download the emergency kit (PDF)
-        </button>
+        <button class="btn btn-outline" @click="downloadKit()">Download the emergency kit (PDF)</button>
         <label class="label cursor-pointer justify-start gap-3">
           <input
             type="checkbox"

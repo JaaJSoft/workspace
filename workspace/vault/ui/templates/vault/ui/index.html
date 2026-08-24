@@ -2,6 +2,10 @@
 
 {% block title %}Vault - Workspace{% endblock %}
 
+{% block navbar %}
+  {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+{% endblock %}
+
 {% block body_class %}bg-base-100 min-h-screen flex flex-col{% endblock %}
 {% block drawer_wrapper_class %}{% endblock %}
 {% block drawer_content_class %}{% endblock %}

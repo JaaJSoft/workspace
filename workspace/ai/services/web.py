@@ -170,7 +170,7 @@ def search_many(queries: list[str], **kwargs) -> list[dict]:
     return merged
 
 
-MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 # A PDF carries its fonts and images along with its text, so the budget that
 # fits a whole website's HTML barely fits a ten-page paper.
 MAX_PDF_BYTES = 10 * 1024 * 1024
@@ -284,16 +284,23 @@ def _scoped(body: str, query: str, max_chars: int) -> str:
     return read_for_query(body, query, max_chars=max_chars) if body and query else body
 
 
-def _compose(header: str, body: str, links: str, max_chars: int) -> str:
-    """Assemble header, body and link list within a single *max_chars* budget.
+def _body_budget(header: str, links: str, max_chars: int) -> tuple[int, str]:
+    """Room left for the body, and the link list that still fits beside it.
 
     The body is what was asked for: the link list is dropped whole rather than
-    allowed to eat into the page it belongs to.
+    allowed to eat into the page it belongs to. Read before the body is built
+    as well as while it is composed, so a body assembled for a question aims
+    at the room it will actually get.
     """
-    body_budget = max_chars - len(header) - len(links) - 4
-    if body_budget < max_chars // 2:
-        links = ""
-        body_budget = max_chars - len(header) - 2
+    budget = max_chars - len(header) - len(links) - 4
+    if budget < max_chars // 2:
+        return max_chars - len(header) - 2, ""
+    return budget, links
+
+
+def _compose(header: str, body: str, links: str, max_chars: int) -> str:
+    """Assemble header, body and link list within a single *max_chars* budget."""
+    body_budget, links = _body_budget(header, links, max_chars)
 
     body = _truncate(body, max(body_budget, 0)) if body else ""
     return _truncate(
@@ -344,7 +351,8 @@ def _render_pdf(
         "images, and no reader can extract words from it. Look for an HTML "
         "version of the same document instead."
     )
-    return _compose(header, _scoped(body, query, max_chars), "", max_chars)
+    budget, _ = _body_budget(header, "", max_chars)
+    return _compose(header, _scoped(body, query, budget), "", max_chars)
 
 
 def _render_feed(feed: Feed, final_url: str, max_chars: int, query: str = "") -> str:
@@ -364,7 +372,8 @@ def _render_feed(feed: Feed, final_url: str, max_chars: int, query: str = "") ->
         )
         if entry.summary:
             lines.append(f"  {entry.summary}")
-    return _compose(header, _scoped("\n".join(lines), query, max_chars), "", max_chars)
+    budget, _ = _body_budget(header, "", max_chars)
+    return _compose(header, _scoped("\n".join(lines), query, budget), "", max_chars)
 
 
 def _page_metadata(html: str, final_url: str) -> tuple[str, str, str]:
@@ -439,7 +448,8 @@ def _render_html(page: str, final_url: str, max_chars: int, query: str = "") -> 
         f"Published: {date}" if date else "",
         f"By: {author}" if author else "",
     )
-    return _compose(header, _scoped(text, query, max_chars), links, max_chars)
+    budget, _ = _body_budget(header, links, max_chars)
+    return _compose(header, _scoped(text, query, budget), links, max_chars)
 
 
 def fetch_and_extract(url: str, *, max_chars: int = 12000, query: str = "") -> str:

@@ -5,6 +5,7 @@ from django.test import SimpleTestCase, override_settings
 from workspace.ai.services.reading import (
     CHUNK_MAX_CHARS,
     MAX_CHUNKS,
+    MAX_PARALLEL_READS,
     Extraction,
     Finding,
     read_for_query,
@@ -249,12 +250,12 @@ class ReadForQueryChunkingTests(SimpleTestCase):
         body = "x" * (CHUNK_MAX_CHARS // 5)
         return "\n\n".join(f"Block {i}: {body}" for i in range(blocks))
 
-    def _read(self, page, side_effect=None):
+    def _read(self, page, side_effect=None, *, max_chars=2000):
         with patch(
             "workspace.ai.services.reading.call_llm_structured",
             side_effect=side_effect or _answers("Block 0"),
         ) as mock_call:
-            text = read_for_query(page, "blocks", max_chars=2000)
+            text = read_for_query(page, "blocks", max_chars=max_chars)
         return text, mock_call
 
     def test_a_long_document_is_split_into_chunks(self):
@@ -289,6 +290,41 @@ class ReadForQueryChunkingTests(SimpleTestCase):
             any("Page too long to read whole" in line for line in logs.output)
         )
 
+    def test_a_page_read_in_part_says_so_in_the_result(self):
+        page = self._page(5 * (MAX_CHUNKS + 4))
+
+        with self.assertLogs("workspace.ai.services.reading", level="INFO"):
+            text, _ = self._read(page, max_chars=4000)
+
+        self.assertIn("it is longer than one read", text)
+        self.assertIn(f"out of {len(page)}", text)
+        self.assertIn("cannot be reached by reading this URL again", text)
+
+    def test_a_partial_read_that_found_nothing_still_says_it_was_partial(self):
+        page = self._page(5 * (MAX_CHUNKS + 4))
+
+        with self.assertLogs("workspace.ai.services.reading", level="INFO"):
+            text, _ = self._read(page, side_effect=_answers(), max_chars=4000)
+
+        self.assertIn("it is longer than one read", text)
+        self.assertTrue(text.endswith(page))
+
+    def test_a_page_read_whole_says_nothing_about_a_cut(self):
+        text, _ = self._read(self._page(MAX_CHUNKS), max_chars=4000)
+
+        self.assertNotIn("longer than one read", text)
+
+    def test_the_fan_out_is_capped(self):
+        page = self._page(5 * (MAX_CHUNKS + 4))
+
+        with (
+            self.assertLogs("workspace.ai.services.reading", level="INFO"),
+            patch("workspace.ai.services.reading.ThreadPoolExecutor") as pool,
+        ):
+            self._read(page)
+
+        self.assertLessEqual(pool.call_args.kwargs["max_workers"], MAX_PARALLEL_READS)
+
     def test_a_chunk_that_fails_does_not_sink_the_others(self):
         page = self._page(12)
         calls = []
@@ -303,6 +339,27 @@ class ReadForQueryChunkingTests(SimpleTestCase):
 
         self.assertIn("Block 5", text)
         self.assertNotEqual(text, page)
+
+    def test_a_failed_chunk_suppresses_the_gap_note(self):
+        page = self._page(12)
+        calls = []
+
+        def flaky(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("backend down")
+            return (
+                Extraction(
+                    findings=[Finding(text="Block 5")],
+                    missing="Nothing here about blocks.",
+                ),
+                {},
+            )
+
+        text, _ = self._read(page, side_effect=flaky)
+
+        self.assertIn("Block 5", text)
+        self.assertNotIn("Not on this page:", text)
 
     def test_the_gap_note_needs_every_chunk_to_agree(self):
         page = self._page(12)

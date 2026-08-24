@@ -33,7 +33,11 @@ logger = logging.getLogger(__name__)
 # A chunk is one prompt: small enough that a mid-sized model still reads its
 # far end attentively, large enough that a manual is a handful of calls.
 CHUNK_MAX_CHARS = 24_000
-MAX_CHUNKS = 6
+MAX_CHUNKS = 16
+# Chunks are read concurrently, but a single fetch fanning out to sixteen
+# simultaneous requests is a burst the backend serving them has to absorb —
+# and several fetches can be in flight at once.
+MAX_PARALLEL_READS = 8
 EXTRACT_MAX_TOKENS = 4096
 OUTLINE_MAX_ENTRIES = 40
 OUTLINE_BUDGET_RATIO = 0.25
@@ -192,6 +196,7 @@ def _render(
     missing: str,
     query: str,
     max_chars: int,
+    unread: str = "",
 ) -> str:
     """Lay out the extract — lead, outline, findings, gap note — within budget."""
     asked = _fit(_WHITESPACE_RE.sub(" ", query).strip(), QUERY_ECHO_MAX_CHARS)
@@ -203,7 +208,7 @@ def _render(
     )
     note = f"Not on this page: {_fit(missing, MISSING_MAX_CHARS)}" if missing else ""
 
-    budget = max_chars - len(lead) - len(outline_text) - len(note) - 8
+    budget = max_chars - len(lead) - len(unread) - len(outline_text) - len(note) - 10
     parts: list[str] = []
     section = ""
     spent = 0
@@ -225,7 +230,9 @@ def _render(
         parts = [_fit(findings[0].text.strip(), max(budget, 0))]
 
     return _fit(
-        "\n\n".join(part for part in (lead, outline_text, *parts, note) if part),
+        "\n\n".join(
+            part for part in (lead, unread, outline_text, *parts, note) if part
+        ),
         max_chars,
     )
 
@@ -250,6 +257,8 @@ def read_for_query(markdown: str, query: str, *, max_chars: int) -> str:
     chunks = _chunks(markdown)
     if not chunks:
         return markdown
+
+    unread = ""
     if len(chunks) > MAX_CHUNKS:
         logger.info(
             "Page too long to read whole for a query: %d chunks, reading the "
@@ -259,8 +268,18 @@ def read_for_query(markdown: str, query: str, *, max_chars: int) -> str:
             scrub(query[:QUERY_ECHO_MAX_CHARS]),
         )
         chunks = chunks[:MAX_CHUNKS]
+        # The cap always takes the head of the page, so re-reading returns the
+        # same part of it: what lies past the cut needs another URL, and the
+        # reader has to be told rather than left to trust a partial read.
+        unread = (
+            f"Read the first {sum(len(c) for c in chunks)} characters of this "
+            f"page out of {len(markdown)}: it is longer than one read. The "
+            "outline below covers all of it, but a section past the cut "
+            "cannot be reached by reading this URL again — look for a page or "
+            "an API of its own."
+        )
 
-    with ThreadPoolExecutor(max_workers=len(chunks)) as pool:
+    with ThreadPoolExecutor(max_workers=min(len(chunks), MAX_PARALLEL_READS)) as pool:
         results = list(pool.map(lambda c: _extract(c, query, model), chunks))
 
     findings = [f for r in results if r for f in r.findings if f.text.strip()]
@@ -269,12 +288,16 @@ def read_for_query(markdown: str, query: str, *, max_chars: int) -> str:
             "Nothing extracted from the page read for %s; returning it whole",
             scrub(query[:QUERY_ECHO_MAX_CHARS]),
         )
-        return markdown
+        # Falling back to the page itself, which the caller cuts at the top:
+        # without the notice the reader would take that head for the whole
+        # page, having asked a question of a part it was never shown.
+        return f"{unread}\n\n{markdown}" if unread else markdown
 
     # Each chunk saw one slice of the page, so a gap one of them reports is
-    # only the page's gap when none of the others filled it.
-    answered = [r.missing.strip() for r in results if r]
-    missing = answered[0] if answered and all(answered) else ""
+    # only the page's gap when every other chunk agrees. A chunk that failed
+    # agrees to nothing: it never read the slice that may hold the answer.
+    gaps = [r.missing.strip() if r else "" for r in results]
+    missing = gaps[0] if all(gaps) else ""
 
     return _render(
         findings,
@@ -282,4 +305,5 @@ def read_for_query(markdown: str, query: str, *, max_chars: int) -> str:
         missing,
         query,
         max_chars,
+        unread,
     )

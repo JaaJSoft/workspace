@@ -7,6 +7,7 @@ from django.test import TestCase, override_settings
 from workspace.ai.services.reading import Extraction, Finding
 from workspace.ai.services.web import (
     MAX_LINKS,
+    MAX_RESPONSE_BYTES,
     SEARCH_CATEGORIES,
     SEARCH_TIME_RANGES,
     _absolutize_links,
@@ -409,7 +410,7 @@ class FetchAndExtractTests(TestCase):
     @patch("workspace.ai.services.web.httpx2.Client")
     def test_rejects_oversized_response(self, mock_client_cls):
         resp = _fake_response()
-        resp.content = b"x" * (3 * 1024 * 1024)  # 3 MB
+        resp.content = b"x" * (MAX_RESPONSE_BYTES + 1)
         mock_client_cls.return_value = _client_returning(resp)
 
         with self.assertRaises(ValueError) as ctx:
@@ -764,25 +765,26 @@ def _manual_markdown() -> str:
     )
 
 
-def _extracting(*findings):
+def _extracting(*findings, missing=""):
     """Stand in for the extraction model, reporting *findings* for every chunk."""
     return lambda *a, **kw: (
-        Extraction(findings=[Finding(text=f) for f in findings], missing=""),
+        Extraction(findings=[Finding(text=f) for f in findings], missing=missing),
         {},
     )
 
 
+@override_settings(AI_SMALL_MODEL="small-model", AI_MODEL="big-model")
 class QueryScopedFetchTests(TestCase):
     """The query threaded from the tool down to each renderer."""
 
-    def _fetch_html(self, markdown, *, query="", says=(), max_chars=1600):
+    def _fetch_html(self, markdown, *, query="", says=(), missing="", max_chars=1600):
         url = "https://example.com/manual"
         with (
             patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
             patch("workspace.ai.services.web.trafilatura.extract") as mock_extract,
             patch(
                 "workspace.ai.services.reading.call_llm_structured",
-                side_effect=_extracting(*says),
+                side_effect=_extracting(*says, missing=missing),
             ),
         ):
             mock_client_cls.return_value = _client_returning(
@@ -835,6 +837,31 @@ class QueryScopedFetchTests(TestCase):
 
         mock_read.assert_not_called()
         self.assertEqual(text, self._fetch_html(_manual_markdown()))
+
+    def test_the_extract_is_built_for_the_room_the_link_list_leaves_it(self):
+        # The reading step aims at the budget the composition will grant it.
+        # Built for the whole budget instead, an extract on a page carrying a
+        # link list overruns it, and the truncation lands on what the extract
+        # puts last: the note naming what the page does not answer.
+        markdown = (
+            _manual_markdown()
+            + "\n\n## See also\n\n"
+            + " ".join(
+                f"[reference number {i} of the manual](/ref/{i})" for i in range(12)
+            )
+        )
+
+        text = self._fetch_html(
+            markdown,
+            query="what happens at the cap?",
+            says=tuple(f"Rule {i}: the cap is 600 a minute." for i in range(40)),
+            missing="It never says how long a ban lasts.",
+            max_chars=1800,
+        )
+
+        self.assertIn("Not on this page: It never says how long a ban lasts.", text)
+        self.assertNotIn("truncated at", text)
+        self.assertLessEqual(len(text), 1800)
 
     def test_a_scoped_read_still_honours_the_budget(self):
         text = self._fetch_html(

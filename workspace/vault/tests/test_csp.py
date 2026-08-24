@@ -39,6 +39,27 @@ class VaultCspTests(TestCase):
         unsafe-eval every x-on: in the module stops firing."""
         self.assertIn("'unsafe-eval'", self._policy("vault_ui:onboarding"))
 
+    def test_the_shared_chrome_can_still_style_itself(self):
+        """Alpine and Lucide write style attributes through setAttribute, so
+        style-src-attr refuses them - x-show stops hiding and the icons draw
+        wrong. The concession is bounded by img-src: injected CSS has no
+        remote url() to exfiltrate through."""
+        policy = self._policy("vault_ui:onboarding")
+        self.assertIn("style-src-attr 'unsafe-inline'", policy)
+        # The stylesheet itself stays same-origin: the concession is on
+        # attributes only, and a <style> block would still be refused.
+        self.assertIn("style-src 'self'", policy)
+        self.assertNotIn("style-src 'self' 'unsafe-inline'", policy)
+
+    def test_push_and_the_manifest_survive_the_policy(self):
+        """Both fall back to default-src 'none'. base.html registers /sw.js on
+        every page, inside a try/catch that turns a refusal into a console
+        warning - so the module's pages would be the only ones where web push
+        quietly stops working."""
+        policy = self._policy("vault_ui:onboarding")
+        self.assertIn("worker-src 'self'", policy)
+        self.assertIn("manifest-src 'self'", policy)
+
     def test_the_vault_list_carries_the_same_policy(self):
         AccountIdentity.objects.create(
             user=self.user, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE

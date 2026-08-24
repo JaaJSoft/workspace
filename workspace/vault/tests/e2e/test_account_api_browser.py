@@ -105,7 +105,7 @@ async () => {
 class AccountEnvelopeInteropTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        self.user = User.objects.create_user(username="owner", password="pw")
+        self.user = self.create_user(username="owner")
         self.login_as(self.user)
         self.page.goto(f"{self.live_server_url}/vault")
         self.page.add_script_tag(url=BUNDLE_URL)
@@ -151,7 +151,7 @@ class AccountEnvelopeInteropTests(PlaywrightTestCase):
 
 class CsrfTests(PlaywrightTestCase):
     def test_a_post_without_the_csrf_token_is_refused(self):
-        user = User.objects.create_user(username="owner", password="pw")
+        user = self.create_user(username="owner")
         self.login_as(user)
         self.page.goto(f"{self.live_server_url}/vault")
 

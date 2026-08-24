@@ -10,13 +10,11 @@ that the identity the browser sealed verifies through the same attestation
 code the API uses.
 """
 
-from django.contrib.auth import get_user_model
+from django.core.cache import cache
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.vault.models import AccountIdentity
 from workspace.vault.services.attestation import verify_kex_pub_attestation
-
-User = get_user_model()
 
 # Long, unguessable, and not in any corpus - the floor has to pass on it.
 GOOD_PASSWORD = "correct-horse-battery-staple-42"
@@ -30,10 +28,15 @@ CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
 class OnboardingWalkTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        self.user = User.objects.create_user(
-            username="owner", email="owner@example.com", password="pw"
-        )
+        # create_user, not User.objects.create_user: the shared navbar opens
+        # the welcome tour and the changelog on a fresh account, and their
+        # backdrops swallow every click on the page underneath.
+        self.user = self.create_user(username="owner", email="owner@example.com")
         self.login_as(self.user)
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
 
     def _serve_corpus(self, body="0000000000000000000000000000000000000:1\n"):
         self.page.route(
@@ -100,7 +103,9 @@ class OnboardingWalkTests(PlaywrightTestCase):
 
         opener = self.page.locator("a:has-text('Open my vault')")
         self.assertIn("btn-disabled", opener.get_attribute("class"))
-        self.page.check("input[type='checkbox']")
+        # By id, not by type: the shared layout's drawer toggle is a checkbox
+        # too, and it comes first in the document.
+        self.page.check("#recovery-key-acknowledged")
         self.assertNotIn("btn-disabled", opener.get_attribute("class"))
 
     def test_a_recovery_key_is_shown_grouped_for_transcription(self):

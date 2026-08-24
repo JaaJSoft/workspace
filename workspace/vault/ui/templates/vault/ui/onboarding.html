@@ -1,17 +1,23 @@
-{% extends "vault/ui/base_vault.html" %}
+{% extends "base_with_navbar.html" %}
 {% load static %}
 
 {% block title %}Set up your vault - Workspace{% endblock %}
 
 {% comment %}
-  No inline <script> and no inline style= anywhere in this file: the module
-  serves its own Content-Security-Policy, and the point of a per-view policy
-  is that the module holds the line the rest of the project cannot yet.
+  No inline <script> and no inline style= anywhere in this file, nor in
+  anything base.html pulls in: the module serves its own
+  Content-Security-Policy, and an inline block on a page it covers is a blank
+  screen rather than a warning.
 {% endcomment %}
+
+{% block body_class %}bg-base-100 min-h-screen flex flex-col{% endblock %}
+{% block drawer_wrapper_class %}{% endblock %}
+{% block drawer_content_class %}{% endblock %}
+{% block main_layout_class %}{% endblock %}
 
 {% block content %}
   <div
-    class="mx-auto max-w-2xl px-4 py-10"
+    class="mx-auto max-w-2xl py-6"
     x-data="vaultOnboarding()"
     data-email="{{ request.user.email }}"
   >
@@ -142,7 +148,12 @@
           Download the emergency kit (PDF)
         </button>
         <label class="label cursor-pointer justify-start gap-3">
-          <input type="checkbox" class="checkbox" x-model="acknowledged" />
+          <input
+            type="checkbox"
+            id="recovery-key-acknowledged"
+            class="checkbox"
+            x-model="acknowledged"
+          />
           <span class="label-text">
             I have saved my recovery key. I understand nobody can recover my
             vault without it.

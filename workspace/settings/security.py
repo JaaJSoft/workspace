@@ -1,6 +1,6 @@
 """CSRF, cookies, proxy headers, authentication and password policy."""
 
-from csp.constants import NONE, SELF, UNSAFE_EVAL
+from csp.constants import NONE, SELF, UNSAFE_EVAL, UNSAFE_INLINE
 
 from .base import DEBUG, TESTING
 from .env import env_bool, env_list
@@ -72,7 +72,18 @@ VAULT_CSP = {
     "script-src": [SELF, UNSAFE_EVAL],
     "connect-src": [SELF, "https://api.pwnedpasswords.com"],
     "style-src": [SELF],
+    # Alpine and Lucide both write style attributes through setAttribute
+    # (x-show's display toggle, the svg Lucide draws), which style-src-attr
+    # refuses even though the stylesheet itself is same-origin. The concession
+    # is bounded: with default-src 'none' and img-src limited to self, data:
+    # and blob:, injected CSS has no url() it could exfiltrate through.
+    "style-src-attr": [UNSAFE_INLINE],
     "img-src": [SELF, "data:", "blob:"],
+    # base.html registers /sw.js for web push and links /manifest.json on every
+    # page. Both fall back to default-src, so without these two directives the
+    # module's pages would be the only ones where push silently stops working.
+    "worker-src": [SELF],
+    "manifest-src": [SELF],
     "object-src": [NONE],
     "base-uri": [NONE],
     "form-action": [SELF],

@@ -11,6 +11,7 @@ code the API uses.
 """
 
 from django.core.cache import cache
+from django.urls import reverse
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.vault.models import AccountIdentity
@@ -102,10 +103,17 @@ class OnboardingWalkTests(PlaywrightTestCase):
         self._seal()
 
         opener = self.page.locator("a:has-text('Open my vault')")
+        # On the href, not the class: btn-disabled compiles to pointer-events
+        # alone, which leaves the link in the tab order for Enter to follow -
+        # so a class assertion passes on a gate anyone can walk around.
+        self.assertIsNone(opener.get_attribute("href"))
+        self.assertEqual(opener.get_attribute("aria-disabled"), "true")
         self.assertIn("btn-disabled", opener.get_attribute("class"))
+
         # By id, not by type: the shared layout's drawer toggle is a checkbox
         # too, and it comes first in the document.
         self.page.check("#recovery-key-acknowledged")
+        self.assertEqual(opener.get_attribute("href"), reverse("vault_ui:index"))
         self.assertNotIn("btn-disabled", opener.get_attribute("class"))
 
     def test_a_recovery_key_is_shown_grouped_for_transcription(self):

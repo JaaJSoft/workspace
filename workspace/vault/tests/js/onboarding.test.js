@@ -13,6 +13,7 @@ function component(extra = {}) {
     // base.html loads ui/js/csrf.js on every page; the component reads it.
     getCSRFToken: () => 'test-csrf-token',
     fetch: async () => ({ ok: true, status: 201, json: async () => ({}) }),
+    setTimeout: (fn) => fn(),
     ...extra,
   });
   return ctx.vaultOnboarding();
@@ -205,7 +206,7 @@ test('an init the server refuses does not reach the kit step', async () => {
   // the flow carries on, deriving keys against an undefined salt.
   const { app, calls } = sealing({
     responses: {
-      '/api/v1/vault/account/init': { ok: false, status: 409, json: async () => ({}) },
+      '/api/v1/vault/account/init': { ok: false, status: 500, json: async () => ({}) },
     },
   });
   await app.generateAndSeal();
@@ -214,6 +215,70 @@ test('an init the server refuses does not reach the kit step', async () => {
   // The point of the check: nothing derived from an undefined salt is offered
   // to the server.
   assert.deepEqual(calls, ['/api/v1/vault/account/init']);
+});
+
+test('a retry after a lost finalize shows the key rather than stranding it', async () => {
+  // The worst failure this flow has. finalize commits, its reply is lost, and
+  // the probe cannot reach the server either - so the user clicks again. init
+  // now answers 409, because the identity it would create is already active:
+  // sealed by this very page, with the secret only this page still holds.
+  // Reading that as a refusal leaves an account nobody can ever open.
+  let attempt = 0;
+  let online = false;
+  const { app } = sealing({
+    responses: {
+      '/api/v1/vault/account/init': () => {
+        attempt += 1;
+        return attempt === 1 ? INIT_OK : { ok: false, status: 409 };
+      },
+      '/api/v1/vault/account/finalize': () => {
+        throw new TypeError('network error');
+      },
+      '/api/v1/vault/account/envelope': () => {
+        if (!online) throw new TypeError('network error');
+        return { ok: true, json: async () => ({ state: 'active', kex_public: 'b64' }) };
+      },
+    },
+  });
+
+  await app.generateAndSeal();
+  assert.equal(app.step, 1, 'the first attempt cannot know yet');
+  assert.match(app.error, /Nothing was saved/);
+  const secret = app.secretText;
+
+  online = true;
+  await app.generateAndSeal();
+  assert.equal(app.step, 3);
+  assert.equal(app.secretText, secret, 'the key on screen must be the sealed one');
+  assert.equal(app.error, '');
+});
+
+test('an envelope sealed by another tab never shows this page key', async () => {
+  // Two tabs, one identity. The other one won: the key on the server unwraps
+  // with its secret, not ours. Showing ours would have the user write down a
+  // key that opens nothing.
+  const { app } = sealing({
+    responses: {
+      '/api/v1/vault/account/init': INIT_OK,
+      '/api/v1/vault/account/finalize': { ok: false, status: 409 },
+      '/api/v1/vault/account/envelope': {
+        ok: true,
+        json: async () => ({ state: 'active', kex_public: 'a-key-from-another-tab' }),
+      },
+    },
+  });
+  await app.generateAndSeal();
+  assert.equal(app.step, 1);
+  assert.match(app.error, /somewhere else/);
+});
+
+test('an account already set up before this page started says so', async () => {
+  const { app } = sealing({
+    responses: { '/api/v1/vault/account/init': { ok: false, status: 409 } },
+  });
+  await app.generateAndSeal();
+  assert.equal(app.step, 1);
+  assert.match(app.error, /already been set up/);
 });
 
 test('a lost finalize response still shows the key when the account is active', async () => {
@@ -230,7 +295,7 @@ test('a lost finalize response still shows the key when the account is active', 
       },
       '/api/v1/vault/account/envelope': {
         ok: true,
-        json: async () => ({ state: 'active' }),
+        json: async () => ({ state: 'active', kex_public: 'b64' }),
       },
     },
   });
@@ -248,7 +313,7 @@ test('a lost finalize response with nothing committed says so', async () => {
       },
       '/api/v1/vault/account/envelope': {
         ok: true,
-        json: async () => ({ state: 'pending' }),
+        json: async () => ({ state: 'pending', kex_public: '' }),
       },
     },
   });
@@ -270,7 +335,7 @@ test('a retry keeps the secret the first attempt may already have sealed', async
         if (attempts === 1) throw new TypeError('network error');
         return { ok: true, status: 201 };
       },
-      '/api/v1/vault/account/envelope': { ok: true, json: async () => ({ state: 'pending' }) },
+      '/api/v1/vault/account/envelope': { ok: true, json: async () => ({ state: 'pending', kex_public: '' }) },
     },
   });
   await app.generateAndSeal();
@@ -348,4 +413,68 @@ test('the csrf token comes from the shared helper', () => {
   });
   app.post('/api/v1/vault/account/init');
   assert.equal(sent, 'the-real-token');
+});
+
+test('editing the password drops the previous verdict at once', () => {
+  // x-model writes the field synchronously, the lookups wait 400 ms. Between
+  // the two the floor must not still be answering about the old value.
+  const app = component();
+  app.password = 'a-strong-one-nobody-has-used';
+  app.score = 4;
+  app.breachStatus = 'clean';
+  app.confirmation = app.password;
+  assert.equal(app.passwordAcceptable(), true);
+
+  app.password = 'password1';
+  app.confirmation = 'password1';
+  app.passwordEdited();
+  assert.equal(app.passwordAcceptable(), false, 'the old verdict survived');
+  assert.equal(app.score, null);
+  assert.equal(app.breachStatus, 'unchecked');
+});
+
+test('a strength estimate that throws says so instead of hanging', async () => {
+  // The button is gated on the score, so a rejected estimate left it disabled
+  // for good with nothing on screen to explain it.
+  const app = component({
+    VaultOnboarding: {
+      estimateStrength: async () => {
+        throw new Error('zxcvbn dictionaries missing');
+      },
+    },
+  });
+  app.password = 'whatever-the-user-typed';
+  await app.evaluateStrength();
+  assert.equal(app.score, null);
+  assert.match(app.feedback, /could not be checked/);
+  assert.equal(app.passwordStrongEnough(), false);
+});
+
+test('the kit download outlives the click that starts it', () => {
+  // Revoking the blob URL in the same task can cancel the download, the same
+  // silent way a detached anchor does.
+  const events = [];
+  const link = { click: () => events.push('click'), remove: () => events.push('remove') };
+  const app = component({
+    document: {
+      cookie: '',
+      createElement: () => link,
+      body: { appendChild: () => events.push('append') },
+    },
+    URL: {
+      createObjectURL: () => 'blob:kit',
+      revokeObjectURL: () => events.push('revoke'),
+    },
+    location: { origin: 'https://workspace.example' },
+    VaultOnboarding: { buildEmergencyKitPdf: () => new Uint8Array(1) },
+    setTimeout: (fn) => {
+      events.push('deferred');
+      fn();
+    },
+  });
+  app.$root = { dataset: { email: 'owner@example.com' } };
+  app.secretText = 'SECRET';
+  app.downloadKit();
+  // 'revoke' only ever after 'deferred': never in the task that clicked.
+  assert.deepEqual(events, ['append', 'click', 'remove', 'deferred', 'revoke']);
 });

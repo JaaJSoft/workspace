@@ -81,6 +81,7 @@
             class="input input-bordered w-full"
             autocomplete="new-password"
             x-model="password"
+            @input="passwordEdited()"
             @input.debounce.400ms="passwordChanged()"
           />
         </label>
@@ -161,10 +162,19 @@
             vault without it.
           </span>
         </label>
+        {% url 'vault_ui:index' as vault_url %}
+        {% comment %}
+          No href until the box is ticked: btn-disabled only sets
+          pointer-events, which leaves the link in the tab order and Enter
+          following it - and this is the step the page calls impossible to
+          skip.
+        {% endcomment %}
         <a
           class="btn btn-primary"
           :class="!canFinish() && 'btn-disabled'"
-          href="{% url 'vault_ui:index' %}"
+          :href="canFinish() ? '{{ vault_url }}' : null"
+          :tabindex="canFinish() ? null : -1"
+          :aria-disabled="!canFinish()"
         >
           Open my vault
         </a>

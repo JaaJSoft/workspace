@@ -22,6 +22,7 @@ window.vaultOnboarding = function vaultOnboarding() {
     secretText: '',
     secretBytes: null,
     accountUuid: '',
+    sentKexPublic: '',
     acknowledged: false,
     busy: false,
     error: '',
@@ -75,6 +76,17 @@ window.vaultOnboarding = function vaultOnboarding() {
       return this.acknowledged;
     },
 
+    // x-model writes the field through on every keystroke while the lookups
+    // wait out the debounce. Without this the floor keeps reporting the
+    // previous password's verdict for those 400 ms, and a password manager
+    // filling both fields at once clears it on a value nobody evaluated.
+    passwordEdited() {
+      this.generation++;
+      this.score = null;
+      this.feedback = '';
+      this.breachStatus = 'unchecked';
+    },
+
     passwordChanged() {
       this.generation++;
       this.evaluateStrength();
@@ -88,10 +100,19 @@ window.vaultOnboarding = function vaultOnboarding() {
         this.feedback = '';
         return;
       }
-      var result = await window.VaultOnboarding.estimateStrength(this.password);
-      if (generation !== this.generation) return;
-      this.score = result.score;
-      this.feedback = (result.feedback && result.feedback.warning) || '';
+      try {
+        var result = await window.VaultOnboarding.estimateStrength(this.password);
+        if (generation !== this.generation) return;
+        this.score = result.score;
+        this.feedback = (result.feedback && result.feedback.warning) || '';
+      } catch (err) {
+        // The floor stays closed - an unmeasured password is not a strong one
+        // - but silence would leave a button that refuses to enable and no
+        // reason on screen.
+        if (generation !== this.generation) return;
+        this.score = null;
+        this.feedback = 'could not be checked on this device';
+      }
     },
 
     // k-anonymity: only the first five hex characters of the SHA-1 leave the
@@ -154,12 +175,14 @@ window.vaultOnboarding = function vaultOnboarding() {
       var V = window.VaultCrypto;
       this.busy = true;
       this.error = '';
-      // Whether the finalize request left the browser. What follows a failure
-      // depends entirely on it.
-      var sent = false;
+      // init answers 409 only when the identity is already active. On a first
+      // attempt that means somewhere else sealed it; on a retry it means our
+      // own finalize landed after all, and the reply was what went missing.
+      var conflict = false;
       try {
         var started = await this.post('/api/v1/vault/account/init');
         if (!started.ok) {
+          conflict = started.status === 409;
           throw new Error('the server refused to start an account');
         }
         var account = await started.json();
@@ -245,7 +268,9 @@ window.vaultOnboarding = function vaultOnboarding() {
           ),
         };
 
-        sent = true;
+        // Kept beyond this attempt: it is how a later failure can tell our
+        // own envelope from one another tab sealed.
+        this.sentKexPublic = kexPublic;
         var finalized = await this.post(
           '/api/v1/vault/account/finalize',
           body
@@ -256,35 +281,46 @@ window.vaultOnboarding = function vaultOnboarding() {
         this.step = 3;
         this.forgetSecrets();
       } catch (err) {
-        // A lost response is not a lost account. finalize may have committed
-        // before the connection died, and the identity it activated can only
-        // ever be opened with the secret this page is still holding: claiming
-        // nothing was saved would send the user away from the one screen that
-        // can still show it. Ask the server which of the two happened.
-        if (sent && (await this.accountIsActive())) {
+        // Whether the identity is active is the wrong question: another tab
+        // may have sealed it with a secret this page never saw. What decides
+        // is whether the key on the server is the one we sent.
+        var landed = await this.sealedByThisPage();
+        if (landed === 'ours') {
           this.step = 3;
           this.forgetSecrets();
           return;
         }
-        this.error =
-          'Your vault could not be created. Nothing was saved; try again.';
+        if (landed === 'elsewhere') {
+          this.error =
+            'Your vault was set up somewhere else, with a different recovery ' +
+            'key. Open it there - the key on this page does not belong to it.';
+        } else if (conflict && !this.sentKexPublic) {
+          this.error =
+            'Your vault has already been set up. Reload this page to open it.';
+        } else {
+          this.error =
+            'Your vault could not be created. Nothing was saved; try again.';
+        }
       } finally {
         this.busy = false;
       }
     },
 
-    // Pessimistic on purpose: a lookup that cannot answer reads as "not
-    // active", which is the reply that tells the user to try again.
-    async accountIsActive() {
+    // Three answers, not two - and anything it cannot establish reads as
+    // 'no': showing a recovery key that opens nothing is worse than asking
+    // for a retry that costs a click.
+    async sealedByThisPage() {
+      if (!this.sentKexPublic) return 'no';
       try {
         var response = await fetch('/api/v1/vault/account/envelope', {
           headers: { Accept: 'application/json' },
         });
-        if (!response.ok) return false;
+        if (!response.ok) return 'no';
         var envelope = await response.json();
-        return envelope.state === 'active';
+        if (envelope.state !== 'active') return 'no';
+        return envelope.kex_public === this.sentKexPublic ? 'ours' : 'elsewhere';
       } catch (err) {
-        return false;
+        return 'no';
       }
     },
 
@@ -305,7 +341,12 @@ window.vaultOnboarding = function vaultOnboarding() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(url);
+      // Revoked on the next task, not this one: the browser may not have
+      // started reading the blob when click() returns, and a revoked URL
+      // cancels the download as quietly as a detached anchor does.
+      setTimeout(function() {
+        URL.revokeObjectURL(url);
+      }, 0);
     },
 
     post(url, body) {

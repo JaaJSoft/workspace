@@ -328,6 +328,35 @@
               </button>
             </li>
 
+            <!-- Source code -->
+            <li>
+              <a
+                href="https://github.com/JaaJSoft/workspace"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="gap-3 hover:bg-secondary/10 hover:text-secondary transition-colors"
+              >
+                <i data-lucide="code" class="w-4 h-4"></i>
+                <span class="font-medium">Source code</span>
+                <i data-lucide="external-link" class="w-3.5 h-3.5 ml-auto opacity-40"></i>
+              </a>
+            </li>
+
+            {# The bug form has no version field, so the running version is prefilled into `context`. #}
+            <!-- Report an issue -->
+            <li>
+              <a
+                href="https://github.com/JaaJSoft/workspace/issues/new?template=bug.yml&amp;context=Version%3A+{{ APP_VERSION|urlencode:"" }}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="gap-3 hover:bg-error/10 hover:text-error transition-colors"
+              >
+                <i data-lucide="bug" class="w-4 h-4"></i>
+                <span class="font-medium">Report an issue</span>
+                <i data-lucide="external-link" class="w-3.5 h-3.5 ml-auto opacity-40"></i>
+              </a>
+            </li>
+
             {% if user.is_staff or user.is_superuser %}
               <div class="divider my-1">
                 <span class="text-xs text-base-content/40 uppercase tracking-wider">Admin</span>
@@ -433,10 +462,18 @@
         </div>
         <div class="flex-1">
           <h3 class="font-bold text-lg">What's new</h3>
-          <p class="text-xs text-base-content/50">Version {{ APP_VERSION }}</p>
+          <p class="text-xs text-base-content/50">
+            <a
+              href="https://github.com/JaaJSoft/workspace"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="link link-hover"
+            >Version {{ APP_VERSION }}</a>
+          </p>
         </div>
         <form method="dialog">
-          <button class="btn btn-ghost btn-sm btn-square">
+          {# Keeps showModal() from landing on the version link, which sits earlier in the header. #}
+          <button class="btn btn-ghost btn-sm btn-square" autofocus>
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </form>

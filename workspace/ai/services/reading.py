@@ -15,6 +15,9 @@ page cost. What it may not do is add: everything it returns has to be in the
 document, with the figures and names that carry the facts copied exactly, and
 each finding is labelled with the section it came from so the reader can cite
 it and go back to it.
+
+A document longer than one read of it can hold is read in parts, the reader
+asking for the next one when the outline shows the answer lies past the cut.
 """
 
 import logging
@@ -27,6 +30,7 @@ from pydantic import BaseModel
 from workspace.common.logging import scrub
 
 from .llm import call_llm_structured
+from .paging import check_part, part_count
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +241,7 @@ def _render(
     )
 
 
-def read_for_query(markdown: str, query: str, *, max_chars: int) -> str:
+def read_for_query(markdown: str, query: str, *, max_chars: int, part: int = 1) -> str:
     """Return what *markdown* says about *query*, plus the document's outline.
 
     A document that already fits in *max_chars* comes back untouched — there
@@ -245,38 +249,53 @@ def read_for_query(markdown: str, query: str, *, max_chars: int) -> str:
     one the extraction could not read: a page is worth its first characters,
     and the caller truncates them, so this step never turns a fetch into a
     failure.
-    """
-    if not markdown or not query.strip() or len(markdown) <= max_chars:
-        return markdown
 
-    model = settings.AI_READING_MODEL or settings.AI_SMALL_MODEL or settings.AI_MODEL
-    if not model:
-        logger.warning("Reading a page for a query needs a model; none configured")
+    A document longer than a single read covers is cut into parts of
+    ``MAX_CHUNKS`` chunks, and *part* names the one to read for the query.
+    """
+    if not markdown or not query.strip():
+        return markdown
+    if len(markdown) <= max_chars:
+        check_part(part, 1)
         return markdown
 
     chunks = _chunks(markdown)
     if not chunks:
         return markdown
 
+    total = part_count(len(chunks), MAX_CHUNKS)
+    check_part(part, total)
+    chunks = chunks[(part - 1) * MAX_CHUNKS : part * MAX_CHUNKS]
+    covered = "\n\n".join(chunks)
+
+    model = settings.AI_READING_MODEL or settings.AI_SMALL_MODEL or settings.AI_MODEL
+    if not model:
+        logger.warning("Reading a page for a query needs a model; none configured")
+        return covered
+
     unread = ""
-    if len(chunks) > MAX_CHUNKS:
+    if total > 1:
         logger.info(
-            "Page too long to read whole for a query: %d chunks, reading the "
-            "first %d for %s",
+            "Page too long to read whole for a query: %d chunks, reading part "
+            "%d of %d for %s",
             len(chunks),
-            MAX_CHUNKS,
+            part,
+            total,
             scrub(query[:QUERY_ECHO_MAX_CHARS]),
         )
-        chunks = chunks[:MAX_CHUNKS]
-        # The cap always takes the head of the page, so re-reading returns the
-        # same part of it: what lies past the cut needs another URL, and the
-        # reader has to be told rather than left to trust a partial read.
+        # The reader is told which stretch of the page it got and how to
+        # ask for the next: a page cut with nothing said about the cut reads
+        # as a page that ends there.
+        following = (
+            f" Read this URL again with the same query and part={part + 1} for "
+            "the next stretch of the page."
+            if part < total
+            else " This is its last part."
+        )
         unread = (
-            f"Read the first {sum(len(c) for c in chunks)} characters of this "
-            f"page out of {len(markdown)}: it is longer than one read. The "
-            "outline below covers all of it, but a section past the cut "
-            "cannot be reached by reading this URL again — look for a page or "
-            "an API of its own."
+            f"Part {part} of {total}: this page is longer than one read, and "
+            f"what follows was read from {len(covered)} of its {len(markdown)} "
+            f"characters. The outline below covers all of it.{following}"
         )
 
     with ThreadPoolExecutor(max_workers=min(len(chunks), MAX_PARALLEL_READS)) as pool:
@@ -285,13 +304,13 @@ def read_for_query(markdown: str, query: str, *, max_chars: int) -> str:
     findings = [f for r in results if r for f in r.findings if f.text.strip()]
     if not findings:
         logger.info(
-            "Nothing extracted from the page read for %s; returning it whole",
+            "Nothing extracted from the page read for %s; returning it unread",
             scrub(query[:QUERY_ECHO_MAX_CHARS]),
         )
-        # Falling back to the page itself, which the caller cuts at the top:
+        # Falling back to the part itself, which the caller cuts at the top:
         # without the notice the reader would take that head for the whole
-        # page, having asked a question of a part it was never shown.
-        return f"{unread}\n\n{markdown}" if unread else markdown
+        # page, having asked a question of a stretch it was never shown.
+        return f"{unread}\n\n{covered}" if unread else covered
 
     # Each chunk saw one slice of the page, so a gap one of them reports is
     # only the page's gap when every other chunk agrees. A chunk that failed

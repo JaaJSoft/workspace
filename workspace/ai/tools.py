@@ -123,6 +123,15 @@ class ReadWebpageParams(BaseModel):
         "outline of its sections, instead of its first characters. Leave empty to "
         "read the page from the top.",
     )
+    part: int = Field(
+        default=1,
+        ge=1,
+        description="Which part of the page to read, 1 unless you are continuing "
+        "a read. A page too long to return at once is cut into parts, and the one "
+        "you get ends by naming the part that follows it: ask for that number, "
+        "with the same url and query, to carry on past the cut. Parts are fixed, "
+        "so part 3 is the same stretch of the page however you reach it.",
+    )
 
 
 class GetWeatherParams(BaseModel):
@@ -572,7 +581,10 @@ condensed and grouped by section, plus an outline of the sections you did not ge
 which is what to name in the next read. What comes back is reported, not quoted, so \
 read the page whole when its exact wording is what you need. Leave query empty for a \
 short page too, and whenever the answer is the page itself: summarizing or translating \
-an article needs all of it."""
+an article needs all of it. \
+A page too long for one result — with or without a query — ends by saying which part \
+of it you just read and which one follows; set part to that number to read on, as many \
+times as the question needs."""
         from .services.web import fetch_and_extract
 
         url = args.url.strip()
@@ -580,7 +592,7 @@ an article needs all of it."""
             return "Error: url is required"
 
         try:
-            text = fetch_and_extract(url, query=args.query.strip())
+            text = fetch_and_extract(url, query=args.query.strip(), part=args.part)
         except ValueError as exc:
             return f"Error: {exc}"
 

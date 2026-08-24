@@ -373,7 +373,8 @@ class FetchAndExtractTests(TestCase):
 
         text = fetch_and_extract("https://example.com/api", max_chars=200)
 
-        self.assertEqual(len(text), 200)
+        self.assertLessEqual(len(text), 200)
+        self.assertIn("read this URL again with part=2", text)
 
     @patch("workspace.ai.services.web.trafilatura.extract")
     @patch("workspace.ai.services.web.httpx2.Client")
@@ -777,7 +778,9 @@ def _extracting(*findings, missing=""):
 class QueryScopedFetchTests(TestCase):
     """The query threaded from the tool down to each renderer."""
 
-    def _fetch_html(self, markdown, *, query="", says=(), missing="", max_chars=1600):
+    def _fetch_html(
+        self, markdown, *, query="", says=(), missing="", max_chars=1600, part=1
+    ):
         url = "https://example.com/manual"
         with (
             patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
@@ -791,7 +794,7 @@ class QueryScopedFetchTests(TestCase):
                 _fake_response(text="<html/>", url=url)
             )
             mock_extract.return_value = markdown
-            return fetch_and_extract(url, max_chars=max_chars, query=query)
+            return fetch_and_extract(url, max_chars=max_chars, query=query, part=part)
 
     def test_query_returns_the_section_that_answers_it(self):
         text = self._fetch_html(
@@ -829,7 +832,15 @@ class QueryScopedFetchTests(TestCase):
         self.assertIn("Everything the service exposes", text)
         self.assertIn("Token note 0", text)
         self.assertNotIn("## Page outline", text)
-        self.assertIn("truncated at", text)
+        self.assertIn("read this URL again with part=2", text)
+
+    def test_the_part_asked_for_reaches_the_reading_step(self):
+        with patch(
+            "workspace.ai.services.web.read_for_query", return_value="extract"
+        ) as mock_read:
+            self._fetch_html(_manual_markdown(), query="the cap", part=2)
+
+        self.assertEqual(mock_read.call_args.kwargs["part"], 2)
 
     def test_without_a_query_the_result_is_what_it_was_before_the_feature(self):
         with patch("workspace.ai.services.web.read_for_query") as mock_read:
@@ -946,6 +957,105 @@ class QueryScopedFetchTests(TestCase):
         self.assertNotIn("Gardening tips, part 20]", text)
 
 
+class PagedFetchTests(TestCase):
+    """A page too long for one result, read one part at a time."""
+
+    MAX_CHARS = 1000
+
+    def _fetch(self, markdown, *, part=1):
+        with (
+            patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
+            patch("workspace.ai.services.web.trafilatura.extract") as mock_extract,
+        ):
+            mock_client_cls.return_value = _client_returning(
+                _fake_response(text="<html/>", url="https://example.com/page")
+            )
+            mock_extract.return_value = markdown
+            return fetch_and_extract(
+                "https://example.com/page", max_chars=self.MAX_CHARS, part=part
+            )
+
+    def _page(self):
+        # Numbered throughout, so a gap or an overlap between two parts shows
+        # up in the joined result instead of hiding in filler.
+        return "".join(f"{i:06d}" for i in range(3000))
+
+    def _read_to_the_end(self, fetch):
+        """Every part of a page, walked the way the markers say to walk it."""
+        parts = []
+        while "end of the page" not in (text := fetch(len(parts) + 1)):
+            parts.append(text)
+            self.assertIn(f"part={len(parts) + 1}", text)
+        parts.append(text)
+        return parts
+
+    def _stretch(self, part_text):
+        """The stretch of the page a part carries: no header, no marker."""
+        body = part_text.partition("\n\n")[2]
+        return body.rpartition("\n\n[…")[0] or body
+
+    def test_the_parts_cover_the_page_with_no_gap_and_no_overlap(self):
+        page = self._page()
+
+        parts = self._read_to_the_end(lambda part: self._fetch(page, part=part))
+
+        self.assertGreater(len(parts), 1)
+        self.assertEqual("".join(self._stretch(part) for part in parts), page)
+
+    def test_a_part_says_which_one_it_is_and_which_one_follows(self):
+        parts = self._read_to_the_end(lambda part: self._fetch(self._page(), part=part))
+
+        self.assertIn(f"part 1 of {len(parts)}", parts[0])
+        self.assertIn("read this URL again with part=2", parts[0])
+        self.assertIn(f"end of the page — part {len(parts)} of {len(parts)}", parts[-1])
+        self.assertNotIn("read this URL again", parts[-1])
+
+    def test_every_part_holds_to_the_budget(self):
+        page = self._page()
+
+        for part in (1, 2, 3):
+            self.assertLessEqual(len(self._fetch(page, part=part)), self.MAX_CHARS)
+
+    def test_every_part_names_the_page_it_comes_from(self):
+        text = self._fetch(self._page(), part=3)
+
+        self.assertIn("Source: https://example.com/page", text)
+
+    def test_a_part_the_page_does_not_have_is_refused(self):
+        with self.assertRaises(ValueError) as ctx:
+            self._fetch(self._page(), part=999)
+
+        self.assertIn("there is no part 999", str(ctx.exception))
+
+    def test_a_page_that_fits_is_a_single_part(self):
+        short = "short enough to be read in one go"
+
+        self.assertNotIn("part 1 of", self._fetch(short))
+        with self.assertRaises(ValueError) as ctx:
+            self._fetch(short, part=2)
+        self.assertIn("This page has 1 part", str(ctx.exception))
+
+    def test_json_is_paged_too(self):
+        payload = {"body": "".join(f"{i:06d}" for i in range(400))}
+
+        def fetch(part):
+            resp = _fake_response(text="{}", content_type="application/json")
+            resp.json.return_value = payload
+            with patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls:
+                mock_client_cls.return_value = _client_returning(resp)
+                return fetch_and_extract(
+                    "https://example.com/api", max_chars=800, part=part
+                )
+
+        parts = self._read_to_the_end(fetch)
+
+        self.assertGreater(len(parts), 1)
+        self.assertEqual(
+            "".join(part.rpartition("\n\n[…")[0] for part in parts),
+            json.dumps(payload, separators=(",", ":")),
+        )
+
+
 class ReadWebpageToolTests(TestCase):
     def _run(self, **kwargs):
         provider = WebToolProvider()
@@ -958,7 +1068,9 @@ class ReadWebpageToolTests(TestCase):
             self._run(url=" https://example.com/manual ", query="  rate limit  ")
 
         self.assertEqual(mock_fetch.call_args.args, ("https://example.com/manual",))
-        self.assertEqual(mock_fetch.call_args.kwargs, {"query": "rate limit"})
+        self.assertEqual(
+            mock_fetch.call_args.kwargs, {"query": "rate limit", "part": 1}
+        )
 
     def test_omitting_the_query_reads_the_whole_page(self):
         with patch(
@@ -966,7 +1078,24 @@ class ReadWebpageToolTests(TestCase):
         ) as mock_fetch:
             self._run(url="https://example.com/manual")
 
-        self.assertEqual(mock_fetch.call_args.kwargs, {"query": ""})
+        self.assertEqual(mock_fetch.call_args.kwargs, {"query": "", "part": 1})
+
+    def test_the_part_reaches_the_service(self):
+        with patch(
+            "workspace.ai.services.web.fetch_and_extract", return_value="page"
+        ) as mock_fetch:
+            self._run(url="https://example.com/manual", query="rate limit", part=3)
+
+        self.assertEqual(mock_fetch.call_args.kwargs["part"], 3)
+
+    def test_a_part_the_page_does_not_have_comes_back_as_an_error(self):
+        with patch(
+            "workspace.ai.services.web.fetch_and_extract",
+            side_effect=ValueError("This page has 2 parts — there is no part 5."),
+        ):
+            result = self._run(url="https://example.com/manual", part=5)
+
+        self.assertEqual(result, "Error: This page has 2 parts — there is no part 5.")
 
     def test_a_blank_url_is_refused(self):
         self.assertTrue(self._run(url="   ").startswith("Error:"))

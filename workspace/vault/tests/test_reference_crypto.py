@@ -463,3 +463,59 @@ class TruncatedCiphertextTests(SimpleTestCase):
         )
         with self.assertRaises(ValueError):
             wire.decode_ciphertext(raw[:8])
+
+
+class CrockfordBase32Tests(SimpleTestCase):
+    def test_a_secret_key_round_trips(self):
+        raw = bytes(range(32))
+        self.assertEqual(
+            primitives.crockford_decode(primitives.crockford_encode(raw)), raw
+        )
+
+    def test_the_encoding_uses_the_crockford_alphabet(self):
+        """I, L, O and U are absent by design: they are the characters a human
+        transcribing 52 symbols confuses with 1, 0 and V."""
+        text = primitives.crockford_encode(bytes(range(32)))
+        self.assertFalse(set(text) & set("ILOU"))
+
+    def test_thirty_two_bytes_encode_to_fifty_two_symbols_and_a_check(self):
+        self.assertEqual(len(primitives.crockford_encode(bytes(32))), 53)
+
+    def test_a_single_wrong_character_is_caught(self):
+        text = primitives.crockford_encode(bytes(range(32)))
+        broken = ("Z" if text[0] != "Z" else "Y") + text[1:]
+        with self.assertRaises(ValueError):
+            primitives.crockford_decode(broken)
+
+    def test_a_transposition_of_two_neighbours_is_caught(self):
+        text = primitives.crockford_encode(bytes(range(32)))
+        cut = next(i for i in range(len(text) - 2) if text[i] != text[i + 1])
+        broken = text[:cut] + text[cut + 1] + text[cut] + text[cut + 2 :]
+        with self.assertRaises(ValueError):
+            primitives.crockford_decode(broken)
+
+    def test_the_confusable_characters_decode_as_their_twin(self):
+        """The whole point of the alphabet: O reads as 0, I and L read as 1, so
+        the most common transcription slip never even reaches the check."""
+        text = primitives.crockford_encode(bytes(range(32)))
+        mangled = text.replace("0", "O").replace("1", "I")
+        self.assertEqual(primitives.crockford_decode(mangled), bytes(range(32)))
+
+    def test_a_confusable_written_in_place_of_the_check_symbol_decodes_too(self):
+        """The check symbol comes from the wider alphabet, so it lands on "0"
+        or "1" roughly twice in 37 - and those are exactly the two a
+        transcriber writes as "O" and "I"."""
+        raw = bytes(range(3, 35))
+        text = primitives.crockford_encode(raw)
+        self.assertEqual(text[-1], "0", "vector no longer checks on a 0")
+        self.assertEqual(primitives.crockford_decode(text[:-1] + "O"), raw)
+
+    def test_the_input_is_case_insensitive_and_ignores_grouping(self):
+        text = primitives.crockford_encode(bytes(range(32)))
+        grouped = "-".join(text[i : i + 4] for i in range(0, len(text), 4))
+        self.assertEqual(primitives.crockford_decode(grouped.lower()), bytes(range(32)))
+
+    def test_an_illegal_character_is_refused_rather_than_ignored(self):
+        text = primitives.crockford_encode(bytes(range(32)))
+        with self.assertRaises(ValueError):
+            primitives.crockford_decode(text[:-1] + "!")

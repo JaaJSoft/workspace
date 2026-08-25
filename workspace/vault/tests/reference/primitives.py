@@ -408,3 +408,60 @@ def verify(
         raise ValueError("payload is not canonically encoded")
     verify_bytes(public_key, payload_bytes, signature)  # 5. Ed25519
     return payload
+
+
+# Crockford base32: the alphabet drops I, L, O and U so a hand-transcribed
+# secret cannot be lost to the 0/O and 1/I confusion, and the check symbol
+# extends it with five more characters that never appear in a payload.
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+_CROCKFORD_CHECK = _CROCKFORD + "*~$=U"
+_CROCKFORD_DECODE = {c: i for i, c in enumerate(_CROCKFORD)}
+_CROCKFORD_DECODE.update({"O": 0, "I": 1, "L": 1})
+# The check symbol needs the same folding: it is drawn from the wider
+# alphabet, so it can be "0" or "1" - the two the transcriber writes as "O"
+# and "I". Reading it raw refuses the very slip the alphabet exists to absorb.
+_CROCKFORD_CHECK_DECODE = {c: i for i, c in enumerate(_CROCKFORD_CHECK)}
+_CROCKFORD_CHECK_DECODE.update({"O": 0, "I": 1, "L": 1})
+
+
+def crockford_encode(raw: bytes) -> str:
+    """The stored form of a recovery secret: base32 plus one check symbol.
+
+    The check symbol is the payload read as one big integer, modulo 37 - the
+    scheme Crockford defines, which catches any single wrong character and any
+    transposition of two neighbours. Without it a mistyped secret is
+    indistinguishable from a wrong password at unlock time.
+    """
+    value = int.from_bytes(raw, "big")
+    width = (len(raw) * 8 + 4) // 5
+    symbols = [
+        _CROCKFORD[(value >> (shift * 5)) & 0x1F] for shift in range(width - 1, -1, -1)
+    ]
+    return "".join(symbols) + _CROCKFORD_CHECK[value % 37]
+
+
+def crockford_decode(text: str) -> bytes:
+    """Raw bytes from the stored form, refusing anything the check rejects.
+
+    Hyphens are grouping, not data: the kit prints the secret in blocks so it
+    can be copied by hand, and a user retyping it keeps them.
+    """
+    cleaned = text.replace("-", "").replace(" ", "").upper()
+    if len(cleaned) < 2:
+        raise ValueError("recovery secret is too short")
+    body, check = cleaned[:-1], cleaned[-1]
+    value = 0
+    for symbol in body:
+        digit = _CROCKFORD_DECODE.get(symbol)
+        if digit is None:
+            raise ValueError(f"illegal character {symbol!r} in recovery secret")
+        value = (value << 5) | digit
+    expected = _CROCKFORD_CHECK_DECODE.get(check)
+    if expected is None:
+        raise ValueError("illegal check symbol")
+    if expected != value % 37:
+        raise ValueError("recovery secret fails its check symbol")
+    length = len(body) * 5 // 8
+    if not length:
+        return b""
+    return value.to_bytes(length + 1, "big")[-length:]

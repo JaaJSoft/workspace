@@ -62,6 +62,7 @@ dependencies = [
     "faker>=40.36.0",
     # OpenID Connect (SSO) login
     "mozilla-django-oidc>=5.0.2",
+    "django-csp>=4.0",
 ]
 
 [build-system]

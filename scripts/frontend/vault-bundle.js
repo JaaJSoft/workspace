@@ -16,6 +16,7 @@ import { seal, open } from './src/vault/aead.js';
 import { HPKE_SUITE_V1, hpkeSeal, hpkeOpen } from './src/vault/hpke.js';
 import { canonicalCbor, decodeCbor } from './src/vault/cbor.js';
 import { SIG_ALG_ED25519, sign, verify, signBytes, verifyBytes } from './src/vault/sign.js';
+import { crockfordEncode, crockfordDecode } from './src/vault/crockford.js';
 
 window.VaultCrypto = {
   toBase64Url,
@@ -52,4 +53,6 @@ window.VaultCrypto = {
   verify,
   signBytes,
   verifyBytes,
+  crockfordEncode,
+  crockfordDecode,
 };

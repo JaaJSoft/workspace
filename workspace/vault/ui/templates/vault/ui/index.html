@@ -2,8 +2,17 @@
 
 {% block title %}Vault - Workspace{% endblock %}
 
+{% block navbar %}
+  {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+{% endblock %}
+
+{% block body_class %}bg-base-100 min-h-screen flex flex-col{% endblock %}
+{% block drawer_wrapper_class %}{% endblock %}
+{% block drawer_content_class %}{% endblock %}
+{% block main_layout_class %}{% endblock %}
+
 {% block content %}
-  <div class="flex h-full items-center justify-center">
+  <div class="flex min-h-[50vh] items-center justify-center">
     <p class="text-base-content/60">The vault is not available yet.</p>
   </div>
 {% endblock %}

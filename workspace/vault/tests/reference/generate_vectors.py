@@ -221,6 +221,36 @@ def build_vectors() -> dict:
                 ),
             },
         ],
+        "recovery_secrets": [
+            # The one value a user may have to retype from paper. The check
+            # symbol is what turns a slip into an error message instead of an
+            # unlock failure indistinguishable from a wrong password.
+            {
+                "id": "recovery-zeroes",
+                "raw_b64": to_base64url(bytes(32)),
+                "expected_text": primitives.crockford_encode(bytes(32)),
+            },
+            {
+                "id": "recovery-counting",
+                "raw_b64": to_base64url(bytes(range(32))),
+                "expected_text": primitives.crockford_encode(bytes(range(32))),
+            },
+            {
+                "id": "recovery-high-bits",
+                "raw_b64": to_base64url(bytes([0xFF] * 32)),
+                "expected_text": primitives.crockford_encode(bytes([0xFF] * 32)),
+            },
+            # Chosen because its check symbol is "0": the check is drawn from
+            # the wider alphabet, so it lands on a confusable roughly twice in
+            # 37, and decoding has to fold "O" there exactly as it does in the
+            # body. The other vectors all happen to check on a symbol nobody
+            # mistypes.
+            {
+                "id": "recovery-confusable-check",
+                "raw_b64": to_base64url(bytes(range(3, 35))),
+                "expected_text": primitives.crockford_encode(bytes(range(3, 35))),
+            },
+        ],
         "public_keys": [
             {
                 # X25519 and Ed25519 are both 32 raw bytes; only the label

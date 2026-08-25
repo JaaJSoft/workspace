@@ -1,5 +1,7 @@
 """CSRF, cookies, proxy headers, authentication and password policy."""
 
+from csp.constants import NONE, SELF, UNSAFE_EVAL, UNSAFE_INLINE
+
 from .base import DEBUG, TESTING
 from .env import env_bool, env_list
 
@@ -47,3 +49,43 @@ if TESTING:
     PASSWORD_HASHERS = [
         "django.contrib.auth.hashers.MD5PasswordHasher",
     ]
+
+
+# The vault module's own Content-Security-Policy, applied per view through
+# csp.decorators.csp. Deliberately NOT a project-wide default: inline scripts
+# and inline style attributes still live elsewhere in the project, and a global
+# policy is a separate piece of work. The module holds the line the rest of the
+# project cannot yet.
+#
+# api.pwnedpasswords.com is mandatory rather than decorative - the vault
+# password strength floor queries it under k-anonymity, and connect-src 'self'
+# would kill the feature while making the page merely look slow.
+#
+# unsafe-eval stays: Alpine 3 builds its expressions with new AsyncFunction().
+# The @alpinejs/csp build exists but forbids inline expressions in attributes,
+# which would mean rewriting every x-on: in the project.
+# The directives themselves, not the DIRECTIVES-wrapped shape the global
+# CONTENT_SECURITY_POLICY setting takes: csp.decorators.csp expects the mapping
+# directly, and handing it the wrapper fails at request time, not at import.
+VAULT_CSP = {
+    "default-src": [NONE],
+    "script-src": [SELF, UNSAFE_EVAL],
+    "connect-src": [SELF, "https://api.pwnedpasswords.com"],
+    "style-src": [SELF],
+    # Alpine and Lucide both write style attributes through setAttribute
+    # (x-show's display toggle, the svg Lucide draws), which style-src-attr
+    # refuses even though the stylesheet itself is same-origin. The concession
+    # is bounded: with default-src 'none' and img-src limited to self, data:
+    # and blob:, injected CSS has no url() it could exfiltrate through.
+    "style-src-attr": [UNSAFE_INLINE],
+    "img-src": [SELF, "data:", "blob:"],
+    # base.html registers /sw.js for web push and links /manifest.json on every
+    # page. Both fall back to default-src, so without these two directives the
+    # module's pages would be the only ones where push silently stops working.
+    "worker-src": [SELF],
+    "manifest-src": [SELF],
+    "object-src": [NONE],
+    "base-uri": [NONE],
+    "form-action": [SELF],
+    "frame-ancestors": [NONE],
+}

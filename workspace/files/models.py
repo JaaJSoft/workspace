@@ -165,6 +165,7 @@ class File(models.Model):
             models.Index(
                 fields=["group", "node_type"],
                 include=["size"],
+                condition=Q(group__isnull=False),
                 name="file_group_usage",
             ),
             models.Index(

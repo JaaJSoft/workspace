@@ -167,6 +167,44 @@ test('a vault with no key wrap is reported rather than silently missing', async 
   assert.equal(component.vaults[0].unopenable, true);
 });
 
+test('a vault whose name cannot be decrypted is flagged without hiding the rest of the list', async () => {
+  const rowOf = (uuid) => ({
+    uuid, encrypted_name: 'AQ', wrapped_key: 'AQ', metadata_sig: 'AQ',
+    owner_account_uuid: 'account-uuid', encrypted_description: '', icon: 'lock',
+    color: 'primary', key_version: 1, is_favorite: false,
+  });
+  const component = app({ isUnlocked: () => true }, {
+    listVaults: async () => [rowOf('v1'), rowOf('v2')],
+  }, {
+    open: async (key, raw, ad) => {
+      if (String(ad).includes('v1')) throw new Error('tag mismatch');
+      return new TextEncoder().encode('Work');
+    },
+    AD: {
+      vaultFieldAd: (uuid, field) => `${uuid}:${field}`,
+      vaultKeyInfo: () => 'info',
+      vaultMetaInfo: () => 'meta-info',
+    },
+  });
+  await component.unlock();
+  assert.equal(component.vaults.length, 2);
+  assert.equal(component.vaults[0].unreadable, true);
+  assert.equal(component.vaults[0].name, '');
+  assert.equal(component.vaults[1].name, 'Work');
+});
+
+test('a listing failure after a successful unlock keeps the session and the screen agreeing', async () => {
+  const component = app({ isUnlocked: () => true }, {
+    listVaults: async () => { throw new Error('network down'); },
+  });
+  await component.unlock();
+  // VaultSession reports isUnlocked() === true in this harness: the screen
+  // must say the same thing, not fall back to the password form while the
+  // session still holds live keys.
+  assert.equal(component.state, 'unlocked');
+  assert.ok(component.error);
+});
+
 test('the signed payload carries vault_uuid, not the row\'s own uuid key', async () => {
   let captured = null;
   const component = app({ isUnlocked: () => true }, {

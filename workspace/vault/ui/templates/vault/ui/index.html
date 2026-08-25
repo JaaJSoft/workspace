@@ -88,6 +88,9 @@
             <button class="btn btn-sm btn-ghost" @click="lockNow()">Lock now</button>
           </div>
         </div>
+        <inline-alert type="error" x-show="error" x-cloak class="mb-4">
+          <span x-text="error"></span>
+        </inline-alert>
         <template x-if="vaults.length === 0">
           <p class="text-base-content/60">No vault yet.</p>
         </template>
@@ -108,6 +111,10 @@
                 <template x-if="vault.unopenable">
                   <inline-alert type="warning" title="No key for this device"
                     message="This vault holds no key wrap for your account, so it cannot be opened here."></inline-alert>
+                </template>
+                <template x-if="vault.unreadable">
+                  <inline-alert type="error" title="Could not be decrypted"
+                    message="This vault's data could not be read. It may be corrupted."></inline-alert>
                 </template>
               </div>
             </li>

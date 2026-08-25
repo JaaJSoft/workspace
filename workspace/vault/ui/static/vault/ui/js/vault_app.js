@@ -39,14 +39,20 @@ window.vaultApp = (function () {
     if (!row.wrapped_key) {
       return Object.assign({}, row, { unopenable: true, name: '' });
     }
-    var metaKey = await window.VaultSession.openVaultKey(row.uuid, row.wrapped_key);
+    var metaKey;
     try {
+      metaKey = await window.VaultSession.openVaultKey(row.uuid, row.wrapped_key);
       var plaintext = await V.open(
         metaKey,
         V.fromBase64Url(row.encrypted_name),
         V.AD.vaultFieldAd(row.uuid, 'name')
       );
       return Object.assign({}, row, { name: new TextDecoder().decode(plaintext) });
+    } catch (err) {
+      // Localised the same way a bad signature is: one row loses its name,
+      // the rest of the list - and the Promise.all it resolves inside -
+      // keeps going.
+      return Object.assign({}, row, { unreadable: true, name: '' });
     } finally {
       zero(metaKey);
     }
@@ -99,14 +105,35 @@ window.vaultApp = (function () {
             secretText: this.secretText,
             remember: this.remember,
           });
-          this.state = 'unlocked';
-          await this.loadVaults();
         } catch (err) {
           this.state = 'locked';
           this.error = MESSAGES[err.reason] || 'Something went wrong. Try again.';
-        } finally {
+          // A key that fails to decode - remembered or freshly typed - must
+          // not sit behind needsSecret() forever: clearing it is what makes
+          // the recovery-key input reappear so it can be retyped, and
+          // forgetting it stops a bad remembered value from repeating this
+          // on every load.
+          if (err.reason === 'recovery-key') {
+            this.secretText = '';
+            window.VaultSession.forgetDevice();
+          }
           // A wrong password must not survive into the retry.
           this.password = '';
+          return;
+        }
+        this.password = '';
+        this.state = 'unlocked';
+        this.secondsLeft = window.VaultSession.secondsUntilLock();
+        try {
+          await this.loadVaults();
+        } catch (err) {
+          // The session opened; only the listing failed. Falling back to
+          // 'locked' here would show the password form while VaultSession
+          // still holds live keys with an unreachable countdown and Lock
+          // now button - the exact disagreement this branch exists to
+          // avoid, so the state stays 'unlocked' and the failure is
+          // reported in place instead.
+          this.error = 'The vault list could not be loaded. Try again.';
         }
       },
 

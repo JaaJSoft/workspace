@@ -7,7 +7,6 @@ with the number of *folders* and result rows, never with the number of files.
 
 from dataclasses import dataclass
 
-from django.conf import settings
 from django.db.models import (
     Count,
     F,
@@ -313,6 +312,32 @@ def trash_summary(scope):
     return _totals(File.objects.filter(scope.trash_q(), node_type=File.NodeType.FILE))
 
 
+def _scope_quota(scope):
+    """The limit that applies to this scope's bucket, or None.
+
+    Only a root scope has a bucket: a sub-folder is part of its owner's or its
+    group's total, never a quota of its own.
+    """
+    from .quota import effective_group_quota, effective_quota
+
+    if scope.folder is None:
+        return effective_quota(scope.user)
+    if scope.is_root and scope.group is not None:
+        return effective_group_quota(scope.group)
+    return None
+
+
+def _scope_quota_used(scope):
+    """Bucket usage behind the quota bar - trash included, unlike total_size."""
+    from .quota import group_usage, personal_usage
+
+    if scope.folder is None:
+        return personal_usage(scope.user)
+    if scope.is_root and scope.group is not None:
+        return group_usage(scope.group)
+    return None
+
+
 def analyze_storage(user, folder=None, *, category=None, query=None):
     """Return the storage breakdown of *folder* (or the user's root).
 
@@ -354,6 +379,7 @@ def analyze_storage(user, folder=None, *, category=None, query=None):
         "duplicates": duplicates,
         "duplicates_truncated": len(duplicates) >= DUPLICATE_GROUPS_LIMIT,
         "trash": trash_summary(scope) if scope.is_root else None,
-        "quota": settings.STORAGE_QUOTA_BYTES if folder is None else None,
+        "quota": _scope_quota(scope),
+        "quota_used": _scope_quota_used(scope),
     }
     return result

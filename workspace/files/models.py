@@ -151,6 +151,22 @@ class File(models.Model):
                 include=["size"],
                 name="file_owner_del_type_size",
             ),
+            # Serves quota.personal_usage: SUM(size) over one owner's live and
+            # trashed personal files. Partial on `group IS NULL` because the
+            # bucket excludes group files, and covering on `size` so the sum
+            # never touches the heap (PostgreSQL; SQLite ignores INCLUDE).
+            models.Index(
+                fields=["owner", "node_type"],
+                include=["size"],
+                condition=Q(group__isnull=True),
+                name="file_personal_usage",
+            ),
+            # Same, for quota.group_usage.
+            models.Index(
+                fields=["group", "node_type"],
+                include=["size"],
+                name="file_group_usage",
+            ),
             models.Index(
                 fields=["parent", "deleted_at", "name"], name="file_parent_del_name"
             ),

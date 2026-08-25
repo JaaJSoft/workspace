@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import FileService, quota
 from workspace.imports.importers.base import ImportContext, JobFailed, Outcome
 from workspace.imports.importers.files import FilesImporter
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
@@ -282,7 +282,7 @@ class FilesImporterTests(ImporterTestCase):
         self.provider.tree["/"].append(
             RemoteEntry(id="/tiny.txt", name="tiny.txt", is_dir=False, size=1, etag="t")
         )
-        used = FileService.storage_used(self.user)
+        used = quota.personal_usage(self.user)
         with override_settings(STORAGE_QUOTA_BYTES=used + 100):
             job = self._job()
             self.assertIs(self._run(job), Outcome.DONE)

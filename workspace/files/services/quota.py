@@ -8,8 +8,9 @@ Nothing outside this module computes bucket usage or reads the quota tables.
 """
 
 from django.conf import settings
+from django.db.models import Sum
 
-from ..models import GroupStorageQuota, UserStorageQuota
+from ..models import File, GroupStorageQuota, UserStorageQuota
 
 
 def _pk(value):
@@ -31,3 +32,56 @@ def effective_group_quota(group):
         return None
     row = GroupStorageQuota.objects.filter(group_id=_pk(group)).first()
     return row.quota_bytes if row is not None else None
+
+
+def personal_usage(user):
+    """Bytes held by *user*'s personal files, trashed rows included."""
+    total = File.objects.filter(
+        owner_id=_pk(user),
+        group__isnull=True,
+        node_type=File.NodeType.FILE,
+    ).aggregate(total=Sum("size"))["total"]
+    return total or 0
+
+
+def group_usage(group):
+    """Bytes held in *group*'s folder, trashed rows included."""
+    total = File.objects.filter(
+        group_id=_pk(group),
+        node_type=File.NodeType.FILE,
+    ).aggregate(total=Sum("size"))["total"]
+    return total or 0
+
+
+def _group_name(group):
+    name = getattr(group, "name", None)
+    if name is not None:
+        return name
+    from django.contrib.auth.models import Group
+
+    return Group.objects.filter(pk=group).values_list("name", flat=True).first() or "?"
+
+
+def bucket_state(*, owner, group):
+    """Return ``(used, limit, label)`` for the bucket a write would land in.
+
+    ``limit`` is ``None`` when the bucket is unlimited, and ``used`` is then
+    left at 0 - nobody needs the figure and the aggregate would be wasted.
+    """
+    if group is not None:
+        limit = effective_group_quota(group)
+        used = 0 if limit is None else group_usage(group)
+        return used, limit, f'The group folder "{_group_name(group)}"'
+    limit = effective_quota(owner)
+    used = 0 if limit is None else personal_usage(owner)
+    return used, limit, "Your personal storage"
+
+
+def remaining_bytes(*, owner, group):
+    """Bytes still writable in the bucket, or ``None`` when unlimited.
+
+    May be negative: a quota lowered below current usage leaves a bucket over
+    its limit, which blocks writes without breaking reads.
+    """
+    used, limit, _ = bucket_state(owner=owner, group=group)
+    return None if limit is None else limit - used

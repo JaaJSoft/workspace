@@ -6,7 +6,6 @@ import os
 import time
 import uuid
 
-from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
 from wsgidav.dav_error import HTTP_BAD_REQUEST, DAVError
@@ -14,7 +13,7 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.common.logging import scrub
 from workspace.files.models import File, file_upload_path
-from workspace.files.services import FileService
+from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
 
 logger = logging.getLogger(__name__)
@@ -200,10 +199,13 @@ class RootCollection(DAVCollection):
         return True
 
     def get_used_bytes(self):
-        return FileService.storage_used(self._user)
+        return quota.personal_usage(self._user)
 
     def get_available_bytes(self):
-        return max(0, django_settings.STORAGE_QUOTA_BYTES - self.get_used_bytes())
+        # wsgidav omits {DAV:}quota-available-bytes when this returns None,
+        # which is exactly what an unlimited bucket should advertise.
+        remaining = quota.remaining_bytes(owner=self._user, group=None)
+        return None if remaining is None else max(0, remaining)
 
 
 class FolderResource(DAVCollection):

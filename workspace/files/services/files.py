@@ -149,18 +149,6 @@ class FileService:
             ),
         ).prefetch_related("file_tags__tag")
 
-    @staticmethod
-    def storage_used(user):
-        """Return total bytes used by *user*'s non-deleted files."""
-        from django.db.models import Sum
-
-        total = File.objects.filter(
-            owner=user,
-            deleted_at__isnull=True,
-            node_type=File.NodeType.FILE,
-        ).aggregate(total=Sum("size"))["total"]
-        return total or 0
-
     # ------------------------------------------------------------------
     # Creation
     # ------------------------------------------------------------------

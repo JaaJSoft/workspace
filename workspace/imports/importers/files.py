@@ -19,7 +19,7 @@ from rest_framework import serializers
 
 from workspace.common.logging import scrub
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import FileService, quota
 from workspace.files.services._names import available_file_name, find_name_conflict
 
 from ..models import ImportJobItem
@@ -177,11 +177,11 @@ class FilesImporter(Importer):
         # Up-front only: the writes themselves are bounded by the files
         # module, this is what lets a hopeless import fail in seconds rather
         # than after hours of copying.
-        available = settings.STORAGE_QUOTA_BYTES - FileService.storage_used(ctx.owner)
-        if incoming_bytes > available:
+        remaining = quota.remaining_bytes(owner=ctx.owner, group=None)
+        if remaining is not None and incoming_bytes > remaining:
             raise JobFailed(
                 f"Not enough space: the import needs {filesizeformat(incoming_bytes)} "
-                f"but only {filesizeformat(max(available, 0))} are left."
+                f"but only {filesizeformat(max(remaining, 0))} are left."
             )
 
     # -- copying phase -------------------------------------------------

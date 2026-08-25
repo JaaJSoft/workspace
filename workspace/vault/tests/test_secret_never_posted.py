@@ -11,8 +11,11 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-VAULT_JS = Path("workspace/vault/ui/static/vault/ui/js")
-FIXTURE = Path("workspace/vault/tests/fixtures/violation_sample.js")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+VAULT_JS = REPO_ROOT / "workspace" / "vault" / "ui" / "static" / "vault" / "ui" / "js"
+FIXTURE = (
+    REPO_ROOT / "workspace" / "vault" / "tests" / "fixtures" / "violation_sample.js"
+)
 
 # The names the module holds a recovery secret under. A new alias has to be
 # added here deliberately, which is the point: the catalogue is the contract.

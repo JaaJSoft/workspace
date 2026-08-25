@@ -24,6 +24,10 @@ dependencies = [
     "cairosvg>=2.9.0",
     # mail
     "cryptography>=50.0.0",
+    # vault - canonical CBOR for the metadata signatures the server verifies
+    # before storing a vault or an entry. Encoding only: the server never
+    # decodes CBOR a client sent, it re-encodes the row it is about to write.
+    "cbor2>=5.7.0",
     "nh3>=0.3.7",
     "myl-discovery>=0.6.4",
     "icalendar>=7.3.0",
@@ -87,7 +91,6 @@ dev = [
     # the Argon2 `secret` parameter (K) the key hierarchy depends on.
     "argon2-cffi>=25.1.0",
     "pyhpke>=0.6.0",
-    "cbor2>=5.7.0",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
     "ruff==0.16.4",

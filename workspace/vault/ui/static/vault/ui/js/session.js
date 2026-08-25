@@ -213,14 +213,19 @@ window.VaultSession = (function () {
       unlocked = true;
       expiresAt = Date.now() + IDLE_LOCK_MS;
 
-      // Failing to remember the device does not mean failing to unlock it -
-      // the session above is already live and must stay that way.
-      if (options.remember) {
-        try {
+      // Failing to remember - or forget - the device does not mean failing
+      // to unlock it - the session above is already live and must stay that
+      // way. The else branch matters as much as the if: an unchecked box
+      // must actually revoke a key a previous unlock remembered, not just
+      // skip writing a new one.
+      try {
+        if (options.remember) {
           localStorage.setItem(VAULT_SECRET_STORAGE_KEY, options.secretText);
-        } catch (err) {
-          // Best-effort only; nothing to recover, nothing to zero.
+        } else {
+          localStorage.removeItem(VAULT_SECRET_STORAGE_KEY);
         }
+      } catch (err) {
+        // Best-effort only; nothing to recover, nothing to zero.
       }
     },
 

@@ -98,6 +98,32 @@ test('a substituted key is not reported as a wrong password', async () => {
   assert.match(component.error, /key the server returned|does not match/i);
 });
 
+test('a corrupt remembered recovery key can be retyped, not just stared at', async () => {
+  let forgotten = false;
+  const component = app({
+    unlock: async () => { const e = new Error('x'); e.reason = 'recovery-key'; throw e; },
+    forgetDevice: () => { forgotten = true; },
+  });
+  component.secretText = 'A'.repeat(53);
+  assert.equal(component.needsSecret(), false);
+  await component.unlock();
+  assert.equal(component.secretText, '');
+  assert.equal(component.needsSecret(), true);
+  assert.equal(forgotten, true);
+});
+
+test('a wrong password does not clear the remembered recovery key', async () => {
+  let forgotten = false;
+  const component = app({
+    unlock: async () => { const e = new Error('x'); e.reason = 'password'; throw e; },
+    forgetDevice: () => { forgotten = true; },
+  });
+  component.secretText = 'A'.repeat(53);
+  await component.unlock();
+  assert.equal(component.secretText, 'A'.repeat(53));
+  assert.equal(forgotten, false);
+});
+
 test('the password is dropped from the component whatever the outcome', async () => {
   const component = app({
     unlock: async () => { const e = new Error('x'); e.reason = 'password'; throw e; },

@@ -362,6 +362,14 @@ test('forgetting the device clears the stored recovery key', async () => {
   assert.equal(h.session.rememberedSecret(), null);
 });
 
+test('unlocking again without remembering revokes a previously remembered key', async () => {
+  const h = harness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: true });
+  assert.equal(h.session.rememberedSecret(), SECRET);
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  assert.equal(h.session.rememberedSecret(), null);
+});
+
 test('locking leaves nothing reachable on the module', async () => {
   const h = harness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });

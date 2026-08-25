@@ -551,12 +551,13 @@ def unique_copy_name(base_name, node_type, existing_names):
 def copy_node(node, parent, owner, _sibling_names=None):
     """Recursively copy a single node."""
     if _sibling_names is None:
+        # Folders count as well as files: a copied folder that reuses an
+        # existing folder's name merges the two trees. Imported here because
+        # _names imports unique_copy_name from this module.
+        from ._names import sibling_nodes
+
         _sibling_names = set(
-            File.objects.filter(
-                owner=owner,
-                parent=parent,
-                deleted_at__isnull=True,
-            ).values_list("name", flat=True)
+            sibling_nodes(owner, parent).values_list("name", flat=True)
         )
 
     new_name = unique_copy_name(

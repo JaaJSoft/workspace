@@ -22,13 +22,8 @@ var PKCS8_ED25519_PREFIX = Uint8Array.from([
   0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
 ]);
 
-// Deliberately checks only the overflow case (`.set` would otherwise write
-// past the fixed 32-byte slot), not exact-32 equality: the recomputed public
-// key is a defense-in-depth cross-check, not the seed's only consumer, and a
-// too-short value here still fails loudly downstream when Ed25519 rejects the
-// malformed PKCS#8 structure.
 function pkcs8FromSeed(seed) {
-  if (seed.length > 32) throw new Error('Ed25519 seed is ' + seed.length + ' bytes, expected at most 32');
+  if (seed.length !== 32) throw new Error('Ed25519 seed is ' + seed.length + ' bytes, expected 32');
   var out = new Uint8Array(PKCS8_ED25519_PREFIX.length + 32);
   out.set(PKCS8_ED25519_PREFIX, 0);
   out.set(seed, PKCS8_ED25519_PREFIX.length);
@@ -110,6 +105,10 @@ window.VaultSession = (function () {
       } catch (err) {
         zero(unwrapKey);
         zero(secretBytes);
+        // The kex open can succeed and the sig open fail (or the reverse):
+        // both draw on the same unwrapKey, but a partial failure still means
+        // a decrypted key sat in kexPriv up to this point.
+        zero(kexPriv);
         throw VaultUnlockError('password');
       }
       // Nothing in v1 needs it again: a rotation re-derives it from the

@@ -25,8 +25,12 @@ const ENVELOPE = {
 function harness(overrides = {}) {
   const calls = [];
   const amk = Uint8Array.from([1, 2, 3, 4]);
-  const kexPriv = Uint8Array.from([5, 6, 7, 8]);
-  const sigSeed = Uint8Array.from([9, 10, 11, 12]);
+  // 32 bytes each: kexPriv is an X25519 scalar and sigSeed an Ed25519 seed,
+  // and sigSeed in particular reaches the real (unmocked) pkcs8FromSeed via
+  // publicKeyFromSeed - a short fixture would trip its length check before
+  // the stubbed crypto.subtle ever runs.
+  const kexPriv = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
+  const sigSeed = Uint8Array.from({ length: 32 }, (_, i) => i + 33);
   const storage = new Map();
 
   const crypto = {
@@ -56,6 +60,12 @@ function harness(overrides = {}) {
     hkdf: async () => { calls.push('hkdf'); return Uint8Array.from([13, 14]); },
     open: async (key, raw, ad) => {
       calls.push(`open:${ad}`);
+      // Lets a test fail only the second open (the signing key) while the
+      // first (the key-exchange key) still succeeds and lands in kexPriv -
+      // the partial-failure shape the wrong-password catch must still cover.
+      if (overrides.failOpen && String(ad).startsWith(overrides.failOpen)) {
+        throw new Error('tag mismatch');
+      }
       if (String(ad).startsWith('kex')) return kexPriv;
       return sigSeed;
     },
@@ -138,6 +148,15 @@ test('a wrong password fails locally, with no request beyond the envelope', asyn
   assert.equal(h.session.isUnlocked(), false);
 });
 
+test('a failure on the signing key still zeroes the already-unwrapped key exchange key', async () => {
+  const h = harness({ failOpen: 'sig' });
+  await assert.rejects(
+    h.session.unlock({ password: 'wrong', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'password'
+  );
+  assert.ok(h.kexPriv.every((byte) => byte === 0));
+});
+
 test('a substituted signing public key is caught before it is trusted', async () => {
   const h = harness({
     globals: {
@@ -217,6 +236,11 @@ test('locking runs the registered callbacks once', async () => {
 
 test('signing before unlocking is refused rather than silently empty', async () => {
   await assert.rejects(harness().session.sign({ v: 1 }));
+});
+
+test('pkcs8FromSeed refuses a seed shorter than 32 bytes', () => {
+  const { ctx } = harness();
+  assert.throws(() => ctx.pkcs8FromSeed(new Uint8Array(31)), /32/);
 });
 
 test('pkcs8FromSeed refuses a seed longer than 32 bytes', () => {

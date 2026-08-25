@@ -567,6 +567,9 @@ def _move_to(file_obj, user, dest_path):
     needs_move = dest_parent != file_obj.parent
 
     if needs_move:
+        # FileService.rename below moves the blob with a non-transactional
+        # os.rename, so a refusal from move() would leave it stranded. Refuse here,
+        # before anything is written.
         FileService.check_move_allowed(file_obj, dest_parent, acting_user=user)
 
     rename_first = not (

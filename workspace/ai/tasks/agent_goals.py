@@ -44,14 +44,25 @@ def dispatch_agent_goals():
     return outcome.as_dict()
 
 
+def _overdue_phrase(delta):
+    """How long a deadline has been past, in the wording both prompts share.
+
+    Anything under 24h truncates to "0 day(s)" through timedelta.days, which
+    reads as not-overdue — the opposite of what this signal is for.
+    """
+    days = delta.days
+    return f"{days} day(s)" if days else "less than a day"
+
+
 def _build_goal_instruction(goal, user_tz):
     """Build the system-prompt injection describing this check-in."""
+    now = timezone.now()
     deadline_line = ""
-    is_overdue = bool(goal.deadline) and goal.deadline < timezone.now()
-    overdue_days = (timezone.now() - goal.deadline).days if is_overdue else 0
+    is_overdue = bool(goal.deadline) and goal.deadline < now
+    overdue_for = _overdue_phrase(now - goal.deadline) if is_overdue else ""
     if goal.deadline:
         deadline_local = goal.deadline.astimezone(user_tz)
-        overdue_note = f" — OVERDUE by {overdue_days} day(s)" if is_overdue else ""
+        overdue_note = f" — OVERDUE by {overdue_for}" if is_overdue else ""
         deadline_line = (
             f"- Deadline: {deadline_local.strftime('%Y-%m-%d %H:%M')}{overdue_note}\n"
         )
@@ -82,14 +93,14 @@ def _build_goal_instruction(goal, user_tz):
     overdue_clause = ""
     if is_overdue:
         overdue_clause = (
-            f"\n\nThe deadline passed {overdue_days} day(s) ago. Unless the user has "
+            f"\n\nThe deadline passed {overdue_for} ago. Unless the user has "
             f"since asked you to keep going, close this goal NOW with "
             f"complete_agent_goal — state in the outcome what was achieved and that "
             f"the deadline expired. Do not keep checking in on an expired goal."
         )
 
     notes_block = goal.notes or "(none yet — this is your first check-in)"
-    elapsed_days = (timezone.now() - goal.created_at).days
+    elapsed_days = (now - goal.created_at).days
 
     return (
         f"\n\n## Autonomous goal check-in\n"

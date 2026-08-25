@@ -1220,6 +1220,18 @@ class AgentGoalCheckInInstructionTests(TestCase):
         self.assertIn("The deadline passed 7 day(s) ago", text)
         self.assertIn("complete_agent_goal", text)
 
+    def test_deadline_passed_minutes_ago_reads_as_sub_day(self):
+        text = self._instruction(deadline=timezone.now() - timedelta(minutes=10))
+        self.assertIn("OVERDUE by less than a day", text)
+        self.assertIn("The deadline passed less than a day ago", text)
+        self.assertNotIn("OVERDUE by 0 day(s)", text)
+        self.assertNotIn("The deadline passed 0 day(s) ago", text)
+
+    def test_deadline_passed_over_a_day_ago_counts_full_days(self):
+        text = self._instruction(deadline=timezone.now() - timedelta(days=1, hours=3))
+        self.assertIn("OVERDUE by 1 day(s)", text)
+        self.assertIn("The deadline passed 1 day(s) ago", text)
+
     def test_no_deadline_carries_no_overdue_signal(self):
         text = self._instruction()
         self.assertNotIn("Deadline", text)

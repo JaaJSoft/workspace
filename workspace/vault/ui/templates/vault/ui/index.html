@@ -126,7 +126,7 @@
                        autocomplete="off" spellcheck="false" x-model="newVaultName"
                        placeholder="Vault name">
                 <div class="modal-action">
-                  <button type="button" class="btn btn-ghost" @click="showCreate = false">Cancel</button>
+                  <button type="button" class="btn btn-ghost" @click="showCreate = false; newVaultName = ''">Cancel</button>
                   <button type="submit" class="btn btn-primary" :disabled="busy">Create</button>
                 </div>
               </form>

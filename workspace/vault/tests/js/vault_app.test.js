@@ -199,6 +199,7 @@ test('creating a vault seals a fresh key to the account and signs the metadata',
   assert.equal(posted[0].uuid, 'vault-uuid');
   assert.equal(posted[0].metadata_sig, 'signature');
   assert.deepEqual(posted[0].hpke_suite, { kem_id: 32, kdf_id: 1, aead_id: 2, mode: 0 });
+  assert.equal(component.vaults.length, 1);
 });
 
 test('the vault name never leaves the browser in the clear', async () => {
@@ -239,8 +240,13 @@ test('an empty name is refused before anything is sealed', async () => {
 });
 
 test('creating a vault while locked is refused', async () => {
-  const component = app({ isUnlocked: () => false });
+  let called = 0;
+  const component = app({ isUnlocked: () => false }, {
+    listVaults: async () => [],
+    createVault: async () => { called += 1; return {}; },
+  });
   component.newVaultName = 'Work';
   await component.createVault();
+  assert.equal(called, 0);
   assert.equal(component.state, 'locked');
 });

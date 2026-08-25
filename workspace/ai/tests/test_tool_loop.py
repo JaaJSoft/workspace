@@ -613,9 +613,16 @@ class _StubRegistry:
             self.spans.append((call_id, "end"))
 
 
-@override_settings(AI_MAX_TOOL_ROUNDS=10, AI_MAX_IDENTICAL_TOOL_CALLS=3)
+@override_settings(
+    AI_MAX_TOOL_ROUNDS=10, AI_MAX_IDENTICAL_TOOL_CALLS=3, AI_TOOL_CONCURRENCY=4
+)
 class ConcurrentToolCallTests(TestCase):
-    """Read-only calls of one round share a dispatch; everything else doesn't."""
+    """Read-only calls of one round share a dispatch; everything else doesn't.
+
+    The width is pinned rather than inherited: a test that proves two calls
+    overlap has to state the setting it needs, or a changed default turns it
+    into a barrier timeout that names nothing.
+    """
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -748,7 +755,7 @@ class ConcurrentToolCallTests(TestCase):
         self._run(registry, calls)
 
         self.assertLessEqual(registry.peak_in_flight, 2)
-        # The sixth call waits for the pair before it: batches are dispatched
+        # The third call waits for the pair before it: batches are dispatched
         # one after another, only their members overlap.
         starts = [call_id for call_id, event in registry.spans if event == "start"]
         self.assertEqual(starts, ["c0", "c1", "c2", "c3", "c4"])
@@ -860,7 +867,9 @@ class ConcurrentToolCallTests(TestCase):
             self._run(registry, calls)
 
 
-@override_settings(AI_MAX_TOOL_ROUNDS=10, AI_MAX_IDENTICAL_TOOL_CALLS=3)
+@override_settings(
+    AI_MAX_TOOL_ROUNDS=10, AI_MAX_IDENTICAL_TOOL_CALLS=3, AI_TOOL_CONCURRENCY=4
+)
 class StepCompletionTests(TestCase):
     """Each call reports its own end, so the UI never guesses from position."""
 

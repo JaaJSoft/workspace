@@ -187,11 +187,11 @@ def run_tool_loop(
     normal completion and flags nothing.
 
     Within a round, consecutive calls to tools the registry marks
-    ``concurrent`` are dispatched together, up to
-    settings.AI_TOOL_CONCURRENCY at a time, so a model that asks for five
-    pages waits for the slowest fetch rather than the sum of five. Every
-    other call runs alone, in the order the model asked for it, and results
-    are recorded in that order whatever order they land in.
+    ``concurrent`` are dispatched together, settings.AI_TOOL_CONCURRENCY at
+    a time, so a model that asks for a batch of pages waits for the slowest
+    fetch of that batch rather than the sum of them all. Every other call
+    runs alone, in the order the model asked for it, and results are
+    recorded in that order whatever order they land in.
 
     *rounds* is a list
     of dicts capturing each LLM response and the tool executions that

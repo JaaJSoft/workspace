@@ -19,6 +19,16 @@
       "key_b64": "8b43Rnlqqx3tYCG03X00vdglUqDQHYaSZKynjYYDzuY",
       "key_version": 0,
       "plaintext": "private-key-bytes"
+    },
+    {
+      "ad": "v1|vault-field|0192f3a4-2222-7d8e-9f01-23456789abcd|name",
+      "expected_wire_b64": "AQEBAAEMAAECAwQFBgcICQoLs4vePsyEAEIbLQzZItxOIWKR2Iw-ninV",
+      "id": "vault-field-name",
+      "iv_b64": "AAECAwQFBgcICQoL",
+      "kdf_id": 1,
+      "key_b64": "z_Gj18v3bdBe2BbV76RruXMMeWv3rNsRFs9TifH27a0",
+      "key_version": 1,
+      "plaintext": "Personal"
     }
   ],
   "argon2id": [
@@ -86,6 +96,22 @@
         "type": "test",
         "v": 1
       }
+    },
+    {
+      "expected_b64": "qmF2AWRpY29uZGxvY2tkdHlwZW52YXVsdC1tZXRhZGF0YWVjb2xvcmdwcmltYXJ5anZhdWx0X3V1aWR4JDAxOTJmM2E0LTIyMjItN2Q4ZS05ZjAxLTIzNDU2Nzg5YWJjZGtpc19mYXZvcml0ZfRra2V5X3ZlcnNpb24BbmVuY3J5cHRlZF9uYW1leDhBUUVCQUFFTUFBRUNBd1FGQmdjSUNRb0xzNHZlUHN5RUFFSWJMUXpaSXR4T0lXS1IySXctbmluVnJvd25lcl9hY2NvdW50X3V1aWR4JDAxOTJmM2E0LTExMTEtN2Q4ZS05ZjAxLTIzNDU2Nzg5YWJjZHVlbmNyeXB0ZWRfZGVzY3JpcHRpb25g",
+      "id": "vault-metadata",
+      "payload": {
+        "color": "primary",
+        "encrypted_description": "",
+        "encrypted_name": "AQEBAAEMAAECAwQFBgcICQoLs4vePsyEAEIbLQzZItxOIWKR2Iw-ninV",
+        "icon": "lock",
+        "is_favorite": false,
+        "key_version": 1,
+        "owner_account_uuid": "0192f3a4-1111-7d8e-9f01-23456789abcd",
+        "type": "vault-metadata",
+        "v": 1,
+        "vault_uuid": "0192f3a4-2222-7d8e-9f01-23456789abcd"
+      }
     }
   ],
   "ed25519": [
@@ -109,6 +135,24 @@
       "message_b64": "djF8YWNjb3VudC1rZXgtcHVifDAxOTJmM2E0LTExMTEtN2Q4ZS05ZjAxLTIzNDU2Nzg5YWJjZHxBUS1xYUU3U2lHZTVmMHBxTGU1ZC1NNlhUbmEzQVk0X0lxSEV6eVo0Vnc4Zw",
       "pk_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
       "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
+    },
+    {
+      "expected_sig_b64": "AbAhLeSzgXfdipMIFuhXSbwUvRwFYploFovfdZ1cA6zCOMFXDABqGp4DpyLDj3h_ph0XqytsT_dGgyKJ5D6-fwM",
+      "id": "vault-metadata-signature",
+      "payload": {
+        "color": "primary",
+        "encrypted_description": "",
+        "encrypted_name": "AQEBAAEMAAECAwQFBgcICQoLs4vePsyEAEIbLQzZItxOIWKR2Iw-ninV",
+        "icon": "lock",
+        "is_favorite": false,
+        "key_version": 1,
+        "owner_account_uuid": "0192f3a4-1111-7d8e-9f01-23456789abcd",
+        "type": "vault-metadata",
+        "v": 1,
+        "vault_uuid": "0192f3a4-2222-7d8e-9f01-23456789abcd"
+      },
+      "pk_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+      "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
     }
   ],
   "hkdf": [
@@ -123,6 +167,12 @@
       "id": "entry-key",
       "ikm_b64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8",
       "info": "v1|entry-key|0192f3a4-5b6c-7d8e-9f01-23456789abcd"
+    },
+    {
+      "expected_b64": "z_Gj18v3bdBe2BbV76RruXMMeWv3rNsRFs9TifH27a0",
+      "id": "vault-meta-key",
+      "ikm_b64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8",
+      "info": "v1|vault-meta|0192f3a4-2222-7d8e-9f01-23456789abcd"
     }
   ],
   "hpke": [

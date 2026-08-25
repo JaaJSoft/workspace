@@ -15,7 +15,7 @@ import pathlib
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from . import ad, primitives
+from . import ad, metadata, primitives
 from .encoding import to_base64url
 
 VECTORS_PATH = pathlib.Path(__file__).resolve().parent.parent / "crypto_vectors.json"
@@ -59,6 +59,27 @@ def build_vectors() -> dict:
         "ts": 1755000000000,
     }
 
+    vault_meta_key = primitives.hkdf(vault_key, ad.vault_meta_info(VAULT_UUID))
+    vault_metadata = metadata.vault_metadata_payload(
+        vault_uuid=VAULT_UUID,
+        owner_account_uuid=ACCOUNT_UUID,
+        encrypted_name=to_base64url(
+            primitives.aead_seal(
+                vault_meta_key,
+                b"Personal",
+                ad.vault_field_ad(VAULT_UUID, "name"),
+                iv=AEAD_IV,
+                key_version=1,
+                kdf_id=0x01,
+            )
+        ),
+        encrypted_description="",
+        icon="lock",
+        color="primary",
+        key_version=1,
+        is_favorite=False,
+    )
+
     return {
         "version": 1,
         "argon2id": [
@@ -99,6 +120,12 @@ def build_vectors() -> dict:
                     primitives.hkdf(vault_key, ad.entry_key_info(ENTRY_UUID))
                 ),
             },
+            {
+                "id": "vault-meta-key",
+                "ikm_b64": to_base64url(vault_key),
+                "info": ad.vault_meta_info(VAULT_UUID).decode("ascii"),
+                "expected_b64": to_base64url(vault_meta_key),
+            },
         ],
         "aead": [
             {
@@ -138,6 +165,16 @@ def build_vectors() -> dict:
                         kdf_id=0x00,
                     )
                 ),
+            },
+            {
+                "id": "vault-field-name",
+                "key_b64": to_base64url(vault_meta_key),
+                "iv_b64": to_base64url(AEAD_IV),
+                "ad": ad.vault_field_ad(VAULT_UUID, "name").decode("ascii"),
+                "plaintext": "Personal",
+                "key_version": 1,
+                "kdf_id": 0x01,
+                "expected_wire_b64": vault_metadata["encrypted_name"],
             },
         ],
         "hpke": [
@@ -188,6 +225,11 @@ def build_vectors() -> dict:
                     primitives.canonical_cbor({"v": 1, "type": "test", "name": "café"})
                 ),
             },
+            {
+                "id": "vault-metadata",
+                "payload": vault_metadata,
+                "expected_b64": to_base64url(primitives.canonical_cbor(vault_metadata)),
+            },
         ],
         "ed25519": [
             {
@@ -218,6 +260,15 @@ def build_vectors() -> dict:
                         signer,
                         ad.kex_pub_payload(ACCOUNT_UUID, to_base64url(kex_pub_stored)),
                     )
+                ),
+            },
+            {
+                "id": "vault-metadata-signature",
+                "sk_b64": to_base64url(SIG_SK),
+                "pk_b64": to_base64url(primitives.public_bytes(signer.public_key())),
+                "payload": vault_metadata,
+                "expected_sig_b64": to_base64url(
+                    primitives.sign(signer, vault_metadata)
                 ),
             },
         ],

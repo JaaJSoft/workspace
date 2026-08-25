@@ -2,7 +2,7 @@ from cryptography.exceptions import InvalidSignature, InvalidTag
 from django.test import SimpleTestCase
 from pyhpke.exceptions import OpenError
 
-from workspace.vault.tests.reference import ad, encoding, primitives, wire
+from workspace.vault.tests.reference import ad, encoding, metadata, primitives, wire
 
 
 class Base64UrlTests(SimpleTestCase):
@@ -519,3 +519,90 @@ class CrockfordBase32Tests(SimpleTestCase):
         text = primitives.crockford_encode(bytes(range(32)))
         with self.assertRaises(ValueError):
             primitives.crockford_decode(text[:-1] + "!")
+
+
+class VaultMetadataCatalogueTests(SimpleTestCase):
+    VAULT = "0192f3a4-2222-7d8e-9f01-23456789abcd"
+    ACCOUNT = "0192f3a4-1111-7d8e-9f01-23456789abcd"
+
+    def test_the_metadata_key_info_is_scoped_to_the_vault(self):
+        self.assertEqual(
+            ad.vault_meta_info(self.VAULT), b"v1|vault-meta|" + self.VAULT.encode()
+        )
+
+    def test_the_field_ad_names_the_field(self):
+        self.assertEqual(
+            ad.vault_field_ad(self.VAULT, "name"),
+            b"v1|vault-field|" + self.VAULT.encode() + b"|name",
+        )
+
+    def test_the_uuid_is_lowercased_before_it_enters_the_string(self):
+        self.assertEqual(
+            ad.vault_field_ad(self.VAULT.upper(), "name"),
+            ad.vault_field_ad(self.VAULT, "name"),
+        )
+
+    def test_a_field_outside_the_catalogue_is_refused(self):
+        """An open list here would let a vault field derive the same AD as an
+        entry field and make the two ciphertexts interchangeable."""
+        for field in ("password", "custom:x", "", "notes"):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                ad.vault_field_ad(self.VAULT, field)
+
+    def test_the_payload_carries_exactly_the_signed_fields(self):
+        payload = metadata.vault_metadata_payload(
+            vault_uuid=self.VAULT,
+            owner_account_uuid=self.ACCOUNT,
+            encrypted_name="AQEBAAABc2VhbGVk",
+            encrypted_description="",
+            icon="lock",
+            color="primary",
+            key_version=1,
+            is_favorite=False,
+        )
+        self.assertEqual(
+            set(payload),
+            {
+                "v",
+                "type",
+                "vault_uuid",
+                "owner_account_uuid",
+                "encrypted_name",
+                "encrypted_description",
+                "icon",
+                "color",
+                "key_version",
+                "is_favorite",
+            },
+        )
+        self.assertEqual(payload["v"], 1)
+        self.assertEqual(payload["type"], "vault-metadata")
+
+    def test_the_payload_holds_no_timestamp(self):
+        """The server writes created_at and updated_at, so a client
+        re-verifying a vault it did not just create cannot reproduce them."""
+        payload = metadata.vault_metadata_payload(
+            vault_uuid=self.VAULT,
+            owner_account_uuid=self.ACCOUNT,
+            encrypted_name="AQ",
+            encrypted_description="",
+            icon="lock",
+            color="primary",
+            key_version=1,
+            is_favorite=False,
+        )
+        self.assertFalse([key for key in payload if key.endswith("_at")])
+
+    def test_the_uuids_are_lowercased_in_the_payload(self):
+        payload = metadata.vault_metadata_payload(
+            vault_uuid=self.VAULT.upper(),
+            owner_account_uuid=self.ACCOUNT.upper(),
+            encrypted_name="AQ",
+            encrypted_description="",
+            icon="lock",
+            color="primary",
+            key_version=1,
+            is_favorite=False,
+        )
+        self.assertEqual(payload["vault_uuid"], self.VAULT)
+        self.assertEqual(payload["owner_account_uuid"], self.ACCOUNT)

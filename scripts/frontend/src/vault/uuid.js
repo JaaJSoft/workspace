@@ -1,7 +1,9 @@
 // UUIDv7, because the identifier is the row's primary key and a v4 scatters
 // inserts across the index. crypto.randomUUID() only mints v4, so the
-// timestamp prefix is written here and the remaining 74 bits come from the
-// CSPRNG - no entropy is home-rolled, only the layout.
+// timestamp prefix is written here; the remaining 74 bits come from the
+// CSPRNG on the first call in a millisecond, and increment from there for
+// every following call in the same millisecond - no entropy is home-rolled,
+// only the layout.
 import { randomBytes } from './encoding.js';
 
 const RAND_BITS = 74n;

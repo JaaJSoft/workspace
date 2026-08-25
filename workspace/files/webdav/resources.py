@@ -401,33 +401,38 @@ class FileResource(DAVNonCollection):
         )
         return self._write_buf
 
+    def _discard_placeholder(self):
+        """Drop the row ``create_empty_resource`` left behind, if still empty.
+
+        Only a record that never had content (``size is None``) goes; refresh
+        first so a concurrent PUT that already populated it survives.
+        """
+        try:
+            self._file.refresh_from_db()
+            if self._file.size is None:
+                self._file.delete(hard=True)
+        except File.DoesNotExist:
+            pass  # already gone
+
     def end_write(self, *, with_errors):
+        # No buffer means begin_write refused the upload before opening one.
+        # do_PUT still creates the empty row first, so the failure path must
+        # run all the same.
         buf = getattr(self, "_write_buf", None)
-        if buf is None:
-            # begin_write refused the upload before opening anything.
-            return
-        elapsed = time.monotonic() - getattr(
-            self, "_write_started_at", time.monotonic()
-        )
+        started_at = getattr(self, "_write_started_at", None)
+        elapsed = 0.0 if started_at is None else time.monotonic() - started_at
         username = scrub(getattr(self._user, "username", "?"))
 
-        if with_errors:
-            buf.abort()
+        if with_errors or buf is None:
+            if buf is not None:
+                buf.abort()
             logger.warning(
                 "PUT failed for %s by %s (%.2fs)",
                 scrub(self.path),
                 username,
                 elapsed,
             )
-            # Only hard-delete if the record still exists and has never
-            # had content (size is None).  Refresh first so we don't
-            # delete a record that a concurrent PUT already populated.
-            try:
-                self._file.refresh_from_db()
-                if self._file.size is None:
-                    self._file.delete(hard=True)
-            except File.DoesNotExist:
-                pass  # already gone
+            self._discard_placeholder()
             return
 
         # Detect partial uploads: if the client announced Content-Length
@@ -446,12 +451,7 @@ class FileResource(DAVNonCollection):
                 expected,
                 elapsed,
             )
-            try:
-                self._file.refresh_from_db()
-                if self._file.size is None:
-                    self._file.delete(hard=True)
-            except File.DoesNotExist:
-                pass  # already gone
+            self._discard_placeholder()
             raise DAVError(HTTP_BAD_REQUEST, "Incomplete upload")
 
         # Finalize the file on storage (flush remaining buffer + close).

@@ -389,6 +389,58 @@ class WebDavWriteBufferTests(TestCase):
             self.assertEqual(buf.size, 100_000)
 
 
+@override_settings(STORAGE_QUOTA_BYTES=KB)
+class WebDavRefusedPutTests(TestCase):
+    """A PUT refused before a byte is read must leave the tree as it was.
+
+    ``do_PUT`` creates the empty row before calling ``begin_write``, then
+    answers a raising ``begin_write`` with ``end_write(with_errors=True)``.
+    """
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        tmpdir = tempfile.mkdtemp()
+        media = override_settings(MEDIA_ROOT=tmpdir)
+        media.enable()
+        self.addCleanup(media.disable)
+        self.addCleanup(shutil.rmtree, tmpdir, ignore_errors=True)
+
+        self.user = User.objects.create_user(username="davput", password="pw")
+        FileService.create_file(
+            self.user, "used.bin", content=ContentFile(b"x" * KB, name="used.bin")
+        )
+
+    def _environ(self, content_length):
+        return {
+            "workspace.user": self.user,
+            "wsgidav.provider": None,
+            "CONTENT_LENGTH": str(content_length),
+        }
+
+    def _put(self, name, content_length):
+        """Drive the create/begin/end sequence ``do_PUT`` uses for a new file."""
+        from wsgidav.dav_error import DAVError
+
+        from workspace.files.webdav.resources import RootCollection
+
+        root = RootCollection("/", self._environ(content_length))
+        res = root.create_empty_resource(name)
+        with self.assertRaises(DAVError) as caught:
+            res.begin_write(content_type="application/octet-stream")
+        res.end_write(with_errors=True)
+        return caught.exception
+
+    def test_a_refused_new_file_put_leaves_no_row_behind(self):
+        error = self._put("big.bin", 512)
+        self.assertEqual(error.value, 507)
+        self.assertFalse(
+            File.objects.filter(name="big.bin").exists(),
+            "the placeholder row must not survive a refused upload",
+        )
+
+
 @override_settings(STORAGE_QUOTA_BYTES=10 * KB)
 class WebDavQuotaAdvertisingTests(TestCase):
     def setUp(self):

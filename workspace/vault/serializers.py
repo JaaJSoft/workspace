@@ -204,3 +204,16 @@ class VaultCreateSerializer(serializers.Serializer):
     metadata_sig = _OpaqueField()
     wrapped_key = _OpaqueField()
     hpke_suite = serializers.JSONField(validators=[validate_hpke_suite])
+
+
+class VaultUpdateSerializer(serializers.Serializer):
+    """Every signed field, always. A rename re-signs the whole payload, so a
+    partial write would leave the row carrying a signature over values it no
+    longer holds."""
+
+    encrypted_name = _OpaqueField()
+    encrypted_description = _OpaqueField(allow_blank=True)
+    icon = serializers.RegexField(_ICON)
+    color = serializers.RegexField(_COLOR)
+    is_favorite = serializers.BooleanField()
+    metadata_sig = _OpaqueField()

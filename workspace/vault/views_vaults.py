@@ -19,9 +19,9 @@ from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
 
-from .models import Vault, VaultKeyWrap
-from .queries import active_identity, user_vault_ids
-from .serializers import VaultCreateSerializer, VaultSerializer
+from .models import Vault, VaultKeyWrap, VaultRole
+from .queries import active_identity, get_vault_role, user_vault_ids
+from .serializers import VaultCreateSerializer, VaultSerializer, VaultUpdateSerializer
 from .services.attestation import AttestationError
 from .services.metadata import vault_metadata_payload, verify_vault_metadata
 
@@ -128,3 +128,64 @@ class VaultListView(CacheControlMixin, APIView):
             VaultSerializer(vault, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+@method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
+class VaultDetailView(CacheControlMixin, APIView):
+    cache_no_store = True
+
+    def _owned(self, request, uuid):
+        """The caller's own vault, or None - and the caller never learns which
+        of the two reasons applied."""
+        vault = Vault.objects.filter(uuid=uuid).first()
+        if vault is None or get_vault_role(request.user, vault) != VaultRole.OWNER:
+            return None
+        return vault
+
+    @extend_schema(
+        tags=["Vault"],
+        summary="Rename or restyle a vault",
+        request=VaultUpdateSerializer,
+        responses={200: VaultSerializer},
+    )
+    @sensitive_variables()
+    def patch(self, request, uuid):
+        identity = active_identity(request.user)
+        vault = self._owned(request, uuid)
+        if identity is None or vault is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        serializer = VaultUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # key_version comes from the row, never from the request: it moves on
+        # a vault key rotation, which this endpoint does not perform.
+        payload = vault_metadata_payload(
+            vault_uuid=vault.uuid,
+            owner_account_uuid=identity.uuid,
+            encrypted_name=data["encrypted_name"],
+            encrypted_description=data["encrypted_description"],
+            icon=data["icon"],
+            color=data["color"],
+            key_version=vault.key_version,
+            is_favorite=data["is_favorite"],
+        )
+        try:
+            verify_vault_metadata(payload, identity.sig_public, data["metadata_sig"])
+        except AttestationError:
+            return _signature_refused()
+
+        for field, value in data.items():
+            setattr(vault, field, value)
+        vault.save(update_fields=[*data, "updated_at"])
+        vault.own_wraps = list(vault.key_wraps.filter(recipient=request.user))
+        return Response(VaultSerializer(vault, context={"request": request}).data)
+
+    @extend_schema(tags=["Vault"], summary="Delete a vault", responses={204: None})
+    def delete(self, request, uuid):
+        vault = self._owned(request, uuid)
+        if vault is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        vault.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -28,4 +28,9 @@ urlpatterns = [
         views_vaults.VaultListView.as_view(),
         name="vault-list",
     ),
+    path(
+        "api/v1/vault/vaults/<uuid:uuid>",
+        views_vaults.VaultDetailView.as_view(),
+        name="vault-detail",
+    ),
 ]

@@ -203,3 +203,140 @@ class VaultListTests(TestCase):
 
     def test_the_listing_is_never_cached(self):
         self.assertIn("no-store", self.client.get(self.url)["Cache-Control"])
+
+
+class VaultUpdateTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.other = User.objects.create_user(username="other", password="pw")
+        self.client.force_login(self.user)
+        self.signer = Ed25519PrivateKey.generate()
+        self.identity = AccountIdentity.objects.create(
+            user=self.user,
+            kdf_salt="SALT",
+            state=AccountIdentity.State.ACTIVE,
+            sig_public=to_base64url(
+                bytes([0x02]) + self.signer.public_key().public_bytes_raw()
+            ),
+        )
+        self.vault = Vault.objects.create(
+            uuid=VAULT_UUID, owner=self.user, encrypted_name="AQ", metadata_sig="AQ"
+        )
+        self.url = reverse("vault-detail", args=[VAULT_UUID])
+
+    def _body(self, **overrides):
+        fields = {
+            "vault_uuid": VAULT_UUID,
+            "owner_account_uuid": str(self.identity.uuid),
+            "encrypted_name": "AQEBAAABcmVuYW1lZA",
+            "encrypted_description": "",
+            "icon": "lock",
+            "color": "primary",
+            "key_version": 1,
+            "is_favorite": False,
+        }
+        fields.update(overrides)
+        payload = vault_metadata_payload(**fields)
+        signature = bytes([0x01]) + self.signer.sign(canonical_cbor(payload))
+        return {
+            "encrypted_name": fields["encrypted_name"],
+            "encrypted_description": fields["encrypted_description"],
+            "icon": fields["icon"],
+            "color": fields["color"],
+            "is_favorite": fields["is_favorite"],
+            "metadata_sig": to_base64url(signature),
+        }
+
+    def test_a_signed_rename_lands(self):
+        response = self.client.patch(self.url, self._body(), "application/json")
+        self.assertEqual(response.status_code, 200)
+        self.vault.refresh_from_db()
+        self.assertEqual(self.vault.encrypted_name, "AQEBAAABcmVuYW1lZA")
+
+    def test_the_new_signature_replaces_the_old_one(self):
+        body = self._body()
+        self.client.patch(self.url, body, "application/json")
+        self.vault.refresh_from_db()
+        self.assertEqual(self.vault.metadata_sig, body["metadata_sig"])
+
+    def test_a_favourite_is_re_signed_like_any_other_field(self):
+        response = self.client.patch(
+            self.url, self._body(is_favorite=True), "application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.vault.refresh_from_db()
+        self.assertTrue(self.vault.is_favorite)
+
+    def test_an_unsigned_rename_leaves_the_vault_alone(self):
+        body = self._body()
+        body["encrypted_name"] = "AQEBAAABdGFtcGVyZWQ"
+        self.assertEqual(
+            self.client.patch(self.url, body, "application/json").status_code, 400
+        )
+        self.vault.refresh_from_db()
+        self.assertEqual(self.vault.encrypted_name, "AQ")
+
+    def test_a_signature_from_another_key_version_is_refused(self):
+        """key_version is inside the payload and the server takes it from the
+        row: a client signing a version it invented cannot rewrite the vault."""
+        self.assertEqual(
+            self.client.patch(
+                self.url, self._body(key_version=2), "application/json"
+            ).status_code,
+            400,
+        )
+
+    def test_someone_elses_vault_answers_404_not_403(self):
+        theirs = Vault.objects.create(
+            owner=self.other, encrypted_name="AQ", metadata_sig="AQ"
+        )
+        response = self.client.patch(
+            reverse("vault-detail", args=[theirs.uuid]),
+            self._body(),
+            "application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_vault_that_does_not_exist_answers_the_same_404(self):
+        response = self.client.patch(
+            reverse("vault-detail", args=["0192f3a4-9999-7d8e-9f01-23456789abcd"]),
+            self._body(),
+            "application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_member_cannot_rename_a_vault_they_do_not_own(self):
+        theirs = Vault.objects.create(
+            owner=self.other, encrypted_name="AQ", metadata_sig="AQ"
+        )
+        VaultKeyWrap.objects.create(
+            vault=theirs, recipient=self.user, wrapped_key="AQ", hpke_suite=HPKE_SUITE
+        )
+        response = self.client.patch(
+            reverse("vault-detail", args=[theirs.uuid]),
+            self._body(),
+            "application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_the_owner_can_delete_their_vault(self):
+        self.assertEqual(self.client.delete(self.url).status_code, 204)
+        self.assertFalse(Vault.objects.filter(uuid=VAULT_UUID).exists())
+
+    def test_deleting_a_vault_takes_its_key_wraps_with_it(self):
+        VaultKeyWrap.objects.create(
+            vault=self.vault,
+            recipient=self.user,
+            wrapped_key="AQ",
+            hpke_suite=HPKE_SUITE,
+        )
+        self.client.delete(self.url)
+        self.assertFalse(VaultKeyWrap.objects.exists())
+
+    def test_deleting_someone_elses_vault_answers_404_and_changes_nothing(self):
+        theirs = Vault.objects.create(
+            owner=self.other, encrypted_name="AQ", metadata_sig="AQ"
+        )
+        response = self.client.delete(reverse("vault-detail", args=[theirs.uuid]))
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Vault.objects.filter(uuid=theirs.uuid).exists())

@@ -758,10 +758,6 @@ class FileService:
         return _storage.ensure_folder_on_storage(folder)
 
     @staticmethod
-    def _copy_node(node, parent, owner, _sibling_names=None):
-        return _storage.copy_node(node, parent, owner, _sibling_names)
-
-    @staticmethod
     def _parent_storage_path(owner, parent):
         return _storage.parent_storage_path(owner, parent)
 

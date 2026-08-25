@@ -4,7 +4,9 @@
 // components stay classic scripts, which is what keeps them loadable by the
 // node:vm test loader.
 import { toBase64Url, fromBase64Url, randomBytes, equalBytes } from './src/vault/encoding.js';
-import { AD, RESERVED_FIELD_IDS, ENTRY_COLUMN_FIELD_IDS, qualifyFieldId } from './src/vault/ad.js';
+import {
+  AD, RESERVED_FIELD_IDS, ENTRY_COLUMN_FIELD_IDS, VAULT_FIELD_IDS, qualifyFieldId,
+} from './src/vault/ad.js';
 import {
   FORMAT_VERSION, AEAD_AES_256_GCM, KDF_DIRECT, KDF_HKDF_SHA256,
   PUBKEY_ALG_X25519, PUBKEY_ALG_ED25519,
@@ -17,6 +19,8 @@ import { HPKE_SUITE_V1, hpkeSeal, hpkeOpen } from './src/vault/hpke.js';
 import { canonicalCbor, decodeCbor } from './src/vault/cbor.js';
 import { SIG_ALG_ED25519, sign, verify, signBytes, verifyBytes } from './src/vault/sign.js';
 import { crockfordEncode, crockfordDecode } from './src/vault/crockford.js';
+import { VAULT_METADATA_TYPE, vaultMetadataPayload } from './src/vault/metadata.js';
+import { uuidV7 } from './src/vault/uuid.js';
 
 window.VaultCrypto = {
   toBase64Url,
@@ -26,6 +30,7 @@ window.VaultCrypto = {
   AD,
   RESERVED_FIELD_IDS,
   ENTRY_COLUMN_FIELD_IDS,
+  VAULT_FIELD_IDS,
   qualifyFieldId,
   FORMAT_VERSION,
   AEAD_AES_256_GCM,
@@ -55,4 +60,7 @@ window.VaultCrypto = {
   verifyBytes,
   crockfordEncode,
   crockfordDecode,
+  VAULT_METADATA_TYPE,
+  vaultMetadataPayload,
+  uuidV7,
 };

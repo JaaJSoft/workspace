@@ -22,6 +22,11 @@ export const RESERVED_FIELD_IDS = Object.freeze(['username', 'password', 'totp',
 // verify, so it may never produce them.
 export const ENTRY_COLUMN_FIELD_IDS = Object.freeze(['name', 'notes']);
 
+// Closed for the same reason as RESERVED_FIELD_IDS: an open list would let a
+// vault field derive an associated data string an entry field can also derive,
+// and a ciphertext could be moved between the two and still verify.
+export const VAULT_FIELD_IDS = Object.freeze(['name', 'description']);
+
 const CUSTOM_PREFIX = 'custom:';
 
 // The account identifier in these strings is the UUID of the account's
@@ -38,6 +43,13 @@ export const AD = {
     ascii(`v1|account-kex-pub|${uuid(accountUuid)}|${kexPubB64}`),
   vaultKeyInfo: (vaultUuid, recipientUuid) =>
     ascii(`v1|vault-key|${uuid(vaultUuid)}|${uuid(recipientUuid)}`),
+  vaultMetaInfo: (vaultUuid) => ascii(`v1|vault-meta|${uuid(vaultUuid)}`),
+  vaultFieldAd: (vaultUuid, field) => {
+    if (!VAULT_FIELD_IDS.includes(field)) {
+      throw new Error(`${field} is not a vault metadata field`);
+    }
+    return ascii(`v1|vault-field|${uuid(vaultUuid)}|${field}`);
+  },
 };
 
 // The AD component of a STORED field id - identity, never a transformation:

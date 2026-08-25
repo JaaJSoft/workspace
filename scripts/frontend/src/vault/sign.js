@@ -48,6 +48,23 @@ export async function sign(privateRaw, payload) {
   return signBytes(privateRaw, canonicalCbor(payload));
 }
 
+// The session form: a non-extractable CryptoKey, so the seed can be zeroed at
+// once and no later call needs the raw bytes back.
+export async function importSigner(seed) {
+  const key = await crypto.subtle.importKey(
+    'pkcs8', toPkcs8(seed), 'Ed25519', false, ['sign']
+  );
+  return {
+    async sign(message) {
+      const signature = new Uint8Array(await crypto.subtle.sign('Ed25519', key, message));
+      const out = new Uint8Array(1 + signature.length);
+      out[0] = SIG_ALG_ED25519;
+      out.set(signature, 1);
+      return out;
+    },
+  };
+}
+
 export async function verify(publicRaw, payloadBytes, signature, expectedType) {
   const payload = decodeCbor(payloadBytes);              // 1. decode
   if (payload.v !== 1) throw new Error(`unsupported payload version ${payload.v}`);  // 2.

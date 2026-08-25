@@ -190,6 +190,8 @@
                   <input
                     type="password"
                     class="input input-bordered w-full"
+                    :class="passwordBlocked() && 'input-error'"
+                    :aria-invalid="passwordBlocked()"
                     autocomplete="new-password"
                     data-step-focus
                     x-model="password"
@@ -217,33 +219,98 @@
                 {% endcomment %}
                 <ul class="text-sm space-y-1" aria-live="polite">
                   <li
+                    class="flex items-start gap-2"
                     :class="passwordLongEnough() ? 'text-success' : 'text-base-content/60'"
                   >
-                    At least 12 characters
+                    {% comment %}
+                      Each line carries its own icon because each line carries
+                      its own verdict, and colour alone does not reach anyone
+                      who cannot see it.
+                    {% endcomment %}
+                    <span class="shrink-0 mt-0.5">
+                      <span x-show="!passwordLongEnough()">
+                        <i data-lucide="circle-dashed" class="w-4 h-4"></i>
+                      </span>
+                      <span x-show="passwordLongEnough()" x-cloak>
+                        <i data-lucide="circle-check" class="w-4 h-4"></i>
+                      </span>
+                    </span>
+                    <span>At least 12 characters</span>
                   </li>
                   <li
+                    class="flex items-start gap-2"
                     :class="passwordStrongEnough() ? 'text-success' : 'text-base-content/60'"
                   >
-                    Strong enough to resist guessing
-                    <span x-show="feedback" x-text="'- ' + feedback" x-cloak></span>
+                    <span class="shrink-0 mt-0.5">
+                      <span x-show="!passwordStrongEnough()">
+                        <i data-lucide="circle-dashed" class="w-4 h-4"></i>
+                      </span>
+                      <span x-show="passwordStrongEnough()" x-cloak>
+                        <i data-lucide="circle-check" class="w-4 h-4"></i>
+                      </span>
+                    </span>
+                    <span>
+                      Strong enough to resist guessing
+                      <span x-show="feedback" x-text="'- ' + feedback" x-cloak></span>
+                    </span>
                   </li>
-                  <li :class="passwordsMatch() ? 'text-success' : 'text-base-content/60'">Both fields match</li>
                   <li
-                    :class="breachStatus === 'clean' || breachStatus === 'unavailable'
-                      ? 'text-success' : 'text-base-content/60'"
+                    class="flex items-start gap-2"
+                    :class="passwordsMatch() ? 'text-success' : 'text-base-content/60'"
                   >
-                    <span x-show="breachStatus !== 'checking'">Checked against known breaches</span>
-                    <span x-show="breachStatus === 'checking'" x-cloak>Checking against known breaches...</span>
+                    <span class="shrink-0 mt-0.5">
+                      <span x-show="!passwordsMatch()">
+                        <i data-lucide="circle-dashed" class="w-4 h-4"></i>
+                      </span>
+                      <span x-show="passwordsMatch()" x-cloak>
+                        <i data-lucide="circle-check" class="w-4 h-4"></i>
+                      </span>
+                    </span>
+                    <span>Both fields match</span>
+                  </li>
+                  {% comment %}
+                    The one criterion with more than two answers, and the reason
+                    this line states its verdict rather than deferring it to a
+                    block underneath: a password in the corpus will never turn
+                    green, so leaving the line grey - the colour the three above
+                    use for "not yet" - reads as a step still pending while
+                    something else says it is over. A lookup that could not run
+                    is a third answer again: it passes the floor, so it must not
+                    claim the green the ones we actually verified earned.
+                  {% endcomment %}
+                  <li
+                    class="flex items-start gap-2"
+                    :class="breachStatus === 'found' ? 'text-error'
+                      : breachStatus === 'unavailable' ? 'text-warning'
+                      : breachStatus === 'clean' ? 'text-success' : 'text-base-content/60'"
+                  >
+                    <span class="shrink-0 mt-0.5">
+                      <span x-show="breachStatus === 'unchecked'">
+                        <i data-lucide="circle-dashed" class="w-4 h-4"></i>
+                      </span>
+                      <span
+                        x-show="breachStatus === 'checking'"
+                        x-cloak
+                        class="loading loading-spinner loading-xs"
+                      ></span>
+                      <span x-show="breachStatus === 'clean'" x-cloak>
+                        <i data-lucide="circle-check" class="w-4 h-4"></i>
+                      </span>
+                      <span x-show="breachStatus === 'found'" x-cloak>
+                        <i data-lucide="circle-x" class="w-4 h-4"></i>
+                      </span>
+                      <span x-show="breachStatus === 'unavailable'" x-cloak>
+                        <i data-lucide="triangle-alert" class="w-4 h-4"></i>
+                      </span>
+                    </span>
+                    <span>
+                      <span x-show="breachStatus === 'unchecked' || breachStatus === 'clean'">Not in a known data breach</span>
+                      <span x-show="breachStatus === 'checking'" x-cloak>Checking known data breaches...</span>
+                      <span x-show="breachStatus === 'found'" x-cloak>Found in a public data breach - pick another one</span>
+                      <span x-show="breachStatus === 'unavailable'" x-cloak>Breach check unavailable - you can continue</span>
+                    </span>
                   </li>
                 </ul>
-
-                <inline-alert type="error" x-show="breachStatus === 'found'" x-cloak>
-                This password has appeared in a public data breach. Pick another one.
-                </inline-alert>
-                <inline-alert type="warning" x-show="breachStatus === 'unavailable'" x-cloak>
-                We could not check this password against known breaches. You
-                can continue.
-                </inline-alert>
               </section>
             </template>
 

@@ -186,6 +186,12 @@ class VaultListTests(TestCase):
     def test_listing_costs_the_same_whatever_the_number_of_vaults(self):
         """The absolute count depends on the session backend, so what is
         pinned is the shape: it must not grow with the collection."""
+        # A presence-tracking middleware writes a UserPresence row (plus a
+        # couple of reads) only on the first request this process ever sees
+        # for the user, then relies on a process-global cache to skip it on
+        # every later one. Spend that one-time cost here, outside both
+        # captures, so neither measurement absorbs it.
+        self.client.get(self.url)
         self._seed(1)
         with CaptureQueriesContext(connection) as one:
             self.client.get(self.url)

@@ -47,7 +47,7 @@
             ></div>
           </div>
           <div class="text-xs text-base-content/50 mt-1">
-            {% if storage_quota %}{{ storage_usage|filesizeformat }} / {{ storage_quota|filesizeformat }}{% else %}{{ storage_usage|filesizeformat }} used{% endif %}
+            {% if storage_quota is not None %}{{ storage_usage|filesizeformat }} / {{ storage_quota|filesizeformat }}{% else %}{{ storage_usage|filesizeformat }} used{% endif %}
           </div>
         </div>
       </div>

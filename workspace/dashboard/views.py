@@ -17,7 +17,11 @@ from workspace.core.services.module_visibility import (
     is_module_slug_visible,
     visible_modules,
 )
-from workspace.files.services.quota import effective_quota, personal_usage
+from workspace.files.services.quota import (
+    effective_quota,
+    personal_usage,
+    usage_percent,
+)
 from workspace.notifications.services.notifications import get_unread_badges
 from workspace.projects.queries import assigned_open_tasks
 from workspace.users.services.settings import get_module_settings, get_setting
@@ -139,11 +143,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
         "usage_stats": get_usage_stats(user.id),
         "storage_usage": storage_usage,
         "storage_quota": storage_quota,
-        "storage_percent": (
-            min(100, round(100 * storage_usage / storage_quota))
-            if storage_quota
-            else None
-        ),
+        "storage_percent": usage_percent(storage_usage, storage_quota),
     }
     if include_activity:
         context.update(_get_activity_context(user, source=activity_source))

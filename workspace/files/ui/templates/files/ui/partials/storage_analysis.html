@@ -64,7 +64,7 @@ Context (built by files.ui.views.storage):
       </div>
       <div class="stat-title">Used</div>
       <div class="stat-value text-2xl">{{ analysis.total_size|filesizeformat }}</div>
-      {% if analysis.quota %}
+      {% if analysis.quota is not None %}
         <div class="stat-desc">
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
             <progress

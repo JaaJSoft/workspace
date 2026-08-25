@@ -266,7 +266,11 @@ def profile_activity_feed(request, username):
 def settings_view(request):
     from django.conf import settings as django_settings
 
-    from workspace.files.services.quota import effective_quota, personal_usage
+    from workspace.files.services.quota import (
+        effective_quota,
+        personal_usage,
+        usage_percent,
+    )
     from workspace.users.services.oidc import is_oidc_managed
 
     profile_settings = get_module_settings(request.user, "profile")
@@ -280,11 +284,7 @@ def settings_view(request):
             "usage_stats": get_usage_stats(request.user.id),
             "storage_usage": storage_usage,
             "storage_quota": storage_quota,
-            "storage_percent": (
-                min(100, round(100 * storage_usage / storage_quota))
-                if storage_quota
-                else None
-            ),
+            "storage_percent": usage_percent(storage_usage, storage_quota),
             "profile_bio": profile_settings.get("bio") or "",
             "profile_role": profile_settings.get("role") or "",
             "banner_palette": profile_settings.get("banner_palette"),

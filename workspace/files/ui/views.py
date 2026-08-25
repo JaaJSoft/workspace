@@ -13,6 +13,7 @@ from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_viewer_by_slug
+from workspace.files.services.quota import usage_percent
 from workspace.files.services.storage_analysis import (
     CATEGORY_META,
     QUERY_MAX_LENGTH,
@@ -605,8 +606,8 @@ def storage(request, uuid=None):
     quota = analysis["quota"]
     quota_used = analysis["quota_used"]
     quota_percent = (
-        min(100, round(100 * quota_used / quota, 1))
-        if quota and quota_used is not None
+        usage_percent(quota_used, quota, ndigits=1)
+        if quota is not None and quota_used is not None
         else None
     )
     return render(

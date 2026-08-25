@@ -7,7 +7,7 @@ from django.db.models import Sum
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from workspace.files.models import File
+from workspace.files.models import File, UserStorageQuota
 from workspace.files.services import FileService, quota
 
 User = get_user_model()
@@ -176,14 +176,28 @@ class GaugeContextTests(TestCase):
         response = self.client.get(reverse("dashboard:index"))
         self.assertEqual(response.context["storage_usage"], 12)
         self.assertEqual(response.context["storage_quota"], 10 * MB)
+        self.assertEqual(response.context["storage_percent"], 0)
 
     def test_the_settings_gauge_uses_the_bucket_usage(self):
         response = self.client.get(reverse("users_ui:settings"))
         self.assertEqual(response.context["storage_usage"], 12)
 
     def test_an_unlimited_user_gets_a_null_quota(self):
-        from workspace.files.models import UserStorageQuota
-
         UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
         response = self.client.get(reverse("dashboard:index"))
         self.assertIsNone(response.context["storage_quota"])
+        self.assertIsNone(response.context["storage_percent"])
+        # A bare `None` embedded in the animation script would be invalid JS
+        # (`const pct = None;`); the |default:"0" filter must catch it.
+        self.assertNotContains(response, "pct = None")
+
+    def test_the_percent_clamps_at_100_when_usage_exceeds_quota(self):
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=5)
+        response = self.client.get(reverse("dashboard:index"))
+        self.assertEqual(response.context["storage_percent"], 100)
+
+    def test_a_zero_quota_renders_as_full_not_unlimited(self):
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=0)
+        response = self.client.get(reverse("dashboard:index"))
+        self.assertEqual(response.context["storage_quota"], 0)
+        self.assertEqual(response.context["storage_percent"], 100)

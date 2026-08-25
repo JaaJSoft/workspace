@@ -89,6 +89,21 @@ def remaining_bytes(*, owner, group):
     return None if limit is None else limit - used
 
 
+def usage_percent(used, limit, *, ndigits=None):
+    """Share of *limit* consumed by *used*, capped at 100.
+
+    ``None`` means unlimited. A limit of zero is a valid, fully-consumed
+    bucket (an administrator freezing an account) - it is never treated as
+    unlimited, and always reports 100.
+    """
+    if limit is None:
+        return None
+    if limit == 0:
+        return 100
+    share = 100 * used / limit
+    return min(100, round(share) if ndigits is None else round(share, ndigits))
+
+
 class QuotaExceeded(APIException):
     """A write refused because its bucket is full.
 

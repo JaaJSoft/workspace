@@ -484,14 +484,31 @@ class ExtractEnforcementTests(TestCase):
             extract_zip(archive, None, acting_user=self.user)
 
     def test_a_refused_extraction_leaves_no_entry_behind(self):
+        from unittest.mock import patch
+
         from workspace.files.services.extract import extract_zip
 
         archive = self._archive(
             [("a.bin", b"x" * (3 * KB)), ("b.bin", b"y" * (3 * KB))]
         )
-        with self.assertRaises(quota.QuotaExceeded):
-            extract_zip(archive, None, acting_user=self.user)
+        storage = File._meta.get_field("content").storage
+        delete_calls = []
+        orig_delete = storage.delete
+
+        def tracking_delete(name):
+            delete_calls.append(name)
+            return orig_delete(name)
+
+        with patch.object(storage, "delete", side_effect=tracking_delete):
+            with self.assertRaises(quota.QuotaExceeded):
+                extract_zip(archive, None, acting_user=self.user)
+
         self.assertFalse(File.objects.filter(name__in=["a.bin", "b.bin"]).exists())
+        self.assertTrue(
+            any("a.bin" in c for c in delete_calls),
+            f"Expected a cleanup delete for the 'a.bin' blob, got: {delete_calls}",
+        )
+        self.assertFalse(default_storage.exists(delete_calls[0]))
 
     def test_an_archive_that_fits_still_extracts(self):
         from workspace.files.services.extract import extract_zip
@@ -500,3 +517,25 @@ class ExtractEnforcementTests(TestCase):
         archive = self._archive([("a.bin", b"x" * (3 * KB))])
         result = extract_zip(archive, None, acting_user=self.user)
         self.assertEqual(result["files_created"], 1)
+
+    def test_the_fast_path_refuses_before_decompressing_the_entry(self):
+        """The quota is charged before ``b.bin`` reaches
+        ``_stream_entry_to_tempfile`` - decompression never happens for the
+        entry that would be refused."""
+        from unittest.mock import patch
+
+        from workspace.files.services import extract as extract_module
+
+        archive = self._archive(
+            [("a.bin", b"x" * (3 * KB)), ("b.bin", b"y" * (3 * KB))]
+        )
+        with patch.object(
+            extract_module,
+            "_stream_entry_to_tempfile",
+            wraps=extract_module._stream_entry_to_tempfile,
+        ) as spy:
+            with self.assertRaises(quota.QuotaExceeded):
+                extract_module.extract_zip(archive, None, acting_user=self.user)
+
+        self.assertEqual(spy.call_count, 1)
+        self.assertEqual(spy.call_args.args[2], "a.bin")

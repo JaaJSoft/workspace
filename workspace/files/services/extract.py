@@ -182,11 +182,13 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                             quota_remaining is not None
                             and total_bytes + info.file_size > quota_remaining
                         ):
-                            # The service names the bucket and re-reads usage.
+                            # The service names the bucket and re-reads usage,
+                            # which already includes bytes written earlier in
+                            # this extraction - charge only this entry.
                             check_write_allowed(
                                 owner=acting_user,
                                 group=dest_group,
-                                additional_bytes=total_bytes + info.file_size,
+                                additional_bytes=info.file_size,
                             )
 
                         tmp, total_bytes = _stream_entry_to_tempfile(

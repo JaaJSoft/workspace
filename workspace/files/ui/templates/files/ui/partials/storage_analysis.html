@@ -15,7 +15,7 @@ Context (built by files.ui.views.storage):
 - query_suffix: "?q=..." (url-encoded) when a path search is active, else "" -
   appended to scope links so drilling keeps the search
 - query_param: "&q=..." variant for links that already carry a query string
-- quota_percent: used share of the quota (personal root only)
+- quota_percent: analysis.quota_used share of analysis.quota (root scopes only)
 - can_empty_trash: whether the "Empty trash" button applies (personal root)
 {% endcomment %}
 <div
@@ -72,7 +72,7 @@ Context (built by files.ui.views.storage):
               value="{{ quota_percent|unlocalize }}"
               max="100"
             ></progress>
-            <span>{{ quota_percent }}% of {{ analysis.quota|filesizeformat }}</span>
+            <span>{{ analysis.quota_used|filesizeformat }} of {{ analysis.quota|filesizeformat }} ({{ quota_percent }}%)</span>
           </div>
         </div>
       {% endif %}

@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.db.models import Sum
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from workspace.files.models import File
 from workspace.files.services import FileService, quota
@@ -58,6 +59,15 @@ class BucketUsageTests(TestCase):
 
     def test_folders_do_not_count(self):
         FileService.create_folder(self.user, "empty")
+        self.assertEqual(quota.personal_usage(self.user), 0)
+
+    def test_a_folder_row_with_a_size_still_does_not_count(self):
+        File.objects.create(
+            owner=self.user,
+            name="empty",
+            node_type=File.NodeType.FOLDER,
+            size=999,
+        )
         self.assertEqual(quota.personal_usage(self.user), 0)
 
     def test_every_file_lands_in_exactly_one_bucket(self):
@@ -147,3 +157,33 @@ class UsageQueryCountTests(TestCase):
     def test_an_unlimited_bucket_skips_the_aggregate(self):
         with self.assertNumQueries(1):
             quota.remaining_bytes(owner=self.user, group=self.group)
+
+
+@override_settings(STORAGE_QUOTA_BYTES=10 * MB)
+class GaugeContextTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="gauge", password="pw")
+        self.client.force_login(self.user)
+        FileService.create_file(
+            self.user, "note.md", content=ContentFile(b"# hello", name="note.md")
+        )
+        trashed = FileService.create_file(
+            self.user, "gone.txt", content=ContentFile(b"12345", name="gone.txt")
+        )
+        FileService.soft_delete(trashed)
+
+    def test_the_dashboard_gauge_uses_the_bucket_usage(self):
+        response = self.client.get(reverse("dashboard:index"))
+        self.assertEqual(response.context["storage_usage"], 12)
+        self.assertEqual(response.context["storage_quota"], 10 * MB)
+
+    def test_the_settings_gauge_uses_the_bucket_usage(self):
+        response = self.client.get(reverse("users_ui:settings"))
+        self.assertEqual(response.context["storage_usage"], 12)
+
+    def test_an_unlimited_user_gets_a_null_quota(self):
+        from workspace.files.models import UserStorageQuota
+
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
+        response = self.client.get(reverse("dashboard:index"))
+        self.assertIsNone(response.context["storage_quota"])

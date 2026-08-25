@@ -1,7 +1,6 @@
 from dataclasses import asdict
 from datetime import datetime, time
 
-from django.conf import settings as django_settings
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.urls import reverse
@@ -18,6 +17,7 @@ from workspace.core.services.module_visibility import (
     is_module_slug_visible,
     visible_modules,
 )
+from workspace.files.services.quota import effective_quota, personal_usage
 from workspace.notifications.services.notifications import get_unread_badges
 from workspace.projects.queries import assigned_open_tasks
 from workspace.users.services.settings import get_module_settings, get_setting
@@ -125,6 +125,9 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
 
     my_tasks_available = is_module_slug_visible(user, "projects")
 
+    storage_usage = personal_usage(user.pk)
+    storage_quota = effective_quota(user.pk)
+
     context = {
         "modules": modules,
         "dashboard_apps": dashboard_apps,
@@ -134,7 +137,13 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
         "show_my_tasks": my_tasks_available
         and dashboard_settings.get("show_my_tasks", True),
         "usage_stats": get_usage_stats(user.id),
-        "storage_quota": django_settings.STORAGE_QUOTA_BYTES,
+        "storage_usage": storage_usage,
+        "storage_quota": storage_quota,
+        "storage_percent": (
+            min(100, round(100 * storage_usage / storage_quota))
+            if storage_quota
+            else None
+        ),
     }
     if include_activity:
         context.update(_get_activity_context(user, source=activity_source))

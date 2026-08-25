@@ -603,8 +603,11 @@ def storage(request, uuid=None):
         (c for c in analysis["categories"] if c["key"] == category), None
     )
     quota = analysis["quota"]
+    quota_used = analysis["quota_used"]
     quota_percent = (
-        min(100, round(100 * analysis["total_size"] / quota, 1)) if quota else None
+        min(100, round(100 * quota_used / quota, 1))
+        if quota and quota_used is not None
+        else None
     )
     return render(
         request,

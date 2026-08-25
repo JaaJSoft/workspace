@@ -308,9 +308,7 @@
         _animateStorage() {
           const bar = this.$refs.storageBar;
           if (!bar) return;
-          const used = {{ usage_stats.files.total_size|default:"0" }};
-          const quota = {{ storage_quota }};
-          const pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
+          const pct = {{ storage_percent|default:"0" }};
           requestAnimationFrame(() => {
             bar.style.width = pct + '%';
           });

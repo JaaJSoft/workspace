@@ -26,7 +26,7 @@ dependencies = [
     "cryptography>=50.0.0",
     "nh3>=0.3.6",
     "myl-discovery>=0.6.4",
-    "icalendar>=7.2.2",
+    "icalendar>=7.3.0",
     # utils
     "mistune>=3.3.4",
     "pygments>=2.21.0",

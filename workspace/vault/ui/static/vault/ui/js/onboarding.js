@@ -192,11 +192,21 @@ window.vaultOnboarding = function vaultOnboarding() {
     // Written from the kit screen, in the grouped spelling the sheet shows:
     // crockfordDecode ignores the hyphens and the case, so what is stored is
     // exactly what the user could retype.
+    //
+    // Failing to remember the device does not mean failing to finish
+    // onboarding - by the time this runs, finish() has either already
+    // created the vault or has nowhere left to send the user but the vault
+    // screen, and a storage throw here must never turn either outcome into
+    // a reported failure or block the navigation that follows it.
     rememberOnThisDevice() {
-      if (this.remember) {
-        localStorage.setItem('vault.secret-key', this.groupedSecret());
-      } else {
-        localStorage.removeItem('vault.secret-key');
+      try {
+        if (this.remember) {
+          localStorage.setItem('vault.secret-key', this.groupedSecret());
+        } else {
+          localStorage.removeItem('vault.secret-key');
+        }
+      } catch (err) {
+        // Best-effort only; nothing to recover, nothing to zero.
       }
     },
 

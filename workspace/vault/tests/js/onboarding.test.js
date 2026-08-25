@@ -704,3 +704,43 @@ test('with no signer for this identity, the recovery key is still remembered if 
   await app.finish();
   assert.equal(stored.get('vault.secret-key'), app.groupedSecret());
 });
+
+// A throwing localStorage (Safari private mode, a storage policy, an
+// extension) must never be mistaken for a failed vault creation, and must
+// never block the navigation that follows - on either branch of finish().
+const THROWING_STORAGE = {
+  setItem: () => { throw new Error('quota exceeded'); },
+  removeItem: () => { throw new Error('quota exceeded'); },
+};
+
+test('a storage failure does not turn a successful creation into a reported failure', async () => {
+  const created = [];
+  const { app, navigated } = finishing({
+    localStorage: THROWING_STORAGE,
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    VaultApi: { createVault: async (body) => { created.push(body); return body; } },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(created.length, 1);
+  assert.deepEqual(navigated, ['/vault/']);
+  assert.equal(app.error, '');
+});
+
+test('a storage failure does not block the no-signer path from reaching the vault', async () => {
+  let attempted = false;
+  const { app, navigated } = finishing({
+    localStorage: THROWING_STORAGE,
+    buildVaultCreateRequest: async () => { attempted = true; return { uuid: 'v1' }; },
+    VaultApi: { createVault: async () => { attempted = true; return {}; } },
+  });
+  app.vaultSigner = null;
+  app.accountKexPublic = null;
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(attempted, false);
+  assert.deepEqual(navigated, ['/vault/']);
+  assert.equal(app.error, '');
+});

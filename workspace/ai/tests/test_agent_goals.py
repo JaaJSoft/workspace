@@ -906,6 +906,85 @@ class AgentGoalToolTests(TestCase):
         self.assertIn("Budget under 900 euros.", result)
         self.assertIn("Only for visits worth booking.", result)
 
+    def test_list_goals_includes_recently_closed_with_date(self):
+        self._goal(
+            title="Finished goal",
+            status=AgentGoal.Status.COMPLETED,
+            outcome="Lease signed in June.",
+            closed_at=timezone.now() - timedelta(days=7),
+        )
+        result = self._call("list_agent_goals", {})
+        self.assertIn("Finished goal", result)
+        self.assertIn("completed", result)
+        self.assertIn("closed", result)
+        self.assertIn("7 day(s) ago", result)
+        self.assertIn("Lease signed in June.", result)
+
+    def test_list_goals_closed_only_still_reports_no_active(self):
+        self._goal(
+            title="Finished goal",
+            status=AgentGoal.Status.COMPLETED,
+            outcome="Done.",
+            closed_at=timezone.now() - timedelta(days=2),
+        )
+        result = self._call("list_agent_goals", {})
+        self.assertIn("No active goals", result)
+        self.assertIn("Finished goal", result)
+
+    def test_list_goals_drops_closed_beyond_the_recall_window(self):
+        self._goal(
+            title="Ancient goal",
+            status=AgentGoal.Status.COMPLETED,
+            outcome="Long done.",
+            closed_at=timezone.now()
+            - AgentGoal.CLOSED_RECALL_WINDOW
+            - timedelta(days=1),
+        )
+        result = self._call("list_agent_goals", {})
+        self.assertNotIn("Ancient goal", result)
+
+    def test_list_goals_caps_the_closed_section(self):
+        for i in range(AgentGoal.CLOSED_RECALL_LIMIT + 3):
+            self._goal(
+                title=f"Closed {i}",
+                status=AgentGoal.Status.COMPLETED,
+                outcome="Done.",
+                closed_at=timezone.now() - timedelta(days=i + 1),
+            )
+        result = self._call("list_agent_goals", {})
+        self.assertIn(f"Closed recently ({AgentGoal.CLOSED_RECALL_LIMIT})", result)
+        # Ordered newest-first, so the oldest ones fall off the end.
+        self.assertIn("Closed 0", result)
+        self.assertNotIn(f"Closed {AgentGoal.CLOSED_RECALL_LIMIT + 2}", result)
+
+    def test_list_goals_ignores_closed_goals_of_another_conversation(self):
+        other = _make_conversation(self.user, self.bot_user)
+        AgentGoal.objects.create(
+            conversation=other,
+            bot=self.bot_user,
+            created_by=self.user,
+            title="Elsewhere goal",
+            goal="Not this conversation.",
+            next_check_at=timezone.now() + timedelta(hours=6),
+            status=AgentGoal.Status.COMPLETED,
+            outcome="Done.",
+            closed_at=timezone.now() - timedelta(days=1),
+        )
+        result = self._call("list_agent_goals", {})
+        self.assertNotIn("Elsewhere goal", result)
+
+    def test_list_goals_flags_an_overdue_deadline(self):
+        self._goal(title="Late goal", deadline=timezone.now() - timedelta(days=3))
+        result = self._call("list_agent_goals", {})
+        self.assertIn("Late goal", result)
+        self.assertIn("OVERDUE", result)
+
+    def test_list_goals_leaves_a_future_deadline_unflagged(self):
+        self._goal(title="On time goal", deadline=timezone.now() + timedelta(days=3))
+        result = self._call("list_agent_goals", {})
+        self.assertIn("deadline", result)
+        self.assertNotIn("OVERDUE", result)
+
     # -- update --------------------------------------------------------------
 
     def test_update_mission_brief(self):
@@ -1010,6 +1089,7 @@ class AgentGoalToolTests(TestCase):
         goal.refresh_from_db()
         self.assertEqual(goal.status, AgentGoal.Status.COMPLETED)
         self.assertEqual(goal.outcome, "Mission accomplished.")
+        self.assertIsNotNone(goal.closed_at)
 
     def test_abandon_goal(self):
         goal = self._goal()
@@ -1022,6 +1102,7 @@ class AgentGoalToolTests(TestCase):
         self.assertIn("abandoned", result)
         goal.refresh_from_db()
         self.assertEqual(goal.status, AgentGoal.Status.ABANDONED)
+        self.assertIsNotNone(goal.closed_at)
 
     def test_complete_unknown_goal(self):
         result = self._call(
@@ -1126,3 +1207,32 @@ class AgentGoalCheckInInstructionTests(TestCase):
         self.assertNotIn("Constraints set by the user", text)
         self.assertNotIn("reporting rule above", text)
         self.assertIn("what the goal says to report", text)
+
+    def test_future_deadline_carries_no_overdue_signal(self):
+        text = self._instruction(deadline=timezone.now() + timedelta(days=10))
+        self.assertIn("- Deadline:", text)
+        self.assertNotIn("OVERDUE", text)
+        self.assertNotIn("The deadline passed", text)
+
+    def test_passed_deadline_orders_the_goal_closed(self):
+        text = self._instruction(deadline=timezone.now() - timedelta(days=7))
+        self.assertIn("OVERDUE by 7 day(s)", text)
+        self.assertIn("The deadline passed 7 day(s) ago", text)
+        self.assertIn("complete_agent_goal", text)
+
+    def test_deadline_passed_minutes_ago_reads_as_sub_day(self):
+        text = self._instruction(deadline=timezone.now() - timedelta(minutes=10))
+        self.assertIn("OVERDUE by less than a day", text)
+        self.assertIn("The deadline passed less than a day ago", text)
+        self.assertNotIn("OVERDUE by 0 day(s)", text)
+        self.assertNotIn("The deadline passed 0 day(s) ago", text)
+
+    def test_deadline_passed_over_a_day_ago_counts_full_days(self):
+        text = self._instruction(deadline=timezone.now() - timedelta(days=1, hours=3))
+        self.assertIn("OVERDUE by 1 day(s)", text)
+        self.assertIn("The deadline passed 1 day(s) ago", text)
+
+    def test_no_deadline_carries_no_overdue_signal(self):
+        text = self._instruction()
+        self.assertNotIn("Deadline", text)
+        self.assertNotIn("OVERDUE", text)

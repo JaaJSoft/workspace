@@ -160,6 +160,8 @@ class AgentGoalDetailView(APIView):
 
     @extend_schema(summary="Stop an agent goal (marks it abandoned)")
     def delete(self, request, conversation_id, goal_id):
+        from django.utils import timezone
+
         from workspace.ai.models import AgentGoal
 
         membership = get_active_membership(request.user, conversation_id)
@@ -178,5 +180,6 @@ class AgentGoalDetailView(APIView):
 
         goal.status = AgentGoal.Status.ABANDONED
         goal.outcome = goal.outcome or "Stopped by the user."
-        goal.save(update_fields=["status", "outcome", "updated_at"])
+        goal.closed_at = timezone.now()
+        goal.save(update_fields=["status", "outcome", "closed_at", "updated_at"])
         return Response(status=status.HTTP_204_NO_CONTENT)

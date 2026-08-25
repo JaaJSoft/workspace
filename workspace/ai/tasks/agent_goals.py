@@ -9,7 +9,7 @@ from workspace.ai.metrics import AI_AGENT_CHECKINS
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import build_conversation_history
 from workspace.ai.services.llm import sanitize_messages_for_storage
-from workspace.ai.services.responses import post_bot_message
+from workspace.ai.services.responses import post_bot_message, produced_media
 from workspace.ai.services.tool_loop import run_tool_loop
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
@@ -247,10 +247,11 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         raw_messages = {"messages": initial_messages, "rounds": rounds}
 
         # Check-ins are silent by default: the model's final plain text is
-        # never shown to the user. Only messages the agent explicitly queued
-        # through send_user_message get delivered.
+        # never shown to the user. What gets delivered is what the agent
+        # deliberately addressed to them - a message queued through
+        # send_user_message, or media a tool produced to be sent.
         queued = [m for m in tool_context.get("agent_messages", []) if m.strip()]
-        if not queued:
+        if not queued and not produced_media(tool_context):
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SILENT]"
             ai_task.model_used = result.get("model", "")

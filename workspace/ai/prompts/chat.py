@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from .base import build_context_block
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -84,6 +86,13 @@ def build_chat_messages(
     identity_lines = []
     if bot_name:
         identity_lines.append(f"Your name is {_sanitize_identity(bot_name)}.")
+    bot_voice = getattr(getattr(bot, "bot_profile", None), "voice", "")
+    if bot_voice and settings.AI_TTS_MODEL:
+        identity_lines.append(
+            f"Your voice sounds like this: {_sanitize_identity(bot_voice, 300)} "
+            "This is how you actually sound when you send a voice message, so "
+            "describe your voice this way rather than inventing one."
+        )
     if user:
         display = _sanitize_identity(user.get_full_name() or user.username)
         identity_lines.append(
@@ -250,6 +259,36 @@ def build_chat_messages(
         "be generated."
     )
 
+    voice_instructions = ""
+    if settings.AI_TTS_MODEL:
+        voice_instructions = (
+            "\n\n## Your voice\n"
+            "You have a voice and can send voice messages with "
+            "send_voice_message. Call it whenever the user asks you to speak, "
+            "to send them a vocal, to read something out loud, or when hearing "
+            "it is the point — a pronunciation, a song, a greeting meant to be "
+            "warm.\n"
+            "What you say out loud and what you type are one reply, not two: "
+            "put the content in the voice message, and let the written part be "
+            "a short line or nothing at all. Repeating the spoken text in "
+            "writing makes the voice message pointless.\n"
+            "Set language to the one you are speaking. You already answer in "
+            "the user's language, so it is that one \u2014 a French line "
+            "announced as English is pronounced with an English accent.\n"
+            "Write for the ear. The text is read out letter by letter, so it "
+            "must be plain prose in the language you are speaking, correctly "
+            "accented, with no markdown, no emoji, no lists, no URLs and no "
+            "abbreviations a listener would not recognize.\n"
+            "Your own voice is the default and what makes you recognizable, "
+            "so send_voice_message needs nothing but the text. Pass voice "
+            "only to sound different for that one message \u2014 playing a "
+            "character, imitating someone, reading a line theatrically.\n"
+            "When you do, describe the whole speaker rather than an "
+            "adjustment: the description replaces your voice, it is not "
+            "added to it. Name the gender first, keep it to a sentence or "
+            "two, and avoid extremes \u2014 they garble the pronunciation."
+        )
+
     past_images_instructions = (
         "\n\n## Past images\n"
         "History markers like [image: filename - description] or "
@@ -348,6 +387,7 @@ def build_chat_messages(
         f"{agent_goal_instructions}"
         f"{projects_instructions}"
         f"{image_instructions}"
+        f"{voice_instructions}"
         f"{past_images_instructions}"
         f"{web_instructions}"
         f"{safety_instructions}"

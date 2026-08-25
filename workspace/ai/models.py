@@ -23,6 +23,7 @@ class BotProfile(models.Model):
     description = models.TextField(blank=True)
     supports_tools = models.BooleanField(default=True)
     supports_vision = models.BooleanField(default=True)
+    voice = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -54,6 +55,10 @@ class BotProfile(models.Model):
     def get_model(self):
         """Return the model to use, falling back to the global default."""
         return self.model or settings.AI_MODEL
+
+    def get_voice(self) -> str:
+        """Description of how this bot sounds, for the speech backend."""
+        return self.voice or settings.AI_TTS_VOICE
 
     def is_accessible_by(self, user) -> bool:
         """Check if a user can access this bot."""

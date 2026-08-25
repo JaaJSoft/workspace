@@ -75,6 +75,20 @@ class BotProfileAdmin(ModelAdmin):
             ("Avatar", {"fields": ["avatar_preview", "avatar", "delete_avatar"]}),
             ("Capabilities", {"fields": ["supports_tools", "supports_vision"]}),
             (
+                "Voice",
+                {
+                    "fields": ["voice"],
+                    "description": (
+                        "How the bot sounds when it sends a voice message: a "
+                        "free-text description of the speaker, e.g. \u201cA young "
+                        "woman, soft and composed, warm tone.\u201d Name the gender "
+                        "first \u2014 the model drifts without it. This description "
+                        "is the whole of the bot's vocal identity, so a wording "
+                        "change is a voice change."
+                    ),
+                },
+            ),
+            (
                 "Access control",
                 {
                     "fields": [

@@ -11,7 +11,11 @@ from workspace.ai.services.llm import (
     clean_llm_content,
     sanitize_messages_for_storage,
 )
-from workspace.ai.services.responses import handle_generation_error, post_bot_message
+from workspace.ai.services.responses import (
+    handle_generation_error,
+    post_bot_message,
+    produced_media,
+)
 from workspace.ai.services.tool_loop import retry_final_completion, run_tool_loop
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
@@ -176,7 +180,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         # the whole loop would re-execute side-effectful tools and
         # discard the first pass's tool_context / tool_data.
         body_preview = clean_llm_content(result.get("content") or "")
-        if not body_preview and not tool_context.get("images"):
+        if not body_preview and not produced_media(tool_context):
             logger.warning(
                 "Empty scheduled response, retrying once: schedule=%s",
                 scrub(schedule_id),
@@ -186,7 +190,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             )
             rounds.extend(retry_rounds)
             body_preview = clean_llm_content(result.get("content") or "")
-            if not body_preview and not tool_context.get("images"):
+            if not body_preview and not produced_media(tool_context):
                 ai_task.status = ai_task.Status.COMPLETED
                 ai_task.result = "[EMPTY]"
                 ai_task.model_used = result.get("model", "")

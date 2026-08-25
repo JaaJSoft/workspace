@@ -18,7 +18,11 @@ from workspace.ai.services.llm import (
     clean_llm_content,
     sanitize_messages_for_storage,
 )
-from workspace.ai.services.responses import handle_generation_error, post_bot_message
+from workspace.ai.services.responses import (
+    handle_generation_error,
+    post_bot_message,
+    produced_media,
+)
 from workspace.ai.services.tool_loop import retry_final_completion, run_tool_loop
 from workspace.common.logging import scrub
 
@@ -117,7 +121,7 @@ def generate_chat_response(
         # the whole loop would re-execute side-effectful tools and
         # discard the first pass's tool_context / tool_data.
         body_preview = clean_llm_content(result.get("content") or "")
-        if not body_preview and not tool_context.get("images"):
+        if not body_preview and not produced_media(tool_context):
             logger.warning(
                 "Empty response, retrying once: conversation=%s", scrub(conversation_id)
             )
@@ -126,7 +130,7 @@ def generate_chat_response(
             )
             rounds.extend(retry_rounds)
             body_preview = clean_llm_content(result.get("content") or "")
-            if not body_preview and not tool_context.get("images"):
+            if not body_preview and not produced_media(tool_context):
                 raise RuntimeError("Empty response from model")
 
         raw_messages = {"messages": initial_messages, "rounds": rounds}

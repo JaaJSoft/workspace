@@ -271,6 +271,74 @@ class SendUserMessageParams(BaseModel):
     message: str = Field(description="The message to deliver to the user.")
 
 
+def _spoken_language_enum(schema: dict) -> None:
+    """Advertise the deployment's languages in the tool schema.
+
+    Resolved when the schema is built - at provider registration, so once
+    settings are loaded - rather than pinned in the annotation, which would
+    hard-code one speech model's vocabulary into the tool.
+    """
+    from .services.speech import supported_languages
+
+    schema["enum"] = ["", *sorted(supported_languages())]
+
+
+# A voice is a sentence or two, not a paragraph: the backend drifts on a long
+# description, and the model writes this one.
+VOICE_MAX_CHARS = 300
+
+VOICE_WRITING_GUIDE = (
+    'Describe the speaker in plain prose, e.g. "Une jeune femme, voix douce '
+    'et posée, ton chaleureux" or "An elderly man, very deep and gravelly". '
+    "Name the gender first — the model drifts towards a neutral register "
+    "without it. One or two sentences: age, register, timbre, pace, mood. "
+    "Avoid extremes ('very high-pitched', 'screaming'), which garble the "
+    "pronunciation itself."
+)
+
+
+class SendVoiceMessageParams(BaseModel):
+    text: str = Field(
+        description=(
+            "What to say, written exactly as it should be pronounced and in "
+            "the language you are speaking. Accents and punctuation are read "
+            "literally, so write real sentences — no markdown, no emoji, no "
+            "abbreviations, and numbers spelled out when their reading matters."
+        )
+    )
+    language: str = Field(
+        default="",
+        json_schema_extra=_spoken_language_enum,
+        description=(
+            "The language text is written in — set it to whichever one you "
+            "are speaking, so the words are pronounced with the right accent "
+            "and rhythm. Only the values listed for this field are "
+            "understood. Leave it empty when the language is not among them "
+            "or the text mixes several: it is then detected from the text "
+            "itself."
+        ),
+    )
+    voice: str = Field(
+        default="",
+        description=(
+            "Optional: speak this one message in a different voice, described "
+            "in full — it replaces your usual voice instead of adding to it, "
+            f"so describe the whole speaker. {VOICE_WRITING_GUIDE} Leave it "
+            "empty to use your own voice, which is what makes you "
+            "recognizable; set it to play a character, imitate someone, or "
+            "read a line theatrically."
+        ),
+    )
+
+
+def _clean_voice(value: str) -> str:
+    """Normalize a model-written voice description before it is sent."""
+    # Blanked, not dropped: deleting a newline glues the words on either
+    # side of it into one, which corrupts the description the backend reads.
+    cleaned = "".join(c if c.isprintable() else " " for c in (value or ""))
+    return " ".join(cleaned.split())[:VOICE_MAX_CHARS].strip()
+
+
 def _bot_supports_vision(bot):
     profile = getattr(bot, "bot_profile", None)
     return bool(profile and profile.supports_vision)
@@ -779,6 +847,68 @@ Do NOT use this to create an image from scratch — use generate_image instead."
         if _bot_supports_vision(bot):
             return _image_tool_payload(image_data, confirmation)
         return confirmation
+
+
+class VoiceToolProvider(ToolProvider):
+    """Registered only when AI_TTS_MODEL is configured."""
+
+    @tool(
+        badge_icon="🎙️",
+        badge_label="Sent a voice message",
+        badge_running_label="Recording a voice message",
+        detail_key="text",
+        params=SendVoiceMessageParams,
+    )
+    def send_voice_message(self, args, user, bot, conversation_id, context):
+        """Say something out loud in your own voice, as a voice message in the conversation. \
+Call this when the user asks you to speak, to send a voice message or a vocal, to read something aloud, \
+to sing, or to say how something is pronounced. \
+The audio is attached to the reply you are writing: say the whole thing here, then keep the written \
+part of that reply to a short line or nothing at all — never repeat out loud what you also typed."""
+        from .services.speech import SpeechSynthesisError, ai_synthesize_speech
+
+        text = args.text.strip()
+        if not text:
+            return "Error: text is required"
+        if not conversation_id:
+            return "Error: no conversation context"
+        if len(text) > settings.AI_TTS_MAX_CHARS:
+            return (
+                f"Error: too long to say in one voice message "
+                f"({len(text)} characters, {settings.AI_TTS_MAX_CHARS} maximum). "
+                "Say the essential part instead, or split it across several calls."
+            )
+
+        profile = getattr(bot, "bot_profile", None)
+        override = _clean_voice(args.voice)
+        voice = override or (profile.get_voice() if profile else settings.AI_TTS_VOICE)
+
+        try:
+            audio = ai_synthesize_speech(text, voice, args.language)
+        except ValueError as exc:
+            return f"Error: {exc}"
+        except SpeechSynthesisError as exc:
+            if exc.rejected:
+                return (
+                    f"Error: the speech service refused this text after "
+                    f"{exc.attempts} attempt(s) — {exc}. Rephrase it more "
+                    "plainly and call send_voice_message again."
+                )
+            return (
+                f"Error: the speech service is unavailable ({exc}, "
+                f"{exc.attempts} attempt(s)). Do not call send_voice_message "
+                "again in this reply — answer in writing and say the voice "
+                "message could not be recorded."
+            )
+
+        context.setdefault("voices", []).append(
+            {
+                "data": audio,
+                "text": text,
+                "position": call_position(),
+            }
+        )
+        return f"Voice message recorded and attached to your reply: {text}"
 
 
 def _parse_local_datetime(value: str, user_tz):

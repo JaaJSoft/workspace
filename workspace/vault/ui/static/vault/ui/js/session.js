@@ -8,10 +8,21 @@
 // sets the standard for the ones that could.
 var VAULT_SECRET_STORAGE_KEY = 'vault.secret-key';
 
-function VaultUnlockError(reason) {
+// reason is one of: 'password' (wrong password, or a wrapped key that fails
+// to decrypt), 'recovery-key' (the recovery key text itself does not
+// decode), 'identity' (no active account envelope, or an unexpected failure
+// before the private keys are unwrapped), 'substituted-key' (a spoofed or
+// malformed signing key, or an unexpected failure at or after the private
+// keys are unwrapped), 'network' (the envelope request itself failed), or
+// 'locked' (called before a session is open). cause, when given, is the
+// exception this reason was mapped from - kept so a genuine programming
+// error stays diagnosable instead of surfacing only as a security-sounding
+// reason string.
+function VaultUnlockError(reason, cause) {
   var error = new Error('vault unlock failed: ' + reason);
   error.name = 'VaultUnlockError';
   error.reason = reason;
+  if (cause !== undefined) error.cause = cause;
   return error;
 }
 
@@ -72,7 +83,7 @@ window.VaultSession = (function () {
       try {
         envelope = await window.VaultApi.fetchEnvelope();
       } catch (err) {
-        throw VaultUnlockError(err.status === 404 ? 'identity' : 'network');
+        throw VaultUnlockError(err.status === 404 ? 'identity' : 'network', err);
       }
       if (envelope.state !== 'active') throw VaultUnlockError('identity');
 
@@ -90,7 +101,11 @@ window.VaultSession = (function () {
       var keysUnwrapped = false;
 
       try {
-        secretBytes = V.crockfordDecode(options.secretText);
+        try {
+          secretBytes = V.crockfordDecode(options.secretText);
+        } catch (err) {
+          throw VaultUnlockError('recovery-key', err);
+        }
         amk = await V.deriveAmk({
           password: options.password.normalize('NFC'),
           secretKey: secretBytes,
@@ -114,7 +129,7 @@ window.VaultSession = (function () {
             V.AD.sigPrivAd(envelope.uuid)
           );
         } catch (err) {
-          throw VaultUnlockError('password');
+          throw VaultUnlockError('password', err);
         }
         keysUnwrapped = true;
         // Nothing in v1 needs it again: a rotation re-derives it from the
@@ -138,7 +153,7 @@ window.VaultSession = (function () {
             V.fromBase64Url(envelope.sig_over_kex_pub)
           );
         } catch (err) {
-          throw VaultUnlockError('substituted-key');
+          throw VaultUnlockError('substituted-key', err);
         }
 
         signer = await V.importSigner(sigSeed);
@@ -154,8 +169,14 @@ window.VaultSession = (function () {
         zero(unwrapKey);
         zero(kexPriv);
         zero(sigSeed);
+        // importSigner can succeed and hpkeRecipient still fail: without
+        // this, the imported signing key would sit in the closure with
+        // unlocked still false, so lock() (which no-ops while locked) could
+        // never release it.
+        signer = null;
+        recipient = null;
         if (err && err.name === 'VaultUnlockError') throw err;
-        throw VaultUnlockError(keysUnwrapped ? 'substituted-key' : 'identity');
+        throw VaultUnlockError(keysUnwrapped ? 'substituted-key' : 'identity', err);
       }
 
       // Committed only once every check above has passed: a caller reading

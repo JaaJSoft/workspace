@@ -196,6 +196,42 @@ test('a broken signer import is refused with a defined reason and zeroes both un
   assert.ok(h.sigSeed.every((byte) => byte === 0));
 });
 
+test('a broken key-exchange import is refused with a defined reason and zeroes both unwrapped private keys', async () => {
+  const h = harness({ VaultCrypto: { hpkeRecipient: async () => { throw new Error('boom'); } } });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'substituted-key'
+  );
+  assert.ok(h.kexPriv.every((byte) => byte === 0));
+  assert.ok(h.sigSeed.every((byte) => byte === 0));
+});
+
+test('a broken master-key derivation is refused with a defined reason and zeroes the decoded recovery key', async () => {
+  const h = harness({ VaultCrypto: { deriveAmk: async () => { throw new Error('boom'); } } });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'identity'
+  );
+  assert.ok(h.secretBytes.every((byte) => byte === 0));
+});
+
+test('a mistyped recovery key is refused with its own reason, not identity', async () => {
+  const h = harness({ VaultCrypto: { crockfordDecode: () => { throw new Error('invalid crockford input'); } } });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'recovery-key'
+  );
+});
+
+test('a crash mapped to a defined reason keeps the original error as its cause', async () => {
+  const original = new TypeError('kexPubPayload is not a function');
+  const h = harness({ VaultCrypto: { hkdf: async () => { throw original; } } });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'identity' && err.cause === original
+  );
+});
+
 test('a substituted signing public key is caught before it is trusted', async () => {
   const h = harness({
     globals: {

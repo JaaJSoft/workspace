@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from django.conf import settings
+from django.utils import timezone
 from pydantic import BaseModel, Field, field_validator
 
 from workspace.common.limits import clamp_limit
@@ -861,18 +862,56 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
             f"{first_local.strftime('%Y-%m-%d %H:%M')} ({user_tz})."
         )
 
+    @staticmethod
+    def _recently_closed(conversation_id, bot, user_tz):
+        """Lines describing goals closed inside the recall window, or []."""
+        from .models import AgentGoal
+
+        closed = AgentGoal.objects.filter(
+            conversation_id=conversation_id,
+            bot=bot,
+            status__in=[AgentGoal.Status.COMPLETED, AgentGoal.Status.ABANDONED],
+            closed_at__gte=timezone.now() - AgentGoal.CLOSED_RECALL_WINDOW,
+        ).order_by("-closed_at")[: AgentGoal.CLOSED_RECALL_LIMIT]
+
+        lines = []
+        for g in closed:
+            closed_local = g.closed_at.astimezone(user_tz)
+            days_ago = (timezone.now() - g.closed_at).days
+            line = (
+                f'- "{g.title}" [{g.status}] — closed '
+                f"{closed_local.strftime('%Y-%m-%d %H:%M')} ({user_tz}), "
+                f"{days_ago} day(s) ago"
+            )
+            if g.outcome:
+                line += f"\n  Outcome: {g.outcome[:300]}"
+            lines.append(line)
+        return lines
+
     @tool(
         badge_icon="\U0001f3af",
         badge_label="Listed goals",
         badge_running_label="Listing goals",
     )
     def list_agent_goals(self, args, user, bot, conversation_id, context):
-        """List your active and paused long-term goals in this conversation, including \
-their private notes, next check-in and deadline. Call this before creating a goal (to avoid \
-duplicates) and whenever the user asks what you are working on autonomously."""
+        """List your long-term goals in this conversation: the active and paused ones with \
+their private notes, next check-in and deadline, plus the ones closed in the last 30 days with \
+their closing date and outcome. Call this before creating a goal (to avoid duplicates or \
+re-opening something already finished) and whenever the user asks what you are working on \
+autonomously."""
         from workspace.users.services.settings import get_user_timezone
 
         from .models import AgentGoal
+
+        user_tz = get_user_timezone(user)
+        closed_lines = self._recently_closed(conversation_id, bot, user_tz)
+        closed_block = ""
+        if closed_lines:
+            closed_block = (
+                f"\n\nClosed recently ({len(closed_lines)}) — already finished, do not "
+                f"re-open them or speak about them as ongoing:\n"
+                + "\n".join(closed_lines)
+            )
 
         goals = AgentGoal.objects.filter(
             conversation_id=conversation_id,
@@ -880,9 +919,8 @@ duplicates) and whenever the user asks what you are working on autonomously."""
             status__in=[AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED],
         )
         if not goals.exists():
-            return "No active goals in this conversation."
+            return "No active goals in this conversation." + closed_block
 
-        user_tz = get_user_timezone(user)
         lines = []
         for g in goals:
             next_local = g.next_check_at.astimezone(user_tz)
@@ -892,7 +930,12 @@ duplicates) and whenever the user asks what you are working on autonomously."""
                 f"{g.check_count} check-in(s) so far"
             )
             if g.deadline:
-                line += f", deadline {g.deadline.astimezone(user_tz).strftime('%Y-%m-%d %H:%M')}"
+                overdue = " (OVERDUE)" if g.deadline < timezone.now() else ""
+                line += (
+                    f", deadline "
+                    f"{g.deadline.astimezone(user_tz).strftime('%Y-%m-%d %H:%M')}"
+                    f"{overdue}"
+                )
             line += f"\n  Objective: {g.goal[:200]}"
             if g.success_criteria:
                 line += f"\n  Definition of done: {g.success_criteria[:200]}"
@@ -904,7 +947,7 @@ duplicates) and whenever the user asks what you are working on autonomously."""
                 line += f"\n  Notes: {g.notes[:300]}"
             lines.append(line)
 
-        return f"Goals ({len(lines)}):\n" + "\n".join(lines)
+        return f"Goals ({len(lines)}):\n" + "\n".join(lines) + closed_block
 
     @tool(
         badge_icon="\U0001f4dd",
@@ -1018,7 +1061,8 @@ Call this when the goal is reached, has become irrelevant, or the user asks you 
             AgentGoal.Status.ABANDONED if args.abandoned else AgentGoal.Status.COMPLETED
         )
         goal.outcome = outcome
-        goal.save(update_fields=["status", "outcome", "updated_at"])
+        goal.closed_at = timezone.now()
+        goal.save(update_fields=["status", "outcome", "closed_at", "updated_at"])
         context["agent_goal_changed"] = True
         logger.info(
             "Agent goal closed (%s): %s bot=%s",

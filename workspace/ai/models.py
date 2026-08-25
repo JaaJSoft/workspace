@@ -217,6 +217,11 @@ class AgentGoal(models.Model):
     # instead of going quiet forever (or re-firing immediately).
     FALLBACK_CHECK_INTERVAL = timedelta(hours=24)
     MAX_ACTIVE_PER_CONVERSATION = 20
+    # How long a closed goal keeps surfacing in list_agent_goals. A goal absent
+    # from that listing is indistinguishable from one that never existed, which
+    # is what makes an agent re-open it or speak about it as still running.
+    CLOSED_RECALL_WINDOW = timedelta(days=30)
+    CLOSED_RECALL_LIMIT = 10
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     conversation = models.ForeignKey(
@@ -252,6 +257,10 @@ class AgentGoal(models.Model):
 
     next_check_at = models.DateTimeField()
     last_checked_at = models.DateTimeField(null=True, blank=True)
+    # Set when the goal leaves active/paused. `updated_at` cannot stand in for
+    # it: it moves on any later write, while the recall window needs a date
+    # that is fixed at closing time.
+    closed_at = models.DateTimeField(null=True, blank=True)
     check_count = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)

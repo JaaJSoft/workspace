@@ -47,9 +47,14 @@ def dispatch_agent_goals():
 def _build_goal_instruction(goal, user_tz):
     """Build the system-prompt injection describing this check-in."""
     deadline_line = ""
+    is_overdue = bool(goal.deadline) and goal.deadline < timezone.now()
+    overdue_days = (timezone.now() - goal.deadline).days if is_overdue else 0
     if goal.deadline:
         deadline_local = goal.deadline.astimezone(user_tz)
-        deadline_line = f"- Deadline: {deadline_local.strftime('%Y-%m-%d %H:%M')}\n"
+        overdue_note = f" — OVERDUE by {overdue_days} day(s)" if is_overdue else ""
+        deadline_line = (
+            f"- Deadline: {deadline_local.strftime('%Y-%m-%d %H:%M')}{overdue_note}\n"
+        )
 
     # The mission brief comes from the user, so it outranks anything the agent
     # wrote in its own notes when the two disagree.
@@ -70,6 +75,18 @@ def _build_goal_instruction(goal, user_tz):
         else ""
     )
     report_source = "reporting rule above" if goal.reporting else "goal"
+
+    # The deadline is inert everywhere else: no dispatcher predicate reads it,
+    # and the worker reparks next_check_at on every run, so an unclosed goal
+    # keeps waking up indefinitely. Past the deadline, closing is the default.
+    overdue_clause = ""
+    if is_overdue:
+        overdue_clause = (
+            f"\n\nThe deadline passed {overdue_days} day(s) ago. Unless the user has "
+            f"since asked you to keep going, close this goal NOW with "
+            f"complete_agent_goal — state in the outcome what was achieved and that "
+            f"the deadline expired. Do not keep checking in on an expired goal."
+        )
 
     notes_block = goal.notes or "(none yet — this is your first check-in)"
     elapsed_days = (timezone.now() - goal.created_at).days
@@ -103,6 +120,7 @@ def _build_goal_instruction(goal, user_tz):
         f"(do not mention check-ins or that you are an automated process). Do NOT "
         f"message just to say you checked and found nothing: staying silent is "
         f"the normal outcome of most check-ins."
+        f"{overdue_clause}"
     )
 
 

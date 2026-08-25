@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-function app(session = {}, api = {}) {
+function app(session = {}, api = {}, crypto = {}) {
   const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_app.js', {
     VaultSession: {
       isUnlocked: () => false,
@@ -43,6 +43,7 @@ function app(session = {}, api = {}) {
         vaultMetaInfo: () => 'meta-info',
       },
       vaultMetadataPayload: (fields) => fields,
+      ...crypto,
     },
     TextEncoder: globalThis.TextEncoder,
     TextDecoder: globalThis.TextDecoder,
@@ -160,6 +161,21 @@ test('a vault with no key wrap is reported rather than silently missing', async 
   });
   await component.unlock();
   assert.equal(component.vaults[0].unopenable, true);
+});
+
+test('the signed payload carries vault_uuid, not the row\'s own uuid key', async () => {
+  let captured = null;
+  const component = app({ isUnlocked: () => true }, {
+    listVaults: async () => [
+      { uuid: 'v1', encrypted_name: 'AQ', wrapped_key: 'AQ', metadata_sig: 'AQ',
+        owner_account_uuid: 'account-uuid', encrypted_description: '', icon: 'lock',
+        color: 'primary', key_version: 1, is_favorite: false },
+    ],
+  }, {
+    vaultMetadataPayload: (fields) => { captured = fields; return fields; },
+  });
+  await component.unlock();
+  assert.equal(captured.vault_uuid, 'v1');
 });
 
 test('the countdown is rendered as minutes and seconds', () => {

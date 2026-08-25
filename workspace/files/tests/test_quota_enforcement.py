@@ -83,7 +83,9 @@ class CreateFileEnforcementTests(TestCase):
                 content=ContentFile(b"x" * (10 * KB + 1), name="big.bin"),
             )
         self.assertEqual(set(File.objects.values_list("pk", flat=True)), before)
-        self.assertFalse(default_storage.exists(f"files/users/{self.user.username}/big.bin"))
+        self.assertFalse(
+            default_storage.exists(f"files/users/{self.user.username}/big.bin")
+        )
 
     def test_uploads_accumulate_until_the_quota_is_reached(self):
         FileService.create_file(
@@ -121,6 +123,19 @@ class CreateFileEnforcementTests(TestCase):
             self.user, "a.bin", content=ContentFile(b"x" * (10 * KB), name="a.bin")
         )
         FileService.create_folder(self.user, "still allowed")
+
+    def test_register_disk_file_is_never_refused(self):
+        """The bytes are already on disk; refusing here would strand a file
+        nobody can see or delete."""
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=0)
+        created = FileService.register_disk_file(
+            self.user,
+            "synced.bin",
+            None,
+            f"files/users/{self.user.username}/synced.bin",
+            size=10 * KB,
+        )
+        self.assertIn(created.pk, File.objects.values_list("pk", flat=True))
 
 
 @override_settings(STORAGE_QUOTA_BYTES=10 * KB)

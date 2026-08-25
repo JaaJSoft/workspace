@@ -91,8 +91,7 @@ def remaining_bytes(*, owner, group):
 class QuotaExceeded(APIException):
     """A write refused because its bucket is full.
 
-    A DRF exception so REST endpoints answer 413 through the default handler;
-    WebDAV and the importer catch it and translate.
+    A DRF exception so REST endpoints answer 413 through the default handler.
     """
 
     status_code = 413

@@ -7,6 +7,8 @@ from knox.models import AuthToken
 from unfold.admin import ModelAdmin
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
+from workspace.files.admin import GroupStorageQuotaInline, UserStorageQuotaInline
+
 from .models import APITokenLabel, UserPresence, UserSetting
 
 
@@ -53,6 +55,7 @@ class UserAdmin(DjangoUserAdmin, ModelAdmin):
     form = UserChangeForm
     add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm
+    inlines = (UserStorageQuotaInline,)
     list_display = (
         *DjangoUserAdmin.list_display,
         "is_active",
@@ -63,7 +66,8 @@ class UserAdmin(DjangoUserAdmin, ModelAdmin):
 
 @admin.register(Group)
 class GroupAdmin(DjangoGroupAdmin, ModelAdmin):
-    pass
+    inlines = (GroupStorageQuotaInline,)
+    search_fields = ("name",)
 
 
 @admin.register(AuthToken)

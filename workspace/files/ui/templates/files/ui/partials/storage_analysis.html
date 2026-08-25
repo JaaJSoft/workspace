@@ -62,7 +62,7 @@ Context (built by files.ui.views.storage):
       <div class="stat-figure text-primary">
         <i data-lucide="hard-drive" class="w-6 h-6"></i>
       </div>
-      <div class="stat-title">Used</div>
+      <div class="stat-title">Live files</div>
       <div class="stat-value text-2xl">{{ analysis.total_size|filesizeformat }}</div>
       {% if analysis.quota is not None %}
         <div class="stat-desc">
@@ -72,7 +72,7 @@ Context (built by files.ui.views.storage):
               value="{{ quota_percent|unlocalize }}"
               max="100"
             ></progress>
-            <span>{{ analysis.quota_used|filesizeformat }} of {{ analysis.quota|filesizeformat }} ({{ quota_percent }}%)</span>
+            <span>{{ analysis.quota_used|filesizeformat }} of {{ analysis.quota|filesizeformat }} used, trash included ({{ quota_percent }}%)</span>
           </div>
         </div>
       {% endif %}

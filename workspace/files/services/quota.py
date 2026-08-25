@@ -2,11 +2,9 @@
 
 Two buckets, never both: a file counts against its group's quota when
 ``File.group`` is set, against its owner's personal quota otherwise. Trashed
-rows keep counting - they still occupy disk, which is what makes emptying the
-trash a real remedy and what lets a restore skip any check.
+rows count.
 
-Every read of the quota tables and every write decision goes through this
-module; nothing else may compute "bytes used".
+Nothing outside this module computes bucket usage or reads the quota tables.
 """
 
 from django.conf import settings
@@ -20,11 +18,7 @@ def _pk(value):
 
 
 def effective_quota(user):
-    """Bytes *user* may hold in personal files. ``None`` means unlimited.
-
-    No row at all means the deployment-wide default; a row with an empty
-    ``quota_bytes`` is an explicit exemption.
-    """
+    """Bytes *user* may hold in personal files. ``None`` means unlimited."""
     row = UserStorageQuota.objects.filter(user_id=_pk(user)).first()
     if row is None:
         return settings.STORAGE_QUOTA_BYTES

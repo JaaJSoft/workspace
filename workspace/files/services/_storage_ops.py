@@ -571,8 +571,8 @@ def copy_node(node, parent, owner, _sibling_names=None):
         name=new_name,
         node_type=node.node_type,
         parent=parent,
-        # The blob's storage root is chosen by file_upload_path from
-        # instance.group_id, so the group has to be set before save().
+        # file_upload_path reads instance.group_id, so the group must be set
+        # before save().
         group=parent.group if parent is not None else None,
         mime_type=node.mime_type,
         type=node.type,

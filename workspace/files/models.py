@@ -852,13 +852,8 @@ class ThumbnailFailure(models.Model):
 class UserStorageQuota(models.Model):
     """Storage limit for one user's personal files.
 
-    A missing row means the global ``STORAGE_QUOTA_BYTES`` applies; a row whose
-    ``quota_bytes`` is empty means unlimited. Rows exist only where an
-    administrator deviated from the default, so the table stays small.
-
-    Deliberately not a ``UserSetting``: that store is writable by its own user
-    through the settings API, which would let anyone raise their own quota.
-    Nothing outside the admin may write here.
+    No row means the global ``STORAGE_QUOTA_BYTES`` applies; an empty
+    ``quota_bytes`` means unlimited.
     """
 
     uuid = models.UUIDField(
@@ -886,9 +881,7 @@ class UserStorageQuota(models.Model):
 class GroupStorageQuota(models.Model):
     """Storage limit for one group's folder.
 
-    A missing row means unlimited - that is the behaviour groups had before
-    quotas existed, so no administrative action is needed to keep a team
-    working. An empty ``quota_bytes`` means unlimited too, set on purpose.
+    No row means unlimited, and so does an empty ``quota_bytes``.
     """
 
     uuid = models.UUIDField(

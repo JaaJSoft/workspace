@@ -201,6 +201,24 @@ class CopyEnforcementTests(TestCase):
         copied = FileService.copy(self.file, self.folder, self.user)
         self.assertEqual(copied.parent_id, self.folder.pk)
 
+    def test_a_copy_into_a_full_group_folder_is_refused(self):
+        group = Group.objects.create(name="Design")
+        self.user.groups.add(group)
+        group_root = FileService.create_folder(self.user, "Design", group=group)
+        GroupStorageQuota.objects.create(group=group, quota_bytes=1)
+        with self.assertRaises(quota.QuotaExceeded):
+            FileService.copy(self.file, group_root, self.user)
+        self.assertFalse(File.objects.filter(parent=group_root).exists())
+
+    def test_a_copy_into_a_group_folder_with_room_succeeds(self):
+        group = Group.objects.create(name="Design")
+        self.user.groups.add(group)
+        group_root = FileService.create_folder(self.user, "Design", group=group)
+        GroupStorageQuota.objects.create(group=group, quota_bytes=20 * KB)
+        copied = FileService.copy(self.file, group_root, self.user)
+        self.assertEqual(copied.parent_id, group_root.pk)
+        self.assertEqual(copied.group_id, group.pk)
+
 
 @override_settings(STORAGE_QUOTA_BYTES=10 * KB)
 class MoveEnforcementTests(TestCase):
@@ -278,6 +296,16 @@ class MoveEnforcementTests(TestCase):
         FileService.soft_delete(trashed)
         with self.assertRaises(quota.QuotaExceeded):
             FileService.move(folder, self.design_root, acting_user=self.user)
+
+    def test_a_move_within_the_same_group_bucket_is_never_checked(self):
+        # Same reasoning as test_a_move_inside_the_same_bucket_is_never_checked,
+        # but both buckets are the same group instead of both personal.
+        f = self._in(self.design_root, "a.bin", 2 * KB)
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=0)
+        sub = FileService.create_folder(self.user, "sub", parent=self.design_root)
+        FileService.move(f, sub, acting_user=self.user)
+        f.refresh_from_db()
+        self.assertEqual(f.parent_id, sub.pk)
 
 
 class WebDavWriteBufferTests(TestCase):
@@ -364,3 +392,62 @@ class WebDavQuotaAdvertisingTests(TestCase):
         res = FolderResource("/Design", self._environ(), self.group_root)
         self.assertEqual(res.get_used_bytes(), KB)
         self.assertEqual(res.get_available_bytes(), 3 * KB)
+
+
+class WebDavMoveCopyQuotaTests(TestCase):
+    """A refused MOVE/COPY must reach the client as 507, and a refused MOVE
+    must never leave a file's storage renamed out from under its row."""
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        self._tmpdir = tempfile.mkdtemp()
+        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
+        self._media_override.enable()
+        self.addCleanup(self._media_override.disable)
+        self.addCleanup(shutil.rmtree, self._tmpdir, ignore_errors=True)
+
+        self.user = User.objects.create_user(username="davmoveq", password="pw")
+        self.group = Group.objects.create(name="Design")
+        self.user.groups.add(self.group)
+        self.design_root = FileService.create_folder(
+            self.user, "Design", group=self.group
+        )
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=0)
+
+    def _make_resource(self, file_obj, path="/a.bin"):
+        from workspace.files.webdav.resources import FileResource
+
+        environ = {"workspace.user": self.user, "wsgidav.provider": None}
+        return FileResource(path, environ, file_obj)
+
+    def test_a_refused_move_answers_507_and_leaves_the_file_intact(self):
+        from wsgidav.dav_error import DAVError
+
+        file_obj = FileService.create_file(
+            self.user, "a.bin", content=ContentFile(b"payload", name="a.bin")
+        )
+        res = self._make_resource(file_obj)
+
+        with self.assertRaises(DAVError) as caught:
+            res.copy_move_single("/Design/b.bin", is_move=True)
+        self.assertEqual(caught.exception.value, 507)
+
+        file_obj.refresh_from_db()
+        self.assertEqual(file_obj.name, "a.bin")
+        self.assertIsNone(file_obj.parent_id)
+        with file_obj.content.open("rb") as f:
+            self.assertEqual(f.read(), b"payload")
+
+    def test_a_refused_copy_answers_507(self):
+        from wsgidav.dav_error import DAVError
+
+        file_obj = FileService.create_file(
+            self.user, "a.bin", content=ContentFile(b"payload", name="a.bin")
+        )
+        res = self._make_resource(file_obj)
+
+        with self.assertRaises(DAVError) as caught:
+            res.copy_move_single("/Design/copy.bin", is_move=False)
+        self.assertEqual(caught.exception.value, 507)

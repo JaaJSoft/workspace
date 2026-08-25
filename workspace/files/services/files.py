@@ -318,6 +318,28 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def check_move_allowed(file_obj, new_parent, *, acting_user=None):
+        """Raise ``QuotaExceeded`` when moving *file_obj* under *new_parent* would not fit."""
+        new_group = new_parent.group if new_parent else None
+        old_group = file_obj.group
+
+        new_owner = (
+            acting_user if (old_group and not new_group and acting_user) else None
+        )
+
+        # Only a group change moves bytes between buckets. The owner charged
+        # is the one the move will assign, not necessarily the current one.
+        if (old_group.pk if old_group else None) != (
+            new_group.pk if new_group else None
+        ):
+            check_write_allowed(
+                owner=new_owner or file_obj.owner_id,
+                group=new_group,
+                # Trashed descendants travel with the subtree.
+                additional_bytes=subtree_bytes(file_obj, include_trashed=True),
+            )
+
+    @staticmethod
     @transaction.atomic
     def move(file_obj, new_parent, *, acting_user=None):
         """Move a file or folder to a new parent, handling physical storage."""
@@ -343,18 +365,7 @@ class FileService:
             file_obj.node_type,
             exclude_pk=file_obj.pk,
         )
-
-        # Only a group change moves bytes between buckets. The owner charged
-        # is the one the move will assign, not necessarily the current one.
-        if (old_group.pk if old_group else None) != (
-            new_group.pk if new_group else None
-        ):
-            check_write_allowed(
-                owner=new_owner or file_obj.owner_id,
-                group=new_group,
-                # Trashed descendants travel with the subtree.
-                additional_bytes=subtree_bytes(file_obj, include_trashed=True),
-            )
+        FileService.check_move_allowed(file_obj, new_parent, acting_user=acting_user)
 
         if file_obj.node_type == File.NodeType.FOLDER:
             FileService._move_folder_storage(file_obj, new_parent, new_owner=new_owner)

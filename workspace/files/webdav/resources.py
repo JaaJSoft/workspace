@@ -5,6 +5,7 @@ import logging
 import os
 import time
 import uuid
+from contextlib import contextmanager
 
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
@@ -334,7 +335,8 @@ class FolderResource(DAVCollection):
 
     @transaction.atomic
     def move_recursive(self, dest_path):
-        _move_to(self._file, self._user, dest_path)
+        with _as_insufficient_storage():
+            _move_to(self._file, self._user, dest_path)
 
     def support_recursive_delete(self):
         return True
@@ -498,14 +500,15 @@ class FileResource(DAVNonCollection):
 
     def copy_move_single(self, dest_path, *, is_move):
         if is_move:
-            with transaction.atomic():
+            with transaction.atomic(), _as_insufficient_storage():
                 _move_to(self._file, self._user, dest_path)
             self._moved = True
         else:
             dest_parts = _dest_parts(dest_path)
             new_name = dest_parts[-1]
             dest_parent = _resolve_parent(self._user, dest_parts[:-1])
-            _copy_as(self._file, dest_parent, self._user, new_name)
+            with _as_insufficient_storage():
+                _copy_as(self._file, dest_parent, self._user, new_name)
 
     def support_content_length(self):
         return True
@@ -536,6 +539,15 @@ def _dest_parts(dest_path):
     return [part for part in dest_path.split("/") if part]
 
 
+@contextmanager
+def _as_insufficient_storage():
+    """Translate a refused write into the 507 a WebDAV client expects."""
+    try:
+        yield
+    except quota.QuotaExceeded as exc:
+        raise DAVError(HTTP_INSUFFICIENT_STORAGE, str(exc)) from exc
+
+
 def _move_to(file_obj, user, dest_path):
     """Move and/or rename *file_obj* to *dest_path* (MOVE handlers).
 
@@ -553,6 +565,9 @@ def _move_to(file_obj, user, dest_path):
 
     needs_rename = new_name != file_obj.name
     needs_move = dest_parent != file_obj.parent
+
+    if needs_move:
+        FileService.check_move_allowed(file_obj, dest_parent, acting_user=user)
 
     rename_first = not (
         needs_rename

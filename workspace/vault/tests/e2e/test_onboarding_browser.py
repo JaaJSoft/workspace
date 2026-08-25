@@ -12,6 +12,7 @@ code the API uses.
 
 from django.core.cache import cache
 from django.urls import reverse
+from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.vault.models import AccountIdentity
@@ -144,20 +145,13 @@ class OnboardingWalkTests(PlaywrightTestCase):
         self.page.wait_for_url("**/vault/onboarding")
         self.page.wait_for_selector("button:has-text('I understand')")
         self.page.click("button:has-text('I understand')")
-        self.page.wait_for_selector("input[autocomplete='new-password']")
-        self.assertEqual(
-            self.page.evaluate("document.activeElement.tagName.toLowerCase()"), "input"
-        )
+        # The step focuses its `data-step-focus` element on $nextTick, so the
+        # assertion has to retry: read once and it catches the button that was
+        # just clicked.
+        expect(self.page.locator("input[data-step-focus]")).to_be_focused()
 
-        self._fill_password()
-        self.page.wait_for_selector(
-            "button:has-text('Create my vault'):not([disabled])"
-        )
-        self.page.click("button:has-text('Create my vault')")
-        self.page.wait_for_selector("#recovery-key-acknowledged")
-        self.assertEqual(
-            self.page.evaluate("document.activeElement.tagName.toLowerCase()"), "pre"
-        )
+        self._seal()
+        expect(self.page.locator("pre[data-step-focus]")).to_be_focused()
 
     def test_the_warning_stays_on_screen_through_every_step(self):
         """It used to live on the first step alone, which is the one people

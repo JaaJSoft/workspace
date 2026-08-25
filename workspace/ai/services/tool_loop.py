@@ -15,7 +15,11 @@ from workspace.ai.services.llm import (
     serialize_response,
     truncate_tool_result,
 )
-from workspace.ai.services.stream_steps import notify_tool_step, step_recipients
+from workspace.ai.services.stream_steps import (
+    notify_tool_step,
+    notify_tool_step_done,
+    step_recipients,
+)
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -84,15 +88,27 @@ def _batch_calls(tool_calls, concurrent_names, limit):
 
 
 def _execute(tool_call, human_user, bot_user, conversation_id, tool_context):
+    """Run one tool call and report its end to the conversation's streams.
+
+    The report is sent from wherever the call ran, as soon as it returns,
+    so the row of a quick call stops spinning without waiting for the slow
+    one it was dispatched with.
+    """
     from workspace.ai.tool_registry import tool_registry
 
-    return tool_registry.execute(
-        tool_call,
-        user=human_user,
-        bot=bot_user,
-        conversation_id=conversation_id,
-        context=tool_context,
-    )
+    try:
+        return tool_registry.execute(
+            tool_call,
+            user=human_user,
+            bot=bot_user,
+            conversation_id=conversation_id,
+            context=tool_context,
+        )
+    finally:
+        if conversation_id:
+            notify_tool_step_done(
+                step_recipients(conversation_id, bot_user), conversation_id, tool_call
+            )
 
 
 def _execute_off_thread(*args):

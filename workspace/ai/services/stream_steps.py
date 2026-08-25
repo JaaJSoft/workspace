@@ -3,14 +3,19 @@
 While a bot response is being generated in a Celery worker, each tool
 execution pushes a small "step" envelope (icon + label + detail) to every
 active member of the conversation, then wakes their SSE stream via
-``notify_sse``. Mirrors the call-signaling mailbox pattern: nothing here
-is durable — a lost step only means the progress label lags until the
-next one (or the final message) arrives, so failures must never abort
-the generation they report on.
+``notify_sse``. A second envelope, carrying the call id alone, reports the
+same call ending: a round runs its read-only tools together, so which ones
+are still in flight cannot be read off the order the steps arrived in.
+
+Mirrors the call-signaling mailbox pattern: nothing here is durable — a
+lost step only means the progress label lags until the next one (or the
+final message) arrives, so failures must never abort the generation they
+report on.
 """
 
 import json
 import logging
+import threading
 
 from workspace.chat.services.tool_calls import display_args
 from workspace.common.uuids import uuid_v7_or_v4
@@ -19,7 +24,12 @@ from workspace.core.sse_registry import notify_sse
 logger = logging.getLogger(__name__)
 
 STEP_EVENT_TTL = 120  # seconds; a step is stale once the response lands
-MAX_QUEUE = 50  # backstop against an unbounded mailbox if a client never drains
+MAX_QUEUE = 100  # backstop against an unbounded mailbox if a client never drains
+
+# The mailbox is read-modify-written, and a round's parallel tool calls report
+# their end from their own thread: without this two of them racing lose one
+# report, leaving a row spinning until the reply lands.
+_enqueue_lock = threading.Lock()
 
 # Dedicated provider slug: waking the heavy "chat" provider (a dozen DB
 # queries per dirty poll) for every tool execution would be wasteful.
@@ -51,11 +61,20 @@ def _enqueue(user_id, step):
     from django.core.cache import cache
 
     key = _events_key(user_id)
-    queue = cache.get(key) or []
-    queue.append({"id": str(uuid_v7_or_v4()), "data": step})
-    if len(queue) > MAX_QUEUE:
-        queue = queue[-MAX_QUEUE:]
-    cache.set(key, queue, STEP_EVENT_TTL)
+    with _enqueue_lock:
+        queue = cache.get(key) or []
+        queue.append({"id": str(uuid_v7_or_v4()), "data": step})
+        if len(queue) > MAX_QUEUE:
+            queue = queue[-MAX_QUEUE:]
+        cache.set(key, queue, STEP_EVENT_TTL)
+
+
+def _push(recipient_ids, step):
+    """Queue *step* for every recipient, then wake their streams."""
+    for user_id in recipient_ids:
+        _enqueue(user_id, step)
+    for user_id in recipient_ids:
+        notify_sse(PROVIDER_SLUG, user_id)
 
 
 def _queue(user_id):
@@ -123,9 +142,9 @@ def notify_tool_step(recipient_ids, conversation_id, tool_call):
         # Render the final message's tool timeline row itself (auto-escaped
         # there and here), so a live step is that row minus the result the
         # tool has not produced yet, and a tool's presentation has one source
-        # of truth. Both tenses ship in the row: the step outlives the call it
-        # announces — once the next one starts it becomes a done row — and the
-        # cached HTML cannot be re-rendered at that point.
+        # of truth. Both tenses ship in the row: it outlives the call it
+        # announces, and the completion that turns it into a done row carries
+        # no HTML, so the cached markup is never re-rendered.
         html = render_to_string(
             "chat/ui/partials/_tool_call_row.html",
             {
@@ -139,13 +158,40 @@ def notify_tool_step(recipient_ids, conversation_id, tool_call):
                 }
             },
         )
-        step = {
-            "conversation_id": str(conversation_id),
-            "html": html,
-        }
-        for user_id in recipient_ids:
-            _enqueue(user_id, step)
-        for user_id in recipient_ids:
-            notify_sse(PROVIDER_SLUG, user_id)
+        _push(
+            recipient_ids,
+            {
+                "conversation_id": str(conversation_id),
+                "call_id": tool_call.id,
+                "html": html,
+            },
+        )
     except Exception:
         logger.exception("Failed to push bot step event")
+
+
+def notify_tool_step_done(recipient_ids, conversation_id, tool_call):
+    """Tell every recipient that *tool_call* has returned.
+
+    Which row reads as running cannot be deduced from the order steps
+    arrive in: a round dispatches its read-only calls together, so several
+    are in flight at once and they finish in any order. The row carries
+    both tenses already, so ending one is naming it - no HTML to re-render.
+
+    Never raises, for the same reason as :func:`notify_tool_step`: a step
+    lost to a broken cache only leaves a row spinning until the reply
+    lands.
+    """
+    if not recipient_ids:
+        return
+    try:
+        _push(
+            recipient_ids,
+            {
+                "conversation_id": str(conversation_id),
+                "call_id": tool_call.id,
+                "done": True,
+            },
+        )
+    except Exception:
+        logger.exception("Failed to push bot step completion")

@@ -1,6 +1,6 @@
 import threading
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -258,12 +258,13 @@ class StepEmissionTests(TestCase):
         }
         return first, final
 
+    @patch("workspace.ai.services.tool_loop.notify_tool_step_done")
     @patch("workspace.ai.services.tool_loop.notify_tool_step")
     @patch("workspace.ai.services.tool_loop.step_recipients", return_value=[1, 2])
     @patch("workspace.ai.services.tool_loop.call_llm")
     @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
     def test_each_tool_execution_emits_a_step(
-        self, mock_build, mock_call_llm, mock_recipients, mock_notify
+        self, mock_build, mock_call_llm, mock_recipients, mock_notify, mock_done
     ):
         tool_call = SimpleNamespace(
             id="call_1",
@@ -283,15 +284,19 @@ class StepEmissionTests(TestCase):
                 conversation_id="conv-1",
             )
 
-        mock_recipients.assert_called_once_with("conv-1", self.bot)
+        # Membership is re-read for the completion too: a member who leaves
+        # while a tool runs must not receive its end either.
+        self.assertEqual(mock_recipients.call_args_list, [call("conv-1", self.bot)] * 2)
         mock_notify.assert_called_once_with([1, 2], "conv-1", tool_call)
+        mock_done.assert_called_once_with([1, 2], "conv-1", tool_call)
 
+    @patch("workspace.ai.services.tool_loop.notify_tool_step_done")
     @patch("workspace.ai.services.tool_loop.notify_tool_step")
     @patch("workspace.ai.services.tool_loop.step_recipients")
     @patch("workspace.ai.services.tool_loop.call_llm")
     @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
     def test_no_conversation_id_skips_recipient_lookup(
-        self, mock_build, mock_call_llm, mock_recipients, mock_notify
+        self, mock_build, mock_call_llm, mock_recipients, mock_notify, mock_done
     ):
         tool_call = SimpleNamespace(
             id="call_1",
@@ -313,6 +318,7 @@ class StepEmissionTests(TestCase):
 
         mock_recipients.assert_not_called()
         mock_notify.assert_not_called()
+        mock_done.assert_not_called()
 
     @patch("workspace.ai.services.tool_loop.notify_tool_step")
     @patch("workspace.ai.services.tool_loop.call_llm")
@@ -852,3 +858,126 @@ class ConcurrentToolCallTests(TestCase):
 
         with self.assertRaises(RuntimeError):
             self._run(registry, calls)
+
+
+@override_settings(AI_MAX_TOOL_ROUNDS=10, AI_MAX_IDENTICAL_TOOL_CALLS=3)
+class StepCompletionTests(TestCase):
+    """Each call reports its own end, so the UI never guesses from position."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="step-user", email="su@test.com", password="pw"
+        )
+        self.bot = User.objects.create_user(
+            username="step-bot", email="sb@test.com", password="pw"
+        )
+
+    def _run(self, registry, calls, conversation_id="conv-1"):
+        events = registry.spans
+        with (
+            patch("workspace.ai.services.tool_loop.step_recipients", return_value=[7]),
+            patch(
+                "workspace.ai.services.tool_loop.notify_tool_step",
+                side_effect=lambda ids, conv, tc: events.append((tc.id, "step")),
+            ),
+            patch(
+                "workspace.ai.services.tool_loop.notify_tool_step_done",
+                side_effect=lambda ids, conv, tc: events.append((tc.id, "done")),
+            ),
+            patch("workspace.ai.services.tool_loop.call_llm") as mock_call_llm,
+            patch("workspace.ai.tool_registry.tool_registry", registry),
+        ):
+            mock_call_llm.side_effect = [
+                _llm_result(calls),
+                _llm_result([], content="done"),
+            ]
+            run_tool_loop(
+                messages=[{"role": "user", "content": "go"}],
+                model="x",
+                human_user=self.user,
+                bot_user=self.bot,
+                conversation_id=conversation_id,
+            )
+        return events
+
+    def test_a_call_reports_its_end_once_it_has_returned(self):
+        registry = _StubRegistry()
+        calls = [_tool_call("c1", name="get_weather", arguments='{"location": "Lyon"}')]
+
+        events = self._run(registry, calls)
+
+        self.assertEqual(
+            events, [("c1", "step"), ("c1", "start"), ("c1", "end"), ("c1", "done")]
+        )
+
+    def test_the_call_that_ends_first_reports_first(self):
+        # The whole point of the completion event: c2 was dispatched second
+        # and finished first, and its row has to stop spinning right then -
+        # not when c1, the slow one it shares a batch with, catches up.
+        finished_second = threading.Event()
+
+        def handler(tool_call):
+            if tool_call.id == "c1":
+                finished_second.wait(10)
+                return "slow"
+            finished_second.set()
+            return "fast"
+
+        registry = _StubRegistry(concurrent={"read_webpage"}, handler=handler)
+        calls = [
+            _tool_call(
+                "c1", name="read_webpage", arguments='{"url": "https://a.test"}'
+            ),
+            _tool_call(
+                "c2", name="read_webpage", arguments='{"url": "https://b.test"}'
+            ),
+        ]
+
+        events = self._run(registry, calls)
+
+        # Both rows are announced in call order before either runs.
+        self.assertEqual(events[:2], [("c1", "step"), ("c2", "step")])
+        self.assertLess(events.index(("c2", "done")), events.index(("c1", "end")))
+
+    def test_a_refused_repeat_announces_nothing_and_ends_nothing(self):
+        registry = _StubRegistry()
+        repeated = '{"location": "Lyon"}'
+        calls = [
+            _tool_call(f"c{i}", name="get_weather", arguments=repeated)
+            for i in range(1, 5)
+        ]
+
+        events = self._run(registry, calls)
+
+        # The fourth identical call is refused before it could run, so its
+        # row never appears and never has to be ended.
+        self.assertEqual([call_id for call_id, _ in events if call_id == "c4"], [])
+        self.assertEqual(
+            events[-4:],
+            [("c3", "step"), ("c3", "start"), ("c3", "end"), ("c3", "done")],
+        )
+
+    def test_a_run_outside_a_conversation_notifies_nobody(self):
+        registry = _StubRegistry()
+        calls = [_tool_call("c1", name="get_weather", arguments="{}")]
+
+        with (
+            patch("workspace.ai.services.tool_loop.notify_tool_step") as mock_step,
+            patch("workspace.ai.services.tool_loop.notify_tool_step_done") as mock_done,
+            patch("workspace.ai.services.tool_loop.call_llm") as mock_call_llm,
+            patch("workspace.ai.tool_registry.tool_registry", registry),
+        ):
+            mock_call_llm.side_effect = [
+                _llm_result(calls),
+                _llm_result([], content="done"),
+            ]
+            run_tool_loop(
+                messages=[{"role": "user", "content": "go"}],
+                model="x",
+                human_user=self.user,
+                bot_user=self.bot,
+                conversation_id=None,
+            )
+
+        mock_step.assert_not_called()
+        mock_done.assert_not_called()

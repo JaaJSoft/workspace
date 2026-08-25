@@ -1,5 +1,73 @@
 # Changelog
 
+## 0.38.0 - Sprints, Office & Voice
+
+### Highlights
+
+Projects grows up: work in sprints, group tasks under epics, break them into checklists, link what blocks what, and estimate the effort. Office documents now open and save straight in the browser, and the assistant finally does real research - it reads several pages to answer one question, searches with proper filters, opens PDFs and feeds, and can even reply out loud.
+
+### Projects
+
+- Sprints and a scrum board. A project can now run in iterations: plan a sprint from the backlog, start it, and the board shows only that sprint's work. Complete it and you choose what happens to the unfinished work - back to the backlog, or carried into another sprint where it resumes exactly where it stopped; closed sprints stay browsable as history. Creating and managing sprints happens right in the sprint switcher, and the new-sprint form arrives prefilled with the next name and sensible dates.
+- Switch a project between kanban and scrum whenever you like, from the project settings, without losing tasks, columns, comments or history.
+- Epics. Group tasks under a named, colored epic - it shows on board cards, backlog rows and hover cards, filters every task view, and project settings track how far each epic has progressed.
+- Checklists on tasks. Break a task into checkable items with inline add, rename and drag-to-reorder; board cards show a done/total counter.
+- Task links and dependencies. Link tasks as *blocks*, *duplicates* or *relates to*, each side showing its own perspective, and board cards flag a task as Blocked while something open still blocks it.
+- Effort estimates, in the unit each project picks in its settings - story points or hours. Estimates show on cards, rows and the task panel, and each board column totals its own. Off by default until an admin picks a unit.
+- File attachments on tasks. Upload a file or pull one in from your workspace, preview and download it - everyone who can open the task can see it. Attachments now belong to the task itself, so they no longer land in the uploader's private folder where nobody else could reach them.
+- Watch a task to follow it, or mute one to stop hearing about it. Watchers also get notified when a task moves or is completed, which used to notify nobody. Commenting on a task or being assigned to it starts watching it automatically - switchable in your project preferences.
+- Choose how loud projects are: in-app and push, in-app only, or nothing at all - set once for all projects, and overridable per project from the bell in its header.
+- Being assigned a task now notifies you, and shows up in the project activity feed. Due-date reminders no longer repeat every day: you get one when a task falls due and one when it becomes overdue, in the morning of your own timezone rather than at a fixed server hour.
+- Filtering, sorting and paging now happen on the server, so a filtered board, backlog or task list is fast, shareable by URL and survives a refresh.
+- The filter bar is a single compact row - search, a Filters button with a count badge, and Clear - with all the pickers in a panel underneath. It no longer breaks into ragged lines when space runs short, stays open while you use it, and shows the assignees and labels you already picked as removable chips.
+- Priority and status dropdowns are styled like the assignee and label pickers, with the priority badge's colors and the status color dot.
+- New projects' default columns come with colors out of the box, and existing projects were backfilled - except columns you had renamed or colored yourself.
+- The task panel is reordered around what a task is: status, priority and due date first, then assignees and labels, then description and checklist, then links, attachments and the discussion. Every section folds from its header, and empty ones start folded.
+
+### Files
+
+- Edit office documents in the browser. Word, Excel and PowerPoint files - and their OpenDocument equivalents - now open and save directly in the file viewer when your instance is set up with an editor. Without one, office files keep their download-only behavior.
+
+### AI Assistants
+
+- The assistant researches instead of glancing. It now chains several lookups to answer one question, building each on the last, instead of reading one page and concluding from it.
+- It reads a page for your question rather than from the top: on a long spec, manual or thread it returns what the page says on the subject, grouped by section, with the page outline so it knows where to look next - and it can now continue past the point where a long page was cut instead of re-reading the beginning.
+- PDFs and news feeds are readable too. A PDF comes back as text (and says so plainly when it is a scan with nothing to read), and a site's feed comes back as a dated list of what it published lately.
+- Web search gained the filters it was missing: a time range, a category, how many results, a single-site scope, and several queries in one go. "What happened this week" now actually searches this week.
+- Replies come back faster: lookups that cannot affect each other now run at the same time, so a turn that reads five pages costs the slowest one rather than all five added up. Generating several images at once got the same treatment.
+- Follow-up questions no longer lose the thread. What a tool found used to be cut to a fragment before the next turn saw it; the most recent turn now comes back whole.
+- The assistant can work on your projects: ask what is on your plate today, find tasks across boards, then create, move, reassign, reschedule or comment on them - always within what you yourself are allowed to see.
+- Bots can speak. An assistant can now reply with a voice message - the same bubble and player a recorded one gets - and each bot has a recognizable voice of its own. Needs speech synthesis configured on the instance.
+- An agent goal whose deadline has passed is now flagged as overdue and closed instead of checking in forever, and an assistant can see the goals it recently finished, so it stops re-opening them or talking about them as if they were still running.
+
+### Chat
+
+- The "AI is typing" bubble no longer stays stuck on screen after you leave the app and come back once the reply has landed.
+
+### Sign-in
+
+- Groups from your identity provider can be mirrored into the workspace at login, so a team arrives with the right access to shared folders, conversations and projects on its first sign-in. Off by default, with an optional allowlist of which groups to mirror.
+- An account linked to single sign-on no longer keeps its old local password alive: it is disabled at linking, and accounts linked before this release were cleaned up too. To keep external clients working - and to finally give SSO accounts a way to mount their files - WebDAV now accepts a personal API token in place of the password.
+
+### Interface
+
+- Preferences and settings stop looking alike: every module's display preferences now open from a sliders icon labelled "Preferences", while the gear stays for real settings.
+- Confirmation dialogs are consistent across the app, each with an icon matching what it does. Deleting several files at once now asks the same clear question as deleting one - it used to fall back to a generic blue "OK" dialog.
+- Hovering someone's name, and not just their picture, opens their user card - everywhere, including a project's member list, where it did nothing at all.
+- The user menu now links to the project's source code and to the bug report form, with the version you are running already filled in.
+
+### API
+
+- The calendar endpoints are flatter and match the rest of the API: `/api/v1/calendars`, `/api/v1/events`, `/api/v1/external-calendars` and `/api/v1/polls`. The chat gallery endpoint is now `/media`. The old paths are gone - scripts calling them need updating.
+- The API reference is organized by module and sub-module throughout, so large modules are no longer one undifferentiated block of fifty operations.
+
+### Fixes
+
+- Emptying the trash now actually removes purged folders from disk. They used to be left behind and get resurrected on the next scan, group folders included.
+- Typing `[[` in a note right as it opens no longer silently fails to bring up the link picker.
+- The file browser toolbar no longer wraps onto two lines on a 1280px-wide screen.
+- The Storage analysis dialog's close button sits in its corner again on mobile.
+
 ## 0.37.0 - Imports & Storage
 
 ### Highlights

@@ -9,6 +9,8 @@ Nothing outside this module computes bucket usage or reads the quota tables.
 
 from django.conf import settings
 from django.db.models import Sum
+from django.template.defaultfilters import filesizeformat
+from rest_framework.exceptions import APIException
 
 from ..models import File, GroupStorageQuota, UserStorageQuota
 
@@ -84,3 +86,38 @@ def remaining_bytes(*, owner, group):
     """
     used, limit, _ = bucket_state(owner=owner, group=group)
     return None if limit is None else limit - used
+
+
+class QuotaExceeded(APIException):
+    """A write refused because its bucket is full.
+
+    A DRF exception so REST endpoints answer 413 through the default handler;
+    WebDAV and the importer catch it and translate.
+    """
+
+    status_code = 413
+    default_code = "storage_quota_exceeded"
+    default_detail = "Storage quota exceeded."
+
+
+def check_write_allowed(*, owner, group, additional_bytes):
+    """Raise ``QuotaExceeded`` when *additional_bytes* would not fit.
+
+    The bucket comes from the target row, not from whoever is acting: writing
+    into a teammate's file charges that file's bucket. A delta of zero or less
+    is always allowed, so a shrinking file stays saveable over quota.
+    """
+    if not additional_bytes or additional_bytes <= 0:
+        return
+    used, limit, label = bucket_state(owner=owner, group=group)
+    if limit is None or used + additional_bytes <= limit:
+        return
+    remedy = (
+        "Free up space or empty the trash."
+        if group is None
+        else "Free up space or ask an administrator to raise the limit."
+    )
+    raise QuotaExceeded(
+        f"{label} is full ({filesizeformat(used)} of {filesizeformat(limit)} used) "
+        f"and this write needs {filesizeformat(additional_bytes)}. {remedy}"
+    )

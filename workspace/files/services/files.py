@@ -19,6 +19,7 @@ from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
+from .quota import check_write_allowed
 from .thumbnails.failures import clear_failure
 
 
@@ -182,6 +183,13 @@ class FileService:
 
         if group is None and parent and parent.group_id:
             group = parent.group
+
+        # Before the detection and hashing passes read the stream.
+        check_write_allowed(
+            owner=owner,
+            group=group,
+            additional_bytes=content.size if content is not None else 0,
+        )
 
         if content is not None:
             detection = detect_from_stream(content)
@@ -420,6 +428,12 @@ class FileService:
             refine_with_name,
         )
         from workspace.files.services.filetype import pin_viewer_for_upload
+
+        check_write_allowed(
+            owner=file_obj.owner_id,
+            group=file_obj.group_id,
+            additional_bytes=content.size - (file_obj.size or 0),
+        )
 
         detection = detect_from_stream(content)
         file_obj.content_hash = hash_stream(content)

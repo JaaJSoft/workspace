@@ -163,9 +163,10 @@ class AttachmentSaveToFilesView(APIView):
         #
         # The try/except scopes only the source-blob open: a vanished blob
         # is the user-visible "Attachment not found" 404 path. Storage
-        # failures from FileService.create_file (disk full, perm denied,
-        # quota exceeded, ...) must surface as 5xx, not be silently
-        # rewritten to a 404 that hides the real problem.
+        # failures from FileService.create_file (disk full, perm denied)
+        # must surface as 5xx, not be silently rewritten to a 404 that hides
+        # the real problem. A quota refusal is different: it answers 413 on
+        # its own, through DRF's handler.
         try:
             src = attachment.file.open("rb")
         except FileNotFoundError, OSError:

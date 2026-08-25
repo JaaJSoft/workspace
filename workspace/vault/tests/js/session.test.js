@@ -206,6 +206,44 @@ test('a broken key-exchange import is refused with a defined reason and zeroes b
   assert.ok(h.sigSeed.every((byte) => byte === 0));
 });
 
+test('a second unlock that fails after importing keys leaves the live session exactly as it was', async () => {
+  // Distinguishes which attempt's signer is actually in use: the default
+  // importSigner/hpkeRecipient stubs are indistinguishable across calls, so
+  // a bug that let the second (aborted) attempt clobber the live session
+  // would otherwise pass unnoticed.
+  let importCalls = 0;
+  let hpkeCalls = 0;
+  const h = harness({
+    VaultCrypto: {
+      importSigner: async () => {
+        importCalls += 1;
+        const id = importCalls;
+        return { sign: async () => Uint8Array.from([id]) };
+      },
+      hpkeRecipient: async () => {
+        hpkeCalls += 1;
+        if (hpkeCalls === 1) return { open: async () => new Uint8Array(0) };
+        throw new Error('boom');
+      },
+    },
+  });
+
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  assert.equal(h.session.isUnlocked(), true);
+  const signatureBefore = await h.session.sign({ v: 1 });
+
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'substituted-key'
+  );
+
+  // Still unlocked, through the original session - not a TypeError from a
+  // nulled-out signer, and not a signature from the aborted attempt's key.
+  assert.equal(h.session.isUnlocked(), true);
+  const signatureAfter = await h.session.sign({ v: 1 });
+  assert.equal(signatureAfter, signatureBefore);
+});
+
 test('a broken master-key derivation is refused with a defined reason and zeroes the decoded recovery key', async () => {
   const h = harness({ VaultCrypto: { deriveAmk: async () => { throw new Error('boom'); } } });
   await assert.rejects(

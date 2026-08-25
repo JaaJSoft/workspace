@@ -93,6 +93,14 @@ window.VaultSession = (function () {
       var kexPriv;
       var sigSeed;
       var recomputed;
+      // Held locally, not written into the closure's signer/recipient until
+      // every check below has passed: signer and recipient are shared with a
+      // session that may already be unlocked, so an aborted second attempt
+      // must never overwrite what the live session is using, and a failed
+      // first attempt must never leave a half-imported key reachable once
+      // unlocked flips true on some later, unrelated success.
+      var newSigner;
+      var newRecipient;
       // Everything that can still throw once both private keys are unwrapped
       // is working with server-supplied envelope fields (sig_public,
       // kex_public, sig_over_kex_pub) - an unexpected failure there is
@@ -156,8 +164,8 @@ window.VaultSession = (function () {
           throw VaultUnlockError('substituted-key', err);
         }
 
-        signer = await V.importSigner(sigSeed);
-        recipient = await V.hpkeRecipient(kexPriv);
+        newSigner = await V.importSigner(sigSeed);
+        newRecipient = await V.hpkeRecipient(kexPriv);
         zero(sigSeed);
         zero(kexPriv);
       } catch (err) {
@@ -169,12 +177,10 @@ window.VaultSession = (function () {
         zero(unwrapKey);
         zero(kexPriv);
         zero(sigSeed);
-        // importSigner can succeed and hpkeRecipient still fail: without
-        // this, the imported signing key would sit in the closure with
-        // unlocked still false, so lock() (which no-ops while locked) could
-        // never release it.
-        signer = null;
-        recipient = null;
+        // Nothing to reset here: importSigner/hpkeRecipient wrote to
+        // newSigner/newRecipient, not to the closure's signer/recipient, so
+        // a failed attempt - first or a later one against an already-live
+        // session - never touched what's committed.
         if (err && err.name === 'VaultUnlockError') throw err;
         throw VaultUnlockError(keysUnwrapped ? 'substituted-key' : 'identity', err);
       }
@@ -184,6 +190,8 @@ window.VaultSession = (function () {
       // out untrusted.
       accountUuid = envelope.uuid;
       sigPublicRaw = recomputed;
+      signer = newSigner;
+      recipient = newRecipient;
       unlocked = true;
 
       // Failing to remember the device does not mean failing to unlock it -

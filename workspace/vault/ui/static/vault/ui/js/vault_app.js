@@ -108,6 +108,27 @@ window.vaultApp = (function () {
         this.vaults = await Promise.all(rows.map(decryptVault));
       },
 
+      createVault: async function () {
+        if (!window.VaultSession.isUnlocked()) return;
+        var name = this.newVaultName.trim();
+        if (!name) return;
+        this.busy = true;
+        this.error = '';
+        try {
+          var body = await window.buildVaultCreateRequest(window.VaultSession, name);
+          var row = await window.VaultApi.createVault(body);
+          this.vaults.push(await decryptVault(row));
+          this.showCreate = false;
+          this.newVaultName = '';
+        } catch (err) {
+          this.error = err.status === 409
+            ? 'A vault with that name could not be created - its identifier collided. Try again.'
+            : 'The vault could not be created. Try again.';
+        } finally {
+          this.busy = false;
+        }
+      },
+
       lockNow: function () {
         window.VaultSession.lock();
       },

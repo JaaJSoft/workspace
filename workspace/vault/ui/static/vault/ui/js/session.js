@@ -46,6 +46,7 @@ window.VaultSession = (function () {
   var signer = null;
   var recipient = null;
   var sigPublicRaw = null;
+  var kexPublicRaw = null;
   var lockCallbacks = [];
   var unlocked = false;
   var IDLE_LOCK_MS = 5 * 60 * 1000;
@@ -72,6 +73,7 @@ window.VaultSession = (function () {
   return {
     isUnlocked: function () { return unlocked; },
     accountUuid: function () { return accountUuid; },
+    accountKexPublicRaw: function () { return kexPublicRaw; },
     rememberedSecret: function () {
       return localStorage.getItem(VAULT_SECRET_STORAGE_KEY);
     },
@@ -104,6 +106,7 @@ window.VaultSession = (function () {
       // unlocked flips true on some later, unrelated success.
       var newSigner;
       var newRecipient;
+      var newKexPublicRaw;
       // Everything that can still throw once both private keys are unwrapped
       // is working with server-supplied envelope fields (sig_public,
       // kex_public, sig_over_kex_pub) - an unexpected failure there is
@@ -167,6 +170,12 @@ window.VaultSession = (function () {
           throw VaultUnlockError('substituted-key', err);
         }
 
+        // The server's kex_public, trusted only now: the attestation just
+        // above is what vouches for it, checked with the recomputed signing
+        // key rather than the served one. Decoding it any earlier - or
+        // re-fetching it later - would hand a second chance to the
+        // substitution this whole sequence exists to catch.
+        newKexPublicRaw = V.decodePublicKey(V.fromBase64Url(envelope.kex_public));
         newSigner = await V.importSigner(sigSeed);
         newRecipient = await V.hpkeRecipient(kexPriv);
         zero(sigSeed);
@@ -193,6 +202,7 @@ window.VaultSession = (function () {
       // out untrusted.
       accountUuid = envelope.uuid;
       sigPublicRaw = recomputed;
+      kexPublicRaw = newKexPublicRaw;
       signer = newSigner;
       recipient = newRecipient;
       unlocked = true;
@@ -215,6 +225,7 @@ window.VaultSession = (function () {
       signer = null;
       recipient = null;
       sigPublicRaw = null;
+      kexPublicRaw = null;
       accountUuid = null;
       expiresAt = 0;
       lockCallbacks.forEach(function (callback) { callback(); });

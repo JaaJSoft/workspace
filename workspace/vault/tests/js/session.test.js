@@ -513,6 +513,19 @@ test('a hidden tab locks the session', async () => {
   assert.equal(h.session.isUnlocked(), false);
 });
 
+test('accountKexPublicRaw is null before unlock', () => {
+  const h = harness();
+  assert.equal(h.session.accountKexPublicRaw(), null);
+});
+
+test('accountKexPublicRaw is set after unlock and cleared again after lock', async () => {
+  const h = harness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  assert.ok(h.session.accountKexPublicRaw() instanceof Uint8Array);
+  h.session.lock();
+  assert.equal(h.session.accountKexPublicRaw(), null);
+});
+
 test('pagehide locks the session', async () => {
   const h = watchHarness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });

@@ -3,10 +3,13 @@
 // sees at each step and what the screen refuses to do.
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 function app(session = {}, api = {}, crypto = {}) {
-  const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_app.js', {
+  const ctx = loadScripts([
+    'workspace/vault/ui/static/vault/ui/js/vault_create.js',
+    'workspace/vault/ui/static/vault/ui/js/vault_app.js',
+  ], {
     VaultSession: {
       isUnlocked: () => false,
       unlock: async () => {},
@@ -181,4 +184,63 @@ test('the signed payload carries vault_uuid, not the row\'s own uuid key', async
 test('the countdown is rendered as minutes and seconds', () => {
   assert.equal(app({ secondsUntilLock: () => 272 }).countdown(), '4:32');
   assert.equal(app({ secondsUntilLock: () => 9 }).countdown(), '0:09');
+});
+
+test('creating a vault seals a fresh key to the account and signs the metadata', async () => {
+  const posted = [];
+  const component = app({ isUnlocked: () => true }, {
+    listVaults: async () => [],
+    createVault: async (body) => { posted.push(body); return { ...body, wrapped_key: body.wrapped_key }; },
+  });
+  await component.unlock();
+  component.newVaultName = 'Work';
+  await component.createVault();
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0].uuid, 'vault-uuid');
+  assert.equal(posted[0].metadata_sig, 'signature');
+  assert.deepEqual(posted[0].hpke_suite, { kem_id: 32, kdf_id: 1, aead_id: 2, mode: 0 });
+});
+
+test('the vault name never leaves the browser in the clear', async () => {
+  const posted = [];
+  const component = app({ isUnlocked: () => true }, {
+    listVaults: async () => [],
+    createVault: async (body) => { posted.push(body); return body; },
+  });
+  await component.unlock();
+  component.newVaultName = 'Work';
+  await component.createVault();
+  assert.equal(JSON.stringify(posted[0]).includes('Work'), false);
+});
+
+test('a refused creation leaves the dialog open with its message', async () => {
+  const component = app({ isUnlocked: () => true }, {
+    listVaults: async () => [],
+    createVault: async () => { const e = new Error('x'); e.status = 400; throw e; },
+  });
+  await component.unlock();
+  component.showCreate = true;
+  component.newVaultName = 'Work';
+  await component.createVault();
+  assert.equal(component.showCreate, true);
+  assert.ok(component.error);
+});
+
+test('an empty name is refused before anything is sealed', async () => {
+  let called = 0;
+  const component = app({ isUnlocked: () => true }, {
+    listVaults: async () => [],
+    createVault: async () => { called += 1; return {}; },
+  });
+  await component.unlock();
+  component.newVaultName = '   ';
+  await component.createVault();
+  assert.equal(called, 0);
+});
+
+test('creating a vault while locked is refused', async () => {
+  const component = app({ isUnlocked: () => false });
+  component.newVaultName = 'Work';
+  await component.createVault();
+  assert.equal(component.state, 'locked');
 });

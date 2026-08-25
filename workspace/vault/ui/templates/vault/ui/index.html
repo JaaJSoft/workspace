@@ -88,7 +88,51 @@
             <button class="btn btn-sm btn-ghost" @click="lockNow()">Lock now</button>
           </div>
         </div>
-        {# the vault list and the create dialog are not built yet #}
+        <template x-if="vaults.length === 0">
+          <p class="text-base-content/60">No vault yet.</p>
+        </template>
+        <ul class="grid gap-3 sm:grid-cols-2">
+          <template x-for="vault in vaults" :key="vault.uuid">
+            <li class="card bg-base-100 border border-base-300">
+              <div class="card-body p-4">
+                <div class="flex items-center gap-3">
+                  {# Static, not bound: Lucide replaces this element with an svg and copies #}
+                  {# its attributes across once, so a binding here freezes at first render. #}
+                  <i data-lucide="lock" class="w-4 h-4"></i>
+                  <span class="font-medium" x-text="vault.name"></span>
+                </div>
+                <template x-if="vault.tampered">
+                  <inline-alert type="error" title="Signature does not verify"
+                    message="This vault's metadata was not signed by your account. Its name is not shown."></inline-alert>
+                </template>
+                <template x-if="vault.unopenable">
+                  <inline-alert type="warning" title="No key for this device"
+                    message="This vault holds no key wrap for your account, so it cannot be opened here."></inline-alert>
+                </template>
+              </div>
+            </li>
+          </template>
+        </ul>
+        <button class="btn btn-primary mt-6" @click="showCreate = true">New vault</button>
+        <template x-if="showCreate">
+          <div class="modal modal-open">
+            <div class="modal-box">
+              <h2 class="font-semibold text-lg">New vault</h2>
+              <inline-alert type="error" x-show="error" x-cloak class="mt-4">
+                <span x-text="error"></span>
+              </inline-alert>
+              <form @submit.prevent="createVault()">
+                <input type="text" class="input input-bordered w-full mt-4"
+                       autocomplete="off" spellcheck="false" x-model="newVaultName"
+                       placeholder="Vault name">
+                <div class="modal-action">
+                  <button type="button" class="btn btn-ghost" @click="showCreate = false">Cancel</button>
+                  <button type="submit" class="btn btn-primary" :disabled="busy">Create</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </template>
       </div>
     </template>
   </div>
@@ -98,5 +142,6 @@
   <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
   <script src="{% static 'vault/ui/js/api.js' %}"></script>
   <script src="{% static 'vault/ui/js/session.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_create.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_app.js' %}"></script>
 {% endblock %}

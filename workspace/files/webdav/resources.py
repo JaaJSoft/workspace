@@ -8,7 +8,7 @@ import uuid
 
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
-from wsgidav.dav_error import HTTP_BAD_REQUEST, DAVError
+from wsgidav.dav_error import HTTP_BAD_REQUEST, HTTP_INSUFFICIENT_STORAGE, DAVError
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.common.logging import scrub
@@ -41,10 +41,11 @@ class _StreamingWriteBuffer:
     concurrent PUTs (Windows retries a slow upload) would interleave writes.
     """
 
-    def __init__(self, full_path, flush_size):
+    def __init__(self, full_path, flush_size, max_bytes=None):
         self._full_path = full_path
         self._temp_path = f"{full_path}.{uuid.uuid4().hex}.part"
         self._flush_size = flush_size
+        self._max_bytes = max_bytes
         self._membuf = bytearray()
         self._total_size = 0
         self._hasher = new_hasher()
@@ -60,6 +61,15 @@ class _StreamingWriteBuffer:
         )
 
     def write(self, data):
+        # Per chunk, not at the end: this buffer writes straight to disk, so a
+        # client ignoring the advertised quota would fill the volume first.
+        # wsgidav answers the DAVError with end_write(with_errors=True), which
+        # aborts and cleans up, then a 507.
+        if (
+            self._max_bytes is not None
+            and self._total_size + len(data) > self._max_bytes
+        ):
+            raise DAVError(HTTP_INSUFFICIENT_STORAGE, "Storage quota exceeded")
         self._membuf.extend(data)
         self._total_size += len(data)
         self._hasher.update(data)
@@ -225,6 +235,21 @@ class FolderResource(DAVCollection):
     def get_last_modified(self):
         return self._file.updated_at.timestamp()
 
+    def get_used_bytes(self):
+        # Only a group root is a bucket; a sub-folder is part of a total that
+        # is reported one level up.
+        if self._file.group_id and self._file.parent_id is None:
+            return quota.group_usage(self._file.group_id)
+        return None
+
+    def get_available_bytes(self):
+        if self._file.group_id and self._file.parent_id is None:
+            remaining = quota.remaining_bytes(
+                owner=self._file.owner_id, group=self._file.group_id
+            )
+            return None if remaining is None else max(0, remaining)
+        return None
+
     def get_member_names(self):
         self._prefetch_members()
         return [f.name for f in self._members_cache]
@@ -345,6 +370,17 @@ class FileResource(DAVNonCollection):
         return self._file.content
 
     def begin_write(self, content_type=None):
+        # An overwrite frees the bytes it replaces, so credit them back before
+        # deciding how much room is left.
+        remaining = quota.remaining_bytes(
+            owner=self._file.owner_id, group=self._file.group_id
+        )
+        if remaining is not None:
+            remaining = max(0, remaining + (self._file.size or 0))
+            declared = int(self.environ.get("CONTENT_LENGTH") or 0)
+            if declared > remaining:
+                raise DAVError(HTTP_INSUFFICIENT_STORAGE, "Storage quota exceeded")
+
         storage = self._file.content.storage
         storage_path = file_upload_path(self._file, self._file.name)
         full_path = storage.path(storage_path)
@@ -353,6 +389,7 @@ class FileResource(DAVNonCollection):
         self._write_buf = _StreamingWriteBuffer(
             full_path,
             DjangoFile.DEFAULT_CHUNK_SIZE,
+            max_bytes=remaining,
         )
         self._write_started_at = time.monotonic()
         logger.info(
@@ -363,7 +400,10 @@ class FileResource(DAVNonCollection):
         return self._write_buf
 
     def end_write(self, *, with_errors):
-        buf = self._write_buf
+        buf = getattr(self, "_write_buf", None)
+        if buf is None:
+            # begin_write refused the upload before opening anything.
+            return
         elapsed = time.monotonic() - getattr(
             self, "_write_started_at", time.monotonic()
         )

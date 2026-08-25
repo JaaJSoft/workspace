@@ -278,3 +278,89 @@ class MoveEnforcementTests(TestCase):
         FileService.soft_delete(trashed)
         with self.assertRaises(quota.QuotaExceeded):
             FileService.move(folder, self.design_root, acting_user=self.user)
+
+
+class WebDavWriteBufferTests(TestCase):
+    """The buffer must refuse before the disk fills, not after."""
+
+    def test_the_buffer_aborts_as_soon_as_the_ceiling_is_crossed(self):
+        import os
+        import tempfile
+
+        from wsgidav.dav_error import DAVError
+
+        from workspace.files.webdav.resources import _StreamingWriteBuffer
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "upload.bin")
+            buf = _StreamingWriteBuffer(target, 1024, max_bytes=10)
+            buf.write(b"x" * 8)
+            with self.assertRaises(DAVError) as caught:
+                buf.write(b"x" * 8)
+            self.assertEqual(caught.exception.value, 507)
+            buf.abort()
+            self.assertFalse(os.path.exists(target))
+            self.assertEqual(
+                [p for p in os.listdir(tmp) if p.endswith(".part")],
+                [],
+                "the partial upload must be cleaned up",
+            )
+
+    def test_no_ceiling_means_no_limit(self):
+        import os
+        import tempfile
+
+        from workspace.files.webdav.resources import _StreamingWriteBuffer
+
+        with tempfile.TemporaryDirectory() as tmp:
+            buf = _StreamingWriteBuffer(os.path.join(tmp, "u.bin"), 1024)
+            buf.write(b"x" * 100_000)
+            buf.finalize()
+            self.assertEqual(buf.size, 100_000)
+
+
+@override_settings(STORAGE_QUOTA_BYTES=10 * KB)
+class WebDavQuotaAdvertisingTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="davuser", password="pw")
+        self.group = Group.objects.create(name="Design")
+        self.user.groups.add(self.group)
+        self.group_root = FileService.create_folder(
+            self.user, "Design", group=self.group
+        )
+        FileService.create_file(
+            self.user, "a.bin", content=ContentFile(b"x" * KB, name="a.bin")
+        )
+
+    def _environ(self):
+        # wsgidav._DAVResource.__init__ indexes environ["wsgidav.provider"]
+        # unconditionally; a resource built for direct testing (no real
+        # provider dispatch) still needs the key present.
+        return {"workspace.user": self.user, "wsgidav.provider": None}
+
+    def test_the_personal_root_reports_the_effective_quota(self):
+        from workspace.files.webdav.resources import RootCollection
+
+        root = RootCollection("/", self._environ())
+        self.assertEqual(root.get_used_bytes(), KB)
+        self.assertEqual(root.get_available_bytes(), 9 * KB)
+
+    def test_an_unlimited_bucket_advertises_nothing(self):
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
+        from workspace.files.webdav.resources import RootCollection
+
+        self.assertIsNone(RootCollection("/", self._environ()).get_available_bytes())
+
+    def test_a_group_root_reports_the_group_bucket(self):
+        from workspace.files.webdav.resources import FolderResource
+
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=4 * KB)
+        FileService.create_file(
+            self.user,
+            "team.bin",
+            parent=self.group_root,
+            content=ContentFile(b"x" * KB, name="team.bin"),
+        )
+        res = FolderResource("/Design", self._environ(), self.group_root)
+        self.assertEqual(res.get_used_bytes(), KB)
+        self.assertEqual(res.get_available_bytes(), 3 * KB)

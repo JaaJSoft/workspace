@@ -59,7 +59,7 @@ dependencies = [
     "lxml>=5.3.0",
     # streaming ZIP generation for bulk downloads (constant RAM)
     "zipstream-ng>=1.9.3",
-    "faker>=40.36.0",
+    "faker>=40.37.0",
     # OpenID Connect (SSO) login
     "mozilla-django-oidc>=5.0.2",
     "django-csp>=4.0",

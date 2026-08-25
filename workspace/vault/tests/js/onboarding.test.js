@@ -15,6 +15,7 @@ function component(extra = {}) {
     fetch: async () => ({ ok: true, status: 201, json: async () => ({}) }),
     setTimeout: (fn) => fn(),
     addEventListener: () => {},
+    localStorage: { setItem: () => {}, removeItem: () => {} },
     ...extra,
   });
   return ctx.vaultOnboarding();
@@ -159,6 +160,8 @@ const CRYPTO_STUB = {
   seal: async () => new Uint8Array(8),
   signBytes: async () => new Uint8Array(64),
   encodePublicKey: () => new Uint8Array(33),
+  importSigner: async () => ({ sign: async () => new Uint8Array(64) }),
+  decodePublicKey: () => new Uint8Array(32),
 };
 
 const SUBTLE_STUB = {
@@ -543,4 +546,88 @@ test('leaving the page is guarded until the key is acknowledged', async () => {
 
   app.acknowledged = true;
   assert.equal(prevented(), false, 'the user says they have saved it');
+});
+
+// --- finishing onboarding --------------------------------------------------
+
+test('acknowledging the kit creates the first vault', async () => {
+  const created = [];
+  const app = component({
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    VaultApi: { createVault: async (body) => { created.push(body); return body; } },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(created.length, 1);
+});
+
+test('the first vault is called Personal', async () => {
+  let name = null;
+  const app = component({
+    buildVaultCreateRequest: async (session, vaultName) => { name = vaultName; return { uuid: 'v1' }; },
+    VaultApi: { createVault: async (body) => body },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(name, 'Personal');
+});
+
+test('a failed first vault keeps the user on the kit screen', async () => {
+  const app = component({
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    VaultApi: { createVault: async () => { throw new Error('refused'); } },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(app.step, 3);
+  assert.match(app.error, /vault could not be created/i);
+});
+
+test('retrying the first vault never touches the account endpoints again', async () => {
+  const posted = [];
+  const app = component({
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    VaultApi: { createVault: async () => { throw new Error('refused'); } },
+    fetch: async (url) => { posted.push(url); return { ok: true, status: 201, json: async () => ({}) }; },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  await app.finish();
+  // The identity is already active: a retry that re-ran init or finalize
+  // would be refused by the server and would read as a lost account.
+  assert.deepEqual(posted, []);
+  assert.equal(app.step, 3);
+});
+
+test('the recovery key is not stored unless the box is ticked', async () => {
+  const stored = new Map();
+  const app = component({
+    localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    VaultApi: { createVault: async () => ({}) },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  app.secretText = 'A'.repeat(53);
+  await app.finish();
+  assert.equal(stored.size, 0);
+});
+
+test('ticking the box stores the key in the spelling the sheet shows', async () => {
+  const stored = new Map();
+  const app = component({
+    localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    VaultApi: { createVault: async () => ({}) },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  app.remember = true;
+  app.secretText = 'A'.repeat(53);
+  await app.finish();
+  assert.equal(stored.get('vault.secret-key'), app.groupedSecret());
 });

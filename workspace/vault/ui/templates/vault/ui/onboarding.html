@@ -26,6 +26,7 @@
     class="mx-auto max-w-4xl w-full py-8"
     x-data="vaultOnboarding()"
     data-email="{{ request.user.email }}"
+    data-vault-url="{{ vault_url }}"
   >
     <h1 class="text-2xl font-semibold mb-6">Set up your vault</h1>
 
@@ -331,6 +332,7 @@
                 <pre
                   class="p-4 rounded-lg bg-base-200 font-mono text-sm whitespace-pre-wrap break-all"
                   data-step-focus
+                  data-recovery-key
                   tabindex="-1"
                   x-text="groupedSecret()"
                 ></pre>
@@ -345,6 +347,14 @@
                   <span class="label-text">
                     I have saved my recovery key. Without it, nobody can open my
                     vault.
+                  </span>
+                </label>
+                <label class="label cursor-pointer justify-start gap-3">
+                  <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
+                  <span class="label-text">
+                    Remember the recovery key on this device. Anything that can run
+                    code on this page can then read it, so leave it off on a shared
+                    computer.
                   </span>
                 </label>
               </section>
@@ -387,24 +397,18 @@
               <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
               Create my vault
             </button>
-            {% comment %}
-              No href until the box is ticked: btn-disabled only sets
-              pointer-events, which leaves the link in the tab order and Enter
-              following it - and this is the step the page calls impossible to
-              skip.
-            {% endcomment %}
-            <a
+            <button
+              type="button"
               class="btn btn-primary btn-sm"
               x-show="step === 3"
               x-cloak
-              :class="!canFinish() && 'btn-disabled'"
-              :href="canFinish() ? '{{ vault_url }}' : null"
-              :tabindex="canFinish() ? null : -1"
-              :aria-disabled="!canFinish()"
+              :disabled="!canFinish() || busy"
+              @click="finish()"
             >
+              <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
               Open my vault
               <i data-lucide="check" class="w-4 h-4"></i>
-            </a>
+            </button>
           </div>
         </section>
       </div>
@@ -415,5 +419,7 @@
 {% block extra_scripts %}
   <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
   <script src="{% static 'vault/ui/js/vendor/vault-onboarding.js' %}"></script>
+  <script src="{% static 'vault/ui/js/api.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_create.js' %}"></script>
   <script src="{% static 'vault/ui/js/onboarding.js' %}"></script>
 {% endblock %}

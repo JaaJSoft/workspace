@@ -23,7 +23,10 @@ window.vaultOnboarding = function vaultOnboarding() {
     secretBytes: null,
     accountUuid: '',
     sentKexPublic: '',
+    vaultSigner: null,
+    accountKexPublic: null,
     acknowledged: false,
+    remember: false,
     leaveGuard: null,
     busy: false,
     error: '',
@@ -186,6 +189,54 @@ window.vaultOnboarding = function vaultOnboarding() {
       return (this.secretText.match(/.{1,4}/g) || []).join('-');
     },
 
+    // Written from the kit screen, in the grouped spelling the sheet shows:
+    // crockfordDecode ignores the hyphens and the case, so what is stored is
+    // exactly what the user could retype.
+    rememberOnThisDevice() {
+      if (this.remember) {
+        localStorage.setItem('vault.secret-key', this.groupedSecret());
+      } else {
+        localStorage.removeItem('vault.secret-key');
+      }
+    },
+
+    // The last step of onboarding and the first vault are one action from the
+    // user's side. Splitting them would leave an account that is set up and
+    // has nowhere to put anything.
+    async finish() {
+      if (!this.canFinish() || this.busy) return;
+      this.busy = true;
+      this.error = '';
+      try {
+        var body = await window.buildVaultCreateRequest(this.vaultSession(), 'Personal');
+        await window.VaultApi.createVault(body);
+        this.rememberOnThisDevice();
+        window.location.assign(this.$root.dataset.vaultUrl);
+      } catch (err) {
+        // The identity is active and the kit has been shown: the account is
+        // sound, only the vault is missing. Saying so keeps the retry on the
+        // one screen that can still explain it.
+        this.error =
+          'Your vault could not be created. Your account is set up and your ' +
+          'recovery key is valid - try again.';
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    vaultSession() {
+      var self = this;
+      return {
+        accountUuid: function () { return self.accountUuid; },
+        accountKexPublicRaw: function () { return self.accountKexPublic; },
+        sign: async function (payload) {
+          return window.VaultCrypto.toBase64Url(
+            await self.vaultSigner.sign(window.VaultCrypto.canonicalCbor(payload))
+          );
+        },
+      };
+    },
+
     // The whole sealing flow, in the order the norm sets out: init for the
     // salt and the account identifier, derive, wrap, attest, finalize.
     async generateAndSeal() {
@@ -296,6 +347,13 @@ window.vaultOnboarding = function vaultOnboarding() {
         if (finalized.status !== 201) {
           throw new Error('the server refused the account envelope');
         }
+        // The first vault is sealed on this same page, right after the kit -
+        // it needs a signer and the account's own key-exchange public key,
+        // neither of which forgetSecrets() below may keep.
+        this.vaultSigner = await V.importSigner(sigSeed);
+        this.accountKexPublic = V.decodePublicKey(V.fromBase64Url(kexPublic));
+        sigSeed.fill(0);
+        kexPrivate.fill(0);
         this.step = 3;
         this.forgetSecrets();
       } catch (err) {

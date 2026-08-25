@@ -124,6 +124,8 @@ class UserStorageQuotaAdmin(ModelAdmin):
 
     @admin.display(description="Current usage")
     def usage(self, obj):
+        if obj is None or obj.user_id is None:
+            return "-"
         return _quota_display(personal_usage(obj.user_id), obj.quota_bytes)
 
 
@@ -145,6 +147,8 @@ class GroupStorageQuotaAdmin(ModelAdmin):
 
     @admin.display(description="Current usage")
     def usage(self, obj):
+        if obj is None or obj.group_id is None:
+            return "-"
         return _quota_display(group_usage(obj.group_id), obj.quota_bytes)
 
 

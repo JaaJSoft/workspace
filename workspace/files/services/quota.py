@@ -4,7 +4,8 @@ Two buckets, never both: a file counts against its group's quota when
 ``File.group`` is set, against its owner's personal quota otherwise. Trashed
 rows count.
 
-Nothing outside this module computes bucket usage or reads the quota tables.
+Bucket usage is computed here and nowhere else; the admin is the only other
+reader of the quota tables.
 """
 
 from django.conf import settings

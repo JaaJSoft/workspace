@@ -390,7 +390,7 @@ Task-level queries filter with `project_id__in=user_project_ids(user)` - see `ta
 ```python
 from workspace.vault.models import VaultEntry
 from workspace.vault.queries import (
-    accessible_entries_q, get_vault_role, user_vault_ids, visible_folders, visible_tags,
+    accessible_entries_q, active_identity, get_vault_role, user_vault_ids, visible_folders, visible_tags,
 )
 
 vault_ids = user_vault_ids(user)              # vaults the user can open
@@ -398,9 +398,12 @@ role = get_vault_role(user, vault)            # 'owner' | 'member' | None
 qs = VaultEntry.objects.filter(accessible_entries_q(user))  # does NOT filter deleted_at
 folders = visible_folders(user, vault)        # empty queryset when the vault is out of reach
 tags = visible_tags(user, vault)              # empty queryset when the vault is out of reach
+identity = active_identity(user)              # the user's finished AccountIdentity, or None
 ```
 
 `accessible_entries_q` does not filter `deleted_at` - the trash is a legitimate view, and the caller decides.
+
+`active_identity` excludes a pending `AccountIdentity`: `init` created the row but the browser never came back with the sealed private keys, so the account can seal nothing and open nothing yet.
 
 ### User Settings - always go through `workspace.users.services.settings`
 

@@ -1,8 +1,10 @@
 from django.test import SimpleTestCase
+from rest_framework import serializers
 
 from workspace.vault.serializers import (
     AccountFinalizeSerializer,
     AccountRotateSerializer,
+    validate_base64url,
 )
 
 VALID_PARAMS = {"m": 65536, "t": 3, "p": 2}
@@ -87,6 +89,18 @@ class AccountFinalizeSerializerTests(SimpleTestCase):
     def test_refuses_an_unknown_kdf_algo(self):
         serializer = AccountFinalizeSerializer(data=finalize_payload(kdf_algo="scrypt"))
         self.assertFalse(serializer.is_valid())
+
+
+class ValidateBase64urlTests(SimpleTestCase):
+    def test_accepts_the_empty_string(self):
+        """A field that allows blank (an optional encrypted description)
+        has already decided the empty string is valid; there is nothing to
+        decode."""
+        self.assertEqual(validate_base64url(""), "")
+
+    def test_still_refuses_non_base64url_text(self):
+        with self.assertRaises(serializers.ValidationError):
+            validate_base64url("not base64")
 
 
 class AccountRotateSerializerTests(SimpleTestCase):

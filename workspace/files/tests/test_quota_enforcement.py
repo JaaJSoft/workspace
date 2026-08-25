@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import TestCase, override_settings
+from rest_framework.test import APITestCase
 
 from workspace.files.models import File, GroupStorageQuota, UserStorageQuota
 from workspace.files.services import FileService, quota
@@ -223,6 +224,15 @@ class CopyEnforcementTests(TestCase):
 @override_settings(STORAGE_QUOTA_BYTES=10 * KB)
 class MoveEnforcementTests(TestCase):
     def setUp(self):
+        import shutil
+        import tempfile
+
+        self._tmpdir = tempfile.mkdtemp()
+        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
+        self._media_override.enable()
+        self.addCleanup(self._media_override.disable)
+        self.addCleanup(shutil.rmtree, self._tmpdir, ignore_errors=True)
+
         self.user = User.objects.create_user(username="mover", password="pw")
         self.group = Group.objects.create(name="Design")
         self.other_group = Group.objects.create(name="Ops")
@@ -281,12 +291,44 @@ class MoveEnforcementTests(TestCase):
     def test_a_folder_move_counts_the_whole_subtree(self):
         GroupStorageQuota.objects.create(group=self.group, quota_bytes=3 * KB)
         folder = FileService.create_folder(self.user, "batch", parent=self.personal)
-        self._in(folder, "a.bin", 2 * KB)
+        child = self._in(folder, "a.bin", 2 * KB)
         self._in(folder, "b.bin", 2 * KB)
         with self.assertRaises(quota.QuotaExceeded):
             FileService.move(folder, self.design_root, acting_user=self.user)
         folder.refresh_from_db()
         self.assertEqual(folder.parent_id, self.personal.pk)
+        self.assertIsNone(folder.group_id)
+        child.refresh_from_db()
+        self.assertIsNone(child.group_id)
+
+    def test_a_refused_move_out_of_a_group_rolls_back_the_whole_subtree(self):
+        """The rollback spans a group propagation and a descendant owner update.
+
+        A descendant owned by someone else is what a partial failure corrupts:
+        its owner would flip to the mover and its blob would move with it.
+        """
+        teammate = User.objects.create_user(username="teammate", password="pw")
+        teammate.groups.add(self.group)
+        folder = FileService.create_folder(self.user, "specs", parent=self.design_root)
+        child = self._in(folder, "a.bin", 2 * KB, owner=teammate)
+        blob_path = child.content.name
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=KB)
+
+        with self.assertRaises(quota.QuotaExceeded):
+            FileService.move(folder, self.personal, acting_user=self.user)
+
+        folder.refresh_from_db()
+        self.assertEqual(folder.parent_id, self.design_root.pk)
+        self.assertEqual(folder.group_id, self.group.pk)
+        self.assertEqual(folder.owner_id, self.user.pk)
+        child.refresh_from_db()
+        self.assertEqual(child.parent_id, folder.pk)
+        self.assertEqual(child.group_id, self.group.pk)
+        self.assertEqual(child.owner_id, teammate.pk)
+        self.assertEqual(child.content.name, blob_path)
+        self.assertTrue(default_storage.exists(blob_path))
+        with child.content.open("rb") as fh:
+            self.assertEqual(fh.read(), b"x" * 2 * KB)
 
     def test_a_trashed_descendant_travels_and_counts(self):
         GroupStorageQuota.objects.create(group=self.group, quota_bytes=3 * KB)
@@ -539,3 +581,35 @@ class ExtractEnforcementTests(TestCase):
 
         self.assertEqual(spy.call_count, 1)
         self.assertEqual(spy.call_args.args[2], "a.bin")
+
+
+@override_settings(STORAGE_QUOTA_BYTES=10 * KB)
+class OverQuotaTrashTests(APITestCase):
+    """A full bucket must not block the operations that empty it."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="fullup", password="pw")
+        self.client.force_authenticate(user=self.user)
+        self.file = FileService.create_file(
+            self.user, "a.bin", content=ContentFile(b"x" * (2 * KB), name="a.bin")
+        )
+        FileService.soft_delete(self.file)
+        # Squeezed shut only once the bytes are in: create_file would have
+        # refused them otherwise.
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=0)
+
+    def test_restore_from_trash_is_never_refused(self):
+        response = self.client.post(f"/api/v1/files/{self.file.uuid}/restore")
+        self.assertEqual(response.status_code, 200)
+        self.file.refresh_from_db()
+        self.assertIsNone(self.file.deleted_at)
+
+    def test_emptying_the_trash_frees_the_bucket(self):
+        response = self.client.delete("/api/v1/files/trash/clean?force=1")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(quota.personal_usage(self.user), 0)
+
+    def test_purging_a_single_item_is_never_refused(self):
+        response = self.client.delete(f"/api/v1/files/{self.file.uuid}/purge")
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(quota.personal_usage(self.user), 0)

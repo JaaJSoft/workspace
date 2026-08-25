@@ -25,6 +25,7 @@ from django.views.decorators.debug import sensitive_variables
 from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.quota import QuotaExceeded
 from workspace.files.services.wopi import locks
 from workspace.files.services.wopi.tokens import parse_access_token
 
@@ -170,7 +171,14 @@ class WopiFileContentsView(View):
             return _lock_conflict(outcome)
 
         content = ContentFile(request.body, name=file_obj.name)
-        FileService.update_content(file_obj, content, acting_user=user)
+        try:
+            FileService.update_content(file_obj, content, acting_user=user)
+        except QuotaExceeded as exc:
+            # A plain Django view: nothing translates a DRF exception here, so
+            # an escaping QuotaExceeded would reach the editor as a 500.
+            return HttpResponse(
+                str(exc.detail), status=413, content_type="text/plain; charset=utf-8"
+            )
         response = JsonResponse({"LastModifiedTime": file_obj.updated_at.isoformat()})
         response["X-WOPI-ItemVersion"] = _item_version(file_obj)
         return response

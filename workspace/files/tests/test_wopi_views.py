@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from workspace.files.models import File, FileEvent
+from workspace.files.models import File, FileEvent, UserStorageQuota
 from workspace.files.services import FileService
 from workspace.files.services.wopi.tokens import mint_access_token
 
@@ -142,6 +142,15 @@ class PutFileTests(WopiViewTestBase):
         resp = self._put(lock="session-2")
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.headers["X-WOPI-Lock"], "session-1")
+
+    def test_put_over_the_quota_is_413_and_leaves_the_content_alone(self):
+        UserStorageQuota.objects.create(user=self.owner, quota_bytes=self.file.size)
+        resp = self._put(b"a much longer document body than before")
+        self.assertEqual(resp.status_code, 413)
+        self.assertIn("personal", resp.content.decode().lower())
+        self.file.refresh_from_db()
+        with self.file.content.open("rb") as f:
+            self.assertEqual(f.read(), b"PK\x03\x04 fake docx bytes")
 
     def test_put_blocked_by_another_users_app_lock(self):
         File.objects.filter(pk=self.file.pk).update(

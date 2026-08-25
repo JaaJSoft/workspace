@@ -1,0 +1,168 @@
+// The unlock screen as a state machine. The session is stubbed - what it does
+// is tested in session.test.js - so what is under test here is what the user
+// sees at each step and what the screen refuses to do.
+const test = require('node:test');
+const assert = require('node:assert');
+const { loadScript } = require('../../../common/tests/js/loader');
+
+function app(session = {}, api = {}) {
+  const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_app.js', {
+    VaultSession: {
+      isUnlocked: () => false,
+      unlock: async () => {},
+      lock() {},
+      onLock() {},
+      watchForIdle() {},
+      secondsUntilLock: () => 300,
+      rememberedSecret: () => null,
+      forgetDevice() {},
+      openVaultKey: async () => new Uint8Array(32),
+      verifyVaultMetadata: async () => {},
+      sign: async () => 'signature',
+      accountUuid: () => 'account-uuid',
+      accountKexPublicRaw: () => new Uint8Array(32),
+      ...session,
+    },
+    VaultApi: { listVaults: async () => [], createVault: async () => ({}), ...api },
+    VaultCrypto: {
+      uuidV7: () => 'vault-uuid',
+      randomBytes: () => new Uint8Array(32),
+      toBase64Url: () => 'b64',
+      fromBase64Url: () => new Uint8Array(1),
+      seal: async () => new Uint8Array(4),
+      open: async () => new TextEncoder().encode('Personal'),
+      hkdf: async () => new Uint8Array(32),
+      hpkeSeal: async () => new Uint8Array(64),
+      decodePublicKey: () => new Uint8Array(32),
+      canonicalCbor: () => new Uint8Array(2),
+      KDF_HKDF_SHA256: 0x01,
+      HPKE_SUITE_V1: { kem_id: 32, kdf_id: 1, aead_id: 2, mode: 0 },
+      AD: {
+        vaultFieldAd: () => 'ad',
+        vaultKeyInfo: () => 'info',
+        vaultMetaInfo: () => 'meta-info',
+      },
+      vaultMetadataPayload: (fields) => fields,
+    },
+    TextEncoder: globalThis.TextEncoder,
+    TextDecoder: globalThis.TextDecoder,
+    document: { addEventListener() {} },
+    addEventListener() {},
+  });
+  return ctx.vaultApp();
+}
+
+test('the screen starts locked', () => {
+  assert.equal(app().state, 'locked');
+});
+
+test('a device with no remembered key asks for one', () => {
+  assert.equal(app().needsSecret(), true);
+});
+
+test('a remembered key is used without asking for it again', () => {
+  const component = app({ rememberedSecret: () => 'A'.repeat(53) });
+  component.init();
+  assert.equal(component.needsSecret(), false);
+  assert.equal(component.secretText, 'A'.repeat(53));
+});
+
+test('the deriving state is entered before the wait, not after', async () => {
+  const seen = [];
+  const component = app({
+    unlock: async () => { seen.push(component.state); },
+  });
+  await component.unlock();
+  assert.deepEqual(seen, ['deriving']);
+});
+
+test('a wrong password says so and returns to the entry state', async () => {
+  const component = app({
+    unlock: async () => { const e = new Error('x'); e.reason = 'password'; throw e; },
+  });
+  await component.unlock();
+  assert.equal(component.state, 'locked');
+  assert.match(component.error, /password/i);
+});
+
+test('a substituted key is not reported as a wrong password', async () => {
+  const component = app({
+    unlock: async () => { const e = new Error('x'); e.reason = 'substituted-key'; throw e; },
+  });
+  await component.unlock();
+  assert.match(component.error, /key the server returned|does not match/i);
+});
+
+test('the password is dropped from the component whatever the outcome', async () => {
+  const component = app({
+    unlock: async () => { const e = new Error('x'); e.reason = 'password'; throw e; },
+  });
+  component.password = 'secret';
+  await component.unlock();
+  assert.equal(component.password, '');
+});
+
+test('a successful unlock loads the vault list', async () => {
+  let listed = 0;
+  const component = app(
+    { isUnlocked: () => true },
+    { listVaults: async () => { listed += 1; return []; } }
+  );
+  await component.unlock();
+  assert.equal(component.state, 'unlocked');
+  assert.equal(listed, 1);
+});
+
+test('locking clears the decrypted names from the component', async () => {
+  let onLock = null;
+  const component = app({
+    isUnlocked: () => true,
+    onLock: (fn) => { onLock = fn; },
+    verifyVaultMetadata: async () => {},
+  }, {
+    listVaults: async () => [
+      { uuid: 'v1', encrypted_name: 'AQ', wrapped_key: 'AQ', metadata_sig: 'AQ',
+        owner_account_uuid: 'account-uuid', encrypted_description: '', icon: 'lock',
+        color: 'primary', key_version: 1, is_favorite: false },
+    ],
+  });
+  component.init();
+  await component.unlock();
+  assert.equal(component.vaults.length, 1);
+  onLock();
+  assert.deepEqual(component.vaults, []);
+  assert.equal(component.state, 'locked');
+});
+
+test('a vault whose signature does not verify is flagged, not shown as normal', async () => {
+  const component = app({
+    isUnlocked: () => true,
+    verifyVaultMetadata: async () => { throw new Error('bad signature'); },
+  }, {
+    listVaults: async () => [
+      { uuid: 'v1', encrypted_name: 'AQ', wrapped_key: 'AQ', metadata_sig: 'AQ',
+        owner_account_uuid: 'account-uuid', encrypted_description: '', icon: 'lock',
+        color: 'primary', key_version: 1, is_favorite: false },
+    ],
+  });
+  await component.unlock();
+  assert.equal(component.vaults[0].tampered, true);
+  assert.equal(component.vaults[0].name, '');
+});
+
+test('a vault with no key wrap is reported rather than silently missing', async () => {
+  const component = app({ isUnlocked: () => true }, {
+    listVaults: async () => [
+      { uuid: 'v1', encrypted_name: 'AQ', wrapped_key: null, metadata_sig: 'AQ',
+        owner_account_uuid: 'account-uuid', encrypted_description: '', icon: 'lock',
+        color: 'primary', key_version: 1, is_favorite: false },
+    ],
+  });
+  await component.unlock();
+  assert.equal(component.vaults[0].unopenable, true);
+});
+
+test('the countdown is rendered as minutes and seconds', () => {
+  assert.equal(app({ secondsUntilLock: () => 272 }).countdown(), '4:32');
+  assert.equal(app({ secondsUntilLock: () => 9 }).countdown(), '0:09');
+});

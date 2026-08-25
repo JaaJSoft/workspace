@@ -48,6 +48,9 @@ window.VaultSession = (function () {
   var sigPublicRaw = null;
   var lockCallbacks = [];
   var unlocked = false;
+  var IDLE_LOCK_MS = 5 * 60 * 1000;
+  var expiresAt = 0;
+  var ticker = null;
 
   function zero(buffer) {
     if (buffer && buffer.fill) buffer.fill(0);
@@ -193,6 +196,7 @@ window.VaultSession = (function () {
       signer = newSigner;
       recipient = newRecipient;
       unlocked = true;
+      expiresAt = Date.now() + IDLE_LOCK_MS;
 
       // Failing to remember the device does not mean failing to unlock it -
       // the session above is already live and must stay that way.
@@ -212,7 +216,38 @@ window.VaultSession = (function () {
       recipient = null;
       sigPublicRaw = null;
       accountUuid = null;
+      expiresAt = 0;
       lockCallbacks.forEach(function (callback) { callback(); });
+    },
+
+    secondsUntilLock: function () {
+      if (!unlocked) return 0;
+      return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+    },
+    noteActivity: function () {
+      if (unlocked) expiresAt = Date.now() + IDLE_LOCK_MS;
+    },
+    tick: function () {
+      if (unlocked && Date.now() >= expiresAt) this.lock();
+    },
+    // Called once by the page controller. The listeners are registered here
+    // rather than in the controller so a second component mounting cannot
+    // register a second set - they are per session, not per view.
+    watchForIdle: function () {
+      if (ticker !== null) return;
+      var self = this;
+      ticker = setInterval(function () { self.tick(); }, 1000);
+      ['pointerdown', 'keydown', 'wheel'].forEach(function (name) {
+        document.addEventListener(name, function () { self.noteActivity(); }, {
+          passive: true,
+        });
+      });
+      // A hidden tab is a machine the user has walked away from, and pagehide
+      // fires where unload does not on mobile Safari.
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') self.lock();
+      });
+      addEventListener('pagehide', function () { self.lock(); });
     },
 
     sign: async function (payload) {

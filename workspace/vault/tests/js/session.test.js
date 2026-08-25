@@ -405,3 +405,53 @@ test('pkcs8FromSeed refuses a seed longer than 32 bytes', () => {
   const { ctx } = harness();
   assert.throws(() => ctx.pkcs8FromSeed(new Uint8Array(40)), /32/);
 });
+
+function clockHarness() {
+  let current = 1000;
+  const h = harness({
+    globals: {
+      Date: { now: () => current },
+      addEventListener(name, handler) { (this.handlers ||= {})[name] = handler; },
+    },
+  });
+  return { ...h, advance: (ms) => { current += ms; }, at: () => current };
+}
+
+test('a fresh unlock leaves five minutes on the clock', async () => {
+  const h = clockHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  assert.equal(h.session.secondsUntilLock(), 300);
+});
+
+test('the countdown runs down with the clock', async () => {
+  const h = clockHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  h.advance(120000);
+  assert.equal(h.session.secondsUntilLock(), 180);
+});
+
+test('activity puts the five minutes back', async () => {
+  const h = clockHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  h.advance(240000);
+  h.session.noteActivity();
+  assert.equal(h.session.secondsUntilLock(), 300);
+});
+
+test('the session locks itself once the countdown reaches zero', async () => {
+  const h = clockHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  h.advance(300001);
+  h.session.tick();
+  assert.equal(h.session.isUnlocked(), false);
+});
+
+test('the countdown reads zero rather than a negative once locked', () => {
+  assert.equal(harness().session.secondsUntilLock(), 0);
+});
+
+test('activity on a locked session does not resurrect the countdown', () => {
+  const h = clockHarness();
+  h.session.noteActivity();
+  assert.equal(h.session.secondsUntilLock(), 0);
+});

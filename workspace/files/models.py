@@ -869,7 +869,7 @@ class UserStorageQuota(models.Model):
     """Storage limit for one user's personal files.
 
     No row means the global ``STORAGE_QUOTA_BYTES`` applies; an empty
-    ``quota_bytes`` means unlimited.
+    ``quota_bytes`` means unlimited. Nothing outside the admin writes here.
     """
 
     uuid = models.UUIDField(

@@ -65,8 +65,8 @@ def _group_name(group):
 def bucket_state(*, owner, group):
     """Return ``(used, limit, label)`` for the bucket a write would land in.
 
-    ``limit`` is ``None`` when the bucket is unlimited, and ``used`` is then
-    left at 0 - nobody needs the figure and the aggregate would be wasted.
+    ``limit`` is ``None`` when unlimited; ``used`` is then left at 0 rather
+    than aggregated.
     """
     if group is not None:
         limit = effective_group_quota(group)
@@ -80,8 +80,7 @@ def bucket_state(*, owner, group):
 def remaining_bytes(*, owner, group):
     """Bytes still writable in the bucket, or ``None`` when unlimited.
 
-    May be negative: a quota lowered below current usage leaves a bucket over
-    its limit, which blocks writes without breaking reads.
+    Negative when a quota was lowered below current usage.
     """
     used, limit, _ = bucket_state(owner=owner, group=group)
     return None if limit is None else limit - used

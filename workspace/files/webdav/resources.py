@@ -236,20 +236,30 @@ class FolderResource(DAVCollection):
     def get_last_modified(self):
         return self._file.updated_at.timestamp()
 
+    def _bucket_bytes(self):
+        """``(used, available)`` for this folder, or ``(None, None)``.
+
+        Only a group root is a bucket; a sub-folder is part of a total that is
+        reported one level up. wsgidav asks both questions for every resource
+        of a listing, twice on an allprop PROPFIND, so the pair is computed
+        once per resource - and a resource lives for one request.
+        """
+        if not (self._file.group_id and self._file.parent_id is None):
+            return None, None
+        if not hasattr(self, "_bucket_cache"):
+            used = quota.group_usage(self._file.group_id)
+            limit = quota.effective_group_quota(self._file.group_id)
+            self._bucket_cache = (
+                used,
+                None if limit is None else max(0, limit - used),
+            )
+        return self._bucket_cache
+
     def get_used_bytes(self):
-        # Only a group root is a bucket; a sub-folder is part of a total that
-        # is reported one level up.
-        if self._file.group_id and self._file.parent_id is None:
-            return quota.group_usage(self._file.group_id)
-        return None
+        return self._bucket_bytes()[0]
 
     def get_available_bytes(self):
-        if self._file.group_id and self._file.parent_id is None:
-            remaining = quota.remaining_bytes(
-                owner=self._file.owner_id, group=self._file.group_id
-            )
-            return None if remaining is None else max(0, remaining)
-        return None
+        return self._bucket_bytes()[1]
 
     def get_member_names(self):
         self._prefetch_members()

@@ -539,6 +539,27 @@ class WebDavQuotaAdvertisingTests(TestCase):
         self.assertEqual(res.get_used_bytes(), KB)
         self.assertEqual(res.get_available_bytes(), 3 * KB)
 
+    def test_a_group_root_aggregates_once_per_resource(self):
+        """wsgidav asks both questions twice per resource on an allprop
+        PROPFIND, and a listing holds one resource per group folder."""
+        from workspace.files.webdav.resources import FolderResource
+
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=4 * KB)
+        res = FolderResource("/Design", self._environ(), self.group_root)
+        with self.assertNumQueries(2):
+            for _ in range(2):
+                res.get_used_bytes()
+                res.get_available_bytes()
+
+    def test_a_sub_folder_reports_no_bucket(self):
+        from workspace.files.webdav.resources import FolderResource
+
+        sub = FileService.create_folder(self.user, "sub", parent=self.group_root)
+        res = FolderResource("/Design/sub", self._environ(), sub)
+        with self.assertNumQueries(0):
+            self.assertIsNone(res.get_used_bytes())
+            self.assertIsNone(res.get_available_bytes())
+
 
 class WebDavMoveCopyQuotaTests(TestCase):
     """A refused MOVE/COPY must reach the client as 507, and a refused MOVE

@@ -236,6 +236,9 @@ window.VaultSession = (function () {
     watchForIdle: function () {
       if (ticker !== null) return;
       var self = this;
+      // Never cleared by lock(): tick() no-ops while locked, and the guard
+      // above means a later re-unlock reuses this same ticker rather than
+      // accumulating a second one - so nothing needs cancelling.
       ticker = setInterval(function () { self.tick(); }, 1000);
       ['pointerdown', 'keydown', 'wheel'].forEach(function (name) {
         document.addEventListener(name, function () { self.noteActivity(); }, {

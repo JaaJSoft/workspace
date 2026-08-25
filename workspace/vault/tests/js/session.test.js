@@ -447,11 +447,76 @@ test('the session locks itself once the countdown reaches zero', async () => {
 });
 
 test('the countdown reads zero rather than a negative once locked', () => {
-  assert.equal(harness().session.secondsUntilLock(), 0);
+  // A session that never unlocked has expiresAt at its initial 0. Advancing
+  // the clock below that (negative is fine - this Date is fully mocked, not
+  // real wall-clock time) makes (expiresAt - Date.now()) positive, so the
+  // Math.max(0, ...) clamp alone would no longer save a naive read: only the
+  // `!unlocked` guard keeps this at zero.
+  const h = clockHarness();
+  h.advance(-2000);
+  assert.equal(h.session.secondsUntilLock(), 0);
 });
 
 test('activity on a locked session does not resurrect the countdown', () => {
   const h = clockHarness();
   h.session.noteActivity();
   assert.equal(h.session.secondsUntilLock(), 0);
+});
+
+test('noteActivity never touches the clock while locked', () => {
+  // secondsUntilLock() has its own `!unlocked` guard, so reading it back
+  // cannot distinguish a noteActivity that wrote a stale expiresAt from one
+  // that didn't - both read back as zero. Watching whether the guarded
+  // statement ran at all (via a Date.now spy) isolates noteActivity's own
+  // guard from that other one.
+  let calls = 0;
+  const h = harness({ globals: { Date: { now: () => { calls += 1; return 1000; } } } });
+  h.session.noteActivity();
+  assert.equal(calls, 0);
+});
+
+function watchHarness(overrides = {}) {
+  const docListeners = {};
+  const winListeners = {};
+  const doc = {
+    visibilityState: 'visible',
+    addEventListener(name, handler) { (docListeners[name] ||= []).push(handler); },
+  };
+  const h = harness({
+    ...overrides,
+    globals: {
+      document: doc,
+      addEventListener(name, handler) { (winListeners[name] ||= []).push(handler); },
+      ...overrides.globals,
+    },
+  });
+  return { ...h, doc, docListeners, winListeners };
+}
+
+test('watchForIdle registers each listener once, even called twice', () => {
+  const h = watchHarness();
+  h.session.watchForIdle();
+  h.session.watchForIdle();
+  assert.equal(h.docListeners.pointerdown.length, 1);
+  assert.equal(h.docListeners.keydown.length, 1);
+  assert.equal(h.docListeners.wheel.length, 1);
+  assert.equal(h.docListeners.visibilitychange.length, 1);
+  assert.equal(h.winListeners.pagehide.length, 1);
+});
+
+test('a hidden tab locks the session', async () => {
+  const h = watchHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  h.session.watchForIdle();
+  h.doc.visibilityState = 'hidden';
+  h.docListeners.visibilitychange[0]();
+  assert.equal(h.session.isUnlocked(), false);
+});
+
+test('pagehide locks the session', async () => {
+  const h = watchHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  h.session.watchForIdle();
+  h.winListeners.pagehide[0]();
+  assert.equal(h.session.isUnlocked(), false);
 });

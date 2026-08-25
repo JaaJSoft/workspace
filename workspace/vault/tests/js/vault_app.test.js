@@ -15,6 +15,7 @@ function app(session = {}, api = {}, crypto = {}) {
       unlock: async () => {},
       lock() {},
       onLock() {},
+      onTick() {},
       watchForIdle() {},
       secondsUntilLock: () => 300,
       rememberedSecret: () => null,
@@ -182,8 +183,25 @@ test('the signed payload carries vault_uuid, not the row\'s own uuid key', async
 });
 
 test('the countdown is rendered as minutes and seconds', () => {
-  assert.equal(app({ secondsUntilLock: () => 272 }).countdown(), '4:32');
-  assert.equal(app({ secondsUntilLock: () => 9 }).countdown(), '0:09');
+  const a = app();
+  a.secondsLeft = 272;
+  assert.equal(a.countdown(), '4:32');
+  const b = app();
+  b.secondsLeft = 9;
+  assert.equal(b.countdown(), '0:09');
+});
+
+test('init subscribes to the session ticker so the countdown keeps updating', () => {
+  let onTickCallback = null;
+  const component = app({
+    onTick: (fn) => { onTickCallback = fn; },
+    secondsUntilLock: () => 187,
+  });
+  component.init();
+  assert.equal(typeof onTickCallback, 'function');
+  onTickCallback();
+  assert.equal(component.secondsLeft, 187);
+  assert.equal(component.countdown(), '3:07');
 });
 
 test('creating a vault seals a fresh key to the account and signs the metadata', async () => {

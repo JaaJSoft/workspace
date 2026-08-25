@@ -48,6 +48,7 @@ window.VaultSession = (function () {
   var sigPublicRaw = null;
   var kexPublicRaw = null;
   var lockCallbacks = [];
+  var tickCallbacks = [];
   var unlocked = false;
   var IDLE_LOCK_MS = 5 * 60 * 1000;
   var expiresAt = 0;
@@ -81,6 +82,10 @@ window.VaultSession = (function () {
       localStorage.removeItem(VAULT_SECRET_STORAGE_KEY);
     },
     onLock: function (callback) { lockCallbacks.push(callback); },
+    // Fired from tick(), once a second, whether or not that tick locked the
+    // session - the countdown display has no other reactive hook into this
+    // closure, so it reads secondsUntilLock() itself from the callback.
+    onTick: function (callback) { tickCallbacks.push(callback); },
 
     unlock: async function (options) {
       var V = window.VaultCrypto;
@@ -240,6 +245,7 @@ window.VaultSession = (function () {
     },
     tick: function () {
       if (unlocked && Date.now() >= expiresAt) this.lock();
+      tickCallbacks.forEach(function (callback) { callback(); });
     },
     // Called once by the page controller. The listeners are registered here
     // rather than in the controller so a second component mounting cannot

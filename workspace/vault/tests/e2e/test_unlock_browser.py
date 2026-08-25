@@ -147,6 +147,20 @@ class UnlockWalkTests(PlaywrightTestCase):
         # cleared the vault list.
         self.assertEqual(self.page.get_by_text("Personal", exact=True).count(), 0)
 
+    def test_the_countdown_advances_while_the_vault_stays_unlocked(self):
+        # Alpine's reactivity is not observable from a stubbed session in a
+        # node:vm sandbox - only a real browser proves the "Locks in" text
+        # actually changes rather than being rendered once and left stale.
+        self._onboard()
+        self.page.reload()
+        self._unlock()
+        self._wait_for_vault_named("Personal", timeout=60000)
+        countdown = self.page.locator("span", has_text="Locks in")
+        first = countdown.inner_text()
+        self.page.wait_for_timeout(2500)
+        second = countdown.inner_text()
+        self.assertNotEqual(first, second)
+
     def test_a_second_vault_can_be_created_and_read_back(self):
         self._onboard()
         self.page.reload()

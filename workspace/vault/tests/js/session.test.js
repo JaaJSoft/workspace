@@ -533,3 +533,22 @@ test('pagehide locks the session', async () => {
   h.winListeners.pagehide[0]();
   assert.equal(h.session.isUnlocked(), false);
 });
+
+test('onTick subscribers fire on every tick, not just the one that locks', () => {
+  const h = clockHarness();
+  let calls = 0;
+  h.session.onTick(() => { calls += 1; });
+  h.session.tick();
+  h.session.tick();
+  assert.equal(calls, 2);
+});
+
+test('a tick reports the same remaining time the countdown itself would read', async () => {
+  const h = clockHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  h.advance(60000);
+  let seen = null;
+  h.session.onTick(() => { seen = h.session.secondsUntilLock(); });
+  h.session.tick();
+  assert.equal(seen, 240);
+});

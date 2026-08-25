@@ -63,6 +63,10 @@ window.vaultApp = (function () {
       busy: false,
       showCreate: false,
       newVaultName: '',
+      // Alpine's reactivity only sees property reads, never a call into
+      // VaultSession's own closure - so the countdown template binds this
+      // property, and onTick is what keeps it current.
+      secondsLeft: 0,
 
       init: function () {
         var remembered = window.VaultSession.rememberedSecret();
@@ -75,6 +79,9 @@ window.vaultApp = (function () {
           self.vaults = [];
           self.state = 'locked';
           self.newVaultName = '';
+        });
+        window.VaultSession.onTick(function () {
+          self.secondsLeft = window.VaultSession.secondsUntilLock();
         });
         window.VaultSession.watchForIdle();
       },
@@ -134,9 +141,8 @@ window.vaultApp = (function () {
       },
 
       countdown: function () {
-        var seconds = window.VaultSession.secondsUntilLock();
-        var minutes = Math.floor(seconds / 60);
-        var rest = seconds % 60;
+        var minutes = Math.floor(this.secondsLeft / 60);
+        var rest = this.secondsLeft % 60;
         return minutes + ':' + String(rest).padStart(2, '0');
       },
     };

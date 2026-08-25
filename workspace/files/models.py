@@ -3,6 +3,7 @@ import secrets
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import FileSystemStorage
+from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import F, Q, Value
 from django.db.models.functions import Concat, Lower, Substr
@@ -846,3 +847,67 @@ class ThumbnailFailure(models.Model):
 
     def __str__(self):
         return f"{self.file}: {self.attempts} failed thumbnail attempt(s)"
+
+
+class UserStorageQuota(models.Model):
+    """Storage limit for one user's personal files.
+
+    A missing row means the global ``STORAGE_QUOTA_BYTES`` applies; a row whose
+    ``quota_bytes`` is empty means unlimited. Rows exist only where an
+    administrator deviated from the default, so the table stays small.
+
+    Deliberately not a ``UserSetting``: that store is writable by its own user
+    through the settings API, which would let anyone raise their own quota.
+    Nothing outside the admin may write here.
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="storage_quota"
+    )
+    quota_bytes = models.BigIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Bytes allowed for personal files. Leave empty for unlimited.",
+    )
+    note = models.TextField(
+        blank=True, help_text="Why this user deviates from the default."
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        limit = "unlimited" if self.quota_bytes is None else f"{self.quota_bytes} bytes"
+        return f"{self.user}: {limit}"
+
+
+class GroupStorageQuota(models.Model):
+    """Storage limit for one group's folder.
+
+    A missing row means unlimited - that is the behaviour groups had before
+    quotas existed, so no administrative action is needed to keep a team
+    working. An empty ``quota_bytes`` means unlimited too, set on purpose.
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    group = models.OneToOneField(
+        "auth.Group", on_delete=models.CASCADE, related_name="storage_quota"
+    )
+    quota_bytes = models.BigIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Bytes allowed in this group's folder. Leave empty for unlimited.",
+    )
+    note = models.TextField(
+        blank=True, help_text="Why this group deviates from the default."
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        limit = "unlimited" if self.quota_bytes is None else f"{self.quota_bytes} bytes"
+        return f"{self.group}: {limit}"

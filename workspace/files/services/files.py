@@ -19,7 +19,7 @@ from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
-from .quota import check_write_allowed
+from .quota import check_write_allowed, subtree_bytes
 from .thumbnails.failures import clear_failure
 
 
@@ -344,6 +344,18 @@ class FileService:
             exclude_pk=file_obj.pk,
         )
 
+        # Only a group change moves bytes between buckets. The owner charged
+        # is the one the move will assign, not necessarily the current one.
+        if (old_group.pk if old_group else None) != (
+            new_group.pk if new_group else None
+        ):
+            check_write_allowed(
+                owner=new_owner or file_obj.owner_id,
+                group=new_group,
+                # Trashed descendants travel with the subtree.
+                additional_bytes=subtree_bytes(file_obj, include_trashed=True),
+            )
+
         if file_obj.node_type == File.NodeType.FOLDER:
             FileService._move_folder_storage(file_obj, new_parent, new_owner=new_owner)
         else:
@@ -510,6 +522,12 @@ class FileService:
     @staticmethod
     def copy(file_obj, target_parent, owner, *, acting_user=None):
         """Recursively copy a file or folder to *target_parent*."""
+        check_write_allowed(
+            owner=owner,
+            group=target_parent.group if target_parent is not None else None,
+            # copy_node only duplicates live descendants.
+            additional_bytes=subtree_bytes(file_obj, include_trashed=False),
+        )
         copied = _storage.copy_node(file_obj, target_parent, owner)
         record_event(
             copied,

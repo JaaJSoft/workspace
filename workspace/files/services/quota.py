@@ -99,6 +99,18 @@ class QuotaExceeded(APIException):
     default_detail = "Storage quota exceeded."
 
 
+def subtree_bytes(node, *, include_trashed):
+    """Bytes stored by *node* and its descendants.
+
+    ``include_trashed`` follows what the caller is about to do: a move carries
+    trashed descendants along, a copy only duplicates the live ones.
+    """
+    qs = File.objects.filter(node._descendant_filter(), node_type=File.NodeType.FILE)
+    if not include_trashed:
+        qs = qs.filter(deleted_at__isnull=True)
+    return qs.aggregate(total=Sum("size"))["total"] or 0
+
+
 def check_write_allowed(*, owner, group, additional_bytes):
     """Raise ``QuotaExceeded`` when *additional_bytes* would not fit.
 

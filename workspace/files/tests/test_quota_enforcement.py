@@ -176,3 +176,105 @@ class UpdateContentEnforcementTests(TestCase):
         )
         self.file.refresh_from_db()
         self.assertEqual(self.file.size, 10 * KB)
+
+
+@override_settings(STORAGE_QUOTA_BYTES=10 * KB)
+class CopyEnforcementTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="copyquota", password="pw")
+        self.file = FileService.create_file(
+            self.user, "a.bin", content=ContentFile(b"x" * (6 * KB), name="a.bin")
+        )
+        self.folder = FileService.create_folder(self.user, "dest")
+
+    def test_a_copy_that_would_double_past_the_quota_is_refused(self):
+        with self.assertRaises(quota.QuotaExceeded):
+            FileService.copy(self.file, self.folder, self.user)
+
+    def test_a_refused_copy_creates_nothing(self):
+        with self.assertRaises(quota.QuotaExceeded):
+            FileService.copy(self.file, self.folder, self.user)
+        self.assertFalse(File.objects.filter(parent=self.folder).exists())
+
+    def test_a_copy_that_fits_is_allowed(self):
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=20 * KB)
+        copied = FileService.copy(self.file, self.folder, self.user)
+        self.assertEqual(copied.parent_id, self.folder.pk)
+
+
+@override_settings(STORAGE_QUOTA_BYTES=10 * KB)
+class MoveEnforcementTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="mover", password="pw")
+        self.group = Group.objects.create(name="Design")
+        self.other_group = Group.objects.create(name="Ops")
+        self.user.groups.add(self.group, self.other_group)
+        self.design_root = FileService.create_folder(
+            self.user, "Design", group=self.group
+        )
+        self.ops_root = FileService.create_folder(
+            self.user, "Ops", group=self.other_group
+        )
+        self.personal = FileService.create_folder(self.user, "mine")
+
+    def _in(self, parent, name, size, owner=None):
+        return FileService.create_file(
+            owner or self.user,
+            name,
+            parent=parent,
+            content=ContentFile(b"x" * size, name=name),
+        )
+
+    def test_personal_to_a_full_group_is_refused(self):
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=KB)
+        f = self._in(self.personal, "a.bin", 2 * KB)
+        with self.assertRaises(quota.QuotaExceeded):
+            FileService.move(f, self.design_root, acting_user=self.user)
+        f.refresh_from_db()
+        self.assertEqual(f.parent_id, self.personal.pk)
+        self.assertIsNone(f.group_id)
+
+    def test_group_to_personal_charges_the_mover(self):
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=KB)
+        f = self._in(self.design_root, "a.bin", 2 * KB)
+        with self.assertRaises(quota.QuotaExceeded):
+            FileService.move(f, self.personal, acting_user=self.user)
+        f.refresh_from_db()
+        self.assertEqual(f.parent_id, self.design_root.pk)
+        self.assertEqual(f.group_id, self.group.pk)
+
+    def test_group_to_group_is_checked_against_the_destination(self):
+        GroupStorageQuota.objects.create(group=self.other_group, quota_bytes=KB)
+        f = self._in(self.design_root, "a.bin", 2 * KB)
+        with self.assertRaises(quota.QuotaExceeded):
+            FileService.move(f, self.ops_root, acting_user=self.user)
+        f.refresh_from_db()
+        self.assertEqual(f.group_id, self.group.pk)
+
+    def test_a_move_inside_the_same_bucket_is_never_checked(self):
+        # The file has to exist before the bucket is squeezed shut, otherwise
+        # create_file refuses it and the move is never reached.
+        f = self._in(None, "a.bin", 2 * KB)
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=0)
+        FileService.move(f, self.personal, acting_user=self.user)
+        f.refresh_from_db()
+        self.assertEqual(f.parent_id, self.personal.pk)
+
+    def test_a_folder_move_counts_the_whole_subtree(self):
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=3 * KB)
+        folder = FileService.create_folder(self.user, "batch", parent=self.personal)
+        self._in(folder, "a.bin", 2 * KB)
+        self._in(folder, "b.bin", 2 * KB)
+        with self.assertRaises(quota.QuotaExceeded):
+            FileService.move(folder, self.design_root, acting_user=self.user)
+        folder.refresh_from_db()
+        self.assertEqual(folder.parent_id, self.personal.pk)
+
+    def test_a_trashed_descendant_travels_and_counts(self):
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=3 * KB)
+        folder = FileService.create_folder(self.user, "batch", parent=self.personal)
+        self._in(folder, "a.bin", 2 * KB)
+        trashed = self._in(folder, "b.bin", 2 * KB)
+        FileService.soft_delete(trashed)
+        with self.assertRaises(quota.QuotaExceeded):
+            FileService.move(folder, self.design_root, acting_user=self.user)

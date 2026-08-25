@@ -377,10 +377,14 @@ class FileResource(DAVNonCollection):
         remaining = quota.remaining_bytes(
             owner=self._file.owner_id, group=self._file.group_id
         )
+        ceiling = None
         if remaining is not None:
-            remaining = max(0, remaining + (self._file.size or 0))
+            # The bytes already held are always writable again, even when an
+            # administrator lowered the quota below current usage and left
+            # `remaining` negative - a shrinking file must stay saveable.
+            ceiling = (self._file.size or 0) + max(0, remaining)
             declared = int(self.environ.get("CONTENT_LENGTH") or 0)
-            if declared > remaining:
+            if declared > ceiling:
                 raise DAVError(HTTP_INSUFFICIENT_STORAGE, "Storage quota exceeded")
 
         storage = self._file.content.storage
@@ -391,7 +395,7 @@ class FileResource(DAVNonCollection):
         self._write_buf = _StreamingWriteBuffer(
             full_path,
             DjangoFile.DEFAULT_CHUNK_SIZE,
-            max_bytes=remaining,
+            max_bytes=ceiling,
         )
         self._write_started_at = time.monotonic()
         logger.info(

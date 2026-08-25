@@ -441,6 +441,58 @@ class WebDavRefusedPutTests(TestCase):
         )
 
 
+@override_settings(STORAGE_QUOTA_BYTES=None)
+class WebDavShrinkOverQuotaTests(TestCase):
+    """WebDAV must honour the same escape hatch as REST: a smaller file fits."""
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        tmpdir = tempfile.mkdtemp()
+        media = override_settings(MEDIA_ROOT=tmpdir)
+        media.enable()
+        self.addCleanup(media.disable)
+        self.addCleanup(shutil.rmtree, tmpdir, ignore_errors=True)
+
+        self.user = User.objects.create_user(username="davshrink", password="pw")
+        self.file = FileService.create_file(
+            self.user, "a.bin", content=ContentFile(b"x" * (8 * KB), name="a.bin")
+        )
+        FileService.create_file(
+            self.user, "b.bin", content=ContentFile(b"x" * (4 * KB), name="b.bin")
+        )
+        # 12 KB used against a 10 KB limit: the bucket is 2 KB over.
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=10 * KB)
+
+    def _resource(self, content_length):
+        from workspace.files.webdav.resources import FileResource
+
+        environ = {
+            "workspace.user": self.user,
+            "wsgidav.provider": None,
+            "CONTENT_LENGTH": str(content_length),
+        }
+        return FileResource("/a.bin", environ, self.file)
+
+    def test_shrinking_a_file_is_allowed_while_the_bucket_is_over_quota(self):
+        res = self._resource(7 * KB)
+        buf = res.begin_write(content_type="application/octet-stream")
+        buf.write(b"x" * (7 * KB))
+        buf.close()
+        res.end_write(with_errors=False)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.size, 7 * KB)
+
+    def test_growing_a_file_is_still_refused_while_over_quota(self):
+        from wsgidav.dav_error import DAVError
+
+        res = self._resource(9 * KB)
+        with self.assertRaises(DAVError) as caught:
+            res.begin_write(content_type="application/octet-stream")
+        self.assertEqual(caught.exception.value, 507)
+
+
 @override_settings(STORAGE_QUOTA_BYTES=10 * KB)
 class WebDavQuotaAdvertisingTests(TestCase):
     def setUp(self):

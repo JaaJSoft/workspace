@@ -31,6 +31,11 @@ function harness(overrides = {}) {
   // the stubbed crypto.subtle ever runs.
   const kexPriv = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
   const sigSeed = Uint8Array.from({ length: 32 }, (_, i) => i + 33);
+  // The decoded recovery key and the opened vault key, tracked the same way:
+  // a fixed non-zero fixture so a test can prove the session zeroed the one
+  // reference it actually held, not just that a fresh all-zero array exists.
+  const secretBytes = Uint8Array.from({ length: 32 }, (_, i) => i + 65);
+  const vaultKeyRaw = Uint8Array.from({ length: 32 }, (_, i) => i + 129);
   const storage = new Map();
 
   const crypto = {
@@ -51,7 +56,7 @@ function harness(overrides = {}) {
       vaultKeyInfo: (v, r) => `vaultkey:${v}:${r}`,
       vaultMetaInfo: (v) => `vaultmeta:${v}`,
     },
-    crockfordDecode: () => new Uint8Array(32),
+    crockfordDecode: () => secretBytes,
     fromBase64Url: (text) => Uint8Array.from(text, (c) => c.charCodeAt(0)),
     toBase64Url: (bytes) => String.fromCharCode(...bytes),
     equalBytes: (a, b) => String(a) === String(b),
@@ -71,7 +76,7 @@ function harness(overrides = {}) {
     },
     verifyBytes: async () => { calls.push('verifyBytes'); },
     importSigner: async () => { calls.push('importSigner'); return { sign: async () => new Uint8Array(1) }; },
-    hpkeRecipient: async () => { calls.push('hpkeRecipient'); return { open: async () => new Uint8Array(32) }; },
+    hpkeRecipient: async () => { calls.push('hpkeRecipient'); return { open: async () => vaultKeyRaw }; },
     canonicalCbor: () => new Uint8Array(2),
     ...(overrides.VaultCrypto || {}),
   };
@@ -101,7 +106,9 @@ function harness(overrides = {}) {
       ...overrides.globals,
     }
   );
-  return { ctx, calls, amk, kexPriv, sigSeed, storage, session: ctx.VaultSession };
+  return {
+    ctx, calls, amk, kexPriv, sigSeed, secretBytes, vaultKeyRaw, storage, session: ctx.VaultSession,
+  };
 }
 
 const SECRET = 'A'.repeat(53);
@@ -157,6 +164,38 @@ test('a failure on the signing key still zeroes the already-unwrapped key exchan
   assert.ok(h.kexPriv.every((byte) => byte === 0));
 });
 
+test('a broken kdf derivation is refused with a defined reason and zeroes what was already derived', async () => {
+  const h = harness({ VaultCrypto: { hkdf: async () => { throw new Error('boom'); } } });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'identity'
+  );
+  assert.ok(h.amk.every((byte) => byte === 0));
+  assert.ok(h.secretBytes.every((byte) => byte === 0));
+});
+
+test('a malformed served signing key is refused with a defined reason and zeroes both unwrapped private keys', async () => {
+  const h = harness({ VaultCrypto: { decodePublicKey: () => { throw new Error('bad algorithm byte'); } } });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'substituted-key'
+  );
+  assert.ok(h.kexPriv.every((byte) => byte === 0));
+  assert.ok(h.sigSeed.every((byte) => byte === 0));
+  // Never surfaced while the identity it names was never verified.
+  assert.equal(h.session.accountUuid(), null);
+});
+
+test('a broken signer import is refused with a defined reason and zeroes both unwrapped private keys', async () => {
+  const h = harness({ VaultCrypto: { importSigner: async () => { throw new Error('boom'); } } });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'substituted-key'
+  );
+  assert.ok(h.kexPriv.every((byte) => byte === 0));
+  assert.ok(h.sigSeed.every((byte) => byte === 0));
+});
+
 test('a substituted signing public key is caught before it is trusted', async () => {
   const h = harness({
     globals: {
@@ -183,6 +222,24 @@ test('the attestation is verified after the key comparison, never before', async
   assert.ok(h.calls.indexOf('verifyBytes') > h.calls.indexOf('open:sig:0192f3a4-1111-7d8e-9f01-23456789abcd'));
 });
 
+test('the attestation is verified against the recomputed key, never the served one', async () => {
+  // Byte-identical to what publicKeyFromSeed recomputes (so the equality
+  // check still passes and unlock proceeds), but tagged so a swap of
+  // sigPublicRaw for the untrusted served value is observable even though
+  // the two are indistinguishable by content alone.
+  const servedKey = Object.assign(Uint8Array.from([115, 105, 103, 112, 117, 98]), { fromServer: true });
+  let verifyBytesArg = null;
+  const h = harness({
+    VaultCrypto: {
+      decodePublicKey: () => servedKey,
+      verifyBytes: async (pub) => { verifyBytesArg = pub; },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  assert.equal(verifyBytesArg.fromServer, undefined);
+  assert.deepEqual(Array.from(verifyBytesArg), [115, 105, 103, 112, 117, 98]);
+});
+
 test('an account with no identity is told so, not told the password is wrong', async () => {
   const h = harness({ fetch: async () => ({ ok: false, status: 404 }) });
   await assert.rejects(
@@ -203,6 +260,25 @@ test('not remembering the device stores nothing', async () => {
   const h = harness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
   assert.equal(h.storage.size, 0);
+});
+
+test('a storage failure while remembering the device does not leave the session half-open', async () => {
+  const h = harness({
+    globals: {
+      localStorage: {
+        getItem: () => null,
+        setItem: () => { throw new Error('quota exceeded'); },
+        removeItem: () => {},
+      },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: true });
+  assert.equal(h.session.isUnlocked(), true);
+  let locked = 0;
+  h.session.onLock(() => { locked += 1; });
+  h.session.lock();
+  assert.equal(locked, 1);
+  assert.equal(h.session.isUnlocked(), false);
 });
 
 test('forgetting the device clears the stored recovery key', async () => {
@@ -236,6 +312,14 @@ test('locking runs the registered callbacks once', async () => {
 
 test('signing before unlocking is refused rather than silently empty', async () => {
   await assert.rejects(harness().session.sign({ v: 1 }));
+});
+
+test('a broken metadata-key derivation still zeroes the opened vault key', async () => {
+  const h = harness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  h.ctx.VaultCrypto.hkdf = async () => { throw new Error('boom'); };
+  await assert.rejects(h.session.openVaultKey('0192f3a4-2222-7d8e-9f01-23456789abcd', 'd3JhcHBlZA'));
+  assert.ok(h.vaultKeyRaw.every((byte) => byte === 0));
 });
 
 test('pkcs8FromSeed refuses a seed shorter than 32 bytes', () => {

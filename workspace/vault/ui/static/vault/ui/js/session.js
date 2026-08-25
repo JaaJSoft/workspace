@@ -75,79 +75,105 @@ window.VaultSession = (function () {
         throw VaultUnlockError(err.status === 404 ? 'identity' : 'network');
       }
       if (envelope.state !== 'active') throw VaultUnlockError('identity');
-      accountUuid = envelope.uuid;
 
-      var secretBytes = V.crockfordDecode(options.secretText);
-      var amk = await V.deriveAmk({
-        password: options.password.normalize('NFC'),
-        secretKey: secretBytes,
-        salt: V.fromBase64Url(envelope.kdf_salt),
-        params: envelope.kdf_params,
-      });
-      var unwrapKey = await V.hkdf(amk, V.AD.unwrapInfo());
-      zero(amk);
-
+      var secretBytes;
+      var amk;
+      var unwrapKey;
       var kexPriv;
       var sigSeed;
+      var recomputed;
+      // Everything that can still throw once both private keys are unwrapped
+      // is working with server-supplied envelope fields (sig_public,
+      // kex_public, sig_over_kex_pub) - an unexpected failure there is
+      // envelope-shaped, not a credentials problem, so it reports the same
+      // way a deliberate substitution does.
+      var keysUnwrapped = false;
+
       try {
-        // The tag failure here IS the wrong-password answer. No request
-        // validates it, and the server never learns whether one succeeded.
-        kexPriv = await V.open(
-          unwrapKey,
-          V.fromBase64Url(envelope.wrapped_kex_priv),
-          V.AD.kexPrivAd(accountUuid)
-        );
-        sigSeed = await V.open(
-          unwrapKey,
-          V.fromBase64Url(envelope.wrapped_sig_priv),
-          V.AD.sigPrivAd(accountUuid)
-        );
-      } catch (err) {
+        secretBytes = V.crockfordDecode(options.secretText);
+        amk = await V.deriveAmk({
+          password: options.password.normalize('NFC'),
+          secretKey: secretBytes,
+          salt: V.fromBase64Url(envelope.kdf_salt),
+          params: envelope.kdf_params,
+        });
+        unwrapKey = await V.hkdf(amk, V.AD.unwrapInfo());
+        zero(amk);
+
+        try {
+          // The tag failure here IS the wrong-password answer. No request
+          // validates it, and the server never learns whether one succeeded.
+          kexPriv = await V.open(
+            unwrapKey,
+            V.fromBase64Url(envelope.wrapped_kex_priv),
+            V.AD.kexPrivAd(envelope.uuid)
+          );
+          sigSeed = await V.open(
+            unwrapKey,
+            V.fromBase64Url(envelope.wrapped_sig_priv),
+            V.AD.sigPrivAd(envelope.uuid)
+          );
+        } catch (err) {
+          throw VaultUnlockError('password');
+        }
+        keysUnwrapped = true;
+        // Nothing in v1 needs it again: a rotation re-derives it from the
+        // password the user retypes.
         zero(unwrapKey);
         zero(secretBytes);
-        // The kex open can succeed and the sig open fail (or the reverse):
-        // both draw on the same unwrapKey, but a partial failure still means
-        // a decrypted key sat in kexPriv up to this point.
-        zero(kexPriv);
-        throw VaultUnlockError('password');
-      }
-      // Nothing in v1 needs it again: a rotation re-derives it from the
-      // password the user retypes.
-      zero(unwrapKey);
-      zero(secretBytes);
 
-      var recomputed = await publicKeyFromSeed(sigSeed);
-      var served = V.decodePublicKey(V.fromBase64Url(envelope.sig_public));
-      if (!V.equalBytes(recomputed, served)) {
-        zero(kexPriv);
+        recomputed = await publicKeyFromSeed(sigSeed);
+        var served = V.decodePublicKey(V.fromBase64Url(envelope.sig_public));
+        if (!V.equalBytes(recomputed, served)) {
+          throw VaultUnlockError('substituted-key');
+        }
+
+        // Verified with the recomputed key, never with the served one:
+        // checking a server's signature with the server's own key proves
+        // nothing.
+        try {
+          await V.verifyBytes(
+            recomputed,
+            V.AD.kexPubPayload(envelope.uuid, envelope.kex_public),
+            V.fromBase64Url(envelope.sig_over_kex_pub)
+          );
+        } catch (err) {
+          throw VaultUnlockError('substituted-key');
+        }
+
+        signer = await V.importSigner(sigSeed);
+        recipient = await V.hpkeRecipient(kexPriv);
         zero(sigSeed);
-        throw VaultUnlockError('substituted-key');
-      }
-      sigPublicRaw = recomputed;
-
-      // Verified with the recomputed key, never with the served one: checking
-      // a server's signature with the server's own key proves nothing.
-      try {
-        await V.verifyBytes(
-          sigPublicRaw,
-          V.AD.kexPubPayload(accountUuid, envelope.kex_public),
-          V.fromBase64Url(envelope.sig_over_kex_pub)
-        );
+        zero(kexPriv);
       } catch (err) {
+        // A crash anywhere above must not leave decrypted key material
+        // behind, however it got here: zero() no-ops on whatever was never
+        // assigned, so this is safe to run unconditionally.
+        zero(secretBytes);
+        zero(amk);
+        zero(unwrapKey);
         zero(kexPriv);
         zero(sigSeed);
-        throw VaultUnlockError('substituted-key');
+        if (err && err.name === 'VaultUnlockError') throw err;
+        throw VaultUnlockError(keysUnwrapped ? 'substituted-key' : 'identity');
       }
 
-      signer = await V.importSigner(sigSeed);
-      recipient = await V.hpkeRecipient(kexPriv);
-      zero(sigSeed);
-      zero(kexPriv);
-
-      if (options.remember) {
-        localStorage.setItem(VAULT_SECRET_STORAGE_KEY, options.secretText);
-      }
+      // Committed only once every check above has passed: a caller reading
+      // these mid-verification must never observe a value that later turns
+      // out untrusted.
+      accountUuid = envelope.uuid;
+      sigPublicRaw = recomputed;
       unlocked = true;
+
+      // Failing to remember the device does not mean failing to unlock it -
+      // the session above is already live and must stay that way.
+      if (options.remember) {
+        try {
+          localStorage.setItem(VAULT_SECRET_STORAGE_KEY, options.secretText);
+        } catch (err) {
+          // Best-effort only; nothing to recover, nothing to zero.
+        }
+      }
     },
 
     lock: function () {
@@ -173,13 +199,15 @@ window.VaultSession = (function () {
         V.AD.vaultKeyInfo(vaultUuid, accountUuid),
         V.fromBase64Url(wrappedKeyB64)
       );
-      // The vault key never encrypts anything itself; the metadata key does.
-      var metaKey = await V.hkdf(raw, V.AD.vaultMetaInfo(vaultUuid));
-      zero(raw);
-      // Returns raw metadata-key bytes rather than a CryptoKey: VaultCrypto.open
-      // imports its key per call, so there is no CryptoKey form to hand back
-      // yet. The bytes live in the caller's local for one decryption - Task 9
-      // must zero them. Revisit once aead.js grows a CryptoKey-taking form.
+      var metaKey;
+      try {
+        // The vault key never encrypts anything itself; the metadata key does.
+        metaKey = await V.hkdf(raw, V.AD.vaultMetaInfo(vaultUuid));
+      } finally {
+        zero(raw);
+      }
+      // The caller owns these bytes and must zero them after one decryption.
+      // Revisit once aead.js grows a CryptoKey-taking form.
       return metaKey;
     },
 

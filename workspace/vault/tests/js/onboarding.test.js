@@ -3,10 +3,16 @@
 // skipped and that the strength floor counts what the norm says it counts.
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 function component(extra = {}) {
-  const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/onboarding.js', {
+  // session.js defines VAULT_SECRET_STORAGE_KEY, the constant
+  // rememberOnThisDevice() writes and reads - both pages load it in that
+  // order in the browser, so the test does too.
+  const ctx = loadScripts([
+    'workspace/vault/ui/static/vault/ui/js/session.js',
+    'workspace/vault/ui/static/vault/ui/js/onboarding.js',
+  ], {
     crypto: globalThis.crypto,
     TextEncoder: globalThis.TextEncoder,
     document: { cookie: '', createElement: () => ({ click() {} }) },

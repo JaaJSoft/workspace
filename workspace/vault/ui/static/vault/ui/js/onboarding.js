@@ -201,9 +201,9 @@ window.vaultOnboarding = function vaultOnboarding() {
     rememberOnThisDevice() {
       try {
         if (this.remember) {
-          localStorage.setItem('vault.secret-key', this.groupedSecret());
+          localStorage.setItem(VAULT_SECRET_STORAGE_KEY, this.groupedSecret());
         } else {
-          localStorage.removeItem('vault.secret-key');
+          localStorage.removeItem(VAULT_SECRET_STORAGE_KEY);
         }
       } catch (err) {
         // Best-effort only; nothing to recover, nothing to zero.

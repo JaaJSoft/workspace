@@ -239,8 +239,13 @@ by project or due window. For tasks assigned to other people use search_tasks.""
         if args.due_within_days > 0:
             from django.utils import timezone
 
-            cutoff = timezone.localdate() + timedelta(days=args.due_within_days)
-            qs = qs.filter(due_date__lte=cutoff)
+            from workspace.users.services.settings import get_user_timezone
+
+            # The user's own timezone, not the active one: nothing activates
+            # theirs in a Celery worker, and a tool running off the main
+            # thread would not see it if anything did.
+            today = timezone.localdate(timezone=get_user_timezone(user))
+            qs = qs.filter(due_date__lte=today + timedelta(days=args.due_within_days))
         limit = max(1, min(args.limit, 50))
         tasks = qs.prefetch_related("assignees")[:limit]
         results = [_task_entry(t) for t in tasks]

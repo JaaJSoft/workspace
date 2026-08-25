@@ -1,6 +1,7 @@
 import json
 import uuid
-from datetime import timedelta
+from datetime import UTC, date, datetime, timedelta
+from unittest import mock
 
 from django.core.cache import cache
 from django.test import TestCase
@@ -19,6 +20,7 @@ from workspace.projects.ai_tools import (
 )
 from workspace.projects.models import Project, TaskComment, TaskEvent, TaskStatus
 from workspace.projects.services.tasks import create_task
+from workspace.users.services.settings import set_setting
 
 from .base import ProjectTestMixin
 
@@ -99,6 +101,29 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
         )
         self.assertIn("Due soon", result)
         self.assertNotIn("Due later", result)
+
+    def test_list_my_tasks_due_window_is_read_in_the_user_timezone(self):
+        # 23:30 UTC is already tomorrow in Paris, so the window a user asks
+        # for is one day off unless their own date is what it is measured
+        # from. Nothing activates a timezone in a Celery worker, and a tool
+        # running off the main thread would not see it if anything did.
+        set_setting(self.member, "core", "timezone", "Europe/Paris")
+        frozen = datetime(2026, 1, 15, 23, 30, tzinfo=UTC)
+        local_tomorrow = date(2026, 1, 17)
+        create_task(
+            self.project,
+            self.admin,
+            title="Due the day after in Paris",
+            assignees=[self.member],
+            due_date=local_tomorrow,
+        )
+
+        with mock.patch("django.utils.timezone.now", return_value=frozen):
+            result = self._call(
+                "list_my_tasks", ListMyTasksParams(due_within_days=1), self.member
+            )
+
+        self.assertIn("Due the day after in Paris", result)
 
     # -- search_tasks --------------------------------------------------------
 

@@ -7,7 +7,7 @@ from django.db.models import Sum
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from workspace.files.models import File, UserStorageQuota
+from workspace.files.models import File, GroupStorageQuota, UserStorageQuota
 from workspace.files.services import FileService, quota
 
 User = get_user_model()
@@ -106,13 +106,11 @@ class RemainingBytesTests(TestCase):
     def test_unlimited_group_has_no_remaining_figure(self):
         self.assertIsNone(quota.remaining_bytes(owner=self.user, group=self.group))
 
-    def test_bucket_state_labels_the_bucket(self):
-        used, limit, label = quota.bucket_state(owner=self.user, group=None)
-        self.assertEqual((used, limit), (0, 10 * MB))
-        self.assertIn("personal", label.lower())
-        used, limit, label = quota.bucket_state(owner=self.user, group=self.group)
+    def test_bucket_state_reports_usage_and_limit(self):
+        self.assertEqual(quota.bucket_state(owner=self.user, group=None), (0, 10 * MB))
+        used, limit = quota.bucket_state(owner=self.user, group=self.group)
+        self.assertEqual(used, 0)
         self.assertIsNone(limit)
-        self.assertIn("Design", label)
 
 
 class SurfacesAgreeTests(TestCase):
@@ -157,6 +155,37 @@ class UsageQueryCountTests(TestCase):
     def test_an_unlimited_bucket_skips_the_aggregate(self):
         with self.assertNumQueries(1):
             quota.remaining_bytes(owner=self.user, group=self.group)
+
+
+class GroupLabelQueryCountTests(TestCase):
+    """Naming a group given only its pk costs a query - a refusal may pay it.
+
+    Callers on hot paths (``update_content``, WebDAV PROPFIND) hand over
+    ``group_id``, so passing a ``Group`` instance here would hide the lookup.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="labelled", password="pw")
+        self.group = Group.objects.create(name="Design")
+
+    def test_an_allowed_write_never_names_the_group(self):
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=10 * MB)
+        with self.assertNumQueries(2):
+            quota.check_write_allowed(
+                owner=self.user.pk, group=self.group.pk, additional_bytes=1
+            )
+
+    def test_a_refused_write_names_the_group(self):
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=1)
+        with self.assertNumQueries(3), self.assertRaises(quota.QuotaExceeded) as caught:
+            quota.check_write_allowed(
+                owner=self.user.pk, group=self.group.pk, additional_bytes=10 * MB
+            )
+        self.assertIn("Design", str(caught.exception.detail))
+
+    def test_remaining_bytes_on_an_unlimited_group_pk_is_one_query(self):
+        with self.assertNumQueries(1):
+            quota.remaining_bytes(owner=self.user.pk, group=self.group.pk)
 
 
 @override_settings(STORAGE_QUOTA_BYTES=10 * MB)

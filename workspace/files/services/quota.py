@@ -56,28 +56,35 @@ def group_usage(group):
     return total or 0
 
 
-def _group_name(group):
-    name = getattr(group, "name", None)
-    if name is not None:
-        return name
-    from django.contrib.auth.models import Group
+def _bucket_label(group):
+    """Name the bucket in a refusal message.
 
-    return Group.objects.filter(pk=group).values_list("name", flat=True).first() or "?"
+    Costs a query when *group* is a bare primary key, which is why it is only
+    reached once a write has already been refused.
+    """
+    if group is None:
+        return "Your personal storage"
+    name = getattr(group, "name", None)
+    if name is None:
+        from django.contrib.auth.models import Group
+
+        name = (
+            Group.objects.filter(pk=group).values_list("name", flat=True).first() or "?"
+        )
+    return f'The group folder "{name}"'
 
 
 def bucket_state(*, owner, group):
-    """Return ``(used, limit, label)`` for the bucket a write would land in.
+    """Return ``(used, limit)`` for the bucket a write would land in.
 
     ``limit`` is ``None`` when unlimited; ``used`` is then left at 0 rather
     than aggregated.
     """
     if group is not None:
         limit = effective_group_quota(group)
-        used = 0 if limit is None else group_usage(group)
-        return used, limit, f'The group folder "{_group_name(group)}"'
+        return (0 if limit is None else group_usage(group)), limit
     limit = effective_quota(owner)
-    used = 0 if limit is None else personal_usage(owner)
-    return used, limit, "Your personal storage"
+    return (0 if limit is None else personal_usage(owner)), limit
 
 
 def remaining_bytes(*, owner, group):
@@ -85,7 +92,7 @@ def remaining_bytes(*, owner, group):
 
     Negative when a quota was lowered below current usage.
     """
-    used, limit, _ = bucket_state(owner=owner, group=group)
+    used, limit = bucket_state(owner=owner, group=group)
     return None if limit is None else limit - used
 
 
@@ -136,9 +143,10 @@ def check_write_allowed(*, owner, group, additional_bytes):
     """
     if not additional_bytes or additional_bytes <= 0:
         return
-    used, limit, label = bucket_state(owner=owner, group=group)
+    used, limit = bucket_state(owner=owner, group=group)
     if limit is None or used + additional_bytes <= limit:
         return
+    label = _bucket_label(group)
     remedy = (
         "Free up space or empty the trash."
         if group is None

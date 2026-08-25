@@ -451,3 +451,52 @@ class WebDavMoveCopyQuotaTests(TestCase):
         with self.assertRaises(DAVError) as caught:
             res.copy_move_single("/Design/copy.bin", is_move=False)
         self.assertEqual(caught.exception.value, 507)
+
+
+@override_settings(STORAGE_QUOTA_BYTES=4 * KB)
+class ExtractEnforcementTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="extractor", password="pw")
+
+    def _archive(self, entries):
+        import io
+        import zipfile
+
+        buf = io.BytesIO()
+        # Deflated on purpose: the archive itself is a File and counts against
+        # the same bucket, so a stored (uncompressed) 6 KB zip would be refused
+        # by create_file before any test could extract it.
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, payload in entries:
+                zf.writestr(name, payload)
+        buf.seek(0)
+        return FileService.create_file(
+            self.user, "bundle.zip", content=ContentFile(buf.read(), name="bundle.zip")
+        )
+
+    def test_extraction_stops_at_the_quota(self):
+        from workspace.files.services.extract import extract_zip
+
+        archive = self._archive(
+            [("a.bin", b"x" * (3 * KB)), ("b.bin", b"y" * (3 * KB))]
+        )
+        with self.assertRaises(quota.QuotaExceeded):
+            extract_zip(archive, None, acting_user=self.user)
+
+    def test_a_refused_extraction_leaves_no_entry_behind(self):
+        from workspace.files.services.extract import extract_zip
+
+        archive = self._archive(
+            [("a.bin", b"x" * (3 * KB)), ("b.bin", b"y" * (3 * KB))]
+        )
+        with self.assertRaises(quota.QuotaExceeded):
+            extract_zip(archive, None, acting_user=self.user)
+        self.assertFalse(File.objects.filter(name__in=["a.bin", "b.bin"]).exists())
+
+    def test_an_archive_that_fits_still_extracts(self):
+        from workspace.files.services.extract import extract_zip
+
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=100 * KB)
+        archive = self._archive([("a.bin", b"x" * (3 * KB))])
+        result = extract_zip(archive, None, acting_user=self.user)
+        self.assertEqual(result["files_created"], 1)

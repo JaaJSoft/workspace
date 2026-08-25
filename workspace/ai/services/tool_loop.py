@@ -1,10 +1,14 @@
 import json
 import logging
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 
 from django.conf import settings
+from django.db import connections
 
 from workspace.ai.metrics import AI_TOOL_CALLS, AI_TOOL_LOOP_STOPS, AI_TOOL_ROUNDS
+from workspace.ai.services.call_order import set_call_position
 from workspace.ai.services.llm import (
     build_tool_content,
     call_llm,
@@ -12,7 +16,11 @@ from workspace.ai.services.llm import (
     serialize_response,
     truncate_tool_result,
 )
-from workspace.ai.services.stream_steps import notify_tool_step, step_recipients
+from workspace.ai.services.stream_steps import (
+    notify_tool_step,
+    notify_tool_step_done,
+    step_recipients,
+)
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -39,6 +47,115 @@ def _call_signature(tool_call):
     except json.JSONDecodeError, TypeError:
         args = raw.strip()
     return f"{tool_call.function.name}:{args}"
+
+
+@dataclass
+class _PlannedCall:
+    """One tool call of a round, and what came of it.
+
+    Filled in three steps - planned on the main thread in call order, run
+    (possibly off it), then recorded back in call order - so the model reads
+    its results in the order it asked for them whatever order they land in.
+    """
+
+    tool_call: object
+    metric_tool: str
+    position: int = 0
+    refusal: str | None = None
+    result: object = None
+    error: BaseException | None = None
+
+
+def _batch_calls(tool_calls, concurrent_names, limit):
+    """Split a round's calls into batches that may run in one dispatch.
+
+    Consecutive independent calls share a batch, up to *limit*; every other
+    call is a batch of its own, which keeps a write in the order the model
+    asked for it and keeps every read before it strictly ahead of it.
+    """
+    batch = []
+    for tool_call in tool_calls:
+        if limit > 1 and tool_call.function.name in concurrent_names:
+            batch.append(tool_call)
+            if len(batch) == limit:
+                yield batch
+                batch = []
+            continue
+        if batch:
+            yield batch
+            batch = []
+        yield [tool_call]
+    if batch:
+        yield batch
+
+
+def _execute(entry, human_user, bot_user, conversation_id, tool_context):
+    """Run one tool call and report its end to the conversation's streams.
+
+    The report is sent from wherever the call ran, as soon as it returns,
+    so the row of a quick call stops spinning without waiting for the slow
+    one it was dispatched with.
+    """
+    from workspace.ai.tool_registry import tool_registry
+
+    tool_call = entry.tool_call
+    # Read by a tool that leaves an image for the caller to attach: appended
+    # in completion order, they would reach the reply in a different order
+    # than the model asked for them in.
+    set_call_position(entry.position)
+    try:
+        return tool_registry.execute(
+            tool_call,
+            user=human_user,
+            bot=bot_user,
+            conversation_id=conversation_id,
+            context=tool_context,
+        )
+    finally:
+        if conversation_id:
+            notify_tool_step_done(
+                step_recipients(conversation_id, bot_user), conversation_id, tool_call
+            )
+
+
+def _execute_off_thread(*args):
+    """Run one tool call in a pool thread and hand its connections back.
+
+    Django opens a connection per thread on first query and nothing closes
+    the ones a pool thread leaves behind, so a worker process would collect
+    one for every parallel tool call it has ever run.
+    """
+    try:
+        return _execute(*args)
+    finally:
+        connections.close_all()
+
+
+def _run_batch(planned, human_user, bot_user, conversation_id, tool_context):
+    """Execute the calls of one batch, storing each outcome on its entry.
+
+    A single call runs inline: a thread buys nothing and costs a database
+    connection. Exceptions are captured rather than raised so the caller
+    can still report them in call order.
+    """
+    pending = [entry for entry in planned if entry.refusal is None]
+    args = (human_user, bot_user, conversation_id, tool_context)
+    if len(pending) <= 1:
+        for entry in pending:
+            try:
+                entry.result = _execute(entry, *args)
+            except Exception as exc:
+                entry.error = exc
+        return
+    # One worker per call: everything dispatched starts immediately, so a
+    # cancellation checked before dispatch cannot be outrun by a queued call.
+    with ThreadPoolExecutor(max_workers=len(pending)) as pool:
+        futures = [pool.submit(_execute_off_thread, entry, *args) for entry in pending]
+    for entry, future in zip(pending, futures, strict=True):
+        try:
+            entry.result = future.result()
+        except Exception as exc:
+            entry.error = exc
 
 
 def _repeat_notice(tool_call, limit):
@@ -73,6 +190,13 @@ def run_tool_loop(
     ``round_cap_reached``; a run whose last round answered in text is a
     normal completion and flags nothing.
 
+    Within a round, consecutive calls to tools the registry marks
+    ``concurrent`` are dispatched together, settings.AI_TOOL_CONCURRENCY at
+    a time, so a model that asks for a batch of pages waits for the slowest
+    fetch of that batch rather than the sum of them all. Every other call
+    runs alone, in the order the model asked for it, and results are
+    recorded in that order whatever order they land in.
+
     *rounds* is a list
     of dicts capturing each LLM response and the tool executions that
     followed it, suitable for storage in ``AITask.raw_messages``.
@@ -81,8 +205,8 @@ def run_tool_loop(
     ``Message.tool_data`` so that future history rebuilds can reconstruct
     the correct ``assistant(tool_calls) -> tool(result)`` message sequence.
 
-    *is_cancelled* is an optional predicate read before every tool
-    execution. When it returns True the loop stops and reports it through
+    *is_cancelled* is an optional predicate read before every tool is
+    dispatched. When it returns True the loop stops and reports it through
     ``tool_context["cancelled"]``, so a caller can tell an abandoned run
     from a finished one.
 
@@ -104,7 +228,10 @@ def run_tool_loop(
     tool_data = []  # compact history for Message.tool_data
     max_tool_rounds = settings.AI_MAX_TOOL_ROUNDS
     max_identical_calls = settings.AI_MAX_IDENTICAL_TOOL_CALLS
+    max_concurrency = settings.AI_TOOL_CONCURRENCY
+    concurrent_names = tool_registry.concurrent_names()
     seen_calls = Counter()
+    call_position = 0
     for _ in range(max_tool_rounds):
         # Fallback: parse tool calls from text if model didn't use native function calling
         if not result.get("tool_calls") and result.get("content"):
@@ -169,30 +296,40 @@ def run_tool_loop(
         }
 
         executed_in_round = 0
-        for tc in result["tool_calls"]:
-            # Read before executing, not after the loop: past this point the
-            # tool writes memories, schedules messages or bills an image, and
-            # none of that should happen once the user has cancelled.
-            if is_cancelled and is_cancelled():
-                tool_context["cancelled"] = True
-                break
-            signature = _call_signature(tc)
-            metric_tool = (
-                tc.function.name if tc.function.name in known_tools else "unknown"
-            )
-            seen_calls[signature] += 1
-            if seen_calls[signature] > max_identical_calls:
-                # A model stuck re-issuing one call burns every remaining round
-                # on an answer it already has. Refusing the duplicate keeps the
-                # side effects single and tells it why nothing new came back.
-                logger.info(
-                    "Blocked repeated tool call %s (%d times)",
-                    scrub(tc.function.name),
-                    seen_calls[signature],
+        for batch in _batch_calls(
+            result["tool_calls"], concurrent_names, max_concurrency
+        ):
+            planned = []
+            for tc in batch:
+                # Read before dispatching, not after: past this point the tool
+                # writes memories, schedules messages or bills an image, and
+                # none of that should happen once the user has cancelled.
+                if is_cancelled and is_cancelled():
+                    tool_context["cancelled"] = True
+                    break
+                signature = _call_signature(tc)
+                metric_tool = (
+                    tc.function.name if tc.function.name in known_tools else "unknown"
                 )
-                tool_result = _repeat_notice(tc, max_identical_calls)
-                AI_TOOL_CALLS.labels(tool=metric_tool, status="repeat").inc()
-            else:
+                seen_calls[signature] += 1
+                call_position += 1
+                entry = _PlannedCall(
+                    tool_call=tc, metric_tool=metric_tool, position=call_position
+                )
+                planned.append(entry)
+                if seen_calls[signature] > max_identical_calls:
+                    # A model stuck re-issuing one call burns every remaining
+                    # round on an answer it already has. Refusing the duplicate
+                    # keeps the side effects single and tells it why nothing
+                    # new came back.
+                    logger.info(
+                        "Blocked repeated tool call %s (%d times)",
+                        scrub(tc.function.name),
+                        seen_calls[signature],
+                    )
+                    entry.refusal = _repeat_notice(tc, max_identical_calls)
+                    AI_TOOL_CALLS.labels(tool=metric_tool, status="repeat").inc()
+                    continue
                 executed_in_round += 1
                 # Membership is re-read per tool, not snapshotted for the whole
                 # generation: a member who leaves mid-run must stop receiving
@@ -201,67 +338,71 @@ def run_tool_loop(
                     notify_tool_step(
                         step_recipients(conversation_id, bot_user), conversation_id, tc
                     )
-                try:
-                    tool_result = tool_registry.execute(
-                        tc,
-                        user=human_user,
-                        bot=bot_user,
-                        conversation_id=conversation_id,
-                        context=tool_context,
-                    )
-                except Exception:
-                    AI_TOOL_CALLS.labels(tool=metric_tool, status="error").inc()
-                    raise
-                AI_TOOL_CALLS.labels(
-                    tool=metric_tool, status=_result_status(tool_result)
-                ).inc()
-            # Rides inside the residue of a trimmed result, so a stub the
-            # model reads later still says which call produced it.
-            call_hint = tool_registry.describe_call(
-                tc.function.name, tc.function.arguments
-            )
-            tool_content = build_tool_content(tool_result)
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": tool_content,
-                }
-            )
-            round_data["tool_executions"].append(
-                {
-                    "tool_call_id": tc.id,
-                    "name": tc.function.name,
-                    "arguments": tc.function.arguments,
-                    "result": truncate_tool_result(
-                        tool_result,
-                        settings.AI_TOOL_RESULT_TASK_MAX_CHARS,
-                        hint=call_hint,
-                    ),
-                }
-            )
-            # Store a text-only version for history reconstruction
-            td_result_content = tool_result
-            if isinstance(tool_content, list):
-                # Multi-part content (e.g. image) - keep only the text part
-                td_result_content = next(
-                    (
-                        p["text"]
-                        for p in tool_content
-                        if isinstance(p, dict) and p.get("type") == "text"
-                    ),
-                    tool_result,
+
+            _run_batch(planned, human_user, bot_user, conversation_id, tool_context)
+
+            for entry in planned:
+                tc = entry.tool_call
+                if entry.error is not None:
+                    AI_TOOL_CALLS.labels(tool=entry.metric_tool, status="error").inc()
+                    raise entry.error
+                if entry.refusal is not None:
+                    tool_result = entry.refusal
+                else:
+                    tool_result = entry.result
+                    AI_TOOL_CALLS.labels(
+                        tool=entry.metric_tool, status=_result_status(tool_result)
+                    ).inc()
+                # Rides inside the residue of a trimmed result, so a stub the
+                # model reads later still says which call produced it.
+                call_hint = tool_registry.describe_call(
+                    tc.function.name, tc.function.arguments
                 )
-            td_round["results"].append(
-                {
-                    "tool_call_id": tc.id,
-                    "content": truncate_tool_result(
-                        td_result_content,
-                        settings.AI_TOOL_RESULT_STORE_MAX_CHARS,
-                        hint=call_hint,
-                    ),
-                }
-            )
+                tool_content = build_tool_content(tool_result)
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": tool_content,
+                    }
+                )
+                round_data["tool_executions"].append(
+                    {
+                        "tool_call_id": tc.id,
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                        "result": truncate_tool_result(
+                            tool_result,
+                            settings.AI_TOOL_RESULT_TASK_MAX_CHARS,
+                            hint=call_hint,
+                        ),
+                    }
+                )
+                # Store a text-only version for history reconstruction
+                td_result_content = tool_result
+                if isinstance(tool_content, list):
+                    # Multi-part content (e.g. image) - keep only the text part
+                    td_result_content = next(
+                        (
+                            p["text"]
+                            for p in tool_content
+                            if isinstance(p, dict) and p.get("type") == "text"
+                        ),
+                        tool_result,
+                    )
+                td_round["results"].append(
+                    {
+                        "tool_call_id": tc.id,
+                        "content": truncate_tool_result(
+                            td_result_content,
+                            settings.AI_TOOL_RESULT_STORE_MAX_CHARS,
+                            hint=call_hint,
+                        ),
+                    }
+                )
+
+            if tool_context.get("cancelled"):
+                break
 
         tool_data.append(td_round)
         rounds.append(round_data)

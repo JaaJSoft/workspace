@@ -134,6 +134,7 @@ class ChatToolProvider(ToolProvider):
         badge_running_label="Searching messages",
         detail_key="query",
         params=SearchMessagesParams,
+        concurrent=True,
     )
     def search_messages(self, args, user, bot, conversation_id, context):
         """Search chat messages across all your conversations, or within the current one. \
@@ -213,6 +214,7 @@ or references a past discussion."""
         badge_label="Read a conversation",
         badge_running_label="Reading a conversation",
         params=ReadConversationParams,
+        concurrent=True,
     )
     def read_conversation(self, args, user, bot, conversation_id, context):
         """Read the most recent messages of one of the user's conversations, in order. \

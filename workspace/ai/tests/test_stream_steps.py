@@ -1,3 +1,5 @@
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -176,9 +178,9 @@ class NotifyToolStepTests(TestCase):
     @patch("workspace.ai.services.stream_steps.notify_sse")
     def test_step_carries_both_tenses(self, mock_notify):
         # The step is pushed before the tool runs, so the row must read
-        # "Looking up profile"; it stays on screen once the next step starts,
-        # where the same row has to read "Looked up profile" instead. Which
-        # one shows is CSS, so both labels ship in the HTML.
+        # "Looking up profile"; the completion that follows carries no HTML,
+        # so the same row has to be able to read "Looked up profile" without
+        # being re-rendered. Which one shows is CSS, so both labels ship.
         stream_steps.notify_tool_step(
             [1], "conv-1", make_tool_call(name="get_current_user_info", arguments="{}")
         )
@@ -237,6 +239,16 @@ class NotifyToolStepTests(TestCase):
         # The step is pushed before the tool runs, so there is no result block.
         self.assertNotIn("<pre", html)
 
+    @patch("workspace.ai.services.stream_steps.notify_sse")
+    def test_step_names_the_call_it_announces(self, mock_notify):
+        # The row it opens is ended by call id, not by position: a round's
+        # independent calls run together and finish in any order.
+        stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
+
+        step = stream_steps.read_steps(1, None)[0][0]["data"]
+
+        self.assertEqual(step["call_id"], "call_1")
+
     def test_no_recipients_is_a_noop(self):
         with patch("workspace.ai.services.stream_steps.notify_sse") as mock_notify:
             stream_steps.notify_tool_step([], "conv-1", make_tool_call())
@@ -248,6 +260,79 @@ class NotifyToolStepTests(TestCase):
             side_effect=RuntimeError("redis down"),
         ):
             stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
+
+
+class NotifyToolStepDoneTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch("workspace.ai.services.stream_steps.notify_sse")
+    def test_enqueues_a_completion_for_each_recipient_and_wakes_them(self, mock_notify):
+        stream_steps.notify_tool_step_done([1, 2], "conv-1", make_tool_call())
+
+        for user_id in (1, 2):
+            out, _ = stream_steps.read_steps(user_id, None)
+            self.assertEqual(len(out), 1)
+            step = out[0]["data"]
+            self.assertEqual(step["conversation_id"], "conv-1")
+            self.assertEqual(step["call_id"], "call_1")
+            self.assertIs(step["done"], True)
+            # The row is already on screen with both tenses in it, so ending
+            # it names it - there is nothing to render again.
+            self.assertNotIn("html", step)
+        self.assertEqual(mock_notify.call_count, 2)
+
+    @patch("workspace.ai.services.stream_steps.notify_sse")
+    def test_a_call_opens_then_closes_one_row(self, mock_notify):
+        tool_call = make_tool_call()
+        stream_steps.notify_tool_step([1], "conv-1", tool_call)
+        stream_steps.notify_tool_step_done([1], "conv-1", tool_call)
+
+        out, _ = stream_steps.read_steps(1, None)
+
+        self.assertEqual([e["data"]["call_id"] for e in out], ["call_1", "call_1"])
+        self.assertEqual([e["data"].get("done") for e in out], [None, True])
+
+    def test_no_recipients_is_a_noop(self):
+        with patch("workspace.ai.services.stream_steps.notify_sse") as mock_notify:
+            stream_steps.notify_tool_step_done([], "conv-1", make_tool_call())
+        mock_notify.assert_not_called()
+
+    def test_never_raises_on_broken_notify(self):
+        with patch(
+            "workspace.ai.services.stream_steps.notify_sse",
+            side_effect=RuntimeError("redis down"),
+        ):
+            stream_steps.notify_tool_step_done([1], "conv-1", make_tool_call())
+
+    def test_completions_reported_from_several_threads_are_all_queued(self):
+        """Parallel calls report their end from their own thread.
+
+        The mailbox is a read-modify-write on one cache key, so without the
+        enqueue lock two reports racing lose one - and the row it belonged
+        to spins until the reply lands.
+        """
+        calls = [make_tool_call() for _ in range(8)]
+        for index, tool_call in enumerate(calls):
+            tool_call.id = f"call_{index}"
+        start = threading.Barrier(len(calls), timeout=10)
+
+        def report(tool_call):
+            start.wait()
+            stream_steps.notify_tool_step_done([1], "conv-1", tool_call)
+
+        with patch("workspace.ai.services.stream_steps.notify_sse"):
+            with ThreadPoolExecutor(max_workers=len(calls)) as pool:
+                list(pool.map(report, calls))
+
+        out, _ = stream_steps.read_steps(1, None)
+        self.assertEqual(
+            sorted(e["data"]["call_id"] for e in out),
+            sorted(tool_call.id for tool_call in calls),
+        )
 
 
 class AIStreamSSEProviderTests(TestCase):

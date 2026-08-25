@@ -221,6 +221,40 @@ class PostBotMessageImageTypingTests(TestCase):
         self.assertEqual(att.mime_type, "image/jpeg")
         self.assertFalse(att.original_name.endswith(".png"))
 
+    def test_images_are_attached_in_the_order_the_model_asked_for(self):
+        # Generated in parallel, so the second prompt can come back first;
+        # the reply describes them in the order it asked for them.
+        _, msg = self._post(
+            [
+                {"data": _image_bytes("PNG"), "prompt": "the dog", "position": 2},
+                {"data": _image_bytes("JPEG"), "prompt": "the cat", "position": 1},
+            ]
+        )
+
+        names = [
+            att.original_name
+            for att in MessageAttachment.objects.filter(message=msg).order_by(
+                "created_at"
+            )
+        ]
+        self.assertEqual(names, ["the_cat_1.jpg", "the_dog_2.png"])
+
+    def test_images_with_no_position_keep_the_order_they_arrived_in(self):
+        _, msg = self._post(
+            [
+                {"data": _image_bytes("PNG"), "prompt": "first"},
+                {"data": _image_bytes("JPEG"), "prompt": "second"},
+            ]
+        )
+
+        names = [
+            att.original_name
+            for att in MessageAttachment.objects.filter(message=msg).order_by(
+                "created_at"
+            )
+        ]
+        self.assertEqual(names, ["first_1.png", "second_2.jpg"])
+
     def test_undetectable_bytes_keep_the_png_fallback(self):
         _, msg = self._post([{"data": b"", "prompt": "broken"}])
 

@@ -28,22 +28,73 @@ function buildApp() {
   return { app, timers };
 }
 
-test('bot_step raises the typing indicator and stores the step', () => {
+test('bot_step raises the typing indicator and stores the step as running', () => {
   const { app } = buildApp();
 
-  app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Web Search</span>' });
 
   assert.equal(app.botTyping, true);
   assert.deepStrictEqual(
     Array.from(app.botSteps, s => ({ ...s })),
-    [{ html: '<span>Web Search</span>' }],
+    [{ id: 'c1', html: '<span>Web Search</span>', running: true }],
   );
+  assert.equal(app.botStepsRunning(), true);
+});
+
+test('a completion ends its own row, not the last one', () => {
+  // A round dispatches independent tools together: the call that ends
+  // first is rarely the one shown last.
+  const { app } = buildApp();
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Read A</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c2', html: '<span>Read B</span>' });
+
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', done: true });
+
+  assert.deepStrictEqual(
+    Array.from(app.botSteps, s => [s.id, s.running]),
+    [['c1', false], ['c2', true]],
+  );
+  assert.equal(app.botStepsRunning(), true);
+});
+
+test('the rows stay in call order whatever order the calls end in', () => {
+  const { app } = buildApp();
+  ['c1', 'c2', 'c3'].forEach(id =>
+    app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: id, html: `<span>${id}</span>` }),
+  );
+
+  ['c3', 'c1', 'c2'].forEach(id =>
+    app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: id, done: true }),
+  );
+
+  assert.deepStrictEqual(Array.from(app.botSteps, s => s.id), ['c1', 'c2', 'c3']);
+  assert.equal(app.botStepsRunning(), false);
+});
+
+test('a completion whose opening step is unknown is ignored', () => {
+  // Its step can have fallen out of the capped mailbox, or been queued
+  // before this connection opened.
+  const { app } = buildApp();
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Read A</span>' });
+
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'gone', done: true });
+
+  assert.deepStrictEqual(
+    Array.from(app.botSteps, s => [s.id, s.running]),
+    [['c1', true]],
+  );
+});
+
+test('no step at all counts as nothing running', () => {
+  const { app } = buildApp();
+
+  assert.equal(app.botStepsRunning(), false);
 });
 
 test('bot_step for another conversation is ignored', () => {
   const { app } = buildApp();
 
-  app.handleSSEBotStep({ conversation_id: 'conv-2', html: '<span>Web Search</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-2', call_id: 'c1', html: '<span>Web Search</span>' });
 
   assert.equal(app.botTyping, false);
   assert.equal(app.botSteps.length, 0);
@@ -53,7 +104,7 @@ test('bot_step with no active conversation is ignored', () => {
   const { app } = buildApp();
   app.activeConversation = null;
 
-  app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Web Search</span>' });
 
   assert.equal(app.botTyping, false);
   assert.equal(app.botSteps.length, 0);
@@ -62,8 +113,8 @@ test('bot_step with no active conversation is ignored', () => {
 test('later steps accumulate in order and re-arm the failsafe', () => {
   const { app, timers } = buildApp();
 
-  app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
-  app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Calendar</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Web Search</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c2', html: '<span>Calendar</span>' });
 
   assert.deepStrictEqual(
     Array.from(app.botSteps, s => s.html),
@@ -77,7 +128,7 @@ test('the step list is capped', () => {
   const { app } = buildApp();
 
   for (let i = 0; i < 40; i++) {
-    app.handleSSEBotStep({ conversation_id: 'conv-1', html: `<span>${i}</span>` });
+    app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: `c${i}`, html: `<span>${i}</span>` });
   }
 
   assert.equal(app.botSteps.length, 30);
@@ -87,7 +138,7 @@ test('the step list is capped', () => {
 test('the failsafe timer hides both the steps and the typing indicator', () => {
   const { app, timers } = buildApp();
 
-  app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Web Search</span>' });
   timers.fns[timers.fns.length - 1]();
 
   assert.equal(app.botTyping, false);
@@ -97,7 +148,7 @@ test('the failsafe timer hides both the steps and the typing indicator', () => {
 test('clearBotStep cancels the timer and drops the steps', () => {
   const { app, timers } = buildApp();
 
-  app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Web Search</span>' });
   app.clearBotStep();
 
   assert.equal(app.botSteps.length, 0);
@@ -126,7 +177,7 @@ test('a snapshot without the active conversation lowers a stale indicator', () =
   // was away: the reopened connection replays no message event, so the
   // fresh snapshot is the only thing that can end the bubble.
   const { app, timers } = buildApp();
-  app.handleSSEBotStep({ conversation_id: 'conv-1', html: '<span>Web Search</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Web Search</span>' });
   assert.equal(app.botTyping, true);
 
   app.handleSSEBotGenerating({ conversation_ids: [] });

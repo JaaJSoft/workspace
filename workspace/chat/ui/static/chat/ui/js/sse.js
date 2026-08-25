@@ -206,13 +206,24 @@ window.chatSseMixin = function chatSseMixin() {
     // conversations), so raise the typing indicator for them too. The
     // failsafe timer hides everything again if the generation is cancelled
     // server-side and no completion message ever lands.
+    //
+    // Two kinds arrive: a call starting, carrying its server-rendered
+    // summary line (same partial as the final timeline row), and a call
+    // ending, carrying its id alone. A round runs independent tools
+    // together, so the one that ends is not necessarily the last one shown.
     handleSSEBotStep(detail) {
       if (!this.activeConversation || detail.conversation_id !== this.activeConversation.uuid) return;
       this.botTyping = true;
-      // Server-rendered summary line (same partial as the final timeline
-      // row); steps accumulate so the bubble builds up the timeline live.
-      this.botSteps.push({ html: detail.html });
-      if (this.botSteps.length > 30) this.botSteps.shift();
+      if (detail.done) {
+        // Its opening step may have fallen out of the capped mailbox, or
+        // been queued before this connection opened: there is then no row
+        // to end, and nothing to do.
+        const step = this.botSteps.find(s => s.id === detail.call_id);
+        if (step) step.running = false;
+      } else {
+        this.botSteps.push({ id: detail.call_id, html: detail.html, running: true });
+        if (this.botSteps.length > 30) this.botSteps.shift();
+      }
       this._armBotStepFailsafe();
     },
 

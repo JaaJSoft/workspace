@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+import threading
 import uuid as uuid_lib
 from datetime import UTC, datetime
 from typing import Literal
@@ -14,6 +15,7 @@ from workspace.common.limits import clamp_limit
 from workspace.common.logging import scrub
 
 from .models import UserMemory
+from .services.call_order import call_position
 from .tool_registry import ToolProvider, tool
 
 logger = logging.getLogger(__name__)
@@ -289,6 +291,9 @@ def _image_tool_payload(image_data, text):
     )
 
 
+_image_failures_lock = threading.Lock()
+
+
 def _image_failure_message(tool_name, prompt, exc, context):
     """Tool result for an image the backend refused to produce.
 
@@ -299,10 +304,16 @@ def _image_failure_message(tool_name, prompt, exc, context):
     to stop, since nothing else caps how many times a model can call a tool
     within a reply.
     """
-    tried = context.setdefault("failed_image_prompts", [])
-    repeated = any(p.strip().lower() == prompt.strip().lower() for p in tried)
-    tried.append(prompt)
-    exhausted = len(tried) >= settings.AI_IMAGE_FAILURE_BUDGET
+    # Read and appended to as one step: images of a round are generated in
+    # parallel, and both answers below are decided from what the list holds
+    # at that moment. The budget is still read after the fact, so a round
+    # already in flight can overshoot it by its own width - what it caps is
+    # how long a model may keep coming back, not the calls it has made.
+    with _image_failures_lock:
+        tried = context.setdefault("failed_image_prompts", [])
+        repeated = any(p.strip().lower() == prompt.strip().lower() for p in tried)
+        tried.append(prompt)
+        exhausted = len(tried) >= settings.AI_IMAGE_FAILURE_BUDGET
 
     head = f"Error: image failed after {exc.attempts} attempt(s) — {exc}."
     tail = (
@@ -343,6 +354,7 @@ class CoreToolProvider(ToolProvider):
         badge_icon="👤",
         badge_label="Looked up profile",
         badge_running_label="Looking up profile",
+        concurrent=True,
     )
     def get_current_user_info(self, args, user, bot, conversation_id, context):
         """Get the profile of the user you are chatting with: username, full name, email, and join date. \
@@ -416,6 +428,7 @@ Call this when the user explicitly asks you to forget something or when a stored
         badge_icon="🖼️",
         badge_label="Viewed own avatar",
         badge_running_label="Viewing own avatar",
+        concurrent=True,
     )
     def get_my_avatar(self, args, user, bot, conversation_id, context):
         """Retrieve your own avatar image so you can see or describe it. \
@@ -453,6 +466,7 @@ class SearchToolProvider(ToolProvider):
         badge_running_label="Searching the workspace",
         detail_key="query",
         params=SearchEverythingParams,
+        concurrent=True,
     )
     def search_everything(self, args, user, bot, conversation_id, context):
         """Search the whole workspace at once — files, notes, emails, contacts, \
@@ -525,6 +539,7 @@ class WebToolProvider(ToolProvider):
         badge_running_label="Searching the web",
         detail_key="queries",
         params=WebSearchParams,
+        concurrent=True,
     )
     def web_search(self, args, user, bot, conversation_id, context):
         """Search the web for current information. \
@@ -563,6 +578,7 @@ read_webpage rather than answering from the snippets."""
         badge_running_label="Reading webpage",
         detail_key="url",
         params=ReadWebpageParams,
+        concurrent=True,
     )
     def read_webpage(self, args, user, bot, conversation_id, context):
         """Fetch a webpage and return its main content as markdown, links included. \
@@ -610,6 +626,7 @@ class WeatherToolProvider(ToolProvider):
         badge_running_label="Checking the weather",
         detail_key="location",
         params=GetWeatherParams,
+        concurrent=True,
     )
     def get_weather(self, args, user, bot, conversation_id, context):
         """Get the current weather for a place given its name. \
@@ -638,6 +655,11 @@ class ImageToolProvider(ToolProvider):
         badge_running_label="Generating image",
         detail_key="prompt",
         params=GenerateImageParams,
+        # The exception to "nothing that bills runs in parallel": four images
+        # asked for in one breath are the longest wait in the product, and
+        # each call is independent of its siblings. What it costs is that a
+        # round already in flight can overshoot the failure budget.
+        concurrent=True,
     )
     def generate_image(self, args, user, bot, conversation_id, context):
         """Generate a brand-new image from a text description. \
@@ -668,6 +690,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
                 "data": image_data,
                 "prompt": prompt,
                 "size": size,
+                "position": call_position(),
             }
         )
 
@@ -682,6 +705,9 @@ Do NOT use this to modify an existing image — use edit_image instead."""
         badge_running_label="Editing image",
         detail_key="prompt",
         params=EditImageParams,
+        # Stays sequential where generate_image does not: it edits the last
+        # image of the turn, so running it beside the call that produces that
+        # image would pick a source by race.
     )
     def edit_image(self, args, user, bot, conversation_id, context):
         """Edit an existing image from the conversation based on a text instruction. \
@@ -744,6 +770,7 @@ Do NOT use this to create an image from scratch — use generate_image instead."
                 "data": image_data,
                 "prompt": prompt,
                 "size": size,
+                "position": call_position(),
             }
         )
 
@@ -865,6 +892,7 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
         badge_icon="\U0001f3af",
         badge_label="Listed goals",
         badge_running_label="Listing goals",
+        concurrent=True,
     )
     def list_agent_goals(self, args, user, bot, conversation_id, context):
         """List your active and paused long-term goals in this conversation, including \
@@ -1260,6 +1288,7 @@ Call this when the user wants to stop or remove a previously scheduled message."
         badge_icon="\U0001f4cb",
         badge_label="Listed schedules",
         badge_running_label="Listing schedules",
+        concurrent=True,
     )
     def list_schedules(self, args, user, bot, conversation_id, context):
         """List all active scheduled messages in this conversation. \

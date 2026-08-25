@@ -6,8 +6,9 @@ window.chatBotMixin = function chatBotMixin() {
     botFilter: '',
     botTyping: false,
     // Progress steps received for the active conversation's running
-    // generation, in arrival order: [{ html }]. Each html is the
-    // server-rendered tool summary row. Only rendered while botTyping is up.
+    // generation, in call order: [{ id, html, running }]. Each html is the
+    // server-rendered tool summary row; `running` is turned off by the
+    // matching completion step. Only rendered while botTyping is up.
     botSteps: [],
     _botStepTimer: null,
 
@@ -149,6 +150,14 @@ window.chatBotMixin = function chatBotMixin() {
       return this.activeConversation.members.find(m =>
         this.availableBots.some(b => b.user_id === m.user.id)
       );
+    },
+
+    // A round dispatches independent tools together, so "is anything
+    // still running" is not "is there a last step" - it has to be asked of
+    // every row. Drives the thinking dots, which stand for the part of the
+    // work no tool announces: the model composing the reply.
+    botStepsRunning() {
+      return this.botSteps.some(step => step.running);
     },
 
     clearBotStep() {

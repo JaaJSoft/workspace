@@ -21,6 +21,7 @@ def tool(
     badge_running_label: str | None = None,
     detail_key: str | None = None,
     params: type[BaseModel] | None = None,
+    concurrent: bool = False,
 ):
     """Mark a :class:`ToolProvider` method as an AI chat tool.
 
@@ -31,6 +32,15 @@ def tool(
     *badge_label* is past tense ("Generated image"): it labels a call that
     has already run. *badge_running_label* is the present participle
     ("Generating image") shown while the call is still in flight.
+
+    *concurrent* lets the tool loop run this tool alongside its neighbours
+    in the same round instead of waiting its turn. Set it only where the
+    calls are independent: the handler must be safe off the main thread, must
+    not read what a call beside it produces, and must let the caller put
+    whatever it leaves behind back in call order. Reading tools are the
+    usual case; a paid one qualifies only when the wait it saves is worth
+    losing the exact ordering of its budget checks, which today is
+    generate_image alone. Everything else stays sequential, the default.
     """
 
     def decorator(fn):
@@ -40,6 +50,7 @@ def tool(
             "badge_running_label": badge_running_label,
             "detail_key": detail_key,
             "params": params,
+            "concurrent": concurrent,
         }
         return fn
 
@@ -83,6 +94,7 @@ class _ToolInfo:
     badge_running_label: str
     detail_key: str | None = None
     params_class: type[BaseModel] | None = None
+    concurrent: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +146,7 @@ class ToolRegistry:
                 badge_running_label=meta["badge_running_label"] or label,
                 detail_key=meta["detail_key"],
                 params_class=params_cls,
+                concurrent=meta["concurrent"],
             )
             with self._lock:
                 if info.name in self._tools:
@@ -144,6 +157,10 @@ class ToolRegistry:
 
     def get_all(self) -> list[_ToolInfo]:
         return list(self._tools.values())
+
+    def concurrent_names(self) -> frozenset[str]:
+        """Names of the tools a round may run in parallel with each other."""
+        return frozenset(t.name for t in self._tools.values() if t.concurrent)
 
     def get_definitions(self) -> list[dict]:
         """Return OpenAI function-calling definitions for all tools."""

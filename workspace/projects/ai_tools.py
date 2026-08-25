@@ -186,6 +186,7 @@ class ProjectsToolProvider(ToolProvider):
         badge_icon="📋",
         badge_label="Listed projects",
         badge_running_label="Listing projects",
+        concurrent=True,
     )
     def list_projects(self, args, user, bot, conversation_id, context):
         """List the user's projects with their board statuses (column names). \
@@ -220,6 +221,7 @@ project name or status name — statuses are per-project, never guess them."""
         badge_label="Checked tasks",
         badge_running_label="Checking tasks",
         params=ListMyTasksParams,
+        concurrent=True,
     )
     def list_my_tasks(self, args, user, bot, conversation_id, context):
         """List the open tasks assigned to the user, most urgent first \
@@ -237,8 +239,13 @@ by project or due window. For tasks assigned to other people use search_tasks.""
         if args.due_within_days > 0:
             from django.utils import timezone
 
-            cutoff = timezone.localdate() + timedelta(days=args.due_within_days)
-            qs = qs.filter(due_date__lte=cutoff)
+            from workspace.users.services.settings import get_user_timezone
+
+            # The user's own timezone, not the active one: nothing activates
+            # theirs in a Celery worker, and a tool running off the main
+            # thread would not see it if anything did.
+            today = timezone.localdate(timezone=get_user_timezone(user))
+            qs = qs.filter(due_date__lte=today + timedelta(days=args.due_within_days))
         limit = max(1, min(args.limit, 50))
         tasks = qs.prefetch_related("assignees")[:limit]
         results = [_task_entry(t) for t in tasks]
@@ -252,6 +259,7 @@ by project or due window. For tasks assigned to other people use search_tasks.""
         badge_running_label="Searching tasks",
         detail_key="query",
         params=SearchTasksParams,
+        concurrent=True,
     )
     def search_tasks(self, args, user, bot, conversation_id, context):
         """Search tasks by keyword or by reference (e.g. WR-42) across every \

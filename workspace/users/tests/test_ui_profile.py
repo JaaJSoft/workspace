@@ -136,3 +136,21 @@ class ProfileHeatmapTests(TestCase):
             self.client.get(reverse("users_ui:profile"))
             self.client.get(reverse("users_ui:profile"))
             self.assertEqual(mock_registry.get_daily_counts.call_count, 1)
+
+
+class SettingsQueryBudgetTests(TestCase):
+    """The settings page render, on a cold cache."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="settingsbudget", password="pw")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_settings_render_stays_within_its_query_budget(self):
+        # 2 of these belong to the storage gauge (usage aggregate + quota row).
+        with self.assertNumQueries(24):
+            resp = self.client.get(reverse("users_ui:settings"))
+        self.assertEqual(resp.status_code, 200)

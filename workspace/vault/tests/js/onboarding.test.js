@@ -203,6 +203,10 @@ test('a sealed account reaches the kit step', async () => {
   assert.equal(app.step, 3);
   assert.equal(app.error, '');
   assert.ok(app.secretText);
+  // The first vault is created on this same page, right after the kit - it
+  // needs a signer and the account's own key-exchange public key.
+  assert.ok(app.vaultSigner);
+  assert.ok(app.accountKexPublic);
 });
 
 test('an init the server refuses does not reach the kit step', async () => {
@@ -255,6 +259,12 @@ test('a retry after a lost finalize shows the key rather than stranding it', asy
   assert.equal(app.step, 3);
   assert.equal(app.secretText, secret, 'the key on screen must be the sealed one');
   assert.equal(app.error, '');
+  // The second attempt never generated new keys - it got a 409 from init
+  // before reaching that point - so there is nothing here to build a signer
+  // from, even though the envelope this call confirms is the first
+  // attempt's. finish() is the one that must cope with that gap.
+  assert.equal(app.vaultSigner, null);
+  assert.equal(app.accountKexPublic, null);
 });
 
 test('an envelope sealed by another tab never shows this page key', async () => {
@@ -306,6 +316,10 @@ test('a lost finalize response still shows the key when the account is active', 
   await app.generateAndSeal();
   assert.equal(app.step, 3);
   assert.equal(app.error, '');
+  // This recovery still ran inside the same attempt that drew the keys, so
+  // unlike the cross-attempt retry above, the signer is there to build.
+  assert.ok(app.vaultSigner);
+  assert.ok(app.accountKexPublic);
 });
 
 test('a lost finalize response with nothing committed says so', async () => {
@@ -549,10 +563,29 @@ test('leaving the page is guarded until the key is acknowledged', async () => {
 });
 
 // --- finishing onboarding --------------------------------------------------
+//
+// finish() hands off to the vault screen by navigating there. $root and
+// location are stubbed here so a finish() that never calls
+// window.location.assign fails these tests instead of disappearing into
+// finish()'s own catch - which every test below did, silently, before this
+// file stubbed either.
+function finishing(extra = {}) {
+  const navigated = [];
+  const app = component({
+    location: { assign: (url) => navigated.push(url) },
+    ...extra,
+  });
+  app.$root = { dataset: { vaultUrl: '/vault/' } };
+  // Stands in for what generateAndSeal's success path leaves behind - these
+  // tests exercise finish() on its own, without going through it.
+  app.vaultSigner = { sign: async () => new Uint8Array(1) };
+  app.accountKexPublic = new Uint8Array(32);
+  return { app, navigated };
+}
 
 test('acknowledging the kit creates the first vault', async () => {
   const created = [];
-  const app = component({
+  const { app, navigated } = finishing({
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
     VaultApi: { createVault: async (body) => { created.push(body); return body; } },
   });
@@ -560,11 +593,12 @@ test('acknowledging the kit creates the first vault', async () => {
   app.acknowledged = true;
   await app.finish();
   assert.equal(created.length, 1);
+  assert.deepEqual(navigated, ['/vault/']);
 });
 
 test('the first vault is called Personal', async () => {
   let name = null;
-  const app = component({
+  const { app } = finishing({
     buildVaultCreateRequest: async (session, vaultName) => { name = vaultName; return { uuid: 'v1' }; },
     VaultApi: { createVault: async (body) => body },
   });
@@ -575,7 +609,7 @@ test('the first vault is called Personal', async () => {
 });
 
 test('a failed first vault keeps the user on the kit screen', async () => {
-  const app = component({
+  const { app, navigated } = finishing({
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
     VaultApi: { createVault: async () => { throw new Error('refused'); } },
   });
@@ -584,11 +618,14 @@ test('a failed first vault keeps the user on the kit screen', async () => {
   await app.finish();
   assert.equal(app.step, 3);
   assert.match(app.error, /vault could not be created/i);
+  // A refused creation must not send the user anywhere: the kit screen is
+  // the only place that can still show the recovery key.
+  assert.deepEqual(navigated, []);
 });
 
 test('retrying the first vault never touches the account endpoints again', async () => {
   const posted = [];
-  const app = component({
+  const { app } = finishing({
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
     VaultApi: { createVault: async () => { throw new Error('refused'); } },
     fetch: async (url) => { posted.push(url); return { ok: true, status: 201, json: async () => ({}) }; },
@@ -605,7 +642,7 @@ test('retrying the first vault never touches the account endpoints again', async
 
 test('the recovery key is not stored unless the box is ticked', async () => {
   const stored = new Map();
-  const app = component({
+  const { app } = finishing({
     localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
     VaultApi: { createVault: async () => ({}) },
@@ -619,11 +656,47 @@ test('the recovery key is not stored unless the box is ticked', async () => {
 
 test('ticking the box stores the key in the spelling the sheet shows', async () => {
   const stored = new Map();
-  const app = component({
+  const { app } = finishing({
     localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
     VaultApi: { createVault: async () => ({}) },
   });
+  app.step = 3;
+  app.acknowledged = true;
+  app.remember = true;
+  app.secretText = 'A'.repeat(53);
+  await app.finish();
+  assert.equal(stored.get('vault.secret-key'), app.groupedSecret());
+});
+
+test('with no signer for this identity, finish sends the user to the vault without attempting to create one', async () => {
+  // The lost-response recovery path in generateAndSeal can land here with
+  // vaultSigner still null - a retry that found the account active without
+  // generating new keys of its own. The account is real either way; only
+  // the vault creation this step would normally do is unavailable, and a
+  // retry that can never succeed must not trap the user on this screen.
+  let attempted = false;
+  const { app, navigated } = finishing({
+    buildVaultCreateRequest: async () => { attempted = true; return { uuid: 'v1' }; },
+    VaultApi: { createVault: async () => { attempted = true; return {}; } },
+  });
+  app.vaultSigner = null;
+  app.accountKexPublic = null;
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(attempted, false);
+  assert.deepEqual(navigated, ['/vault/']);
+  assert.equal(app.error, '');
+});
+
+test('with no signer for this identity, the recovery key is still remembered if ticked', async () => {
+  const stored = new Map();
+  const { app } = finishing({
+    localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
+  });
+  app.vaultSigner = null;
+  app.accountKexPublic = null;
   app.step = 3;
   app.acknowledged = true;
   app.remember = true;

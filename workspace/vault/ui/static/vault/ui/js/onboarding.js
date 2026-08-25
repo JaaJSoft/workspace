@@ -208,6 +208,18 @@ window.vaultOnboarding = function vaultOnboarding() {
       this.busy = true;
       this.error = '';
       try {
+        // A user can reach this step through the lost-response recovery path
+        // in generateAndSeal, which only rebuilds the signer when the same
+        // attempt drew the keys - a retry that found the account active
+        // without generating anything holds none. The identity is active
+        // either way: send them to the vault screen, which can still create
+        // one, rather than parking them behind a retry that can never
+        // succeed because there is nothing left here to sign with.
+        if (!this.vaultSigner || !this.accountKexPublic) {
+          this.rememberOnThisDevice();
+          window.location.assign(this.$root.dataset.vaultUrl);
+          return;
+        }
         var body = await window.buildVaultCreateRequest(this.vaultSession(), 'Personal');
         await window.VaultApi.createVault(body);
         this.rememberOnThisDevice();
@@ -235,6 +247,18 @@ window.vaultOnboarding = function vaultOnboarding() {
           );
         },
       };
+    },
+
+    // Shared by the direct success path below and its own lost-response
+    // recovery branch: both confirm the same envelope landed, and both need
+    // a signer and the account's own key-exchange public key for the vault
+    // this step is about to create.
+    async captureVaultSigningMaterial(sigSeed, kexPrivate, kexPublic) {
+      var V = window.VaultCrypto;
+      this.vaultSigner = await V.importSigner(sigSeed);
+      this.accountKexPublic = V.decodePublicKey(V.fromBase64Url(kexPublic));
+      sigSeed.fill(0);
+      kexPrivate.fill(0);
     },
 
     // The whole sealing flow, in the order the norm sets out: init for the
@@ -350,10 +374,7 @@ window.vaultOnboarding = function vaultOnboarding() {
         // The first vault is sealed on this same page, right after the kit -
         // it needs a signer and the account's own key-exchange public key,
         // neither of which forgetSecrets() below may keep.
-        this.vaultSigner = await V.importSigner(sigSeed);
-        this.accountKexPublic = V.decodePublicKey(V.fromBase64Url(kexPublic));
-        sigSeed.fill(0);
-        kexPrivate.fill(0);
+        await this.captureVaultSigningMaterial(sigSeed, kexPrivate, kexPublic);
         this.step = 3;
         this.forgetSecrets();
       } catch (err) {
@@ -362,6 +383,14 @@ window.vaultOnboarding = function vaultOnboarding() {
         // is whether the key on the server is the one we sent.
         var landed = await this.sealedByThisPage();
         if (landed === 'ours') {
+          // sigSeed only exists when this very attempt is the one that drew
+          // the keys - a retry that got a 409 before generating anything
+          // holds none, even though an earlier attempt's envelope is the one
+          // now confirmed active. finish() falls back to the vault screen
+          // itself when it finds no signer here.
+          if (sigSeed) {
+            await this.captureVaultSigningMaterial(sigSeed, kexPrivate, kexPublic);
+          }
           this.step = 3;
           this.forgetSecrets();
           return;

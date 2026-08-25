@@ -315,6 +315,16 @@ window.vaultOnboarding = function vaultOnboarding() {
         } else if (conflict && !this.sentKexPublic) {
           this.error =
             'Your vault has already been set up. Reload this page to open it.';
+        } else if (conflict) {
+          // 409 means an active identity exists, and sentKexPublic means this
+          // page sent an envelope - so the probe above is the only thing that
+          // could have said whose. It could not answer, which leaves exactly
+          // one certainty: something was saved. Telling the user otherwise
+          // walks them off the only screen that can still show the key.
+          this.error =
+            'Your vault is already set up, but we could not confirm from ' +
+            'here whether this page holds its recovery key. Do not close ' +
+            'this page - try again.';
         } else {
           this.error =
             'Your vault could not be created. Nothing was saved; try again.';

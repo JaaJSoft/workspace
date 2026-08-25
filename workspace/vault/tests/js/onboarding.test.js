@@ -323,6 +323,37 @@ test('a lost finalize response with nothing committed says so', async () => {
   assert.match(app.error, /Nothing was saved/);
 });
 
+test('a retry that finds the account active never claims nothing was saved', async () => {
+  // A 409 from init proves an ACTIVE identity exists; a non-empty
+  // sentKexPublic proves this page is the one that sent an envelope. When the
+  // probe that would tell those two apart cannot answer - a throttled or
+  // unreachable /envelope - the one thing certainly false is "nothing was
+  // saved", and it is the sentence that sends the user away from the only
+  // screen that can still show them the recovery key.
+  var started = 0;
+  const { app } = sealing({
+    responses: {
+      '/api/v1/vault/account/init': () => {
+        started += 1;
+        return started === 1 ? INIT_OK : { ok: false, status: 409 };
+      },
+      '/api/v1/vault/account/finalize': () => {
+        throw new TypeError('network error');
+      },
+      '/api/v1/vault/account/envelope': () => {
+        throw new TypeError('network error');
+      },
+    },
+  });
+  await app.generateAndSeal();
+  assert.ok(app.sentKexPublic);
+
+  await app.generateAndSeal();
+  assert.equal(app.step, 1);
+  assert.doesNotMatch(app.error, /Nothing was saved/);
+  assert.match(app.error, /do not close this page/i);
+});
+
 test('a retry keeps the secret the first attempt may already have sealed', async () => {
   // init is idempotent while the identity is pending, so the retry derives the
   // same keys - from the same secret. A fresh draw would put a key on screen

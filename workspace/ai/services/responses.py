@@ -4,27 +4,48 @@ from django.db import transaction
 from django.utils import timezone
 
 from workspace.ai.services.llm import clean_llm_content
+from workspace.ai.services.speech import audio_duration_seconds
 
 logger = logging.getLogger(__name__)
 
 
-def _describe_image(data):
-    """Return (label, mime_type, category, extension) for generated image bytes.
+def _describe_media(data, group, fallback):
+    """Return (label, mime_type, category, extension) for bytes a tool produced.
 
-    Image backends return whatever format their model produces -- PNG, JPEG or
-    WebP -- regardless of what was requested, so the type is read from the bytes
-    instead of assumed.
+    A media backend returns whatever format its model produces -- PNG, JPEG or
+    WebP for an image, WAV for speech -- regardless of what was requested, so
+    the type is read from the bytes instead of assumed. Bytes Magika cannot
+    place in *group* keep *fallback* rather than being stored as an opaque
+    blob, which would drop the attachment out of the media gallery and out of
+    the viewer that makes it playable.
     """
     from workspace.files.services.detection import detect_from_bytes, get_label_info
 
     detection = detect_from_bytes(data)
-    if detection.group != "image":
-        # Magika could not place the bytes in the image group. Keep the PNG
-        # assumption rather than storing them as an opaque blob, which would
-        # drop the attachment out of the media gallery and the image viewer.
-        return "unknown", "image/png", "unknown", ".png"
-    extensions = get_label_info(detection.label).get("extensions") or ["png"]
+    if detection.group != group:
+        return fallback
+    default_extension = fallback[3].removeprefix(".")
+    extensions = get_label_info(detection.label).get("extensions") or [
+        default_extension
+    ]
     return detection.label, detection.mime_type, detection.group, f".{extensions[0]}"
+
+
+def _describe_image(data):
+    return _describe_media(data, "image", ("unknown", "image/png", "unknown", ".png"))
+
+
+def _describe_audio(data):
+    return _describe_media(data, "audio", ("wav", "audio/wav", "audio", ".wav"))
+
+
+def produced_media(tool_context) -> bool:
+    """Whether tools left media for the reply to carry.
+
+    A reply that is only an image or only a voice message has an empty body
+    on purpose, and must not be mistaken for the model answering nothing.
+    """
+    return bool(tool_context.get("images") or tool_context.get("voices"))
 
 
 @transaction.atomic
@@ -37,7 +58,7 @@ def post_bot_message(
     raw_messages=None,
     tool_data=None,
 ):
-    """Create the bot message, attach images, update unread counts, notify, and complete AITask.
+    """Create the bot message, attach its media, update unread counts, notify, and complete AITask.
 
     Returns (body, bot_message).
     """
@@ -107,6 +128,31 @@ def post_bot_message(
             type=label,
             category=category,
             size=len(data),
+        )
+        att.file.save(filename, ContentFile(data), save=False)
+        att.save()
+        created_attachments.append(att)
+
+    # Voice messages recorded by tools during this response. The spoken text
+    # is stored as the attachment's description: it is what later turns read
+    # back instead of the audio, and the caption task never runs on audio.
+    voices = sorted(
+        tool_context.get("voices", []), key=lambda voice: voice.get("position", 0)
+    )
+    for i, voice in enumerate(voices):
+        data = voice["data"]
+        label, mime_type, category, extension = _describe_audio(data)
+        suffix = f"_{i + 1}" if len(voices) > 1 else ""
+        filename = f"voice_message{suffix}{extension}"
+        att = MessageAttachment(
+            message=bot_message,
+            original_name=filename,
+            mime_type=mime_type,
+            type=label,
+            category=category,
+            size=len(data),
+            duration_seconds=audio_duration_seconds(data),
+            ai_description=voice.get("text", ""),
         )
         att.file.save(filename, ContentFile(data), save=False)
         att.save()

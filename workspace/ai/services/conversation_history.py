@@ -81,6 +81,31 @@ def _image_note(att):
     return f"[image: {att.original_name} - {att.ai_description}]"
 
 
+def _audio_notes(atts, is_bot):
+    """Textual stand-ins for the voice messages of one chat message.
+
+    Audio never reaches the model - the chat model has no ears. What the bot
+    said out loud is replayed from the text the speech tool stored on the
+    attachment, so it does not repeat itself; a voice message from the user
+    is only announced, since nothing transcribes it yet and silence would
+    read as an empty message.
+    """
+    notes = []
+    for att in atts:
+        if not att.is_audio:
+            continue
+        if not is_bot:
+            notes.append(
+                "[The user sent a voice message. You cannot listen to it — "
+                "say so if it matters.]"
+            )
+        elif att.ai_description:
+            notes.append(f'[Voice message you sent: "{att.ai_description}"]')
+        else:
+            notes.append("[You sent a voice message here.]")
+    return notes
+
+
 def _visual_window(msgs_newest_first, att_cache):
     """Pick the last 2 messages (any author) with visual attachments.
 
@@ -185,10 +210,10 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
         msgs_to_use = all_msgs
 
     vision = bot_profile.supports_vision
-    _att_cache = {}
+    # Populated whatever the bot's vision support: voice messages are read
+    # from it too, and hearing has nothing to do with seeing.
+    _att_cache = {msg.uuid: list(msg.attachments.all()) for msg in msgs_to_use}
     if vision:
-        for msg in msgs_to_use:
-            _att_cache[msg.uuid] = list(msg.attachments.all())
         # Only defined (and only read) when vision is on.
         pixel_msg_uuids, allowed_att_uuids = _visual_window(msgs_to_use, _att_cache)
 
@@ -225,9 +250,11 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
             media_parts, video_descriptions, caption_notes = _collect_media(
                 msg, is_bot, in_window, allowed_att_uuids, _att_cache
             )
+        audio_notes = _audio_notes(_att_cache.get(msg.uuid, []), is_bot)
         body_text = body
-        if caption_notes and not is_bot:
-            body_text = (body + "\n" if body else "") + "\n".join(caption_notes)
+        inline_notes = caption_notes + audio_notes if not is_bot else []
+        if inline_notes:
+            body_text = (body + "\n" if body else "") + "\n".join(inline_notes)
 
         # Reconstruct tool call history for bot messages
         if is_bot and msg.tool_data:
@@ -250,6 +277,8 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
             history.append({"role": "assistant", "content": body_text})
             if media_parts or caption_notes:
                 history.append(_assistant_images_message(media_parts, caption_notes))
+            if audio_notes:
+                history.append({"role": "user", "content": "\n".join(audio_notes)})
             continue
 
         if video_descriptions:
@@ -262,6 +291,8 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
             history.append({"role": "assistant", "content": body_text})
             if media_parts or caption_notes:
                 history.append(_assistant_images_message(media_parts, caption_notes))
+            if audio_notes:
+                history.append({"role": "user", "content": "\n".join(audio_notes)})
         elif media_parts:
             content = []
             if body_text:

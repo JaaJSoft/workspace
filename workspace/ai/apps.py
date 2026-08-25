@@ -50,6 +50,11 @@ class AIConfig(AppConfig):
 
             tool_registry.register_provider(ImageToolProvider())
 
+        if getattr(settings, "AI_TTS_MODEL", ""):
+            from workspace.ai.tools import VoiceToolProvider
+
+            tool_registry.register_provider(VoiceToolProvider())
+
         if getattr(settings, "SEARXNG_URL", ""):
             from workspace.ai.tools import WebToolProvider
 

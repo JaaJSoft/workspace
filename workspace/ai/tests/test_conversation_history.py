@@ -352,3 +352,101 @@ class ReplayBudgetTests(TestCase):
         self.assertGreaterEqual(
             min(len(c) for c in tool_contents(self._history())), 500
         )
+
+
+def attach_voice(message, text="", name="voice_message.wav"):
+    data = b"RIFFfake"
+    att = MessageAttachment(
+        message=message,
+        original_name=name,
+        mime_type="audio/wav",
+        type="wav",
+        category="audio",
+        size=len(data),
+        duration_seconds=1.5,
+        ai_description=text,
+    )
+    att.file.save(name, ContentFile(data), save=False)
+    att.save()
+    return att
+
+
+class VoiceMessageHistoryTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="vocal", email="vo@test.com", password="pw"
+        )
+        self.bot_user = User.objects.create_user(
+            username="vocalbot", email="vob@test.com", password="pw"
+        )
+        self.bot_profile = BotProfile.objects.create(user=self.bot_user)
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+
+    def _history(self):
+        history, _ = build_conversation_history(
+            self.conv.pk, self.bot_profile, self.user
+        )
+        return history
+
+    def test_bot_voice_message_is_replayed_as_the_text_it_spoke(self):
+        m = Message.objects.create(
+            conversation=self.conv, author=self.bot_user, body=""
+        )
+        attach_voice(m, text="Bonjour Pierre.")
+
+        history = self._history()
+
+        self.assertIn('[Voice message you sent: "Bonjour Pierre."]', str(history))
+
+    def test_bot_voice_note_never_rides_in_the_assistant_turn(self):
+        # An assistant turn holding a bracketed marker teaches the model to
+        # write markers of its own instead of calling the tool.
+        m = Message.objects.create(
+            conversation=self.conv, author=self.bot_user, body="voilà"
+        )
+        attach_voice(m, text="Bonjour Pierre.")
+
+        history = self._history()
+
+        assistant = [e for e in history if e.get("role") == "assistant"]
+        self.assertNotIn("Voice message", str(assistant))
+
+    def test_a_tool_round_turn_still_gets_its_voice_note(self):
+        m = Message.objects.create(
+            conversation=self.conv,
+            author=self.bot_user,
+            body="",
+            tool_data=[tool_round("c1", "ok", name="send_voice_message")],
+        )
+        attach_voice(m, text="Bonjour Pierre.")
+
+        self.assertIn(
+            '[Voice message you sent: "Bonjour Pierre."]', str(self._history())
+        )
+
+    def test_user_voice_message_is_announced_as_unlistenable(self):
+        m = Message.objects.create(conversation=self.conv, author=self.user, body="")
+        attach_voice(m)
+
+        history = self._history()
+
+        note = [e for e in history if "voice message" in str(e.get("content", ""))]
+        self.assertEqual(len(note), 1)
+        self.assertEqual(note[0]["role"], "user")
+        self.assertIn("cannot listen", note[0]["content"])
+
+    def test_a_non_vision_bot_still_hears_about_voice_messages(self):
+        # Voice notes are not vision: a bot with images turned off must
+        # still know it already answered out loud.
+        self.bot_profile.supports_vision = False
+        self.bot_profile.save()
+        m = Message.objects.create(
+            conversation=self.conv, author=self.bot_user, body=""
+        )
+        attach_voice(m, text="Bonjour Pierre.")
+
+        self.assertIn(
+            '[Voice message you sent: "Bonjour Pierre."]', str(self._history())
+        )

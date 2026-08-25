@@ -2,6 +2,8 @@
 
 import os
 
+from .env import env_list
+
 AI_API_KEY = os.getenv("AI_API_KEY", "")
 AI_BASE_URL = os.getenv("AI_BASE_URL") or None  # For Ollama, LM Studio, etc.
 AI_MODEL = os.getenv("AI_MODEL", "gpt-5")
@@ -64,3 +66,44 @@ SEARXNG_URL = os.getenv("SEARXNG_URL", "")  # e.g. http://searxng:8080
 SEARXNG_BLOCKED_DOMAINS = os.getenv(
     "SEARXNG_BLOCKED_DOMAINS", ""
 )  # comma-separated, e.g. "evil.com,spam.org"
+
+# Text-to-speech for bot voice messages. The voice is designed by a free-text
+# instruction rather than picked from a fixed catalogue, so AI_TTS_BASE_URL must
+# point at a route that forwards the request body untouched: an OpenAI-standard
+# proxy drops every non-OpenAI field, which silently reduces every bot to the
+# same voice. Pointing straight at the speech server is the simplest way to get
+# that, and it needs no key of its own - AI_API_KEY is sent only when set.
+AI_TTS_MODEL = os.getenv("AI_TTS_MODEL", "")
+AI_TTS_BASE_URL = os.getenv("AI_TTS_BASE_URL") or None
+# What the speech model can be told it is reading, spelled out in English and
+# lowercase. The default is what qwen3-voicedesign accepts, measured against
+# it; another model takes another list, and naming one it does not know is a
+# hard error, so this is the list a deployment has to keep true. A language
+# outside it is not refused - it is simply not announced, and the model
+# detects it from the text.
+AI_TTS_LANGUAGES = env_list("AI_TTS_LANGUAGES") or [
+    "french",
+    "english",
+    "spanish",
+    "german",
+    "italian",
+    "portuguese",
+    "russian",
+    "japanese",
+    "korean",
+    "chinese",
+]
+AI_TTS_VOICE = os.getenv(
+    "AI_TTS_VOICE",
+    "A warm, natural adult voice with a calm, friendly delivery.",
+)  # voice of a bot whose profile does not describe one
+AI_TTS_MAX_CHARS = int(
+    os.getenv("AI_TTS_MAX_CHARS", "700")
+)  # characters per voice message; generation takes about as long as the audio
+AI_TTS_TIMEOUT = int(os.getenv("AI_TTS_TIMEOUT", "180"))  # seconds per synthesis call
+AI_TTS_MAX_ATTEMPTS = int(
+    os.getenv("AI_TTS_MAX_ATTEMPTS", "3")
+)  # calls per voice message before giving up (1 = no retry)
+AI_TTS_RETRY_DELAY = float(
+    os.getenv("AI_TTS_RETRY_DELAY", "2")
+)  # seconds before the first retry, doubled after each attempt

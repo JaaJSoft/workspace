@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+import threading
 import uuid as uuid_lib
 from datetime import UTC, datetime
 from typing import Literal
@@ -14,6 +15,7 @@ from workspace.common.limits import clamp_limit
 from workspace.common.logging import scrub
 
 from .models import UserMemory
+from .services.call_order import call_position
 from .tool_registry import ToolProvider, tool
 
 logger = logging.getLogger(__name__)
@@ -289,6 +291,9 @@ def _image_tool_payload(image_data, text):
     )
 
 
+_image_failures_lock = threading.Lock()
+
+
 def _image_failure_message(tool_name, prompt, exc, context):
     """Tool result for an image the backend refused to produce.
 
@@ -299,10 +304,16 @@ def _image_failure_message(tool_name, prompt, exc, context):
     to stop, since nothing else caps how many times a model can call a tool
     within a reply.
     """
-    tried = context.setdefault("failed_image_prompts", [])
-    repeated = any(p.strip().lower() == prompt.strip().lower() for p in tried)
-    tried.append(prompt)
-    exhausted = len(tried) >= settings.AI_IMAGE_FAILURE_BUDGET
+    # Read and appended to as one step: images of a round are generated in
+    # parallel, and both answers below are decided from what the list holds
+    # at that moment. The budget is still read after the fact, so a round
+    # already in flight can overshoot it by its own width - what it caps is
+    # how long a model may keep coming back, not the calls it has made.
+    with _image_failures_lock:
+        tried = context.setdefault("failed_image_prompts", [])
+        repeated = any(p.strip().lower() == prompt.strip().lower() for p in tried)
+        tried.append(prompt)
+        exhausted = len(tried) >= settings.AI_IMAGE_FAILURE_BUDGET
 
     head = f"Error: image failed after {exc.attempts} attempt(s) — {exc}."
     tail = (
@@ -644,6 +655,11 @@ class ImageToolProvider(ToolProvider):
         badge_running_label="Generating image",
         detail_key="prompt",
         params=GenerateImageParams,
+        # The exception to "nothing that bills runs in parallel": four images
+        # asked for in one breath are the longest wait in the product, and
+        # each call is independent of its siblings. What it costs is that a
+        # round already in flight can overshoot the failure budget.
+        concurrent=True,
     )
     def generate_image(self, args, user, bot, conversation_id, context):
         """Generate a brand-new image from a text description. \
@@ -674,6 +690,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
                 "data": image_data,
                 "prompt": prompt,
                 "size": size,
+                "position": call_position(),
             }
         )
 
@@ -688,6 +705,9 @@ Do NOT use this to modify an existing image — use edit_image instead."""
         badge_running_label="Editing image",
         detail_key="prompt",
         params=EditImageParams,
+        # Stays sequential where generate_image does not: it edits the last
+        # image of the turn, so running it beside the call that produces that
+        # image would pick a source by race.
     )
     def edit_image(self, args, user, bot, conversation_id, context):
         """Edit an existing image from the conversation based on a text instruction. \
@@ -750,6 +770,7 @@ Do NOT use this to create an image from scratch — use generate_image instead."
                 "data": image_data,
                 "prompt": prompt,
                 "size": size,
+                "position": call_position(),
             }
         )
 

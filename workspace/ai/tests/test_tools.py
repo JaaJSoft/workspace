@@ -1,5 +1,7 @@
 import inspect
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from importlib import import_module
 from types import SimpleNamespace
@@ -459,13 +461,17 @@ class GenerateImageVisionTests(TestCase):
 class ConcurrentToolFlagTests(TestCase):
     """Which tools the loop is allowed to run alongside each other."""
 
-    # Everything that writes, sends, schedules, bills or waits on the user.
-    # Running two of these at once, or one of them out of the order the model
-    # asked for, is a side effect nobody requested.
+    # Everything that writes, sends, schedules or waits on the user. Running
+    # two of these at once, or one of them out of the order the model asked
+    # for, is a side effect nobody requested.
+    #
+    # generate_image is deliberately absent: it bills, but its calls are
+    # independent of one another and four images in one breath are the
+    # longest wait in the product. edit_image stays here - it edits what an
+    # earlier call produced, so it cannot share a batch with it.
     SIDE_EFFECTING = {
         "save_memory",
         "delete_memory",
-        "generate_image",
         "edit_image",
         "create_agent_goal",
         "update_agent_goal",
@@ -510,7 +516,13 @@ class ConcurrentToolFlagTests(TestCase):
     def test_reading_tools_are_marked_concurrent(self):
         flags = self._declared_flags()
 
-        for name in ("web_search", "read_webpage", "get_weather", "search_tasks"):
+        for name in (
+            "web_search",
+            "read_webpage",
+            "get_weather",
+            "search_tasks",
+            "generate_image",
+        ):
             self.assertTrue(flags[name], f"{name} should run alongside its neighbours")
 
     def test_a_tool_is_sequential_unless_it_says_otherwise(self):
@@ -528,3 +540,81 @@ class ConcurrentToolFlagTests(TestCase):
         registry.register_provider(Provider())
 
         self.assertEqual(registry.concurrent_names(), frozenset({"read"}))
+
+
+class ImageParallelismTests(TestCase):
+    """What generating several images at once must not break."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="par-user", email="pu@test.com", password="pw"
+        )
+        self.bot = User.objects.create_user(
+            username="par-bot", email="pb@test.com", password="pw"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+
+    @override_settings(AI_IMAGE_MODEL="img-model")
+    def test_a_generated_image_records_where_it_belongs_in_the_reply(self):
+        from workspace.ai.services.call_order import set_call_position
+
+        context = {}
+        set_call_position(3)
+        with patch(
+            "workspace.ai.services.image.ai_generate_image", return_value=b"IMG"
+        ):
+            ImageToolProvider().generate_image(
+                GenerateImageParams(prompt="a cat"),
+                self.user,
+                self.bot,
+                str(self.conv.pk),
+                context,
+            )
+        set_call_position(0)
+
+        self.assertEqual(context["images"][0]["position"], 3)
+
+    @override_settings(AI_IMAGE_FAILURE_BUDGET=8)
+    def test_failures_landing_at_once_each_see_their_own_count(self):
+        """The budget is read and written as one step.
+
+        Every failure has to see a different count, or the one that lands on
+        the budget reads a number another call has yet to write: no answer
+        tells the bot to stop, and a backend that is down keeps being asked.
+        """
+        from workspace.ai.services.image import ImageGenerationError
+        from workspace.ai.tools import _image_failure_message
+
+        context = {}
+        exc = ImageGenerationError("upstream down", attempts=3)
+        prompts = [f"prompt {i}" for i in range(8)]
+        start = threading.Barrier(len(prompts), timeout=10)
+
+        def fail(prompt):
+            start.wait()
+            return _image_failure_message("generate_image", prompt, exc, context)
+
+        with ThreadPoolExecutor(max_workers=len(prompts)) as pool:
+            messages = list(pool.map(fail, prompts))
+
+        self.assertEqual(sorted(context["failed_image_prompts"]), sorted(prompts))
+        exhausted = [m for m in messages if "Too many image failures" in m]
+        self.assertEqual(len(exhausted), 1)
+
+    @override_settings(AI_IMAGE_FAILURE_BUDGET=3)
+    def test_the_budget_still_ends_a_bot_that_keeps_failing(self):
+        from workspace.ai.services.image import ImageGenerationError
+        from workspace.ai.tools import _image_failure_message
+
+        context = {}
+        exc = ImageGenerationError("upstream down", attempts=3)
+
+        messages = [
+            _image_failure_message("generate_image", f"prompt {i}", exc, context)
+            for i in range(3)
+        ]
+
+        self.assertNotIn("Too many image failures", messages[0])
+        self.assertIn("Too many image failures", messages[-1])

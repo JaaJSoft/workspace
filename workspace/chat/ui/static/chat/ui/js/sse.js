@@ -209,7 +209,7 @@ window.chatSseMixin = function chatSseMixin() {
     //
     // Two kinds arrive: a call starting, carrying its server-rendered
     // summary line (same partial as the final timeline row), and a call
-    // ending, carrying its id alone. A round runs its read-only tools
+    // ending, carrying its id alone. A round runs independent tools
     // together, so the one that ends is not necessarily the last one shown.
     handleSSEBotStep(detail) {
       if (!this.activeConversation || detail.conversation_id !== this.activeConversation.uuid) return;

@@ -42,7 +42,7 @@ test('bot_step raises the typing indicator and stores the step as running', () =
 });
 
 test('a completion ends its own row, not the last one', () => {
-  // A round dispatches its read-only tools together: the call that ends
+  // A round dispatches independent tools together: the call that ends
   // first is rarely the one shown last.
   const { app } = buildApp();
   app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Read A</span>' });

@@ -8,6 +8,7 @@ from django.conf import settings
 from django.db import connections
 
 from workspace.ai.metrics import AI_TOOL_CALLS, AI_TOOL_LOOP_STOPS, AI_TOOL_ROUNDS
+from workspace.ai.services.call_order import set_call_position
 from workspace.ai.services.llm import (
     build_tool_content,
     call_llm,
@@ -59,6 +60,7 @@ class _PlannedCall:
 
     tool_call: object
     metric_tool: str
+    position: int = 0
     refusal: str | None = None
     result: object = None
     error: BaseException | None = None
@@ -67,7 +69,7 @@ class _PlannedCall:
 def _batch_calls(tool_calls, concurrent_names, limit):
     """Split a round's calls into batches that may run in one dispatch.
 
-    Consecutive read-only calls share a batch, up to *limit*; every other
+    Consecutive independent calls share a batch, up to *limit*; every other
     call is a batch of its own, which keeps a write in the order the model
     asked for it and keeps every read before it strictly ahead of it.
     """
@@ -87,7 +89,7 @@ def _batch_calls(tool_calls, concurrent_names, limit):
         yield batch
 
 
-def _execute(tool_call, human_user, bot_user, conversation_id, tool_context):
+def _execute(entry, human_user, bot_user, conversation_id, tool_context):
     """Run one tool call and report its end to the conversation's streams.
 
     The report is sent from wherever the call ran, as soon as it returns,
@@ -96,6 +98,11 @@ def _execute(tool_call, human_user, bot_user, conversation_id, tool_context):
     """
     from workspace.ai.tool_registry import tool_registry
 
+    tool_call = entry.tool_call
+    # Read by a tool that leaves an image for the caller to attach: appended
+    # in completion order, they would reach the reply in a different order
+    # than the model asked for them in.
+    set_call_position(entry.position)
     try:
         return tool_registry.execute(
             tool_call,
@@ -136,17 +143,14 @@ def _run_batch(planned, human_user, bot_user, conversation_id, tool_context):
     if len(pending) <= 1:
         for entry in pending:
             try:
-                entry.result = _execute(entry.tool_call, *args)
+                entry.result = _execute(entry, *args)
             except Exception as exc:
                 entry.error = exc
         return
     # One worker per call: everything dispatched starts immediately, so a
     # cancellation checked before dispatch cannot be outrun by a queued call.
     with ThreadPoolExecutor(max_workers=len(pending)) as pool:
-        futures = [
-            pool.submit(_execute_off_thread, entry.tool_call, *args)
-            for entry in pending
-        ]
+        futures = [pool.submit(_execute_off_thread, entry, *args) for entry in pending]
     for entry, future in zip(pending, futures, strict=True):
         try:
             entry.result = future.result()
@@ -227,6 +231,7 @@ def run_tool_loop(
     max_concurrency = settings.AI_TOOL_CONCURRENCY
     concurrent_names = tool_registry.concurrent_names()
     seen_calls = Counter()
+    call_position = 0
     for _ in range(max_tool_rounds):
         # Fallback: parse tool calls from text if model didn't use native function calling
         if not result.get("tool_calls") and result.get("content"):
@@ -307,7 +312,10 @@ def run_tool_loop(
                     tc.function.name if tc.function.name in known_tools else "unknown"
                 )
                 seen_calls[signature] += 1
-                entry = _PlannedCall(tool_call=tc, metric_tool=metric_tool)
+                call_position += 1
+                entry = _PlannedCall(
+                    tool_call=tc, metric_tool=metric_tool, position=call_position
+                )
                 planned.append(entry)
                 if seen_calls[signature] > max_identical_calls:
                     # A model stuck re-issuing one call burns every remaining

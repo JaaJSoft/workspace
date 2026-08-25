@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from workspace.ai.services.call_order import call_position
 from workspace.ai.services.tool_loop import run_tool_loop
 from workspace.chat.models import Conversation, ConversationMember
 
@@ -617,7 +618,7 @@ class _StubRegistry:
     AI_MAX_TOOL_ROUNDS=10, AI_MAX_IDENTICAL_TOOL_CALLS=3, AI_TOOL_CONCURRENCY=4
 )
 class ConcurrentToolCallTests(TestCase):
-    """Read-only calls of one round share a dispatch; everything else doesn't.
+    """Independent calls of one round share a dispatch; everything else doesn't.
 
     The width is pinned rather than inherited: a test that proves two calls
     overlap has to state the setting it needs, or a changed default turns it
@@ -711,6 +712,60 @@ class ConcurrentToolCallTests(TestCase):
         self.assertEqual(
             [r["tool_call_id"] for r in tool_data[0]["results"]], ["c1", "c2"]
         )
+
+    def test_each_call_knows_where_it_belongs_in_the_reply(self):
+        # What a tool leaving an image for the caller stamps on it: the rank
+        # the model asked for, not the rank it came back in.
+        seen = {}
+
+        def handler(tool_call):
+            seen[tool_call.id] = call_position()
+            return "ok"
+
+        registry = _StubRegistry(concurrent={"generate_image"}, handler=handler)
+        calls = [
+            _tool_call(f"c{i}", name="generate_image", arguments=f'{{"prompt": "{i}"}}')
+            for i in range(1, 4)
+        ]
+
+        self._run(registry, calls)
+
+        self.assertEqual(seen, {"c1": 1, "c2": 2, "c3": 3})
+
+    def test_the_rank_keeps_climbing_across_rounds(self):
+        # Images of a later round are attached after those of an earlier one,
+        # so the rank cannot restart with each round.
+        seen = {}
+
+        def handler(tool_call):
+            seen[tool_call.id] = call_position()
+            return "ok"
+
+        registry = _StubRegistry(concurrent={"generate_image"}, handler=handler)
+        first = [
+            _tool_call(f"c{i}", name="generate_image", arguments=f'{{"prompt": "{i}"}}')
+            for i in (1, 2)
+        ]
+        second = [_tool_call("c3", name="generate_image", arguments='{"prompt": "3"}')]
+
+        with (
+            patch("workspace.ai.services.tool_loop.call_llm") as mock_call_llm,
+            patch("workspace.ai.tool_registry.tool_registry", registry),
+        ):
+            mock_call_llm.side_effect = [
+                _llm_result(first),
+                _llm_result(second),
+                _llm_result([], content="done"),
+            ]
+            run_tool_loop(
+                messages=[{"role": "user", "content": "go"}],
+                model="x",
+                human_user=self.user,
+                bot_user=self.bot,
+                conversation_id=None,
+            )
+
+        self.assertEqual(seen, {"c1": 1, "c2": 2, "c3": 3})
 
     def test_a_write_splits_the_round_and_keeps_its_place(self):
         registry = _StubRegistry(concurrent={"read_webpage"})

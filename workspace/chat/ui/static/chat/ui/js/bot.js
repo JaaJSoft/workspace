@@ -152,7 +152,7 @@ window.chatBotMixin = function chatBotMixin() {
       );
     },
 
-    // A round dispatches its read-only tools together, so "is anything
+    // A round dispatches independent tools together, so "is anything
     // still running" is not "is there a last step" - it has to be asked of
     // every row. Drives the thinking dots, which stand for the part of the
     // work no tool announces: the model composing the reply.

@@ -34,11 +34,13 @@ def tool(
     ("Generating image") shown while the call is still in flight.
 
     *concurrent* lets the tool loop run this tool alongside its neighbours
-    in the same round instead of waiting its turn. Only set it on a handler
-    that reads: it must have no side effect, spend nothing, and be safe to
-    run off the main thread while another read is in flight. Anything that
-    writes, sends, schedules or bills stays sequential, which is the
-    default.
+    in the same round instead of waiting its turn. Set it only where the
+    calls are independent: the handler must be safe off the main thread, must
+    not read what a call beside it produces, and must let the caller put
+    whatever it leaves behind back in call order. Reading tools are the
+    usual case; a paid one qualifies only when the wait it saves is worth
+    losing the exact ordering of its budget checks, which today is
+    generate_image alone. Everything else stays sequential, the default.
     """
 
     def decorator(fn):

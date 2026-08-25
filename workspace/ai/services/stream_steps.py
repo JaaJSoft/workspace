@@ -4,7 +4,7 @@ While a bot response is being generated in a Celery worker, each tool
 execution pushes a small "step" envelope (icon + label + detail) to every
 active member of the conversation, then wakes their SSE stream via
 ``notify_sse``. A second envelope, carrying the call id alone, reports the
-same call ending: a round runs its read-only tools together, so which ones
+same call ending: a round runs independent tools together, so which ones
 are still in flight cannot be read off the order the steps arrived in.
 
 Mirrors the call-signaling mailbox pattern: nothing here is durable — a
@@ -174,7 +174,7 @@ def notify_tool_step_done(recipient_ids, conversation_id, tool_call):
     """Tell every recipient that *tool_call* has returned.
 
     Which row reads as running cannot be deduced from the order steps
-    arrive in: a round dispatches its read-only calls together, so several
+    arrive in: a round dispatches independent calls together, so several
     are in flight at once and they finish in any order. The row carries
     both tenses already, so ending one is naming it - no HTML to re-render.
 

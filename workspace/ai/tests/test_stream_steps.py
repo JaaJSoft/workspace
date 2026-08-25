@@ -242,7 +242,7 @@ class NotifyToolStepTests(TestCase):
     @patch("workspace.ai.services.stream_steps.notify_sse")
     def test_step_names_the_call_it_announces(self, mock_notify):
         # The row it opens is ended by call id, not by position: a round's
-        # read-only calls run together and finish in any order.
+        # independent calls run together and finish in any order.
         stream_steps.notify_tool_step([1], "conv-1", make_tool_call())
 
         step = stream_steps.read_steps(1, None)[0][0]["data"]

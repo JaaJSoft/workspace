@@ -1,6 +1,6 @@
 """E2E: a progress row ends when its own call ends, not when the next starts.
 
-A round dispatches its read-only tool calls together, so their rows arrive
+A round dispatches independent tool calls together, so their rows arrive
 together and finish in any order. Which one still reads as running cannot be
 deduced from their order any more - the browser is told per call.
 

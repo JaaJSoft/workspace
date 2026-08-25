@@ -177,20 +177,11 @@ class FilesImporter(Importer):
     def _check_quota(self, ctx, incoming_bytes):
         # Up-front only: the writes themselves are bounded by the files
         # module, this is what lets a hopeless import fail in seconds rather
-        # than after hours of copying. Reads the destination's group instead
-        # of calling _resolve_root, which would create the root folder before
-        # the import is known to fit.
-        destination = None
-        if ctx.options.get("destination"):
-            destination = (
-                FileService.user_files_qs(ctx.owner)
-                .filter(uuid=ctx.options["destination"], node_type=File.NodeType.FOLDER)
-                .first()
-            )
-        remaining = quota.remaining_bytes(
-            owner=ctx.owner,
-            group=destination.group if destination is not None else None,
-        )
+        # than after hours of copying.
+        #
+        # Always the personal bucket: every destination this importer accepts
+        # is resolved through user_files_qs, which excludes group folders.
+        remaining = quota.remaining_bytes(owner=ctx.owner, group=None)
         if remaining is not None and incoming_bytes > remaining:
             raise JobFailed(
                 f"Not enough space: the import needs {filesizeformat(incoming_bytes)} "

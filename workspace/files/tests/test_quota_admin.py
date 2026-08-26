@@ -7,8 +7,10 @@ from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
 from django.template.defaultfilters import filesizeformat
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from workspace.files.models import GroupStorageQuota, UserStorageQuota
@@ -42,6 +44,68 @@ class QuotaAdminTests(TestCase):
         response = self.client.get(reverse("admin:files_groupstoragequota_changelist"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Design")
+
+    def test_the_user_changelist_costs_the_same_with_one_row_or_many(self):
+        UserStorageQuota.objects.create(user=self.admin, quota_bytes=5 * KB)
+        url = reverse("admin:files_userstoragequota_changelist")
+        with CaptureQueriesContext(connection) as one_row:
+            self.client.get(url)
+        for i in range(10):
+            member = User.objects.create_user(username=f"m{i}", password="pw")
+            FileService.create_file(
+                member, "a.bin", content=ContentFile(b"x" * KB, name="a.bin")
+            )
+            UserStorageQuota.objects.create(user=member, quota_bytes=5 * KB)
+        with CaptureQueriesContext(connection) as many_rows:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(many_rows), len(one_row))
+
+    def test_the_group_changelist_costs_the_same_with_one_row_or_many(self):
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=5 * KB)
+        url = reverse("admin:files_groupstoragequota_changelist")
+        with CaptureQueriesContext(connection) as one_row:
+            self.client.get(url)
+        for i in range(10):
+            GroupStorageQuota.objects.create(
+                group=Group.objects.create(name=f"g{i}"), quota_bytes=5 * KB
+            )
+        with CaptureQueriesContext(connection) as many_rows:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(many_rows), len(one_row))
+
+    def test_the_changelist_reports_the_same_usage_as_the_helper(self):
+        FileService.create_file(
+            self.admin, "a.bin", content=ContentFile(b"x" * (3 * KB), name="a.bin")
+        )
+        UserStorageQuota.objects.create(user=self.admin, quota_bytes=5 * KB)
+        response = self.client.get(reverse("admin:files_userstoragequota_changelist"))
+        self.assertContains(
+            response, f"{filesizeformat(personal_usage(self.admin.pk))} of "
+        )
+
+    def test_the_quota_change_page_reports_usage_without_an_annotation(self):
+        """The change form builds its object outside the annotated changelist
+        queryset, so the column has to fall back to the aggregate."""
+        FileService.create_file(
+            self.admin, "a.bin", content=ContentFile(b"x" * (3 * KB), name="a.bin")
+        )
+        row = UserStorageQuota.objects.create(user=self.admin, quota_bytes=5 * KB)
+        response = self.client.get(
+            reverse("admin:files_userstoragequota_change", args=[row.pk])
+        )
+        self.assertContains(
+            response, f"{filesizeformat(personal_usage(self.admin.pk))} of "
+        )
+
+    def test_an_unlimited_row_reads_as_unlimited_on_the_changelist(self):
+        FileService.create_file(
+            self.admin, "a.bin", content=ContentFile(b"x" * KB, name="a.bin")
+        )
+        UserStorageQuota.objects.create(user=self.admin, quota_bytes=None)
+        response = self.client.get(reverse("admin:files_userstoragequota_changelist"))
+        self.assertContains(response, "used (unlimited)")
 
     def test_the_user_change_page_still_renders_with_the_inline(self):
         response = self.client.get(

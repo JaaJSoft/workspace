@@ -9,7 +9,8 @@ reader of the quota tables.
 """
 
 from django.conf import settings
-from django.db.models import Sum
+from django.db.models import OuterRef, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from django.template.defaultfilters import filesizeformat
 from rest_framework.exceptions import APIException
 
@@ -54,6 +55,43 @@ def group_usage(group):
         node_type=File.NodeType.FILE,
     ).aggregate(total=Sum("size"))["total"]
     return total or 0
+
+
+def personal_usage_subquery(user_field="user_id"):
+    """``personal_usage`` as an annotation over a queryset of quota rows.
+
+    Same bucket definition as the aggregate above, expressed so a listing
+    resolves every row in one query instead of one aggregate per row.
+    """
+    return Coalesce(
+        Subquery(
+            File.objects.filter(
+                owner_id=OuterRef(user_field),
+                group__isnull=True,
+                node_type=File.NodeType.FILE,
+            )
+            .values("owner_id")
+            .annotate(total=Sum("size"))
+            .values("total")
+        ),
+        Value(0),
+    )
+
+
+def group_usage_subquery(group_field="group_id"):
+    """``group_usage`` as an annotation over a queryset of quota rows."""
+    return Coalesce(
+        Subquery(
+            File.objects.filter(
+                group_id=OuterRef(group_field),
+                node_type=File.NodeType.FILE,
+            )
+            .values("group_id")
+            .annotate(total=Sum("size"))
+            .values("total")
+        ),
+        Value(0),
+    )
 
 
 def _bucket_label(group):

@@ -77,24 +77,21 @@ class BotProfileAdmin(ModelAdmin):
             (
                 "Voice",
                 {
-                    "fields": ["voice", "voice_ref", "voice_ref_text"],
+                    "fields": ["voice_ref", "voice_ref_text", "voice"],
                     "description": (
-                        "How the bot sounds when it sends a voice message. "
-                        "The description is free-text prose about the speaker, "
-                        "e.g. \u201cA young woman, soft and composed, warm "
-                        "tone.\u201d \u2014 name the gender first, the model "
-                        "drifts without it. It is also what the bot recites "
-                        "when asked what it sounds like, so keep it true even "
-                        "when a recording is what actually speaks.<br>"
-                        "The recording is a few seconds of the voice to clone, "
-                        "produced outside the workspace \u2014 by a "
+                        "The recording is the voice. A few seconds of speech, "
+                        "produced outside the workspace \u2014 designed by a "
                         "voice-design model, or lifted from any clean sample "
-                        "\u2014 and it is the only way to keep one voice "
-                        "across messages: a description makes the backend draw "
-                        "a new speaker matching it every time. Upload the two "
-                        "together, the transcript matching the audio word for "
-                        "word. A model that clones reads the recording and "
-                        "ignores the description entirely."
+                        "\u2014 and cloned on every voice message, with the "
+                        "transcript matching it word for word so the backend "
+                        "can align the clone. A bot with no recording here, "
+                        "and no AI_TTS_VOICE_REF to fall back on, cannot send "
+                        "voice messages at all.<br>"
+                        "The description reaches no speech model and changes "
+                        "nothing about how the bot sounds. It is what the bot "
+                        "answers when asked what its voice is like, so write "
+                        "it to match the recording \u2014 or leave it empty "
+                        "and the bot will not bring its voice up."
                     ),
                 },
             ),

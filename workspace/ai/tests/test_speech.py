@@ -23,7 +23,6 @@ TTS_SETTINGS = {
     "AI_API_KEY": "test-key",
     "AI_TTS_MODEL": "test-voice-model",
     "AI_TTS_BASE_URL": "https://speech.test/passthrough/v1/",
-    "AI_TTS_VOICE": "A default adult voice.",
     "AI_TTS_LANGUAGES": [
         "french",
         "english",
@@ -50,6 +49,11 @@ def make_wav(seconds=1.0, rate=24000):
         wav.setframerate(rate)
         wav.writeframes(b"\x00\x00" * int(rate * seconds))
     return buffer.getvalue()
+
+
+REFERENCE = VoiceReference(
+    audio=make_wav(), text="Bonjour, je suis l'assistante de Pierre."
+)
 
 
 def _request():
@@ -94,65 +98,29 @@ class _ClientPatch:
 
 @override_settings(**TTS_SETTINGS)
 class SynthesizeSpeechTests(SimpleTestCase):
-    def test_sends_the_voice_as_a_nested_instruct(self):
-        audio = make_wav()
-        with _ClientPatch(audio) as http:
-            self.assertEqual(
-                ai_synthesize_speech("Bonjour Pierre.", "Une jeune femme."), audio
-            )
-
-        call = http.calls[0]
-        self.assertEqual(call["model"], "test-voice-model")
-        self.assertEqual(call["input"], "Bonjour Pierre.")
-        # Nested under `options`: at the top level the backend accepts the
-        # field and ignores it, which loses the voice without an error.
-        self.assertEqual(
-            call["extra_body"]["options"], {"instruct": "Une jeune femme."}
-        )
-        self.assertNotIn("language", call["extra_body"])
-
-    def test_falls_back_to_the_configured_default_voice(self):
-        with _ClientPatch(make_wav()) as http:
-            ai_synthesize_speech("Hello.", "   ")
-        self.assertEqual(
-            http.calls[0]["extra_body"]["options"]["instruct"],
-            "A default adult voice.",
-        )
-
-    def test_sends_the_language_the_caller_named(self):
-        with _ClientPatch(make_wav()) as http:
-            ai_synthesize_speech("Bonjour.", "Une voix.", "french")
-        self.assertEqual(http.calls[0]["extra_body"]["language"], "french")
-
-    def test_omits_the_language_when_the_caller_names_none(self):
-        # Nothing is substituted: the backend reads the text, which beats any
-        # fixed guess this side could make.
-        with _ClientPatch(make_wav()) as http:
-            ai_synthesize_speech("Bonjour.", "Une voix.")
-        self.assertNotIn("language", http.calls[0]["extra_body"])
-
-    def test_omits_a_language_the_speech_model_does_not_know(self):
-        # Never forwarded: an unknown language is a 500, not a soft failure.
-        with _ClientPatch(make_wav()) as http:
-            ai_synthesize_speech("Goedendag.", "A voice.", "dutch")
-        self.assertNotIn("language", http.calls[0]["extra_body"])
+    def setUp(self):
+        self.reference = REFERENCE
 
     def test_rejects_empty_text(self):
         with self.assertRaises(ValueError):
-            ai_synthesize_speech("   ", "A voice.")
+            ai_synthesize_speech("   ", self.reference)
+
+    def test_rejects_a_call_carrying_no_reference(self):
+        # There is no describing a voice to this backend, so a caller that
+        # found no recording has nothing left to fall back on.
+        with self.assertRaises(ValueError):
+            ai_synthesize_speech("Hello.", None)
 
     @override_settings(AI_TTS_MODEL="")
     def test_rejects_an_unconfigured_backend(self):
         with self.assertRaises(ValueError):
-            ai_synthesize_speech("Hello.", "A voice.")
+            ai_synthesize_speech("Hello.", self.reference)
 
 
 @override_settings(**TTS_SETTINGS)
 class SynthesizeFromAReferenceTests(SimpleTestCase):
     def setUp(self):
-        self.reference = VoiceReference(
-            audio=make_wav(), text="Bonjour, je suis l'assistante de Pierre."
-        )
+        self.reference = REFERENCE
 
     def test_sends_the_recording_and_its_transcript(self):
         with _ClientPatch(make_wav()) as http:
@@ -165,27 +133,38 @@ class SynthesizeFromAReferenceTests(SimpleTestCase):
         )
         self.assertEqual(body["reference_text"], self.reference.text)
 
-    def test_drops_the_description_a_clone_would_ignore(self):
-        # Sending both leaves the caller unable to tell which one speaks: a
-        # clone-based model reads the recording and ignores `instruct`.
+    def test_never_describes_a_voice(self):
+        # The backend designs a new speaker from `instruct` and ignores it
+        # once cloning: either way it contradicts the recording.
         with _ClientPatch(make_wav()) as http:
-            ai_synthesize_speech(
-                "Bonjour Pierre.", "Un homme âgé.", reference=self.reference
-            )
+            ai_synthesize_speech("Bonjour Pierre.", self.reference)
 
         self.assertNotIn("options", http.calls[0]["extra_body"])
 
-    def test_still_announces_the_language(self):
+    def test_announces_the_language_the_caller_named(self):
         with _ClientPatch(make_wav()) as http:
-            ai_synthesize_speech(
-                "Bonjour.", language="french", reference=self.reference
-            )
+            ai_synthesize_speech("Bonjour.", self.reference, "french")
 
         self.assertEqual(http.calls[0]["extra_body"]["language"], "french")
 
+    def test_omits_the_language_when_the_caller_names_none(self):
+        # Nothing is substituted: the backend reads the text, which beats
+        # any fixed guess this side could make.
+        with _ClientPatch(make_wav()) as http:
+            ai_synthesize_speech("Bonjour.", self.reference)
+
+        self.assertNotIn("language", http.calls[0]["extra_body"])
+
+    def test_omits_a_language_the_speech_model_does_not_know(self):
+        # Never forwarded: an unknown language is a 500, not a soft failure.
+        with _ClientPatch(make_wav()) as http:
+            ai_synthesize_speech("Goedendag.", self.reference, "dutch")
+
+        self.assertNotIn("language", http.calls[0]["extra_body"])
+
     def test_a_reference_carries_over_every_retry(self):
         with _ClientPatch(_http_error(503), make_wav()) as http:
-            ai_synthesize_speech("Bonjour.", reference=self.reference)
+            ai_synthesize_speech("Bonjour.", self.reference)
 
         self.assertEqual(len(http.calls), 2)
         self.assertIn("voice_ref", http.calls[1]["extra_body"])
@@ -234,19 +213,19 @@ class SynthesizeSpeechRetryTests(SimpleTestCase):
         # held the model lock for too long - the next call usually gets it.
         audio = make_wav()
         with _ClientPatch(_http_error(503), audio) as http:
-            self.assertEqual(ai_synthesize_speech("Hello.", "A voice."), audio)
+            self.assertEqual(ai_synthesize_speech("Hello.", REFERENCE), audio)
         self.assertEqual(len(http.calls), 2)
 
     def test_retries_a_response_carrying_no_audio(self):
         audio = make_wav()
         with _ClientPatch(b"", audio) as http:
-            self.assertEqual(ai_synthesize_speech("Hello.", "A voice."), audio)
+            self.assertEqual(ai_synthesize_speech("Hello.", REFERENCE), audio)
         self.assertEqual(len(http.calls), 2)
 
     def test_gives_up_after_the_configured_attempts(self):
         with _ClientPatch(*[_http_error(500)] * 3) as http:
             with self.assertRaises(SpeechSynthesisError) as caught:
-                ai_synthesize_speech("Hello.", "A voice.")
+                ai_synthesize_speech("Hello.", REFERENCE)
         self.assertEqual(len(http.calls), 3)
         self.assertEqual(caught.exception.attempts, 3)
         self.assertFalse(caught.exception.rejected)
@@ -254,14 +233,14 @@ class SynthesizeSpeechRetryTests(SimpleTestCase):
     def test_does_not_retry_a_rejected_request(self):
         with _ClientPatch(_http_error(400)) as http:
             with self.assertRaises(SpeechSynthesisError) as caught:
-                ai_synthesize_speech("Hello.", "A voice.")
+                ai_synthesize_speech("Hello.", REFERENCE)
         self.assertEqual(len(http.calls), 1)
         self.assertTrue(caught.exception.rejected)
 
     def test_retries_a_transport_failure(self):
         audio = make_wav()
         with _ClientPatch(APIConnectionError(request=_request()), audio) as http:
-            self.assertEqual(ai_synthesize_speech("Hello.", "A voice."), audio)
+            self.assertEqual(ai_synthesize_speech("Hello.", REFERENCE), audio)
         self.assertEqual(len(http.calls), 2)
 
 

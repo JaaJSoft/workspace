@@ -166,7 +166,11 @@ class MultiStepInstructionsTests(TestCase):
         self.assertIn("optional query", self.system)
 
 
-@override_settings(AI_TTS_MODEL="test-voice-model")
+@override_settings(
+    AI_TTS_MODEL="test-voice-model",
+    AI_TTS_VOICE_REF="/srv/voices/default.wav",
+    AI_TTS_VOICE_REF_TEXT="Bonjour, je suis l'assistante de Pierre.",
+)
 class BuildChatMessagesVoiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="vuser", password="pass123")
@@ -194,15 +198,25 @@ class BuildChatMessagesVoiceTests(TestCase):
     def test_the_voice_section_is_present(self):
         self.assertIn("## Your voice", self._system())
 
-    def test_sounding_different_is_scoped_to_one_message(self):
-        # A bot's voice is its identity and only its owner sets it; the
-        # prompt must not suggest the bot can change it for good.
+    def test_the_bot_is_not_offered_a_voice_it_cannot_change(self):
+        # Its voice is a recording its owner uploaded. A prompt hinting the
+        # bot can play a character earns a claim it changed voice, over
+        # audio that sounds exactly like it always does.
         system = self._system()
-        self.assertIn("that one message", system)
+        self.assertIn("not yours to change", system)
+        self.assertNotIn("that one message", system)
         self.assertNotIn("set_my_voice", system)
 
     @override_settings(AI_TTS_MODEL="")
     def test_no_voice_is_mentioned_when_speech_is_off(self):
+        system = self._system()
+        self.assertNotIn("## Your voice", system)
+        self.assertNotIn("Une jeune femme", system)
+
+    @override_settings(AI_TTS_VOICE_REF="", AI_TTS_VOICE_REF_TEXT="")
+    def test_an_unrecorded_bot_is_told_of_no_voice(self):
+        # Nothing would come of the tool: without a recording the backend
+        # has no speaker, so a bot told it can speak only fails out loud.
         system = self._system()
         self.assertNotIn("## Your voice", system)
         self.assertNotIn("Une jeune femme", system)

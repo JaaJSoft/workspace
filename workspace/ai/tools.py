@@ -283,20 +283,6 @@ def _spoken_language_enum(schema: dict) -> None:
     schema["enum"] = ["", *sorted(supported_languages())]
 
 
-# A voice is a sentence or two, not a paragraph: the backend drifts on a long
-# description, and the model writes this one.
-VOICE_MAX_CHARS = 300
-
-VOICE_WRITING_GUIDE = (
-    'Describe the speaker in plain prose, e.g. "Une jeune femme, voix douce '
-    'et posée, ton chaleureux" or "An elderly man, very deep and gravelly". '
-    "Name the gender first — the model drifts towards a neutral register "
-    "without it. One or two sentences: age, register, timbre, pace, mood. "
-    "Avoid extremes ('very high-pitched', 'screaming'), which garble the "
-    "pronunciation itself."
-)
-
-
 class SendVoiceMessageParams(BaseModel):
     text: str = Field(
         description=(
@@ -318,25 +304,6 @@ class SendVoiceMessageParams(BaseModel):
             "itself."
         ),
     )
-    voice: str = Field(
-        default="",
-        description=(
-            "Optional: speak this one message in a different voice, described "
-            "in full — it replaces your usual voice instead of adding to it, "
-            f"so describe the whole speaker. {VOICE_WRITING_GUIDE} Leave it "
-            "empty to use your own voice, which is what makes you "
-            "recognizable; set it to play a character, imitate someone, or "
-            "read a line theatrically."
-        ),
-    )
-
-
-def _clean_voice(value: str) -> str:
-    """Normalize a model-written voice description before it is sent."""
-    # Blanked, not dropped: deleting a newline glues the words on either
-    # side of it into one, which corrupts the description the backend reads.
-    cleaned = "".join(c if c.isprintable() else " " for c in (value or ""))
-    return " ".join(cleaned.split())[:VOICE_MAX_CHARS].strip()
 
 
 def _bot_supports_vision(bot):
@@ -884,18 +851,17 @@ part of that reply to a short line or nothing at all — never repeat out loud w
             )
 
         profile = getattr(bot, "bot_profile", None)
-        override = _clean_voice(args.voice)
-        voice = override or (profile.get_voice() if profile else settings.AI_TTS_VOICE)
-        # A reference is a whole speaker, so an override that names another one
-        # has to displace it: sending both would leave the recording speaking.
-        reference = None
-        if not override:
-            reference = (
-                profile.voice_reference() if profile else None
-            ) or default_voice_reference()
+        reference = (
+            profile.voice_reference() if profile else None
+        ) or default_voice_reference()
+        if reference is None:
+            return (
+                "Error: you have no voice recorded, so you cannot send a voice "
+                "message. Say so plainly and answer in writing instead."
+            )
 
         try:
-            audio = ai_synthesize_speech(text, voice, args.language, reference)
+            audio = ai_synthesize_speech(text, reference, args.language)
         except ValueError as exc:
             return f"Error: {exc}"
         except SpeechSynthesisError as exc:

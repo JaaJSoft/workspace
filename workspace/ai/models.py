@@ -53,6 +53,8 @@ class BotProfile(models.Model):
     description = models.TextField(blank=True)
     supports_tools = models.BooleanField(default=True)
     supports_vision = models.BooleanField(default=True)
+    # What the bot says about its own voice when asked, and nothing more: the
+    # backend is told who speaks by the recording, never by a description.
     voice = models.TextField(blank=True)
     voice_ref = models.FileField(
         upload_to=bot_voice_reference_path,
@@ -93,9 +95,16 @@ class BotProfile(models.Model):
         """Return the model to use, falling back to the global default."""
         return self.model or settings.AI_MODEL
 
-    def get_voice(self) -> str:
-        """Description of how this bot sounds, for the speech backend."""
-        return self.voice or settings.AI_TTS_VOICE
+    def can_speak(self) -> bool:
+        """Whether a recording exists for this bot to be voiced from.
+
+        Answered without opening the file, since it gates the prompt built
+        on every turn. A blob that has gone missing since is caught at
+        synthesis time instead.
+        """
+        if self.voice_ref and self.voice_ref_text.strip():
+            return True
+        return bool(settings.AI_TTS_VOICE_REF and settings.AI_TTS_VOICE_REF_TEXT)
 
     def clean(self):
         super().clean()

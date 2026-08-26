@@ -209,14 +209,31 @@ class RootCollection(DAVCollection):
         FileService.create_folder(self._user, name, parent=None, acting_user=self._user)
         return True
 
+    def _bucket_bytes(self):
+        """``(used, available)`` for the personal bucket.
+
+        wsgidav asks both questions in ``get_property_names`` and again in
+        ``get_property_value``, so an allprop PROPFIND pays for the pair
+        twice - and the root is the resource every mount touches first and
+        most often. A resource lives for one request, so the cache cannot go
+        stale.
+        """
+        if not hasattr(self, "_bucket_cache"):
+            used = quota.personal_usage(self._user)
+            limit = quota.effective_quota(self._user)
+            self._bucket_cache = (
+                used,
+                # wsgidav omits {DAV:}quota-available-bytes when this is
+                # None, which is what an unlimited bucket should advertise.
+                None if limit is None else max(0, limit - used),
+            )
+        return self._bucket_cache
+
     def get_used_bytes(self):
-        return quota.personal_usage(self._user)
+        return self._bucket_bytes()[0]
 
     def get_available_bytes(self):
-        # wsgidav omits {DAV:}quota-available-bytes when this returns None,
-        # which is exactly what an unlimited bucket should advertise.
-        remaining = quota.remaining_bytes(owner=self._user, group=None)
-        return None if remaining is None else max(0, remaining)
+        return self._bucket_bytes()[1]
 
 
 class FolderResource(DAVCollection):

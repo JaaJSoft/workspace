@@ -525,6 +525,23 @@ class WebDavQuotaAdvertisingTests(TestCase):
 
         self.assertIsNone(RootCollection("/", self._environ()).get_available_bytes())
 
+    def test_the_personal_root_aggregates_once_per_resource(self):
+        """The root is the first resource every mount touches, and wsgidav
+        asks both questions twice on an allprop PROPFIND."""
+        from workspace.files.webdav.resources import RootCollection
+
+        root = RootCollection("/", self._environ())
+        with self.assertNumQueries(2):
+            for _ in range(2):
+                root.get_used_bytes()
+                root.get_available_bytes()
+
+    def test_an_unlimited_root_still_reports_what_it_holds(self):
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
+        from workspace.files.webdav.resources import RootCollection
+
+        self.assertEqual(RootCollection("/", self._environ()).get_used_bytes(), KB)
+
     def test_a_group_root_reports_the_group_bucket(self):
         from workspace.files.webdav.resources import FolderResource
 

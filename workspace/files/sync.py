@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from django.core.files.storage import default_storage
 from django.utils import timezone
 
+from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import FileService
 
@@ -237,7 +238,9 @@ class FileSyncService:
 
             # Not found on disk or type mismatch -> soft-delete
             if self.dry_run:
-                self.log.info("[DRY-RUN] Would soft-delete %s: %s", node_type, name)
+                self.log.info(
+                    "[DRY-RUN] Would soft-delete %s: %s", node_type, scrub(name)
+                )
                 if node_type == File.NodeType.FOLDER:
                     result.folders_soft_deleted += 1
                 else:
@@ -263,7 +266,7 @@ class FileSyncService:
                     },
                 )
                 self.log.info(
-                    "Soft-deleted %s: %s (%d records)", node_type, name, count
+                    "Soft-deleted %s: %s (%d records)", node_type, scrub(name), count
                 )
                 if node_type == File.NodeType.FOLDER:
                     result.folders_soft_deleted += 1
@@ -271,7 +274,7 @@ class FileSyncService:
                     result.files_soft_deleted += 1
             except Exception as e:
                 result.errors.append(f"Error soft-deleting {name}: {e}")
-                self.log.warning("Error soft-deleting %s: %s", name, e)
+                self.log.warning("Error soft-deleting %s: %s", scrub(name), scrub(e))
 
         # --- Phase 2: Disk -> DB (create missing) ---
         for entry_name, entry in disk_names.items():
@@ -290,7 +293,9 @@ class FileSyncService:
                 continue  # in trash, don't create a duplicate
 
             if self.dry_run:
-                self.log.info("[DRY-RUN] Would create %s: %s", node_type, entry_name)
+                self.log.info(
+                    "[DRY-RUN] Would create %s: %s", node_type, scrub(entry_name)
+                )
                 if is_dir:
                     result.folders_created += 1
                 else:
@@ -304,7 +309,7 @@ class FileSyncService:
                     )
                     index.add(created)
                     result.folders_created += 1
-                    self.log.info("Created folder: %s", entry_name)
+                    self.log.info("Created folder: %s", scrub(entry_name))
                 else:
                     content_path = f"{storage_prefix}/{entry_name}"
 
@@ -323,8 +328,10 @@ class FileSyncService:
                     )
                     index.add(created)
                     result.files_created += 1
-                    self.log.info("Created file: %s (%s bytes)", entry_name, size)
+                    self.log.info(
+                        "Created file: %s (%s bytes)", scrub(entry_name), size
+                    )
 
             except Exception as e:
                 result.errors.append(f"Error creating {entry_name}: {e}")
-                self.log.warning("Error creating %s: %s", entry_name, e)
+                self.log.warning("Error creating %s: %s", scrub(entry_name), scrub(e))

@@ -128,6 +128,51 @@ class TrashStorageLayoutTests(TestCase):
             ),
         )
 
+    def test_two_trashed_namesakes_keep_separate_directories(self):
+        first = FileService.create_folder(self.user, "Docs")
+        old = self._make_file("deep.txt", parent=first, content=b"FIRST")
+        FileService.soft_delete(first, acting_user=self.user)
+        second = FileService.create_folder(self.user, "Docs")
+        new = self._make_file("deep.txt", parent=second, content=b"SECOND")
+        FileService.soft_delete(second, acting_user=self.user)
+
+        old.refresh_from_db()
+        new.refresh_from_db()
+        self.assertEqual(
+            old.content.name, f"trash/users/bob/{first.uuid}/Docs/deep.txt"
+        )
+        self.assertEqual(
+            new.content.name, f"trash/users/bob/{second.uuid}/Docs/deep.txt"
+        )
+
+    def test_restoring_from_one_of_two_trashed_namesakes_picks_the_right_one(self):
+        # Both folders carry the path "Docs", so resolving the trash root by
+        # path hands back whichever row the lookup happens to keep - here the
+        # younger one, whose directory has nothing to do with this file.
+        first = FileService.create_folder(self.user, "Docs")
+        older = self._make_file("deep.txt", parent=first, content=b"FIRST")
+        FileService.soft_delete(first, acting_user=self.user)
+        second = FileService.create_folder(self.user, "Docs")
+        younger = self._make_file("deep.txt", parent=second, content=b"SECOND")
+        FileService.soft_delete(second, acting_user=self.user)
+
+        older.refresh_from_db()
+        FileService.restore(older, acting_user=self.user)
+
+        older.refresh_from_db()
+        younger.refresh_from_db()
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertIsNone(first.deleted_at)
+        self.assertIsNotNone(second.deleted_at)
+        with older.content.open("rb") as fh:
+            self.assertEqual(fh.read(), b"FIRST")
+        with younger.content.open("rb") as fh:
+            self.assertEqual(fh.read(), b"SECOND")
+        self.assertEqual(
+            younger.content.name, f"trash/users/bob/{second.uuid}/Docs/deep.txt"
+        )
+
     def test_restoring_onto_a_taken_name_renames_instead_of_overwriting(self):
         original = self._make_file("report.pdf", content=b"OLD")
         FileService.soft_delete(original, acting_user=self.user)
@@ -281,6 +326,25 @@ class NameCollisionTests(TestCase):
         )
         with self.assertRaises(ValueError):
             FileService.create_folder(self.user, "Docs")
+
+    def test_a_personal_root_does_not_compete_with_a_group_root(self):
+        # files/users/<name>/Marketing and files/groups/Marketing are two
+        # directories, so the same name in both is not a collision.
+        group = Group.objects.create(name="Marketing")
+        self.user.groups.add(group)
+        FileService.create_folder(self.user, "Marketing", group=group)
+
+        FileService.check_name_available(
+            self.user, None, "Marketing", File.NodeType.FOLDER
+        )
+        FileService.create_folder(self.user, "Marketing")
+
+        self.assertEqual(
+            File.objects.filter(
+                owner=self.user, name="Marketing", deleted_at__isnull=True
+            ).count(),
+            2,
+        )
 
     def test_the_same_name_is_fine_in_two_different_folders(self):
         a = FileService.create_folder(self.user, "A")

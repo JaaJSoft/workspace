@@ -11,11 +11,15 @@ def sibling_nodes(owner, parent):
     a folder of the same name in the same parent resolve to one path, and so
     do two folders. Names are unique per folder within a group, and per owner
     otherwise.
+
+    At the root the two namespaces are separate directories - ``files/users/
+    <username>`` and ``files/groups`` - so a personal node never competes
+    with a group root folder the same user happens to own.
     """
     qs = File.objects.filter(parent=parent, deleted_at__isnull=True)
     if parent and parent.group_id:
         return qs.filter(group=parent.group)
-    return qs.filter(owner=owner)
+    return qs.filter(owner=owner, group__isnull=True)
 
 
 def sibling_files(owner, parent):

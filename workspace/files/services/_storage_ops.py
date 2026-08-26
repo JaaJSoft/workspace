@@ -412,13 +412,17 @@ def move_file_storage(file_obj, new_parent, *, new_owner=None):
         )
 
 
-def _relocate_on_storage(source, destination):
+def _relocate_on_storage(source, destination, *, expect_dir):
     """Move a blob or a directory on storage.
 
-    Returns False when there was nothing at *source* - an empty folder whose
-    directory was never materialised is a normal case. Raises ``OSError``
-    when a move was attempted and failed, so the caller's transaction rolls
-    back rather than leaving rows pointing at a path the bytes never reached.
+    Returns False when there is nothing to move: an empty folder whose
+    directory was never materialised, or a *source* whose kind on disk
+    contradicts the row - a file row pointing at what is now a directory,
+    which the disk sync runs into when a path flips from one to the other.
+    Moving that directory would drag content the row never owned into the
+    trash. Raises ``OSError`` when a move was attempted and failed, so the
+    caller's transaction rolls back rather than leaving rows pointing at a
+    path the bytes never reached.
     """
     try:
         source_full = default_storage.path(source)
@@ -427,6 +431,14 @@ def _relocate_on_storage(source, destination):
         return _relocate_without_paths(source, destination)
 
     if not os.path.exists(source_full):
+        return False
+    if os.path.isdir(source_full) != expect_dir:
+        logger.warning(
+            "Not moving '%s': it is a %s, the row says %s",
+            scrub(source),
+            "directory" if os.path.isdir(source_full) else "file",
+            "directory" if expect_dir else "file",
+        )
         return False
     os.makedirs(os.path.dirname(destination_full), exist_ok=True)
     os.rename(source_full, destination_full)
@@ -500,15 +512,16 @@ def move_node_storage(node, source, destination):
     if source == destination:
         return
 
-    if node.node_type == File.NodeType.FILE:
+    is_folder = node.node_type == File.NodeType.FOLDER
+    if is_folder:
+        rewrite_descendant_content_names(node, source, destination)
+    else:
         if not node.content or not node.content.name:
             return
         node.content.name = destination
         File.objects.filter(pk=node.pk).update(content=destination)
-    else:
-        rewrite_descendant_content_names(node, source, destination)
 
-    if _relocate_on_storage(source, destination):
+    if _relocate_on_storage(source, destination, expect_dir=is_folder):
         logger.info("Moved %s -> %s", scrub(source), scrub(destination))
 
 

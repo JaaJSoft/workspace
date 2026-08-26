@@ -330,20 +330,22 @@ class FileService:
         if old_parent_id == new_parent_id:
             return
 
+        new_group = new_parent.group if new_parent else None
+        old_group = file_obj.group
+
+        # A node leaving a group folder becomes the personal node of whoever
+        # moved it, so the destination namespace is theirs, not the current
+        # owner's.
+        new_owner = (
+            acting_user if (old_group and not new_group and acting_user) else None
+        )
+
         _name_helpers.check_name_available(
-            file_obj.owner,
+            new_owner or file_obj.owner,
             new_parent,
             file_obj.name,
             file_obj.node_type,
             exclude_pk=file_obj.pk,
-        )
-
-        new_group = new_parent.group if new_parent else None
-        old_group = file_obj.group
-
-        # Determine new owner for storage path computation
-        new_owner = (
-            acting_user if (old_group and not new_group and acting_user) else None
         )
 
         if file_obj.node_type == File.NodeType.FOLDER:

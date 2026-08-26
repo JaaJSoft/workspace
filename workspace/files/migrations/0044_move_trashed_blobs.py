@@ -19,6 +19,8 @@ import posixpath
 
 from django.db import migrations
 
+from workspace.common.logging import scrub
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,7 +82,7 @@ def _move_file(File, db, storage, row, destination, live_paths):
 
     try:
         if not storage.exists(source):
-            logger.warning("Trashed blob already missing: %s", source)
+            logger.warning("Trashed blob already missing: %s", scrub(source))
         elif source in live_paths:
             # A live row owns these bytes now. Leave them, hand the trashed
             # row its own copy.
@@ -89,7 +91,7 @@ def _move_file(File, db, storage, row, destination, live_paths):
         else:
             _relocate(storage, source, destination)
     except OSError as e:
-        logger.error("Could not move trashed blob %s: %s", source, e)
+        logger.error("Could not move trashed blob %s: %s", scrub(source), scrub(e))
         return
 
     File.objects.using(db).filter(pk=row.pk).update(content=destination)
@@ -100,7 +102,7 @@ def _move_folder(File, db, storage, row, destination, username):
     try:
         _relocate(storage, source, destination)
     except OSError as e:
-        logger.error("Could not move trashed folder %s: %s", source, e)
+        logger.error("Could not move trashed folder %s: %s", scrub(source), scrub(e))
         return
 
     # Repoint every blob that rode inside the folder.

@@ -39,32 +39,22 @@ def trash_dir(node):
 def trash_root_of(node):
     """The trashed ancestor-or-self that owns a directory under ``trash/``.
 
-    ``None`` when *node* is live. Resolved from ``path`` in a single query
-    rather than by climbing the parent FK one row at a time.
+    ``None`` when *node* is live. Climbs the parent chain by identity rather
+    than by ``path``: two trashed folders can carry the same path (trash one,
+    make another of the same name, trash that too), and resolving by path
+    would hand back the wrong one - and with it the wrong trash directory.
     """
     if node.deleted_at is None:
         return None
 
-    path = node.path or node.get_path()
-    prefixes = _ancestor_paths(path)
-    if not prefixes:
-        return node
-
-    candidates = File.objects.filter(path__in=prefixes)
-    if node.group_id:
-        candidates = candidates.filter(group_id=node.group_id)
-    else:
-        candidates = candidates.filter(owner_id=node.owner_id, group__isnull=True)
-    by_path = {f.path: f for f in candidates.select_related("owner")}
-
     root = node
-    # Nearest parent first: the chain of trashed ancestors is contiguous, so
-    # the first live one ends the climb.
-    for prefix in reversed(prefixes):
-        ancestor = by_path.get(prefix)
-        if ancestor is None or ancestor.deleted_at is None:
+    parent_id = node.parent_id
+    while parent_id:
+        parent = File.objects.select_related("owner").filter(pk=parent_id).first()
+        if parent is None or parent.deleted_at is None:
             break
-        root = ancestor
+        root = parent
+        parent_id = parent.parent_id
     return root
 
 
@@ -79,9 +69,3 @@ def trashed_storage_path(node, root=None):
         return base
     relative = node_path[len(root_path) + 1 :]
     return posixpath.join(base, *relative.split("/"))
-
-
-def _ancestor_paths(path):
-    """``"A/B/C"`` -> ``["A", "A/B"]`` (root first)."""
-    parts = path.split("/")
-    return ["/".join(parts[:depth]) for depth in range(1, len(parts))]

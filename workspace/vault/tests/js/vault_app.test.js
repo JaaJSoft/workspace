@@ -148,6 +148,35 @@ test('a wrong password does not clear the remembered recovery key', async () => 
   assert.equal(forgotten, false);
 });
 
+test('a password failure on a remembered key hands the key back to be corrected', async () => {
+  // A recovery key belonging to another account decodes cleanly and then fails
+  // the same AEAD tag a mistyped password does, so nothing here can tell the
+  // two apart. Leaving the field hidden makes the second case unrecoverable:
+  // every attempt fails, the message blames the password, and the key that is
+  // actually wrong is not on screen to be changed.
+  const component = app({
+    rememberedSecret: () => 'A'.repeat(53),
+    unlock: async () => { const e = new Error('x'); e.reason = 'password'; throw e; },
+  });
+  component.init();
+  assert.equal(component.secretRequired, false);
+  await component.unlock();
+  assert.equal(component.secretRequired, true);
+  assert.equal(component.secretText, 'A'.repeat(53));
+  assert.match(component.error, /recovery key/i);
+});
+
+test('a password failure without a remembered key does not grow a second field', async () => {
+  const component = app({
+    unlock: async () => { const e = new Error('x'); e.reason = 'password'; throw e; },
+  });
+  component.init();
+  component.secretText = 'A'.repeat(53);
+  await component.unlock();
+  assert.equal(component.secretRequired, true);
+  assert.match(component.error, /master password/i);
+});
+
 test('the password is dropped from the component whatever the outcome', async () => {
   const component = app({
     unlock: async () => { const e = new Error('x'); e.reason = 'password'; throw e; },
@@ -355,4 +384,83 @@ test('creating a vault while locked is refused', async () => {
   await component.createVault();
   assert.equal(called, 0);
   assert.equal(component.state, 'locked');
+});
+
+test('a lock while the list is loading does not put the names back on screen', async () => {
+  // The listing is not atomic with the lock: an idle timeout or a hidden tab
+  // can fire between the request going out and the answer being decrypted,
+  // and by then the onLock callback that empties the list has already run.
+  let unlocked = true;
+  let release;
+  const component = app(
+    { isUnlocked: () => unlocked },
+    {
+      listVaults: () => new Promise((resolve) => {
+        release = () => resolve([
+          { uuid: 'v1', encrypted_name: 'n', metadata_sig: 's', wrapped_key: 'w' },
+        ]);
+      }),
+    }
+  );
+  const loading = component.loadVaults();
+  unlocked = false;
+  component.vaults = [];
+  release();
+  await loading;
+  assert.deepEqual([...component.vaults], []);
+});
+
+test('a retry after a lost answer creates one vault, not two', async () => {
+  // The server matches on the UUID the client mints, which is the only reason
+  // its conflict branch can turn a lost response into "already written". A
+  // fresh UUID on the retry defeats that: the second request describes a
+  // different vault, and the account ends up with two under two keys.
+  let minted = 0;
+  let fail = true;
+  const posted = [];
+  const component = app(
+    { isUnlocked: () => true },
+    {
+      listVaults: async () => [],
+      createVault: async (body) => {
+        posted.push(body);
+        if (fail) throw new Error('the answer never arrived');
+        return body;
+      },
+    },
+    { uuidV7: () => 'vault-uuid-' + ++minted }
+  );
+  await component.unlock();
+  component.newVaultName = 'Work';
+  await component.createVault();
+  fail = false;
+  await component.createVault();
+  assert.equal(posted.length, 2);
+  assert.equal(
+    posted[0].uuid,
+    posted[1].uuid,
+    'the retry must carry the UUID the server may already have written'
+  );
+});
+
+test('a conflict is the vault already existing, not a failure to report', async () => {
+  let listed = [];
+  const component = app(
+    { isUnlocked: () => true },
+    {
+      listVaults: async () => listed,
+      createVault: async () => {
+        const err = new Error('conflict');
+        err.status = 409;
+        throw err;
+      },
+    }
+  );
+  await component.unlock();
+  listed = [{ uuid: 'vault-uuid', encrypted_name: 'n', metadata_sig: 's', wrapped_key: 'w' }];
+  component.newVaultName = 'Work';
+  await component.createVault();
+  assert.equal(component.error, '');
+  assert.equal(component.showCreate, false);
+  assert.equal(component.vaults.length, 1);
 });

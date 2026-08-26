@@ -5,9 +5,13 @@
 // Sealing a vault key to yourself and sharing it with someone else are the
 // same operation with a different recipient - which is why sharing will add
 // rows and change nothing here.
-window.buildVaultCreateRequest = async function buildVaultCreateRequest(session, name) {
+//
+// vaultUuid is the caller's to keep: it is the key the server's conflict
+// branch matches on, so a retry after a lost answer has to carry the one the
+// first attempt sent or it describes a different vault.
+window.buildVaultCreateRequest = async function buildVaultCreateRequest(session, name, vaultUuid) {
   var V = window.VaultCrypto;
-  var vaultUuid = V.uuidV7();
+  vaultUuid = vaultUuid || V.uuidV7();
   var vaultKey = V.randomBytes(32);
   var metaKey = await V.hkdf(vaultKey, V.AD.vaultMetaInfo(vaultUuid));
   var encryptedName = V.toBase64Url(

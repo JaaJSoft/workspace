@@ -4,6 +4,7 @@ from rest_framework import serializers
 from workspace.vault.serializers import (
     AccountFinalizeSerializer,
     AccountRotateSerializer,
+    VaultUpdateSerializer,
     validate_base64url,
 )
 
@@ -122,3 +123,40 @@ class AccountRotateSerializerTests(SimpleTestCase):
         self.assertEqual(
             declared, {"kdf_params", "wrapped_kex_priv", "wrapped_sig_priv"}
         )
+
+
+class VaultUpdateSerializerTests(SimpleTestCase):
+    def _payload(self, **overrides):
+        payload = {
+            "encrypted_name": OPAQUE,
+            "encrypted_description": "",
+            "icon": "lock",
+            "color": "primary",
+            "is_favorite": False,
+            "metadata_sig": OPAQUE,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_accepts_a_plain_icon_and_colour(self):
+        serializer = VaultUpdateSerializer(data=self._payload())
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_a_trailing_newline_never_reaches_the_column(self):
+        """Two layers have to agree for this to hold, and only one of them is
+        obvious: CharField trims the value before the pattern ever sees it,
+        and the pattern ends in ``\\Z`` so it would refuse the untrimmed form
+        too. Turning either off must not silently store the newline."""
+        serializer = VaultUpdateSerializer(data=self._payload(icon="lock\n"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["icon"], "lock")
+
+    def test_refuses_a_newline_inside_the_icon(self):
+        serializer = VaultUpdateSerializer(data=self._payload(icon="lo\nck"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("icon", serializer.errors)
+
+    def test_refuses_a_newline_inside_the_colour(self):
+        serializer = VaultUpdateSerializer(data=self._payload(color="pri\nmary"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("color", serializer.errors)

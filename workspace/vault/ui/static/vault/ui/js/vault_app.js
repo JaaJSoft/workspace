@@ -15,7 +15,9 @@ window.vaultApp = (function () {
     identity: 'This account has no vault identity yet.',
     'substituted-key': 'The signing key the server returned does not match the one your password unwrapped. Nothing was decrypted. Do not enter your password again on this page.',
     network: 'The vault could not be reached. Check your connection and try again.',
+    throttled: 'Too many unlock attempts from here. Nothing is wrong with your password - wait a minute and try again.',
     'recovery-key': 'Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.',
+    'password-or-recovery-key': 'That did not open this account. Either the master password is wrong, or the recovery key remembered on this device belongs to another account - both fail the same way. Nothing was sent to the server.',
   };
 
   function zero(buffer) {
@@ -70,10 +72,18 @@ window.vaultApp = (function () {
       // every keystroke, and a gate reading it would unmount the field on its
       // own first character - the key could then never be typed, only pasted.
       secretRequired: false,
+      // Whether the key in secretText came from this device rather than from
+      // the user's hands. It is what lets a failed unlock tell "you mistyped
+      // the password" apart from "the key we remembered is not yours".
+      secretRemembered: false,
       vaults: [],
       busy: false,
       showCreate: false,
       newVaultName: '',
+      // Minted on the first attempt and kept until one succeeds: it is the
+      // server's idempotency key, so every retry of the same vault has to
+      // reuse it.
+      pendingVaultUuid: null,
       // Alpine's reactivity only sees property reads, never a call into
       // VaultSession's own closure - so the countdown template binds this
       // property, and onTick is what keeps it current.
@@ -86,6 +96,7 @@ window.vaultApp = (function () {
           this.remember = true;
         }
         this.secretRequired = !remembered;
+        this.secretRemembered = !!remembered;
         var self = this;
         window.VaultSession.onLock(function () {
           self.vaults = [];
@@ -122,7 +133,19 @@ window.vaultApp = (function () {
           if (err.reason === 'recovery-key') {
             this.secretText = '';
             this.secretRequired = true;
+            this.secretRemembered = false;
             window.VaultSession.forgetDevice();
+          }
+          // A recovery key belonging to another account decodes cleanly and
+          // then fails the very tag a mistyped password fails, so this branch
+          // cannot tell the two apart and must not pick one. Putting the
+          // remembered key back on screen - filled in, ready to be replaced -
+          // is the only thing that makes the second case correctable; without
+          // it every attempt fails, blames the password, and hides the field
+          // that is actually wrong.
+          if (err.reason === 'password' && this.secretRemembered) {
+            this.secretRequired = true;
+            this.error = MESSAGES['password-or-recovery-key'];
           }
           // A wrong password must not survive into the retry.
           this.password = '';
@@ -146,7 +169,14 @@ window.vaultApp = (function () {
 
       loadVaults: async function () {
         var rows = await window.VaultApi.listVaults();
-        this.vaults = await Promise.all(rows.map(decryptVault));
+        var decrypted = await Promise.all(rows.map(decryptVault));
+        // Neither await is atomic with the lock: an idle timeout or a hidden
+        // tab can fire in between, and by then the onLock callback has already
+        // emptied the list. Assigning anyway would put decrypted names back
+        // into a locked component - reachable state a lock exists to clear,
+        // even though nothing renders it.
+        if (!window.VaultSession.isUnlocked()) return;
+        this.vaults = decrypted;
       },
 
       createVault: async function () {
@@ -155,19 +185,40 @@ window.vaultApp = (function () {
         if (!name) return;
         this.busy = true;
         this.error = '';
+        if (!this.pendingVaultUuid) {
+          this.pendingVaultUuid = window.VaultCrypto.uuidV7();
+        }
         try {
-          var body = await window.buildVaultCreateRequest(window.VaultSession, name);
+          var body = await window.buildVaultCreateRequest(
+            window.VaultSession, name, this.pendingVaultUuid
+          );
           var row = await window.VaultApi.createVault(body);
           this.vaults.push(await decryptVault(row));
-          this.showCreate = false;
-          this.newVaultName = '';
+          this.closeCreateDialog();
         } catch (err) {
-          this.error = err.status === 409
-            ? 'A vault with that name could not be created - its identifier collided. Try again.'
-            : 'The vault could not be created. Try again.';
+          if (err.status === 409) {
+            // The UUID is already taken, and it is one this component minted -
+            // so the vault is the one the previous attempt wrote and never
+            // heard back about. Reloading is what turns that into the success
+            // it already was.
+            try {
+              await this.loadVaults();
+              this.closeCreateDialog();
+            } catch (reloadErr) {
+              this.error = 'Your vault was created, but the list could not be reloaded.';
+            }
+          } else {
+            this.error = 'The vault could not be created. Try again.';
+          }
         } finally {
           this.busy = false;
         }
+      },
+
+      closeCreateDialog: function () {
+        this.showCreate = false;
+        this.newVaultName = '';
+        this.pendingVaultUuid = null;
       },
 
       lockNow: function () {

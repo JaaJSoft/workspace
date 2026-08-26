@@ -22,6 +22,10 @@ function component(extra = {}) {
     setTimeout: (fn) => fn(),
     addEventListener: () => {},
     localStorage: { setItem: () => {}, removeItem: () => {} },
+    // finish() mints the first vault's UUID itself, so every test that
+    // reaches it needs this much of the crypto module even when it stubs the
+    // builder that would otherwise have used it.
+    VaultCrypto: { uuidV7: () => 'first-vault-uuid' },
     ...extra,
   });
   return ctx.vaultOnboarding();
@@ -144,6 +148,7 @@ test('the password and the secret bytes are gone once the kit is shown', () => {
 // around them - which is where a lost response turns into a vault nobody can
 // open.
 const CRYPTO_STUB = {
+  uuidV7: () => 'first-vault-uuid',
   KDF_HKDF_SHA256: 1,
   ARGON2_PARAMS: {},
   PUBKEY_ALG_X25519: 1,
@@ -644,6 +649,45 @@ test('retrying the first vault never touches the account endpoints again', async
   // would be refused by the server and would read as a lost account.
   assert.deepEqual(posted, []);
   assert.equal(app.step, 3);
+});
+
+test('a retried first vault carries the UUID the first attempt sent', async () => {
+  // The server turns a lost answer into a conflict by matching the UUID the
+  // client minted. A fresh one on the retry describes a different vault, so
+  // the account that lost one answer ends up with two "Personal" vaults.
+  let minted = 0;
+  const seen = [];
+  const { app } = finishing({
+    buildVaultCreateRequest: async (session, name, uuid) => { seen.push(uuid); return { uuid }; },
+    VaultApi: { createVault: async () => { throw new Error('refused'); } },
+    VaultCrypto: { uuidV7: () => 'first-vault-' + ++minted },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  await app.finish();
+  assert.equal(seen.length, 2);
+  assert.ok(seen[0], 'the UUID has to be minted here, not inside the builder');
+  assert.equal(seen[0], seen[1]);
+});
+
+test('a conflict on the first vault means it is already there', async () => {
+  const { app, navigated } = finishing({
+    buildVaultCreateRequest: async (session, name, uuid) => ({ uuid }),
+    VaultApi: {
+      createVault: async () => {
+        const err = new Error('conflict');
+        err.status = 409;
+        throw err;
+      },
+    },
+    VaultCrypto: { uuidV7: () => 'first-vault' },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(app.error, '');
+  assert.deepEqual(navigated, ['/vault/']);
 });
 
 test('the recovery key is not stored unless the box is ticked', async () => {

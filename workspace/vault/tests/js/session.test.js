@@ -322,6 +322,18 @@ test('an account with no identity is told so, not told the password is wrong', a
   );
 });
 
+test('a throttled envelope is not reported as a network failure', async () => {
+  // The envelope endpoint carries a burst limit, and unlocking refetches it -
+  // a session that locks on every tab hide reaches it often. Folding 429 into
+  // 'network' tells the user to check a connection that is fine, and hides the
+  // one fact that would let them act: waiting is what fixes it.
+  const h = harness({ fetch: async () => ({ ok: false, status: 429 }) });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'throttled'
+  );
+});
+
 test('remembering the device stores the recovery key and nothing else', async () => {
   const h = harness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: true });
@@ -559,4 +571,18 @@ test('a tick reports the same remaining time the countdown itself would read', a
   h.session.onTick(() => { seen = h.session.secondsUntilLock(); });
   h.session.tick();
   assert.equal(seen, 240);
+});
+
+test('a storage that refuses every access does not take the screen down with it', () => {
+  // Private-browsing Safari and "block site data" throw on access rather than
+  // returning null. The write in unlock() has always been wrapped; these two
+  // were not, and vaultApp.init() calls rememberedSecret() as its first
+  // statement - a throw there aborts the rest of init, so onLock, onTick and
+  // watchForIdle never register and the session stops auto-locking.
+  const denied = () => { throw new Error('access denied'); };
+  const { session } = harness({
+    globals: { localStorage: { getItem: denied, setItem: denied, removeItem: denied } },
+  });
+  assert.equal(session.rememberedSecret(), null);
+  assert.doesNotThrow(() => session.forgetDevice());
 });

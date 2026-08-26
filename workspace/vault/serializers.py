@@ -127,8 +127,11 @@ class AccountRotateSerializer(serializers.Serializer):
 # would produce a wrap nobody can open.
 HPKE_SUITE_V1 = {"kem_id": 0x0020, "kdf_id": 0x0001, "aead_id": 0x0002, "mode": 0x00}
 
-_ICON = re.compile(r"^[a-z0-9-]{1,64}$")
-_COLOR = re.compile(r"^[a-z0-9-]{1,32}$")
+# The trailing anchor is \Z, not $: $ also matches before a final newline,
+# and RegexField validates with search(), so an icon ending in one would
+# pass a pattern that looks closed.
+_ICON = re.compile(r"^[a-z0-9-]{1,64}\Z")
+_COLOR = re.compile(r"^[a-z0-9-]{1,32}\Z")
 
 
 def validate_hpke_suite(value):

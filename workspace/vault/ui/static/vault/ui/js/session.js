@@ -13,8 +13,9 @@ var VAULT_SECRET_STORAGE_KEY = 'vault.secret-key';
 // decode), 'identity' (no active account envelope, or an unexpected failure
 // before the private keys are unwrapped), 'substituted-key' (a spoofed or
 // malformed signing key, or an unexpected failure at or after the private
-// keys are unwrapped), 'network' (the envelope request itself failed), or
-// 'locked' (called before a session is open). cause, when given, is the
+// keys are unwrapped), 'network' (the envelope request itself failed),
+// 'throttled' (the envelope request was rate-limited), or 'locked' (called
+// before a session is open). cause, when given, is the
 // exception this reason was mapped from - kept so a genuine programming
 // error stays diagnosable instead of surfacing only as a security-sounding
 // reason string.
@@ -75,11 +76,24 @@ window.VaultSession = (function () {
     isUnlocked: function () { return unlocked; },
     accountUuid: function () { return accountUuid; },
     accountKexPublicRaw: function () { return kexPublicRaw; },
+    // Both wrapped for the same reason the write in unlock() is: private
+    // browsing and blocked site data throw on access rather than answering
+    // null. A throw here would reach vaultApp.init(), which calls this as its
+    // first statement - Alpine would abandon the rest of it, and the session
+    // would run with no idle timer, no countdown and no lock on tab hide.
     rememberedSecret: function () {
-      return localStorage.getItem(VAULT_SECRET_STORAGE_KEY);
+      try {
+        return localStorage.getItem(VAULT_SECRET_STORAGE_KEY);
+      } catch (err) {
+        return null;
+      }
     },
     forgetDevice: function () {
-      localStorage.removeItem(VAULT_SECRET_STORAGE_KEY);
+      try {
+        localStorage.removeItem(VAULT_SECRET_STORAGE_KEY);
+      } catch (err) {
+        // Nothing readable was stored either, so there is nothing to undo.
+      }
     },
     onLock: function (callback) { lockCallbacks.push(callback); },
     // Fired from tick(), once a second, whether or not that tick locked the
@@ -93,7 +107,14 @@ window.VaultSession = (function () {
       try {
         envelope = await window.VaultApi.fetchEnvelope();
       } catch (err) {
-        throw VaultUnlockError(err.status === 404 ? 'identity' : 'network', err);
+        // 429 is kept apart from 'network' on purpose: the envelope carries a
+        // burst limit and every unlock refetches it, so this is reachable by
+        // ordinary use. Telling the user to check their connection would send
+        // them after the wrong thing.
+        var reason = 'network';
+        if (err.status === 404) reason = 'identity';
+        else if (err.status === 429) reason = 'throttled';
+        throw VaultUnlockError(reason, err);
       }
       if (envelope.state !== 'active') throw VaultUnlockError('identity');
 

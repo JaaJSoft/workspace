@@ -230,11 +230,27 @@ window.vaultOnboarding = function vaultOnboarding() {
           window.location.assign(this.$root.dataset.vaultUrl);
           return;
         }
-        var body = await window.buildVaultCreateRequest(this.vaultSession(), 'Personal');
+        // Minted here rather than inside the builder, and kept across
+        // retries: the server turns a lost answer into a conflict by matching
+        // this UUID, and a fresh one would describe a second vault instead.
+        if (!this.firstVaultUuid) {
+          this.firstVaultUuid = window.VaultCrypto.uuidV7();
+        }
+        var body = await window.buildVaultCreateRequest(
+          this.vaultSession(), 'Personal', this.firstVaultUuid
+        );
         await window.VaultApi.createVault(body);
         this.rememberOnThisDevice();
         window.location.assign(this.$root.dataset.vaultUrl);
       } catch (err) {
+        // A conflict on a UUID this page minted is the vault the previous
+        // attempt wrote and never heard back about - the outcome the user
+        // asked for, reached the slow way.
+        if (err && err.status === 409) {
+          this.rememberOnThisDevice();
+          window.location.assign(this.$root.dataset.vaultUrl);
+          return;
+        }
         // The identity is active and the kit has been shown: the account is
         // sound, only the vault is missing. Saying so keeps the retry on the
         // one screen that can still explain it.

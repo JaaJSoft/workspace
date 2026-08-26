@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('auth', '0012_alter_user_first_name_max_length'),
-        ('files', '0043_file_lock_token'),
+        ('files', '0044_move_trashed_blobs'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

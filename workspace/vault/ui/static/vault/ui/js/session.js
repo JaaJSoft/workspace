@@ -6,6 +6,22 @@
 // buffer, import as a non-extractable key, zero the buffer - because the one
 // path that cannot avoid raw bytes (HPKE hands them back whatever happens)
 // sets the standard for the ones that could.
+// Where the recovery key lives between sessions when the box is ticked, in
+// both this file and onboarding.js. It is written as plain text, and CodeQL
+// says so (js/clear-text-storage-of-sensitive-data) - the trade-off is taken
+// knowingly, not overlooked:
+//
+//   - The key is a secret from the server, which is the adversary this module
+//     is built against. Nothing here ever reaches it.
+//   - It opens nothing on its own: the KDF needs the master password too, and
+//     a script able to read this storage could already keylog that password.
+//   - Storing it sealed under a non-extractable key would move the bar rather
+//     than raise it - the same script could call decrypt.
+//   - It is opt-in, the checkbox label states exactly this, and unticking it
+//     erases what a previous unlock wrote.
+//
+// Anyone tempted to "fix" the alert should change the decision first, not the
+// storage.
 var VAULT_SECRET_STORAGE_KEY = 'vault.secret-key';
 
 // reason is one of: 'password' (wrong password, or a wrapped key that fails

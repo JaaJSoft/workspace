@@ -838,7 +838,7 @@ class VoiceToolProvider(ToolProvider):
 
     @tool(
         badge_icon="🎙️",
-        badge_label="Sent a voice message",
+        badge_label="Recorded a voice message",
         badge_running_label="Recording a voice message",
         detail_key="text",
         params=SendVoiceMessageParams,

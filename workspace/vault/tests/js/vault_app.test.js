@@ -62,13 +62,36 @@ test('the screen starts locked', () => {
 });
 
 test('a device with no remembered key asks for one', () => {
-  assert.equal(app().needsSecret(), true);
+  const component = app();
+  component.init();
+  assert.equal(component.secretRequired, true);
+});
+
+test('typing the recovery key does not take the field away', () => {
+  // The gate is decided at mount, never from the field's own value: it is
+  // bound with x-model, so a gate reading it would close on the first
+  // character and unmount the input mid-word. Pasting hid this - one input
+  // event carries the whole key - so the check walks the value up from empty.
+  const component = app();
+  component.init();
+  for (const value of ['0', '0E', '0ET', '0ETE']) {
+    component.secretText = value;
+    assert.equal(component.secretRequired, true, `gate closed at "${value}"`);
+  }
+});
+
+test('the submit button waits for a required recovery key, not for any text', () => {
+  const component = app();
+  component.init();
+  assert.equal(component.secretMissing(), true);
+  component.secretText = '0ETE';
+  assert.equal(component.secretMissing(), false);
 });
 
 test('a remembered key is used without asking for it again', () => {
   const component = app({ rememberedSecret: () => 'A'.repeat(53) });
   component.init();
-  assert.equal(component.needsSecret(), false);
+  assert.equal(component.secretRequired, false);
   assert.equal(component.secretText, 'A'.repeat(53));
 });
 
@@ -101,14 +124,15 @@ test('a substituted key is not reported as a wrong password', async () => {
 test('a corrupt remembered recovery key can be retyped, not just stared at', async () => {
   let forgotten = false;
   const component = app({
+    rememberedSecret: () => 'A'.repeat(53),
     unlock: async () => { const e = new Error('x'); e.reason = 'recovery-key'; throw e; },
     forgetDevice: () => { forgotten = true; },
   });
-  component.secretText = 'A'.repeat(53);
-  assert.equal(component.needsSecret(), false);
+  component.init();
+  assert.equal(component.secretRequired, false);
   await component.unlock();
   assert.equal(component.secretText, '');
-  assert.equal(component.needsSecret(), true);
+  assert.equal(component.secretRequired, true);
   assert.equal(forgotten, true);
 });
 

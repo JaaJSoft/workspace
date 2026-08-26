@@ -11,7 +11,7 @@ window.vaultApp = (function () {
   // inviting a retry would mean typing a password into a page that may be
   // hostile.
   var MESSAGES = {
-    password: 'That vault password does not open this account. Nothing was sent to the server - the check happens here.',
+    password: 'That master password does not open this account. Nothing was sent to the server - the check happens here.',
     identity: 'This account has no vault identity yet.',
     'substituted-key': 'The signing key the server returned does not match the one your password unwrapped. Nothing was decrypted. Do not enter your password again on this page.',
     network: 'The vault could not be reached. Check your connection and try again.',
@@ -65,6 +65,11 @@ window.vaultApp = (function () {
       password: '',
       secretText: '',
       remember: false,
+      // Whether this device has to be asked for a recovery key, decided once
+      // at mount. It must not follow secretText: x-model rewrites that on
+      // every keystroke, and a gate reading it would unmount the field on its
+      // own first character - the key could then never be typed, only pasted.
+      secretRequired: false,
       vaults: [],
       busy: false,
       showCreate: false,
@@ -80,6 +85,7 @@ window.vaultApp = (function () {
           this.secretText = remembered;
           this.remember = true;
         }
+        this.secretRequired = !remembered;
         var self = this;
         window.VaultSession.onLock(function () {
           self.vaults = [];
@@ -92,8 +98,8 @@ window.vaultApp = (function () {
         window.VaultSession.watchForIdle();
       },
 
-      needsSecret: function () {
-        return !this.secretText;
+      secretMissing: function () {
+        return this.secretRequired && !this.secretText;
       },
 
       unlock: async function () {
@@ -109,12 +115,13 @@ window.vaultApp = (function () {
           this.state = 'locked';
           this.error = MESSAGES[err.reason] || 'Something went wrong. Try again.';
           // A key that fails to decode - remembered or freshly typed - must
-          // not sit behind needsSecret() forever: clearing it is what makes
-          // the recovery-key input reappear so it can be retyped, and
-          // forgetting it stops a bad remembered value from repeating this
-          // on every load.
+          // not leave the user with no way back: clearing the value and
+          // re-arming the gate is what puts the input back on screen, and
+          // forgetting the device stops a bad remembered value from repeating
+          // this on every load.
           if (err.reason === 'recovery-key') {
             this.secretText = '';
+            this.secretRequired = true;
             window.VaultSession.forgetDevice();
           }
           // A wrong password must not survive into the retry.

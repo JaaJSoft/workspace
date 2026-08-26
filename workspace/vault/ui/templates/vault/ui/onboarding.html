@@ -1,7 +1,7 @@
 {% extends "base_with_navbar.html" %}
 {% load static %}
 
-{% block title %}Set up your vault - Workspace{% endblock %}
+{% block title %}Set up your master password - Workspace{% endblock %}
 
 {% comment %}
   No inline script and no inline style attribute anywhere in this file, nor in
@@ -28,7 +28,7 @@
     data-email="{{ request.user.email }}"
     data-vault-url="{{ vault_url }}"
   >
-    <h1 class="text-2xl font-semibold mb-6">Set up your vault</h1>
+    <h1 class="text-2xl font-semibold mb-6">Set up your master password</h1>
 
     <div
       class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden"
@@ -66,8 +66,8 @@
                 <span class="w-px flex-1 bg-base-300 my-1"></span>
               </div>
               <div class="pb-5">
-                <p class="text-sm font-medium">Before you start</p>
-                <p class="text-xs text-base-content/50">The server cannot read your vault</p>
+                <p class="text-sm font-medium">How it works</p>
+                <p class="text-xs text-base-content/50">One password opens every vault</p>
               </div>
             </li>
 
@@ -91,7 +91,7 @@
                   class="text-sm font-medium"
                   :class="step < 2 && 'text-base-content/40'"
                 >
-                  Vault password
+                  Master password
                 </p>
                 <p class="text-xs text-base-content/50">Typed every time you unlock</p>
               </div>
@@ -126,7 +126,7 @@
             <i data-lucide="lock" class="w-4 h-4 shrink-0 text-primary"></i>
             <span>
               Encrypted on this device. There is no password reset: lose both
-              your password and your recovery key and the vault is gone.
+              your password and your recovery key and your vaults are gone.
             </span>
           </p>
         </aside>
@@ -145,8 +145,8 @@
               </span>
             </div>
             <h2 class="font-bold text-lg flex-1">
-              <span x-show="step === 1">Before you start</span>
-              <span x-show="step === 2" x-cloak>Vault password</span>
+              <span x-show="step === 1">How it works</span>
+              <span x-show="step === 2" x-cloak>Master password</span>
               <span x-show="step === 3" x-cloak>Your recovery key</span>
             </h2>
           </div>
@@ -156,31 +156,47 @@
             <span x-text="error"></span>
             </inline-alert>
 
-            {# Step 1 - what the server cannot read, and cannot recover #}
+            {# Step 1 - one password for every vault, and no way back once both halves are lost #}
             <template x-if="step === 1">
-              <section class="space-y-4">
-                <p>
-                  Your vault is encrypted on this device. The server keeps what
-                  it cannot open: it never sees your password, and it cannot
-                  reset it.
-                </p>
-                <p>
-                  So there is no "forgot password" here. Lose your password and
-                  the recovery key you are about to get, and nobody can open
-                  your vault again.
-                </p>
+              <section class="space-y-5">
+                <div>
+                  <h3 class="font-semibold mb-1">One password opens everything</h3>
+                  <p class="text-sm text-base-content/60">
+                    Your master password unlocks your account, and every vault
+                    in it - today's and the ones you create later. Vaults do not
+                    have their own passwords. It is not your Workspace password
+                    either, and changing one never changes the other.
+                  </p>
+                </div>
+                <div>
+                  <h3 class="font-semibold mb-1">It never leaves this browser</h3>
+                  <p class="text-sm text-base-content/60">
+                    It is used here, on this device, to open the keys that
+                    decrypt your data. What we store, we cannot read - which is
+                    also why nobody here can reset it.
+                  </p>
+                </div>
+                <div>
+                  <h3 class="font-semibold mb-1">Your recovery key is the other half</h3>
+                  <p class="text-sm text-base-content/60">
+                    We will create one on this device in a moment and show it
+                    once. It does not recover your password: it is the second
+                    half of the lock, the part you bring to a new device. Keep
+                    it offline.
+                  </p>
+                </div>
               </section>
             </template>
 
-            {# Step 2 - the vault password, behind the floor #}
+            {# Step 2 - the master password, behind the floor #}
             <template x-if="step === 2">
               <section
                 class="space-y-4"
                 x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
               >
-                <p>Pick a password for your vault. It never leaves this browser.</p>
+                <p>Pick your master password. It never leaves this browser.</p>
                 <label class="form-control w-full">
-                  <span class="label-text">Vault password</span>
+                  <span class="label-text">Master password</span>
                   {% comment %}
                     On input, not change: the corpus check gates the step, and
                     hanging it off change would leave the button disabled for
@@ -322,8 +338,8 @@
                 x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
               >
                 <p>
-                  Save it somewhere safe and offline. With your password, it is
-                  the only way into your vault.
+                  Save it somewhere safe and offline. With your master password,
+                  it is the only way into your vaults.
                 </p>
                 {% comment %}
                   The key takes the focus when the step opens, so a screen reader
@@ -346,13 +362,13 @@
                   />
                   <span class="label-text">
                     I have saved my recovery key. Without it, nobody can open my
-                    vault.
+                    vaults.
                   </span>
                 </label>
                 <label class="label cursor-pointer justify-start gap-3">
                   <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
                   <span class="label-text">
-                    Remember the recovery key on this device. Anything that can run
+                    Remember my recovery key on this device. Anything that can run
                     code on this page can then read it, so leave it off on a shared
                     computer.
                   </span>
@@ -395,7 +411,7 @@
               @click="generateAndSeal()"
             >
               <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
-              Create my vault
+              Set my master password
             </button>
             <button
               type="button"
@@ -406,7 +422,7 @@
               @click="finish()"
             >
               <span x-show="busy" class="loading loading-spinner loading-xs" x-cloak></span>
-              Open my vault
+              Create my first vault
               <i data-lucide="check" class="w-4 h-4"></i>
             </button>
           </div>

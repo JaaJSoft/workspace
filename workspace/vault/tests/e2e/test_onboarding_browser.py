@@ -67,9 +67,9 @@ class OnboardingWalkTests(PlaywrightTestCase):
         """
         self._fill_password()
         self.page.wait_for_selector(
-            "button:has-text('Create my vault'):not([disabled])", timeout=15000
+            "button:has-text('Set my master password'):not([disabled])", timeout=15000
         )
-        self.page.click("button:has-text('Create my vault')")
+        self.page.click("button:has-text('Set my master password')")
         # The acknowledgement box, not the heading: the rail names every step
         # from the start, so "Your recovery key" is on screen well before the
         # step that shows one.
@@ -84,7 +84,9 @@ class OnboardingWalkTests(PlaywrightTestCase):
         self._walk_to_the_password_step()
         self._fill_password("short")
         self.page.wait_for_timeout(1500)
-        self.assertTrue(self.page.is_disabled("button:has-text('Create my vault')"))
+        self.assertTrue(
+            self.page.is_disabled("button:has-text('Set my master password')")
+        )
 
     def test_the_whole_flow_seals_an_identity_the_server_verifies(self):
         self._serve_corpus()
@@ -105,7 +107,7 @@ class OnboardingWalkTests(PlaywrightTestCase):
         self._walk_to_the_password_step()
         self._seal()
 
-        opener = self.page.locator("button:has-text('Open my vault')")
+        opener = self.page.locator("button:has-text('Create my first vault')")
         self.assertTrue(opener.is_disabled())
 
         # By id, not by type: the shared layout's drawer toggle is a checkbox
@@ -171,5 +173,5 @@ class OnboardingWalkTests(PlaywrightTestCase):
         self._walk_to_the_password_step()
         self._fill_password()
         self.page.wait_for_selector(
-            "button:has-text('Create my vault'):not([disabled])", timeout=15000
+            "button:has-text('Set my master password'):not([disabled])", timeout=15000
         )

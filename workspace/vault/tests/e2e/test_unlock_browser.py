@@ -19,7 +19,7 @@ CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
 # the navbar's theme switch are checkboxes too, and both come earlier in the
 # document than this one.
 REMEMBER_CHECKBOX = (
-    "label:has-text('Remember the recovery key on this device') input[type='checkbox']"
+    "label:has-text('Remember my recovery key on this device') input[type='checkbox']"
 )
 
 
@@ -47,15 +47,15 @@ class UnlockWalkTests(PlaywrightTestCase):
         self.page.fill("input[autocomplete='new-password'] >> nth=0", GOOD_PASSWORD)
         self.page.fill("input[autocomplete='new-password'] >> nth=1", GOOD_PASSWORD)
         self.page.wait_for_selector(
-            "button:has-text('Create my vault'):not([disabled])", timeout=15000
+            "button:has-text('Set my master password'):not([disabled])", timeout=15000
         )
-        self.page.click("button:has-text('Create my vault')")
+        self.page.click("button:has-text('Set my master password')")
         self.page.wait_for_selector("#recovery-key-acknowledged", timeout=60000)
         self.secret = self.page.inner_text("[data-recovery-key]")
         self.page.check("#recovery-key-acknowledged")
         # Left unticked on purpose: the reload tests below have to prove the
         # recovery key is asked for when it was never stored.
-        self.page.click("button:has-text('Open my vault')")
+        self.page.click("button:has-text('Create my first vault')")
         self.page.wait_for_url("**/vault")
         return self.secret
 
@@ -63,7 +63,7 @@ class UnlockWalkTests(PlaywrightTestCase):
         """Fill and submit the unlock form, recovery key included.
 
         The recovery key was never remembered by ``_onboard``, so
-        ``needsSecret()`` keeps the submit button disabled until this field
+        ``secretMissing()`` keeps the submit button disabled until this field
         carries something - a wrong-password test still has to fill in the
         (correct) recovery key, or it never reaches the password check at
         all.
@@ -112,6 +112,24 @@ class UnlockWalkTests(PlaywrightTestCase):
         self.page.reload()
         self.page.wait_for_selector("input[autocomplete='current-password']")
         self.assertEqual(self.page.locator("input[spellcheck='false']").count(), 0)
+
+    def test_the_recovery_key_survives_being_typed_one_key_at_a_time(self):
+        """Every other test here reaches the field through ``fill()``, which
+        delivers the whole key in a single input event - so the value never
+        passes through the one-character state, and the field is never asked to
+        stay mounted while it holds one. A person types, one keystroke at a
+        time, and the field has to still be there at the end of the word."""
+        secret = self._onboard()
+        self.page.reload()
+        self.page.wait_for_selector("input[spellcheck='false']")
+        self.page.click("input[spellcheck='false']")
+        self.page.keyboard.type(secret)
+        self.assertEqual(
+            self.page.locator("input[spellcheck='false']").count(),
+            1,
+            "the recovery-key field must survive its own first character",
+        )
+        self.assertEqual(self.page.input_value("input[spellcheck='false']"), secret)
 
     def test_a_wrong_password_fails_without_a_request(self):
         self._onboard()

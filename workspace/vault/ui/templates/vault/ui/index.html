@@ -22,15 +22,17 @@
 {% block content %}
   <div class="mx-auto max-w-4xl w-full py-8" x-data="vaultApp()">
     <template x-if="state !== 'unlocked'">
-      <div class="card bg-base-100 border border-base-300 shadow-sm max-w-lg mx-auto">
+      <div
+        class="card bg-base-100 border border-base-300 shadow-sm max-w-lg mx-auto"
+      >
         <div class="card-body">
-          <h1 class="text-xl font-semibold">Unlock your vault</h1>
+          <h1 class="text-xl font-semibold">Unlock your vaults</h1>
           <inline-alert type="error" x-show="error" x-cloak>
-            <span x-text="error"></span>
+          <span x-text="error"></span>
           </inline-alert>
           <form @submit.prevent="unlock()">
             <label class="form-control">
-              <span class="label-text">Vault password</span>
+              <span class="label-text">Master password</span>
               <input
                 type="password"
                 class="input input-bordered"
@@ -39,7 +41,7 @@
                 :disabled="state === 'deriving'"
               />
             </label>
-            <template x-if="needsSecret()">
+            <template x-if="secretRequired">
               <label class="form-control mt-4">
                 <span class="label-text">Recovery key</span>
                 <input
@@ -56,7 +58,7 @@
             <label class="label cursor-pointer justify-start gap-3 mt-4">
               <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
               <span class="label-text">
-                Remember the recovery key on this device. Anything that can run
+                Remember my recovery key on this device. Anything that can run
                 code on this page can then read it, so leave it off on a shared
                 computer.
               </span>
@@ -64,12 +66,12 @@
             <button
               type="submit"
               class="btn btn-primary mt-4"
-              :disabled="state === 'deriving' || !password || needsSecret()"
+              :disabled="state === 'deriving' || !password || secretMissing()"
             >
               <span x-show="state !== 'deriving'">Unlock</span>
               <span x-show="state === 'deriving'" x-cloak>
                 <span class="loading loading-spinner loading-xs"></span>
-                Deriving your key - this takes a moment on purpose
+                Unlocking - the wait is deliberate
               </span>
             </button>
           </form>
@@ -89,7 +91,7 @@
           </div>
         </div>
         <inline-alert type="error" x-show="error" x-cloak class="mb-4">
-          <span x-text="error"></span>
+        <span x-text="error"></span>
         </inline-alert>
         <template x-if="vaults.length === 0">
           <p class="text-base-content/60">No vault yet.</p>
@@ -105,16 +107,13 @@
                   <span class="font-medium" x-text="vault.name"></span>
                 </div>
                 <template x-if="vault.tampered">
-                  <inline-alert type="error" title="Signature does not verify"
-                    message="This vault's metadata was not signed by your account. Its name is not shown."></inline-alert>
+                  <inline-alert type="error" title="Signature does not verify" message="This vault's metadata was not signed by your account. Its name is not shown."></inline-alert>
                 </template>
                 <template x-if="vault.unopenable">
-                  <inline-alert type="warning" title="No key for this device"
-                    message="This vault holds no key wrap for your account, so it cannot be opened here."></inline-alert>
+                  <inline-alert type="warning" title="No key for this device" message="This vault holds no key wrap for your account, so it cannot be opened here."></inline-alert>
                 </template>
                 <template x-if="vault.unreadable">
-                  <inline-alert type="error" title="Could not be decrypted"
-                    message="This vault's data could not be read. It may be corrupted."></inline-alert>
+                  <inline-alert type="error" title="Could not be decrypted" message="This vault's data could not be read. It may be corrupted."></inline-alert>
                 </template>
               </div>
             </li>
@@ -126,14 +125,25 @@
             <div class="modal-box">
               <h2 class="font-semibold text-lg">New vault</h2>
               <inline-alert type="error" x-show="error" x-cloak class="mt-4">
-                <span x-text="error"></span>
+              <span x-text="error"></span>
               </inline-alert>
               <form @submit.prevent="createVault()">
-                <input type="text" class="input input-bordered w-full mt-4"
-                       autocomplete="off" spellcheck="false" x-model="newVaultName"
-                       placeholder="Vault name">
+                <input
+                  type="text"
+                  class="input input-bordered w-full mt-4"
+                  autocomplete="off"
+                  spellcheck="false"
+                  x-model="newVaultName"
+                  placeholder="Vault name"
+                />
                 <div class="modal-action">
-                  <button type="button" class="btn btn-ghost" @click="showCreate = false; newVaultName = ''">Cancel</button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    @click="showCreate = false; newVaultName = ''"
+                  >
+                    Cancel
+                  </button>
                   <button type="submit" class="btn btn-primary" :disabled="busy">Create</button>
                 </div>
               </form>

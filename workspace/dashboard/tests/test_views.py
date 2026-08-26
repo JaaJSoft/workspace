@@ -1062,6 +1062,24 @@ class IndexViewQueryBudgetTests(TestCase):
         )
         self.client.login(username="budgetuser", password="pass123")
 
+    def test_index_spends_two_queries_on_the_storage_gauge(self):
+        """One usage aggregate and one quota-row lookup, neither cached.
+
+        Both are per-render costs the gauge added to a landing page, so a
+        third one - a per-module or per-file resolution - must not creep in.
+        """
+        with CaptureQueriesContext(connection) as ctx:
+            resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+
+        gauge_queries = [
+            q["sql"]
+            for q in ctx.captured_queries
+            if "files_userstoragequota" in q["sql"]
+            or ('SUM("files_file"."size")' in q["sql"])
+        ]
+        self.assertEqual(len(gauge_queries), 2, gauge_queries)
+
     def test_index_does_not_expand_upcoming_on_critical_path(self):
         with CaptureQueriesContext(connection) as ctx:
             resp = self.client.get("/")
@@ -1087,3 +1105,20 @@ class IndexViewQueryBudgetTests(TestCase):
             f"(pending-action provider + activity stats only). Found "
             f"{len(calendar_event_queries)}: {calendar_event_queries}",
         )
+
+
+class IndexViewTotalQueryBudgetTests(TestCase):
+    """The whole render, on a cold cache - the state a first page view hits."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="totalbudget", password="pw")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_index_render_stays_within_its_query_budget(self):
+        # 2 of these belong to the storage gauge (usage aggregate + quota row).
+        with self.assertNumQueries(24):
+            self.assertEqual(self.client.get("/").status_code, 200)

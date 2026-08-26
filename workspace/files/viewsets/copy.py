@@ -148,8 +148,11 @@ class CopyMixin:
         copied = FileService.copy(
             file_obj, parent, request.user, acting_user=request.user
         )
-        # Re-fetch through get_queryset() so the instance carries the
-        # annotations FileSerializer now requires.
-        annotated = self.get_queryset().filter(pk=copied.pk).first() or copied
+        # get_queryset() only spans the user's own personal files; a copy
+        # landing in a group folder needs the access-aware annotation instead
+        # to carry the annotations FileSerializer requires.
+        annotated = FileService.annotate_for_serializer(
+            File.objects.filter(pk=copied.pk), request.user
+        ).first()
         serializer = self.get_serializer(annotated)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

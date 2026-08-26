@@ -20,6 +20,7 @@ from workspace.common.logging import scrub
 
 from ..models import File
 from .files import FileService
+from .quota import check_write_allowed, remaining_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,15 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                 with transaction.atomic():
                     folder_cache = {(): dest_folder}
                     total_bytes = 0
+                    dest_group = dest_folder.group if dest_folder is not None else None
+                    # The bucket is read once and the running total is kept in
+                    # Python, so the loop costs no quota query per entry.
+                    # ``total_bytes`` counts bytes actually decompressed, which
+                    # is what makes it safe to hand create_file check_quota=False
+                    # below - a zip header can lie, the running total cannot.
+                    quota_remaining = remaining_bytes(
+                        owner=acting_user, group=dest_group
+                    )
 
                     for info in entries:
                         if _is_symlink(info):
@@ -171,6 +181,21 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                         )
                         leaf = parts[-1]
 
+                        if (
+                            quota_remaining is not None
+                            and total_bytes + info.file_size > quota_remaining
+                        ):
+                            # Declared size: a refusal before the entry is
+                            # decompressed at all. The service names the bucket
+                            # and re-reads usage, which already includes bytes
+                            # written earlier in this extraction - so charge
+                            # only this entry.
+                            check_write_allowed(
+                                owner=acting_user,
+                                group=dest_group,
+                                additional_bytes=info.file_size,
+                            )
+
                         tmp, total_bytes = _stream_entry_to_tempfile(
                             zf,
                             info,
@@ -179,12 +204,25 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                             max_bytes,
                         )
                         try:
+                            if (
+                                quota_remaining is not None
+                                and total_bytes > quota_remaining
+                            ):
+                                # Real size, now that the entry is on disk:
+                                # this is the gate an understated header would
+                                # otherwise walk past.
+                                check_write_allowed(
+                                    owner=acting_user,
+                                    group=dest_group,
+                                    additional_bytes=tmp.size,
+                                )
                             new_file = FileService.create_file(
                                 acting_user,
                                 leaf,
                                 parent=parent,
                                 content=tmp,
                                 acting_user=acting_user,
+                                check_quota=False,
                             )
                             created_paths.append(
                                 (new_file.content.storage, new_file.content.name),

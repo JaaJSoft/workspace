@@ -5,16 +5,16 @@ import logging
 import os
 import time
 import uuid
+from contextlib import contextmanager
 
-from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
-from wsgidav.dav_error import HTTP_BAD_REQUEST, DAVError
+from wsgidav.dav_error import HTTP_BAD_REQUEST, HTTP_INSUFFICIENT_STORAGE, DAVError
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.common.logging import scrub
 from workspace.files.models import File, file_upload_path
-from workspace.files.services import FileService
+from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
 
 logger = logging.getLogger(__name__)
@@ -42,10 +42,11 @@ class _StreamingWriteBuffer:
     concurrent PUTs (Windows retries a slow upload) would interleave writes.
     """
 
-    def __init__(self, full_path, flush_size):
+    def __init__(self, full_path, flush_size, max_bytes=None):
         self._full_path = full_path
         self._temp_path = f"{full_path}.{uuid.uuid4().hex}.part"
         self._flush_size = flush_size
+        self._max_bytes = max_bytes
         self._membuf = bytearray()
         self._total_size = 0
         self._hasher = new_hasher()
@@ -61,6 +62,15 @@ class _StreamingWriteBuffer:
         )
 
     def write(self, data):
+        # Per chunk, not at the end: this buffer writes straight to disk, so a
+        # client ignoring the advertised quota would fill the volume first.
+        # wsgidav answers the DAVError with end_write(with_errors=True), which
+        # aborts and cleans up, then a 507.
+        if (
+            self._max_bytes is not None
+            and self._total_size + len(data) > self._max_bytes
+        ):
+            raise DAVError(HTTP_INSUFFICIENT_STORAGE, "Storage quota exceeded")
         self._membuf.extend(data)
         self._total_size += len(data)
         self._hasher.update(data)
@@ -199,11 +209,31 @@ class RootCollection(DAVCollection):
         FileService.create_folder(self._user, name, parent=None, acting_user=self._user)
         return True
 
+    def _bucket_bytes(self):
+        """``(used, available)`` for the personal bucket.
+
+        wsgidav asks both questions in ``get_property_names`` and again in
+        ``get_property_value``, so an allprop PROPFIND pays for the pair
+        twice - and the root is the resource every mount touches first and
+        most often. A resource lives for one request, so the cache cannot go
+        stale.
+        """
+        if not hasattr(self, "_bucket_cache"):
+            used = quota.personal_usage(self._user)
+            limit = quota.effective_quota(self._user)
+            self._bucket_cache = (
+                used,
+                # wsgidav omits {DAV:}quota-available-bytes when this is
+                # None, which is what an unlimited bucket should advertise.
+                None if limit is None else max(0, limit - used),
+            )
+        return self._bucket_cache
+
     def get_used_bytes(self):
-        return FileService.storage_used(self._user)
+        return self._bucket_bytes()[0]
 
     def get_available_bytes(self):
-        return max(0, django_settings.STORAGE_QUOTA_BYTES - self.get_used_bytes())
+        return self._bucket_bytes()[1]
 
 
 class FolderResource(DAVCollection):
@@ -222,6 +252,31 @@ class FolderResource(DAVCollection):
 
     def get_last_modified(self):
         return self._file.updated_at.timestamp()
+
+    def _bucket_bytes(self):
+        """``(used, available)`` for this folder, or ``(None, None)``.
+
+        Only a group root is a bucket; a sub-folder is part of a total that is
+        reported one level up. wsgidav asks both questions for every resource
+        of a listing, twice on an allprop PROPFIND, so the pair is computed
+        once per resource - and a resource lives for one request.
+        """
+        if not (self._file.group_id and self._file.parent_id is None):
+            return None, None
+        if not hasattr(self, "_bucket_cache"):
+            used = quota.group_usage(self._file.group_id)
+            limit = quota.effective_group_quota(self._file.group_id)
+            self._bucket_cache = (
+                used,
+                None if limit is None else max(0, limit - used),
+            )
+        return self._bucket_cache
+
+    def get_used_bytes(self):
+        return self._bucket_bytes()[0]
+
+    def get_available_bytes(self):
+        return self._bucket_bytes()[1]
 
     def get_member_names(self):
         self._prefetch_members()
@@ -307,7 +362,8 @@ class FolderResource(DAVCollection):
 
     @transaction.atomic
     def move_recursive(self, dest_path):
-        _move_to(self._file, self._user, dest_path)
+        with _as_insufficient_storage():
+            _move_to(self._file, self._user, dest_path)
 
     def support_recursive_delete(self):
         return True
@@ -343,6 +399,21 @@ class FileResource(DAVNonCollection):
         return self._file.content
 
     def begin_write(self, content_type=None):
+        # An overwrite frees the bytes it replaces, so credit them back before
+        # deciding how much room is left.
+        remaining = quota.remaining_bytes(
+            owner=self._file.owner_id, group=self._file.group_id
+        )
+        ceiling = None
+        if remaining is not None:
+            # The bytes already held are always writable again, even when an
+            # administrator lowered the quota below current usage and left
+            # `remaining` negative - a shrinking file must stay saveable.
+            ceiling = (self._file.size or 0) + max(0, remaining)
+            declared = int(self.environ.get("CONTENT_LENGTH") or 0)
+            if declared > ceiling:
+                raise DAVError(HTTP_INSUFFICIENT_STORAGE, "Storage quota exceeded")
+
         storage = self._file.content.storage
         storage_path = file_upload_path(self._file, self._file.name)
         full_path = storage.path(storage_path)
@@ -351,6 +422,7 @@ class FileResource(DAVNonCollection):
         self._write_buf = _StreamingWriteBuffer(
             full_path,
             DjangoFile.DEFAULT_CHUNK_SIZE,
+            max_bytes=ceiling,
         )
         self._write_started_at = time.monotonic()
         logger.info(
@@ -360,30 +432,38 @@ class FileResource(DAVNonCollection):
         )
         return self._write_buf
 
+    def _discard_placeholder(self):
+        """Drop the row ``create_empty_resource`` left behind, if still empty.
+
+        Only a record that never had content (``size is None``) goes; refresh
+        first so a concurrent PUT that already populated it survives.
+        """
+        try:
+            self._file.refresh_from_db()
+            if self._file.size is None:
+                self._file.delete(hard=True)
+        except File.DoesNotExist:
+            pass  # already gone
+
     def end_write(self, *, with_errors):
-        buf = self._write_buf
-        elapsed = time.monotonic() - getattr(
-            self, "_write_started_at", time.monotonic()
-        )
+        # No buffer means begin_write refused the upload before opening one.
+        # do_PUT still creates the empty row first, so the failure path must
+        # run all the same.
+        buf = getattr(self, "_write_buf", None)
+        started_at = getattr(self, "_write_started_at", None)
+        elapsed = 0.0 if started_at is None else time.monotonic() - started_at
         username = scrub(getattr(self._user, "username", "?"))
 
-        if with_errors:
-            buf.abort()
+        if with_errors or buf is None:
+            if buf is not None:
+                buf.abort()
             logger.warning(
                 "PUT failed for %s by %s (%.2fs)",
                 scrub(self.path),
                 username,
                 elapsed,
             )
-            # Only hard-delete if the record still exists and has never
-            # had content (size is None).  Refresh first so we don't
-            # delete a record that a concurrent PUT already populated.
-            try:
-                self._file.refresh_from_db()
-                if self._file.size is None:
-                    self._file.delete(hard=True)
-            except File.DoesNotExist:
-                pass  # already gone
+            self._discard_placeholder()
             return
 
         # Detect partial uploads: if the client announced Content-Length
@@ -402,12 +482,7 @@ class FileResource(DAVNonCollection):
                 expected,
                 elapsed,
             )
-            try:
-                self._file.refresh_from_db()
-                if self._file.size is None:
-                    self._file.delete(hard=True)
-            except File.DoesNotExist:
-                pass  # already gone
+            self._discard_placeholder()
             raise DAVError(HTTP_BAD_REQUEST, "Incomplete upload")
 
         # Finalize the file on storage (flush remaining buffer + close).
@@ -456,14 +531,15 @@ class FileResource(DAVNonCollection):
 
     def copy_move_single(self, dest_path, *, is_move):
         if is_move:
-            with transaction.atomic():
+            with transaction.atomic(), _as_insufficient_storage():
                 _move_to(self._file, self._user, dest_path)
             self._moved = True
         else:
             dest_parts = _dest_parts(dest_path)
             new_name = dest_parts[-1]
             dest_parent = _resolve_parent(self._user, dest_parts[:-1])
-            _copy_as(self._file, dest_parent, self._user, new_name)
+            with _as_insufficient_storage():
+                _copy_as(self._file, dest_parent, self._user, new_name)
 
     def support_content_length(self):
         return True
@@ -494,6 +570,15 @@ def _dest_parts(dest_path):
     return [part for part in dest_path.split("/") if part]
 
 
+@contextmanager
+def _as_insufficient_storage():
+    """Translate a refused write into the 507 a WebDAV client expects."""
+    try:
+        yield
+    except quota.QuotaExceeded as exc:
+        raise DAVError(HTTP_INSUFFICIENT_STORAGE, str(exc)) from exc
+
+
 def _move_to(file_obj, user, dest_path):
     """Move and/or rename *file_obj* to *dest_path* (MOVE handlers).
 
@@ -511,6 +596,12 @@ def _move_to(file_obj, user, dest_path):
 
     needs_rename = new_name != file_obj.name
     needs_move = dest_parent != file_obj.parent
+
+    if needs_move:
+        # FileService.rename below moves the blob with a non-transactional
+        # os.rename, so a refusal from move() would leave it stranded. Refuse here,
+        # before anything is written.
+        FileService.check_move_allowed(file_obj, dest_parent, acting_user=user)
 
     rename_first = not (
         needs_rename

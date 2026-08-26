@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import FileService, quota
 from workspace.imports.importers.base import ImportContext, JobFailed, Outcome
 from workspace.imports.importers.files import FilesImporter
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
@@ -282,11 +282,26 @@ class FilesImporterTests(ImporterTestCase):
         self.provider.tree["/"].append(
             RemoteEntry(id="/tiny.txt", name="tiny.txt", is_dir=False, size=1, etag="t")
         )
-        used = FileService.storage_used(self.user)
+        used = quota.personal_usage(self.user)
         with override_settings(STORAGE_QUOTA_BYTES=used + 100):
             job = self._job()
             self.assertIs(self._run(job), Outcome.DONE)
         self.assertEqual(job.stats["files"]["files"], 1)
+
+    def test_a_quota_refusal_mid_copy_fails_the_job(self):
+        """One refused write means every later entry would fail identically."""
+        from workspace.files.services.quota import QuotaExceeded
+
+        with patch(
+            "workspace.imports.importers.files.FileService.create_file",
+            side_effect=QuotaExceeded("Your personal storage is full."),
+        ):
+            with self.assertRaisesRegex(JobFailed, "full"):
+                self._run(self._job())
+        self.assertFalse(
+            ImportJobItem.objects.filter(status=ImportJobItem.Status.FAILED).exists(),
+            "a quota refusal stops the job, it does not fail entries one by one",
+        )
 
     def test_listing_failure_during_planning_fails_the_job(self):
         self.provider.fail_list.add("/Docs")

@@ -37,22 +37,18 @@
             class="text-xs text-base-content/50 font-medium uppercase tracking-wide flex items-center gap-1"
           >
             Storage used
-            <span
-              class="tooltip tooltip-top cursor-help"
-              data-tip="Storage quota is indicative and not enforced."
-            >
-              <i data-lucide="info" class="w-3 h-3 text-base-content/40"></i>
-            </span>
           </div>
-          <div class="font-semibold text-2xl mt-1">{{ usage_stats.files.total_size|default:"0"|filesizeformat }}</div>
+          <div class="font-semibold text-2xl mt-1">{{ storage_usage|filesizeformat }}</div>
           <div class="w-full bg-base-300 rounded-full h-2 mt-2">
             <div
-              class="bg-primary rounded-full h-2 transition-all duration-700"
+              class="{% if storage_percent >= 100 %}bg-error{% elif storage_percent >= 90 %}bg-warning{% else %}bg-primary{% endif %} rounded-full h-2 transition-all duration-700"
               x-ref="settingsStorageBar"
               style="width: 0%"
             ></div>
           </div>
-          <div class="text-xs text-base-content/50 mt-1">{{ usage_stats.files.total_size|default:"0"|filesizeformat }} / {{ storage_quota|filesizeformat }}</div>
+          <div class="text-xs text-base-content/50 mt-1">
+            {% if storage_quota is not None %}{{ storage_usage|filesizeformat }} / {{ storage_quota|filesizeformat }}{% else %}{{ storage_usage|filesizeformat }} used{% endif %}
+          </div>
         </div>
       </div>
     </div>
@@ -219,9 +215,7 @@
           });
           const bar = this.$refs.settingsStorageBar;
           if (bar) {
-            const used = {{ usage_stats.files.total_size|default:"0" }};
-            const quota = {{ storage_quota }};
-            const pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
+            const pct = {{ storage_percent|default:"0" }};
             requestAnimationFrame(() => {
               bar.style.width = pct + '%';
             });

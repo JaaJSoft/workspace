@@ -19,8 +19,9 @@ from rest_framework import serializers
 
 from workspace.common.logging import scrub
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import FileService, quota
 from workspace.files.services._names import available_file_name, find_name_conflict
+from workspace.files.services.quota import QuotaExceeded
 
 from ..models import ImportJobItem
 from ..providers.base import KIND_FILES, ProviderError
@@ -177,11 +178,14 @@ class FilesImporter(Importer):
         # Up-front only: the writes themselves are bounded by the files
         # module, this is what lets a hopeless import fail in seconds rather
         # than after hours of copying.
-        available = settings.STORAGE_QUOTA_BYTES - FileService.storage_used(ctx.owner)
-        if incoming_bytes > available:
+        #
+        # Always the personal bucket: every destination this importer accepts
+        # is resolved through user_files_qs, which excludes group folders.
+        remaining = quota.remaining_bytes(owner=ctx.owner, group=None)
+        if remaining is not None and incoming_bytes > remaining:
             raise JobFailed(
                 f"Not enough space: the import needs {filesizeformat(incoming_bytes)} "
-                f"but only {filesizeformat(max(available, 0))} are left."
+                f"but only {filesizeformat(max(remaining, 0))} are left."
             )
 
     # -- copying phase -------------------------------------------------
@@ -226,6 +230,11 @@ class FilesImporter(Importer):
                     continue
                 try:
                     self._import_file(ctx, source, entry, local_parent)
+                except QuotaExceeded as exc:
+                    # Every remaining entry would fail the same way.
+                    ctx.stats.pop("in_flight", None)
+                    ctx.flush(force=True)
+                    raise JobFailed(str(exc.detail)) from exc
                 except (ProviderError, *_STORAGE_ERRORS) as exc:
                     ctx.stats.pop("in_flight", None)
                     message = getattr(exc, "user_message", None) or _storage_message(

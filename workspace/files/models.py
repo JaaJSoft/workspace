@@ -3,6 +3,7 @@ import secrets
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import FileSystemStorage
+from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import F, Q, Value
 from django.db.models.functions import Concat, Lower, Substr
@@ -149,6 +150,23 @@ class File(models.Model):
                 fields=["owner", "deleted_at", "node_type"],
                 include=["size"],
                 name="file_owner_del_type_size",
+            ),
+            # Serves quota.personal_usage: SUM(size) over one owner's live and
+            # trashed personal files. Partial on `group IS NULL` because the
+            # bucket excludes group files, and covering on `size` so the sum
+            # never touches the heap (PostgreSQL; SQLite ignores INCLUDE).
+            models.Index(
+                fields=["owner", "node_type"],
+                include=["size"],
+                condition=Q(group__isnull=True),
+                name="file_personal_usage",
+            ),
+            # Same, for quota.group_usage.
+            models.Index(
+                fields=["group", "node_type"],
+                include=["size"],
+                condition=Q(group__isnull=False),
+                name="file_group_usage",
             ),
             models.Index(
                 fields=["parent", "deleted_at", "name"], name="file_parent_del_name"
@@ -846,3 +864,60 @@ class ThumbnailFailure(models.Model):
 
     def __str__(self):
         return f"{self.file}: {self.attempts} failed thumbnail attempt(s)"
+
+
+class UserStorageQuota(models.Model):
+    """Storage limit for one user's personal files.
+
+    No row means the global ``STORAGE_QUOTA_BYTES`` applies; an empty
+    ``quota_bytes`` means unlimited. Nothing outside the admin writes here.
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="storage_quota"
+    )
+    quota_bytes = models.BigIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Bytes allowed for personal files. Leave empty for unlimited.",
+    )
+    note = models.TextField(
+        blank=True, help_text="Why this user deviates from the default."
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        limit = "unlimited" if self.quota_bytes is None else f"{self.quota_bytes} bytes"
+        return f"{self.user}: {limit}"
+
+
+class GroupStorageQuota(models.Model):
+    """Storage limit for one group's folder.
+
+    No row means unlimited, and so does an empty ``quota_bytes``.
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    group = models.OneToOneField(
+        "auth.Group", on_delete=models.CASCADE, related_name="storage_quota"
+    )
+    quota_bytes = models.BigIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Bytes allowed in this group's folder. Leave empty for unlimited.",
+    )
+    note = models.TextField(
+        blank=True, help_text="Why this group deviates from the default."
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        limit = "unlimited" if self.quota_bytes is None else f"{self.quota_bytes} bytes"
+        return f"{self.group}: {limit}"

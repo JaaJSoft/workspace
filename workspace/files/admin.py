@@ -1,5 +1,6 @@
 from django.contrib import admin, messages
-from unfold.admin import ModelAdmin
+from django.template.defaultfilters import filesizeformat
+from unfold.admin import ModelAdmin, StackedInline
 from unfold.contrib.filters.admin import RangeDateTimeFilter
 
 from .models import (
@@ -7,8 +8,16 @@ from .models import (
     FileComment,
     FileFavorite,
     FileShare,
+    GroupStorageQuota,
     PinnedFolder,
     ThumbnailFailure,
+    UserStorageQuota,
+)
+from .services.quota import (
+    group_usage,
+    group_usage_subquery,
+    personal_usage,
+    personal_usage_subquery,
 )
 from .services.thumbnails.failures import retry_failures
 
@@ -94,3 +103,89 @@ class ThumbnailFailureAdmin(ModelAdmin):
             f"Unparked {count} file(s); thumbnail generation queued.",
             messages.SUCCESS,
         )
+
+
+class _QuotaAdminMixin:
+    """Renders the two quota columns for both ModelAdmins and both inlines.
+
+    ``bucket_pk`` names the attribute holding the bucket's owner; ``usage``
+    reads the ``_usage`` annotation a changelist provides and falls back to
+    the aggregate on a change form, where there is no queryset to annotate.
+    """
+
+    bucket_pk = None
+    bucket_usage = None
+
+    @admin.display(description="Limit")
+    def limit(self, obj):
+        return (
+            "unlimited" if obj.quota_bytes is None else filesizeformat(obj.quota_bytes)
+        )
+
+    @admin.display(description="Current usage")
+    def usage(self, obj):
+        pk = None if obj is None else getattr(obj, self.bucket_pk)
+        if pk is None:
+            return "-"
+        used = getattr(obj, "_usage", None)
+        if used is None:
+            used = self.bucket_usage(pk)
+        if obj.quota_bytes is None:
+            return f"{filesizeformat(used)} used (unlimited)"
+        return f"{filesizeformat(used)} of {filesizeformat(obj.quota_bytes)}"
+
+
+@admin.register(UserStorageQuota)
+class UserStorageQuotaAdmin(_QuotaAdminMixin, ModelAdmin):
+    """Every user whose personal limit deviates from STORAGE_QUOTA_BYTES."""
+
+    list_display = ("user", "limit", "usage", "updated_at")
+    list_select_related = ("user",)
+    search_fields = ("user__username", "user__email", "note")
+    autocomplete_fields = ("user",)
+    readonly_fields = ("uuid", "usage", "updated_at")
+    bucket_pk = "user_id"
+    bucket_usage = staticmethod(personal_usage)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(_usage=personal_usage_subquery())
+
+
+@admin.register(GroupStorageQuota)
+class GroupStorageQuotaAdmin(_QuotaAdminMixin, ModelAdmin):
+    """Every group folder with a limit. A group with no row is unlimited."""
+
+    list_display = ("group", "limit", "usage", "updated_at")
+    list_select_related = ("group",)
+    search_fields = ("group__name", "note")
+    autocomplete_fields = ("group",)
+    readonly_fields = ("uuid", "usage", "updated_at")
+    bucket_pk = "group_id"
+    bucket_usage = staticmethod(group_usage)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(_usage=group_usage_subquery())
+
+
+class UserStorageQuotaInline(_QuotaAdminMixin, StackedInline):
+    """Set the personal quota from the user's own page."""
+
+    model = UserStorageQuota
+    extra = 0
+    can_delete = True
+    fields = ("quota_bytes", "usage", "note")
+    readonly_fields = ("usage",)
+    bucket_pk = "user_id"
+    bucket_usage = staticmethod(personal_usage)
+
+
+class GroupStorageQuotaInline(_QuotaAdminMixin, StackedInline):
+    """Set the group folder's quota from the group's own page."""
+
+    model = GroupStorageQuota
+    extra = 0
+    can_delete = True
+    fields = ("quota_bytes", "usage", "note")
+    readonly_fields = ("usage",)
+    bucket_pk = "group_id"
+    bucket_usage = staticmethod(group_usage)

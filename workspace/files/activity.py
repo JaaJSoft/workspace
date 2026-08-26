@@ -1,4 +1,4 @@
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 
 from workspace.core.activity_registry import ActivityProvider
@@ -130,11 +130,4 @@ class FilesActivityProvider(ActivityProvider):
             qs = qs.filter(owner_id=user_id)
         qs = qs.filter(self._file_visibility_filter(user_id, viewer_id))
 
-        agg = qs.aggregate(
-            total_files=Count("pk"),
-            total_size=Sum("size"),
-        )
-        return {
-            "total_files": agg["total_files"] or 0,
-            "total_size": agg["total_size"] or 0,
-        }
+        return {"total_files": qs.count()}

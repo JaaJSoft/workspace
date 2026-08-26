@@ -19,6 +19,7 @@ from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
+from .quota import check_write_allowed, subtree_bytes
 from .thumbnails.failures import clear_failure
 
 
@@ -149,18 +150,6 @@ class FileService:
             ),
         ).prefetch_related("file_tags__tag")
 
-    @staticmethod
-    def storage_used(user):
-        """Return total bytes used by *user*'s non-deleted files."""
-        from django.db.models import Sum
-
-        total = File.objects.filter(
-            owner=user,
-            deleted_at__isnull=True,
-            node_type=File.NodeType.FILE,
-        ).aggregate(total=Sum("size"))["total"]
-        return total or 0
-
     # ------------------------------------------------------------------
     # Creation
     # ------------------------------------------------------------------
@@ -176,6 +165,7 @@ class FileService:
         group=None,
         viewer=None,
         acting_user=None,
+        check_quota=True,
     ):
         """Create a new file record, optionally with uploaded content.
 
@@ -183,6 +173,11 @@ class FileService:
         declared media type. Callers copying an existing row pass the source's
         pin, which the declared type can no longer reconstruct (a voice message
         is stored as ``video/webm``).
+
+        ``check_quota=False`` is for a caller that has already charged these
+        exact bytes to the bucket itself - the archive extraction loop, which
+        would otherwise re-aggregate the bucket once per entry. Every other
+        caller leaves it on: this is where a write is refused.
         """
         from workspace.files.services.content_hash import hash_stream
         from workspace.files.services.detection import (
@@ -194,6 +189,14 @@ class FileService:
 
         if group is None and parent and parent.group_id:
             group = parent.group
+
+        # Before the detection and hashing passes read the stream.
+        if check_quota:
+            check_write_allowed(
+                owner=owner,
+                group=group,
+                additional_bytes=content.size if content is not None else 0,
+            )
 
         if content is not None:
             detection = detect_from_stream(content)
@@ -322,6 +325,28 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def check_move_allowed(file_obj, new_parent, *, acting_user=None):
+        """Raise ``QuotaExceeded`` when moving *file_obj* under *new_parent* would not fit."""
+        new_group = new_parent.group if new_parent else None
+        old_group = file_obj.group
+
+        new_owner = (
+            acting_user if (old_group and not new_group and acting_user) else None
+        )
+
+        # Only a group change moves bytes between buckets. The owner charged
+        # is the one the move will assign, not necessarily the current one.
+        if (old_group.pk if old_group else None) != (
+            new_group.pk if new_group else None
+        ):
+            check_write_allowed(
+                owner=new_owner or file_obj.owner_id,
+                group=new_group,
+                # Trashed descendants travel with the subtree.
+                additional_bytes=subtree_bytes(file_obj, include_trashed=True),
+            )
+
+    @staticmethod
     @transaction.atomic
     def move(file_obj, new_parent, *, acting_user=None):
         """Move a file or folder to a new parent, handling physical storage."""
@@ -347,6 +372,7 @@ class FileService:
             file_obj.node_type,
             exclude_pk=file_obj.pk,
         )
+        FileService.check_move_allowed(file_obj, new_parent, acting_user=acting_user)
 
         if file_obj.node_type == File.NodeType.FOLDER:
             FileService._move_folder_storage(file_obj, new_parent, new_owner=new_owner)
@@ -433,6 +459,12 @@ class FileService:
         )
         from workspace.files.services.filetype import pin_viewer_for_upload
 
+        check_write_allowed(
+            owner=file_obj.owner_id,
+            group=file_obj.group_id,
+            additional_bytes=content.size - (file_obj.size or 0),
+        )
+
         detection = detect_from_stream(content)
         file_obj.content_hash = hash_stream(content)
         file_obj.size = content.size
@@ -508,6 +540,12 @@ class FileService:
     @staticmethod
     def copy(file_obj, target_parent, owner, *, acting_user=None):
         """Recursively copy a file or folder to *target_parent*."""
+        check_write_allowed(
+            owner=owner,
+            group=target_parent.group if target_parent is not None else None,
+            # copy_node only duplicates live descendants.
+            additional_bytes=subtree_bytes(file_obj, include_trashed=False),
+        )
         copied = _storage.copy_node(file_obj, target_parent, owner)
         record_event(
             copied,
@@ -725,10 +763,6 @@ class FileService:
     @staticmethod
     def _ensure_folder_on_storage(folder):
         return _storage.ensure_folder_on_storage(folder)
-
-    @staticmethod
-    def _copy_node(node, parent, owner, _sibling_names=None):
-        return _storage.copy_node(node, parent, owner, _sibling_names)
 
     @staticmethod
     def _parent_storage_path(owner, parent):

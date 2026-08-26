@@ -283,17 +283,16 @@ def _spoken_language_enum(schema: dict) -> None:
     schema["enum"] = ["", *sorted(supported_languages())]
 
 
-# A voice is a sentence or two, not a paragraph: the backend drifts on a long
-# description, and the model writes this one.
-VOICE_MAX_CHARS = 300
-
-VOICE_WRITING_GUIDE = (
-    'Describe the speaker in plain prose, e.g. "Une jeune femme, voix douce '
-    'et posée, ton chaleureux" or "An elderly man, very deep and gravelly". '
-    "Name the gender first — the model drifts towards a neutral register "
-    "without it. One or two sentences: age, register, timbre, pace, mood. "
-    "Avoid extremes ('very high-pitched', 'screaming'), which garble the "
-    "pronunciation itself."
+# Non-verbal sounds the backend performs instead of reading out: a laugh, a
+# sigh, a breath, an "Ah". They are the only direction a cloned voice still
+# takes, the description that designs one being ignored once a reference is
+# in play. The catalogue is OmniVoice's rather than voxcpm2's own, and only
+# part of it is audibly confirmed against this backend - but an unlisted tag
+# is dropped in silence rather than spoken, so a wrong guess costs nothing.
+NONVERBAL_TAGS = (
+    "[laughter] [sigh] [confirmation-en] [question-en] [question-ah] "
+    "[question-oh] [surprise-ah] [surprise-oh] [surprise-wa] [surprise-yo] "
+    "[dissatisfaction-hnn]"
 )
 
 
@@ -303,7 +302,11 @@ class SendVoiceMessageParams(BaseModel):
             "What to say, written exactly as it should be pronounced and in "
             "the language you are speaking. Accents and punctuation are read "
             "literally, so write real sentences — no markdown, no emoji, no "
-            "abbreviations, and numbers spelled out when their reading matters."
+            "abbreviations, and numbers spelled out when their reading matters. "
+            "One exception: these tags are performed as a sound rather than "
+            f"read out — {NONVERBAL_TAGS}. Drop one in where a listener would "
+            "actually hear it, once or twice in a message at most. Any other "
+            "bracketed word is discarded without a sound."
         )
     )
     language: str = Field(
@@ -318,25 +321,6 @@ class SendVoiceMessageParams(BaseModel):
             "itself."
         ),
     )
-    voice: str = Field(
-        default="",
-        description=(
-            "Optional: speak this one message in a different voice, described "
-            "in full — it replaces your usual voice instead of adding to it, "
-            f"so describe the whole speaker. {VOICE_WRITING_GUIDE} Leave it "
-            "empty to use your own voice, which is what makes you "
-            "recognizable; set it to play a character, imitate someone, or "
-            "read a line theatrically."
-        ),
-    )
-
-
-def _clean_voice(value: str) -> str:
-    """Normalize a model-written voice description before it is sent."""
-    # Blanked, not dropped: deleting a newline glues the words on either
-    # side of it into one, which corrupts the description the backend reads.
-    cleaned = "".join(c if c.isprintable() else " " for c in (value or ""))
-    return " ".join(cleaned.split())[:VOICE_MAX_CHARS].strip()
 
 
 def _bot_supports_vision(bot):
@@ -865,7 +849,11 @@ Call this when the user asks you to speak, to send a voice message or a vocal, t
 to sing, or to say how something is pronounced. \
 The audio is attached to the reply you are writing: say the whole thing here, then keep the written \
 part of that reply to a short line or nothing at all — never repeat out loud what you also typed."""
-        from .services.speech import SpeechSynthesisError, ai_synthesize_speech
+        from .services.speech import (
+            SpeechSynthesisError,
+            ai_synthesize_speech,
+            default_voice_reference,
+        )
 
         text = args.text.strip()
         if not text:
@@ -880,11 +868,17 @@ part of that reply to a short line or nothing at all — never repeat out loud w
             )
 
         profile = getattr(bot, "bot_profile", None)
-        override = _clean_voice(args.voice)
-        voice = override or (profile.get_voice() if profile else settings.AI_TTS_VOICE)
+        reference = (
+            profile.voice_reference() if profile else None
+        ) or default_voice_reference()
+        if reference is None:
+            return (
+                "Error: you have no voice recorded, so you cannot send a voice "
+                "message. Say so plainly and answer in writing instead."
+            )
 
         try:
-            audio = ai_synthesize_speech(text, voice, args.language)
+            audio = ai_synthesize_speech(text, reference, args.language)
         except ValueError as exc:
             return f"Error: {exc}"
         except SpeechSynthesisError as exc:

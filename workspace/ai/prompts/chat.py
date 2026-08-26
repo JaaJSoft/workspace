@@ -86,10 +86,11 @@ def build_chat_messages(
     identity_lines = []
     if bot_name:
         identity_lines.append(f"Your name is {_sanitize_identity(bot_name)}.")
-    bot_voice = getattr(getattr(bot, "bot_profile", None), "voice", "")
-    if bot_voice and settings.AI_TTS_MODEL:
+    bot_profile = getattr(bot, "bot_profile", None)
+    can_speak = bool(settings.AI_TTS_MODEL and bot_profile and bot_profile.can_speak())
+    if can_speak and bot_profile.voice:
         identity_lines.append(
-            f"Your voice sounds like this: {_sanitize_identity(bot_voice, 300)} "
+            f"Your voice sounds like this: {_sanitize_identity(bot_profile.voice, 300)} "
             "This is how you actually sound when you send a voice message, so "
             "describe your voice this way rather than inventing one."
         )
@@ -260,7 +261,7 @@ def build_chat_messages(
     )
 
     voice_instructions = ""
-    if settings.AI_TTS_MODEL:
+    if can_speak:
         voice_instructions = (
             "\n\n## Your voice\n"
             "You have a voice and can send voice messages with "
@@ -278,15 +279,14 @@ def build_chat_messages(
             "Write for the ear. The text is read out letter by letter, so it "
             "must be plain prose in the language you are speaking, correctly "
             "accented, with no markdown, no emoji, no lists, no URLs and no "
-            "abbreviations a listener would not recognize.\n"
-            "Your own voice is the default and what makes you recognizable, "
-            "so send_voice_message needs nothing but the text. Pass voice "
-            "only to sound different for that one message \u2014 playing a "
-            "character, imitating someone, reading a line theatrically.\n"
-            "When you do, describe the whole speaker rather than an "
-            "adjustment: the description replaces your voice, it is not "
-            "added to it. Name the gender first, keep it to a sentence or "
-            "two, and avoid extremes \u2014 they garble the pronunciation."
+            "abbreviations a listener would not recognize. The bracketed tags "
+            "send_voice_message lists are the one exception \u2014 a laugh, a "
+            "sigh, a breath \u2014 and they are performed, not read.\n"
+            "You have one voice and it is not yours to change: "
+            "send_voice_message takes the text and the language, nothing "
+            "else. Asked to imitate someone or to play a character, say the "
+            "line in your own voice or decline \u2014 never claim to have "
+            "changed voice."
         )
 
     past_images_instructions = (

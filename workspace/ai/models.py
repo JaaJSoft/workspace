@@ -1,12 +1,42 @@
+import logging
+import os
 from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+from workspace.common.logging import scrub
 from workspace.common.uuids import uuid_v7_or_v4
+
+logger = logging.getLogger(__name__)
+
+# Cap on a reference recording. The backend's own 5 MiB ceiling applies to
+# the base64 payload, which is a third larger than the file; this leaves room
+# for that and is still generous - ten seconds of speech weighs under 500 KB.
+VOICE_REF_MAX_BYTES = 3 * 1024 * 1024
+
+
+def bot_voice_reference_path(instance, filename):
+    ext = os.path.splitext(filename)[1].lower() or ".wav"
+    return f"ai/voices/{instance.user_id}/{uuid_v7_or_v4()}{ext}"
+
+
+def validate_voice_reference_size(value):
+    try:
+        size = value.size
+    except OSError:
+        # The blob is gone; `voice_reference()` reports that at synthesis
+        # time. Saving an unrelated field should not be what surfaces it.
+        return
+    if size > VOICE_REF_MAX_BYTES:
+        raise ValidationError(
+            f"The recording is {size} bytes; at most {VOICE_REF_MAX_BYTES} "
+            "reaches the speech backend. A few seconds of speech is enough."
+        )
 
 
 class BotProfile(models.Model):
@@ -23,7 +53,16 @@ class BotProfile(models.Model):
     description = models.TextField(blank=True)
     supports_tools = models.BooleanField(default=True)
     supports_vision = models.BooleanField(default=True)
+    # What the bot says about its own voice when asked, and nothing more: the
+    # backend is told who speaks by the recording, never by a description.
     voice = models.TextField(blank=True)
+    voice_ref = models.FileField(
+        upload_to=bot_voice_reference_path,
+        max_length=500,
+        blank=True,
+        validators=[validate_voice_reference_size],
+    )
+    voice_ref_text = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -56,9 +95,57 @@ class BotProfile(models.Model):
         """Return the model to use, falling back to the global default."""
         return self.model or settings.AI_MODEL
 
-    def get_voice(self) -> str:
-        """Description of how this bot sounds, for the speech backend."""
-        return self.voice or settings.AI_TTS_VOICE
+    def can_speak(self) -> bool:
+        """Whether a recording exists for this bot to be voiced from.
+
+        Answered without opening the file, since it gates the prompt built
+        on every turn. A blob that has gone missing since is caught at
+        synthesis time instead.
+        """
+        if self.voice_ref and self.voice_ref_text.strip():
+            return True
+        return bool(settings.AI_TTS_VOICE_REF and settings.AI_TTS_VOICE_REF_TEXT)
+
+    def clean(self):
+        super().clean()
+        if self.voice_ref and not self.voice_ref_text.strip():
+            raise ValidationError(
+                {
+                    "voice_ref_text": (
+                        "Transcribe the recording word for word - the speech "
+                        "model aligns the clone on it."
+                    )
+                }
+            )
+        if self.voice_ref_text.strip() and not self.voice_ref:
+            raise ValidationError(
+                {"voice_ref": "A transcript on its own clones no voice."}
+            )
+
+    def voice_reference(self):
+        """The recording this bot speaks through, or None when it has none.
+
+        None is also the answer to a half-filled pair or a vanished blob:
+        the description is a usable second-best, while a clone missing
+        either half is a hard error at the backend.
+        """
+        from .services.speech import VoiceReference
+
+        transcript = self.voice_ref_text.strip()
+        if not self.voice_ref or not transcript:
+            return None
+        try:
+            with self.voice_ref.open("rb") as recording:
+                audio = recording.read()
+        except OSError as exc:
+            logger.warning(
+                "Voice reference of bot %s is unreadable at %s: %s",
+                scrub(str(self.user_id)),
+                scrub(self.voice_ref.name),
+                scrub(str(exc)),
+            )
+            return None
+        return VoiceReference(audio=audio, text=transcript) if audio else None
 
     def is_accessible_by(self, user) -> bool:
         """Check if a user can access this bot."""

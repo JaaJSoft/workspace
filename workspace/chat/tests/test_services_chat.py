@@ -242,7 +242,7 @@ class NotifyNewMessageTests(TestCase):
         never marked read and never pruned — it must not be created at all."""
         from workspace.ai.models import BotProfile
 
-        bot = User.objects.create_user(username="assistant", password="p")
+        bot = User.objects.create_user(username="notifbot", password="p")
         BotProfile.objects.create(user=bot)
         ConversationMember.objects.create(conversation=self.conv, user=bot)
 

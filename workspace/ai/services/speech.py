@@ -1,25 +1,33 @@
 """Text-to-speech: turns a bot's written line into the audio of its own voice.
 
-The backend designs the voice from a free-text instruction ("a young woman,
-soft and composed") instead of picking one from a catalogue, so a bot's voice
-is a string on its profile rather than an identifier, and the request body
-must reach the model untouched (see ``AI_TTS_BASE_URL``).
+A voice is a reference recording to clone, never a description. The WAV goes
+out as ``voice_ref`` alongside the ``reference_text`` transcribing it word for
+word, and the output is that speaker: a reference at 233 Hz came back at
+231.9 Hz.
 
-The instruction is the whole of the identity. The backend also accepts a
-seed, but measuring it settled what it is worth here: at a fixed seed, two
-different sentences came back 10-32 Hz apart in median pitch, as far apart as
-the 18-24 Hz that changing the seed moves a fixed sentence. A seed reproduces
-one exact call, not a speaker — and a chat never sends the same sentence
-twice. The instruction, meanwhile, moves the voice from 93 Hz to 364 Hz.
+Describing the voice instead ("a young woman, soft and composed") is what the
+backend's other models do, and it names an archetype rather than a person —
+each call samples a new voice matching the description, so a bot changes voice
+mid-conversation: 279, 240 then 247 Hz across three messages under one
+description. A seed does not fix that either, since it reproduces one exact
+call and a chat never sends the same sentence twice. So nothing here describes
+a voice, and a bot with no reference cannot speak at all.
+
+The body must reach the model untouched: ``voice_ref`` and ``reference_text``
+are not OpenAI fields, and a proxy that strips unknown ones leaves the request
+with no speaker, which the backend rejects outright (see ``AI_TTS_BASE_URL``).
 """
 
+import base64
 import io
 import logging
 import time
 import wave
+from dataclasses import dataclass
+from pathlib import Path
 
 from django.conf import settings
-from openai import APIStatusError
+from openai import NOT_GIVEN, APIStatusError
 
 from workspace.common.logging import scrub
 
@@ -82,14 +90,50 @@ def is_speech_enabled() -> bool:
     )
 
 
-def ai_synthesize_speech(text: str, voice: str = "", language: str = "") -> bytes:
-    """Speak *text* in the voice described by *voice*.
+@dataclass(frozen=True)
+class VoiceReference:
+    """A recording of a speaker and the exact words it says.
+
+    The transcript is half of the reference, not documentation of it: the
+    model aligns the clone on it, and the two travel together or not at all.
+    """
+
+    audio: bytes
+    text: str
+
+
+def default_voice_reference() -> VoiceReference | None:
+    """Reference a bot with none of its own speaks through, if configured.
+
+    Nothing else can stand in for it: a bot reaching synthesis without a
+    reference has no voice to be given.
+    """
+    path = (settings.AI_TTS_VOICE_REF or "").strip()
+    text = (settings.AI_TTS_VOICE_REF_TEXT or "").strip()
+    if not path or not text:
+        return None
+    try:
+        audio = Path(path).read_bytes()
+    except OSError as exc:
+        logger.warning(
+            "Unreadable AI_TTS_VOICE_REF %s: %s", scrub(path), scrub(str(exc))
+        )
+        return None
+    return VoiceReference(audio=audio, text=text) if audio else None
+
+
+def ai_synthesize_speech(
+    text: str,
+    reference: VoiceReference,
+    language: str = "",
+) -> bytes:
+    """Speak *text* in the voice *reference* records.
 
     Args:
         text: What to say, in any language, accented as it should be
               pronounced — the model reads the letters it is given.
-        voice: Free-text description of the speaker. Falls back to
-               ``AI_TTS_VOICE`` when empty.
+        reference: Recording to clone, with the transcript the backend
+                   aligns it on.
         language: Which language *text* is in. Anything outside
                   ``AI_TTS_LANGUAGES`` is dropped so the model detects it.
 
@@ -97,12 +141,15 @@ def ai_synthesize_speech(text: str, voice: str = "", language: str = "") -> byte
         Raw bytes of the audio, as the backend produced them (WAV today).
 
     Raises:
-        ValueError: If *text* is empty or speech is not configured.
+        ValueError: If *text* is empty, there is no reference, or speech is
+                    not configured.
         SpeechSynthesisError: If every attempt failed.
     """
     text = (text or "").strip()
     if not text:
         raise ValueError("text is required")
+    if reference is None:
+        raise ValueError("a voice reference is required")
     if not is_speech_enabled():
         raise ValueError("speech synthesis is not configured")
 
@@ -110,21 +157,23 @@ def ai_synthesize_speech(text: str, voice: str = "", language: str = "") -> byte
     if not client:
         raise ValueError("speech synthesis is not configured")
 
-    # The voice is designed from `instruct`, so the OpenAI `voice` id names
-    # nothing here - but the SDK requires the argument, and a proxy in front
-    # of the model may reject a request without it.
-    instruct = voice.strip() or settings.AI_TTS_VOICE
-    extra_body = {"options": {"instruct": instruct}}
+    extra_body = {
+        "voice_ref": {
+            "type": "base64",
+            "data": base64.b64encode(reference.audio).decode(),
+        },
+        "reference_text": reference.text,
+    }
     spoken = normalize_language(language)
     if spoken:
         extra_body["language"] = spoken
 
     logger.info(
-        "Starting speech synthesis: model=%s chars=%d language=%s voice=%.60s",
+        "Starting speech synthesis: model=%s chars=%d language=%s ref_bytes=%d",
         settings.AI_TTS_MODEL,
         len(text),
         spoken or "auto",
-        scrub(instruct),
+        len(reference.audio),
     )
 
     audio = _run_with_retry(client, text, extra_body)
@@ -156,10 +205,15 @@ def audio_duration_seconds(data: bytes) -> float | None:
 
 
 def _post(client, text: str, extra_body: dict) -> bytes:
+    # `voice` must be absent, not empty. The field is how the backend is
+    # asked for a voice it has cached, and it takes that branch on the mere
+    # presence of the key: sending "" answers 500 "requires speaker
+    # reference audio, not a cached voice id" with the reference right
+    # there in the body. NOT_GIVEN is what keeps the SDK from writing it.
     response = client.audio.speech.create(
         model=settings.AI_TTS_MODEL,
         input=text,
-        voice="",
+        voice=NOT_GIVEN,
         extra_body=extra_body,
     )
     return response.content

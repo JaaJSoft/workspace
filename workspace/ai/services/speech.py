@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
-from openai import APIStatusError
+from openai import NOT_GIVEN, APIStatusError
 
 from workspace.common.logging import scrub
 
@@ -205,13 +205,15 @@ def audio_duration_seconds(data: bytes) -> float | None:
 
 
 def _post(client, text: str, extra_body: dict) -> bytes:
-    # The OpenAI `voice` id names nothing here - the SDK requires the
-    # argument, and a proxy in front of the model may reject a request
-    # without it.
+    # `voice` must be absent, not empty. The field is how the backend is
+    # asked for a voice it has cached, and it takes that branch on the mere
+    # presence of the key: sending "" answers 500 "requires speaker
+    # reference audio, not a cached voice id" with the reference right
+    # there in the body. NOT_GIVEN is what keeps the SDK from writing it.
     response = client.audio.speech.create(
         model=settings.AI_TTS_MODEL,
         input=text,
-        voice="",
+        voice=NOT_GIVEN,
         extra_body=extra_body,
     )
     return response.content

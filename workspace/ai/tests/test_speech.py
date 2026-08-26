@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import os
 import tempfile
 import wave
@@ -7,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx2
 from django.test import SimpleTestCase, override_settings
-from openai import APIConnectionError, APIStatusError
+from openai import APIConnectionError, APIStatusError, OpenAI
 
 from workspace.ai.services.speech import (
     SpeechSynthesisError,
@@ -204,6 +205,41 @@ class DefaultVoiceReferenceTests(SimpleTestCase):
             AI_TTS_VOICE_REF_TEXT="Bonjour.",
         ):
             self.assertIsNone(default_voice_reference())
+
+
+@override_settings(**TTS_SETTINGS)
+class SpeechRequestBodyTests(SimpleTestCase):
+    """What actually goes on the wire, past the SDK's serialization."""
+
+    def _body_of(self, **kwargs):
+        sent = {}
+
+        def handler(request):
+            sent.update(json.loads(request.content))
+            return httpx2.Response(200, content=make_wav())
+
+        client = OpenAI(
+            api_key="unused",
+            base_url="https://speech.test/v1/",
+            http_client=httpx2.Client(transport=httpx2.MockTransport(handler)),
+        )
+        with patch(
+            "workspace.ai.services.speech.get_speech_client", return_value=client
+        ):
+            ai_synthesize_speech("Bonjour Pierre.", REFERENCE, **kwargs)
+        return sent
+
+    def test_omits_the_voice_field_entirely(self):
+        # Absent, not empty. `voice` is how the backend is asked for a voice
+        # it has cached, and it takes that branch on the key being there at
+        # all: sending "" answers 500 "requires speaker reference audio, not
+        # a cached voice id" with the reference sitting in the same body.
+        self.assertNotIn("voice", self._body_of())
+
+    def test_carries_the_reference_the_backend_reads(self):
+        body = self._body_of()
+        self.assertEqual(base64.b64decode(body["voice_ref"]["data"]), REFERENCE.audio)
+        self.assertEqual(body["reference_text"], REFERENCE.text)
 
 
 @override_settings(**TTS_SETTINGS)

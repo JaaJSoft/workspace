@@ -3,8 +3,9 @@
 Existing installs kept a trashed node's bytes where they were, under a name
 the app considered free - so a file created since may have overwritten them.
 This walks every trashed node that is the outermost of its chain and moves
-it to ``trash/users/<username>/<uuid>/<name>`` (``trash/groups/<uuid>/...``
-for group files), the layout ``services/_trash.py`` maintains from now on.
+its blobs to ``trash/users/<username>/<uuid>/<name>``
+(``trash/groups/<uuid>/...`` for group files), the layout
+``services/_trash.py`` maintains from now on.
 
 Where a trashed row and a live row already point at the same blob - the
 collision this fixes, after the fact - the live row keeps the file and the
@@ -72,55 +73,96 @@ def move_trashed_blobs(apps, schema_editor):
         if root.node_type == "file":
             _move_file(File, db, storage, root, destination, live_paths)
         else:
-            _move_folder(File, db, storage, root, destination, username)
+            _move_folder(File, db, storage, root, destination, username, live_paths)
 
 
 def _move_file(File, db, storage, row, destination, live_paths):
     source = (row.content.name or "").replace("\\", "/")
     if not source or source.startswith("trash/"):
         return
+    if not _relocate_blob(storage, source, destination, live_paths):
+        return
+    File.objects.using(db).filter(pk=row.pk).update(content=destination)
 
+
+def _move_folder(File, db, storage, row, destination, username, live_paths):
+    """Move the folder's own blobs, one by one.
+
+    Deliberately not a directory rename. On the legacy layout a live folder
+    recreated under the same name resolves to the same directory, so
+    renaming it would carry its files into the trash with the ones that
+    belong there. For the same reason the subtree is collected through the
+    parent chain rather than by path: the path is shared, the subtree is
+    not.
+    """
+    updated = []
+    for child, relative in _subtree_files(File, db, row):
+        source = (child.content.name or "").replace("\\", "/")
+        if not source or source.startswith("trash/"):
+            continue
+        child_destination = posixpath.join(destination, *relative.split("/"))
+        if not _relocate_blob(storage, source, child_destination, live_paths):
+            continue
+        child.content.name = child_destination
+        updated.append(child)
+
+    if updated:
+        File.objects.using(db).bulk_update(updated, ["content"], batch_size=500)
+    _prune_empty_dirs(storage, _live_dir(row, username))
+
+
+def _subtree_files(File, db, root):
+    """``(row, path relative to root)`` for every file under *root*."""
+    found = []
+    level = {root.pk: ""}
+    while level:
+        children = list(File.objects.using(db).filter(parent_id__in=list(level)))
+        next_level = {}
+        for child in children:
+            relative = level[child.parent_id] + child.name
+            if child.node_type == "folder":
+                next_level[child.pk] = f"{relative}/"
+            else:
+                found.append((child, relative))
+        level = next_level
+    return found
+
+
+def _relocate_blob(storage, source, destination, live_paths):
+    """Put the bytes at *destination*; False when nothing could be done.
+
+    A blob a live row has taken over is copied rather than moved, so the
+    live row keeps reading and the trashed one stops sharing. A blob that
+    is already gone still reports success: the row is repointed either way,
+    so no path outlives the layout it belongs to.
+    """
     try:
         if not storage.exists(source):
             logger.warning("Trashed blob already missing: %s", scrub(source))
         elif source in live_paths:
-            # A live row owns these bytes now. Leave them, hand the trashed
-            # row its own copy.
             with storage.open(source, "rb") as fh:
                 storage.save(destination, fh)
         else:
             _relocate(storage, source, destination)
     except OSError as e:
         logger.error("Could not move trashed blob %s: %s", scrub(source), scrub(e))
-        return
+        return False
+    return True
 
-    File.objects.using(db).filter(pk=row.pk).update(content=destination)
 
-
-def _move_folder(File, db, storage, row, destination, username):
-    source = _live_dir(row, username)
+def _prune_empty_dirs(storage, dir_path):
+    """Drop what the moved-out subtree left behind, if anything."""
     try:
-        _relocate(storage, source, destination)
-    except OSError as e:
-        logger.error("Could not move trashed folder %s: %s", scrub(source), scrub(e))
+        full = storage.path(dir_path)
+    except NotImplementedError:
         return
-
-    # Repoint every blob that rode inside the folder.
-    folder_path = row.path or row.name
-    descendants = list(
-        File.objects.using(db)
-        .filter(path__startswith=f"{folder_path}/", node_type="file")
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
-    updated = []
-    for child in descendants:
-        name = (child.content.name or "").replace("\\", "/")
-        if name.startswith(f"{source}/"):
-            child.content.name = destination + name[len(source) :]
-            updated.append(child)
-    if updated:
-        File.objects.using(db).bulk_update(updated, ["content"], batch_size=500)
+    if not os.path.isdir(full):
+        return
+    for current, _subdirs, _names in os.walk(full, topdown=False):
+        try:
+            os.rmdir(current)
+        except OSError:
+            pass  # still holds a live folder's content
 
 
 def _relocate(storage, source, destination):

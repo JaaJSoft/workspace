@@ -86,7 +86,7 @@ class SyncMixin:
         service = FileSyncService(log=logger)
         result = service.sync_folder_shallow(request.user, parent_db=file_obj)
         for err in result.errors:
-            logger.warning("sync folder %s: %s", uuid, scrub(err))
+            logger.warning("sync folder %s: %s", scrub(uuid), scrub(err))
         return Response(
             {
                 "files_created": result.files_created,

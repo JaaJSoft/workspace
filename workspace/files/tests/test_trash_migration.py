@@ -120,6 +120,55 @@ class MoveTrashedBlobsTests(TestCase):
         )
         self.assertEqual(self._bytes_of(deep), b"DEEP")
 
+    def test_a_live_folder_recreated_under_the_same_name_keeps_its_blobs(self):
+        # On the legacy layout both folders resolve to files/users/legacy/Docs,
+        # so moving that directory - or selecting descendants by path - would
+        # carry the live folder's files into the trash with the others.
+        trashed_folder = self._row("Docs", node_type="folder", trashed=True)
+        self._write("files/users/legacy/Docs/old.txt", b"TRASHED-FILE")
+        old = self._row(
+            "old.txt",
+            parent=trashed_folder,
+            content="files/users/legacy/Docs/old.txt",
+            trashed=True,
+        )
+        live_folder = self._row("Docs", node_type="folder")
+        self._write("files/users/legacy/Docs/new.txt", b"LIVE-FILE")
+        live = self._row(
+            "new.txt", parent=live_folder, content="files/users/legacy/Docs/new.txt"
+        )
+
+        self._migrate()
+
+        live.refresh_from_db()
+        old.refresh_from_db()
+        self.assertEqual(live.content.name, "files/users/legacy/Docs/new.txt")
+        self.assertEqual(self._bytes_of(live), b"LIVE-FILE")
+        self.assertEqual(
+            old.content.name,
+            f"trash/users/legacy/{trashed_folder.uuid}/Docs/old.txt",
+        )
+        self.assertEqual(self._bytes_of(old), b"TRASHED-FILE")
+        self.assertTrue(
+            os.path.isdir(os.path.join(self.media_root, "files/users/legacy/Docs"))
+        )
+
+    def test_the_emptied_directory_is_pruned_when_nothing_lives_there(self):
+        folder = self._row("Docs", node_type="folder", trashed=True)
+        self._write("files/users/legacy/Docs/deep.txt", b"DEEP")
+        self._row(
+            "deep.txt",
+            parent=folder,
+            content="files/users/legacy/Docs/deep.txt",
+            trashed=True,
+        )
+
+        self._migrate()
+
+        self.assertFalse(
+            os.path.exists(os.path.join(self.media_root, "files/users/legacy/Docs"))
+        )
+
     def test_only_the_outermost_trashed_node_gets_a_directory(self):
         self._write("files/users/legacy/Docs/deep.txt", b"DEEP")
         folder = self._row("Docs", node_type="folder", trashed=True)

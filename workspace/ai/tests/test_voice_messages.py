@@ -10,7 +10,11 @@ from django.test import TestCase, override_settings
 from workspace.ai.models import VOICE_REF_MAX_BYTES, AITask, BotProfile
 from workspace.ai.services.responses import post_bot_message, produced_media
 from workspace.ai.services.speech import SpeechSynthesisError, VoiceReference
-from workspace.ai.tools import SendVoiceMessageParams, VoiceToolProvider
+from workspace.ai.tools import (
+    NONVERBAL_TAGS,
+    SendVoiceMessageParams,
+    VoiceToolProvider,
+)
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
@@ -138,6 +142,18 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
             schema["properties"]["language"]["enum"],
             ["", "english", "french"],
         )
+
+    def test_the_schema_names_the_sounds_that_survive_cloning(self):
+        # A cloned voice takes no other direction, and the model has no way
+        # to guess a vocabulary that appears in no repository.
+        from workspace.ai.tool_registry import _build_parameters
+
+        described = _build_parameters(SendVoiceMessageParams)["properties"]["text"][
+            "description"
+        ]
+        for tag in ("[laughter]", "[sigh]", "[dissatisfaction-hnn]"):
+            self.assertIn(tag, described)
+        self.assertIn(NONVERBAL_TAGS, described)
 
     def test_the_tool_offers_no_way_to_sound_like_someone_else(self):
         # A description reaches no clone-based backend, so a parameter for

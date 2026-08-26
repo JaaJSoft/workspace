@@ -283,13 +283,30 @@ def _spoken_language_enum(schema: dict) -> None:
     schema["enum"] = ["", *sorted(supported_languages())]
 
 
+# Non-verbal sounds the backend performs instead of reading out: a laugh, a
+# sigh, a breath, an "Ah". They are the only direction a cloned voice still
+# takes, the description that designs one being ignored once a reference is
+# in play. The catalogue is OmniVoice's rather than voxcpm2's own, and only
+# part of it is audibly confirmed against this backend - but an unlisted tag
+# is dropped in silence rather than spoken, so a wrong guess costs nothing.
+NONVERBAL_TAGS = (
+    "[laughter] [sigh] [confirmation-en] [question-en] [question-ah] "
+    "[question-oh] [surprise-ah] [surprise-oh] [surprise-wa] [surprise-yo] "
+    "[dissatisfaction-hnn]"
+)
+
+
 class SendVoiceMessageParams(BaseModel):
     text: str = Field(
         description=(
             "What to say, written exactly as it should be pronounced and in "
             "the language you are speaking. Accents and punctuation are read "
             "literally, so write real sentences — no markdown, no emoji, no "
-            "abbreviations, and numbers spelled out when their reading matters."
+            "abbreviations, and numbers spelled out when their reading matters. "
+            "One exception: these tags are performed as a sound rather than "
+            f"read out — {NONVERBAL_TAGS}. Drop one in where a listener would "
+            "actually hear it, once or twice in a message at most. Any other "
+            "bracketed word is discarded without a sound."
         )
     )
     language: str = Field(

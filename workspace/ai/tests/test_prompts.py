@@ -198,6 +198,13 @@ class BuildChatMessagesVoiceTests(TestCase):
     def test_the_voice_section_is_present(self):
         self.assertIn("## Your voice", self._system())
 
+    def test_the_ear_rule_spares_the_non_verbal_tags(self):
+        # "Plain prose, no markdown" otherwise reads as a ban on brackets,
+        # and the one expressive control a cloned voice has goes unused.
+        system = self._system()
+        self.assertIn("bracketed tags", system)
+        self.assertIn("performed, not read", system)
+
     def test_the_bot_is_not_offered_a_voice_it_cannot_change(self):
         # Its voice is a recording its owner uploaded. A prompt hinting the
         # bot can play a character earns a claim it changed voice, over

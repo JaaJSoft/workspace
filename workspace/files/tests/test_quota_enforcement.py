@@ -644,7 +644,7 @@ class ExtractEnforcementTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="extractor", password="pw")
 
-    def _archive(self, entries):
+    def _archive(self, entries, name="bundle.zip"):
         import io
         import zipfile
 
@@ -653,11 +653,11 @@ class ExtractEnforcementTests(TestCase):
         # the same bucket, so a stored (uncompressed) 6 KB zip would be refused
         # by create_file before any test could extract it.
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for name, payload in entries:
-                zf.writestr(name, payload)
+            for entry_name, payload in entries:
+                zf.writestr(entry_name, payload)
         buf.seek(0)
         return FileService.create_file(
-            self.user, "bundle.zip", content=ContentFile(buf.read(), name="bundle.zip")
+            self.user, name, content=ContentFile(buf.read(), name=name)
         )
 
     def test_extraction_stops_at_the_quota(self):
@@ -720,7 +720,9 @@ class ExtractEnforcementTests(TestCase):
         with CaptureQueriesContext(connection) as single:
             extract_zip(one, None, acting_user=self.user)
 
-        five = self._archive([(f"e{i}.bin", b"x" * (3 * KB)) for i in range(5)])
+        five = self._archive(
+            [(f"e{i}.bin", b"x" * (3 * KB)) for i in range(5)], name="bundle5.zip"
+        )
         with CaptureQueriesContext(connection) as several:
             extract_zip(five, None, acting_user=self.user)
 

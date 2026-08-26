@@ -1,10 +1,9 @@
 """Unit tests for FileService."""
 
 import os
-import shutil
-import tempfile
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
@@ -91,54 +90,44 @@ class TestCreateFolderOnStorage(TestCase):
     """Verify create_folder creates directories on FileSystemStorage."""
 
     def setUp(self):
-        self.media_root = tempfile.mkdtemp()
         self.user = User.objects.create_user(
             username="storageuser", email="storage@test.com", password="pass"
         )
 
-    def tearDown(self):
-        shutil.rmtree(self.media_root, ignore_errors=True)
-
     def test_root_folder_created_on_disk(self):
-        with self.settings(MEDIA_ROOT=self.media_root):
-            FileService.create_folder(self.user, "Photos")
-            expected = os.path.join(
-                self.media_root, "files", "users", self.user.username, "Photos"
-            )
-            self.assertTrue(os.path.isdir(expected))
+        FileService.create_folder(self.user, "Photos")
+        expected = os.path.join(
+            settings.MEDIA_ROOT, "files", "users", self.user.username, "Photos"
+        )
+        self.assertTrue(os.path.isdir(expected))
 
     def test_nested_folder_created_on_disk(self):
-        with self.settings(MEDIA_ROOT=self.media_root):
-            parent = FileService.create_folder(self.user, "Documents")
-            FileService.create_folder(self.user, "Work", parent=parent)
-            expected = os.path.join(
-                self.media_root,
-                "files",
-                "users",
-                self.user.username,
-                "Documents",
-                "Work",
-            )
-            self.assertTrue(os.path.isdir(expected))
+        parent = FileService.create_folder(self.user, "Documents")
+        FileService.create_folder(self.user, "Work", parent=parent)
+        expected = os.path.join(
+            settings.MEDIA_ROOT,
+            "files",
+            "users",
+            self.user.username,
+            "Documents",
+            "Work",
+        )
+        self.assertTrue(os.path.isdir(expected))
 
     def test_deeply_nested_folder(self):
-        with self.settings(MEDIA_ROOT=self.media_root):
-            a = FileService.create_folder(self.user, "A")
-            b = FileService.create_folder(self.user, "B", parent=a)
-            FileService.create_folder(self.user, "C", parent=b)
-            expected = os.path.join(
-                self.media_root, "files", "users", self.user.username, "A", "B", "C"
-            )
-            self.assertTrue(os.path.isdir(expected))
+        a = FileService.create_folder(self.user, "A")
+        b = FileService.create_folder(self.user, "B", parent=a)
+        FileService.create_folder(self.user, "C", parent=b)
+        expected = os.path.join(
+            settings.MEDIA_ROOT, "files", "users", self.user.username, "A", "B", "C"
+        )
+        self.assertTrue(os.path.isdir(expected))
 
     def test_silently_skipped_for_unsupported_backend(self):
         """A backend without local paths (S3-like) must not break folder creation."""
-        with (
-            self.settings(MEDIA_ROOT=self.media_root),
-            patch(
-                "workspace.files.services._storage_ops.default_storage.path",
-                side_effect=NotImplementedError,
-            ),
+        with patch(
+            "workspace.files.services._storage_ops.default_storage.path",
+            side_effect=NotImplementedError,
         ):
             folder = FileService.create_folder(self.user, "Ignored")
 
@@ -564,103 +553,94 @@ class TestMoveOnStorage(TestCase):
     """Tests for FileService.move() with physical storage operations."""
 
     def setUp(self):
-        self.media_root = tempfile.mkdtemp()
         self.user = User.objects.create_user(
             username="moveuser", email="move@test.com", password="pass"
         )
 
-    def tearDown(self):
-        shutil.rmtree(self.media_root, ignore_errors=True)
-
     def _storage_path(self, *parts):
         return os.path.join(
-            self.media_root, "files", "users", self.user.username, *parts
+            settings.MEDIA_ROOT, "files", "users", self.user.username, *parts
         )
 
     def test_move_folder_moves_directory_on_disk(self):
-        with self.settings(MEDIA_ROOT=self.media_root):
-            src = FileService.create_folder(self.user, "Src")
-            dest = FileService.create_folder(self.user, "Dest")
-            child = FileService.create_folder(self.user, "Child", parent=src)
+        src = FileService.create_folder(self.user, "Src")
+        dest = FileService.create_folder(self.user, "Dest")
+        child = FileService.create_folder(self.user, "Child", parent=src)
 
-            self.assertTrue(os.path.isdir(self._storage_path("Src", "Child")))
+        self.assertTrue(os.path.isdir(self._storage_path("Src", "Child")))
 
-            FileService.move(child, dest)
+        FileService.move(child, dest)
 
-            self.assertFalse(os.path.isdir(self._storage_path("Src", "Child")))
-            self.assertTrue(os.path.isdir(self._storage_path("Dest", "Child")))
+        self.assertFalse(os.path.isdir(self._storage_path("Src", "Child")))
+        self.assertTrue(os.path.isdir(self._storage_path("Dest", "Child")))
 
     def test_move_folder_to_root(self):
-        with self.settings(MEDIA_ROOT=self.media_root):
-            parent = FileService.create_folder(self.user, "Parent")
-            child = FileService.create_folder(self.user, "Child", parent=parent)
+        parent = FileService.create_folder(self.user, "Parent")
+        child = FileService.create_folder(self.user, "Child", parent=parent)
 
-            self.assertTrue(os.path.isdir(self._storage_path("Parent", "Child")))
+        self.assertTrue(os.path.isdir(self._storage_path("Parent", "Child")))
 
-            FileService.move(child, None)
+        FileService.move(child, None)
 
-            self.assertFalse(os.path.isdir(self._storage_path("Parent", "Child")))
-            self.assertTrue(os.path.isdir(self._storage_path("Child")))
+        self.assertFalse(os.path.isdir(self._storage_path("Parent", "Child")))
+        self.assertTrue(os.path.isdir(self._storage_path("Child")))
 
     def test_move_folder_updates_descendant_content_names(self):
-        with self.settings(MEDIA_ROOT=self.media_root):
-            src = FileService.create_folder(self.user, "Src")
-            dest = FileService.create_folder(self.user, "Dest")
-            f = FileService.create_file(
-                self.user,
-                "doc.txt",
-                parent=src,
-                content=ContentFile(b"hello", name="doc.txt"),
-            )
+        src = FileService.create_folder(self.user, "Src")
+        dest = FileService.create_folder(self.user, "Dest")
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            parent=src,
+            content=ContentFile(b"hello", name="doc.txt"),
+        )
 
-            old_content_name = f.content.name.replace("\\", "/")
-            self.assertTrue(old_content_name.startswith("files/users/moveuser/Src/"))
+        old_content_name = f.content.name.replace("\\", "/")
+        self.assertTrue(old_content_name.startswith("files/users/moveuser/Src/"))
 
-            FileService.move(src, dest)
+        FileService.move(src, dest)
 
-            f.refresh_from_db()
-            new_content_name = f.content.name.replace("\\", "/")
-            self.assertTrue(
-                new_content_name.startswith("files/users/moveuser/Dest/Src/"),
-                f"Expected path starting with files/users/moveuser/Dest/Src/, got {new_content_name}",
-            )
+        f.refresh_from_db()
+        new_content_name = f.content.name.replace("\\", "/")
+        self.assertTrue(
+            new_content_name.startswith("files/users/moveuser/Dest/Src/"),
+            f"Expected path starting with files/users/moveuser/Dest/Src/, got {new_content_name}",
+        )
 
     def test_move_file_moves_on_disk(self):
-        with self.settings(MEDIA_ROOT=self.media_root):
-            src = FileService.create_folder(self.user, "Src")
-            dest = FileService.create_folder(self.user, "Dest")
-            f = FileService.create_file(
-                self.user,
-                "doc.txt",
-                parent=src,
-                content=ContentFile(b"hello", name="doc.txt"),
-            )
+        src = FileService.create_folder(self.user, "Src")
+        dest = FileService.create_folder(self.user, "Dest")
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            parent=src,
+            content=ContentFile(b"hello", name="doc.txt"),
+        )
 
-            old_full_path = os.path.join(self.media_root, f.content.name)
-            self.assertTrue(os.path.isfile(old_full_path))
+        old_full_path = os.path.join(settings.MEDIA_ROOT, f.content.name)
+        self.assertTrue(os.path.isfile(old_full_path))
 
-            FileService.move(f, dest)
+        FileService.move(f, dest)
 
-            self.assertFalse(os.path.isfile(old_full_path))
-            new_full_path = os.path.join(self.media_root, f.content.name)
-            self.assertTrue(os.path.isfile(new_full_path))
+        self.assertFalse(os.path.isfile(old_full_path))
+        new_full_path = os.path.join(settings.MEDIA_ROOT, f.content.name)
+        self.assertTrue(os.path.isfile(new_full_path))
 
     def test_move_file_to_root(self):
-        with self.settings(MEDIA_ROOT=self.media_root):
-            folder = FileService.create_folder(self.user, "Folder")
-            f = FileService.create_file(
-                self.user,
-                "doc.txt",
-                parent=folder,
-                content=ContentFile(b"hello", name="doc.txt"),
-            )
+        folder = FileService.create_folder(self.user, "Folder")
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            parent=folder,
+            content=ContentFile(b"hello", name="doc.txt"),
+        )
 
-            FileService.move(f, None)
+        FileService.move(f, None)
 
-            new_path = f.content.name.replace("\\", "/")
-            self.assertNotIn("Folder", new_path)
-            new_full_path = os.path.join(self.media_root, f.content.name)
-            self.assertTrue(os.path.isfile(new_full_path))
+        new_path = f.content.name.replace("\\", "/")
+        self.assertNotIn("Folder", new_path)
+        new_full_path = os.path.join(settings.MEDIA_ROOT, f.content.name)
+        self.assertTrue(os.path.isfile(new_full_path))
 
     def test_move_noop_when_same_parent(self):
         folder = FileService.create_folder(self.user, "Folder")

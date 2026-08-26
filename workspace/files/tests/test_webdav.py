@@ -5,12 +5,14 @@ import io
 import os
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 from knox.models import AuthToken
 
+from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.webdav import dc as dc_module
@@ -518,24 +520,12 @@ class FolderResourceMoveStorageTests(TestCase):
     """
 
     def setUp(self):
-        import tempfile
-
-        self._tmpdir = tempfile.mkdtemp()
-        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
-        self._media_override.enable()
-
         self.user = User.objects.create_user(
             username="davmove",
             email="dmv@test.com",
             password="pass",
         )
         self.environ = _make_environ(user=self.user)
-
-    def tearDown(self):
-        import shutil
-
-        self._media_override.disable()
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     def test_move_recursive_migrates_descendant_content(self):
         """Moving a folder via WebDAV must update descendant content paths."""
@@ -547,7 +537,7 @@ class FolderResourceMoveStorageTests(TestCase):
             parent=src,
             content=ContentFile(b"hello", name="note.txt"),
         )
-        old_full_path = os.path.join(self._tmpdir, note.content.name)
+        old_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
         self.assertTrue(os.path.isfile(old_full_path))
 
         res = FolderResource("/Src", self.environ, src)
@@ -559,7 +549,7 @@ class FolderResourceMoveStorageTests(TestCase):
             new_content_name.startswith("files/users/davmove/Dest/Src/"),
             f"Expected new path under Dest/Src/, got {new_content_name}",
         )
-        new_full_path = os.path.join(self._tmpdir, note.content.name)
+        new_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
         self.assertTrue(os.path.isfile(new_full_path))
         self.assertFalse(os.path.isfile(old_full_path))
 
@@ -586,14 +576,16 @@ class FolderResourceMoveStorageTests(TestCase):
         self.assertEqual(sub.name, "Target")
         self.assertEqual(sub.parent, b)
         note.refresh_from_db()
-        blob = os.path.join(self._tmpdir, note.content.name)
+        blob = os.path.join(settings.MEDIA_ROOT, note.content.name)
         self.assertTrue(os.path.isfile(blob), f"missing blob at {note.content.name}")
         with open(blob, "rb") as f:
             self.assertEqual(f.read(), b"payload")
         # The colliding sibling's directory must be left alone.
         self.assertTrue(
             os.path.isdir(
-                os.path.join(self._tmpdir, "files", "users", "davmove", "A", "Target")
+                os.path.join(
+                    settings.MEDIA_ROOT, "files", "users", "davmove", "A", "Target"
+                )
             )
         )
 
@@ -621,31 +613,27 @@ class FolderResourceMoveStorageTests(TestCase):
         x.refresh_from_db()
         self.assertEqual(x.name, "y.txt")
         self.assertEqual(x.path, "B/y.txt")
-        with open(os.path.join(self._tmpdir, x.content.name), "rb") as f:
+        with open(os.path.join(settings.MEDIA_ROOT, x.content.name), "rb") as f:
             self.assertEqual(f.read(), b"xdata")
         sibling.refresh_from_db()
-        with open(os.path.join(self._tmpdir, sibling.content.name), "rb") as f:
+        with open(os.path.join(settings.MEDIA_ROOT, sibling.content.name), "rb") as f:
             self.assertEqual(f.read(), b"ydata")
 
 
 # ── FileResource ──────────────────────────────────────────────────────
 
 
-class FileResourceTests(TestCase):
+class FileResourceTests(IsolatedMediaRootMixin, TestCase):
     """Tests for FileResource.
 
-    Uses a real temporary FileSystemStorage (not InMemoryStorage) because
+    Uses a real FileSystemStorage (not InMemoryStorage) because
     ``_StreamingWriteBuffer`` writes directly to the filesystem via
-    ``os.open`` / ``os.write``.
+    ``os.open`` / ``os.write``. The root is isolated because one test walks it
+    to prove an overwrite left no partial file behind.
     """
 
     def setUp(self):
-        import tempfile
-
-        self._tmpdir = tempfile.mkdtemp()
-        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
-        self._media_override.enable()
-
+        super().setUp()
         self.user = User.objects.create_user(
             username="davfile", email="file@test.com", password="pass"
         )
@@ -655,12 +643,6 @@ class FileResourceTests(TestCase):
             self.user, "test.txt", content=content, mime_type="text/plain"
         )
         self.res = FileResource("/test.txt", self.environ, self.file)
-
-    def tearDown(self):
-        import shutil
-
-        self._media_override.disable()
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     def test_content_length(self):
         self.assertEqual(self.res.get_content_length(), 11)
@@ -810,7 +792,7 @@ class FileResourceTests(TestCase):
         buf.close()
         self.res.end_write(with_errors=False)
         on_disk = []
-        for _root, _dirs, names in os.walk(self._tmpdir):
+        for _root, _dirs, names in os.walk(settings.MEDIA_ROOT):
             on_disk.extend(names)
         self.assertEqual(on_disk, ["test.txt"])
 
@@ -853,7 +835,7 @@ class FileResourceTests(TestCase):
         self.assertEqual(self.file.name, "renamed.txt")
         self.assertEqual(self.file.parent, original_parent)
         # Bytes follow the rename.
-        new_full_path = os.path.join(self._tmpdir, self.file.content.name)
+        new_full_path = os.path.join(settings.MEDIA_ROOT, self.file.content.name)
         self.assertTrue(os.path.isfile(new_full_path))
 
     def test_copy_move_single_move_migrates_content_storage(self):
@@ -864,7 +846,7 @@ class FileResourceTests(TestCase):
         reads served stale storage state.
         """
         FileService.create_folder(self.user, "Target")
-        old_full_path = os.path.join(self._tmpdir, self.file.content.name)
+        old_full_path = os.path.join(settings.MEDIA_ROOT, self.file.content.name)
         self.assertTrue(os.path.isfile(old_full_path))
 
         self.res.copy_move_single("/Target/moved.txt", is_move=True)
@@ -874,7 +856,7 @@ class FileResourceTests(TestCase):
         new_content_name = self.file.content.name.replace("\\", "/")
         self.assertIn("Target/", new_content_name)
         # And the bytes must actually live there.
-        new_full_path = os.path.join(self._tmpdir, self.file.content.name)
+        new_full_path = os.path.join(settings.MEDIA_ROOT, self.file.content.name)
         self.assertTrue(os.path.isfile(new_full_path))
         self.assertFalse(os.path.isfile(old_full_path))
 
@@ -1141,8 +1123,8 @@ def _basic_auth_header(username, password):
 class WebDAVIntegrationTests(TestCase):
     """End-to-end tests hitting the WsgiDAV app through the WSGI dispatch.
 
-    Uses a real temporary FileSystemStorage (via MEDIA_ROOT override)
-    because ``_StreamingWriteBuffer`` needs ``storage.path()``.
+    Uses a real FileSystemStorage (not InMemoryStorage) because
+    ``_StreamingWriteBuffer`` needs ``storage.path()``.
     """
 
     @classmethod
@@ -1153,22 +1135,10 @@ class WebDAVIntegrationTests(TestCase):
         cls._app = create_webdav_app()
 
     def setUp(self):
-        import tempfile
-
-        self._tmpdir = tempfile.mkdtemp()
-        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
-        self._media_override.enable()
-
         self.user = User.objects.create_user(
             username="davint", email="int@test.com", password="pass123"
         )
         self.auth = _basic_auth_header("davint", "pass123")
-
-    def tearDown(self):
-        import shutil
-
-        self._media_override.disable()
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     # ── helpers ──
 

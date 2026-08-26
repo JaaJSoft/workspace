@@ -177,6 +177,12 @@ workspace/<module>/tests/
 └── ...
 ```
 
+### Media root
+
+`MEDIA_ROOT` defaults to `BASE_DIR`, so a test that saves file content would write real blobs into the checkout under `files/users/<username>/` - a path `.gitignore` hides, so nothing surfaces it. `TEST_RUNNER` (`workspace/test_runner.py`) redirects the media root to a temporary directory for the whole run and removes it afterwards, so **no test needs its own `MEDIA_ROOT` override to stay out of the tree**. Never re-introduce the `override_settings(MEDIA_ROOT=tempfile.mkdtemp())` idiom for that purpose; write content and read `settings.MEDIA_ROOT` when a path is needed.
+
+The one case that still warrants an isolated root is a test that **walks** the media tree - a sync reconciliation asserting how many nodes it created, a purge command deleting every blob no row points at. A rolled-back transaction takes the rows away but leaves the files, so those tests would see earlier tests' leftovers. Use `IsolatedMediaRootMixin` from `workspace/common/tests/media.py` (mixed in before the `TestCase` base, `super().setUp()` first); it exposes the fresh directory as `self.media_root`.
+
 ### CI
 
 Tests run in parallel in CI with one job per module (see `.github/workflows/tests.yml`). When creating a new Django app module, add it to the `matrix.module` list in the workflow file.

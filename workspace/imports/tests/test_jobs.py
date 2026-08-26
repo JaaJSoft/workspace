@@ -1,5 +1,3 @@
-import shutil
-import tempfile
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -26,9 +24,6 @@ User = get_user_model()
 @override_settings(IMPORTS_ALLOWED_HOSTS=["x", "y"])
 class JobsTestCase(TestCase):
     def setUp(self):
-        self._tmpdir = tempfile.mkdtemp()
-        self._media = override_settings(MEDIA_ROOT=self._tmpdir)
-        self._media.enable()
         self.user = User.objects.create_user(username="alice", password="pw")
         self.provider = fake_provider()
         self.conn = ImportConnection.objects.create(
@@ -41,8 +36,6 @@ class JobsTestCase(TestCase):
         cache.clear()
 
     def tearDown(self):
-        self._media.disable()
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
         cache.clear()
 
 

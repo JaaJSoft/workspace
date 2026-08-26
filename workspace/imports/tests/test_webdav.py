@@ -1,6 +1,4 @@
 import io
-import shutil
-import tempfile
 from datetime import UTC, datetime
 from unittest.mock import patch
 
@@ -234,9 +232,6 @@ class AgainstOurOwnServerTests(TestCase):
     def setUp(self):
         from workspace.wsgi import application
 
-        self._tmpdir = tempfile.mkdtemp()
-        self._media = override_settings(MEDIA_ROOT=self._tmpdir)
-        self._media.enable()
         self.remote_user = User.objects.create_user(username="bob", password="bobpw")
         docs = FileService.create_folder(self.remote_user, "Documents")
         FileService.create_file(
@@ -254,10 +249,6 @@ class AgainstOurOwnServerTests(TestCase):
             username="bob",
         )
         self.conn.set_secret("bobpw")
-
-    def tearDown(self):
-        self._media.disable()
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     def _source(self, conn=None):
         conn = conn or self.conn

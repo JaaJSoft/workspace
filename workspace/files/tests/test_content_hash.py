@@ -2,11 +2,10 @@
 
 import hashlib
 import os
-import shutil
-import tempfile
 from io import BytesIO, StringIO
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
@@ -15,7 +14,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
@@ -146,18 +145,11 @@ class WritePathHashTests(TestCase):
 
 class WebDavHashTests(TestCase):
     def setUp(self):
-        self._tmpdir = tempfile.mkdtemp()
-        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
-        self._media_override.enable()
         self.user = User.objects.create_user(username="davhash", password="pass")
         self.file = FileService.create_file(
             self.user, "test.txt", content=ContentFile(HELLO, name="test.txt")
         )
         self.res = FileResource("/test.txt", _make_environ(user=self.user), self.file)
-
-    def tearDown(self):
-        self._media_override.disable()
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     def test_put_hashes_in_the_write_pass(self):
         buf = self.res.begin_write(content_type="text/plain")
@@ -172,23 +164,18 @@ class WebDavHashTests(TestCase):
 
 class SyncHashTests(TestCase):
     def setUp(self):
-        self.media_root = tempfile.mkdtemp()
         self.user = User.objects.create_user(username="synchash", password="pass")
 
-    def tearDown(self):
-        shutil.rmtree(self.media_root, ignore_errors=True)
-
     def test_disk_synced_files_are_hashed(self):
-        with self.settings(MEDIA_ROOT=self.media_root):
-            root = os.path.join(self.media_root, "files", "users", self.user.username)
-            os.makedirs(root, exist_ok=True)
-            with open(os.path.join(root, "found.txt"), "wb") as fh:
-                fh.write(HELLO)
+        root = os.path.join(settings.MEDIA_ROOT, "files", "users", self.user.username)
+        os.makedirs(root, exist_ok=True)
+        with open(os.path.join(root, "found.txt"), "wb") as fh:
+            fh.write(HELLO)
 
-            FileSyncService().sync_user_recursive(self.user)
+        FileSyncService().sync_user_recursive(self.user)
 
-            f = File.objects.get(owner=self.user, name="found.txt")
-            self.assertEqual(f.content_hash, HELLO_SHA256)
+        f = File.objects.get(owner=self.user, name="found.txt")
+        self.assertEqual(f.content_hash, HELLO_SHA256)
 
 
 class FindDuplicatesTests(TestCase):

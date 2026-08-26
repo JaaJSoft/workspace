@@ -7,13 +7,12 @@ descendant content storage paths follow the move on disk.
 """
 
 import os
-import shutil
-import tempfile
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.base import ContentFile
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from workspace.files.services import FileService
 from workspace.notes.ui.views import _ensure_default_folders
@@ -25,10 +24,6 @@ class EnsureDefaultFoldersStorageTests(TestCase):
     """Verifies the legacy Journal migration migrates content on disk."""
 
     def setUp(self):
-        self._tmpdir = tempfile.mkdtemp()
-        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
-        self._media_override.enable()
-
         self.user = User.objects.create_user(
             username="journalmig",
             email="jmig@test.com",
@@ -37,8 +32,6 @@ class EnsureDefaultFoldersStorageTests(TestCase):
 
     def tearDown(self):
         cache.clear()
-        self._media_override.disable()
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     def test_legacy_journal_migration_moves_descendant_content(self):
         """A root-level Journal containing a note must migrate the note's bytes
@@ -60,7 +53,7 @@ class EnsureDefaultFoldersStorageTests(TestCase):
             parent=journal,
             content=ContentFile(b"today I refactored", name="2026-04-26.md"),
         )
-        old_full_path = os.path.join(self._tmpdir, note.content.name)
+        old_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
         self.assertTrue(os.path.isfile(old_full_path))
 
         _ensure_default_folders(self.user)
@@ -71,7 +64,7 @@ class EnsureDefaultFoldersStorageTests(TestCase):
             new_content_name.startswith("files/users/journalmig/Notes/Journal/"),
             f"Expected new path under Notes/Journal/, got {new_content_name}",
         )
-        new_full_path = os.path.join(self._tmpdir, note.content.name)
+        new_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
         self.assertTrue(os.path.isfile(new_full_path))
         self.assertFalse(os.path.isfile(old_full_path))
 

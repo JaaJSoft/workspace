@@ -1,22 +1,38 @@
 """Text-to-speech: turns a bot's written line into the audio of its own voice.
 
-The backend designs the voice from a free-text instruction ("a young woman,
-soft and composed") instead of picking one from a catalogue, so a bot's voice
-is a string on its profile rather than an identifier, and the request body
-must reach the model untouched (see ``AI_TTS_BASE_URL``).
+A voice reaches the backend one of two ways, and which one a deployment uses
+is the speech model's choice, not this module's.
 
-The instruction is the whole of the identity. The backend also accepts a
-seed, but measuring it settled what it is worth here: at a fixed seed, two
-different sentences came back 10-32 Hz apart in median pitch, as far apart as
-the 18-24 Hz that changing the seed moves a fixed sentence. A seed reproduces
-one exact call, not a speaker — and a chat never sends the same sentence
-twice. The instruction, meanwhile, moves the voice from 93 Hz to 364 Hz.
+A **reference recording** clones a speaker: the WAV goes out as ``voice_ref``
+alongside the ``reference_text`` transcribing it word for word, and the
+output is that speaker. This is the only way to hold a voice still across
+messages — a clone-based model has no default voice at all, and answers a
+new speaker to every call made without a reference.
+
+A **free-text description** ("a young woman, soft and composed") goes out as
+``options.instruct`` and designs a voice from scratch. It describes an
+archetype rather than a person, so the model samples a fresh voice matching
+it on every call; measured across three messages under one instruction, the
+median pitch came back 279, 240 and 247 Hz. A seed does not fix that: it
+reproduces one exact call, and a chat never sends the same sentence twice.
+
+The two are exclusive. A clone-based model reads the reference and ignores
+the description entirely — five very different instructions returned files
+identical to the byte at a fixed seed — so sending both would leave the
+caller unable to tell which one is speaking.
+
+Either way the body must reach the model untouched: ``voice_ref`` and
+``reference_text`` are not OpenAI fields, and a proxy that strips unknown
+ones leaves the request with no voice at all (see ``AI_TTS_BASE_URL``).
 """
 
+import base64
 import io
 import logging
 import time
 import wave
+from dataclasses import dataclass
+from pathlib import Path
 
 from django.conf import settings
 from openai import APIStatusError
@@ -82,16 +98,56 @@ def is_speech_enabled() -> bool:
     )
 
 
-def ai_synthesize_speech(text: str, voice: str = "", language: str = "") -> bytes:
-    """Speak *text* in the voice described by *voice*.
+@dataclass(frozen=True)
+class VoiceReference:
+    """A recording of a speaker and the exact words it says.
+
+    The transcript is half of the reference, not documentation of it: the
+    model aligns the clone on it, and the two travel together or not at all.
+    """
+
+    audio: bytes
+    text: str
+
+
+def default_voice_reference() -> VoiceReference | None:
+    """Reference a bot with none of its own speaks through, if configured.
+
+    A description cannot stand in for it. ``AI_TTS_VOICE`` is inert on a
+    clone-based model, which without a reference draws a new speaker for
+    every message.
+    """
+    path = (settings.AI_TTS_VOICE_REF or "").strip()
+    text = (settings.AI_TTS_VOICE_REF_TEXT or "").strip()
+    if not path or not text:
+        return None
+    try:
+        audio = Path(path).read_bytes()
+    except OSError as exc:
+        logger.warning(
+            "Unreadable AI_TTS_VOICE_REF %s: %s", scrub(path), scrub(str(exc))
+        )
+        return None
+    return VoiceReference(audio=audio, text=text) if audio else None
+
+
+def ai_synthesize_speech(
+    text: str,
+    voice: str = "",
+    language: str = "",
+    reference: VoiceReference | None = None,
+) -> bytes:
+    """Speak *text*, as *reference* sounds or as *voice* describes.
 
     Args:
         text: What to say, in any language, accented as it should be
               pronounced — the model reads the letters it is given.
-        voice: Free-text description of the speaker. Falls back to
-               ``AI_TTS_VOICE`` when empty.
+        voice: Free-text description of the speaker, used only when there is
+               no *reference*. Falls back to ``AI_TTS_VOICE`` when empty.
         language: Which language *text* is in. Anything outside
                   ``AI_TTS_LANGUAGES`` is dropped so the model detects it.
+        reference: Recording to clone, with its transcript. Takes the voice
+                   over any description, which the backend then ignores.
 
     Returns:
         Raw bytes of the audio, as the backend produced them (WAV today).
@@ -110,21 +166,31 @@ def ai_synthesize_speech(text: str, voice: str = "", language: str = "") -> byte
     if not client:
         raise ValueError("speech synthesis is not configured")
 
-    # The voice is designed from `instruct`, so the OpenAI `voice` id names
-    # nothing here - but the SDK requires the argument, and a proxy in front
-    # of the model may reject a request without it.
-    instruct = voice.strip() or settings.AI_TTS_VOICE
-    extra_body = {"options": {"instruct": instruct}}
+    extra_body = {}
     spoken = normalize_language(language)
     if spoken:
         extra_body["language"] = spoken
+
+    if reference is not None:
+        extra_body["voice_ref"] = {
+            "type": "base64",
+            "data": base64.b64encode(reference.audio).decode(),
+        }
+        extra_body["reference_text"] = reference.text
+        speaker = f"reference of {len(reference.audio)} bytes"
+    else:
+        # The voice is designed from `instruct`, so the OpenAI `voice` id
+        # names nothing here - but the SDK requires the argument, and a proxy
+        # in front of the model may reject a request without it.
+        speaker = voice.strip() or settings.AI_TTS_VOICE
+        extra_body["options"] = {"instruct": speaker}
 
     logger.info(
         "Starting speech synthesis: model=%s chars=%d language=%s voice=%.60s",
         settings.AI_TTS_MODEL,
         len(text),
         spoken or "auto",
-        scrub(instruct),
+        scrub(speaker),
     )
 
     audio = _run_with_retry(client, text, extra_body)

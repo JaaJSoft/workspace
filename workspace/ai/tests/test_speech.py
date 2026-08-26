@@ -1,4 +1,7 @@
+import base64
 import io
+import os
+import tempfile
 import wave
 from unittest.mock import MagicMock, patch
 
@@ -8,8 +11,10 @@ from openai import APIConnectionError, APIStatusError
 
 from workspace.ai.services.speech import (
     SpeechSynthesisError,
+    VoiceReference,
     ai_synthesize_speech,
     audio_duration_seconds,
+    default_voice_reference,
     is_speech_enabled,
     normalize_language,
 )
@@ -140,6 +145,86 @@ class SynthesizeSpeechTests(SimpleTestCase):
     def test_rejects_an_unconfigured_backend(self):
         with self.assertRaises(ValueError):
             ai_synthesize_speech("Hello.", "A voice.")
+
+
+@override_settings(**TTS_SETTINGS)
+class SynthesizeFromAReferenceTests(SimpleTestCase):
+    def setUp(self):
+        self.reference = VoiceReference(
+            audio=make_wav(), text="Bonjour, je suis l'assistante de Pierre."
+        )
+
+    def test_sends_the_recording_and_its_transcript(self):
+        with _ClientPatch(make_wav()) as http:
+            ai_synthesize_speech("Bonjour Pierre.", reference=self.reference)
+
+        body = http.calls[0]["extra_body"]
+        self.assertEqual(body["voice_ref"]["type"], "base64")
+        self.assertEqual(
+            base64.b64decode(body["voice_ref"]["data"]), self.reference.audio
+        )
+        self.assertEqual(body["reference_text"], self.reference.text)
+
+    def test_drops_the_description_a_clone_would_ignore(self):
+        # Sending both leaves the caller unable to tell which one speaks: a
+        # clone-based model reads the recording and ignores `instruct`.
+        with _ClientPatch(make_wav()) as http:
+            ai_synthesize_speech(
+                "Bonjour Pierre.", "Un homme âgé.", reference=self.reference
+            )
+
+        self.assertNotIn("options", http.calls[0]["extra_body"])
+
+    def test_still_announces_the_language(self):
+        with _ClientPatch(make_wav()) as http:
+            ai_synthesize_speech(
+                "Bonjour.", language="french", reference=self.reference
+            )
+
+        self.assertEqual(http.calls[0]["extra_body"]["language"], "french")
+
+    def test_a_reference_carries_over_every_retry(self):
+        with _ClientPatch(_http_error(503), make_wav()) as http:
+            ai_synthesize_speech("Bonjour.", reference=self.reference)
+
+        self.assertEqual(len(http.calls), 2)
+        self.assertIn("voice_ref", http.calls[1]["extra_body"])
+
+
+class DefaultVoiceReferenceTests(SimpleTestCase):
+    def setUp(self):
+        self.recording = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        self.recording.write(make_wav())
+        self.recording.close()
+        self.addCleanup(os.unlink, self.recording.name)
+
+    def test_reads_the_configured_recording(self):
+        with override_settings(
+            AI_TTS_VOICE_REF=self.recording.name,
+            AI_TTS_VOICE_REF_TEXT="  Bonjour, je suis l'assistante.  ",
+        ):
+            reference = default_voice_reference()
+
+        self.assertEqual(reference.text, "Bonjour, je suis l'assistante.")
+        with open(self.recording.name, "rb") as f:
+            self.assertEqual(reference.audio, f.read())
+
+    def test_half_a_reference_is_no_reference(self):
+        # A transcript aligns the clone; a recording without one and a
+        # transcript without a recording are both a backend error.
+        for settings_kwargs in (
+            {"AI_TTS_VOICE_REF": self.recording.name, "AI_TTS_VOICE_REF_TEXT": "  "},
+            {"AI_TTS_VOICE_REF": "", "AI_TTS_VOICE_REF_TEXT": "Bonjour."},
+        ):
+            with override_settings(**settings_kwargs):
+                self.assertIsNone(default_voice_reference(), settings_kwargs)
+
+    def test_an_unreadable_recording_falls_back_to_the_description(self):
+        with override_settings(
+            AI_TTS_VOICE_REF="/nonexistent/reference.wav",
+            AI_TTS_VOICE_REF_TEXT="Bonjour.",
+        ):
+            self.assertIsNone(default_voice_reference())
 
 
 @override_settings(**TTS_SETTINGS)

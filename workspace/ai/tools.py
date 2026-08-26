@@ -865,7 +865,11 @@ Call this when the user asks you to speak, to send a voice message or a vocal, t
 to sing, or to say how something is pronounced. \
 The audio is attached to the reply you are writing: say the whole thing here, then keep the written \
 part of that reply to a short line or nothing at all — never repeat out loud what you also typed."""
-        from .services.speech import SpeechSynthesisError, ai_synthesize_speech
+        from .services.speech import (
+            SpeechSynthesisError,
+            ai_synthesize_speech,
+            default_voice_reference,
+        )
 
         text = args.text.strip()
         if not text:
@@ -882,9 +886,16 @@ part of that reply to a short line or nothing at all — never repeat out loud w
         profile = getattr(bot, "bot_profile", None)
         override = _clean_voice(args.voice)
         voice = override or (profile.get_voice() if profile else settings.AI_TTS_VOICE)
+        # A reference is a whole speaker, so an override that names another one
+        # has to displace it: sending both would leave the recording speaking.
+        reference = None
+        if not override:
+            reference = (
+                profile.voice_reference() if profile else None
+            ) or default_voice_reference()
 
         try:
-            audio = ai_synthesize_speech(text, voice, args.language)
+            audio = ai_synthesize_speech(text, voice, args.language, reference)
         except ValueError as exc:
             return f"Error: {exc}"
         except SpeechSynthesisError as exc:

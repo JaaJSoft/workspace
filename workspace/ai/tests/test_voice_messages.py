@@ -1,11 +1,15 @@
+import shutil
+import tempfile
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
-from workspace.ai.models import AITask, BotProfile
+from workspace.ai.models import VOICE_REF_MAX_BYTES, AITask, BotProfile
 from workspace.ai.services.responses import post_bot_message, produced_media
-from workspace.ai.services.speech import SpeechSynthesisError
+from workspace.ai.services.speech import SpeechSynthesisError, VoiceReference
 from workspace.ai.tools import (
     VOICE_MAX_CHARS,
     SendVoiceMessageParams,
@@ -61,7 +65,7 @@ class SendVoiceMessageToolTests(TestCase):
 
         self.assertIn("Voice message recorded", result)
         mock_speak.assert_called_once_with(
-            "Bonjour Pierre.", "Une jeune femme, voix douce et posée.", ""
+            "Bonjour Pierre.", "Une jeune femme, voix douce et posée.", "", None
         )
         self.assertEqual(len(self.context["voices"]), 1)
         self.assertEqual(self.context["voices"][0]["data"], audio)
@@ -281,3 +285,141 @@ class BotVoiceTests(TestCase):
         bot = User.objects.create_user(username="bot", password="pw")
         profile = BotProfile.objects.create(user=bot, voice="Un homme âgé, très grave.")
         self.assertEqual(profile.get_voice(), "Un homme âgé, très grave.")
+
+
+class _TemporaryMediaRoot:
+    """Keeps uploaded reference recordings out of the working copy."""
+
+    def setUp(self):
+        super().setUp()
+        media_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, media_root, ignore_errors=True)
+        media = override_settings(MEDIA_ROOT=media_root)
+        media.enable()
+        self.addCleanup(media.disable)
+
+
+class BotVoiceReferenceTests(_TemporaryMediaRoot, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.bot = User.objects.create_user(username="bot", password="pw")
+        self.profile = BotProfile.objects.create(user=self.bot)
+        self.audio = make_wav()
+
+    def _record(self, transcript="Bonjour, je suis l'assistante de Pierre."):
+        self.profile.voice_ref.save("reference.wav", ContentFile(self.audio))
+        self.profile.voice_ref_text = transcript
+        self.profile.save()
+
+    def test_a_recorded_bot_speaks_through_its_reference(self):
+        self._record()
+
+        reference = self.profile.voice_reference()
+
+        self.assertEqual(reference.audio, self.audio)
+        self.assertEqual(reference.text, "Bonjour, je suis l'assistante de Pierre.")
+
+    def test_a_bot_with_no_recording_has_no_reference(self):
+        self.assertIsNone(self.profile.voice_reference())
+
+    def test_a_vanished_recording_leaves_the_description_to_speak(self):
+        self._record()
+        self.profile.voice_ref.storage.delete(self.profile.voice_ref.name)
+
+        self.assertIsNone(self.profile.voice_reference())
+
+    def test_a_recording_without_a_transcript_is_refused(self):
+        self.profile.voice_ref.save("reference.wav", ContentFile(self.audio))
+
+        with self.assertRaises(ValidationError) as caught:
+            self.profile.full_clean()
+
+        self.assertIn("voice_ref_text", caught.exception.error_dict)
+
+    def test_a_transcript_without_a_recording_is_refused(self):
+        self.profile.voice_ref_text = "Bonjour."
+
+        with self.assertRaises(ValidationError) as caught:
+            self.profile.full_clean()
+
+        self.assertIn("voice_ref", caught.exception.error_dict)
+
+    def test_a_recording_over_the_backend_budget_is_refused(self):
+        self.profile.voice_ref.save(
+            "huge.wav", ContentFile(b"\x00" * (VOICE_REF_MAX_BYTES + 1))
+        )
+        self.profile.voice_ref_text = "Bonjour."
+
+        with self.assertRaises(ValidationError) as caught:
+            self.profile.full_clean()
+
+        self.assertIn("voice_ref", caught.exception.error_dict)
+
+
+@override_settings(
+    AI_API_KEY="test-key",
+    AI_TTS_MODEL="test-voice-model",
+    AI_TTS_VOICE="A default adult voice.",
+    AI_TTS_VOICE_REF="",
+    AI_TTS_VOICE_REF_TEXT="",
+    AI_TTS_MAX_CHARS=700,
+    AI_TTS_LANGUAGES=["french", "english"],
+)
+class SendVoiceMessageReferenceTests(_TemporaryMediaRoot, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.provider = VoiceToolProvider()
+        self.context = {}
+        self.bot = User.objects.create_user(username="bot", password="pw")
+        self.profile = BotProfile.objects.create(
+            user=self.bot,
+            voice="Une jeune femme, voix douce et posée.",
+            voice_ref_text="Bonjour, je suis l'assistante de Pierre.",
+        )
+        self.audio = make_wav()
+        self.profile.voice_ref.save("reference.wav", ContentFile(self.audio))
+        self.bot.refresh_from_db()
+
+    def _call(self, voice="", bot=None):
+        return self.provider.send_voice_message(
+            SendVoiceMessageParams(text="Bonjour Pierre.", voice=voice, language=""),
+            user=None,
+            bot=self.bot if bot is None else bot,
+            conversation_id="conv-1",
+            context=self.context,
+        )
+
+    @patch("workspace.ai.services.speech.ai_synthesize_speech")
+    def test_a_recorded_bot_speaks_through_its_own_reference(self, mock_speak):
+        mock_speak.return_value = make_wav()
+
+        self._call()
+
+        reference = mock_speak.call_args.args[3]
+        self.assertEqual(reference.audio, self.audio)
+        self.assertEqual(reference.text, "Bonjour, je suis l'assistante de Pierre.")
+
+    @patch("workspace.ai.services.speech.ai_synthesize_speech")
+    def test_an_override_displaces_the_reference(self, mock_speak):
+        # The description names a whole speaker; leaving the recording in
+        # would keep the bot's own voice reading the character's lines.
+        mock_speak.return_value = make_wav()
+
+        self._call(voice="Un homme âgé, voix très grave.")
+
+        self.assertEqual(mock_speak.call_args.args[1], "Un homme âgé, voix très grave.")
+        self.assertIsNone(mock_speak.call_args.args[3])
+
+    @patch("workspace.ai.services.speech.ai_synthesize_speech")
+    def test_a_bot_with_no_recording_falls_back_to_the_configured_one(self, mock_speak):
+        mock_speak.return_value = make_wav()
+        plain_user = User.objects.create_user(username="nobot", password="pw")
+        fallback = VoiceReference(audio=b"RIFFfallback", text="Bonjour.")
+
+        with patch(
+            "workspace.ai.services.speech.default_voice_reference",
+            return_value=fallback,
+        ):
+            self._call(bot=plain_user)
+
+        self.assertIs(mock_speak.call_args.args[3], fallback)

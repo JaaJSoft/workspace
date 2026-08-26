@@ -77,14 +77,24 @@ class BotProfileAdmin(ModelAdmin):
             (
                 "Voice",
                 {
-                    "fields": ["voice"],
+                    "fields": ["voice", "voice_ref", "voice_ref_text"],
                     "description": (
-                        "How the bot sounds when it sends a voice message: a "
-                        "free-text description of the speaker, e.g. \u201cA young "
-                        "woman, soft and composed, warm tone.\u201d Name the gender "
-                        "first \u2014 the model drifts without it. This description "
-                        "is the whole of the bot's vocal identity, so a wording "
-                        "change is a voice change."
+                        "How the bot sounds when it sends a voice message. "
+                        "The description is free-text prose about the speaker, "
+                        "e.g. \u201cA young woman, soft and composed, warm "
+                        "tone.\u201d \u2014 name the gender first, the model "
+                        "drifts without it. It is also what the bot recites "
+                        "when asked what it sounds like, so keep it true even "
+                        "when a recording is what actually speaks.<br>"
+                        "The recording is a few seconds of the voice to clone, "
+                        "produced outside the workspace \u2014 by a "
+                        "voice-design model, or lifted from any clean sample "
+                        "\u2014 and it is the only way to keep one voice "
+                        "across messages: a description makes the backend draw "
+                        "a new speaker matching it every time. Upload the two "
+                        "together, the transcript matching the audio word for "
+                        "word. A model that clones reads the recording and "
+                        "ignores the description entirely."
                     ),
                 },
             ),

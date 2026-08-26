@@ -67,12 +67,13 @@ SEARXNG_BLOCKED_DOMAINS = os.getenv(
     "SEARXNG_BLOCKED_DOMAINS", ""
 )  # comma-separated, e.g. "evil.com,spam.org"
 
-# Text-to-speech for bot voice messages. The voice is designed by a free-text
-# instruction rather than picked from a fixed catalogue, so AI_TTS_BASE_URL must
-# point at a route that forwards the request body untouched: an OpenAI-standard
-# proxy drops every non-OpenAI field, which silently reduces every bot to the
-# same voice. Pointing straight at the speech server is the simplest way to get
-# that, and it needs no key of its own - AI_API_KEY is sent only when set.
+# Text-to-speech for bot voice messages. A voice is a free-text instruction or
+# a reference recording to clone, never an OpenAI `voice` id, so AI_TTS_BASE_URL
+# must point at a route that forwards the request body untouched: an
+# OpenAI-standard proxy drops every non-OpenAI field, which silently reduces
+# every bot to the same voice - or, on a clone-based model, errors outright.
+# Pointing straight at the speech server is the simplest way to get that, and it
+# needs no key of its own - AI_API_KEY is sent only when set.
 AI_TTS_MODEL = os.getenv("AI_TTS_MODEL", "")
 AI_TTS_BASE_URL = os.getenv("AI_TTS_BASE_URL") or None
 # What the speech model can be told it is reading, spelled out in English and
@@ -96,7 +97,13 @@ AI_TTS_LANGUAGES = env_list("AI_TTS_LANGUAGES") or [
 AI_TTS_VOICE = os.getenv(
     "AI_TTS_VOICE",
     "A warm, natural adult voice with a calm, friendly delivery.",
-)  # voice of a bot whose profile does not describe one
+)  # voice of a bot whose profile neither describes nor records one
+# Recording a bot with no reference of its own is cloned from, and the exact
+# words it says. A clone-based speech model has no default voice and ignores
+# AI_TTS_VOICE, so leaving these empty gives such a bot a new speaker on
+# every message; a deployment on one of those models wants a file here.
+AI_TTS_VOICE_REF = os.getenv("AI_TTS_VOICE_REF", "")
+AI_TTS_VOICE_REF_TEXT = os.getenv("AI_TTS_VOICE_REF_TEXT", "")
 AI_TTS_MAX_CHARS = int(
     os.getenv("AI_TTS_MAX_CHARS", "700")
 )  # characters per voice message; generation takes about as long as the audio

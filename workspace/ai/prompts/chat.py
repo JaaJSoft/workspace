@@ -86,14 +86,6 @@ def build_chat_messages(
     identity_lines = []
     if bot_name:
         identity_lines.append(f"Your name is {_sanitize_identity(bot_name)}.")
-    bot_profile = getattr(bot, "bot_profile", None)
-    can_speak = bool(settings.AI_TTS_MODEL and bot_profile and bot_profile.can_speak())
-    if can_speak and bot_profile.voice:
-        identity_lines.append(
-            f"Your voice sounds like this: {_sanitize_identity(bot_profile.voice, 300)} "
-            "This is how you actually sound when you send a voice message, so "
-            "describe your voice this way rather than inventing one."
-        )
     if user:
         display = _sanitize_identity(user.get_full_name() or user.username)
         identity_lines.append(
@@ -260,8 +252,9 @@ def build_chat_messages(
         "be generated."
     )
 
+    bot_profile = getattr(bot, "bot_profile", None)
     voice_instructions = ""
-    if can_speak:
+    if settings.AI_TTS_MODEL and bot_profile and bot_profile.can_speak():
         voice_instructions = (
             "\n\n## Your voice\n"
             "You have a voice and can send voice messages with "
@@ -286,7 +279,10 @@ def build_chat_messages(
             "send_voice_message takes the text and the language, nothing "
             "else. Asked to imitate someone or to play a character, say the "
             "line in your own voice or decline \u2014 never claim to have "
-            "changed voice."
+            "changed voice.\n"
+            "Asked what your voice sounds like, send one and let them hear "
+            "it. You have never heard yourself, so any description you give "
+            "is invented."
         )
 
     past_images_instructions = (

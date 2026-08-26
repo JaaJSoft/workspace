@@ -77,21 +77,17 @@ class BotProfileAdmin(ModelAdmin):
             (
                 "Voice",
                 {
-                    "fields": ["voice_ref", "voice_ref_text", "voice"],
+                    "fields": ["voice_ref", "voice_ref_text"],
                     "description": (
-                        "The recording is the voice. A few seconds of speech, "
+                        "The recording is the voice, and the only thing that "
+                        "decides how the bot sounds. A few seconds of speech, "
                         "produced outside the workspace \u2014 designed by a "
                         "voice-design model, or lifted from any clean sample "
                         "\u2014 and cloned on every voice message, with the "
                         "transcript matching it word for word so the backend "
                         "can align the clone. A bot with no recording here, "
                         "and no AI_TTS_VOICE_REF to fall back on, cannot send "
-                        "voice messages at all.<br>"
-                        "The description reaches no speech model and changes "
-                        "nothing about how the bot sounds. It is what the bot "
-                        "answers when asked what its voice is like, so write "
-                        "it to match the recording \u2014 or leave it empty "
-                        "and the bot will not bring its voice up."
+                        "voice messages at all."
                     ),
                 },
             ),

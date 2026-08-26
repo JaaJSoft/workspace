@@ -55,7 +55,6 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
         self.bot = User.objects.create_user(username="bot", password="pw")
         self.profile = BotProfile.objects.create(
             user=self.bot,
-            voice="Une jeune femme, voix douce et posée.",
             voice_ref_text="Bonjour, je suis l'assistante de Pierre.",
         )
         self.audio = make_wav()
@@ -133,6 +132,16 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
         self._call(text="Goedendag.", language="dutch")
 
         self.assertEqual(mock_speak.call_args.args[2], "dutch")
+
+    def test_the_badge_claims_no_more_than_the_call_did(self):
+        # Badges stream the moment the tool returns, while the reply is
+        # still being written and the audio is only attached to it. A badge
+        # reading "Sent" announces a delivery that has not happened and
+        # still may not - post_bot_message can fail after this point.
+        label = VoiceToolProvider.send_voice_message._tool_meta["badge_label"]
+
+        self.assertNotIn("sent", label.lower())
+        self.assertIn("recorded", label.lower())
 
     def test_the_tool_schema_advertises_the_configured_languages(self):
         from workspace.ai.tool_registry import _build_parameters

@@ -53,9 +53,6 @@ class BotProfile(models.Model):
     description = models.TextField(blank=True)
     supports_tools = models.BooleanField(default=True)
     supports_vision = models.BooleanField(default=True)
-    # What the bot says about its own voice when asked, and nothing more: the
-    # backend is told who speaks by the recording, never by a description.
-    voice = models.TextField(blank=True)
     voice_ref = models.FileField(
         upload_to=bot_voice_reference_path,
         max_length=500,

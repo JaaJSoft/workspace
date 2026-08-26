@@ -26,16 +26,6 @@ class Command(BaseCommand):
             help="Disable tool calling (for models that do not support it)",
         )
         parser.add_argument(
-            "--voice",
-            type=str,
-            default="",
-            help=(
-                "How the bot sounds in voice messages, in free text "
-                '(e.g. "A young woman, soft and composed, warm tone"). '
-                "Name the gender first."
-            ),
-        )
-        parser.add_argument(
             "--no-vision",
             action="store_true",
             help="Disable vision/images (for models that do not support it)",
@@ -69,7 +59,6 @@ class Command(BaseCommand):
                 "is_public": options["public"],
                 "supports_tools": not options["no_tools"],
                 "supports_vision": not options["no_vision"],
-                "voice": options["voice"],
             },
         )
 

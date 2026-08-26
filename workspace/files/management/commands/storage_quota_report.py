@@ -1,18 +1,13 @@
 """Recompute every storage bucket and report the ones over their limit."""
 
-import sys
-
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from django.db.models import Sum
 from django.template.defaultfilters import filesizeformat
 
-from workspace.files.services.quota import (
-    effective_group_quota,
-    effective_quota,
-    group_usage,
-    personal_usage,
-)
+from workspace.files.models import File, GroupStorageQuota, UserStorageQuota
 
 User = get_user_model()
 
@@ -32,25 +27,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         only_over = options["over"]
-        rows = []
-        for user in User.objects.order_by("username").iterator():
-            rows.append(
-                (
-                    "user",
-                    user.username,
-                    personal_usage(user.pk),
-                    effective_quota(user.pk),
-                )
-            )
-        for group in Group.objects.order_by("name").iterator():
-            rows.append(
-                (
-                    "group",
-                    group.name,
-                    group_usage(group.pk),
-                    effective_group_quota(group.pk),
-                )
-            )
+        rows = [*self._personal_rows(), *self._group_rows()]
 
         over = [r for r in rows if r[3] is not None and r[2] > r[3]]
         listed = over if only_over else sorted(rows, key=lambda r: r[2], reverse=True)
@@ -69,4 +46,41 @@ class Command(BaseCommand):
 
         self.stdout.write(f"\n{len(over)} bucket(s) over their limit.")
         if only_over and over:
-            sys.exit(1)
+            raise CommandError(f"{len(over)} bucket(s) over their limit.", returncode=1)
+
+    # Six queries whatever the number of accounts: per bucket kind, one usage
+    # aggregate, one full read of the (small) override table, and the names to
+    # print. The per-bucket helpers in services.quota cost two queries each,
+    # which turns a report over a few thousand accounts into as many round
+    # trips.
+
+    def _personal_rows(self):
+        usage = dict(
+            File.objects.filter(group__isnull=True, node_type=File.NodeType.FILE)
+            .values_list("owner_id")
+            .annotate(total=Sum("size"))
+        )
+        limits = dict(UserStorageQuota.objects.values_list("user_id", "quota_bytes"))
+        return [
+            (
+                "user",
+                username,
+                usage.get(pk) or 0,
+                limits.get(pk, settings.STORAGE_QUOTA_BYTES),
+            )
+            for pk, username in User.objects.order_by("username").values_list(
+                "pk", "username"
+            )
+        ]
+
+    def _group_rows(self):
+        usage = dict(
+            File.objects.filter(group__isnull=False, node_type=File.NodeType.FILE)
+            .values_list("group_id")
+            .annotate(total=Sum("size"))
+        )
+        limits = dict(GroupStorageQuota.objects.values_list("group_id", "quota_bytes"))
+        return [
+            ("group", name, usage.get(pk) or 0, limits.get(pk))
+            for pk, name in Group.objects.order_by("name").values_list("pk", "name")
+        ]

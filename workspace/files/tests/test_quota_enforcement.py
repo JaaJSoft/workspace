@@ -4,7 +4,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, GroupStorageQuota, UserStorageQuota
@@ -701,6 +703,54 @@ class ExtractEnforcementTests(TestCase):
         archive = self._archive([("a.bin", b"x" * (3 * KB))])
         result = extract_zip(archive, None, acting_user=self.user)
         self.assertEqual(result["files_created"], 1)
+
+    def _quota_queries(self, captured):
+        return [
+            q["sql"]
+            for q in captured.captured_queries
+            if "files_userstoragequota" in q["sql"]
+            or 'SUM("files_file"."size")' in q["sql"]
+        ]
+
+    def test_the_loop_reads_the_bucket_once_whatever_the_entry_count(self):
+        from workspace.files.services.extract import extract_zip
+
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=100 * KB)
+        one = self._archive([("a.bin", b"x" * (3 * KB))])
+        with CaptureQueriesContext(connection) as single:
+            extract_zip(one, None, acting_user=self.user)
+
+        five = self._archive([(f"e{i}.bin", b"x" * (3 * KB)) for i in range(5)])
+        with CaptureQueriesContext(connection) as several:
+            extract_zip(five, None, acting_user=self.user)
+
+        self.assertEqual(len(self._quota_queries(single)), 2)
+        self.assertEqual(
+            len(self._quota_queries(several)), len(self._quota_queries(single))
+        )
+
+    def test_an_entry_larger_than_its_header_is_refused_on_the_real_bytes(self):
+        """The loop tells create_file the bytes are already accounted for, so
+        the check on what was actually decompressed is the only thing standing
+        between an understated header and the bucket."""
+        from unittest.mock import patch
+
+        from workspace.files.services import extract as extract_module
+
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=100 * KB)
+        archive = self._archive([("a.bin", b"x" * (3 * KB))])
+        real = extract_module._stream_entry_to_tempfile
+
+        def understated(zf, info, leaf, total_bytes, max_bytes):
+            tmp, _ = real(zf, info, leaf, total_bytes, max_bytes)
+            tmp.size = 200 * KB
+            return tmp, total_bytes + 200 * KB
+
+        with patch.object(extract_module, "_stream_entry_to_tempfile", understated):
+            with self.assertRaises(quota.QuotaExceeded):
+                extract_module.extract_zip(archive, None, acting_user=self.user)
+
+        self.assertFalse(File.objects.filter(name="a.bin").exists())
 
     def test_the_fast_path_refuses_before_decompressing_the_entry(self):
         """The quota is charged before ``b.bin`` reaches

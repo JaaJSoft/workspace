@@ -165,6 +165,7 @@ class FileService:
         group=None,
         viewer=None,
         acting_user=None,
+        check_quota=True,
     ):
         """Create a new file record, optionally with uploaded content.
 
@@ -172,6 +173,11 @@ class FileService:
         declared media type. Callers copying an existing row pass the source's
         pin, which the declared type can no longer reconstruct (a voice message
         is stored as ``video/webm``).
+
+        ``check_quota=False`` is for a caller that has already charged these
+        exact bytes to the bucket itself - the archive extraction loop, which
+        would otherwise re-aggregate the bucket once per entry. Every other
+        caller leaves it on: this is where a write is refused.
         """
         from workspace.files.services.content_hash import hash_stream
         from workspace.files.services.detection import (
@@ -185,11 +191,12 @@ class FileService:
             group = parent.group
 
         # Before the detection and hashing passes read the stream.
-        check_write_allowed(
-            owner=owner,
-            group=group,
-            additional_bytes=content.size if content is not None else 0,
-        )
+        if check_quota:
+            check_write_allowed(
+                owner=owner,
+                group=group,
+                additional_bytes=content.size if content is not None else 0,
+            )
 
         if content is not None:
             detection = detect_from_stream(content)

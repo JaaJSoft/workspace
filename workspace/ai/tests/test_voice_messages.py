@@ -55,7 +55,6 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
         self.bot = User.objects.create_user(username="bot", password="pw")
         self.profile = BotProfile.objects.create(
             user=self.bot,
-            voice="Une jeune femme, voix douce et posée.",
             voice_ref_text="Bonjour, je suis l'assistante de Pierre.",
         )
         self.audio = make_wav()

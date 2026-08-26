@@ -11,12 +11,40 @@ import os
 import shutil
 import tempfile
 
-from django.test.runner import DiscoverRunner
+from django.test.runner import DiscoverRunner, ParallelTestSuite, _init_worker
 from django.test.utils import override_settings
+
+
+def make_worker_media_root(session_root):
+    """Return this process's own subdirectory of the session media root.
+
+    Django clones the database per worker but never the media tree, and
+    storage paths are built from fixture names that repeat across test classes
+    (``files/users/alice/...``, ``files/groups/Team/...``). Two workers would
+    otherwise write and delete the same blobs, and unlike a transaction
+    nothing rolls a file write back.
+    """
+    worker_root = os.path.join(session_root, f"worker-{os.getpid()}")
+    os.makedirs(worker_root, exist_ok=True)
+    return worker_root
+
+
+def _init_worker_with_media_root(counter, *args, **kwargs):
+    _init_worker(counter, *args, **kwargs)
+    # Under spawn and forkserver ``_init_worker`` has just re-imported the
+    # settings from the environment, so the override has to follow it.
+    worker_root = make_worker_media_root(os.environ["MEDIA_ROOT"])
+    override_settings(MEDIA_ROOT=worker_root).enable()
+
+
+class MediaRootParallelTestSuite(ParallelTestSuite):
+    init_worker = _init_worker_with_media_root
 
 
 class MediaRootTestRunner(DiscoverRunner):
     """Points ``MEDIA_ROOT`` at a throwaway directory for the whole run."""
+
+    parallel_test_suite = MediaRootParallelTestSuite
 
     def setup_test_environment(self, **kwargs):
         super().setup_test_environment(**kwargs)

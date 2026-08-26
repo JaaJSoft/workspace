@@ -316,13 +316,32 @@ class File(models.Model):
         prefix = f"{path}/"
         return models.Q(pk=self.pk) | models.Q(path__startswith=prefix)
 
+    @transaction.atomic
     def soft_delete(self, deleted_at=None):
+        """Trash this node and its subtree, moving the bytes out of the tree.
+
+        The storage move is last: the name a trashed node used to occupy has
+        to be free for the next file to claim, and leaving the bytes there
+        would let that file overwrite them.
+        """
+        # Imported lazily: the services package imports this module.
+        from workspace.files.services import _storage_ops as _storage
+
         if deleted_at is None:
             deleted_at = timezone.now()
-        return File.objects.filter(
+
+        source = _storage.current_node_path(self)
+        count = File.objects.filter(
             self._descendant_filter(),
             deleted_at__isnull=True,
         ).update(deleted_at=deleted_at)
+        if not count:
+            return 0
+
+        self.deleted_at = deleted_at
+        if source:
+            _storage.move_node_storage(self, source, _storage.trash_node_path(self))
+        return count
 
     def _restore_parents(self):
         parent_id = self.parent_id
@@ -343,18 +362,53 @@ class File(models.Model):
 
     @transaction.atomic
     def restore(self):
+        """Bring this node back into the live tree, bytes included.
+
+        The node that physically moves is the outermost trashed node of the
+        chain - restoring a file whose folder was trashed brings the folder
+        back too, which is what ``_restore_parents`` already did in the
+        database.
+        """
+        from workspace.files.services import _storage_ops as _storage
+        from workspace.files.services._names import (
+            available_node_name,
+            find_node_conflict,
+        )
+        from workspace.files.services._trash import trash_root_of
+
+        if self.deleted_at is None and self.node_type != self.NodeType.FOLDER:
+            return 0
+
+        root = trash_root_of(self)
+        if root is not None and root.pk == self.pk:
+            # Same row: work through one instance, or the rename below and
+            # the save() after it would fight over ``name`` and ``path``.
+            root = self
+        source = _storage.current_node_path(root) if root is not None else None
+
+        if root is not None and find_node_conflict(
+            root.owner, root.parent, root.name, exclude_pk=root.pk
+        ):
+            # Something took the name while the node sat in the trash.
+            root.name = available_node_name(
+                root.owner, root.parent, root.name, root.node_type
+            )
+            root.save(update_fields=["name"])
+
         if self.node_type == self.NodeType.FOLDER:
             updated = File.objects.filter(self._descendant_filter()).update(
                 deleted_at=None
             )
         else:
-            if self.deleted_at is None:
-                updated = 0
-            else:
-                self.deleted_at = None
-                self.save(update_fields=["deleted_at"])
-                updated = 1
+            self.deleted_at = None
+            self.save(update_fields=["deleted_at"])
+            updated = 1
         self._restore_parents()
+
+        if root is not None and source:
+            root.deleted_at = None
+            _storage.move_node_storage(root, source, _storage.live_node_path(root))
+            _storage.reconcile_trashed_children(root)
         return updated
 
     def delete(self, *args, **kwargs):
@@ -535,11 +589,23 @@ def delete_file_on_delete(sender, instance, **kwargs):
 
 @receiver(pre_delete, sender="auth.Group")
 def soft_delete_group_files(sender, instance, **kwargs):
-    """Soft-delete all files belonging to this group before it is deleted."""
-    File.objects.filter(
+    """Soft-delete all files belonging to this group before it is deleted.
+
+    Through the root folders rather than in one queryset update: trashing a
+    node moves its bytes out of the live tree, and only the model method
+    does that.
+    """
+    now = timezone.now()
+    roots = File.objects.filter(
         group=instance,
         deleted_at__isnull=True,
-    ).update(deleted_at=timezone.now())
+        parent__isnull=True,
+    ).select_related("owner")
+    for root in roots:
+        root.soft_delete(deleted_at=now)
+    # Anything the group owns outside those roots (legacy rows re-parented by
+    # hand) still has to leave the live listing.
+    File.objects.filter(group=instance, deleted_at__isnull=True).update(deleted_at=now)
 
 
 def _generate_share_link_token():

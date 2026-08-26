@@ -400,7 +400,9 @@ class FilesImporterTests(ImporterTestCase):
         self.assertGreater(mine.updated_at, before)
         self.assertNotEqual(mine.updated_at, MTIME)
 
-    def test_folders_are_matched_case_sensitively(self):
+    def test_folders_differing_only_in_case_are_merged(self):
+        # Local folder names are unique case-insensitively, because the two
+        # would be one directory on a case-insensitive filesystem.
         self.provider.tree["/"] = [
             RemoteEntry(id="/Docs", name="Docs", is_dir=True),
             RemoteEntry(id="/docs", name="docs", is_dir=True),
@@ -415,7 +417,8 @@ class FilesImporterTests(ImporterTestCase):
                 parent=root, node_type=File.NodeType.FOLDER
             ).values_list("name", flat=True)
         )
-        self.assertEqual(names, ["Docs", "docs"])
+        self.assertEqual(names, ["Docs"])
+        self.assertTrue(File.objects.filter(parent__name="Docs", name="x.txt").exists())
 
     def test_listing_phase_resumes_from_its_persisted_stack(self):
         job = self._job()

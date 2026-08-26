@@ -223,7 +223,57 @@ class FileSyncService:
 
         db_by_name = index.live_at(parent_db)
 
-        # --- Phase 1: Disk -> DB (create missing) ---
+        # --- Phase 1: DB -> Disk (soft-delete orphans) ---
+        # Before creating anything: a path that flipped from file to
+        # directory has to free its name here, or the row created for the
+        # new node collides with the stale one.
+        for (name, node_type), db_record in list(db_by_name.items()):
+            if name in disk_names:
+                disk_entry = disk_names[name]
+                is_dir = disk_entry.is_dir(follow_symlinks=False)
+                expected_type = File.NodeType.FOLDER if is_dir else File.NodeType.FILE
+                if expected_type == node_type:
+                    continue  # matches, nothing to do
+
+            # Not found on disk or type mismatch -> soft-delete
+            if self.dry_run:
+                self.log.info("[DRY-RUN] Would soft-delete %s: %s", node_type, name)
+                if node_type == File.NodeType.FOLDER:
+                    result.folders_soft_deleted += 1
+                else:
+                    result.files_soft_deleted += 1
+                continue
+
+            try:
+                # Bypass FileService.soft_delete here: we already have a custom
+                # *deleted_at* (the moment sync started, ``now``), and we still
+                # want a single FileEvent for traceability. Calling the model
+                # directly + recording the event ourselves preserves both.
+                from workspace.files.models import FileEvent
+                from workspace.files.services.events import record_event
+
+                count = db_record.soft_delete(deleted_at=now)
+                record_event(
+                    db_record,
+                    user,
+                    FileEvent.Action.DELETED,
+                    {
+                        "cascade_count": count,
+                        "detected_by_sync": True,
+                    },
+                )
+                self.log.info(
+                    "Soft-deleted %s: %s (%d records)", node_type, name, count
+                )
+                if node_type == File.NodeType.FOLDER:
+                    result.folders_soft_deleted += 1
+                else:
+                    result.files_soft_deleted += 1
+            except Exception as e:
+                result.errors.append(f"Error soft-deleting {name}: {e}")
+                self.log.warning("Error soft-deleting %s: %s", name, e)
+
+        # --- Phase 2: Disk -> DB (create missing) ---
         for entry_name, entry in disk_names.items():
             is_dir = entry.is_dir(follow_symlinks=False)
             is_file = entry.is_file(follow_symlinks=False)
@@ -278,54 +328,3 @@ class FileSyncService:
             except Exception as e:
                 result.errors.append(f"Error creating {entry_name}: {e}")
                 self.log.warning("Error creating %s: %s", entry_name, e)
-
-        # --- Phase 2: DB -> Disk (soft-delete orphans) ---
-        # Iterate a snapshot: phase 1 may have registered new rows into this
-        # same mapping via the index. They are known-present on disk, so they
-        # fall through the match below either way - the copy just keeps the
-        # loop independent of whether phase 1 touched the bucket.
-        for (name, node_type), db_record in list(db_by_name.items()):
-            if name in disk_names:
-                disk_entry = disk_names[name]
-                is_dir = disk_entry.is_dir(follow_symlinks=False)
-                expected_type = File.NodeType.FOLDER if is_dir else File.NodeType.FILE
-                if expected_type == node_type:
-                    continue  # matches, nothing to do
-
-            # Not found on disk or type mismatch -> soft-delete
-            if self.dry_run:
-                self.log.info("[DRY-RUN] Would soft-delete %s: %s", node_type, name)
-                if node_type == File.NodeType.FOLDER:
-                    result.folders_soft_deleted += 1
-                else:
-                    result.files_soft_deleted += 1
-                continue
-
-            try:
-                # Bypass FileService.soft_delete here: we already have a custom
-                # *deleted_at* (the moment sync started, ``now``), and we still
-                # want a single FileEvent for traceability. Calling the model
-                # directly + recording the event ourselves preserves both.
-                from workspace.files.models import FileEvent
-                from workspace.files.services.events import record_event
-
-                count = db_record.soft_delete(deleted_at=now)
-                record_event(
-                    db_record,
-                    user,
-                    FileEvent.Action.DELETED,
-                    {
-                        "cascade_count": count,
-                        "detected_by_sync": True,
-                    },
-                )
-                self.log.info(
-                    "Soft-deleted %s: %s (%d records)", node_type, name, count
-                )
-                if node_type == File.NodeType.FOLDER:
-                    result.folders_soft_deleted += 1
-                else:
-                    result.files_soft_deleted += 1
-            except Exception as e:
-                result.errors.append(f"Error soft-deleting {name}: {e}")
-                self.log.warning("Error soft-deleting %s: %s", name, e)

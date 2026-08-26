@@ -448,14 +448,12 @@ class TestCopy(TestCase):
         self.assertIn("SubDir", child_names)
 
     def test_copy_name_conflict_increments(self):
+        folder = FileService.create_folder(self.user, "Src")
+        original = FileService.create_folder(self.user, "A", parent=folder)
         FileService.create_folder(self.user, "A")
-        original = FileService.create_folder(
-            self.user, "A"
-        )  # same name allowed for folders
-        # Create conflict
         FileService.create_folder(self.user, "A (Copy)")
 
-        # The copy should be "A (Copy 2)"
+        # Both "A" and "A (Copy)" are taken at the root.
         copied = FileService.copy(original, None, self.user)
         self.assertEqual(copied.name, "A (Copy 2)")
 
@@ -510,15 +508,29 @@ class TestCheckNameAvailable(TestCase):
             File.NodeType.FILE,
         )
 
-    def test_no_check_for_folders(self):
+    def test_folders_are_checked_too(self):
+        # Two folders of the same name in one parent map to one directory on
+        # storage, and files dropped in either would overwrite each other.
         FileService.create_folder(self.user, "MyFolder")
-        # Should not raise for folders (check only applies to files)
-        FileService.check_name_available(
-            self.user,
-            None,
-            "MyFolder",
-            File.NodeType.FOLDER,
-        )
+        with self.assertRaises(ValueError):
+            FileService.check_name_available(
+                self.user,
+                None,
+                "MyFolder",
+                File.NodeType.FOLDER,
+            )
+
+    def test_a_file_cannot_take_a_sibling_folders_name(self):
+        # Same directory on storage: the write used to fail with a bare
+        # IsADirectoryError escaping as a 500.
+        FileService.create_folder(self.user, "Docs")
+        with self.assertRaises(ValueError):
+            FileService.check_name_available(
+                self.user,
+                None,
+                "Docs",
+                File.NodeType.FILE,
+            )
 
 
 class TestValidateMoveTarget(TestCase):

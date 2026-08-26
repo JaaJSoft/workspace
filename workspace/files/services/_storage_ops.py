@@ -18,6 +18,7 @@ from django.core.files.storage import default_storage
 from workspace.common.logging import scrub
 
 from ..models import File
+from . import _trash
 from .content_hash import hash_stream
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,17 @@ logger = logging.getLogger(__name__)
 
 def folder_storage_path(folder):
     """Return the storage-relative directory path for *folder*.
+
+    A trashed folder lives under ``trash/`` instead of the live tree; see
+    ``_trash`` for why and for the layout.
+    """
+    if folder.deleted_at is not None:
+        return _trash.trashed_storage_path(folder)
+    return live_folder_path(folder)
+
+
+def live_folder_path(folder):
+    """Where *folder* sits in the live tree, whatever its trash state.
 
     Uses the pre-computed ``folder.path`` to avoid walking the parent
     chain.  Group folders are stored under ``files/groups/<group_name>/...``.
@@ -41,6 +53,61 @@ def parent_storage_path(owner, parent):
     if parent:
         return folder_storage_path(parent)
     return posixpath.join("files", "users", owner.username)
+
+
+def current_node_path(node):
+    """Where *node*'s bytes sit right now, according to the database."""
+    if node.node_type == File.NodeType.FOLDER:
+        return folder_storage_path(node)
+    return node.content.name if node.content else None
+
+
+def live_node_path(node):
+    """Where *node* belongs in the live tree, whatever its trash state."""
+    if node.node_type == File.NodeType.FOLDER:
+        return live_folder_path(node)
+    return posixpath.join(live_parent_path(node), node.name)
+
+
+def live_parent_path(node):
+    """The live directory that should contain *node*."""
+    if node.parent_id:
+        return live_folder_path(node.parent)
+    if node.group_id:
+        return posixpath.join("files", "groups")
+    return posixpath.join("files", "users", node.owner.username)
+
+
+def trash_node_path(node):
+    """Where *node*'s bytes go once it is trashed in its own right."""
+    return posixpath.join(_trash.trash_dir(node), node.name)
+
+
+def reconcile_trashed_children(node):
+    """Move out whatever is still trashed inside a node that just came back.
+
+    Restoring a file also restores its ancestors, so the directory that came
+    back out of the trash can still hold trashed siblings. Each of those is
+    now the outermost trashed node of its chain, so it needs a trash
+    directory of its own.
+    """
+    if node.node_type != File.NodeType.FOLDER:
+        return
+    path = node.path or node.get_path()
+    still_trashed = (
+        File.objects.filter(path__startswith=f"{path}/", deleted_at__isnull=False)
+        .select_related("owner", "parent")
+        .order_by("path")
+    )
+    for child in still_trashed:
+        if child.parent is not None and child.parent.deleted_at is not None:
+            continue  # rides inside its own trashed ancestor
+        source = (
+            child.content.name
+            if child.node_type == File.NodeType.FILE
+            else live_folder_path(child)
+        )
+        move_node_storage(child, source, trash_node_path(child))
 
 
 def ensure_folder_on_storage(folder):
@@ -95,9 +162,13 @@ def _delete_file_storage(node):
         logger.error("Error deleting physical file %s: %s", scrub(file_path), scrub(e))
 
 
+# The two storage roots the cleanup climb must never remove.
+_STORAGE_ROOTS = ("files", _trash.TRASH_ROOT)
+
+
 def _remove_empty_parents(dir_path):
     """Climb from *dir_path* removing directories as long as they are empty."""
-    while dir_path and dir_path != "files":
+    while dir_path and dir_path not in _STORAGE_ROOTS:
         full_path = default_storage.path(dir_path)
         if not os.path.isdir(full_path) or os.listdir(full_path):
             break
@@ -339,6 +410,119 @@ def move_file_storage(file_obj, new_parent, *, new_owner=None):
             scrub(new_path),
             scrub(e),
         )
+
+
+def _relocate_on_storage(source, destination, *, expect_dir):
+    """Move a blob or a directory on storage.
+
+    Returns False when there is nothing to move: an empty folder whose
+    directory was never materialised, or a *source* whose kind on disk
+    contradicts the row - a file row pointing at what is now a directory,
+    which the disk sync runs into when a path flips from one to the other.
+    Moving that directory would drag content the row never owned into the
+    trash. Raises ``OSError`` when a move was attempted and failed, so the
+    caller's transaction rolls back rather than leaving rows pointing at a
+    path the bytes never reached.
+    """
+    try:
+        source_full = default_storage.path(source)
+        destination_full = default_storage.path(destination)
+    except NotImplementedError:
+        return _relocate_without_paths(source, destination)
+
+    if not os.path.exists(source_full):
+        return False
+    if os.path.isdir(source_full) != expect_dir:
+        logger.warning(
+            "Not moving '%s': it is a %s, the row says %s",
+            scrub(source),
+            "directory" if os.path.isdir(source_full) else "file",
+            "directory" if expect_dir else "file",
+        )
+        return False
+    os.makedirs(os.path.dirname(destination_full), exist_ok=True)
+    os.rename(source_full, destination_full)
+    return True
+
+
+def _relocate_without_paths(source, destination):
+    """Fallback for backends with no local filesystem paths (object storage)."""
+    if not default_storage.exists(source):
+        return False
+    handle = None
+    try:
+        handle = default_storage.open(source, "rb")
+        data = handle.read()
+    finally:
+        if handle:
+            handle.close()
+            gc.collect()  # release handles on Windows
+    saved = default_storage.save(destination, ContentFile(data))
+    if saved != destination:
+        # The backend picked a different name, so the caller's stored path
+        # would be wrong; undo and fail loudly rather than lose the bytes.
+        default_storage.delete(saved)
+        raise OSError(f"Storage refused the destination path {destination!r}")
+    default_storage.delete(source)
+    return True
+
+
+def rewrite_descendant_content_names(folder, old_prefix, new_prefix):
+    """Repoint every blob that rides inside *folder* at the new prefix.
+
+    Anchored on the folder's actual storage prefix rather than on a path
+    segment, so nested same-named folders (or a folder whose name collides
+    with an ancestor segment such as the username) are not rewritten in the
+    wrong place.
+    """
+    folder_path = folder.path or folder.get_path()
+    descendants = (
+        File.objects.filter(
+            path__startswith=f"{folder_path}/",
+            node_type=File.NodeType.FILE,
+        )
+        .exclude(content="")
+        .exclude(content__isnull=True)
+    )
+
+    old_prefix = old_prefix.replace("\\", "/")
+    new_prefix = new_prefix.replace("\\", "/")
+
+    updated = []
+    for child in descendants:
+        if not child.content.name:
+            continue
+        content_name = child.content.name.replace("\\", "/")
+        if content_name.startswith(f"{old_prefix}/"):
+            child.content.name = new_prefix + content_name[len(old_prefix) :]
+            updated.append(child)
+
+    if updated:
+        File.objects.bulk_update(updated, ["content"], batch_size=500)
+
+
+def move_node_storage(node, source, destination):
+    """Move *node* from *source* to *destination* on storage.
+
+    Rewrites ``content.name`` for the node (or, for a folder, for every blob
+    riding inside it) before touching the disk, so the rename is the last
+    step: a failure there leaves the surrounding transaction free to roll
+    back with nothing moved.
+    """
+    if source == destination:
+        return
+
+    is_folder = node.node_type == File.NodeType.FOLDER
+    if is_folder:
+        rewrite_descendant_content_names(node, source, destination)
+    else:
+        if not node.content or not node.content.name:
+            return
+        node.content.name = destination
+        File.objects.filter(pk=node.pk).update(content=destination)
+
+    if _relocate_on_storage(source, destination, expect_dir=is_folder):
+        logger.info("Moved %s -> %s", scrub(source), scrub(destination))
 
 
 def unique_copy_name(base_name, node_type, existing_names):

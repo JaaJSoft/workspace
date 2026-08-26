@@ -219,6 +219,8 @@ class FileService:
 
         size = content.size if content is not None else None
 
+        _name_helpers.check_name_available(owner, parent, name, File.NodeType.FILE)
+
         file_obj = File(
             owner=owner,
             name=name,
@@ -253,6 +255,8 @@ class FileService:
         if group is None and parent and parent.group_id:
             group = parent.group
 
+        _name_helpers.check_name_available(owner, parent, name, File.NodeType.FOLDER)
+
         folder = File(
             owner=owner,
             name=name,
@@ -285,6 +289,8 @@ class FileService:
         detection = detect_from_name(name)
         if not mime_type:
             mime_type = detection.mime_type
+
+        _name_helpers.check_name_available(owner, parent, name, File.NodeType.FILE)
 
         file_obj = File(
             owner=owner,
@@ -327,9 +333,19 @@ class FileService:
         new_group = new_parent.group if new_parent else None
         old_group = file_obj.group
 
-        # Determine new owner for storage path computation
+        # A node leaving a group folder becomes the personal node of whoever
+        # moved it, so the destination namespace is theirs, not the current
+        # owner's.
         new_owner = (
             acting_user if (old_group and not new_group and acting_user) else None
+        )
+
+        _name_helpers.check_name_available(
+            new_owner or file_obj.owner,
+            new_parent,
+            file_obj.name,
+            file_obj.node_type,
+            exclude_pk=file_obj.pk,
         )
 
         if file_obj.node_type == File.NodeType.FOLDER:
@@ -377,6 +393,14 @@ class FileService:
         old_name = file_obj.name
         if old_name == new_name:
             return file_obj
+
+        _name_helpers.check_name_available(
+            file_obj.owner,
+            file_obj.parent,
+            new_name,
+            file_obj.node_type,
+            exclude_pk=file_obj.pk,
+        )
 
         if file_obj.node_type == File.NodeType.FOLDER:
             FileService._rename_folder_storage(file_obj, old_name, new_name)

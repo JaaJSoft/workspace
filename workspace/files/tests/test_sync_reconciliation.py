@@ -176,6 +176,27 @@ class DbToDiskTests(SyncReconciliationTestCase):
             swap = self._live("swap")
             self.assertEqual(swap.node_type, File.NodeType.FOLDER)
 
+    def test_a_file_that_became_a_directory_is_not_dragged_into_the_trash(self):
+        # Trashing a file moves its blob out of the tree. The row still says
+        # "file" while the path is now a directory, and moving that would
+        # take content the row never owned along with it.
+        with self.settings(MEDIA_ROOT=self.media_root):
+            path = self._write("swap")
+            self._sync()
+
+            os.remove(path)
+            self._mkdir("swap")
+            inside = self._write("swap", "inside.txt", contents=b"KEEP")
+
+            result = self._sync()
+
+            self.assertEqual(result.files_soft_deleted, 1)
+            self.assertEqual(result.folders_created, 1)
+            self.assertTrue(os.path.isfile(inside))
+            with open(inside, "rb") as fh:
+                self.assertEqual(fh.read(), b"KEEP")
+            self.assertFalse(os.path.exists(os.path.join(self.media_root, "trash")))
+
     def test_records_a_delete_event_for_sync_detected_removals(self):
         from workspace.files.models import FileEvent
 

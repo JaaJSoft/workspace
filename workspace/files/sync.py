@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from django.core.files.storage import default_storage
 from django.utils import timezone
 
+from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import FileService
 
@@ -223,67 +224,10 @@ class FileSyncService:
 
         db_by_name = index.live_at(parent_db)
 
-        # --- Phase 1: Disk -> DB (create missing) ---
-        for entry_name, entry in disk_names.items():
-            is_dir = entry.is_dir(follow_symlinks=False)
-            is_file = entry.is_file(follow_symlinks=False)
-
-            if not is_dir and not is_file:
-                continue  # skip symlinks, special files
-
-            node_type = File.NodeType.FOLDER if is_dir else File.NodeType.FILE
-
-            if (entry_name, node_type) in db_by_name:
-                continue  # already tracked
-
-            if index.is_trashed(parent_db, entry_name, node_type):
-                continue  # in trash, don't create a duplicate
-
-            if self.dry_run:
-                self.log.info("[DRY-RUN] Would create %s: %s", node_type, entry_name)
-                if is_dir:
-                    result.folders_created += 1
-                else:
-                    result.files_created += 1
-                continue
-
-            try:
-                if is_dir:
-                    created = FileService.create_folder(
-                        user, entry_name, parent_db, acting_user=user
-                    )
-                    index.add(created)
-                    result.folders_created += 1
-                    self.log.info("Created folder: %s", entry_name)
-                else:
-                    content_path = f"{storage_prefix}/{entry_name}"
-
-                    try:
-                        size = entry.stat(follow_symlinks=False).st_size
-                    except OSError:
-                        size = None
-
-                    created = FileService.register_disk_file(
-                        user,
-                        entry_name,
-                        parent_db,
-                        content_path,
-                        size=size,
-                        acting_user=user,
-                    )
-                    index.add(created)
-                    result.files_created += 1
-                    self.log.info("Created file: %s (%s bytes)", entry_name, size)
-
-            except Exception as e:
-                result.errors.append(f"Error creating {entry_name}: {e}")
-                self.log.warning("Error creating %s: %s", entry_name, e)
-
-        # --- Phase 2: DB -> Disk (soft-delete orphans) ---
-        # Iterate a snapshot: phase 1 may have registered new rows into this
-        # same mapping via the index. They are known-present on disk, so they
-        # fall through the match below either way - the copy just keeps the
-        # loop independent of whether phase 1 touched the bucket.
+        # --- Phase 1: DB -> Disk (soft-delete orphans) ---
+        # Before creating anything: a path that flipped from file to
+        # directory has to free its name here, or the row created for the
+        # new node collides with the stale one.
         for (name, node_type), db_record in list(db_by_name.items()):
             if name in disk_names:
                 disk_entry = disk_names[name]
@@ -294,7 +238,9 @@ class FileSyncService:
 
             # Not found on disk or type mismatch -> soft-delete
             if self.dry_run:
-                self.log.info("[DRY-RUN] Would soft-delete %s: %s", node_type, name)
+                self.log.info(
+                    "[DRY-RUN] Would soft-delete %s: %s", node_type, scrub(name)
+                )
                 if node_type == File.NodeType.FOLDER:
                     result.folders_soft_deleted += 1
                 else:
@@ -320,7 +266,7 @@ class FileSyncService:
                     },
                 )
                 self.log.info(
-                    "Soft-deleted %s: %s (%d records)", node_type, name, count
+                    "Soft-deleted %s: %s (%d records)", node_type, scrub(name), count
                 )
                 if node_type == File.NodeType.FOLDER:
                     result.folders_soft_deleted += 1
@@ -328,4 +274,64 @@ class FileSyncService:
                     result.files_soft_deleted += 1
             except Exception as e:
                 result.errors.append(f"Error soft-deleting {name}: {e}")
-                self.log.warning("Error soft-deleting %s: %s", name, e)
+                self.log.warning("Error soft-deleting %s: %s", scrub(name), scrub(e))
+
+        # --- Phase 2: Disk -> DB (create missing) ---
+        for entry_name, entry in disk_names.items():
+            is_dir = entry.is_dir(follow_symlinks=False)
+            is_file = entry.is_file(follow_symlinks=False)
+
+            if not is_dir and not is_file:
+                continue  # skip symlinks, special files
+
+            node_type = File.NodeType.FOLDER if is_dir else File.NodeType.FILE
+
+            if (entry_name, node_type) in db_by_name:
+                continue  # already tracked
+
+            if index.is_trashed(parent_db, entry_name, node_type):
+                continue  # in trash, don't create a duplicate
+
+            if self.dry_run:
+                self.log.info(
+                    "[DRY-RUN] Would create %s: %s", node_type, scrub(entry_name)
+                )
+                if is_dir:
+                    result.folders_created += 1
+                else:
+                    result.files_created += 1
+                continue
+
+            try:
+                if is_dir:
+                    created = FileService.create_folder(
+                        user, entry_name, parent_db, acting_user=user
+                    )
+                    index.add(created)
+                    result.folders_created += 1
+                    self.log.info("Created folder: %s", scrub(entry_name))
+                else:
+                    content_path = f"{storage_prefix}/{entry_name}"
+
+                    try:
+                        size = entry.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        size = None
+
+                    created = FileService.register_disk_file(
+                        user,
+                        entry_name,
+                        parent_db,
+                        content_path,
+                        size=size,
+                        acting_user=user,
+                    )
+                    index.add(created)
+                    result.files_created += 1
+                    self.log.info(
+                        "Created file: %s (%s bytes)", scrub(entry_name), size
+                    )
+
+            except Exception as e:
+                result.errors.append(f"Error creating {entry_name}: {e}")
+                self.log.warning("Error creating %s: %s", scrub(entry_name), scrub(e))

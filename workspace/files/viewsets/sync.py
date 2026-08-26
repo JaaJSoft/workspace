@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import FileService
 
@@ -44,7 +45,7 @@ class SyncMixin:
         service = FileSyncService(log=logger)
         result = service.sync_folder_shallow(request.user, parent_db=None)
         for err in result.errors:
-            logger.warning("sync root: %s", err)
+            logger.warning("sync root: %s", scrub(err))
         return Response(
             {
                 "files_created": result.files_created,
@@ -85,7 +86,7 @@ class SyncMixin:
         service = FileSyncService(log=logger)
         result = service.sync_folder_shallow(request.user, parent_db=file_obj)
         for err in result.errors:
-            logger.warning("sync folder %s: %s", uuid, err)
+            logger.warning("sync folder %s: %s", scrub(uuid), scrub(err))
         return Response(
             {
                 "files_created": result.files_created,

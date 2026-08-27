@@ -29,18 +29,16 @@ class VaultActionRegistry:
 
     @classmethod
     def _ensure_loaded(cls):
+        """Import the action module once, for its registration side effects.
+
+        There is deliberately no reset hook. The registry is process-global
+        and the decorators run at import time, so emptying it in one test
+        would empty it for every test after - and importing the module again
+        would not put anything back, because a second import of an already
+        imported module runs nothing. A test that wants an action set of its
+        own subclasses this registry instead.
+        """
         if cls._loaded:
             return
         cls._loaded = True
         importlib.import_module("workspace.vault.actions.entry")
-
-    @classmethod
-    def _reset(cls):
-        """Empty the registry and stop it re-importing - only for tests.
-
-        _loaded stays true on purpose, unlike the projects registry: a test
-        that registered its own actions does not want the production set
-        loaded on top of them.
-        """
-        cls._actions = []
-        cls._loaded = True

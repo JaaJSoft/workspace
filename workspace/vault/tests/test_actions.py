@@ -23,8 +23,14 @@ class _Entry:
 
 class RegistryMachineryTests(SimpleTestCase):
     def setUp(self):
-        VaultActionRegistry._reset()
-        self.addCleanup(VaultActionRegistry._reset)
+        # A registry of this test's own, rather than the global one emptied
+        # and refilled: the global is process-wide, its actions register at
+        # import time, and a second import puts nothing back. Subclassing
+        # gives an isolated _actions list and cannot leak into another
+        # module.
+        self.registry = type(
+            "_TestRegistry", (VaultActionRegistry,), {"_actions": [], "_loaded": True}
+        )
         self.schema = LoginEntry.FIELD_SCHEMA
 
     def _register(self, **attrs):
@@ -35,12 +41,12 @@ class RegistryMachineryTests(SimpleTestCase):
             "category": ActionCategory.EDIT,
         }
         namespace.update(attrs)
-        return VaultActionRegistry.register(
+        return self.registry.register(
             type("SampleAction", (BaseVaultAction,), namespace)
         )
 
     def _available(self, *, role=VaultRole.OWNER, trashed=False):
-        return VaultActionRegistry.get_available_actions(
+        return self.registry.get_available_actions(
             None, _Entry(), role=role, trashed=trashed, schema=self.schema
         )
 
@@ -102,5 +108,5 @@ class RegistryMachineryTests(SimpleTestCase):
             def is_available(self, user, entry, **state):
                 return super().is_available(user, entry, **state)
 
-        VaultActionRegistry.register(Narrower)
+        self.registry.register(Narrower)
         self.assertEqual(self._available(role=None), [])

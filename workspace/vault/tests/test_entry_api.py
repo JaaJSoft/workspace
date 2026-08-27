@@ -14,6 +14,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.vault.models import (
+    EntryField,
     EntryType,
     VaultEntry,
     VaultFolder,
@@ -366,3 +367,61 @@ class EntryApiTests(TestCase):
         body = self.signed_entry(vault=rotated, key_version=1)
         self.assertEqual(self._create(body).status_code, 400)
         self.assertFalse(VaultEntry.objects.filter(uuid=body["uuid"]).exists())
+
+    def _trash(self, entry_uuid):
+        self.assertEqual(
+            self.client.delete(f"{LIST_URL}/{entry_uuid}").status_code, 204
+        )
+
+    def test_restoring_brings_an_entry_back_without_touching_its_signature(self):
+        """deleted_at is outside the signed payload, so the round trip through
+        the trash must leave metadata_sig exactly as the client wrote it."""
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+        response = self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        self.assertEqual(response.status_code, 200)
+        entry = VaultEntry.objects.get(uuid=created["uuid"])
+        self.assertIsNone(entry.deleted_at)
+        self.assertEqual(entry.metadata_sig, created["metadata_sig"])
+
+    def test_a_restored_entry_is_listed_again(self):
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+        self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        listed = self.client.get(f"{LIST_URL}?vault={self.vault.uuid}").json()
+        self.assertIn(created["uuid"], [row["uuid"] for row in listed])
+
+    def test_restoring_an_entry_that_was_never_trashed_is_harmless(self):
+        """Idempotent on purpose: a client that retries a lost answer must not
+        be told it did something wrong."""
+        created = self._create(self.signed_entry()).json()
+        response = self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(VaultEntry.objects.get(uuid=created["uuid"]).deleted_at)
+
+    def test_restoring_an_entry_of_another_vault_answers_404(self):
+        response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/restore")
+        self.assertEqual(response.status_code, 404)
+
+    def test_purging_removes_the_entry_and_its_fields(self):
+        created = self._create(
+            self.signed_entry(fields={"password": "Ag", "totp": "Aw"})
+        ).json()
+        self._trash(created["uuid"])
+        response = self.client.post(f"{LIST_URL}/{created['uuid']}/purge")
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(VaultEntry.objects.filter(uuid=created["uuid"]).exists())
+        self.assertFalse(EntryField.objects.filter(entry_id=created["uuid"]).exists())
+
+    def test_purging_an_entry_that_is_not_in_the_trash_is_refused(self):
+        """The trash is the confirmation step. Skipping it would make one
+        mistyped URL destroy a live entry with no way back."""
+        created = self._create(self.signed_entry()).json()
+        response = self.client.post(f"{LIST_URL}/{created['uuid']}/purge")
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultEntry.objects.filter(uuid=created["uuid"]).exists())
+
+    def test_purging_an_entry_of_another_vault_answers_404(self):
+        response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/purge")
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(VaultEntry.objects.filter(uuid=self.other_entry.uuid).exists())

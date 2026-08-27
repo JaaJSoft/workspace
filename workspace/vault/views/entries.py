@@ -243,3 +243,63 @@ class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
         entry.deleted_at = timezone.now()
         entry.save(update_fields=["deleted_at", "updated_at"])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
+class EntryRestoreView(CacheControlMixin, APIView):
+    """Take an entry back out of the trash.
+
+    No signature travels: deleted_at is not inside the signed payload, so
+    there is nothing for the client to re-sign and nothing for the server to
+    verify. Idempotent, so a retried request after a lost answer is not an
+    error.
+    """
+
+    cache_no_store = True
+
+    @extend_schema(
+        tags=["Vault"],
+        summary="Restore an entry from the trash",
+        request=None,
+        responses={200: VaultEntrySerializer},
+    )
+    def post(self, request, uuid):
+        entry = (
+            entry_queryset()
+            .filter(accessible_entries_q(request.user), uuid=uuid)
+            .first()
+        )
+        if entry is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if entry.deleted_at is not None:
+            entry.deleted_at = None
+            entry.save(update_fields=["deleted_at", "updated_at"])
+        return Response(VaultEntrySerializer(entry).data)
+
+
+@method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
+class EntryPurgeView(CacheControlMixin, APIView):
+    """Destroy a trashed entry and its fields.
+
+    Only from the trash: that step is the confirmation, and without it one
+    mistyped URL destroys a live entry with nothing to undo it.
+    """
+
+    cache_no_store = True
+
+    @extend_schema(
+        tags=["Vault"], summary="Delete a trashed entry for good", responses={204: None}
+    )
+    def post(self, request, uuid):
+        entry = VaultEntry.objects.filter(
+            accessible_entries_q(request.user), uuid=uuid
+        ).first()
+        if entry is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if entry.deleted_at is None:
+            return Response(
+                {"detail": "The entry is not in the trash."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        entry.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -68,4 +68,14 @@ urlpatterns = [
         entries.EntryDetailView.as_view(),
         name="vault-entry-detail",
     ),
+    path(
+        "api/v1/vault/entries/<uuid:uuid>/restore",
+        views_entries.EntryRestoreView.as_view(),
+        name="vault-entry-restore",
+    ),
+    path(
+        "api/v1/vault/entries/<uuid:uuid>/purge",
+        views_entries.EntryPurgeView.as_view(),
+        name="vault-entry-purge",
+    ),
 ]

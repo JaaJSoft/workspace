@@ -96,5 +96,13 @@ window.vaultApi = (function () {
     trashEntry: function (uuid) {
       return request('/api/v1/vault/entries/' + uuid, { method: 'DELETE' });
     },
+    restoreEntry: function (uuid) {
+      return request('/api/v1/vault/entries/' + uuid + '/restore', { method: 'POST' });
+    },
+    // POST, not DELETE: DELETE on an entry is the trash, and this is the step
+    // after it.
+    purgeEntry: function (uuid) {
+      return request('/api/v1/vault/entries/' + uuid + '/purge', { method: 'POST' });
+    },
   };
 })();

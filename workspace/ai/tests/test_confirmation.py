@@ -16,7 +16,11 @@ class RequestConfirmationTests(SimpleTestCase):
     def test_first_question_of_a_round_wins(self):
         context = {}
         request_confirmation(context, "First?")
-        request_confirmation(context, "Second?")
+        result = request_confirmation(context, "Second?")
 
         self.assertEqual(context["question"]["question"], "First?")
         self.assertTrue(context["stop_after_round"])
+        # The result must name the prompt the user can actually see, or the
+        # model treats their answer to "First?" as approval of "Second?".
+        self.assertIn("First?", result)
+        self.assertNotIn("Second?", result)

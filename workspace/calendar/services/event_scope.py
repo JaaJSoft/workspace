@@ -178,6 +178,24 @@ def _inherited_end(master, start):
     return start + (master.end - master.start)
 
 
+def _derived_times(master, data, original_start):
+    """Return ``(start, end, all_day)`` for a row split off *master*.
+
+    The all-day invariant is enforced here for the same reason
+    ``_apply_fields`` enforces it on the update path: ``all_day`` can be
+    inherited from the master while ``start`` comes from the caller, so a
+    payload that never mentions ``all_day`` can still land a non-midnight
+    day label that the rest of the module assumes cannot exist.
+    """
+    start = data.get("start", original_start)
+    end = data.get("end", _inherited_end(master, start))
+    all_day = data.get("all_day", master.all_day)
+    if all_day:
+        start = normalize_all_day(start)
+        end = normalize_all_day(end)
+    return start, end, all_day
+
+
 def _require_original_start(original_start, scope):
     if not original_start:
         raise EventScopeError(f"original_start is required for scope={scope}.")
@@ -241,15 +259,15 @@ def _update_single_occurrence(master, data, user, original_start):
             sync_members(exc, data["member_ids"], user.id)
         return exc
 
+    start, end, all_day = _derived_times(master, data, original_start)
     with transaction.atomic():
-        start = data.get("start", original_start)
         exc = Event.objects.create(
             calendar=master.calendar,
             title=data.get("title", master.title),
             description=data.get("description", master.description),
             start=start,
-            end=data.get("end", _inherited_end(master, start)),
-            all_day=data.get("all_day", master.all_day),
+            end=end,
+            all_day=all_day,
             location=data.get("location", master.location),
             owner=master.owner,
             recurrence_parent=master,
@@ -271,16 +289,20 @@ def _update_future_occurrences(master, data, user, original_start):
         recurrence_parent=master, original_start__gte=original_start
     ).delete()
 
-    start = data.get("start", original_start)
+    start, end, all_day = _derived_times(master, data, original_start)
     new_master = Event.objects.create(
         calendar=master.calendar,
         title=data.get("title", master.title),
         description=data.get("description", master.description),
         start=start,
-        end=data.get("end", _inherited_end(master, start)),
-        all_day=data.get("all_day", master.all_day),
+        end=end,
+        all_day=all_day,
         location=data.get("location", master.location),
         owner=master.owner,
+        # Without the series' zone the split half falls back to legacy
+        # fixed-step UTC expansion, shifting every later occurrence by an
+        # hour across a DST boundary.
+        timezone="" if all_day else master.timezone,
         recurrence_frequency=data.get(
             "recurrence_frequency", master.recurrence_frequency
         ),

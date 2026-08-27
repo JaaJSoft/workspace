@@ -22,8 +22,13 @@ def request_confirmation(context, question):
         "question", {"question": question, "options": list(CONFIRM_OPTIONS)}
     )
     context["stop_after_round"] = True
+    # Report the question the user is actually looking at, not the one this
+    # call proposed: setdefault may have kept an earlier one, and telling the
+    # model to await an answer to a prompt nobody was shown invites it to
+    # read the reply as approval of the wrong action.
+    asked = context["question"]["question"]
     return (
         "Nothing has been changed yet — the user was asked to confirm: "
-        f"{question} Once they agree, repeat this exact call with "
+        f"{asked} Once they agree, repeat this exact call with "
         "confirm=true. If they decline, do not call it again."
     )

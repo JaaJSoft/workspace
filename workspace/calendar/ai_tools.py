@@ -713,11 +713,11 @@ whole series before choosing. Only the owner can edit, and events from an extern
             return "Error: nothing to change — pass at least one field to update."
 
         # The new end must beat the new start, and either side may be the one
-        # already stored: comparing only what the caller sent lets a moved
-        # start slide past an untouched end. A scoped edit is the exception —
-        # it rebuilds the occurrence's end from the series duration, so the
-        # master's stored end says nothing about the row being written.
-        new_start = data.get("start", event.start)
+        # already stored. A scoped edit writes a row anchored on
+        # original_start, not on the master's own start, and rebuilds its end
+        # from the series duration — so on that path the master's stored
+        # start and end both say nothing about the row being written.
+        new_start = data.get("start", original_start or event.start)
         if "end" in data:
             new_end = data["end"]
         elif args.scope == "all" or not event.is_recurring:
@@ -727,7 +727,11 @@ whole series before choosing. Only the owner can edit, and events from an extern
         if new_end and new_start and new_end <= new_start:
             return "Error: end must be after start"
 
-        if event.is_recurring and not args.confirm:
+        # A guest-list change is externally visible whether or not the event
+        # recurs: sync_members notifies everyone added and everyone removed,
+        # and no confirmation afterwards un-sends those.
+        touches_guests = "member_ids" in data
+        if (event.is_recurring or touches_guests) and not args.confirm:
             return request_confirmation(
                 context,
                 f'Update "{event.title}"{_describe_scope(event, args.scope)}?',

@@ -375,7 +375,9 @@ class CalendarWriteToolsTests(TestCase):
         EventMember.objects.create(event=event, user=self.other)
         carol = User.objects.create_user(username="carol", password="pw")
 
-        self._update(event_id=event.uuid, scope="all", attendees=["Carol"])
+        self._update(
+            event_id=event.uuid, scope="all", attendees=["Carol"], confirm=True
+        )
 
         self.assertEqual(
             list(event.members.values_list("user_id", flat=True)), [carol.id]
@@ -384,7 +386,7 @@ class CalendarWriteToolsTests(TestCase):
     def test_update_removes_every_guest_with_the_none_sentinel(self):
         event = self._event()
         EventMember.objects.create(event=event, user=self.other)
-        self._update(event_id=event.uuid, scope="all", attendees=["none"])
+        self._update(event_id=event.uuid, scope="all", attendees=["none"], confirm=True)
         self.assertEqual(event.members.count(), 0)
 
     def test_update_rejects_an_unknown_attendee_without_writing(self):
@@ -493,6 +495,36 @@ class CalendarWriteToolsTests(TestCase):
         exception = Event.objects.get(recurrence_parent=master)
         self.assertEqual(exception.start, moved_to)
         self.assertEqual(exception.end, moved_to + timedelta(hours=1))
+
+    def test_scoped_update_rejects_an_end_before_the_occurrence_start(self):
+        master = self._weekly()
+        third = master.start + timedelta(weeks=2)
+        # An end taken from the FIRST occurrence: later than the master start,
+        # so a guard anchored on the master would wave it through and write an
+        # occurrence finishing two weeks before it begins.
+        end_in_week_one = master.start + timedelta(hours=1)
+
+        result = self._update(
+            event_id=master.uuid,
+            scope="this",
+            original_start=third.isoformat(),
+            end=end_in_week_one.isoformat(),
+            confirm=True,
+        )
+
+        self.assertIn("end must be after start", result)
+        self.assertFalse(Event.objects.filter(recurrence_parent=master).exists())
+
+    def test_changing_the_guest_list_asks_for_confirmation(self):
+        event = self._event()
+        context = {}
+        result = self._update(
+            context=context, event_id=event.uuid, scope="all", attendees=["bob"]
+        )
+
+        self.assertTrue(context["stop_after_round"])
+        self.assertIn("confirm=true", result)
+        self.assertEqual(event.members.count(), 0)
 
     def test_scoped_update_requires_an_original_start(self):
         master = self._weekly()

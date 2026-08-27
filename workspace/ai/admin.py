@@ -43,7 +43,13 @@ class BotProfileAdmin(ModelAdmin):
         "created_by",
         "created_at",
     ]
-    list_filter = ["model", "is_public", "supports_tools", "supports_vision"]
+    list_filter = [
+        "model",
+        "is_public",
+        "supports_tools",
+        "supports_vision",
+        "can_send_email",
+    ]
     search_fields = [
         "user__username",
         "user__first_name",
@@ -73,7 +79,22 @@ class BotProfileAdmin(ModelAdmin):
         return [
             (None, {"fields": ["user", "system_prompt", "model", "description"]}),
             ("Avatar", {"fields": ["avatar_preview", "avatar", "delete_avatar"]}),
-            ("Capabilities", {"fields": ["supports_tools", "supports_vision"]}),
+            (
+                "Capabilities",
+                {
+                    "fields": [
+                        "supports_tools",
+                        "supports_vision",
+                        "can_send_email",
+                    ],
+                    "description": (
+                        "Sending mail lets the assistant put a message on the "
+                        "wire on its own. Leave it off unless this bot is "
+                        "meant to: drafting and triage work without it, and a "
+                        "sent mail cannot be recalled."
+                    ),
+                },
+            ),
             (
                 "Voice",
                 {

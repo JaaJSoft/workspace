@@ -17,6 +17,7 @@ IMAP/SMTP email client with OAuth2, AI-powered features, and full folder managem
 - **Drag & drop** - Move messages between folders
 - **Contact autocomplete** - Suggested recipients while composing
 - **AI summarization** - AI-powered email summaries and reply suggestions
+- **AI drafting and triage** - Assistants can search and read your mail, write a message or a threaded reply into Drafts for you to review, and star, file, trash or label what is in the inbox. Sending is off by default: a bot needs the send capability, and even then it shows you the message and waits for your go-ahead before anything leaves.
 - **Attachment management** - Download attachments or save them directly to the Files module
 - **Read tracking** - Read/unread status with mark-all-as-read support
 - **Connection testing** - Test IMAP and SMTP connectivity before saving account settings

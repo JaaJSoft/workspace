@@ -13,16 +13,26 @@ from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
+# Default network timeout in seconds, mirroring IMAP_TIMEOUT. Without it
+# smtplib waits on the system default, which is no deadline at all: a server
+# that stops answering mid-handshake pins the caller forever, and sending now
+# happens inside the AI tool loop, which streams to a waiting user.
+SMTP_TIMEOUT = 30
+
 
 def connect_smtp(account):
     """Open and authenticate an SMTP connection for the given account."""
     if account.smtp_use_tls:
-        server = smtplib.SMTP(account.smtp_host, account.smtp_port)
+        server = smtplib.SMTP(
+            account.smtp_host, account.smtp_port, timeout=SMTP_TIMEOUT
+        )
         server.ehlo()
         server.starttls()
         server.ehlo()
     else:
-        server = smtplib.SMTP_SSL(account.smtp_host, account.smtp_port)
+        server = smtplib.SMTP_SSL(
+            account.smtp_host, account.smtp_port, timeout=SMTP_TIMEOUT
+        )
         server.ehlo()
 
     if account.auth_method == "oauth2":

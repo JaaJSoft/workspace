@@ -30,6 +30,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Disable vision/images (for models that do not support it)",
         )
+        parser.add_argument(
+            "--can-send-email",
+            action="store_true",
+            help="Allow the bot to send email itself (drafting works without it)",
+        )
 
     def handle(self, *args, **options):
         username = options["username"]
@@ -59,6 +64,7 @@ class Command(BaseCommand):
                 "is_public": options["public"],
                 "supports_tools": not options["no_tools"],
                 "supports_vision": not options["no_vision"],
+                "can_send_email": options["can_send_email"],
             },
         )
 

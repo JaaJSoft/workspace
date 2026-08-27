@@ -10,6 +10,7 @@ Configurable chat bots backed by any OpenAI-compatible provider, with tool calli
 - **Bring your own model** - Works with the OpenAI API or any compatible endpoint (Ollama, LM Studio, vLLM, ...). Per-bot model override falls back to the global `AI_MODEL`.
 - **Vision** - Bots with vision enabled can read images attached to messages.
 - **Function calling (tools)** - Bots can look up information and act on your behalf (see [Tools](#tools) below). Enable/disable per bot.
+- **Mail actions** - Bots can draft and file email on your behalf: write a message or a threaded reply into your Drafts folder, star, read, move, trash or label what is in your inbox. Sending is a separate, opt-in capability - see [Mail](../mail/README.md).
 - **Extended thinking** - Reasoning models are supported for step-by-step problem solving.
 - **Persistent memory** - Bots remember facts about you across conversations (name, preferences, projects) and can recall or forget them on request.
 - **Conversation summaries** - Long conversations are rolled up into a running summary so bots keep context without resending the whole history.
@@ -34,6 +35,11 @@ When tool calling is enabled, bots can invoke:
 | `get_weather` | Current weather by place name (Open-Meteo, keyless) |
 | `generate_image` / `edit_image` | Create or edit images |
 | `schedule_message` / `cancel_schedule` / `list_schedules` | Manage bot-initiated scheduled messages |
+| `search_emails` / `read_email` | Find a message and read it |
+| `draft_email` / `reply_to_email` | Write a message, or a threaded reply, into your Drafts folder |
+| `send_email` | Put a message on the wire - off unless the bot has the send capability, and always confirmed first |
+| `list_folders` / `list_labels` | See what a mail account is organized with |
+| `mark_email` / `move_email` / `delete_email` / `label_email` | Triage: flag, file, trash or label a message |
 
 ## Configuration
 

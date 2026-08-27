@@ -5,13 +5,14 @@ import json
 import logging
 import threading
 import uuid as uuid_lib
-from datetime import UTC, datetime
+from datetime import UTC
 from typing import Literal
 
 from django.conf import settings
 from django.utils import timezone
 from pydantic import BaseModel, Field, field_validator
 
+from workspace.common.datetimes import parse_local_datetime
 from workspace.common.limits import clamp_limit
 from workspace.common.logging import scrub
 
@@ -905,20 +906,6 @@ part of that reply to a short line or nothing at all — never repeat out loud w
         return f"Voice message recorded and attached to your reply: {text}"
 
 
-def _parse_local_datetime(value: str, user_tz):
-    """Parse an ISO datetime string, interpreting naive values in *user_tz*.
-
-    Returns ``None`` when the string cannot be parsed.
-    """
-    try:
-        dt = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=user_tz)
-    return dt
-
-
 class AgentGoalToolProvider(ToolProvider):
     """Long-horizon autonomous goal tools for bots."""
 
@@ -972,7 +959,7 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
             )
 
         user_tz = get_user_timezone(user)
-        first_check = _parse_local_datetime(args.first_check_at.strip(), user_tz)
+        first_check = parse_local_datetime(args.first_check_at.strip(), user_tz)
         if first_check is None:
             return (
                 f'Error: could not parse datetime "{args.first_check_at}". '
@@ -982,7 +969,7 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
 
         deadline = None
         if args.deadline.strip():
-            deadline = _parse_local_datetime(args.deadline.strip(), user_tz)
+            deadline = parse_local_datetime(args.deadline.strip(), user_tz)
             if deadline is None:
                 return (
                     f'Error: could not parse deadline "{args.deadline}". '
@@ -1142,7 +1129,7 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
                 changes.append(f"{label} updated")
 
         if args.next_check_at.strip():
-            next_check = _parse_local_datetime(args.next_check_at.strip(), user_tz)
+            next_check = parse_local_datetime(args.next_check_at.strip(), user_tz)
             if next_check is None:
                 return (
                     f'Error: could not parse datetime "{args.next_check_at}". '
@@ -1156,7 +1143,7 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
             )
 
         if args.deadline.strip():
-            deadline = _parse_local_datetime(args.deadline.strip(), user_tz)
+            deadline = parse_local_datetime(args.deadline.strip(), user_tz)
             if deadline is None:
                 return (
                     f'Error: could not parse deadline "{args.deadline}". '

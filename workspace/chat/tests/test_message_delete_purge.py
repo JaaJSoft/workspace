@@ -5,6 +5,8 @@ reply quotes and the thread structure all read from it. Everything a member
 could still reach *through* it must not.
 """
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.storage import default_storage
@@ -186,3 +188,23 @@ class MessageDeletePurgeTests(APITestCase):
         self._delete()
 
         self.assertNotIn("🦀", quick_reactions_for(self.member))
+
+    def test_deleted_attachment_is_unreachable_even_if_the_blob_survives(self):
+        """The database is the authority, not the disk.
+
+        A storage backend that refuses the delete (or acknowledges it late)
+        must not keep the attachment served: the row is gone, so the memo the
+        download view reads has to be invalidated on its own account.
+        """
+        attachment = self._attach()
+        warm = self.client.get(f"/api/v1/chat/attachments/{attachment.uuid}")
+        b"".join(warm.streaming_content)
+
+        with patch(
+            "django.db.models.fields.files.FieldFile.delete", side_effect=OSError
+        ):
+            self._delete()
+
+        self.assertTrue(default_storage.exists(attachment.file.name))
+        response = self.client.get(f"/api/v1/chat/attachments/{attachment.uuid}")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

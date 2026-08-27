@@ -55,7 +55,9 @@ def purge_message_dependents(message):
 def _discard_attachment_files(attachments):
     for attachment in attachments:
         # The download view memoises attachment metadata for 60s under this
-        # tag; without the bump the blob stays served after the row is gone.
+        # tag. Bumping it is what makes the deleted row authoritative: without
+        # it the 404 would only come from the blob having vanished below, so a
+        # storage backend that refuses or defers the delete keeps serving it.
         invalidate_tags(f"att:{attachment.uuid}")
         if not attachment.file:
             continue

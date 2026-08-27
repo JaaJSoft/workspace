@@ -2,7 +2,7 @@
 // no error is swallowed: a failed call throws with the status attached, and
 // the controller decides what the user is told.
 function VaultApiError(message, status) {
-  var error = new Error(message);
+  const error = new Error(message);
   error.name = 'VaultApiError';
   error.status = status;
   return error;
@@ -10,11 +10,11 @@ function VaultApiError(message, status) {
 
 window.VaultApi = (function () {
   function request(url, options) {
-    var settings = options || {};
-    var method = settings.method || 'GET';
+    const settings = options || {};
+    const method = settings.method || 'GET';
     // The token goes on every unsafe method, not on every request with a
     // body: DELETE has no body and Django refuses it just the same.
-    var headers = { Accept: 'application/json' };
+    const headers = { Accept: 'application/json' };
     if (method !== 'GET') headers['X-CSRFToken'] = getCSRFToken();
     if (settings.body) headers['Content-Type'] = 'application/json';
     return fetch(url, {

@@ -566,6 +566,16 @@ except (ValueError, TypeError) as exc: # ✅ parentheses still MANDATORY with `a
 
 ## Frontend Conventions
 
+### `const`/`let`, never `var` - and camelCase for every global a script publishes
+
+Production JS files are classic scripts, not ES modules, but that is a loading concern - it says nothing about how a binding is declared. Use `const` by default and `let` for what is genuinely reassigned; `var` is not the house style anywhere in `workspace/*/ui/static/`.
+
+The one thing `var` buys is function-scope hoisting, and code that leans on it is code to rewrite rather than preserve: a `var` declared inside a `try` and read from the matching `catch` works by accident. **Declare it above the `try` as `let`** - the catch then reads a binding someone can see, and `undefined` means "that attempt never got that far" on purpose instead of by hoisting.
+
+Globals a script publishes are camelCase, matching the rest of the codebase (`window.vaultApp`, `window.folderNav`, `window.pollUtils`) - whether the global is an Alpine component factory or a plain helper namespace. SCREAMING_SNAKE_CASE is for constants (`window.TAG_CHIP_COLORS`), and PascalCase is reserved for what is called with `new` or reads as a constructor (`VaultApiError`).
+
+**The node:vm test caveat:** top-level `const`/`let` are not reachable as properties of the context the loader returns (see *JS unit tests* above), so a test asserting on a module-level constant needs it published on `window`. Two scripts loaded into the same context still see each other's top-level `const` - they share one global lexical scope - so cross-file constants do not need `var`.
+
 ### Drag & drop - the source must declare an `effectAllowed` containing the target's `dropEffect`
 
 `preventDefault()` on `dragover` is **not** enough to accept a drop. The browser also checks that the `dropEffect` the target asks for is a member of the `effectAllowed` the source declared; if it isn't, it resets `dropEffect` to `none` and refuses the drop. No `drop` event fires, no request goes out, no error is raised - the zone still highlights, so it looks like the handler ran and did nothing.

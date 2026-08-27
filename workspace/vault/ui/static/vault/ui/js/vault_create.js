@@ -10,11 +10,11 @@
 // branch matches on, so a retry after a lost answer has to carry the one the
 // first attempt sent or it describes a different vault.
 window.buildVaultCreateRequest = async function buildVaultCreateRequest(session, name, vaultUuid) {
-  var V = window.VaultCrypto;
+  const V = window.VaultCrypto;
   vaultUuid = vaultUuid || V.uuidV7();
-  var vaultKey = V.randomBytes(32);
-  var metaKey = await V.hkdf(vaultKey, V.AD.vaultMetaInfo(vaultUuid));
-  var encryptedName = V.toBase64Url(
+  const vaultKey = V.randomBytes(32);
+  const metaKey = await V.hkdf(vaultKey, V.AD.vaultMetaInfo(vaultUuid));
+  const encryptedName = V.toBase64Url(
     await V.seal(metaKey, new TextEncoder().encode(name), V.AD.vaultFieldAd(vaultUuid, 'name'), {
       keyVersion: 1,
       kdfId: V.KDF_HKDF_SHA256,
@@ -22,7 +22,7 @@ window.buildVaultCreateRequest = async function buildVaultCreateRequest(session,
   );
   metaKey.fill(0);
 
-  var wrapped = V.toBase64Url(
+  const wrapped = V.toBase64Url(
     await V.hpkeSeal(
       session.accountKexPublicRaw(),
       V.AD.vaultKeyInfo(vaultUuid, session.accountUuid()),
@@ -31,7 +31,7 @@ window.buildVaultCreateRequest = async function buildVaultCreateRequest(session,
   );
   vaultKey.fill(0);
 
-  var payload = V.vaultMetadataPayload({
+  const payload = V.vaultMetadataPayload({
     vault_uuid: vaultUuid,
     owner_account_uuid: session.accountUuid(),
     encrypted_name: encryptedName,

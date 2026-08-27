@@ -10,7 +10,7 @@ window.vaultApp = (function () {
   // retryable error - it is the detection the whole scheme exists for, and
   // inviting a retry would mean typing a password into a page that may be
   // hostile.
-  var MESSAGES = {
+  const MESSAGES = {
     password: 'That master password does not open this account. Nothing was sent to the server - the check happens here.',
     identity: 'This account has no vault identity yet.',
     'substituted-key': 'The signing key the server returned does not match the one your password unwrapped. Nothing was decrypted. Do not enter your password again on this page.',
@@ -27,8 +27,8 @@ window.vaultApp = (function () {
   // The metadata key is opened fresh per vault and lives only for the one
   // decryption below - nothing keeps it past this call.
   async function decryptVault(row) {
-    var V = window.VaultCrypto;
-    var payload = V.vaultMetadataPayload(
+    const V = window.VaultCrypto;
+    const payload = V.vaultMetadataPayload(
       Object.assign({}, row, { vault_uuid: row.uuid })
     );
     try {
@@ -45,10 +45,10 @@ window.vaultApp = (function () {
     if (!row.wrapped_key) {
       return Object.assign({}, row, { unopenable: true, name: '' });
     }
-    var metaKey;
+    let metaKey;
     try {
       metaKey = await window.VaultSession.openVaultKey(row.uuid, row.wrapped_key);
-      var plaintext = await V.open(
+      const plaintext = await V.open(
         metaKey,
         V.fromBase64Url(row.encrypted_name),
         V.AD.vaultFieldAd(row.uuid, 'name')
@@ -95,14 +95,14 @@ window.vaultApp = (function () {
       secondsLeft: 0,
 
       init: function () {
-        var remembered = window.VaultSession.rememberedSecret();
+        const remembered = window.VaultSession.rememberedSecret();
         if (remembered) {
           this.secretText = remembered;
           this.remember = true;
         }
         this.secretRequired = !remembered;
         this.secretRemembered = !!remembered;
-        var self = this;
+        const self = this;
         window.VaultSession.onLock(function () {
           self.vaults = [];
           self.state = 'locked';
@@ -176,8 +176,8 @@ window.vaultApp = (function () {
       },
 
       loadVaults: async function () {
-        var rows = await window.VaultApi.listVaults();
-        var decrypted;
+        const rows = await window.VaultApi.listVaults();
+        let decrypted;
         try {
           decrypted = await Promise.all(rows.map(decryptVault));
         } catch (err) {
@@ -198,7 +198,7 @@ window.vaultApp = (function () {
 
       createVault: async function () {
         if (!window.VaultSession.isUnlocked()) return;
-        var name = this.newVaultName.trim();
+        const name = this.newVaultName.trim();
         if (!name) return;
         this.busy = true;
         this.error = '';
@@ -206,11 +206,11 @@ window.vaultApp = (function () {
           this.pendingVaultUuid = window.VaultCrypto.uuidV7();
         }
         try {
-          var body = await window.buildVaultCreateRequest(
+          const body = await window.buildVaultCreateRequest(
             window.VaultSession, name, this.pendingVaultUuid
           );
-          var row = await window.VaultApi.createVault(body);
-          var created = await decryptVault(row);
+          const row = await window.VaultApi.createVault(body);
+          const created = await decryptVault(row);
           // Same race loadVaults guards against: three awaits sit between the
           // check at the top of this function and here, so a lock can have
           // emptied the list already. pendingVaultUuid survives on purpose -
@@ -233,7 +233,7 @@ window.vaultApp = (function () {
             try {
               await this.loadVaults();
               if (!window.VaultSession.isUnlocked()) return;
-              var pending = this.pendingVaultUuid;
+              const pending = this.pendingVaultUuid;
               if (!this.vaults.some(function (v) { return v.uuid === pending; })) {
                 this.error = 'The vault could not be created. Try again.';
                 return;
@@ -261,8 +261,8 @@ window.vaultApp = (function () {
       },
 
       countdown: function () {
-        var minutes = Math.floor(this.secondsLeft / 60);
-        var rest = this.secondsLeft % 60;
+        const minutes = Math.floor(this.secondsLeft / 60);
+        const rest = this.secondsLeft % 60;
         return minutes + ':' + String(rest).padStart(2, '0');
       },
     };

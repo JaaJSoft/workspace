@@ -22,7 +22,7 @@
 //
 // Anyone tempted to "fix" the alert should change the decision first, not the
 // storage.
-var VAULT_SECRET_STORAGE_KEY = 'vault.secret-key';
+const VAULT_SECRET_STORAGE_KEY = 'vault.secret-key';
 
 // reason is one of: 'password' (wrong password, or a wrapped key that fails
 // to decrypt), 'recovery-key' (the recovery key text itself does not
@@ -36,7 +36,7 @@ var VAULT_SECRET_STORAGE_KEY = 'vault.secret-key';
 // error stays diagnosable instead of surfacing only as a security-sounding
 // reason string.
 function VaultUnlockError(reason, cause) {
-  var error = new Error('vault unlock failed: ' + reason);
+  const error = new Error('vault unlock failed: ' + reason);
   error.name = 'VaultUnlockError';
   error.reason = reason;
   if (cause !== undefined) error.cause = cause;
@@ -46,30 +46,30 @@ function VaultUnlockError(reason, cause) {
 // WebCrypto imports an Ed25519 PRIVATE key as 'pkcs8' or 'jwk' only, never
 // 'raw' - so the bare 32-byte seed this file works with needs the fixed
 // prelude in front of it before crypto.subtle can touch it.
-var PKCS8_ED25519_PREFIX = Uint8Array.from([
+const PKCS8_ED25519_PREFIX = Uint8Array.from([
   0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
 ]);
 
 function pkcs8FromSeed(seed) {
   if (seed.length !== 32) throw new Error('Ed25519 seed is ' + seed.length + ' bytes, expected 32');
-  var out = new Uint8Array(PKCS8_ED25519_PREFIX.length + 32);
+  const out = new Uint8Array(PKCS8_ED25519_PREFIX.length + 32);
   out.set(PKCS8_ED25519_PREFIX, 0);
   out.set(seed, PKCS8_ED25519_PREFIX.length);
   return out;
 }
 
 window.VaultSession = (function () {
-  var accountUuid = null;
-  var signer = null;
-  var recipient = null;
-  var sigPublicRaw = null;
-  var kexPublicRaw = null;
-  var lockCallbacks = [];
-  var tickCallbacks = [];
-  var unlocked = false;
-  var IDLE_LOCK_MS = 5 * 60 * 1000;
-  var expiresAt = 0;
-  var ticker = null;
+  let accountUuid = null;
+  let signer = null;
+  let recipient = null;
+  let sigPublicRaw = null;
+  let kexPublicRaw = null;
+  const lockCallbacks = [];
+  const tickCallbacks = [];
+  let unlocked = false;
+  const IDLE_LOCK_MS = 5 * 60 * 1000;
+  let expiresAt = 0;
+  let ticker = null;
 
   function zero(buffer) {
     if (buffer && buffer.fill) buffer.fill(0);
@@ -86,12 +86,12 @@ window.VaultSession = (function () {
   // way every Uint8Array here is. Dropping the reference is all that is left -
   // it shortens the window to the next collection instead of the page's life.
   async function publicKeyFromSeed(seed) {
-    var V = window.VaultCrypto;
-    var pkcs8 = await crypto.subtle.importKey(
+    const V = window.VaultCrypto;
+    const pkcs8 = await crypto.subtle.importKey(
       'pkcs8', pkcs8FromSeed(seed), 'Ed25519', true, ['sign']
     );
-    var jwk = await crypto.subtle.exportKey('jwk', pkcs8);
-    var publicRaw = V.fromBase64Url(jwk.x);
+    const jwk = await crypto.subtle.exportKey('jwk', pkcs8);
+    const publicRaw = V.fromBase64Url(jwk.x);
     jwk.d = null;
     return publicRaw;
   }
@@ -126,8 +126,8 @@ window.VaultSession = (function () {
     onTick: function (callback) { tickCallbacks.push(callback); },
 
     unlock: async function (options) {
-      var V = window.VaultCrypto;
-      var envelope;
+      const V = window.VaultCrypto;
+      let envelope;
       try {
         envelope = await window.VaultApi.fetchEnvelope();
       } catch (err) {
@@ -135,34 +135,34 @@ window.VaultSession = (function () {
         // burst limit and every unlock refetches it, so this is reachable by
         // ordinary use. Telling the user to check their connection would send
         // them after the wrong thing.
-        var reason = 'network';
+        let reason = 'network';
         if (err.status === 404) reason = 'identity';
         else if (err.status === 429) reason = 'throttled';
         throw VaultUnlockError(reason, err);
       }
       if (envelope.state !== 'active') throw VaultUnlockError('identity');
 
-      var secretBytes;
-      var amk;
-      var unwrapKey;
-      var kexPriv;
-      var sigSeed;
-      var recomputed;
+      let secretBytes;
+      let amk;
+      let unwrapKey;
+      let kexPriv;
+      let sigSeed;
+      let recomputed;
       // Held locally, not written into the closure's signer/recipient until
       // every check below has passed: signer and recipient are shared with a
       // session that may already be unlocked, so an aborted second attempt
       // must never overwrite what the live session is using, and a failed
       // first attempt must never leave a half-imported key reachable once
       // unlocked flips true on some later, unrelated success.
-      var newSigner;
-      var newRecipient;
-      var newKexPublicRaw;
+      let newSigner;
+      let newRecipient;
+      let newKexPublicRaw;
       // Everything that can still throw once both private keys are unwrapped
       // is working with server-supplied envelope fields (sig_public,
       // kex_public, sig_over_kex_pub) - an unexpected failure there is
       // envelope-shaped, not a credentials problem, so it reports the same
       // way a deliberate substitution does.
-      var keysUnwrapped = false;
+      let keysUnwrapped = false;
 
       try {
         try {
@@ -202,7 +202,7 @@ window.VaultSession = (function () {
         zero(secretBytes);
 
         recomputed = await publicKeyFromSeed(sigSeed);
-        var served = V.decodePublicKey(V.fromBase64Url(envelope.sig_public));
+        const served = V.decodePublicKey(V.fromBase64Url(envelope.sig_public));
         if (!V.equalBytes(recomputed, served)) {
           throw VaultUnlockError('substituted-key');
         }
@@ -302,7 +302,7 @@ window.VaultSession = (function () {
     // register a second set - they are per session, not per view.
     watchForIdle: function () {
       if (ticker !== null) return;
-      var self = this;
+      const self = this;
       // Never cleared by lock(): tick() no-ops while locked, and the guard
       // above means a later re-unlock reuses this same ticker rather than
       // accumulating a second one - so nothing needs cancelling.
@@ -322,18 +322,18 @@ window.VaultSession = (function () {
 
     sign: async function (payload) {
       if (!unlocked) throw VaultUnlockError('locked');
-      var V = window.VaultCrypto;
+      const V = window.VaultCrypto;
       return V.toBase64Url(await signer.sign(V.canonicalCbor(payload)));
     },
 
     openVaultKey: async function (vaultUuid, wrappedKeyB64) {
       if (!unlocked) throw VaultUnlockError('locked');
-      var V = window.VaultCrypto;
-      var raw = await recipient.open(
+      const V = window.VaultCrypto;
+      const raw = await recipient.open(
         V.AD.vaultKeyInfo(vaultUuid, accountUuid),
         V.fromBase64Url(wrappedKeyB64)
       );
-      var metaKey;
+      let metaKey;
       try {
         // The vault key never encrypts anything itself; the metadata key does.
         metaKey = await V.hkdf(raw, V.AD.vaultMetaInfo(vaultUuid));
@@ -347,7 +347,7 @@ window.VaultSession = (function () {
 
     verifyVaultMetadata: async function (payload, signatureB64) {
       if (!unlocked) throw VaultUnlockError('locked');
-      var V = window.VaultCrypto;
+      const V = window.VaultCrypto;
       await V.verify(
         sigPublicRaw,
         V.canonicalCbor(payload),

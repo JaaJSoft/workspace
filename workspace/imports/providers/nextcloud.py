@@ -6,16 +6,36 @@ from urllib.parse import urlparse
 
 import httpx2
 
+from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
 
-from .base import ProviderError
-from .webdav import WebDavProvider, _translate_transport_errors, build_client
+from .base import ProviderError, RemoteTag
+from .webdav import (
+    DAV,
+    WebDavProvider,
+    _raise_for_status,
+    _translate_transport_errors,
+    build_client,
+    entry_id_from_href,
+    ok_props,
+    parse_dav_xml,
+)
 
 logger = logging.getLogger(__name__)
 
 DAV_FILES_PREFIX = "/remote.php/dav/files/"
 _LEGACY_DAV_PREFIX = "/remote.php/webdav"
 _OCS_CAPABILITIES = "/ocs/v1.php/cloud/capabilities"
+_DAV_SYSTEMTAGS = "/remote.php/dav/systemtags/"
+
+OC = "{http://owncloud.org/ns}"
+
+_SYSTEMTAGS_BODY = (
+    b'<?xml version="1.0" encoding="utf-8"?>'
+    b'<d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop>'
+    b"<oc:id/><oc:display-name/><oc:user-visible/>"
+    b"</d:prop></d:propfind>"
+)
 
 
 def _instance_root(base_url: str) -> str:
@@ -27,6 +47,125 @@ def _instance_root(base_url: str) -> str:
             path = path[: path.index(marker)]
             break
     return f"{parsed.scheme}://{parsed.netloc}{path.rstrip('/')}"
+
+
+def _filter_files_body(rule: bytes) -> bytes:
+    """A REPORT asking the files endpoint for every entry matching one rule.
+
+    Nextcloud answers with a multistatus whose hrefs are the matching paths -
+    the whole tree in one round trip, which is what makes reading favorites and
+    tags cheap enough to run after every import.
+    """
+    return (
+        b'<?xml version="1.0" encoding="utf-8"?>'
+        b'<oc:filter-files xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">'
+        b"<d:prop><d:getetag/></d:prop>"
+        b"<oc:filter-rules>" + rule + b"</oc:filter-rules>"
+        b"</oc:filter-files>"
+    )
+
+
+def _member_failed(element) -> bool:
+    """Whether a ``<response>`` reports an error of its own.
+
+    RFC 4918 lets a member answer with a bare ``<status>`` instead of
+    properties, and such a member is not a match. A status *inside* a
+    ``<propstat>`` is a different thing entirely: it is about the property we
+    asked for alongside, and the resource still matched the filter - requiring
+    a 200 there would drop favorites whose etag the server could not read.
+    """
+    for token in (element.findtext(f"{DAV}status") or "").split():
+        if len(token) == 3 and token.isdigit():
+            return not 200 <= int(token) < 300
+    return False
+
+
+class NextcloudMetadataSource:
+    """Favorites and tags, read over the same instance the files came from.
+
+    Both live outside the per-user files endpoint - favorites are a filter on
+    it, tags a collection of their own at the instance root - so this source
+    talks to the root and addresses the files endpoint by path.
+    """
+
+    def __init__(self, connection, client=None):
+        self._root = _instance_root(connection.base_url)
+        # Absolute, to strip it off the hrefs the server answers with...
+        self._files_path = urlparse(connection.base_url).path.rstrip("/")
+        # ...and root-relative, because that is what the client's base URL
+        # already carries on an instance served under a sub-path.
+        root_path = urlparse(self._root).path.rstrip("/")
+        self._files_url = self._files_path[len(root_path) :] + "/"
+        self._host = urlparse(self._root).hostname or self._root
+        self._client = client or build_client(connection, base_url=self._root)
+
+    def close(self):
+        self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
+
+    # -- FileMetadataSource --------------------------------------------
+
+    def favorites(self):
+        yield from self._filter_files(b"<oc:favorite>1</oc:favorite>")
+
+    def tags(self):
+        response = self._request(
+            "PROPFIND", _DAV_SYSTEMTAGS, _SYSTEMTAGS_BODY, depth="1"
+        )
+        for element in parse_dav_xml(response.content).iter(f"{DAV}response"):
+            props = ok_props(element)
+            if props is None:
+                continue
+            tag_id = (props.findtext(f"{OC}id") or "").strip()
+            name = (props.findtext(f"{OC}display-name") or "").strip()
+            # A tag id goes back to the server inside an XML body, so only the
+            # integers Nextcloud actually mints are accepted.
+            if not tag_id.isdigit() or not name:
+                continue
+            # Tags the user cannot see are the ones another user assigned, or
+            # an app's own bookkeeping; neither belongs in a personal tag list.
+            # Fail closed: only an explicit true carries a tag over, so a
+            # server that omits the flag or spells it in some way we do not
+            # recognise imports nothing rather than the wrong thing.
+            if not is_truthy((props.findtext(f"{OC}user-visible") or "").strip()):
+                continue
+            yield RemoteTag(id=tag_id, name=name)
+
+    def tagged(self, tag_id: str):
+        if not str(tag_id).isdigit():
+            return
+        yield from self._filter_files(f"<oc:systemtag>{tag_id}</oc:systemtag>".encode())
+
+    # -- internals -----------------------------------------------------
+
+    def _filter_files(self, rule: bytes):
+        response = self._request("REPORT", self._files_url, _filter_files_body(rule))
+        for element in parse_dav_xml(response.content).iter(f"{DAV}response"):
+            href = element.findtext(f"{DAV}href")
+            if not href or _member_failed(element):
+                continue
+            yield entry_id_from_href(href, self._files_path)
+
+    def _request(self, method, url, body, *, depth="0"):
+        with _translate_transport_errors(self._host):
+            response = self._client.request(
+                method,
+                url,
+                content=body,
+                headers={"Depth": depth, "Content-Type": "application/xml"},
+            )
+        _raise_for_status(response, url)
+        if response.status_code != 207:
+            raise ProviderError(
+                f"'{self._host}' answered HTTP {response.status_code} to "
+                f"{method} {url} instead of a multistatus."
+            )
+        return response
 
 
 class NextcloudProvider(WebDavProvider):
@@ -57,6 +196,9 @@ class NextcloudProvider(WebDavProvider):
         capabilities = super().test_connection(connection)
         capabilities.update(self._discover(connection))
         return capabilities
+
+    def file_metadata_source(self, connection):
+        return NextcloudMetadataSource(connection)
 
     def _discover(self, connection) -> dict:
         """Best effort: OCS is not required for files, so any failure here

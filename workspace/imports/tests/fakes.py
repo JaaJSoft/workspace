@@ -10,6 +10,7 @@ from workspace.imports.providers.base import (
     Provider,
     RemoteEntry,
     RemoteNotFound,
+    RemoteTag,
 )
 from workspace.imports.providers.registry import provider_registry
 
@@ -43,6 +44,38 @@ class FakeFileSource:
         )
 
 
+class FakeMetadataSource:
+    def __init__(self, favorites, tags, *, fail=None):
+        self._favorites = favorites
+        self._tags = tags
+        self.fail = fail
+        self.closed = False
+        self.tagged_calls = []
+
+    def close(self):
+        self.closed = True
+
+    def favorites(self):
+        if self.fail == "favorites":
+            raise ConnectionFailed("cannot read favorites")
+        yield from self._favorites
+
+    def tags(self):
+        """``_tags`` is a list of ``(id, name, [entry ids])``."""
+        if self.fail == "tags":
+            raise ConnectionFailed("cannot read tags")
+        for tag_id, name, _entries in self._tags:
+            yield RemoteTag(id=tag_id, name=name)
+
+    def tagged(self, tag_id):
+        self.tagged_calls.append(tag_id)
+        if self.fail == f"tagged:{tag_id}":
+            raise ConnectionFailed(f"cannot read tag {tag_id}")
+        for known_id, _name, entries in self._tags:
+            if known_id == tag_id:
+                yield from entries
+
+
 class FakeProvider(Provider):
     slug = "fake"
     name = "Fake cloud"
@@ -55,6 +88,12 @@ class FakeProvider(Provider):
         self.valid_secret = "good"
         self.test_calls = 0
         self.last_source = None
+        self.last_metadata = None
+        # None until a test opts in, so the metadata phase stays a no-op for
+        # every test that only cares about the copy.
+        self.favorites = None
+        self.tags = []
+        self.fail_metadata = None
         self.contents = {}
         self.fail_list = set()
         self.fail_open = set()
@@ -88,6 +127,14 @@ class FakeProvider(Provider):
             fail_open=self.fail_open,
         )
         return self.last_source
+
+    def file_metadata_source(self, connection):
+        if self.favorites is None and not self.tags:
+            return None
+        self.last_metadata = FakeMetadataSource(
+            self.favorites or [], self.tags, fail=self.fail_metadata
+        )
+        return self.last_metadata
 
 
 def fake_provider():

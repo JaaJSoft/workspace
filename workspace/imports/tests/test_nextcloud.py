@@ -2,7 +2,12 @@ import httpx2
 from django.test import SimpleTestCase
 
 from workspace.imports.models import ImportConnection
-from workspace.imports.providers.nextcloud import NextcloudProvider, _instance_root
+from workspace.imports.providers.base import ProviderError
+from workspace.imports.providers.nextcloud import (
+    NextcloudMetadataSource,
+    NextcloudProvider,
+    _instance_root,
+)
 
 
 def _connection(base_url):
@@ -162,3 +167,228 @@ class TestConnectionTests(SimpleTestCase):
                 "server_version": "31.0.2",
             },
         )
+
+
+def _multistatus(*hrefs):
+    body = "".join(
+        f"<d:response><d:href>{href}</d:href>"
+        "<d:propstat><d:status>HTTP/1.1 200 OK</d:status>"
+        "<d:prop><d:getetag>&quot;e&quot;</d:getetag></d:prop></d:propstat></d:response>"
+        for href in hrefs
+    )
+    return (
+        '<?xml version="1.0"?>'
+        '<d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">'
+        f"{body}</d:multistatus>"
+    )
+
+
+def _systemtags(*tags):
+    body = "".join(
+        f"<d:response><d:href>/remote.php/dav/systemtags/{tag_id}</d:href>"
+        "<d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop>"
+        f"<oc:id>{tag_id}</oc:id><oc:display-name>{name}</oc:display-name>"
+        f"<oc:user-visible>{visible}</oc:user-visible>"
+        "</d:prop></d:propstat></d:response>"
+        for tag_id, name, visible in tags
+    )
+    return (
+        '<?xml version="1.0"?>'
+        '<d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">'
+        f"{body}</d:multistatus>"
+    )
+
+
+class MetadataSourceTests(SimpleTestCase):
+    BASE = "https://cloud.example.org/remote.php/dav/files/alice"
+
+    def _source(self, handler, base_url=None):
+        conn = _connection(base_url or self.BASE)
+        client = httpx2.Client(
+            base_url=_instance_root(conn.base_url),
+            transport=httpx2.MockTransport(handler),
+        )
+        return NextcloudMetadataSource(conn, client=client)
+
+    def test_favorites_are_read_as_entry_ids_relative_to_the_files_root(self):
+        seen = {}
+
+        def handler(request):
+            seen["method"] = request.method
+            seen["url"] = str(request.url)
+            seen["body"] = request.content.decode()
+            return httpx2.Response(
+                207,
+                content=_multistatus(
+                    "/remote.php/dav/files/alice/Docs/",
+                    "/remote.php/dav/files/alice/Docs/re%20port.pdf",
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual(list(source.favorites()), ["/Docs", "/Docs/re port.pdf"])
+        self.assertEqual(seen["method"], "REPORT")
+        self.assertEqual(
+            seen["url"], "https://cloud.example.org/remote.php/dav/files/alice/"
+        )
+        self.assertIn("<oc:favorite>1</oc:favorite>", seen["body"])
+
+    def test_tags_skip_the_ones_the_user_cannot_see(self):
+        def handler(request):
+            self.assertEqual(request.method, "PROPFIND")
+            self.assertEqual(
+                str(request.url),
+                "https://cloud.example.org/remote.php/dav/systemtags/",
+            )
+            self.assertEqual(request.headers["Depth"], "1")
+            return httpx2.Response(
+                207,
+                content=_systemtags(
+                    ("4", "Invoices", "true"),
+                    ("7", "Hidden", "false"),
+                    ("9", "Photos", "true"),
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual(
+                [(t.id, t.name) for t in source.tags()],
+                [("4", "Invoices"), ("9", "Photos")],
+            )
+
+    def test_a_hidden_tag_is_skipped_however_the_server_spells_the_flag(self):
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=_systemtags(
+                    ("1", "Zero", "0"),
+                    ("2", "No", "no"),
+                    ("3", "False", "False"),
+                    ("4", "One", "1"),
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual([t.name for t in source.tags()], ["One"])
+
+    def test_a_tag_without_the_visibility_property_is_skipped(self):
+        """Fail closed: a server that will not say the tag is the user's own
+        imports nothing rather than someone else's tag."""
+
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=(
+                    '<?xml version="1.0"?>'
+                    '<d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">'
+                    "<d:response><d:href>/remote.php/dav/systemtags/4</d:href>"
+                    "<d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop>"
+                    "<oc:id>4</oc:id><oc:display-name>Invoices</oc:display-name>"
+                    "</d:prop></d:propstat></d:response></d:multistatus>"
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual(list(source.tags()), [])
+
+    def test_tags_without_a_numeric_id_or_a_name_are_skipped(self):
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=_systemtags(("../4", "Evil", "true"), ("5", "", "true")),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual(list(source.tags()), [])
+
+    def test_tagged_filters_on_the_tag_id(self):
+        seen = {}
+
+        def handler(request):
+            seen["body"] = request.content.decode()
+            return httpx2.Response(
+                207, content=_multistatus("/remote.php/dav/files/alice/a.txt")
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual(list(source.tagged("4")), ["/a.txt"])
+        self.assertIn("<oc:systemtag>4</oc:systemtag>", seen["body"])
+
+    def test_a_member_reporting_its_own_error_is_not_a_match(self):
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=(
+                    '<?xml version="1.0"?>'
+                    '<d:multistatus xmlns:d="DAV:">'
+                    "<d:response><d:href>/remote.php/dav/files/alice/kept.txt</d:href>"
+                    "<d:propstat><d:status>HTTP/1.1 200 OK</d:status>"
+                    "<d:prop><d:getetag>&quot;e&quot;</d:getetag></d:prop>"
+                    "</d:propstat></d:response>"
+                    "<d:response><d:href>/remote.php/dav/files/alice/gone.txt</d:href>"
+                    "<d:status>HTTP/1.1 404 Not Found</d:status></d:response>"
+                    "</d:multistatus>"
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual(list(source.favorites()), ["/kept.txt"])
+
+    def test_a_member_whose_property_lookup_failed_is_still_a_match(self):
+        """The filter matched the resource; the 404 is about the etag we asked
+        for alongside, so dropping it would lose a real favorite."""
+
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=(
+                    '<?xml version="1.0"?>'
+                    '<d:multistatus xmlns:d="DAV:">'
+                    "<d:response><d:href>/remote.php/dav/files/alice/a.txt</d:href>"
+                    "<d:propstat><d:status>HTTP/1.1 404 Not Found</d:status>"
+                    "<d:prop><d:getetag/></d:prop></d:propstat></d:response>"
+                    "</d:multistatus>"
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual(list(source.favorites()), ["/a.txt"])
+
+    def test_a_tag_id_that_is_not_a_number_never_reaches_the_server(self):
+        def handler(request):  # pragma: no cover - must not be called
+            raise AssertionError("no request expected")
+
+        with self._source(handler) as source:
+            self.assertEqual(list(source.tagged("4</oc:systemtag><evil/>")), [])
+
+    def test_the_files_root_is_read_from_the_connection_sub_path(self):
+        seen = {}
+
+        def handler(request):
+            seen["url"] = str(request.url)
+            return httpx2.Response(207, content=_multistatus())
+
+        source = self._source(
+            handler, base_url="https://example.org/nc/remote.php/dav/files/alice"
+        )
+        with source:
+            list(source.favorites())
+        self.assertEqual(
+            seen["url"], "https://example.org/nc/remote.php/dav/files/alice/"
+        )
+
+    def test_a_server_without_the_tags_endpoint_raises(self):
+        with self._source(lambda r: httpx2.Response(404)) as source:
+            with self.assertRaises(ProviderError):
+                list(source.tags())
+
+    def test_a_non_multistatus_answer_raises(self):
+        with self._source(lambda r: httpx2.Response(200, content=b"ok")) as source:
+            with self.assertRaises(ProviderError):
+                list(source.favorites())
+
+    def test_the_provider_offers_the_source(self):
+        conn = _connection(self.BASE)
+        source = NextcloudProvider().file_metadata_source(conn)
+        self.assertIsInstance(source, NextcloudMetadataSource)
+        source.close()

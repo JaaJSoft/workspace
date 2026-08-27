@@ -7,14 +7,14 @@ from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from workspace.files.models import File
+from workspace.files.models import File, FileFavorite, FileTag, Tag
 from workspace.files.services import FileService, quota
 from workspace.imports.importers.base import ImportContext, JobFailed, Outcome
 from workspace.imports.importers.files import FilesImporter
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
 from workspace.imports.providers.base import RemoteEntry
 
-from .fakes import fake_provider
+from .fakes import FakeFileSource, fake_provider
 
 User = get_user_model()
 
@@ -139,8 +139,19 @@ class FilesImporterTests(ImporterTestCase):
 
         items = {i.remote_id: i for i in ImportJobItem.objects.filter(job=job)}
         self.assertEqual(
-            set(items), {"/readme.txt", "/Docs/report.pdf", "/Docs/Archive/old.txt"}
+            set(items),
+            {
+                "/readme.txt",
+                "/Docs/report.pdf",
+                "/Docs/Archive/old.txt",
+                # Folders are recorded too, for the metadata phase to map
+                # favorites and tags back onto them.
+                "/Docs",
+                "/Docs/Archive",
+            },
         )
+        self.assertEqual(items["/Docs"].target_uuid, files["Docs"].uuid)
+        self.assertEqual(items["/Docs"].remote_etag, "")
         self.assertEqual(items["/readme.txt"].status, ImportJobItem.Status.DONE)
         self.assertEqual(items["/readme.txt"].target_uuid, files["readme.txt"].uuid)
         self.assertEqual(items["/readme.txt"].remote_etag, "e1")
@@ -329,7 +340,15 @@ class FilesImporterTests(ImporterTestCase):
         with patch.object(ImportContext, "cancelled", cancel_after_first_file):
             self.assertIs(self._run(job), Outcome.CANCELLED)
         self.assertEqual(job.stats["files"]["files"], 1)
-        self.assertEqual(ImportJobItem.objects.filter(job=job).count(), 1)
+        self.assertEqual(
+            set(
+                ImportJobItem.objects.filter(job=job).values_list(
+                    "remote_id", flat=True
+                )
+            ),
+            # The one file that made it, plus the folders walked on the way.
+            {"/readme.txt", "/Docs"},
+        )
         self.assertIs(original, ImportContext.cancelled)
 
     def test_deadline_pauses_and_a_later_slice_resumes_without_duplicates(self):
@@ -384,7 +403,10 @@ class FilesImporterTests(ImporterTestCase):
             3,
         )
         self.assertIn(
-            "not accepted", ImportJobItem.objects.filter(job=job).first().error
+            "not accepted",
+            ImportJobItem.objects.filter(job=job, status=ImportJobItem.Status.FAILED)
+            .first()
+            .error,
         )
 
     def test_root_folder_name_is_sanitised(self):
@@ -618,3 +640,198 @@ class SliceCutShortTests(ImporterTestCase):
             File.objects.filter(owner=self.user, node_type=File.NodeType.FILE).exists()
         )
         self.assertFalse(ImportJobItem.objects.filter(job=job).exists())
+
+
+class MetadataPhaseTests(ImporterTestCase):
+    """The follow-up phase that brings over favorites and tags once the files
+    are copied."""
+
+    def _imported(self):
+        files = self._files()
+        return files
+
+    def test_a_provider_without_metadata_leaves_the_phase_a_no_op(self):
+        job = self._job()
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertIsNone(self.provider.last_metadata)
+        self.assertEqual(job.stats["files"]["phase"], "done")
+        self.assertFalse(FileFavorite.objects.exists())
+
+    def test_favorites_land_on_the_imported_files_and_folders(self):
+        self.provider.favorites = ["/readme.txt", "/Docs"]
+        job = self._job()
+        self.assertIs(self._run(job), Outcome.DONE)
+
+        files = self._files()
+        self.assertEqual(
+            set(
+                FileFavorite.objects.filter(owner=self.user).values_list(
+                    "file__name", flat=True
+                )
+            ),
+            {"readme.txt", "Docs"},
+        )
+        self.assertEqual(job.stats["files"]["favorites"], 2)
+        self.assertTrue(self.provider.last_metadata.closed)
+        self.assertIn(files["Docs"].uuid, {f.uuid for f in files.values()})
+
+    def test_a_favorite_on_something_never_imported_is_ignored(self):
+        self.provider.favorites = ["/readme.txt", "/elsewhere/other.txt"]
+        job = self._job()
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertEqual(FileFavorite.objects.count(), 1)
+
+    def test_a_favorite_whose_local_file_is_gone_is_ignored(self):
+        self.provider.favorites = ["/readme.txt"]
+        self.assertIs(self._run(self._job()), Outcome.DONE)
+        FileService.soft_delete(self._files()["readme.txt"], acting_user=self.user)
+        FileFavorite.objects.all().delete()
+        # Gone from the remote too, so the second run has nothing to re-import
+        # and only the stale mapping is left to match against.
+        self.provider.tree["/"] = [
+            e for e in self.provider.tree["/"] if e.id != "/readme.txt"
+        ]
+
+        self.assertIs(self._run(self._job()), Outcome.DONE)
+        self.assertFalse(FileFavorite.objects.exists())
+
+    def test_a_favorite_follows_a_file_imported_again_after_a_local_delete(self):
+        self.provider.favorites = ["/readme.txt"]
+        self.assertIs(self._run(self._job()), Outcome.DONE)
+        FileService.soft_delete(self._files()["readme.txt"], acting_user=self.user)
+        FileFavorite.objects.all().delete()
+
+        self.assertIs(self._run(self._job()), Outcome.DONE)
+        self.assertEqual(
+            FileFavorite.objects.get(owner=self.user).file, self._files()["readme.txt"]
+        )
+
+    def test_tags_are_created_once_and_attached(self):
+        self.provider.tags = [
+            ("4", "Invoices", ["/readme.txt", "/Docs/report.pdf"]),
+            ("9", "Photos", ["/Docs/report.pdf"]),
+        ]
+        job = self._job()
+        self.assertIs(self._run(job), Outcome.DONE)
+
+        self.assertEqual(
+            set(Tag.objects.filter(owner=self.user).values_list("name", flat=True)),
+            {"Invoices", "Photos"},
+        )
+        report = self._files()["report.pdf"]
+        self.assertEqual(
+            set(
+                FileTag.objects.filter(file=report).values_list("tag__name", flat=True)
+            ),
+            {"Invoices", "Photos"},
+        )
+        self.assertEqual(job.stats["files"]["tags"], 3)
+        self.assertEqual(self.provider.last_metadata.tagged_calls, ["4", "9"])
+
+    def test_running_the_import_again_duplicates_nothing(self):
+        self.provider.favorites = ["/readme.txt"]
+        self.provider.tags = [("4", "Invoices", ["/readme.txt"])]
+        self.assertIs(self._run(self._job()), Outcome.DONE)
+
+        second = self._job()
+        self.assertIs(self._run(second), Outcome.DONE)
+        self.assertEqual(FileFavorite.objects.count(), 1)
+        self.assertEqual(FileTag.objects.count(), 1)
+        self.assertEqual(Tag.objects.count(), 1)
+        self.assertNotIn("favorites", second.stats["files"])
+        self.assertNotIn("tags", second.stats["files"])
+
+    def test_a_remote_that_cannot_answer_does_not_fail_the_import(self):
+        self.provider.favorites = ["/readme.txt"]
+        self.provider.fail_metadata = "favorites"
+        job = self._job()
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertEqual(job.stats["files"]["phase"], "done")
+        self.assertIn("cannot read favorites", job.stats["files"]["metadata_error"])
+        self.assertEqual(job.stats["files"]["files"], 3)
+        self.assertTrue(self.provider.last_metadata.closed)
+
+    def test_a_tag_that_cannot_be_read_does_not_fail_the_import(self):
+        self.provider.tags = [
+            ("4", "Invoices", ["/readme.txt"]),
+            ("9", "Photos", ["/readme.txt"]),
+        ]
+        self.provider.fail_metadata = "tagged:9"
+        job = self._job()
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertIn("cannot read tag 9", job.stats["files"]["metadata_error"])
+        # The tags read before the failure are kept.
+        self.assertEqual(FileTag.objects.count(), 1)
+
+    def test_the_phase_resumes_where_the_slice_stopped(self):
+        self.provider.favorites = ["/readme.txt"]
+        self.provider.tags = [
+            ("4", "Invoices", ["/readme.txt"]),
+            ("9", "Photos", ["/Docs/report.pdf"]),
+        ]
+        job = self._job()
+        # Out of time as soon as the copy is over: favorites are applied, then
+        # the tag loop stops on its first check.
+        with patch.object(
+            ImportContext,
+            "out_of_time",
+            lambda ctx: ctx.stats.get("favorites_read", False),
+        ):
+            self.assertIs(self._run(job), Outcome.PAUSED)
+        self.assertEqual(job.stats["files"]["phase"], "metadata")
+        self.assertEqual(job.stats["files"]["favorites"], 1)
+        self.assertEqual(len(job.stats["files"]["tag_stack"]), 2)
+        self.assertFalse(FileTag.objects.exists())
+
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertEqual(job.stats["files"]["phase"], "done")
+        self.assertNotIn("tag_stack", job.stats["files"])
+        self.assertEqual(FileTag.objects.count(), 2)
+        # Favorites are read once, not again on the slice that resumes.
+        self.assertEqual(job.stats["files"]["favorites"], 1)
+        self.assertEqual(FileFavorite.objects.count(), 1)
+
+    def test_a_cancelled_slice_stops_the_phase(self):
+        self.provider.tags = [("4", "Invoices", ["/readme.txt"])]
+        job = self._job()
+        with patch.object(
+            ImportContext,
+            "cancelled",
+            lambda ctx: ctx.stats.get("favorites_read", False),
+        ):
+            self.assertIs(self._run(job), Outcome.CANCELLED)
+        self.assertFalse(FileTag.objects.exists())
+
+    def test_favorites_of_an_earlier_import_on_the_same_connection_are_matched(self):
+        first = self._job()
+        self.assertIs(self._run(first), Outcome.DONE)
+
+        # A second job that copies nothing new still applies what the remote
+        # says about the files the first one brought over.
+        self.provider.favorites = ["/readme.txt"]
+        second = self._job()
+        self.assertIs(self._run(second), Outcome.DONE)
+        self.assertEqual(
+            FileFavorite.objects.get(owner=self.user).file.name, "readme.txt"
+        )
+
+    def test_a_slice_that_pauses_in_the_metadata_phase_does_not_re_walk_the_tree(self):
+        self.provider.tags = [("4", "Invoices", ["/readme.txt"])]
+        job = self._job()
+        with patch.object(
+            ImportContext,
+            "out_of_time",
+            lambda ctx: ctx.stats.get("favorites_read", False),
+        ):
+            self.assertIs(self._run(job), Outcome.PAUSED)
+        self.assertTrue(job.stats["files"]["copied"])
+
+        listed = []
+        original = FakeFileSource.list_dir
+        with patch.object(
+            FakeFileSource,
+            "list_dir",
+            lambda src, entry_id: (listed.append(entry_id), original(src, entry_id))[1],
+        ):
+            self.assertIs(self._run(job), Outcome.DONE)
+        self.assertEqual(listed, [])

@@ -34,6 +34,10 @@ window.vaultApp = (function () {
     try {
       await window.VaultSession.verifyVaultMetadata(payload, row.metadata_sig);
     } catch (err) {
+      // A lock landing mid-listing fails this the same way a forged signature
+      // does, and the tamper alert is the one message the user is told to act
+      // on rather than retry - so it must never stand in for an idle timeout.
+      if (err && err.reason === 'locked') throw err;
       // Signed by nobody the account trusts: never shown with a name that
       // came along for the ride.
       return Object.assign({}, row, { tampered: true, name: '' });
@@ -51,6 +55,7 @@ window.vaultApp = (function () {
       );
       return Object.assign({}, row, { name: new TextDecoder().decode(plaintext) });
     } catch (err) {
+      if (err && err.reason === 'locked') throw err;
       // Localised the same way a bad signature is: one row loses its name,
       // the rest of the list - and the Promise.all it resolves inside -
       // keeps going.
@@ -101,7 +106,10 @@ window.vaultApp = (function () {
         window.VaultSession.onLock(function () {
           self.vaults = [];
           self.state = 'locked';
-          self.newVaultName = '';
+          // showCreate has to go with the name: the dialog lives inside the
+          // unlocked subtree, so a lock hides it without closing it, and the
+          // next unlock reopens it on its own.
+          self.closeCreateDialog();
         });
         window.VaultSession.onTick(function () {
           self.secondsLeft = window.VaultSession.secondsUntilLock();
@@ -169,7 +177,16 @@ window.vaultApp = (function () {
 
       loadVaults: async function () {
         var rows = await window.VaultApi.listVaults();
-        var decrypted = await Promise.all(rows.map(decryptVault));
+        var decrypted;
+        try {
+          decrypted = await Promise.all(rows.map(decryptVault));
+        } catch (err) {
+          // A lock caught the rows mid-flight. There is nothing to report:
+          // the user is looking at the password form, and the caller's
+          // message would blame the listing for an idle timeout.
+          if (err && err.reason === 'locked') return;
+          throw err;
+        }
         // Neither await is atomic with the lock: an idle timeout or a hidden
         // tab can fire in between, and by then the onLock callback has already
         // emptied the list. Assigning anyway would put decrypted names back
@@ -193,16 +210,34 @@ window.vaultApp = (function () {
             window.VaultSession, name, this.pendingVaultUuid
           );
           var row = await window.VaultApi.createVault(body);
-          this.vaults.push(await decryptVault(row));
+          var created = await decryptVault(row);
+          // Same race loadVaults guards against: three awaits sit between the
+          // check at the top of this function and here, so a lock can have
+          // emptied the list already. pendingVaultUuid survives on purpose -
+          // the vault was written, and a retry after re-unlocking must reuse
+          // it.
+          if (!window.VaultSession.isUnlocked()) return;
+          this.vaults.push(created);
           this.closeCreateDialog();
         } catch (err) {
+          // The vault is written; only the local half was cut short. Saying
+          // it could not be created would be false, and the retry after the
+          // next unlock reuses pendingVaultUuid to find it.
+          if (err && err.reason === 'locked') return;
           if (err.status === 409) {
-            // The UUID is already taken, and it is one this component minted -
-            // so the vault is the one the previous attempt wrote and never
-            // heard back about. Reloading is what turns that into the success
-            // it already was.
+            // The 409 says the UUID is taken, not that it is taken by us: it
+            // comes from a globally unique primary key, so a row on another
+            // account answers the same. Reading the reload back is what turns
+            // the assumption that this is the vault a lost answer already
+            // wrote into something checked.
             try {
               await this.loadVaults();
+              if (!window.VaultSession.isUnlocked()) return;
+              var pending = this.pendingVaultUuid;
+              if (!this.vaults.some(function (v) { return v.uuid === pending; })) {
+                this.error = 'The vault could not be created. Try again.';
+                return;
+              }
               this.closeCreateDialog();
             } catch (reloadErr) {
               this.error = 'Your vault was created, but the list could not be reloaded.';

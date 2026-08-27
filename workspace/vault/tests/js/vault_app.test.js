@@ -464,3 +464,109 @@ test('a conflict is the vault already existing, not a failure to report', async 
   assert.equal(component.showCreate, false);
   assert.equal(component.vaults.length, 1);
 });
+
+test('a lock during a listing is not reported as tampering', async () => {
+  // verifyVaultMetadata refuses to run while locked, so an idle timeout fails
+  // every row still in flight exactly as a forged signature would. The tamper
+  // alert tells the user not to retype their password; it must never be what
+  // an idle timeout produces.
+  const component = app({
+    isUnlocked: () => true,
+    verifyVaultMetadata: async () => {
+      const err = new Error('the vault is locked');
+      err.reason = 'locked';
+      throw err;
+    },
+  }, {
+    listVaults: async () => [
+      { uuid: 'v1', encrypted_name: 'AQ', wrapped_key: 'AQ', metadata_sig: 'AQ' },
+    ],
+  });
+  await component.unlock();
+  assert.deepEqual([...component.vaults], []);
+  assert.equal(component.error, '');
+});
+
+test('a lock during a listing is not reported as a corrupt vault either', async () => {
+  const component = app({
+    isUnlocked: () => true,
+    openVaultKey: async () => {
+      const err = new Error('the vault is locked');
+      err.reason = 'locked';
+      throw err;
+    },
+  }, {
+    listVaults: async () => [
+      { uuid: 'v1', encrypted_name: 'AQ', wrapped_key: 'AQ', metadata_sig: 'AQ' },
+    ],
+  });
+  await component.unlock();
+  assert.deepEqual([...component.vaults], []);
+  assert.equal(component.error, '');
+});
+
+test('a lock between writing a vault and showing it keeps the name off the screen', async () => {
+  // The guard at the top of createVault is three awaits away from the push:
+  // building the request, the round trip, and the decryption. A lock landing
+  // in any of them has already emptied the list, and pushing would put a
+  // decrypted name back into a component the lock just cleared.
+  let unlocked = true;
+  const component = app(
+    { isUnlocked: () => unlocked },
+    {
+      listVaults: async () => [],
+      createVault: async (body) => {
+        unlocked = false;
+        return body;
+      },
+    }
+  );
+  component.newVaultName = 'Work';
+  await component.createVault();
+  assert.deepEqual([...component.vaults], []);
+  assert.equal(component.error, '');
+  // The vault was written: the retry after the next unlock has to find it
+  // under the same UUID rather than describe a second one.
+  assert.equal(component.pendingVaultUuid, 'vault-uuid');
+});
+
+test('a lock closes the create dialog instead of reopening it on the next unlock', async () => {
+  // The dialog is nested inside the unlocked subtree, so a lock tears it off
+  // the screen without clearing showCreate - and re-unlocking rebuilds the
+  // subtree with the flag still true.
+  let onLock = null;
+  const component = app({
+    isUnlocked: () => true,
+    onLock: (fn) => { onLock = fn; },
+  });
+  component.init();
+  component.showCreate = true;
+  component.newVaultName = 'Work';
+  component.pendingVaultUuid = 'vault-uuid';
+  onLock();
+  assert.equal(component.showCreate, false);
+  assert.equal(component.newVaultName, '');
+  assert.equal(component.pendingVaultUuid, null);
+});
+
+test('a conflict on a UUID the account does not hold is not declared a success', async () => {
+  // The 409 comes from a globally unique primary key: it says the UUID is
+  // taken, not that the caller is the one holding it. Closing the dialog
+  // without reading the reload back would report a vault that is not there.
+  const component = app(
+    { isUnlocked: () => true },
+    {
+      listVaults: async () => [],
+      createVault: async () => {
+        const err = new Error('conflict');
+        err.status = 409;
+        throw err;
+      },
+    }
+  );
+  component.showCreate = true;
+  component.newVaultName = 'Work';
+  await component.createVault();
+  assert.equal(component.showCreate, true);
+  assert.match(component.error, /could not be created/);
+});

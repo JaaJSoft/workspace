@@ -79,13 +79,21 @@ window.VaultSession = (function () {
   // that is the only way to learn the public key the seed implies. The handle
   // is extractable for this one call and dropped immediately; the key that
   // survives the function is the non-extractable one importSigner holds.
+  //
+  // The export is the one place this module cannot keep its own promise that
+  // no raw secret outlives its buffer: jwk.d is the 32-byte seed base64url'd
+  // into a JS string, and strings are immutable, so it cannot be zeroed the
+  // way every Uint8Array here is. Dropping the reference is all that is left -
+  // it shortens the window to the next collection instead of the page's life.
   async function publicKeyFromSeed(seed) {
     var V = window.VaultCrypto;
     var pkcs8 = await crypto.subtle.importKey(
       'pkcs8', pkcs8FromSeed(seed), 'Ed25519', true, ['sign']
     );
     var jwk = await crypto.subtle.exportKey('jwk', pkcs8);
-    return V.fromBase64Url(jwk.x);
+    var publicRaw = V.fromBase64Url(jwk.x);
+    jwk.d = null;
+    return publicRaw;
   }
 
   return {

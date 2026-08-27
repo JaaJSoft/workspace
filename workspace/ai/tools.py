@@ -284,31 +284,40 @@ def _spoken_language_enum(schema: dict) -> None:
     schema["enum"] = ["", *sorted(supported_languages())]
 
 
-# Non-verbal sounds the backend performs instead of reading out: a laugh, a
-# sigh, a breath, an "Ah". They are the only direction a cloned voice still
-# takes, the description that designs one being ignored once a reference is
-# in play. The catalogue is OmniVoice's rather than voxcpm2's own, and only
-# part of it is audibly confirmed against this backend - but an unlisted tag
-# is dropped in silence rather than spoken, so a wrong guess costs nothing.
-NONVERBAL_TAGS = (
-    "[laughter] [sigh] [confirmation-en] [question-en] [question-ah] "
-    "[question-oh] [surprise-ah] [surprise-oh] [surprise-wa] [surprise-yo] "
-    "[dissatisfaction-hnn]"
-)
+def _nonverbal_tag_guidance(schema: dict) -> None:
+    """Name the sounds this deployment performs, and rule out the rest.
+
+    Resolved at provider registration like the language enum, and for the
+    same reason: the vocabulary belongs to the speech model. A tag it does
+    not know is spoken, not dropped - qwen3-tts reads [laughter] as "la
+    terre" - so nothing is advertised unless AI_TTS_NONVERBAL_TAGS names it.
+    """
+    from .services.speech import nonverbal_tags
+
+    tags = nonverbal_tags()
+    if tags:
+        schema["description"] += (
+            " One exception: these tags are performed as a sound rather than "
+            f"read out - {' '.join(tags)}. Drop one in where a listener would "
+            "actually hear it, once or twice in a message at most. Anything "
+            "else between brackets is spoken like the rest of the sentence."
+        )
+    else:
+        schema["description"] += (
+            " Anything you put between brackets is spoken like the rest of "
+            "the sentence, so write none."
+        )
 
 
 class SendVoiceMessageParams(BaseModel):
     text: str = Field(
+        json_schema_extra=_nonverbal_tag_guidance,
         description=(
             "What to say, written exactly as it should be pronounced and in "
             "the language you are speaking. Accents and punctuation are read "
             "literally, so write real sentences — no markdown, no emoji, no "
-            "abbreviations, and numbers spelled out when their reading matters. "
-            "One exception: these tags are performed as a sound rather than "
-            f"read out — {NONVERBAL_TAGS}. Drop one in where a listener would "
-            "actually hear it, once or twice in a message at most. Any other "
-            "bracketed word is discarded without a sound."
-        )
+            "abbreviations, and numbers spelled out when their reading matters."
+        ),
     )
     language: str = Field(
         default="",

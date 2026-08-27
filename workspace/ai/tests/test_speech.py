@@ -17,6 +17,7 @@ from workspace.ai.services.speech import (
     audio_duration_seconds,
     default_voice_reference,
     is_speech_enabled,
+    nonverbal_tags,
     normalize_language,
 )
 
@@ -36,6 +37,7 @@ TTS_SETTINGS = {
         "korean",
         "chinese",
     ],
+    "AI_TTS_NONVERBAL_TAGS": [],
     "AI_TTS_MAX_ATTEMPTS": 3,
     "AI_TTS_RETRY_DELAY": 0,
     "AI_TTS_TIMEOUT": 5,
@@ -297,6 +299,24 @@ class LanguageNormalizationTests(SimpleTestCase):
         # announced is deployment config, not a constant of this module.
         self.assertEqual(normalize_language("dutch"), "dutch")
         self.assertEqual(normalize_language("french"), "")
+
+
+@override_settings(**TTS_SETTINGS)
+class NonverbalTagTests(SimpleTestCase):
+    def test_a_deployment_that_names_none_advertises_none(self):
+        # The default, and the only safe one: a model with no such
+        # vocabulary pronounces the tag instead of ignoring it.
+        self.assertEqual(nonverbal_tags(), ())
+
+    @override_settings(AI_TTS_NONVERBAL_TAGS=["[laughter]", "  [sigh]  ", "  "])
+    def test_the_configured_tags_come_back_in_order_and_trimmed(self):
+        self.assertEqual(nonverbal_tags(), ("[laughter]", "[sigh]"))
+
+    @override_settings(AI_TTS_NONVERBAL_TAGS=["<laughter>"])
+    def test_the_tags_are_taken_literally(self):
+        # Nothing here assumes square brackets: the setting holds the exact
+        # tokens the backend performs, whatever it spells them with.
+        self.assertEqual(nonverbal_tags(), ("<laughter>",))
 
 
 class AudioDurationTests(SimpleTestCase):

@@ -10,11 +10,7 @@ from django.test import TestCase, override_settings
 from workspace.ai.models import VOICE_REF_MAX_BYTES, AITask, BotProfile
 from workspace.ai.services.responses import post_bot_message, produced_media
 from workspace.ai.services.speech import SpeechSynthesisError, VoiceReference
-from workspace.ai.tools import (
-    NONVERBAL_TAGS,
-    SendVoiceMessageParams,
-    VoiceToolProvider,
-)
+from workspace.ai.tools import SendVoiceMessageParams, VoiceToolProvider
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
@@ -46,6 +42,7 @@ class _TemporaryMediaRoot:
     AI_TTS_VOICE_REF_TEXT="",
     AI_TTS_MAX_CHARS=700,
     AI_TTS_LANGUAGES=["french", "english"],
+    AI_TTS_NONVERBAL_TAGS=[],
 )
 class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
     def setUp(self):
@@ -152,17 +149,29 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
             ["", "english", "french"],
         )
 
-    def test_the_schema_names_the_sounds_that_survive_cloning(self):
-        # A cloned voice takes no other direction, and the model has no way
-        # to guess a vocabulary that appears in no repository.
+    def _text_description(self):
         from workspace.ai.tool_registry import _build_parameters
 
-        described = _build_parameters(SendVoiceMessageParams)["properties"]["text"][
+        return _build_parameters(SendVoiceMessageParams)["properties"]["text"][
             "description"
         ]
+
+    @override_settings(AI_TTS_NONVERBAL_TAGS=["[laughter]", "[sigh]"])
+    def test_the_schema_names_the_sounds_this_backend_performs(self):
+        # A cloned voice takes no other direction, and the model has no way
+        # to guess a vocabulary that appears in no repository.
+        described = self._text_description()
+        self.assertIn("[laughter] [sigh]", described)
+        self.assertIn("performed as a sound rather than read out", described)
+
+    def test_the_schema_names_no_sound_a_backend_only_speaks(self):
+        # Measured: qwen3-tts reads [laughter] as "la terre" and
+        # [dissatisfaction-hnn] as "dis satisfaction". Advertising a tag it
+        # does not perform puts the word itself in the audio.
+        described = self._text_description()
         for tag in ("[laughter]", "[sigh]", "[dissatisfaction-hnn]"):
-            self.assertIn(tag, described)
-        self.assertIn(NONVERBAL_TAGS, described)
+            self.assertNotIn(tag, described)
+        self.assertIn("brackets", described)
 
     def test_the_tool_offers_no_way_to_sound_like_someone_else(self):
         # A description reaches no clone-based backend, so a parameter for

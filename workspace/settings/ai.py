@@ -94,6 +94,13 @@ AI_TTS_LANGUAGES = env_list("AI_TTS_LANGUAGES") or [
     "korean",
     "chinese",
 ]
+# Sounds the speech model performs instead of reading out, written exactly as
+# it expects them. Empty by default because an unknown tag is not ignored, it
+# is pronounced: qwen3-tts says "surpriseau" for [surprise-oh] and "la terre"
+# for [laughter], mid-sentence. Measured on this backend, voxcpm2 performs
+# [laughter] [sigh] [breath] [surprise-oh] [dissatisfaction-hnn] and omnivoice
+# almost none of them - so a deployment lists a tag only once it has heard it.
+AI_TTS_NONVERBAL_TAGS = env_list("AI_TTS_NONVERBAL_TAGS")
 # Recording a bot with no reference of its own is cloned from, and the exact
 # words it says. There is no other way to give it a voice - a bot reaching
 # synthesis with neither its own reference nor this one cannot speak, so a

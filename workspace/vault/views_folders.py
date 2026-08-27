@@ -18,10 +18,15 @@ from rest_framework.views import APIView
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 
-from .models import VaultFolder
+from .models import VaultEntry, VaultFolder
 from .queries import active_identity, reachable_vault, visible_folders
-from .serializers import VaultFolderSerializer, VaultFolderWriteSerializer
+from .serializers import (
+    FolderDeleteSerializer,
+    VaultFolderSerializer,
+    VaultFolderWriteSerializer,
+)
 from .services.attestation import AttestationError
+from .services.entries import entry_signature_payload
 from .services.metadata import folder_metadata_payload, verify_record
 
 SENSITIVE_BODY_FIELDS = ("encrypted_name", "metadata_sig")
@@ -32,6 +37,15 @@ def _signature_refused():
         {"detail": "The folder metadata signature does not verify."},
         status=status.HTTP_400_BAD_REQUEST,
     )
+
+
+class _SignatureRefused(Exception):
+    """Raised inside the deletion transaction so it rolls back.
+
+    Returning a Response from inside ``transaction.atomic`` would **commit**
+    the block - a return is not an exception - and the entries already moved
+    would stay moved under signatures nobody checked.
+    """
 
 
 def _bad_parent():
@@ -202,3 +216,82 @@ class FolderDetailView(_FolderWriteMixin, CacheControlMixin, APIView):
             return _bad_parent()
 
         return Response(VaultFolderSerializer(folder).data)
+
+
+@method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
+class FolderDeleteView(CacheControlMixin, APIView):
+    """Deleting a folder moves its entries to the vault root, in one go.
+
+    VaultEntry.folder is RESTRICT, so the entries have to move first - and
+    folder_uuid is inside their signature, so they cannot move without being
+    re-signed by their owner. Either the whole thing lands or none of it does.
+    """
+
+    cache_no_store = True
+
+    @extend_schema(
+        tags=["Vault"],
+        summary="Delete a folder, moving its entries to the vault root",
+        request=FolderDeleteSerializer,
+        responses={204: None},
+    )
+    @sensitive_variables()
+    def post(self, request, uuid):
+        identity = active_identity(request.user)
+        folder = VaultFolder.objects.filter(uuid=uuid).first()
+        if identity is None or folder is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        vault = reachable_vault(request.user, folder.vault_id)
+        if vault is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        serializer = FolderDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        submitted = {
+            item["uuid"]: item for item in serializer.validated_data["entries"]
+        }
+
+        # Trashed entries included: deleted_at is a view, folder_id is still a
+        # RESTRICT reference, and a client that skipped them would meet a 409
+        # it has no way to interpret.
+        occupants = list(
+            VaultEntry.objects.filter(folder=folder).prefetch_related("tags", "fields")
+        )
+        if {entry.uuid for entry in occupants} != set(submitted):
+            return Response(
+                {"detail": "The submitted entries do not match the folder's contents."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        try:
+            with transaction.atomic():
+                for entry in occupants:
+                    item = submitted[entry.uuid]
+                    # Assigned before the payload is built, so what is verified
+                    # is the state about to be stored, not the state on disk.
+                    entry.folder = None
+                    payload = entry_signature_payload(
+                        entry,
+                        signer_account_uuid=identity.uuid,
+                        tag_uuids=[tag.uuid for tag in entry.tags.all()],
+                        fields={
+                            field.field_id: field.encrypted_value
+                            for field in entry.fields.all()
+                        },
+                    )
+                    try:
+                        verify_record(
+                            payload, identity.sig_public, item["metadata_sig"]
+                        )
+                    except AttestationError as exc:
+                        raise _SignatureRefused from exc
+                    entry.metadata_sig = item["metadata_sig"]
+                    entry.save(update_fields=["folder", "metadata_sig", "updated_at"])
+                folder.delete()
+        except _SignatureRefused:
+            return Response(
+                {"detail": "An entry signature does not verify."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)

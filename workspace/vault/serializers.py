@@ -365,3 +365,21 @@ class VaultEntryWriteSerializer(serializers.Serializer):
     encrypted_notes = _OpaqueField(allow_blank=True)
     fields = serializers.JSONField(validators=[validate_field_map])
     metadata_sig = _OpaqueField()
+
+
+class FolderDeleteEntrySerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    metadata_sig = _OpaqueField()
+
+
+class FolderDeleteSerializer(serializers.Serializer):
+    """The folder's entries, re-signed with no folder.
+
+    Capped rather than paginated: a folder with 500 entries is a UI problem,
+    and a silent truncation here would delete a folder while leaving entries
+    in it.
+    """
+
+    entries = serializers.ListField(
+        child=FolderDeleteEntrySerializer(), allow_empty=True, max_length=500
+    )

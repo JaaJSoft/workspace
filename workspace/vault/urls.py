@@ -44,6 +44,11 @@ urlpatterns = [
         name="vault-folder-detail",
     ),
     path(
+        "api/v1/vault/folders/<uuid:uuid>/delete",
+        views_folders.FolderDeleteView.as_view(),
+        name="vault-folder-delete",
+    ),
+    path(
         "api/v1/vault/tags",
         views_tags.TagListView.as_view(),
         name="vault-tag-list",

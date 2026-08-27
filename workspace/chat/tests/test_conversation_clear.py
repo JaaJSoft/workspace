@@ -1,6 +1,8 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -64,7 +66,7 @@ class ConversationClearLogSanitizationTests(APITestCase):
             side_effect=OSError("storage gone"),
         ):
             with self.assertLogs(
-                "workspace.chat.views_typing",
+                "workspace.chat.services.deletion",
                 level="WARNING",
             ) as cm:
                 with self.captureOnCommitCallbacks(execute=True):
@@ -77,3 +79,54 @@ class ConversationClearLogSanitizationTests(APITestCase):
         formatted = cm.records[0].getMessage()
         self.assertNotIn("\n", formatted)
         self.assertNotIn("\r", formatted)
+
+
+class ConversationClearAttachmentCacheTests(APITestCase):
+    """Clearing a conversation must make its attachments unreachable at once."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="u", password="p")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP,
+            title="G",
+            created_by=self.user,
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+        self.message = Message.objects.create(
+            conversation=self.conv,
+            author=self.user,
+            body="hi",
+        )
+        self.attachment = MessageAttachment.objects.create(
+            message=self.message,
+            file=SimpleUploadedFile("doc.pdf", b"pdf", content_type="application/pdf"),
+            original_name="doc.pdf",
+            mime_type="application/pdf",
+            size=3,
+        )
+        self.client.force_authenticate(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_cleared_attachment_is_unreachable_even_if_the_blob_survives(self):
+        """The database is the authority, not the disk: the download view's
+        metadata memo has to be invalidated on the row's disappearance alone,
+        not merely on the blob turning up missing.
+        """
+        url = f"/api/v1/chat/attachments/{self.attachment.uuid}"
+        warm = self.client.get(url)
+        b"".join(warm.streaming_content)
+
+        with patch(
+            "django.core.files.storage.default_storage.delete",
+            side_effect=OSError("storage gone"),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                resp = self.client.delete(
+                    f"/api/v1/chat/conversations/{self.conv.uuid}/clear",
+                )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(default_storage.exists(self.attachment.file.name))
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_404_NOT_FOUND)

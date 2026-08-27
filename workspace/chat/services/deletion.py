@@ -49,10 +49,15 @@ def purge_message_dependents(message):
 
     # Storage and cache are not transactional: touch them only once the rows
     # are really gone, or a rollback leaves live rows pointing at nothing.
-    transaction.on_commit(lambda: _discard_attachment_files(attachments))
+    transaction.on_commit(lambda: discard_attachment_files(attachments))
 
 
-def _discard_attachment_files(attachments):
+def discard_attachment_files(attachments):
+    """Drop attachment blobs and their metadata memo, best effort.
+
+    Call from ``transaction.on_commit``: neither storage nor cache rolls back,
+    so both must only be touched once the rows are really gone.
+    """
     for attachment in attachments:
         # The download view memoises attachment metadata for 60s under this
         # tag. Bumping it is what makes the deleted row authoritative: without

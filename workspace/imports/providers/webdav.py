@@ -143,11 +143,7 @@ class WebDavFileSource:
         return url
 
     def _entry_id_from_href(self, href: str) -> str:
-        path = unquote(urlparse(href).path)
-        if self._base_path and path.startswith(self._base_path):
-            path = path[len(self._base_path) :]
-        path = "/" + path.strip("/")
-        return path
+        return entry_id_from_href(href, self._base_path)
 
     # -- FileSource ----------------------------------------------------
 
@@ -202,13 +198,7 @@ class WebDavFileSource:
             raise ProviderError(
                 f"'{self._host}' is not a WebDAV server (HTTP {response.status_code} to PROPFIND)."
             )
-        try:
-            root = ElementTree.fromstring(response.content)
-        except ElementTree.ParseError as exc:
-            raise ProviderError(
-                "The server sent an unreadable WebDAV response."
-            ) from exc
-        props = _first_ok_props(root)
+        props = _first_ok_props(parse_dav_xml(response.content))
         if props is None or props.find(f"{DAV}resourcetype/{DAV}collection") is None:
             raise ProviderError("The URL does not point to a WebDAV folder.")
         return {
@@ -219,31 +209,46 @@ class WebDavFileSource:
         }
 
 
-def _first_ok_props(multistatus):
-    for response in multistatus.iter(f"{DAV}response"):
-        for propstat in response.findall(f"{DAV}propstat"):
-            if " 200 " in (propstat.findtext(f"{DAV}status") or ""):
-                return propstat.find(f"{DAV}prop")
+def parse_dav_xml(content: bytes):
+    try:
+        return ElementTree.fromstring(content)
+    except ElementTree.ParseError as exc:
+        raise ProviderError("The server sent an unreadable WebDAV response.") from exc
+
+
+def ok_props(response):
+    """The ``<prop>`` a server reported 200 for on one ``<response>``, or None."""
+    for propstat in response.findall(f"{DAV}propstat"):
+        if " 200 " in (propstat.findtext(f"{DAV}status") or ""):
+            return propstat.find(f"{DAV}prop")
     return None
 
 
-def _parse_multistatus(content: bytes, entry_id_from_href):
-    try:
-        root = ElementTree.fromstring(content)
-    except ElementTree.ParseError as exc:
-        raise ProviderError("The server sent an unreadable WebDAV response.") from exc
-    for response in root.iter(f"{DAV}response"):
+def entry_id_from_href(href: str, base_path: str) -> str:
+    """'/remote.php/dav/files/alice/Docs/a.txt' -> '/Docs/a.txt'."""
+    path = unquote(urlparse(href).path)
+    if base_path and path.startswith(base_path):
+        path = path[len(base_path) :]
+    return "/" + path.strip("/")
+
+
+def _first_ok_props(multistatus):
+    for response in multistatus.iter(f"{DAV}response"):
+        props = ok_props(response)
+        if props is not None:
+            return props
+    return None
+
+
+def _parse_multistatus(content: bytes, to_entry_id):
+    for response in parse_dav_xml(content).iter(f"{DAV}response"):
         href = response.findtext(f"{DAV}href")
         if not href:
             continue
-        props = None
-        for propstat in response.findall(f"{DAV}propstat"):
-            if " 200 " in (propstat.findtext(f"{DAV}status") or ""):
-                props = propstat.find(f"{DAV}prop")
-                break
+        props = ok_props(response)
         if props is None:
             continue
-        entry_id = entry_id_from_href(href)
+        entry_id = to_entry_id(href)
         is_dir = props.find(f"{DAV}resourcetype/{DAV}collection") is not None
         yield RemoteEntry(
             id=entry_id,

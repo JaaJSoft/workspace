@@ -75,6 +75,16 @@ class RemoteEntry:
         }
 
 
+@dataclass(frozen=True)
+class RemoteTag:
+    """A label defined on the remote and assignable to its entries. ``id`` is
+    what ``FileMetadataSource.tagged`` takes; ``name`` is all that is carried
+    over - colours and visibility rules stay on the remote."""
+
+    id: str
+    name: str
+
+
 class FileSource(Protocol):
     """Read access to a remote file tree."""
 
@@ -88,6 +98,27 @@ class FileSource(Protocol):
 
     def close(self) -> None:
         """Release the underlying connection pool; the source is unusable after."""
+
+
+class FileMetadataSource(Protocol):
+    """What a remote knows about its files besides their bytes.
+
+    Read once the copy is over, and always by entry id, so the importer can
+    match each answer against the entries it has recorded.
+    """
+
+    def favorites(self) -> Iterator[str]:
+        """Entry ids the connection's user marked as favorite, files and
+        folders alike."""
+
+    def tags(self) -> Iterator[RemoteTag]:
+        """Tags the connection's user can see."""
+
+    def tagged(self, tag_id: str) -> Iterator[str]:
+        """Entry ids carrying the tag."""
+
+    def close(self) -> None:
+        """Release the underlying connection pool."""
 
 
 class Provider(ABC):
@@ -112,6 +143,11 @@ class Provider(ABC):
 
     def file_source(self, connection) -> FileSource:
         raise NotImplementedError(f"{self.slug} does not provide files")
+
+    def file_metadata_source(self, connection) -> FileMetadataSource | None:
+        """Favorites and tags for the files this provider served, or ``None``
+        when it has none to offer - then the importer skips that phase."""
+        return None
 
     def describe(self) -> dict:
         return {

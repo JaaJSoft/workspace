@@ -1,8 +1,8 @@
-"""Files importer: walks a remote file tree and writes it into the files module.
+"""Files importer: walks a remote file tree and writes it into the files module,
+then brings over what the remote knows about those entries - favorites, tags.
 
-Both walks (listing, then copying) keep their pending stack in the job stats,
-so a slice that runs out of time resumes where it stopped instead of
-re-listing the whole tree.
+Every phase keeps its pending work in the job stats, so a slice that runs out
+of time resumes where it stopped instead of re-listing the whole tree.
 """
 
 import logging
@@ -26,6 +26,7 @@ from workspace.files.services.quota import QuotaExceeded
 from ..models import ImportJobItem
 from ..providers.base import KIND_FILES, ProviderError
 from ..serializers import RemotePathField
+from ..services import file_metadata
 from .base import Importer, JobFailed, Outcome
 
 logger = logging.getLogger(__name__)
@@ -95,8 +96,17 @@ class FilesImporter(Importer):
                 outcome = self._plan(ctx, source)
                 if outcome is not None:
                     return outcome
-            ctx.set_phase("copying")
-            outcome = self._copy(ctx, source)
+            if not ctx.stats.get("copied"):
+                ctx.set_phase("copying")
+                outcome = self._copy(ctx, source)
+                if outcome is not Outcome.DONE:
+                    return outcome
+                # Without this the next slice would rebuild the copy stack from
+                # the source path and re-walk the whole tree to find nothing
+                # left to do.
+                ctx.stats["copied"] = True
+            ctx.set_phase("metadata")
+            outcome = self._apply_metadata(ctx)
             if outcome is Outcome.DONE:
                 ctx.set_phase("done")
             return outcome
@@ -120,6 +130,8 @@ class FilesImporter(Importer):
             ("unchanged", "unchanged"),
             ("skipped", "skipped"),
             ("failed", "failed"),
+            ("favorites", "favorites"),
+            ("tags", "tags"),
         ):
             if stats.get(key):
                 parts.append(f"{stats[key]} {label}")
@@ -218,6 +230,13 @@ class FilesImporter(Importer):
             for entry in entries:
                 if entry.is_dir:
                     folder = self._ensure_folder(ctx, local_parent, entry.name)
+                    # Recorded with no fingerprint, so it never counts as an
+                    # entry already imported (a folder is re-walked every run);
+                    # what the row is for is the remote path -> local node
+                    # mapping the metadata phase reads back.
+                    ctx.report_item(
+                        entry.id, ImportJobItem.Status.DONE, target_uuid=folder.uuid
+                    )
                     subfolders.append([entry.id, str(folder.uuid)])
                     continue
                 if ctx.already_done(entry.id, entry.fingerprint):
@@ -437,6 +456,88 @@ class FilesImporter(Importer):
                     target_uuid=file_obj.uuid,
                     fingerprint=entry.fingerprint,
                 )
+
+    # -- metadata phase ------------------------------------------------
+
+    def _apply_metadata(self, ctx):
+        """Bring over what the remote knows about the entries besides their
+        bytes: favorites and tags.
+
+        Best effort. The files are already imported by the time this runs, so a
+        remote that cannot answer - an older server, the tags app disabled -
+        costs a note in the stats rather than the whole job.
+        """
+        metadata = ctx.provider.file_metadata_source(ctx.connection)
+        if metadata is None:
+            return Outcome.DONE
+        try:
+            return self._read_metadata(ctx, metadata)
+        except ProviderError as exc:
+            logger.warning(
+                "Favorites and tags skipped for connection %s: %s",
+                scrub(str(ctx.connection.pk)),
+                scrub(str(exc)),
+            )
+            ctx.stats["metadata_error"] = exc.user_message
+            ctx.flush(force=True)
+            return Outcome.DONE
+        finally:
+            metadata.close()
+
+    def _read_metadata(self, ctx, metadata):
+        if not ctx.stats.get("favorites_read"):
+            targets = self._imported_targets(ctx, metadata.favorites())
+            added = file_metadata.mark_favorites(ctx.owner, targets.values())
+            if added:
+                ctx.stat("favorites", added)
+            ctx.stats["favorites_read"] = True
+            ctx.flush(force=True)
+        if "tag_stack" not in ctx.stats:
+            ctx.stats["tag_stack"] = [[tag.id, tag.name] for tag in metadata.tags()]
+            ctx.flush(force=True)
+        stack = ctx.stats["tag_stack"]
+        while stack:
+            if stop := ctx.should_stop():
+                ctx.flush(force=True)
+                return stop
+            # A queue, not a stack: tags are applied in the order the remote
+            # listed them, so a run cut short leaves a prefix, not a suffix.
+            tag_id, tag_name = stack[0]
+            targets = self._imported_targets(ctx, metadata.tagged(tag_id))
+            added = file_metadata.apply_tag(ctx.owner, tag_name, targets.values())
+            if added:
+                ctx.stat("tags", added)
+            stack.pop(0)
+            ctx.flush()
+        ctx.stats.pop("tag_stack", None)
+        ctx.flush(force=True)
+        return Outcome.DONE
+
+    def _imported_targets(self, ctx, remote_ids):
+        """Remote id -> local node, for the entries this connection imported
+        and whose local node is still there.
+
+        Only what the job items still record can be matched: an entry whose row
+        the retention purge dropped, or whose local file was deleted, is left
+        alone rather than guessed at from its path.
+        """
+        found = {}
+        for chunk in batched(remote_ids, 500, strict=False):
+            found.update(
+                ImportJobItem.objects.filter(
+                    job__connection_id=ctx.connection.pk,
+                    kind=self.kind,
+                    status=ImportJobItem.Status.DONE,
+                    remote_id__in=chunk,
+                )
+                .exclude(target_uuid=None)
+                # Two imports of the same remote entry: the newest local copy
+                # is the one the user is looking at.
+                .order_by("created_at")
+                .values_list("remote_id", "target_uuid")
+            )
+        alive = self.live_targets(ctx.owner, set(found.values()))
+        return {rid: target for rid, target in found.items() if target in alive}
 
 
 def _storage_message(exc):

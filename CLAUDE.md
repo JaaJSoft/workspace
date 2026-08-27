@@ -423,10 +423,12 @@ Task-level queries filter with `project_id__in=user_project_ids(user)` - see `ta
 ```python
 from workspace.vault.models import VaultEntry
 from workspace.vault.queries import (
-    accessible_entries_q, active_identity, get_vault_role, user_vault_ids, visible_folders, visible_tags,
+    accessible_entries_q, active_identity, get_vault_role, reachable_vault, user_vault_ids,
+    visible_folders, visible_tags,
 )
 
 vault_ids = user_vault_ids(user)              # vaults the user can open
+vault = reachable_vault(user, vault_uuid)     # the vault or None - 404 on None
 role = get_vault_role(user, vault)            # 'owner' | 'member' | None
 qs = VaultEntry.objects.filter(accessible_entries_q(user))  # does NOT filter deleted_at
 folders = visible_folders(user, vault)        # empty queryset when the vault is out of reach

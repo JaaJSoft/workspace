@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
@@ -15,6 +17,7 @@ from workspace.vault.queries import (
     accessible_entries_q,
     active_identity,
     get_vault_role,
+    reachable_vault,
     user_vault_ids,
     visible_folders,
     visible_tags,
@@ -92,15 +95,35 @@ class AccessHelperTests(TestCase):
 
     def test_visible_folders_are_scoped_to_an_accessible_vault(self):
         folder = VaultFolder.objects.create(
-            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy", metadata_sig="AQ"
         )
         self.assertEqual(list(visible_folders(self.owner, self.vault)), [folder])
         self.assertEqual(list(visible_folders(self.stranger, self.vault)), [])
 
     def test_visible_tags_are_scoped_to_an_accessible_vault(self):
-        tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        tag = VaultTag.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEDdGFn", metadata_sig="AQ"
+        )
         self.assertEqual(list(visible_tags(self.owner, self.vault)), [tag])
         self.assertEqual(list(visible_tags(self.stranger, self.vault)), [])
+
+    def test_reachable_vault_returns_the_vault_for_an_owner(self):
+        self.assertEqual(reachable_vault(self.owner, self.vault.uuid), self.vault)
+
+    def test_reachable_vault_returns_none_for_a_stranger(self):
+        self.assertIsNone(reachable_vault(self.stranger, self.vault.uuid))
+
+    def test_reachable_vault_returns_none_for_a_uuid_that_names_nothing(self):
+        self.assertIsNone(reachable_vault(self.owner, uuid.uuid4()))
+
+    def test_reachable_vault_returns_the_vault_for_a_key_wrap_holder(self):
+        VaultKeyWrap.objects.create(
+            vault=self.vault,
+            recipient=self.stranger,
+            wrapped_key="ZW5jfHdyYXA",
+            hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
+        )
+        self.assertEqual(reachable_vault(self.stranger, self.vault.uuid), self.vault)
 
 
 class ActiveIdentityTests(TestCase):

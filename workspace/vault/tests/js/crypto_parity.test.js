@@ -447,3 +447,35 @@ test('entry, folder and tag payloads encode as the reference does', () => {
     assert.equal(b64(V.canonicalCbor(frozen.payload)), frozen.expected_b64, id);
   }
 });
+
+test('open accepts raw bytes and a CryptoKey interchangeably', async () => {
+  const frozen = VECTORS.aead.find((item) => item.id === 'entry-field-password');
+  const raw = V.fromBase64Url(frozen.key_b64);
+  const wire = V.fromBase64Url(frozen.expected_wire_b64);
+  const associated = new TextEncoder().encode(frozen.ad);
+  const viaBytes = await V.open(raw, wire, associated);
+  const imported = await V.importAeadKey(raw);
+  assert.equal(imported.extractable, false, 'an imported aead key must not be extractable');
+  const viaKey = await V.open(imported, wire, associated);
+  assert.deepStrictEqual(Array.from(viaBytes), Array.from(viaKey));
+  // The same key, used twice: the reason this call shape exists at all.
+  assert.deepStrictEqual(
+    Array.from(await V.open(imported, wire, associated)),
+    Array.from(viaBytes)
+  );
+});
+
+test('seal accepts a CryptoKey and produces bytes the raw form opens', async () => {
+  const frozen = VECTORS.aead.find((item) => item.id === 'entry-field-password');
+  const raw = V.fromBase64Url(frozen.key_b64);
+  const associated = new TextEncoder().encode(frozen.ad);
+  const imported = await V.importAeadKey(raw);
+  const sealed = await V.seal(imported, new TextEncoder().encode('hello'), associated, {
+    keyVersion: frozen.key_version,
+    kdfId: frozen.kdf_id,
+  });
+  assert.deepStrictEqual(
+    Array.from(await V.open(raw, sealed, associated)),
+    Array.from(new TextEncoder().encode('hello'))
+  );
+});

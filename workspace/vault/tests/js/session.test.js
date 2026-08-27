@@ -586,3 +586,48 @@ test('a storage that refuses every access does not take the screen down with it'
   assert.equal(session.rememberedSecret(), null);
   assert.doesNotThrow(() => session.forgetDevice());
 });
+
+// A metadata-key harness: the unlock path's hkdf stub returns a two-byte
+// placeholder, which says nothing about what openVaultKey does with it.
+function metaKeyHarness(overrides = {}) {
+  const metaRaw = Uint8Array.from({ length: 32 }, (_, i) => i + 200);
+  const imported = { algorithm: { name: 'AES-GCM' }, extractable: false };
+  const seen = [];
+  const h = harness({
+    vaultCrypto: {
+      hkdf: async () => metaRaw,
+      importAeadKey: async (raw) => {
+        seen.push(raw);
+        if (overrides.failImport) throw new Error('import failed');
+        return imported;
+      },
+    },
+  });
+  return { ...h, metaRaw, imported, seen };
+}
+
+const A_VAULT = '0192f3a4-2222-7d8e-9f01-23456789abcd';
+
+test('openVaultKey hands back an imported key, never the raw metadata bytes', async () => {
+  const h = metaKeyHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const key = await h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  assert.equal(key, h.imported);
+  assert.equal(h.seen.length, 1, 'the derived bytes must be imported exactly once');
+  assert.ok(!(key instanceof Uint8Array), 'openVaultKey must not return raw bytes');
+});
+
+test('openVaultKey zeroes the metadata bytes it derived', async () => {
+  const h = metaKeyHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  await h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  assert.ok(h.metaRaw.every((byte) => byte === 0));
+  assert.ok(h.vaultKeyRaw.every((byte) => byte === 0));
+});
+
+test('a failed import still zeroes the metadata bytes', async () => {
+  const h = metaKeyHarness({ failImport: true });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  await assert.rejects(h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA'));
+  assert.ok(h.metaRaw.every((byte) => byte === 0));
+});

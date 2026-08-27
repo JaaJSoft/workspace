@@ -333,16 +333,20 @@ window.vaultSession = (function () {
         V.AD.vaultKeyInfo(vaultUuid, accountUuid),
         V.fromBase64Url(wrappedKeyB64)
       );
-      let metaKey;
+      let metaRaw;
       try {
         // The vault key never encrypts anything itself; the metadata key does.
-        metaKey = await V.hkdf(raw, V.AD.vaultMetaInfo(vaultUuid));
+        metaRaw = await V.hkdf(raw, V.AD.vaultMetaInfo(vaultUuid));
       } finally {
         zero(raw);
       }
-      // The caller owns these bytes and must zero them after one decryption.
-      // Revisit once aead.js grows a CryptoKey-taking form.
-      return metaKey;
+      try {
+        return await V.importAeadKey(metaRaw);
+      } finally {
+        // The caller never gets a copy it could forget to zero: what it gets
+        // back is a non-extractable key.
+        zero(metaRaw);
+      }
     },
 
     verifyVaultMetadata: async function (payload, signatureB64) {

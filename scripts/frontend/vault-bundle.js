@@ -15,7 +15,7 @@ import {
   encodePublicKey, decodePublicKey,
 } from './src/vault/wire.js';
 import { ARGON2_PARAMS, deriveAmk, hkdf } from './src/vault/kdf.js';
-import { seal, open } from './src/vault/aead.js';
+import { seal, open, importAeadKey } from './src/vault/aead.js';
 import { HPKE_SUITE_V1, hpkeSeal, hpkeOpen, hpkeRecipient } from './src/vault/hpke.js';
 import { canonicalCbor, decodeCbor } from './src/vault/cbor.js';
 import { SIG_ALG_ED25519, sign, verify, signBytes, verifyBytes, importSigner } from './src/vault/sign.js';
@@ -54,6 +54,7 @@ window.vaultCrypto = {
   hkdf,
   seal,
   open,
+  importAeadKey,
   HPKE_SUITE_V1,
   hpkeSeal,
   hpkeOpen,

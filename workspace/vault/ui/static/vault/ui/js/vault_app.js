@@ -20,12 +20,8 @@ window.vaultApp = (function () {
     'password-or-recovery-key': 'That did not open this account. Either the master password is wrong, or the recovery key remembered on this device belongs to another account - both fail the same way. Nothing was sent to the server.',
   };
 
-  function zero(buffer) {
-    if (buffer && buffer.fill) buffer.fill(0);
-  }
-
-  // The metadata key is opened fresh per vault and lives only for the one
-  // decryption below - nothing keeps it past this call.
+  // The metadata key is opened fresh per vault and is non-extractable: no
+  // copy of its bytes exists on this side to be zeroed.
   async function decryptVault(row) {
     const V = window.vaultCrypto;
     const payload = V.vaultMetadataPayload(
@@ -45,9 +41,8 @@ window.vaultApp = (function () {
     if (!row.wrapped_key) {
       return Object.assign({}, row, { unopenable: true, name: '' });
     }
-    let metaKey;
     try {
-      metaKey = await window.vaultSession.openVaultKey(row.uuid, row.wrapped_key);
+      const metaKey = await window.vaultSession.openVaultKey(row.uuid, row.wrapped_key);
       const plaintext = await V.open(
         metaKey,
         V.fromBase64Url(row.encrypted_name),
@@ -60,8 +55,6 @@ window.vaultApp = (function () {
       // the rest of the list - and the Promise.all it resolves inside -
       // keeps going.
       return Object.assign({}, row, { unreadable: true, name: '' });
-    } finally {
-      zero(metaKey);
     }
   }
 

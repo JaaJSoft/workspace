@@ -1,5 +1,5 @@
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from dateutil.parser import parse as dateutil_parse
 from django.contrib.auth import get_user_model
@@ -16,12 +16,10 @@ from workspace.common.mixins import CacheControlMixin
 from workspace.notifications.services.notifications import (
     mark_source_read,
     mark_sources_read,
-    notify,
     notify_many,
 )
 
 from .models import Calendar, Event, EventMember
-from .models_external import ExternalCalendar
 from .queries import member_event_ids, visible_calendar_ids, visible_calendars
 from .recurrence import expand_recurring_events, make_virtual_occurrence
 from .serializers import (
@@ -32,7 +30,14 @@ from .serializers import (
     EventSerializer,
     EventUpdateSerializer,
 )
-from .services.timezones import current_timezone_name, normalize_all_day
+from .services.event_scope import (
+    EventScopeError,
+    cancel_event,
+    is_external_calendar,
+    update_event,
+)
+from .services.invitations import NotInvitedError, respond_to_invitation
+from .services.timezones import current_timezone_name
 from .upcoming import get_upcoming_page
 
 
@@ -75,10 +80,6 @@ def _sort_instant(value):
     return dt.astimezone(UTC)
 
 
-def _is_external_calendar(calendar_id):
-    return ExternalCalendar.objects.filter(calendar_id=calendar_id).exists()
-
-
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
@@ -100,84 +101,6 @@ def _prefetch_event(qs):
             ),
         )
     )
-
-
-def _update_event_fields(event, data, user):
-    """Apply common field updates to an event."""
-    if "calendar_id" in data:
-        try:
-            cal = Calendar.objects.get(pk=data["calendar_id"], owner=user)
-            event.calendar = cal
-        except Calendar.DoesNotExist:
-            return {"detail": "Calendar not found."}
-
-    had_recurrence = event.recurrence_frequency is not None
-    for field in [
-        "title",
-        "description",
-        "start",
-        "end",
-        "all_day",
-        "location",
-        "recurrence_frequency",
-        "recurrence_interval",
-        "recurrence_end",
-    ]:
-        if field in data:
-            setattr(event, field, data[field])
-    if event.all_day:
-        # Enforce the storage invariant even when all_day was already set
-        # and only start/end changed.
-        event.start = normalize_all_day(event.start)
-        event.end = normalize_all_day(event.end)
-        event.timezone = ""
-    elif event.recurrence_frequency and not had_recurrence and not event.timezone:
-        # Only a series GAINING recurrence anchors its wall clock in the
-        # editing zone. Legacy recurring series (blank timezone) must keep
-        # UTC expansion: stamping them on an unrelated edit would shift
-        # future occurrences and orphan their exceptions.
-        event.timezone = current_timezone_name()
-    event.save()
-    return None
-
-
-@transaction.atomic
-def _sync_members(event, member_ids, owner_id):
-    """Sync event members from a list of user IDs.
-    Returns a set of user IDs that were added or removed (already notified separately).
-    """
-    current = set(event.members.values_list("user_id", flat=True))
-    new_ids = set(member_ids) - {owner_id}
-    to_remove = current - new_ids
-    if to_remove:
-        removed_users = list(User.objects.filter(id__in=to_remove))
-        EventMember.objects.filter(event=event, user_id__in=to_remove).delete()
-        if removed_users:
-            notify_many(
-                recipients=removed_users,
-                origin="calendar",
-                title=f'Removed from "{event.title}"',
-                body=f"{event.owner.username} removed you from an event.",
-                url=f"/calendar?event={event.pk}",
-                actor=event.owner,
-                source=event,
-            )
-    to_add = new_ids - current
-    if to_add:
-        users = list(User.objects.filter(id__in=to_add))
-        EventMember.objects.bulk_create(
-            [EventMember(event=event, user=u) for u in users]
-        )
-        notify_many(
-            recipients=users,
-            origin="calendar",
-            title=f'Invited to "{event.title}"',
-            body=f"{event.owner.username} invited you to an event.",
-            url=f"/calendar?event={event.pk}",
-            actor=event.owner,
-            source=event,
-        )
-    return to_add | to_remove
 
 
 # ---------- Calendar CRUD ----------
@@ -417,7 +340,7 @@ class EventListView(CacheControlMixin, APIView):
                 {"detail": "Calendar not found or not owned by you."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if _is_external_calendar(cal.pk):
+        if is_external_calendar(cal.pk):
             return Response(
                 {"detail": "Cannot create events in an external calendar."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -520,7 +443,7 @@ class EventDetailView(APIView):
             return Response(
                 {"detail": "Only the owner can edit."}, status=status.HTTP_403_FORBIDDEN
             )
-        if _is_external_calendar(event.calendar_id):
+        if is_external_calendar(event.calendar_id):
             return Response(
                 {"detail": "Cannot edit events from an external calendar."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -529,209 +452,20 @@ class EventDetailView(APIView):
         ser = EventUpdateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
-
         scope = data.pop("scope", "all")
-        original_start_val = data.pop("original_start", None)
+        original_start = data.pop("original_start", None)
 
-        # Non-recurring event or scope='all': update the event directly
-        if not event.is_recurring or scope == "all":
-            err = _update_event_fields(event, data, request.user)
-            if err:
-                return Response(err, status=status.HTTP_400_BAD_REQUEST)
-
-            changed_ids = set()
-            if "member_ids" in data:
-                changed_ids = _sync_members(event, data["member_ids"], request.user.id)
-
-            # Notify remaining members about the update, excluding the owner
-            # and users already notified by _sync_members (added/removed)
-            exclude_ids = changed_ids | {request.user.id}
-            member_users = list(
-                User.objects.filter(
-                    calendar_invitations__event=event,
-                ).exclude(id__in=exclude_ids)
+        try:
+            written = update_event(
+                event, data, request.user, scope=scope, original_start=original_start
             )
-            if member_users:
-                notify_many(
-                    recipients=member_users,
-                    origin="calendar",
-                    title=f'"{event.title}" was updated',
-                    body=f"{request.user.username} updated an event you are part of.",
-                    url=f"/calendar?event={event.pk}",
-                    actor=request.user,
-                    source=event,
-                )
+        except EventScopeError as exc:
+            return Response({"detail": exc.detail}, status=exc.status_code)
 
-            event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
-            return Response(EventSerializer(event).data)
-
-        if scope == "this":
-            return self._edit_single_occurrence(
-                event, data, original_start_val, request.user
-            )
-
-        if scope == "future":
-            return self._edit_future_occurrences(
-                event, data, original_start_val, request.user
-            )
-
-        return Response(
-            {"detail": "Invalid scope."}, status=status.HTTP_400_BAD_REQUEST
-        )
-
-    def _edit_single_occurrence(self, master, data, original_start, user):
-        """Create a materialized exception for a single occurrence."""
-        if not original_start:
-            return Response(
-                {"detail": "original_start is required for scope=this."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Check if exception already exists
-        exc = Event.objects.filter(
-            recurrence_parent=master,
-            original_start=original_start,
-        ).first()
-
-        if exc:
-            # Update existing exception
-            err = _update_event_fields(exc, data, user)
-            if err:
-                return Response(err, status=status.HTTP_400_BAD_REQUEST)
-            if "member_ids" in data:
-                _sync_members(exc, data["member_ids"], user.id)
-            exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
-            return Response(EventSerializer(exc).data)
-
-        # Create new exception: inherit fields from master, apply overrides
-        with transaction.atomic():
-            duration = (master.end - master.start) if master.end else None
-            exc = Event.objects.create(
-                calendar=master.calendar,
-                title=data.get("title", master.title),
-                description=data.get("description", master.description),
-                start=data.get("start", original_start),
-                end=data.get("end", (original_start + duration) if duration else None),
-                all_day=data.get("all_day", master.all_day),
-                location=data.get("location", master.location),
-                owner=master.owner,
-                recurrence_parent=master,
-                original_start=original_start,
-            )
-
-            # Copy members from master or from data
-            if "member_ids" in data:
-                member_ids = set(data["member_ids"]) - {user.id}
-                existing_ids = set(master.members.values_list("user_id", flat=True))
-                users = list(User.objects.filter(id__in=member_ids))
-                EventMember.objects.bulk_create(
-                    [EventMember(event=exc, user=u) for u in users]
-                )
-                new_users = [u for u in users if u.id not in existing_ids]
-                if new_users:
-                    notify_many(
-                        recipients=new_users,
-                        origin="calendar",
-                        title=f'Invited to "{exc.title}"',
-                        body=f"{user.username} invited you to an event.",
-                        url=f"/calendar?event={exc.pk}",
-                        actor=user,
-                        source=exc,
-                    )
-            else:
-                # Copy from master
-                EventMember.objects.bulk_create(
-                    [
-                        EventMember(event=exc, user=m.user, status=m.status)
-                        for m in master.members.all()
-                    ]
-                )
-
-        exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
-        return Response(EventSerializer(exc).data)
-
-    @transaction.atomic
-    def _edit_future_occurrences(self, master, data, original_start, user):
-        """Split the series: truncate old master, create new master from original_start."""
-        if not original_start:
-            return Response(
-                {"detail": "original_start is required for scope=future."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Truncate old master
-        master.recurrence_end = original_start - timedelta(seconds=1)
-        master.save(update_fields=["recurrence_end"])
-
-        # Delete exceptions >= original_start
-        Event.objects.filter(
-            recurrence_parent=master,
-            original_start__gte=original_start,
-        ).delete()
-
-        # Create new master
-        duration = (master.end - master.start) if master.end else None
-        new_master = Event.objects.create(
-            calendar=data.get("calendar_id", master.calendar_id) and master.calendar,
-            title=data.get("title", master.title),
-            description=data.get("description", master.description),
-            start=data.get("start", original_start),
-            end=data.get("end", (original_start + duration) if duration else None),
-            all_day=data.get("all_day", master.all_day),
-            location=data.get("location", master.location),
-            owner=master.owner,
-            recurrence_frequency=data.get(
-                "recurrence_frequency", master.recurrence_frequency
-            ),
-            recurrence_interval=data.get(
-                "recurrence_interval", master.recurrence_interval
-            ),
-            recurrence_end=data.get("recurrence_end", master.recurrence_end),
-        )
-
-        # Handle calendar_id change
-        if "calendar_id" in data:
-            try:
-                cal = Calendar.objects.get(pk=data["calendar_id"], owner=user)
-                new_master.calendar = cal
-                new_master.save(update_fields=["calendar_id"])
-            except Calendar.DoesNotExist:
-                # Unknown calendar_id or calendar owned by someone else:
-                # keep the master's calendar instead of failing the split.
-                pass
-
-        # Copy members
-        if "member_ids" in data:
-            member_ids = set(data["member_ids"]) - {user.id}
-            existing_ids = set(master.members.values_list("user_id", flat=True))
-            users = list(User.objects.filter(id__in=member_ids))
-            EventMember.objects.bulk_create(
-                [EventMember(event=new_master, user=u) for u in users]
-            )
-            new_users = [u for u in users if u.id not in existing_ids]
-            if new_users:
-                notify_many(
-                    recipients=new_users,
-                    origin="calendar",
-                    title=f'Invited to "{new_master.title}"',
-                    body=f"{user.username} invited you to an event.",
-                    url=f"/calendar?event={new_master.pk}",
-                    actor=user,
-                    source=new_master,
-                )
-        else:
-            EventMember.objects.bulk_create(
-                [
-                    EventMember(event=new_master, user=m.user, status=m.status)
-                    for m in master.members.all()
-                ]
-            )
-
-        new_master = _prefetch_event(Event.objects.filter(pk=new_master.pk)).first()
-        return Response(EventSerializer(new_master).data)
+        written = _prefetch_event(Event.objects.filter(pk=written.pk)).first()
+        return Response(EventSerializer(written).data)
 
     @extend_schema(summary="Delete an event")
-    @transaction.atomic
     def delete(self, request, event_id):
         event, err = self._get_event(event_id, request.user)
         if err:
@@ -741,82 +475,22 @@ class EventDetailView(APIView):
                 {"detail": "Only the owner can delete."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if _is_external_calendar(event.calendar_id):
+        if is_external_calendar(event.calendar_id):
             return Response(
                 {"detail": "Cannot delete events from an external calendar."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        scope = request.query_params.get("scope", "all")
-        original_start_str = request.query_params.get("original_start")
-
-        if not event.is_recurring or scope == "all":
-            member_users = list(
-                User.objects.filter(
-                    calendar_invitations__event=event,
-                ).exclude(id=request.user.id)
+        try:
+            cancel_event(
+                event,
+                request.user,
+                scope=request.query_params.get("scope", "all"),
+                original_start=_parse_dt(request.query_params.get("original_start")),
             )
-            if member_users:
-                notify_many(
-                    recipients=member_users,
-                    origin="calendar",
-                    title=f'"{event.title}" was cancelled',
-                    body=f"{request.user.username} cancelled an event you were part of.",
-                    actor=request.user,
-                )
-            event.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        if scope == "this":
-            if not original_start_str:
-                return Response(
-                    {"detail": "original_start is required for scope=this."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            original_start = _parse_dt(original_start_str)
-
-            # Check if there's already an exception
-            exc = Event.objects.filter(
-                recurrence_parent=event,
-                original_start=original_start,
-            ).first()
-            if exc:
-                exc.is_cancelled = True
-                exc.save(update_fields=["is_cancelled"])
-            else:
-                # Create a cancelled exception
-                Event.objects.create(
-                    calendar=event.calendar,
-                    title=event.title,
-                    start=original_start,
-                    owner=event.owner,
-                    recurrence_parent=event,
-                    original_start=original_start,
-                    is_cancelled=True,
-                )
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        if scope == "future":
-            if not original_start_str:
-                return Response(
-                    {"detail": "original_start is required for scope=future."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            original_start = _parse_dt(original_start_str)
-
-            event.recurrence_end = original_start - timedelta(seconds=1)
-            event.save(update_fields=["recurrence_end"])
-
-            # Delete exceptions >= original_start
-            Event.objects.filter(
-                recurrence_parent=event,
-                original_start__gte=original_start,
-            ).delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        return Response(
-            {"detail": "Invalid scope."}, status=status.HTTP_400_BAD_REQUEST
-        )
+        except EventScopeError as exc:
+            return Response({"detail": exc.detail}, status=exc.status_code)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(tags=["Calendar"])
@@ -827,31 +501,12 @@ class EventRespondView(APIView):
     def post(self, request, event_id):
         ser = EventRespondSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        membership = EventMember.objects.filter(
-            event_id=event_id, user=request.user
-        ).first()
-        if not membership:
+        try:
+            membership, _event = respond_to_invitation(
+                event_id, request.user, ser.validated_data["status"]
+            )
+        except NotInvitedError:
             return Response(
                 {"detail": "Not invited."}, status=status.HTTP_403_FORBIDDEN
-            )
-        membership.status = ser.validated_data["status"]
-        membership.save(update_fields=["status"])
-        event = Event.objects.select_related("owner", "calendar").get(pk=event_id)
-
-        # Send iCalendar REPLY to external organizer if applicable
-        if event.external_organizer and event.source_message_id:
-            from workspace.calendar.tasks import send_ics_reply
-
-            send_ics_reply.delay(str(event.pk), request.user.id, membership.status)
-
-        if event.owner_id != request.user.id:
-            status_label = membership.status  # 'accepted' or 'declined'
-            notify(
-                recipient=event.owner,
-                origin="calendar",
-                title=f'{request.user.username} {status_label} "{event.title}"',
-                url=f"/calendar?event={event.pk}",
-                actor=request.user,
-                source=event,
             )
         return Response({"status": membership.status})

@@ -2,13 +2,37 @@
 
 import json
 import logging
+import uuid as uuid_mod
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from workspace.ai.tool_registry import ToolProvider, tool
+from workspace.common.datetimes import parse_local_datetime
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
+
+# Empty means "leave as is"; this sentinel means "empty it out". Editing a
+# field to blank and not editing it at all are different intents, and a
+# function-calling schema has no way to say "absent".
+CLEAR = "none"
+
+SCOPE_DESCRIPTION = (
+    "Which occurrences this applies to. 'this' = the single occurrence at "
+    "original_start, 'future' = that occurrence and every later one, 'all' = "
+    "the whole series. Ignored for non-recurring events. NEVER guess: ask the "
+    "user which one they mean before calling."
+)
+ORIGINAL_START_DESCRIPTION = (
+    "The occurrence's own start, as returned in original_start by "
+    "list_upcoming_events. Required when scope is 'this' or 'future' on a "
+    "recurring event, ignored otherwise."
+)
+CONFIRM_DESCRIPTION = (
+    "Leave false on the first call: the user is shown the change and asked to "
+    "confirm. Pass true only to repeat the identical call after they agreed."
+)
 
 
 class SearchEventsParams(BaseModel):
@@ -54,6 +78,191 @@ class CreateEventParams(BaseModel):
         description="Name of the calendar to add the event to. If omitted, "
         "the user's first calendar is used.",
     )
+
+
+class UpdateEventParams(BaseModel):
+    event_id: uuid_mod.UUID = Field(
+        description="UUID of the event, as returned by search_events, "
+        "list_upcoming_events (event_id) or create_event."
+    )
+    scope: Literal["this", "future", "all"] = Field(description=SCOPE_DESCRIPTION)
+    original_start: str = Field(default="", description=ORIGINAL_START_DESCRIPTION)
+    title: str = Field(default="", max_length=255, description="New title. Optional.")
+    start: str = Field(
+        default="",
+        description="New start datetime in ISO 8601 (e.g. 2026-07-05T14:00). "
+        "Assumed to be in the user's timezone if no offset is given. Optional.",
+    )
+    end: str = Field(
+        default="",
+        description=f"New end datetime in ISO 8601, or '{CLEAR}' to drop the "
+        "end time. Optional.",
+    )
+    location: str = Field(
+        default="",
+        max_length=255,
+        description=f"New location, or '{CLEAR}' to clear it. Optional.",
+    )
+    description: str = Field(
+        default="",
+        description=f"New description, or '{CLEAR}' to clear it. Optional.",
+    )
+    attendees: list[str] = Field(
+        default_factory=list,
+        description="Exact usernames of the people invited to the event. "
+        "Replaces the whole guest list, so include the ones already invited "
+        f"unless you mean to remove them; ['{CLEAR}'] removes everyone. "
+        "Omit to leave the guest list untouched.",
+    )
+    confirm: bool = Field(default=False, description=CONFIRM_DESCRIPTION)
+
+
+class CancelEventParams(BaseModel):
+    event_id: uuid_mod.UUID = Field(
+        description="UUID of the event, as returned by search_events, "
+        "list_upcoming_events (event_id) or create_event."
+    )
+    scope: Literal["this", "future", "all"] = Field(description=SCOPE_DESCRIPTION)
+    original_start: str = Field(default="", description=ORIGINAL_START_DESCRIPTION)
+    confirm: bool = Field(default=False, description=CONFIRM_DESCRIPTION)
+
+
+class RespondToInvitationParams(BaseModel):
+    event_id: uuid_mod.UUID = Field(
+        description="UUID of the event the user was invited to."
+    )
+    response: Literal["accepted", "declined"] = Field(
+        description="The user's answer to the invitation."
+    )
+    confirm: bool = Field(default=False, description=CONFIRM_DESCRIPTION)
+
+
+class CreatePollParams(BaseModel):
+    title: str = Field(max_length=255, description="What the poll is about.")
+    slots: list[str] = Field(
+        description="The candidate start datetimes in ISO 8601 (e.g. "
+        "2026-07-05T14:00), 2 to 20 of them. Assumed to be in the user's "
+        "timezone if no offset is given."
+    )
+    duration_minutes: int = Field(
+        default=60, description="How long each candidate slot lasts (default 60)."
+    )
+    description: str = Field(default="", description="Optional extra context.")
+    invitees: list[str] = Field(
+        default_factory=list,
+        description="Exact usernames to invite to vote. Optional; the poll can "
+        "also be shared by link afterwards.",
+    )
+
+
+class GetPollResultsParams(BaseModel):
+    poll_id: uuid_mod.UUID = Field(
+        description="UUID of the poll, as returned by search_events or create_poll."
+    )
+
+
+def _writable_event(user, event_id):
+    """Return ``(event, error)`` for an event *user* is allowed to write.
+
+    Exactly one side is set. Reads go through ``visible_events_q`` so an
+    event the user cannot see is indistinguishable from one that does not
+    exist, and the write check refuses events on external calendars — an
+    edit there is reverted by the next feed sync, after the tool has already
+    told the user it worked.
+    """
+    from workspace.calendar.models import Event
+    from workspace.calendar.queries import visible_events_q
+    from workspace.calendar.services.event_scope import EventScopeError, assert_writable
+
+    event = (
+        Event.objects.filter(visible_events_q(user), uuid=event_id)
+        .select_related("calendar")
+        .first()
+    )
+    if event is None:
+        return None, "Error: no event with that id, or you cannot see it."
+    try:
+        assert_writable(event, user)
+    except EventScopeError as exc:
+        return None, f"Error: {exc.detail}"
+    return event, None
+
+
+def _resolve_occurrence(event, scope, raw, user_tz):
+    """Return ``(original_start, error)`` for a scoped edit of *event*.
+
+    ``None`` with no error means the scope does not need one (a whole-series
+    edit, or a non-recurring event where scope is moot).
+    """
+    from datetime import timedelta
+
+    from workspace.calendar.recurrence import _build_rrule
+
+    if scope == "all" or not event.is_recurring:
+        return None, None
+    if not raw.strip():
+        return None, (
+            f"Error: original_start is required for scope={scope}. Take it from "
+            "the occurrence's original_start in list_upcoming_events."
+        )
+    occurrence = parse_local_datetime(raw.strip(), user_tz)
+    if occurrence is None:
+        return None, (
+            f'Error: could not parse original_start "{raw}". '
+            "Use ISO format like 2026-07-05T14:00"
+        )
+    # An instant that is not on the series grid would materialize an
+    # exception nothing ever matches: the write succeeds and changes nothing
+    # the user can see.
+    window_end = occurrence + timedelta(seconds=1)
+    if not any(
+        occ == occurrence for occ in _build_rrule(event, occurrence, window_end)
+    ):
+        return None, (
+            f"Error: {occurrence.isoformat()} is not an occurrence of this series. "
+            "Take original_start from list_upcoming_events rather than computing it."
+        )
+    return occurrence, None
+
+
+def _resolve_usernames(names):
+    """Return ``(user_ids, error)`` for a list of exact usernames.
+
+    An unknown name is reported rather than dropped: silently inviting four
+    people out of five is worse than inviting nobody.
+    """
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
+
+    wanted = [n.strip() for n in names if n.strip()]
+    if not wanted:
+        return [], None
+
+    User = get_user_model()
+    lookup = Q()
+    for name in wanted:
+        lookup |= Q(username__iexact=name)
+    found = {
+        u.username.lower(): u.id for u in User.objects.filter(lookup, is_active=True)
+    }
+    unknown = sorted({n for n in wanted if n.lower() not in found})
+    if unknown:
+        return None, (
+            f"Error: no active user named {', '.join(unknown)}. "
+            "Use search_users to find the exact username."
+        )
+    return sorted({found[n.lower()] for n in wanted}), None
+
+
+def _describe_scope(event, scope):
+    """Human phrasing of what a scoped write will touch."""
+    if not event.is_recurring:
+        return ""
+    return {
+        "this": " (this occurrence only)",
+        "future": " (this occurrence and all later ones)",
+        "all": " (the whole recurring series)",
+    }[scope]
 
 
 class CalendarToolProvider(ToolProvider):
@@ -126,8 +335,6 @@ scheduling polls."""
     def check_availability(self, args, user, bot, conversation_id, context):
         """Check whether the user is available (free) during a given time range. \
 Call this when the user asks if they are free, available, or have any events during a specific period."""
-        from datetime import datetime
-
         from django.db.models import Q
 
         from workspace.calendar.models import Event
@@ -137,19 +344,12 @@ Call this when the user asks if they are free, available, or have any events dur
 
         user_tz = get_user_timezone(user)
 
-        try:
-            start = datetime.fromisoformat(args.start.strip())
-        except ValueError:
+        start = parse_local_datetime(args.start.strip(), user_tz)
+        if start is None:
             return f'Error: could not parse start datetime "{args.start}". Use ISO format like 2026-03-21T09:00'
-        try:
-            end = datetime.fromisoformat(args.end.strip())
-        except ValueError:
+        end = parse_local_datetime(args.end.strip(), user_tz)
+        if end is None:
             return f'Error: could not parse end datetime "{args.end}". Use ISO format like 2026-03-21T10:00'
-
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=user_tz)
-        if end.tzinfo is None:
-            end = end.replace(tzinfo=user_tz)
 
         if end <= start:
             return "Error: end must be after start"
@@ -301,7 +501,9 @@ or when the user asks which calendars they have."""
         """List the user's upcoming events, including recurring occurrences. \
 Call this when the user asks what is coming up, what they have this week, or \
 about their next events. For a keyword lookup use search_events; to check \
-whether a specific time range is free use check_availability."""
+whether a specific time range is free use check_availability. Each entry \
+carries the event_id (and, for a recurring occurrence, its original_start) \
+that update_event and cancel_event take."""
         from datetime import timedelta
 
         from dateutil.parser import parse as parse_dt
@@ -329,16 +531,22 @@ whether a specific time range is free use check_availability."""
                 continue
             start_local = start_dt.astimezone(user_tz)
             end_local = parse_dt(e["end"]).astimezone(user_tz) if e.get("end") else None
-            results.append(
-                {
-                    "title": e["title"],
-                    "start": start_local.strftime("%Y-%m-%d %H:%M"),
-                    "end": end_local.strftime("%Y-%m-%d %H:%M") if end_local else "",
-                    "all_day": e["all_day"],
-                    "location": e.get("location", ""),
-                    "calendar": cal_names.get(e.get("calendar_id"), ""),
-                }
-            )
+            entry = {
+                # A virtual occurrence's own uuid is a synthetic
+                # "<master>:<start>" pair no endpoint accepts; the master is
+                # what the edit tools address.
+                "event_id": e.get("master_event_id") or e["uuid"],
+                "title": e["title"],
+                "start": start_local.strftime("%Y-%m-%d %H:%M"),
+                "end": end_local.strftime("%Y-%m-%d %H:%M") if end_local else "",
+                "all_day": e["all_day"],
+                "location": e.get("location", ""),
+                "calendar": cal_names.get(e.get("calendar_id"), ""),
+            }
+            if e.get("is_recurring"):
+                entry["recurring"] = True
+                entry["original_start"] = e.get("original_start") or e["start"]
+            results.append(entry)
 
         if not results:
             return f"No events in the next {days_ahead} day(s)."
@@ -356,8 +564,6 @@ whether a specific time range is free use check_availability."""
 Call this when the user asks to add, create, schedule, or book an event, \
 meeting, or appointment. Creates a single (non-recurring) event. If the user \
 names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
-        from datetime import datetime
-
         from django.utils import timezone as dj_tz
 
         from workspace.calendar.models import Calendar, Event
@@ -370,27 +576,21 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
 
         user_tz = get_user_timezone(user)
 
-        try:
-            start = datetime.fromisoformat(args.start.strip())
-        except ValueError:
+        start = parse_local_datetime(args.start.strip(), user_tz)
+        if start is None:
             return (
                 f'Error: could not parse start datetime "{args.start}". '
                 "Use ISO format like 2026-07-05T14:00"
             )
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=user_tz)
 
         end = None
         if args.end.strip():
-            try:
-                end = datetime.fromisoformat(args.end.strip())
-            except ValueError:
+            end = parse_local_datetime(args.end.strip(), user_tz)
+            if end is None:
                 return (
                     f'Error: could not parse end datetime "{args.end}". '
                     "Use ISO format like 2026-07-05T15:00"
                 )
-            if end.tzinfo is None:
-                end = end.replace(tzinfo=user_tz)
             if end <= start:
                 return "Error: end must be after start"
 
@@ -437,3 +637,403 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
             f'Created event "{title}" in calendar "{calendar.name}" '
             f"on {start_local.strftime('%Y-%m-%d %H:%M')} (id: {event.uuid})."
         )
+
+    @tool(
+        badge_icon="✏️",
+        badge_label="Updated event",
+        badge_running_label="Updating event",
+        detail_key="title",
+        params=UpdateEventParams,
+    )
+    def update_event(self, args, user, bot, conversation_id, context):
+        """Change an existing event: its title, time, location, description or \
+guest list. Call this when the user wants to move, rename, re-locate or re-staff \
+something already in their calendar — never re-create the event with create_event, \
+which leaves the old one behind. You must pass `scope`; on a recurring event ask \
+the user whether they mean this occurrence, this one and the following, or the \
+whole series before choosing. Only the owner can edit, and events from an external \
+(subscribed ICS) calendar cannot be edited at all."""
+        from workspace.ai.services.confirmation import request_confirmation
+        from workspace.calendar.services import event_scope
+        from workspace.users.services.settings import get_user_timezone
+
+        event, err = _writable_event(user, args.event_id)
+        if err:
+            return err
+
+        user_tz = get_user_timezone(user)
+        original_start, err = _resolve_occurrence(
+            event, args.scope, args.original_start, user_tz
+        )
+        if err:
+            return err
+
+        data = {}
+        if args.title.strip():
+            data["title"] = args.title.strip()
+        if args.start.strip():
+            start = parse_local_datetime(args.start.strip(), user_tz)
+            if start is None:
+                return (
+                    f'Error: could not parse start datetime "{args.start}". '
+                    "Use ISO format like 2026-07-05T14:00"
+                )
+            data["start"] = start
+        if args.end.strip():
+            if args.end.strip().lower() == CLEAR:
+                data["end"] = None
+            else:
+                end = parse_local_datetime(args.end.strip(), user_tz)
+                if end is None:
+                    return (
+                        f'Error: could not parse end datetime "{args.end}". '
+                        "Use ISO format like 2026-07-05T15:00"
+                    )
+                data["end"] = end
+        if args.location.strip():
+            data["location"] = (
+                "" if args.location.strip().lower() == CLEAR else args.location.strip()
+            )
+        if args.description.strip():
+            data["description"] = (
+                ""
+                if args.description.strip().lower() == CLEAR
+                else args.description.strip()
+            )
+        if args.attendees:
+            if [a.strip().lower() for a in args.attendees] == [CLEAR]:
+                data["member_ids"] = []
+            else:
+                member_ids, err = _resolve_usernames(args.attendees)
+                if err:
+                    return err
+                data["member_ids"] = member_ids
+
+        if not data:
+            return "Error: nothing to change — pass at least one field to update."
+
+        # The new end must beat the new start, and either side may be the one
+        # already stored. A scoped edit writes a row anchored on
+        # original_start, not on the master's own start, and rebuilds its end
+        # from the series duration — so on that path the master's stored
+        # start and end both say nothing about the row being written.
+        new_start = data.get("start", original_start or event.start)
+        if "end" in data:
+            new_end = data["end"]
+        elif args.scope == "all" or not event.is_recurring:
+            new_end = event.end
+        else:
+            new_end = None
+        if new_end and new_start and new_end <= new_start:
+            return "Error: end must be after start"
+
+        # A guest-list change is externally visible whether or not the event
+        # recurs: sync_members notifies everyone added and everyone removed,
+        # and no confirmation afterwards un-sends those.
+        touches_guests = "member_ids" in data
+        if (event.is_recurring or touches_guests) and not args.confirm:
+            return request_confirmation(
+                context,
+                f'Update "{event.title}"{_describe_scope(event, args.scope)}?',
+            )
+
+        try:
+            written = event_scope.update_event(
+                event, data, user, scope=args.scope, original_start=original_start
+            )
+        except event_scope.EventScopeError as exc:
+            return f"Error: {exc.detail}"
+
+        logger.info(
+            "AI updated event %s for %s (scope=%s)",
+            scrub(written.title),
+            scrub(user.username),
+            args.scope,
+        )
+        start_local = written.start.astimezone(user_tz)
+        return (
+            f'Updated "{written.title}"{_describe_scope(event, args.scope)} — '
+            f"now on {start_local.strftime('%Y-%m-%d %H:%M')} (id: {written.uuid})."
+        )
+
+    @tool(
+        badge_icon="🗑️",
+        badge_label="Cancelled event",
+        badge_running_label="Cancelling event",
+        params=CancelEventParams,
+    )
+    def cancel_event(self, args, user, bot, conversation_id, context):
+        """Cancel an event: remove it from the calendar and tell the guests. \
+Call this when the user says a meeting is off, cancelled, or should be deleted. \
+You must pass `scope`; on a recurring event ask the user whether they mean to skip \
+this one occurrence, end the series from here on, or delete it entirely — deleting \
+a whole weekly meeting when they wanted to skip one Monday cannot be undone. Only \
+the owner can cancel, and events from an external (subscribed ICS) calendar cannot \
+be cancelled at all."""
+        from workspace.ai.services.confirmation import request_confirmation
+        from workspace.calendar.services import event_scope
+        from workspace.users.services.settings import get_user_timezone
+
+        event, err = _writable_event(user, args.event_id)
+        if err:
+            return err
+
+        original_start, err = _resolve_occurrence(
+            event, args.scope, args.original_start, get_user_timezone(user)
+        )
+        if err:
+            return err
+
+        if not args.confirm:
+            return request_confirmation(
+                context,
+                f'Cancel "{event.title}"{_describe_scope(event, args.scope)}?',
+            )
+
+        title = event.title
+        try:
+            event_scope.cancel_event(
+                event, user, scope=args.scope, original_start=original_start
+            )
+        except event_scope.EventScopeError as exc:
+            return f"Error: {exc.detail}"
+
+        logger.info(
+            "AI cancelled event %s for %s (scope=%s)",
+            scrub(title),
+            scrub(user.username),
+            args.scope,
+        )
+        if args.scope == "this" and original_start:
+            return f'Cancelled the occurrence of "{title}" on {original_start.date()}.'
+        if args.scope == "future" and original_start:
+            return f'Ended the "{title}" series from {original_start.date()} onwards.'
+        return f'Cancelled "{title}". Any guests have been notified.'
+
+    @tool(
+        badge_icon="✉️",
+        badge_label="Answered invitation",
+        badge_running_label="Answering invitation",
+        params=RespondToInvitationParams,
+    )
+    def respond_to_invitation(self, args, user, bot, conversation_id, context):
+        """Accept or decline an invitation the user has received. Call this when \
+the user says yes or no to a meeting someone else organised. The answer leaves the \
+workspace — the organiser is notified, and for an invitation that arrived by email \
+an iCalendar reply is sent back to them — so it always needs the user's explicit \
+confirmation first."""
+        from workspace.ai.services.confirmation import request_confirmation
+        from workspace.calendar.models import Event
+        from workspace.calendar.queries import visible_events_q
+        from workspace.calendar.services import invitations
+
+        event = Event.objects.filter(visible_events_q(user), uuid=args.event_id).first()
+        if event is None:
+            return "Error: no event with that id, or you cannot see it."
+
+        verb = "Accept" if args.response == "accepted" else "Decline"
+        if not args.confirm:
+            return request_confirmation(
+                context,
+                f'{verb} the invitation to "{event.title}"? '
+                "The organiser will be told.",
+            )
+
+        try:
+            invitations.respond_to_invitation(event.uuid, user, args.response)
+        except invitations.NotInvitedError:
+            return f'Error: you are not on the guest list of "{event.title}".'
+
+        logger.info(
+            "AI answered invitation %s as %s for %s",
+            scrub(event.title),
+            args.response,
+            scrub(user.username),
+        )
+        return f'Invitation to "{event.title}" {args.response}. The organiser was notified.'
+
+    @tool(
+        badge_icon="🗳️",
+        badge_label="Created poll",
+        badge_running_label="Creating poll",
+        detail_key="title",
+        params=CreatePollParams,
+    )
+    def create_poll(self, args, user, bot, conversation_id, context):
+        """Create a scheduling poll so invitees can vote on which of several \
+candidate slots suits them. Call this when the user wants to FIND a time rather \
+than book one — "when can we all meet", "propose a few slots to the team". Use \
+check_availability first to pick candidate slots the user is actually free for. \
+Once the votes are in, get_poll_results reports the winner and the user turns it \
+into an event."""
+        from datetime import timedelta
+
+        from django.contrib.auth import get_user_model
+        from django.db import transaction
+        from django.utils import timezone as dj_tz
+
+        from workspace.calendar.models import Poll, PollInvitee, PollSlot
+        from workspace.notifications.services.notifications import notify_many
+        from workspace.users.services.settings import get_user_timezone
+
+        title = args.title.strip()
+        if not title:
+            return "Error: title is required"
+
+        user_tz = get_user_timezone(user)
+        duration = max(1, min(args.duration_minutes, 24 * 60))
+
+        starts = []
+        for raw in args.slots:
+            parsed = parse_local_datetime(raw.strip(), user_tz)
+            if parsed is None:
+                return (
+                    f'Error: could not parse slot "{raw}". '
+                    "Use ISO format like 2026-07-05T14:00"
+                )
+            starts.append(parsed)
+
+        starts = sorted(set(starts))
+        if len(starts) < 2:
+            return "Error: a poll needs at least 2 distinct candidate slots."
+        if len(starts) > 20:
+            return "Error: a poll takes at most 20 candidate slots."
+        if starts[0] <= dj_tz.now():
+            return "Error: candidate slots must be in the future"
+
+        invitee_ids, err = _resolve_usernames(args.invitees)
+        if err:
+            return err
+        invitees = [uid for uid in invitee_ids if uid != user.id]
+
+        with transaction.atomic():
+            poll = Poll.objects.create(
+                title=title,
+                description=args.description.strip(),
+                created_by=user,
+            )
+            PollSlot.objects.bulk_create(
+                [
+                    PollSlot(
+                        poll=poll,
+                        start=start,
+                        end=start + timedelta(minutes=duration),
+                        position=i,
+                    )
+                    for i, start in enumerate(starts)
+                ]
+            )
+            if invitees:
+                PollInvitee.objects.bulk_create(
+                    [PollInvitee(poll=poll, user_id=uid) for uid in invitees],
+                    ignore_conflicts=True,
+                )
+
+        if invitees:
+            recipients = list(get_user_model().objects.filter(id__in=invitees))
+            notify_many(
+                recipients=recipients,
+                origin="calendar",
+                title=f'Poll invitation: "{poll.title}"',
+                body=f"{user.username} invited you to vote on a poll.",
+                url=f"/calendar?poll={poll.pk}",
+                actor=user,
+                source=poll,
+            )
+
+        logger.info(
+            "AI created poll %s with %d slots for %s",
+            scrub(title),
+            len(starts),
+            scrub(user.username),
+        )
+        listed = ", ".join(
+            s.astimezone(user_tz).strftime("%Y-%m-%d %H:%M") for s in starts
+        )
+        return (
+            f'Created poll "{title}" with {len(starts)} slots ({listed}) '
+            f"(id: {poll.uuid})."
+        )
+
+    @tool(
+        badge_icon="📊",
+        badge_label="Read poll results",
+        badge_running_label="Reading poll results",
+        params=GetPollResultsParams,
+        concurrent=True,
+    )
+    def get_poll_results(self, args, user, bot, conversation_id, context):
+        """Report where a scheduling poll stands: every candidate slot with who \
+voted yes, maybe or no, and which slot is currently winning. Call this when the \
+user asks how a poll is going, who has answered, or which slot works best."""
+        from django.db.models import Count, Q
+
+        from workspace.calendar.models import Poll, PollInvitee, PollSlot, PollVote
+        from workspace.users.services.settings import get_user_timezone
+
+        poll = (
+            Poll.objects.filter(uuid=args.poll_id).select_related("created_by").first()
+        )
+        if poll is None:
+            return "Error: no poll with that id."
+        is_participant = (
+            poll.created_by_id == user.id
+            or PollInvitee.objects.filter(poll=poll, user=user).exists()
+            or PollVote.objects.filter(slot__poll=poll, user=user).exists()
+        )
+        if not is_participant:
+            return "Error: no poll with that id, or you have no access to it."
+
+        user_tz = get_user_timezone(user)
+        slots = (
+            PollSlot.objects.filter(poll=poll)
+            .annotate(
+                yes_count=Count("votes", filter=Q(votes__choice="yes")),
+                maybe_count=Count("votes", filter=Q(votes__choice="maybe")),
+                no_count=Count("votes", filter=Q(votes__choice="no")),
+            )
+            .order_by("position", "start")
+        )
+
+        voters_by_slot = {}
+        for vote in PollVote.objects.filter(slot__poll=poll).select_related("user"):
+            who = vote.user.username if vote.user else (vote.guest_name or "guest")
+            voters_by_slot.setdefault(vote.slot_id, {}).setdefault(
+                vote.choice, []
+            ).append(who)
+
+        entries = []
+        for slot in slots:
+            voters = voters_by_slot.get(slot.uuid, {})
+            entries.append(
+                {
+                    "start": slot.start.astimezone(user_tz).strftime("%Y-%m-%d %H:%M"),
+                    "end": slot.end.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
+                    if slot.end
+                    else "",
+                    "yes": slot.yes_count,
+                    "maybe": slot.maybe_count,
+                    "no": slot.no_count,
+                    "voters": voters,
+                }
+            )
+
+        payload = {
+            "title": poll.title,
+            "status": poll.status,
+            "created_by": poll.created_by.username,
+            "invitees": sorted(
+                PollInvitee.objects.filter(poll=poll).values_list(
+                    "user__username", flat=True
+                )
+            ),
+            "slots": entries,
+        }
+        # Ranked the same way the UI does: a maybe is worth less than a yes
+        # but still beats silence, so it breaks ties instead of being ignored.
+        best = max(entries, key=lambda e: (e["yes"], e["maybe"]), default=None)
+        if best and (best["yes"] or best["maybe"]):
+            payload["leading_slot"] = best["start"]
+        if not any(e["yes"] or e["maybe"] or e["no"] for e in entries):
+            payload["note"] = "Nobody has voted yet."
+        return json.dumps(payload, ensure_ascii=False)

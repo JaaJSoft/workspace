@@ -1,6 +1,13 @@
 from django.db.models import Q
 
-from .models import Vault, VaultFolder, VaultKeyWrap, VaultRole, VaultTag
+from .models import (
+    AccountIdentity,
+    Vault,
+    VaultFolder,
+    VaultKeyWrap,
+    VaultRole,
+    VaultTag,
+)
 
 
 def user_vault_ids(user):
@@ -61,3 +68,15 @@ def visible_tags(user, vault):
     if get_vault_role(user, vault) is None:
         return VaultTag.objects.none()
     return VaultTag.objects.filter(vault=vault)
+
+
+def active_identity(user):
+    """The user's finished cryptographic identity, or None.
+
+    A pending row does not count: ``init`` created it and the browser never
+    came back with the sealed private keys, so the account can seal nothing
+    and open nothing.
+    """
+    return AccountIdentity.objects.filter(
+        user=user, state=AccountIdentity.State.ACTIVE
+    ).first()

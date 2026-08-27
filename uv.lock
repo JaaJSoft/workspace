@@ -2678,6 +2678,7 @@ source = { editable = "." }
 dependencies = [
     { name = "authlib" },
     { name = "cairosvg" },
+    { name = "cbor2" },
     { name = "celery" },
     { name = "cryptography" },
     { name = "dj-database-url" },
@@ -2722,7 +2723,6 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "argon2-cffi" },
-    { name = "cbor2" },
     { name = "coverage" },
     { name = "django-debug-toolbar" },
     { name = "djlint" },
@@ -2736,6 +2736,7 @@ dev = [
 requires-dist = [
     { name = "authlib", specifier = ">=1.7.2" },
     { name = "cairosvg", specifier = ">=2.9.0" },
+    { name = "cbor2", specifier = ">=5.7.0" },
     { name = "celery", specifier = ">=5.6.2" },
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "dj-database-url", specifier = ">=2.3.0" },
@@ -2780,7 +2781,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
-    { name = "cbor2", specifier = ">=5.7.0" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.15.4" },
     { name = "django-debug-toolbar", specifier = "==7.1.1" },
     { name = "djlint", specifier = ">=1.44.2" },

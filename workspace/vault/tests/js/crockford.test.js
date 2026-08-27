@@ -4,8 +4,11 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
+const path = require('node:path');
 const vm = require('node:vm');
 const { loadScript } = require('../../../common/tests/js/loader');
+
+const REPO_ROOT = path.join(__dirname, '..', '..', '..', '..');
 
 const ctx = loadScript(
   'workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js',
@@ -17,15 +20,18 @@ const ctx = loadScript(
     atob: globalThis.atob,
   }
 );
-const V = ctx.VaultCrypto;
+const V = ctx.vaultCrypto;
 const VECTORS = JSON.parse(
-  fs.readFileSync('workspace/vault/tests/crypto_vectors.json', 'utf8')
+  fs.readFileSync(
+    path.join(REPO_ROOT, 'workspace', 'vault', 'tests', 'crypto_vectors.json'),
+    'utf8'
+  )
 );
 
 // Decoded inside the vm: a Uint8Array built out here carries this realm's
 // prototypes, and the bundle is entitled to branch on them.
 const inVm = (b64) =>
-  vm.runInContext(`VaultCrypto.fromBase64Url(${JSON.stringify(b64)})`, ctx);
+  vm.runInContext(`vaultCrypto.fromBase64Url(${JSON.stringify(b64)})`, ctx);
 
 test('recovery secret vectors replay exactly', () => {
   for (const vector of VECTORS.recovery_secrets) {

@@ -4,25 +4,14 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.vault.models import AccountIdentity
-
-
-def _has_active_identity(user):
-    """Whether *user* finished onboarding.
-
-    A pending row does not count: ``init`` created it and the browser never
-    came back with the sealed private keys, so the account can open nothing.
-    """
-    return AccountIdentity.objects.filter(
-        user=user, state=AccountIdentity.State.ACTIVE
-    ).exists()
+from workspace.vault.queries import active_identity
 
 
 @csp(settings.VAULT_CSP)
 @login_required
 @ensure_csrf_cookie
 def index(request):
-    if not _has_active_identity(request.user):
+    if active_identity(request.user) is None:
         return redirect("vault_ui:onboarding")
     return render(request, "vault/ui/index.html")
 
@@ -33,6 +22,6 @@ def index(request):
 def onboarding(request):
     # Walking it twice would mint a new salt, and the sealed private keys are
     # the only path back to every VaultKeyWrap the account holds.
-    if _has_active_identity(request.user):
+    if active_identity(request.user) is not None:
         return redirect("vault_ui:index")
     return render(request, "vault/ui/onboarding.html")

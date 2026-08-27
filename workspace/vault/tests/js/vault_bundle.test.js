@@ -35,9 +35,9 @@ test('the bundle is an IIFE, not ESM', () => {
   assert.doesNotMatch(src, /^\s*(import|export)[\s{*]/m, 'ESM import/export declaration found');
 });
 
-test('the bundle exposes window.VaultCrypto', () => {
+test('the bundle exposes window.vaultCrypto', () => {
   const src = fs.readFileSync(BUNDLE, 'utf8');
-  assert.match(src, /window\.VaultCrypto\s*=/, 'window.VaultCrypto is never assigned');
+  assert.match(src, /window\.vaultCrypto\s*=/, 'window.vaultCrypto is never assigned');
 });
 
 test('the bundle stays within the unlock-path size budget', () => {
@@ -78,7 +78,7 @@ test('the on-demand bundle exists, is an IIFE and exposes its global', () => {
   assert.ok(fs.existsSync(ONBOARDING), `missing artifact: ${ONBOARDING}`);
   const src = fs.readFileSync(ONBOARDING, 'utf8');
   assert.ok(src.trimStart().startsWith('(()=>{'), 'bundle does not open with the esbuild IIFE wrapper');
-  assert.match(src, /window\.VaultOnboarding\s*=/, 'window.VaultOnboarding is never assigned');
+  assert.match(src, /window\.vaultOnboardingTools\s*=/, 'window.vaultOnboardingTools is never assigned');
 });
 
 test('the PDF generator and the strength estimator stay off the main bundle', () => {
@@ -102,7 +102,7 @@ test('randomBytes names an insecure context, which is what a browser produces', 
     btoa: globalThis.btoa,
     atob: globalThis.atob,
   });
-  assert.throws(() => insecure.VaultCrypto.randomBytes(32), /secure context/);
+  assert.throws(() => insecure.vaultCrypto.randomBytes(32), /secure context/);
 });
 
 test('randomBytes reports a missing CSPRNG separately', () => {
@@ -113,7 +113,7 @@ test('randomBytes reports a missing CSPRNG separately', () => {
     btoa: globalThis.btoa,
     atob: globalThis.atob,
   });
-  assert.throws(() => deprived.VaultCrypto.randomBytes(32), /no CSPRNG/);
+  assert.throws(() => deprived.vaultCrypto.randomBytes(32), /no CSPRNG/);
 });
 
 test('randomBytes returns the length asked for, and draws each time', () => {
@@ -124,7 +124,7 @@ test('randomBytes returns the length asked for, and draws each time', () => {
     btoa: globalThis.btoa,
     atob: globalThis.atob,
   });
-  const V = ctx.VaultCrypto;
+  const V = ctx.vaultCrypto;
   assert.equal(V.randomBytes(32).length, 32);
   assert.notEqual(V.toBase64Url(V.randomBytes(32)), V.toBase64Url(V.randomBytes(32)));
 });

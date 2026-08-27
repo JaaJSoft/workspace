@@ -390,7 +390,7 @@ Task-level queries filter with `project_id__in=user_project_ids(user)` - see `ta
 ```python
 from workspace.vault.models import VaultEntry
 from workspace.vault.queries import (
-    accessible_entries_q, get_vault_role, user_vault_ids, visible_folders, visible_tags,
+    accessible_entries_q, active_identity, get_vault_role, user_vault_ids, visible_folders, visible_tags,
 )
 
 vault_ids = user_vault_ids(user)              # vaults the user can open
@@ -398,9 +398,12 @@ role = get_vault_role(user, vault)            # 'owner' | 'member' | None
 qs = VaultEntry.objects.filter(accessible_entries_q(user))  # does NOT filter deleted_at
 folders = visible_folders(user, vault)        # empty queryset when the vault is out of reach
 tags = visible_tags(user, vault)              # empty queryset when the vault is out of reach
+identity = active_identity(user)              # the user's finished AccountIdentity, or None
 ```
 
 `accessible_entries_q` does not filter `deleted_at` - the trash is a legitimate view, and the caller decides.
+
+`active_identity` excludes a pending `AccountIdentity`: `init` created the row but the browser never came back with the sealed private keys, so the account can seal nothing and open nothing yet.
 
 ### User Settings - always go through `workspace.users.services.settings`
 
@@ -562,6 +565,16 @@ except (ValueError, TypeError) as exc: # ✅ parentheses still MANDATORY with `a
 **Never rewrite these into `except (ValueError, TypeError):`.** If the code raises `SyntaxError` at import, you are running Python <= 3.13 (an old venv, a sandbox): that is an environment problem, fix the interpreter, not the code. A blanket parenthesization "fix" touches 40+ files of pure noise and has already been reverted once.
 
 ## Frontend Conventions
+
+### `const`/`let`, never `var` - and camelCase for every global a script publishes
+
+Production JS files are classic scripts, not ES modules, but that is a loading concern - it says nothing about how a binding is declared. Use `const` by default and `let` for what is genuinely reassigned; `var` is not the house style anywhere in `workspace/*/ui/static/`.
+
+The one thing `var` buys is function-scope hoisting, and code that leans on it is code to rewrite rather than preserve: a `var` declared inside a `try` and read from the matching `catch` works by accident. **Declare it above the `try` as `let`** - the catch then reads a binding someone can see, and `undefined` means "that attempt never got that far" on purpose instead of by hoisting.
+
+Globals a script publishes are camelCase, matching the rest of the codebase (`window.vaultApp`, `window.folderNav`, `window.pollUtils`) - whether the global is an Alpine component factory or a plain helper namespace. SCREAMING_SNAKE_CASE is for constants (`window.TAG_CHIP_COLORS`), and PascalCase is reserved for what is called with `new` or reads as a constructor (`VaultApiError`).
+
+**The node:vm test caveat:** top-level `const`/`let` are not reachable as properties of the context the loader returns (see *JS unit tests* above), so a test asserting on a module-level constant needs it published on `window`. Two scripts loaded into the same context still see each other's top-level `const` - they share one global lexical scope - so cross-file constants do not need `var`.
 
 ### Drag & drop - the source must declare an `effectAllowed` containing the target's `dropEffect`
 

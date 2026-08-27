@@ -3,10 +3,16 @@
 // skipped and that the strength floor counts what the norm says it counts.
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 function component(extra = {}) {
-  const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/onboarding.js', {
+  // session.js defines VAULT_SECRET_STORAGE_KEY, the constant
+  // rememberOnThisDevice() writes and reads - both pages load it in that
+  // order in the browser, so the test does too.
+  const ctx = loadScripts([
+    'workspace/vault/ui/static/vault/ui/js/session.js',
+    'workspace/vault/ui/static/vault/ui/js/onboarding.js',
+  ], {
     crypto: globalThis.crypto,
     TextEncoder: globalThis.TextEncoder,
     document: { cookie: '', createElement: () => ({ click() {} }) },
@@ -15,6 +21,11 @@ function component(extra = {}) {
     fetch: async () => ({ ok: true, status: 201, json: async () => ({}) }),
     setTimeout: (fn) => fn(),
     addEventListener: () => {},
+    localStorage: { setItem: () => {}, removeItem: () => {} },
+    // finish() mints the first vault's UUID itself, so every test that
+    // reaches it needs this much of the crypto module even when it stubs the
+    // builder that would otherwise have used it.
+    vaultCrypto: { uuidV7: () => 'first-vault-uuid' },
     ...extra,
   });
   return ctx.vaultOnboarding();
@@ -137,6 +148,7 @@ test('the password and the secret bytes are gone once the kit is shown', () => {
 // around them - which is where a lost response turns into a vault nobody can
 // open.
 const CRYPTO_STUB = {
+  uuidV7: () => 'first-vault-uuid',
   KDF_HKDF_SHA256: 1,
   ARGON2_PARAMS: {},
   PUBKEY_ALG_X25519: 1,
@@ -159,6 +171,8 @@ const CRYPTO_STUB = {
   seal: async () => new Uint8Array(8),
   signBytes: async () => new Uint8Array(64),
   encodePublicKey: () => new Uint8Array(33),
+  importSigner: async () => ({ sign: async () => new Uint8Array(64) }),
+  decodePublicKey: () => new Uint8Array(32),
 };
 
 const SUBTLE_STUB = {
@@ -169,7 +183,7 @@ const SUBTLE_STUB = {
 function sealing({ responses, ...extra } = {}) {
   const calls = [];
   const app = component({
-    VaultCrypto: CRYPTO_STUB,
+    vaultCrypto: CRYPTO_STUB,
     crypto: { subtle: SUBTLE_STUB, getRandomValues: (a) => a },
     fetch: async (url) => {
       calls.push(url);
@@ -200,6 +214,10 @@ test('a sealed account reaches the kit step', async () => {
   assert.equal(app.step, 3);
   assert.equal(app.error, '');
   assert.ok(app.secretText);
+  // The first vault is created on this same page, right after the kit - it
+  // needs a signer and the account's own key-exchange public key.
+  assert.ok(app.vaultSigner);
+  assert.ok(app.accountKexPublic);
 });
 
 test('an init the server refuses does not reach the kit step', async () => {
@@ -252,6 +270,12 @@ test('a retry after a lost finalize shows the key rather than stranding it', asy
   assert.equal(app.step, 3);
   assert.equal(app.secretText, secret, 'the key on screen must be the sealed one');
   assert.equal(app.error, '');
+  // The second attempt never generated new keys - it got a 409 from init
+  // before reaching that point - so there is nothing here to build a signer
+  // from, even though the envelope this call confirms is the first
+  // attempt's. finish() is the one that must cope with that gap.
+  assert.equal(app.vaultSigner, null);
+  assert.equal(app.accountKexPublic, null);
 });
 
 test('an envelope sealed by another tab never shows this page key', async () => {
@@ -303,6 +327,10 @@ test('a lost finalize response still shows the key when the account is active', 
   await app.generateAndSeal();
   assert.equal(app.step, 3);
   assert.equal(app.error, '');
+  // This recovery still ran inside the same attempt that drew the keys, so
+  // unlike the cross-attempt retry above, the signer is there to build.
+  assert.ok(app.vaultSigner);
+  assert.ok(app.accountKexPublic);
 });
 
 test('a lost finalize response with nothing committed says so', async () => {
@@ -422,7 +450,7 @@ test('the download anchor is inserted before it is clicked', () => {
     },
     URL: { createObjectURL: () => 'blob:kit', revokeObjectURL: () => {} },
     location: { origin: 'https://workspace.example' },
-    VaultOnboarding: { buildEmergencyKitPdf: () => new Uint8Array(1) },
+    vaultOnboardingTools: { buildEmergencyKitPdf: () => new Uint8Array(1) },
   });
   app.$root = { dataset: { email: 'owner@example.com' } };
   app.secretText = 'SECRET';
@@ -469,7 +497,7 @@ test('a strength estimate that throws says so instead of hanging', async () => {
   // The button is gated on the score, so a rejected estimate left it disabled
   // for good with nothing on screen to explain it.
   const app = component({
-    VaultOnboarding: {
+    vaultOnboardingTools: {
       estimateStrength: async () => {
         throw new Error('zxcvbn dictionaries missing');
       },
@@ -498,7 +526,7 @@ test('the kit download outlives the click that starts it', () => {
       revokeObjectURL: () => events.push('revoke'),
     },
     location: { origin: 'https://workspace.example' },
-    VaultOnboarding: { buildEmergencyKitPdf: () => new Uint8Array(1) },
+    vaultOnboardingTools: { buildEmergencyKitPdf: () => new Uint8Array(1) },
     setTimeout: (fn) => {
       events.push('deferred');
       fn();
@@ -543,4 +571,226 @@ test('leaving the page is guarded until the key is acknowledged', async () => {
 
   app.acknowledged = true;
   assert.equal(prevented(), false, 'the user says they have saved it');
+});
+
+// --- finishing onboarding --------------------------------------------------
+//
+// finish() hands off to the vault screen by navigating there. $root and
+// location are stubbed here so a finish() that never calls
+// window.location.assign fails these tests instead of disappearing into
+// finish()'s own catch - which every test below did, silently, before this
+// file stubbed either.
+function finishing(extra = {}) {
+  const navigated = [];
+  const app = component({
+    location: { assign: (url) => navigated.push(url) },
+    ...extra,
+  });
+  app.$root = { dataset: { vaultUrl: '/vault/' } };
+  // Stands in for what generateAndSeal's success path leaves behind - these
+  // tests exercise finish() on its own, without going through it.
+  app.vaultSigner = { sign: async () => new Uint8Array(1) };
+  app.accountKexPublic = new Uint8Array(32);
+  return { app, navigated };
+}
+
+test('acknowledging the kit creates the first vault', async () => {
+  const created = [];
+  const { app, navigated } = finishing({
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    vaultApi: { createVault: async (body) => { created.push(body); return body; } },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(created.length, 1);
+  assert.deepEqual(navigated, ['/vault/']);
+});
+
+test('the first vault is called Personal', async () => {
+  let name = null;
+  const { app } = finishing({
+    buildVaultCreateRequest: async (session, vaultName) => { name = vaultName; return { uuid: 'v1' }; },
+    vaultApi: { createVault: async (body) => body },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(name, 'Personal');
+});
+
+test('a failed first vault keeps the user on the kit screen', async () => {
+  const { app, navigated } = finishing({
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    vaultApi: { createVault: async () => { throw new Error('refused'); } },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(app.step, 3);
+  assert.match(app.error, /vault could not be created/i);
+  // A refused creation must not send the user anywhere: the kit screen is
+  // the only place that can still show the recovery key.
+  assert.deepEqual(navigated, []);
+});
+
+test('retrying the first vault never touches the account endpoints again', async () => {
+  const posted = [];
+  const { app } = finishing({
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    vaultApi: { createVault: async () => { throw new Error('refused'); } },
+    fetch: async (url) => { posted.push(url); return { ok: true, status: 201, json: async () => ({}) }; },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  await app.finish();
+  // The identity is already active: a retry that re-ran init or finalize
+  // would be refused by the server and would read as a lost account.
+  assert.deepEqual(posted, []);
+  assert.equal(app.step, 3);
+});
+
+test('a retried first vault carries the UUID the first attempt sent', async () => {
+  // The server turns a lost answer into a conflict by matching the UUID the
+  // client minted. A fresh one on the retry describes a different vault, so
+  // the account that lost one answer ends up with two "Personal" vaults.
+  let minted = 0;
+  const seen = [];
+  const { app } = finishing({
+    buildVaultCreateRequest: async (session, name, uuid) => { seen.push(uuid); return { uuid }; },
+    vaultApi: { createVault: async () => { throw new Error('refused'); } },
+    vaultCrypto: { uuidV7: () => 'first-vault-' + ++minted },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  await app.finish();
+  assert.equal(seen.length, 2);
+  assert.ok(seen[0], 'the UUID has to be minted here, not inside the builder');
+  assert.equal(seen[0], seen[1]);
+});
+
+test('a conflict on the first vault means it is already there', async () => {
+  const { app, navigated } = finishing({
+    buildVaultCreateRequest: async (session, name, uuid) => ({ uuid }),
+    vaultApi: {
+      createVault: async () => {
+        const err = new Error('conflict');
+        err.status = 409;
+        throw err;
+      },
+    },
+    vaultCrypto: { uuidV7: () => 'first-vault' },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(app.error, '');
+  assert.deepEqual(navigated, ['/vault/']);
+});
+
+test('the recovery key is not stored unless the box is ticked', async () => {
+  const stored = new Map();
+  const { app } = finishing({
+    localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    vaultApi: { createVault: async () => ({}) },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  app.secretText = 'A'.repeat(53);
+  await app.finish();
+  assert.equal(stored.size, 0);
+});
+
+test('ticking the box stores the key in the spelling the sheet shows', async () => {
+  const stored = new Map();
+  const { app } = finishing({
+    localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    vaultApi: { createVault: async () => ({}) },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  app.remember = true;
+  app.secretText = 'A'.repeat(53);
+  await app.finish();
+  assert.equal(stored.get('vault.secret-key'), app.groupedSecret());
+});
+
+test('with no signer for this identity, finish sends the user to the vault without attempting to create one', async () => {
+  // The lost-response recovery path in generateAndSeal can land here with
+  // vaultSigner still null - a retry that found the account active without
+  // generating new keys of its own. The account is real either way; only
+  // the vault creation this step would normally do is unavailable, and a
+  // retry that can never succeed must not trap the user on this screen.
+  let attempted = false;
+  const { app, navigated } = finishing({
+    buildVaultCreateRequest: async () => { attempted = true; return { uuid: 'v1' }; },
+    vaultApi: { createVault: async () => { attempted = true; return {}; } },
+  });
+  app.vaultSigner = null;
+  app.accountKexPublic = null;
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(attempted, false);
+  assert.deepEqual(navigated, ['/vault/']);
+  assert.equal(app.error, '');
+});
+
+test('with no signer for this identity, the recovery key is still remembered if ticked', async () => {
+  const stored = new Map();
+  const { app } = finishing({
+    localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
+  });
+  app.vaultSigner = null;
+  app.accountKexPublic = null;
+  app.step = 3;
+  app.acknowledged = true;
+  app.remember = true;
+  app.secretText = 'A'.repeat(53);
+  await app.finish();
+  assert.equal(stored.get('vault.secret-key'), app.groupedSecret());
+});
+
+// A throwing localStorage (Safari private mode, a storage policy, an
+// extension) must never be mistaken for a failed vault creation, and must
+// never block the navigation that follows - on either branch of finish().
+const THROWING_STORAGE = {
+  setItem: () => { throw new Error('quota exceeded'); },
+  removeItem: () => { throw new Error('quota exceeded'); },
+};
+
+test('a storage failure does not turn a successful creation into a reported failure', async () => {
+  const created = [];
+  const { app, navigated } = finishing({
+    localStorage: THROWING_STORAGE,
+    buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
+    vaultApi: { createVault: async (body) => { created.push(body); return body; } },
+  });
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(created.length, 1);
+  assert.deepEqual(navigated, ['/vault/']);
+  assert.equal(app.error, '');
+});
+
+test('a storage failure does not block the no-signer path from reaching the vault', async () => {
+  let attempted = false;
+  const { app, navigated } = finishing({
+    localStorage: THROWING_STORAGE,
+    buildVaultCreateRequest: async () => { attempted = true; return { uuid: 'v1' }; },
+    vaultApi: { createVault: async () => { attempted = true; return {}; } },
+  });
+  app.vaultSigner = null;
+  app.accountKexPublic = null;
+  app.step = 3;
+  app.acknowledged = true;
+  await app.finish();
+  assert.equal(attempted, false);
+  assert.deepEqual(navigated, ['/vault/']);
+  assert.equal(app.error, '');
 });

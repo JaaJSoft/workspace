@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_vaults
 
 urlpatterns = [
     path(
@@ -22,5 +22,15 @@ urlpatterns = [
         "api/v1/vault/account/rotate",
         views.AccountRotateView.as_view(),
         name="vault-account-rotate",
+    ),
+    path(
+        "api/v1/vault/vaults",
+        views_vaults.VaultListView.as_view(),
+        name="vault-list",
+    ),
+    path(
+        "api/v1/vault/vaults/<uuid:uuid>",
+        views_vaults.VaultDetailView.as_view(),
+        name="vault-detail",
     ),
 ]

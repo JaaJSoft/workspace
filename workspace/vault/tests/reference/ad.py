@@ -58,6 +58,23 @@ def vault_key_info(vault_uuid: str, recipient_uuid: str) -> bytes:
     return f"v1|vault-key|{_uuid(vault_uuid)}|{_uuid(recipient_uuid)}".encode("ascii")
 
 
+# Closed, like the entry field catalogue and for the same reason: an open list
+# would let a vault field derive an associated data string an entry field can
+# also derive, and a ciphertext could then be moved between the two and still
+# verify.
+VAULT_FIELD_IDS = ("name", "description")
+
+
+def vault_meta_info(vault_uuid: str) -> bytes:
+    return f"v1|vault-meta|{_uuid(vault_uuid)}".encode("ascii")
+
+
+def vault_field_ad(vault_uuid: str, field: str) -> bytes:
+    if field not in VAULT_FIELD_IDS:
+        raise ValueError(f"{field} is not a vault metadata field")
+    return f"v1|vault-field|{_uuid(vault_uuid)}|{field}".encode("ascii")
+
+
 def qualify_field_id(field_id: str) -> str:
     """Return the field_name that goes into the AD for a stored *field_id*.
 

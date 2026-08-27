@@ -7,8 +7,8 @@
 
 // The floor the norm sets: twelve code points after NFC, a zxcvbn score of at
 // least three, and absence from the breach corpus. No composition rules.
-var VAULT_MIN_PASSWORD_LENGTH = 12;
-var VAULT_MIN_PASSWORD_SCORE = 3;
+const VAULT_MIN_PASSWORD_LENGTH = 12;
+const VAULT_MIN_PASSWORD_SCORE = 3;
 
 window.vaultOnboarding = function vaultOnboarding() {
   return {
@@ -23,7 +23,14 @@ window.vaultOnboarding = function vaultOnboarding() {
     secretBytes: null,
     accountUuid: '',
     sentKexPublic: '',
+    vaultSigner: null,
+    accountKexPublic: null,
+    // The first vault's idempotency key, minted on the first attempt and kept
+    // across retries: the server turns a lost answer into a conflict by
+    // matching it, and a fresh one would describe a second vault instead.
+    firstVaultUuid: null,
     acknowledged: false,
+    remember: false,
     leaveGuard: null,
     busy: false,
     error: '',
@@ -95,14 +102,14 @@ window.vaultOnboarding = function vaultOnboarding() {
     },
 
     async evaluateStrength() {
-      var generation = this.generation;
+      const generation = this.generation;
       if (!this.password) {
         this.score = null;
         this.feedback = '';
         return;
       }
       try {
-        var result = await window.VaultOnboarding.estimateStrength(this.password);
+        const result = await window.vaultOnboardingTools.estimateStrength(this.password);
         if (generation !== this.generation) return;
         this.score = result.score;
         this.feedback = (result.feedback && result.feedback.warning) || '';
@@ -120,7 +127,7 @@ window.vaultOnboarding = function vaultOnboarding() {
     // device, and the answer is a list of suffixes we match locally. The
     // password itself never crosses the network.
     async checkBreachCorpus() {
-      var generation = this.generation;
+      const generation = this.generation;
       if (!this.password) {
         this.breachStatus = 'unchecked';
         return;
@@ -130,8 +137,8 @@ window.vaultOnboarding = function vaultOnboarding() {
         // SHA-1 through WebCrypto rather than through the bundle: the corpus
         // is indexed by it, and adding a hash nobody else needs would spend
         // the main bundle's byte budget on one caller.
-        var bytes = new TextEncoder().encode(this.password);
-        var digest = Array.from(
+        const bytes = new TextEncoder().encode(this.password);
+        const digest = Array.from(
           new Uint8Array(await crypto.subtle.digest('SHA-1', bytes))
         )
           .map(function (byte) {
@@ -139,14 +146,14 @@ window.vaultOnboarding = function vaultOnboarding() {
           })
           .join('')
           .toUpperCase();
-        var prefix = digest.slice(0, 5);
-        var suffix = digest.slice(5);
-        var response = await fetch(
+        const prefix = digest.slice(0, 5);
+        const suffix = digest.slice(5);
+        const response = await fetch(
           'https://api.pwnedpasswords.com/range/' + prefix
         );
         if (!response.ok) throw new Error('breach lookup failed');
-        var body = await response.text();
-        var found = body.split('\n').some(function (line) {
+        const body = await response.text();
+        const found = body.split('\n').some(function (line) {
           return line.split(':')[0].trim().toUpperCase() === suffix;
         });
         if (generation !== this.generation) return;
@@ -186,23 +193,127 @@ window.vaultOnboarding = function vaultOnboarding() {
       return (this.secretText.match(/.{1,4}/g) || []).join('-');
     },
 
+    // Written from the kit screen, in the grouped spelling the sheet shows:
+    // crockfordDecode ignores the hyphens and the case, so what is stored is
+    // exactly what the user could retype.
+    //
+    // Failing to remember the device does not mean failing to finish
+    // onboarding - by the time this runs, finish() has either already
+    // created the vault or has nowhere left to send the user but the vault
+    // screen, and a storage throw here must never turn either outcome into
+    // a reported failure or block the navigation that follows it.
+    rememberOnThisDevice() {
+      try {
+        if (this.remember) {
+          localStorage.setItem(VAULT_SECRET_STORAGE_KEY, this.groupedSecret());
+        } else {
+          localStorage.removeItem(VAULT_SECRET_STORAGE_KEY);
+        }
+      } catch (err) {
+        // Best-effort only; nothing to recover, nothing to zero.
+      }
+    },
+
+    // The last step of onboarding and the first vault are one action from the
+    // user's side. Splitting them would leave an account that is set up and
+    // has nowhere to put anything.
+    async finish() {
+      if (!this.canFinish() || this.busy) return;
+      this.busy = true;
+      this.error = '';
+      try {
+        // A user can reach this step through the lost-response recovery path
+        // in generateAndSeal, which only rebuilds the signer when the same
+        // attempt drew the keys - a retry that found the account active
+        // without generating anything holds none. The identity is active
+        // either way: send them to the vault screen, which can still create
+        // one, rather than parking them behind a retry that can never
+        // succeed because there is nothing left here to sign with.
+        if (!this.vaultSigner || !this.accountKexPublic) {
+          this.rememberOnThisDevice();
+          window.location.assign(this.$root.dataset.vaultUrl);
+          return;
+        }
+        // Minted here rather than inside the builder: the builder runs once
+        // per attempt, and a UUID minted there would be a new one each time.
+        if (!this.firstVaultUuid) {
+          this.firstVaultUuid = window.vaultCrypto.uuidV7();
+        }
+        const body = await window.buildVaultCreateRequest(
+          this.vaultSession(), 'Personal', this.firstVaultUuid
+        );
+        await window.vaultApi.createVault(body);
+        this.rememberOnThisDevice();
+        window.location.assign(this.$root.dataset.vaultUrl);
+      } catch (err) {
+        // A conflict on a UUID this page minted is the vault the previous
+        // attempt wrote and never heard back about - the outcome the user
+        // asked for, reached the slow way.
+        if (err && err.status === 409) {
+          this.rememberOnThisDevice();
+          window.location.assign(this.$root.dataset.vaultUrl);
+          return;
+        }
+        // The identity is active and the kit has been shown: the account is
+        // sound, only the vault is missing. Saying so keeps the retry on the
+        // one screen that can still explain it.
+        this.error =
+          'Your vault could not be created. Your account is set up and your ' +
+          'recovery key is valid - try again.';
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    vaultSession() {
+      const self = this;
+      return {
+        accountUuid: function () { return self.accountUuid; },
+        accountKexPublicRaw: function () { return self.accountKexPublic; },
+        sign: async function (payload) {
+          return window.vaultCrypto.toBase64Url(
+            await self.vaultSigner.sign(window.vaultCrypto.canonicalCbor(payload))
+          );
+        },
+      };
+    },
+
+    // Shared by the direct success path below and its own lost-response
+    // recovery branch: both confirm the same envelope landed, and both need
+    // a signer and the account's own key-exchange public key for the vault
+    // this step is about to create.
+    async captureVaultSigningMaterial(sigSeed, kexPrivate, kexPublic) {
+      const V = window.vaultCrypto;
+      this.vaultSigner = await V.importSigner(sigSeed);
+      this.accountKexPublic = V.decodePublicKey(V.fromBase64Url(kexPublic));
+      sigSeed.fill(0);
+      kexPrivate.fill(0);
+    },
+
     // The whole sealing flow, in the order the norm sets out: init for the
     // salt and the account identifier, derive, wrap, attest, finalize.
     async generateAndSeal() {
-      var V = window.VaultCrypto;
+      const V = window.vaultCrypto;
       this.busy = true;
       this.error = '';
       // init answers 409 only when the identity is already active. On a first
       // attempt that means somewhere else sealed it; on a retry it means our
       // own finalize landed after all, and the reply was what went missing.
-      var conflict = false;
+      let conflict = false;
+      // Declared out here because the catch below reads them: they are the
+      // difference between an attempt that drew the keys and a retry that got
+      // a 409 before generating anything, and only the first can hand vault
+      // signing material to step 3.
+      let sigSeed;
+      let kexPrivate;
+      let kexPublic;
       try {
-        var started = await this.post('/api/v1/vault/account/init');
+        const started = await this.post('/api/v1/vault/account/init');
         if (!started.ok) {
           conflict = started.status === 409;
           throw new Error('the server refused to start an account');
         }
-        var account = await started.json();
+        const account = await started.json();
         this.accountUuid = account.account_uuid;
 
         this.guardAgainstLeaving();
@@ -216,48 +327,48 @@ window.vaultOnboarding = function vaultOnboarding() {
           this.secretText = V.crockfordEncode(this.secretBytes);
         }
 
-        var amk = await V.deriveAmk({
+        const amk = await V.deriveAmk({
           password: this.password.normalize('NFC'),
           secretKey: this.secretBytes,
           salt: V.fromBase64Url(account.kdf_salt),
         });
-        var unwrapKey = await V.hkdf(amk, V.AD.unwrapInfo());
+        const unwrapKey = await V.hkdf(amk, V.AD.unwrapInfo());
 
-        var kexPair = await crypto.subtle.generateKey('X25519', true, [
+        const kexPair = await crypto.subtle.generateKey('X25519', true, [
           'deriveBits',
         ]);
-        var sigPair = await crypto.subtle.generateKey('Ed25519', true, [
+        const sigPair = await crypto.subtle.generateKey('Ed25519', true, [
           'sign',
           'verify',
         ]);
-        var kexPrivate = new Uint8Array(
+        kexPrivate = new Uint8Array(
           await crypto.subtle.exportKey('pkcs8', kexPair.privateKey)
         ).slice(-32);
         // WebCrypto exports an Ed25519 private key as PKCS#8 only, and the
         // bundle signs from the bare seed: the last 32 bytes of that fixed
         // structure.
-        var sigSeed = new Uint8Array(
+        sigSeed = new Uint8Array(
           await crypto.subtle.exportKey('pkcs8', sigPair.privateKey)
         ).slice(-32);
 
-        var kexPublic = V.toBase64Url(
+        kexPublic = V.toBase64Url(
           V.encodePublicKey(
             new Uint8Array(await crypto.subtle.exportKey('raw', kexPair.publicKey)),
             V.PUBKEY_ALG_X25519
           )
         );
-        var sigPublic = V.toBase64Url(
+        const sigPublic = V.toBase64Url(
           V.encodePublicKey(
             new Uint8Array(await crypto.subtle.exportKey('raw', sigPair.publicKey)),
             V.PUBKEY_ALG_ED25519
           )
         );
 
-        var sealed = {
+        const sealed = {
           keyVersion: 1,
           kdfId: V.KDF_HKDF_SHA256,
         };
-        var body = {
+        const body = {
           kdf_algo: 'argon2id',
           kdf_params: V.ARGON2_PARAMS,
           kex_public: kexPublic,
@@ -289,21 +400,33 @@ window.vaultOnboarding = function vaultOnboarding() {
         // Kept beyond this attempt: it is how a later failure can tell our
         // own envelope from one another tab sealed.
         this.sentKexPublic = kexPublic;
-        var finalized = await this.post(
+        const finalized = await this.post(
           '/api/v1/vault/account/finalize',
           body
         );
         if (finalized.status !== 201) {
           throw new Error('the server refused the account envelope');
         }
+        // The first vault is sealed on this same page, right after the kit -
+        // it needs a signer and the account's own key-exchange public key,
+        // neither of which forgetSecrets() below may keep.
+        await this.captureVaultSigningMaterial(sigSeed, kexPrivate, kexPublic);
         this.step = 3;
         this.forgetSecrets();
       } catch (err) {
         // Whether the identity is active is the wrong question: another tab
         // may have sealed it with a secret this page never saw. What decides
         // is whether the key on the server is the one we sent.
-        var landed = await this.sealedByThisPage();
+        const landed = await this.sealedByThisPage();
         if (landed === 'ours') {
+          // sigSeed only exists when this very attempt is the one that drew
+          // the keys - a retry that got a 409 before generating anything
+          // holds none, even though an earlier attempt's envelope is the one
+          // now confirmed active. finish() falls back to the vault screen
+          // itself when it finds no signer here.
+          if (sigSeed) {
+            await this.captureVaultSigningMaterial(sigSeed, kexPrivate, kexPublic);
+          }
           this.step = 3;
           this.forgetSecrets();
           return;
@@ -340,11 +463,11 @@ window.vaultOnboarding = function vaultOnboarding() {
     async sealedByThisPage() {
       if (!this.sentKexPublic) return 'no';
       try {
-        var response = await fetch('/api/v1/vault/account/envelope', {
+        const response = await fetch('/api/v1/vault/account/envelope', {
           headers: { Accept: 'application/json' },
         });
         if (!response.ok) return 'no';
-        var envelope = await response.json();
+        const envelope = await response.json();
         if (envelope.state !== 'active') return 'no';
         return envelope.kex_public === this.sentKexPublic ? 'ours' : 'elsewhere';
       } catch (err) {
@@ -353,14 +476,14 @@ window.vaultOnboarding = function vaultOnboarding() {
     },
 
     downloadKit() {
-      var blob = window.VaultOnboarding.buildEmergencyKitPdf({
+      const blob = window.vaultOnboardingTools.buildEmergencyKitPdf({
         email: this.$root.dataset.email,
         serverUrl: window.location.origin,
         secretText: this.groupedSecret(),
         createdAt: new Date().toISOString().slice(0, 10),
       });
-      var url = URL.createObjectURL(blob);
-      var link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
       link.href = url;
       link.download = 'vault-emergency-kit.pdf';
       // In the document, not detached: Firefox ignores a click on an anchor

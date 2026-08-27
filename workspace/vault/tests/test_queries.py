@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.vault.models import (
+    AccountIdentity,
     Vault,
     VaultEntry,
     VaultFolder,
@@ -12,6 +13,7 @@ from workspace.vault.models import (
 )
 from workspace.vault.queries import (
     accessible_entries_q,
+    active_identity,
     get_vault_role,
     user_vault_ids,
     visible_folders,
@@ -99,3 +101,28 @@ class AccessHelperTests(TestCase):
         tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
         self.assertEqual(list(visible_tags(self.owner, self.vault)), [tag])
         self.assertEqual(list(visible_tags(self.stranger, self.vault)), [])
+
+
+class ActiveIdentityTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+
+    def test_an_account_with_no_identity_has_none(self):
+        self.assertIsNone(active_identity(self.user))
+
+    def test_a_pending_identity_does_not_count(self):
+        AccountIdentity.objects.create(user=self.user, kdf_salt="SALT")
+        self.assertIsNone(active_identity(self.user))
+
+    def test_an_active_identity_comes_back(self):
+        identity = AccountIdentity.objects.create(
+            user=self.user, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE
+        )
+        self.assertEqual(active_identity(self.user), identity)
+
+    def test_another_users_identity_is_not_returned(self):
+        other = User.objects.create_user(username="other", password="pw")
+        AccountIdentity.objects.create(
+            user=other, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE
+        )
+        self.assertIsNone(active_identity(self.user))

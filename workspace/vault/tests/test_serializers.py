@@ -1,8 +1,11 @@
 from django.test import SimpleTestCase
+from rest_framework import serializers
 
 from workspace.vault.serializers import (
     AccountFinalizeSerializer,
     AccountRotateSerializer,
+    VaultUpdateSerializer,
+    validate_base64url,
 )
 
 VALID_PARAMS = {"m": 65536, "t": 3, "p": 2}
@@ -89,6 +92,18 @@ class AccountFinalizeSerializerTests(SimpleTestCase):
         self.assertFalse(serializer.is_valid())
 
 
+class ValidateBase64urlTests(SimpleTestCase):
+    def test_accepts_the_empty_string(self):
+        """A field that allows blank (an optional encrypted description)
+        has already decided the empty string is valid; there is nothing to
+        decode."""
+        self.assertEqual(validate_base64url(""), "")
+
+    def test_still_refuses_non_base64url_text(self):
+        with self.assertRaises(serializers.ValidationError):
+            validate_base64url("not base64")
+
+
 class AccountRotateSerializerTests(SimpleTestCase):
     def test_accepts_the_three_rotatable_fields(self):
         serializer = AccountRotateSerializer(
@@ -108,3 +123,40 @@ class AccountRotateSerializerTests(SimpleTestCase):
         self.assertEqual(
             declared, {"kdf_params", "wrapped_kex_priv", "wrapped_sig_priv"}
         )
+
+
+class VaultUpdateSerializerTests(SimpleTestCase):
+    def _payload(self, **overrides):
+        payload = {
+            "encrypted_name": OPAQUE,
+            "encrypted_description": "",
+            "icon": "lock",
+            "color": "primary",
+            "is_favorite": False,
+            "metadata_sig": OPAQUE,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_accepts_a_plain_icon_and_colour(self):
+        serializer = VaultUpdateSerializer(data=self._payload())
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_a_trailing_newline_never_reaches_the_column(self):
+        """Two layers have to agree for this to hold, and only one of them is
+        obvious: CharField trims the value before the pattern ever sees it,
+        and the pattern ends in ``\\Z`` so it would refuse the untrimmed form
+        too. Turning either off must not silently store the newline."""
+        serializer = VaultUpdateSerializer(data=self._payload(icon="lock\n"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["icon"], "lock")
+
+    def test_refuses_a_newline_inside_the_icon(self):
+        serializer = VaultUpdateSerializer(data=self._payload(icon="lo\nck"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("icon", serializer.errors)
+
+    def test_refuses_a_newline_inside_the_colour(self):
+        serializer = VaultUpdateSerializer(data=self._payload(color="pri\nmary"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("color", serializer.errors)

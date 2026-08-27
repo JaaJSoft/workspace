@@ -26,7 +26,7 @@ BUNDLE_URL = "/static/vault/ui/js/vendor/vault-crypto.js"
 # the algorithm labels, the catalogue string and the signature prefix.
 ONBOARD = """
 async () => {
-  const V = window.VaultCrypto;
+  const V = window.vaultCrypto;
   const csrf = document.cookie.match(/csrftoken=([^;]+)/)[1];
   const post = (url, body) => fetch(url, {
     method: 'POST',

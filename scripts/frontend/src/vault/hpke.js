@@ -48,3 +48,19 @@ export async function hpkeOpen(recipientPrivateRaw, info, sealed) {
   });
   return new Uint8Array(await recipient.open(sealed.slice(ENC_LENGTH), new Uint8Array(0)));
 }
+
+// The session form: the private key is deserialized once and kept as the
+// suite's own key object, so the caller can zero its transient buffer instead
+// of holding raw private key bytes for as long as the vault is open.
+export async function hpkeRecipient(recipientPrivateRaw) {
+  const s = suite();
+  const skr = await s.kem.deserializePrivateKey(exactBuffer(recipientPrivateRaw));
+  return {
+    async open(info, sealed) {
+      const recipient = await s.createRecipientContext({
+        recipientKey: skr, enc: exactBuffer(sealed.slice(0, ENC_LENGTH)), info,
+      });
+      return new Uint8Array(await recipient.open(sealed.slice(ENC_LENGTH), new Uint8Array(0)));
+    },
+  };
+}

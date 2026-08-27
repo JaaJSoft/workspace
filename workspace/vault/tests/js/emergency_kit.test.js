@@ -35,20 +35,20 @@ const KIT = {
 };
 
 test('the kit carries every field the norm requires', () => {
-  const printed = ctx.VaultOnboarding.emergencyKitFields(KIT).join('\n');
+  const printed = ctx.vaultOnboardingTools.emergencyKitFields(KIT).join('\n');
   for (const value of Object.values(KIT)) {
     assert.ok(printed.includes(value), `missing ${value}`);
   }
 });
 
 test('the kit says out loud that nobody can recover the vault', () => {
-  const printed = ctx.VaultOnboarding.emergencyKitFields(KIT).join('\n');
+  const printed = ctx.vaultOnboardingTools.emergencyKitFields(KIT).join('\n');
   assert.match(printed, /recover/i);
   assert.match(printed, /nobody|no one/i);
 });
 
 test('the pdf is produced offline, and it is a pdf', () => {
-  const blob = ctx.VaultOnboarding.buildEmergencyKitPdf(KIT);
+  const blob = ctx.vaultOnboardingTools.buildEmergencyKitPdf(KIT);
   assert.ok(blob.size > 0);
   assert.equal(blob.type, 'application/pdf');
 });
@@ -59,7 +59,7 @@ test('the recovery key actually reaches the pdf', async () => {
   // produce the same bytes.
   const other = { ...KIT, secretText: 'ZZZZ-ZZZZ-ZZZZ' };
   const bytes = async (kit) =>
-    Buffer.from(await ctx.VaultOnboarding.buildEmergencyKitPdf(kit).arrayBuffer());
+    Buffer.from(await ctx.vaultOnboardingTools.buildEmergencyKitPdf(kit).arrayBuffer());
   // Same length either way, so the sizes match: it is the content that has
   // to differ.
   assert.notDeepEqual(await bytes(KIT), await bytes(other));

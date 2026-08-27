@@ -27,6 +27,8 @@ dependencies = [
     "nh3>=0.3.7",
     "myl-discovery>=0.6.4",
     "icalendar>=7.3.0",
+    # vault
+    "cbor2>=5.7.0",
     # utils
     "mistune>=3.3.4",
     "pygments>=2.21.0",
@@ -87,7 +89,6 @@ dev = [
     # the Argon2 `secret` parameter (K) the key hierarchy depends on.
     "argon2-cffi>=25.1.0",
     "pyhpke>=0.6.0",
-    "cbor2>=5.7.0",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
     "ruff==0.16.4",

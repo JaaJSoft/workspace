@@ -479,3 +479,42 @@ test('seal accepts a CryptoKey and produces bytes the raw form opens', async () 
     Array.from(new TextEncoder().encode('hello'))
   );
 });
+
+test('a raw key is measured by its byte length, whatever shape it arrives in', async () => {
+  const frozen = VECTORS.aead.find((item) => item.id === 'entry-field-password');
+  const bytes = V.fromBase64Url(frozen.key_b64);
+  const wire = V.fromBase64Url(frozen.expected_wire_b64);
+  const associated = new TextEncoder().encode(frozen.ad);
+  const expected = Array.from(await V.open(bytes, wire, associated));
+  // ArrayBuffer and DataView have no `length` at all: measuring by it would
+  // refuse these two with "got undefined".
+  for (const shape of [bytes.buffer, new DataView(bytes.buffer)]) {
+    assert.deepStrictEqual(Array.from(await V.open(shape, wire, associated)), expected);
+  }
+});
+
+test('a key of the wrong length is refused whatever shape it arrives in', async () => {
+  const short = new Uint8Array(16);
+  for (const shape of [short, short.buffer, new DataView(short.buffer)]) {
+    await assert.rejects(
+      () => V.importAeadKey(shape),
+      /32-byte key, got 16/,
+      'the refusal must name the real length'
+    );
+  }
+});
+
+test('a CryptoKey that is not aes-256-gcm is refused rather than mislabelled', async () => {
+  // Imported outside importAeadKey, which is the only path that could produce
+  // one: sealing under it would write an AES-256-GCM header over AES-128-GCM.
+  const weak = await crypto.subtle.importKey(
+    'raw', new Uint8Array(16), 'AES-GCM', false, ['encrypt', 'decrypt']
+  );
+  await assert.rejects(
+    () => V.seal(weak, new TextEncoder().encode('x'), new Uint8Array(0), {
+      keyVersion: 1,
+      kdfId: 1,
+    }),
+    /AES-GCM 256-bit key/
+  );
+});

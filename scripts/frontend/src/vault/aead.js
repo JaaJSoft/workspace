@@ -10,23 +10,37 @@ const IV_LENGTH = 12;
 // vectors are what say so.
 const isRawKey = (key) => ArrayBuffer.isView(key) || key instanceof ArrayBuffer;
 
-// Both usages by default: a vault metadata key seals and opens across one
-// session. A caller needing only one passes it.
-export function importAeadKey(raw, usages = ['encrypt', 'decrypt']) {
-  if (raw.length !== KEY_LENGTH) {
-    throw new Error(`aes-256-gcm needs a ${KEY_LENGTH}-byte key, got ${raw.length}`);
+// byteLength, not length: an ArrayBuffer and a DataView are raw material this
+// module accepts, and neither has a `length` at all - measuring by it rejects
+// a perfectly good 32-byte key with "got undefined".
+function assertRawKeyLength(key) {
+  if (key.byteLength !== KEY_LENGTH) {
+    throw new Error(`aes-256-gcm needs a ${KEY_LENGTH}-byte key, got ${key.byteLength}`);
   }
+}
+
+// Both usages by default: a vault metadata key seals and opens across one
+// session. A caller needing only one passes it. async so a bad length arrives
+// as a rejection like every other failure here, rather than as a synchronous
+// throw from a function that otherwise returns a promise.
+export async function importAeadKey(raw, usages = ['encrypt', 'decrypt']) {
+  assertRawKeyLength(raw);
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, usages);
 }
 
 async function subtleKeyFor(key, usage) {
-  if (!isRawKey(key)) return key;
-  // WebCrypto picks the AES variant from the key length, so a 16-byte key
-  // would quietly produce AES-128-GCM under a header still declaring
-  // AES-256-GCM - the agility byte would be a lie.
-  if (key.length !== KEY_LENGTH) {
-    throw new Error(`aes-256-gcm needs a ${KEY_LENGTH}-byte key, got ${key.length}`);
+  // WebCrypto picks the AES variant from the key, so a 16-byte one would
+  // quietly produce AES-128-GCM under a header still declaring AES-256-GCM -
+  // the agility byte would be a lie. That holds for a CryptoKey somebody
+  // imported elsewhere just as much as for raw bytes, so both are checked.
+  if (!isRawKey(key)) {
+    const { name, length } = key.algorithm || {};
+    if (name !== 'AES-GCM' || length !== KEY_LENGTH * 8) {
+      throw new Error(`aes-256-gcm needs an AES-GCM ${KEY_LENGTH * 8}-bit key`);
+    }
+    return key;
   }
+  assertRawKeyLength(key);
   return crypto.subtle.importKey('raw', key, 'AES-GCM', false, [usage]);
 }
 

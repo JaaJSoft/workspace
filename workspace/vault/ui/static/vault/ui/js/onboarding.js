@@ -25,6 +25,10 @@ window.vaultOnboarding = function vaultOnboarding() {
     sentKexPublic: '',
     vaultSigner: null,
     accountKexPublic: null,
+    // The first vault's idempotency key, minted on the first attempt and kept
+    // across retries: the server turns a lost answer into a conflict by
+    // matching it, and a fresh one would describe a second vault instead.
+    firstVaultUuid: null,
     acknowledged: false,
     remember: false,
     leaveGuard: null,
@@ -230,9 +234,8 @@ window.vaultOnboarding = function vaultOnboarding() {
           window.location.assign(this.$root.dataset.vaultUrl);
           return;
         }
-        // Minted here rather than inside the builder, and kept across
-        // retries: the server turns a lost answer into a conflict by matching
-        // this UUID, and a fresh one would describe a second vault instead.
+        // Minted here rather than inside the builder: the builder runs once
+        // per attempt, and a UUID minted there would be a new one each time.
         if (!this.firstVaultUuid) {
           this.firstVaultUuid = window.VaultCrypto.uuidV7();
         }

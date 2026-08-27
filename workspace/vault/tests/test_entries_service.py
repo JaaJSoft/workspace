@@ -38,31 +38,46 @@ class EntrySignaturePayloadTests(TestCase):
         fields.update(overrides)
         return VaultEntry.objects.create(**fields)
 
-    def test_the_payload_is_built_from_the_row_not_the_request(self):
+    def test_the_columns_come_from_the_row(self):
+        """The entry's own columns are read off the instance about to be
+        saved, so a request that claimed otherwise cannot reach the payload."""
         entry = self.make_entry(encrypted_name="AQ", is_favorite=True)
-        entry.tags.set([self.tag_b, self.tag_a])
-        EntryField.objects.create(
-            entry=entry, field_id="password", encrypted_value="Ag"
+        payload = entry_signature_payload(
+            entry,
+            signer_account_uuid=self.identity.uuid,
+            tag_uuids=[],
+            fields={},
         )
-        EntryField.objects.create(
-            entry=entry, field_id="username", encrypted_value="Aw"
-        )
+        self.assertEqual(payload["encrypted_name"], "AQ")
+        self.assertEqual(payload["entry_uuid"], str(entry.uuid).lower())
+        self.assertTrue(payload["is_favorite"])
+
+    def test_the_tag_and_field_sets_come_from_the_arguments(self):
+        """Deliberately the other way round, and worth stating: the caller
+        passes the set it is *about to write*, which is not yet what the row
+        holds. The stored rows below are the previous state, and they must not
+        leak into the payload."""
+        entry = self.make_entry()
+        entry.tags.set([self.tag_a])
+        EntryField.objects.create(entry=entry, field_id="totp", encrypted_value="Zz")
 
         payload = entry_signature_payload(
             entry,
             signer_account_uuid=self.identity.uuid,
-            tag_uuids=[self.tag_b.uuid, self.tag_a.uuid],
+            tag_uuids=[self.tag_b.uuid],
             fields={"password": "Ag", "username": "Aw"},
         )
-        self.assertEqual(
-            payload["tags"],
-            sorted([str(self.tag_a.uuid), str(self.tag_b.uuid)]),
-        )
+        self.assertEqual(payload["tags"], [str(self.tag_b.uuid)])
         self.assertEqual(payload["fields"], [["password", "Ag"], ["username", "Aw"]])
-        self.assertEqual(payload["encrypted_name"], "AQ")
-        self.assertTrue(payload["is_favorite"])
-        self.assertNotIn("created_at", payload)
-        self.assertNotIn("updated_at", payload)
+
+    def test_the_payload_holds_no_timestamp(self):
+        payload = entry_signature_payload(
+            self.make_entry(),
+            signer_account_uuid=self.identity.uuid,
+            tag_uuids=[],
+            fields={},
+        )
+        self.assertFalse([key for key in payload if key.endswith("_at")])
 
 
 class ResolveTagsTests(TestCase):

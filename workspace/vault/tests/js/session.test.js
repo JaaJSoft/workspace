@@ -595,7 +595,11 @@ function metaKeyHarness(overrides = {}) {
   const seen = [];
   const h = harness({
     vaultCrypto: {
-      hkdf: async () => metaRaw,
+      // The unwrap key gets its own buffer. Handing metaRaw back for both
+      // derivations would let unlock() zero it before openVaultKey ever runs,
+      // and the zeroing assertions below would hold with no zeroing at all.
+      hkdf: async (_raw, info) =>
+        (info === 'unwrap-info' ? Uint8Array.from([13, 14]) : metaRaw),
       importAeadKey: async (raw) => {
         seen.push(raw);
         if (overrides.failImport) throw new Error('import failed');

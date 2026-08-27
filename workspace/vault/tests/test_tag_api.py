@@ -156,9 +156,23 @@ class TagApiTests(TestCase):
         self.assertEqual(self.tag.color, "neutral")
 
     def test_renaming_a_tag_in_a_vault_the_caller_cannot_open_answers_404(self):
-        body = self.signed_tag(tag_uuid=self.other_vault_tag.uuid)
+        # The body has to name the unreachable vault, or the refusal comes from
+        # the tag lookup and the vault guard is never asked anything.
+        body = self.signed_tag(
+            tag_uuid=self.other_vault_tag.uuid, vault=self.other_vault
+        )
         response = self.client.patch(
             f"{LIST_URL}/{self.other_vault_tag.uuid}", body, "application/json"
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_renaming_a_tag_of_another_vault_of_ones_own_answers_404(self):
+        """The other half: a vault the caller *can* open, naming a tag that is
+        not in it. This is the tag lookup's refusal, not the vault guard's."""
+        mine = make_vault(self.user)
+        body = self.signed_tag(tag_uuid=self.tag.uuid, vault=mine)
+        response = self.client.patch(
+            f"{LIST_URL}/{self.tag.uuid}", body, "application/json"
         )
         self.assertEqual(response.status_code, 404)
 

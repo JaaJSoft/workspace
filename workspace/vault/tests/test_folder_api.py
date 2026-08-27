@@ -187,7 +187,11 @@ class FolderApiTests(TestCase):
         )
 
     def test_renaming_a_folder_in_a_vault_the_caller_cannot_open_answers_404(self):
-        body = self.signed_folder(folder_uuid=self.other_vault_folder.uuid)
+        # The body has to name the unreachable vault, or the refusal comes from
+        # the folder lookup and the vault guard is never asked anything.
+        body = self.signed_folder(
+            folder_uuid=self.other_vault_folder.uuid, vault=self.other_vault
+        )
         response = self.client.patch(
             f"{LIST_URL}/{self.other_vault_folder.uuid}", body, "application/json"
         )

@@ -1,4 +1,4 @@
-"""Tags published over WebDAV as Nextcloud's ``oc:system-tags`` property."""
+"""Tags published over WebDAV as ownCloud/Nextcloud's ``oc:tags`` property."""
 
 from defusedxml import ElementTree as DefusedET
 from django.contrib.auth import get_user_model
@@ -11,8 +11,8 @@ from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import (
-    SYSTEM_TAG_PROP,
-    SYSTEM_TAGS_PROP,
+    TAG_PROP,
+    TAGS_PROP,
     FileResource,
     FolderResource,
 )
@@ -39,7 +39,7 @@ def _tag_names(element):
     return [child.text for child in element]
 
 
-class SystemTagsPropertyTests(TestCase):
+class TagsPropertyTests(TestCase):
     """The property itself, on a file and on a folder."""
 
     def setUp(self):
@@ -61,13 +61,13 @@ class SystemTagsPropertyTests(TestCase):
 
     def test_file_advertises_the_property(self):
         self.assertIn(
-            SYSTEM_TAGS_PROP,
+            TAGS_PROP,
             self._file_resource().get_property_names(is_allprop=True),
         )
 
     def test_folder_advertises_the_property(self):
         self.assertIn(
-            SYSTEM_TAGS_PROP,
+            TAGS_PROP,
             self._folder_resource().get_property_names(is_allprop=True),
         )
 
@@ -80,23 +80,23 @@ class SystemTagsPropertyTests(TestCase):
         _tag(self.user, self.file, "Invoices")
         _tag(self.user, self.file, "2026")
 
-        value = self._file_resource().get_property_value(SYSTEM_TAGS_PROP)
+        value = self._file_resource().get_property_value(TAGS_PROP)
 
-        self.assertEqual(value.tag, SYSTEM_TAGS_PROP)
-        self.assertEqual([child.tag for child in value], [SYSTEM_TAG_PROP] * 2)
+        self.assertEqual(value.tag, TAGS_PROP)
+        self.assertEqual([child.tag for child in value], [TAG_PROP] * 2)
         self.assertEqual(_tag_names(value), ["2026", "Invoices"])
 
     def test_folder_publishes_its_tag_names(self):
         _tag(self.user, self.folder, "Archive")
 
-        value = self._folder_resource().get_property_value(SYSTEM_TAGS_PROP)
+        value = self._folder_resource().get_property_value(TAGS_PROP)
 
         self.assertEqual(_tag_names(value), ["Archive"])
 
     def test_untagged_node_publishes_an_empty_property(self):
-        value = self._file_resource().get_property_value(SYSTEM_TAGS_PROP)
+        value = self._file_resource().get_property_value(TAGS_PROP)
 
-        self.assertEqual(value.tag, SYSTEM_TAGS_PROP)
+        self.assertEqual(value.tag, TAGS_PROP)
         self.assertEqual(len(value), 0)
 
     def test_other_properties_still_resolve(self):
@@ -119,12 +119,12 @@ class SystemTagsPropertyTests(TestCase):
         )
         _tag(self.user, shared, "Received")
 
-        value = self._file_resource(shared).get_property_value(SYSTEM_TAGS_PROP)
+        value = self._file_resource(shared).get_property_value(TAGS_PROP)
 
         self.assertEqual(_tag_names(value), ["Received"])
 
 
-class SystemTagsListingQueryTests(TestCase):
+class TagsListingQueryTests(TestCase):
     """A listing must not cost one query per member."""
 
     def setUp(self):
@@ -137,7 +137,7 @@ class SystemTagsListingQueryTests(TestCase):
         resource = FolderResource(f"/{folder.name}", self.environ, folder)
         with CaptureQueriesContext(connection) as ctx:
             for member in resource.get_member_list():
-                member.get_property_value(SYSTEM_TAGS_PROP)
+                member.get_property_value(TAGS_PROP)
         return len(ctx)
 
     def test_query_count_does_not_grow_with_the_number_of_members(self):
@@ -155,7 +155,7 @@ class SystemTagsListingQueryTests(TestCase):
         )
 
 
-class SystemTagsPropfindTests(TestCase):
+class TagsPropfindTests(TestCase):
     """End-to-end, through the WsgiDAV app."""
 
     @classmethod
@@ -209,7 +209,7 @@ class SystemTagsPropfindTests(TestCase):
         body = (
             b'<?xml version="1.0" encoding="utf-8"?>'
             b'<d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">'
-            b"<d:prop><oc:system-tags/></d:prop></d:propfind>"
+            b"<d:prop><oc:tags/></d:prop></d:propfind>"
         )
 
         code, out = self._request(
@@ -219,7 +219,7 @@ class SystemTagsPropfindTests(TestCase):
         self.assertEqual(code, 207)
         root = DefusedET.fromstring(out.decode())
         self.assertEqual(
-            [el.text for el in root.iter(SYSTEM_TAG_PROP)],
+            [el.text for el in root.iter(TAG_PROP)],
             ["Invoices"],
         )
 
@@ -227,8 +227,8 @@ class SystemTagsPropfindTests(TestCase):
         body = (
             b'<?xml version="1.0" encoding="utf-8"?>'
             b'<d:propertyupdate xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">'
-            b"<d:set><d:prop><oc:system-tags><oc:system-tag>New</oc:system-tag>"
-            b"</oc:system-tags></d:prop></d:set></d:propertyupdate>"
+            b"<d:set><d:prop><oc:tags><oc:tag>New</oc:tag>"
+            b"</oc:tags></d:prop></d:set></d:propertyupdate>"
         )
 
         code, out = self._request("PROPPATCH", "/report.txt", body=body)

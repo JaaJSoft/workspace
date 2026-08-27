@@ -23,8 +23,8 @@ from workspace.files.services.content_hash import new_hasher
 logger = logging.getLogger(__name__)
 
 _OC_NS = "{http://owncloud.org/ns}"
-SYSTEM_TAGS_PROP = f"{_OC_NS}system-tags"
-SYSTEM_TAG_PROP = f"{_OC_NS}system-tag"
+TAGS_PROP = f"{_OC_NS}tags"
+TAG_PROP = f"{_OC_NS}tag"
 
 # Where a prefetched listing leaves each member's tags, so reading the property
 # costs no query of its own.
@@ -53,26 +53,32 @@ def _prefetch_viewer_tags(queryset, user):
 
 
 class _TaggedResource:
-    """Publishes a node's tags as ownCloud/Nextcloud's ``oc:system-tags``.
+    """Publishes a node's tags as ownCloud/Nextcloud's ``oc:tags``.
+
+    No WebDAV RFC defines a vocabulary for keywords, so the choice is between
+    inventing a namespace nothing reads and borrowing the one every Nextcloud
+    and ownCloud client already speaks. ``oc:tags`` is the per-user list
+    (``TagsPlugin``); its instance-wide cousin is ``nc:system-tags``, a
+    different concept in a different namespace, and ``oc:systemtag`` is a
+    filter rule of the ``oc:filter-files`` REPORT rather than a property.
+    ``Tag`` carries an owner, so the per-user spelling is the one that matches.
 
     Read-only and computed on the fly: the app runs with
     ``property_manager: False``, so nothing is stored as a dead property - the
-    same arrangement as the RFC 4331 quota pair. Borrowing Nextcloud's spelling
-    rather than inventing a namespace is what lets a client already speaking to
-    Nextcloud read the value without knowing anything about workspace.
+    same arrangement as the RFC 4331 quota pair.
     """
 
     def get_property_names(self, *, is_allprop):
-        return super().get_property_names(is_allprop=is_allprop) + [SYSTEM_TAGS_PROP]
+        return super().get_property_names(is_allprop=is_allprop) + [TAGS_PROP]
 
     def get_property_value(self, name):
-        if name != SYSTEM_TAGS_PROP:
+        if name != TAGS_PROP:
             return super().get_property_value(name)
         # Built through wsgidav's own etree wrapper: it prefers lxml when
         # installed, and is_etree_element() checks the concrete type.
-        element = xml_tools.etree.Element(SYSTEM_TAGS_PROP)
+        element = xml_tools.etree.Element(TAGS_PROP)
         for file_tag in self._viewer_tags():
-            child = xml_tools.etree.SubElement(element, SYSTEM_TAG_PROP)
+            child = xml_tools.etree.SubElement(element, TAG_PROP)
             child.text = file_tag.tag.name
         return element
 

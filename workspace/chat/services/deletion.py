@@ -25,14 +25,21 @@ from .reactions import invalidate_quick_reactions
 logger = logging.getLogger(__name__)
 
 
-def purge_message_dependents(message):
-    """Erase the rows and blobs hanging off a message being soft-deleted.
+def purge_message_content(message):
+    """Erase what a message being soft-deleted still exposes.
 
-    Kept on purpose: the Message row itself, its ``reply_to``/``thread_root``
-    pointers, its ThreadParticipant rows (a deleted root still owns live
-    replies, whose read state must survive with them) and the shared
-    ``LinkPreview`` cache, which is keyed by URL and belongs to no message.
+    That is its own text and the rows and blobs hanging off it. The Message
+    row survives, stripped: the placeholder needs its author and timestamp,
+    the quote blocks need its uuid, and the thread structure needs its
+    ``reply_to``/``thread_root`` pointers. So do its ThreadParticipant rows -
+    a deleted root still owns live replies, whose read state goes with them -
+    and the shared ``LinkPreview`` cache, keyed by URL and owned by no message.
     """
+    message.body = ""
+    message.body_html = ""
+    message.tool_data = None
+    message.save(update_fields=["body", "body_html", "tool_data"])
+
     attachments = list(MessageAttachment.objects.filter(message=message))
     reactor_ids = set(
         Reaction.objects.filter(message=message).values_list("user_id", flat=True)

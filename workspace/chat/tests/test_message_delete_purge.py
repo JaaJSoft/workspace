@@ -208,3 +208,46 @@ class MessageDeletePurgeTests(APITestCase):
         self.assertTrue(default_storage.exists(attachment.file.name))
         response = self.client.get(f"/api/v1/chat/attachments/{attachment.uuid}")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_blanks_the_message_content(self):
+        Message.objects.filter(pk=self.message.pk).update(
+            body="the secret",
+            body_html="<p>the secret</p>",
+            tool_data={"steps": ["searched the web"]},
+        )
+
+        self._delete()
+
+        self.message.refresh_from_db()
+        self.assertEqual(self.message.body, "")
+        self.assertEqual(self.message.body_html, "")
+        self.assertIsNone(self.message.tool_data)
+
+    def test_the_api_stops_serving_the_deleted_body(self):
+        """The client renders a placeholder; the payload must not carry the
+        text it is placeholding for."""
+        Message.objects.filter(pk=self.message.pk).update(body="the secret")
+
+        self._delete()
+
+        response = self.client.get(
+            f"/api/v1/chat/conversations/{self.conversation.uuid}/messages"
+        )
+        payload = next(
+            m for m in response.data["messages"] if m["uuid"] == str(self.message.uuid)
+        )
+        self.assertEqual(payload["body"], "")
+        self.assertNotIn("secret", response.content.decode())
+
+    def test_delete_keeps_the_tombstone_metadata(self):
+        """Blanking the body must not cost the placeholder its author line."""
+        self._delete()
+
+        response = self.client.get(
+            f"/api/v1/chat/conversations/{self.conversation.uuid}/messages"
+        )
+        payload = next(
+            m for m in response.data["messages"] if m["uuid"] == str(self.message.uuid)
+        )
+        self.assertEqual(payload["author"]["username"], "author")
+        self.assertIsNotNone(payload["deleted_at"])

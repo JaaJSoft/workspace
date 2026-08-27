@@ -15,6 +15,7 @@ def refresh_labels_for_messages(message_ids):
     if not message_ids:
         return
     from ..models import MailLabel, MailMessageLabel
+    from .counts import refresh_label_counts
 
     label_ids = set(
         MailMessageLabel.objects.filter(message_id__in=message_ids).values_list(
@@ -23,10 +24,4 @@ def refresh_labels_for_messages(message_ids):
     )
     if not label_ids:
         return
-    # Deferred import to avoid a load-time cycle: views.py imports from
-    # workspace.mail.services.* in places. Once _refresh_label_counts is
-    # itself moved into services (follow-up), this can become a top-level
-    # import.
-    from ..views import _refresh_label_counts
-
-    _refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))
+    refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))

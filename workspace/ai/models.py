@@ -53,6 +53,10 @@ class BotProfile(models.Model):
     description = models.TextField(blank=True)
     supports_tools = models.BooleanField(default=True)
     supports_vision = models.BooleanField(default=True)
+    # Whether this bot may hand a message to SMTP itself. Off by default:
+    # the tool loop runs unattended, and a send is the one mail action no
+    # later turn can take back. Drafting stays available to every bot.
+    can_send_email = models.BooleanField(default=False)
     voice_ref = models.FileField(
         upload_to=bot_voice_reference_path,
         max_length=500,

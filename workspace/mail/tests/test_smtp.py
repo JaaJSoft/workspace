@@ -5,6 +5,7 @@ from django.test import TestCase
 
 from workspace.core.encryption import decrypt, encrypt
 from workspace.mail.services.smtp import (
+    SMTP_TIMEOUT,
     build_draft_message,
     connect_smtp,
     send_email,
@@ -176,7 +177,9 @@ class ConnectSmtpTests(TestCase):
 
         server = connect_smtp(acct)
 
-        mock_smtp_cls.assert_called_with("smtp.example.com", 587)
+        # Without an explicit deadline smtplib waits forever, and sending now
+        # happens inline in the AI tool loop.
+        mock_smtp_cls.assert_called_with("smtp.example.com", 587, timeout=SMTP_TIMEOUT)
         mock_server.starttls.assert_called_once()
         mock_server.login.assert_called_with("alice", "secret")
         self.assertEqual(server, mock_server)
@@ -195,7 +198,9 @@ class ConnectSmtpTests(TestCase):
 
         connect_smtp(acct)
 
-        mock_smtp_ssl_cls.assert_called_with("smtp.example.com", 465)
+        mock_smtp_ssl_cls.assert_called_with(
+            "smtp.example.com", 465, timeout=SMTP_TIMEOUT
+        )
         mock_server.login.assert_called_with("alice", "secret")
 
 

@@ -335,3 +335,18 @@ class EntryApiTests(TestCase):
         self.client.logout()
         response = self.client.get(f"{LIST_URL}?vault={self.vault.uuid}")
         self.assertIn(response.status_code, (302, 403))
+
+    def test_an_over_long_custom_field_id_is_refused_not_stored(self):
+        """It would outgrow EntryField.field_id: silently truncated by SQLite,
+        a DataError on PostgreSQL, which is where this runs in production."""
+        body = self.signed_entry(fields={f"custom:{'x' * 200}": "Ag"})
+        self.assertEqual(self._create(body).status_code, 400)
+        self.assertFalse(VaultEntry.objects.filter(uuid=body["uuid"]).exists())
+
+    def test_an_over_long_field_value_is_refused(self):
+        """Every other opaque value in this module is capped at 4096; a field
+        ciphertext is the one that travels inside a JSON object rather than as
+        a serializer field, and it must not escape the cap by doing so."""
+        body = self.signed_entry(fields={"password": "A" * 5000})
+        self.assertEqual(self._create(body).status_code, 400)
+        self.assertFalse(VaultEntry.objects.filter(uuid=body["uuid"]).exists())

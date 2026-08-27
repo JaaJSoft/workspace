@@ -12,6 +12,8 @@ agreement circular.
 
 import re
 
+from ..models import EntryField
+
 # What an entry type's FIELD_SCHEMA may declare. Anything a user adds is
 # prefixed instead.
 RESERVED_FIELD_IDS = frozenset({"username", "password", "totp", "uri"})
@@ -24,10 +26,18 @@ ENTRY_COLUMN_FIELD_IDS = frozenset({"name", "notes"})
 
 CUSTOM_PREFIX = "custom:"
 
+# What is left of EntryField.field_id's column once the prefix has taken its
+# share. Derived, not written down: SQLite ignores a CharField's length and
+# PostgreSQL raises DataError, so a label that outgrows the column is a 500 in
+# production and green everywhere else.
+MAX_CUSTOM_LABEL = EntryField._meta.get_field("field_id").max_length - len(
+    CUSTOM_PREFIX
+)
+
 # ASCII, and no colon: the colon is the prefix separator, and a non-ASCII label
 # would build associated data the reference implementation refuses to encode -
 # the browser would seal a value nothing else can open.
-_CUSTOM_LABEL = re.compile(r"^[A-Za-z0-9._~-]{1,64}\Z")
+_CUSTOM_LABEL = re.compile(rf"^[A-Za-z0-9._~-]{{1,{MAX_CUSTOM_LABEL}}}\Z")
 
 
 def qualify_field_id(field_id: str) -> str:

@@ -65,13 +65,16 @@ def validate_base64url(value):
     return value
 
 
+_OPAQUE_MAX_LENGTH = 4096
+
+
 class _OpaqueField(serializers.CharField):
     """base64url text the server stores and can never open."""
 
     def __init__(self, **kwargs):
         kwargs.setdefault("allow_blank", False)
         kwargs.setdefault("trim_whitespace", False)
-        kwargs.setdefault("max_length", 4096)
+        kwargs.setdefault("max_length", _OPAQUE_MAX_LENGTH)
         kwargs.setdefault("validators", [validate_base64url])
         super().__init__(**kwargs)
 
@@ -340,6 +343,11 @@ def validate_field_map(value):
             raise serializers.ValidationError(str(exc)) from exc
         if not isinstance(ciphertext, str) or not ciphertext:
             raise serializers.ValidationError("a field value must be base64url text")
+        # The same cap _OpaqueField applies: these values ride inside a JSON
+        # object rather than as serializer fields, and must not escape it by
+        # doing so.
+        if len(ciphertext) > _OPAQUE_MAX_LENGTH:
+            raise serializers.ValidationError("a field value is too long")
         validate_base64url(ciphertext)
     return value
 

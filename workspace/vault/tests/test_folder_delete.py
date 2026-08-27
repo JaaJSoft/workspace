@@ -172,3 +172,35 @@ class FolderDeleteTests(TestCase):
         self.client.logout()
         response = self._post(self.folder, {"entries": []})
         self.assertIn(response.status_code, (302, 403))
+
+    def test_a_folder_that_still_has_children_is_refused(self):
+        """Deleting it would CASCADE the children away - folders the client
+        never named, whose own signatures would vanish with them - and, when a
+        child still holds entries, the RESTRICT on VaultEntry.folder turns that
+        cascade into a 500."""
+        child = VaultFolder.objects.create(
+            vault=self.vault,
+            parent=self.folder,
+            encrypted_name="AQIF",
+            metadata_sig="AQ",
+        )
+        body = {"entries": [self.resigned(entry) for entry in self.entries]}
+        response = self._post(self.folder, body)
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultFolder.objects.filter(uuid=child.uuid).exists())
+        self.assertTrue(VaultFolder.objects.filter(uuid=self.folder.uuid).exists())
+        for entry in self.entries:
+            entry.refresh_from_db()
+            self.assertEqual(entry.folder_id, self.folder.pk)
+
+    def test_a_child_holding_entries_is_refused_rather_than_raising(self):
+        child = VaultFolder.objects.create(
+            vault=self.vault,
+            parent=self.folder,
+            encrypted_name="AQIF",
+            metadata_sig="AQ",
+        )
+        self._entry(child, 7)
+        body = {"entries": [self.resigned(entry) for entry in self.entries]}
+        response = self._post(self.folder, body)
+        self.assertEqual(response.status_code, 409)

@@ -1,5 +1,6 @@
 from django.test import SimpleTestCase
 
+from workspace.vault.models import EntryField
 from workspace.vault.services import fields
 
 
@@ -40,3 +41,14 @@ class QualifyFieldIdTests(SimpleTestCase):
         self.assertEqual(fields.custom_field_id("pin"), "custom:pin")
         with self.assertRaises(ValueError):
             fields.custom_field_id("café")
+
+    def test_a_stored_identifier_never_exceeds_the_column_it_goes_into(self):
+        """EntryField.field_id is a CharField: SQLite ignores its length,
+        PostgreSQL raises DataError, so an over-long label has to be refused
+        here or it is a 500 in production and nowhere else."""
+        longest = fields.custom_field_id("x" * fields.MAX_CUSTOM_LABEL)
+        self.assertLessEqual(
+            len(longest), EntryField._meta.get_field("field_id").max_length
+        )
+        with self.assertRaises(ValueError):
+            fields.custom_field_id("x" * (fields.MAX_CUSTOM_LABEL + 1))

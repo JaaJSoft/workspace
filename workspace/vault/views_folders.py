@@ -245,6 +245,17 @@ class FolderDeleteView(CacheControlMixin, APIView):
         if vault is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        # A folder with children is refused rather than emptied: VaultFolder.parent
+        # is CASCADE, so deleting it would take folders the client never named -
+        # and their signatures - with it, and would meet the RESTRICT on
+        # VaultEntry.folder as an unhandled IntegrityError the moment one of
+        # those children still held an entry. The client deletes bottom-up.
+        if folder.children.exists():
+            return Response(
+                {"detail": "The folder still has subfolders."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
         serializer = FolderDeleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         submitted = {

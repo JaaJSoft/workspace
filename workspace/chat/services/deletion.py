@@ -8,6 +8,7 @@ that row has to be erased by hand - that is what this module does.
 
 import logging
 
+from django.core.files.storage import default_storage
 from django.db import transaction
 
 from workspace.common.cache import invalidate_tags
@@ -71,11 +72,46 @@ def discard_attachment_files(attachments):
         # it the 404 would only come from the blob having vanished below, so a
         # storage backend that refuses or defers the delete keeps serving it.
         invalidate_tags(f"att:{attachment.uuid}")
-        if not attachment.file:
-            continue
-        try:
-            attachment.file.delete(save=False)
-        except OSError:
-            logger.warning(
-                "Could not delete chat attachment %s", scrub(attachment.file.name)
-            )
+        if attachment.file:
+            delete_attachment_blob(attachment.file.name)
+
+
+def delete_attachment_blob(name):
+    try:
+        default_storage.delete(name)
+    except OSError:
+        logger.warning("Could not delete chat attachment %s", scrub(name))
+
+
+def purge_deleted_message_backlog(
+    *, messages, attachments, reactions, link_previews, interactions, pins
+):
+    """Apply the purge to messages deleted before the purge existed.
+
+    Called by migration 0029, which passes the historical models from the app
+    registry; the tests pass the real ones. The body must therefore keep
+    working against historical model classes: fields and managers only, no
+    model methods and no properties.
+
+    It deliberately skips the attachment metadata memo the live purge bumps.
+    Reaching the cache would make `migrate` fail whenever Redis is unavailable,
+    and a 60s memo self-heals long before anyone notices.
+    """
+    deleted = {"message__deleted_at__isnull": False}
+
+    blob_names = [
+        name
+        for name in attachments.objects.filter(**deleted).values_list("file", flat=True)
+        if name
+    ]
+
+    attachments.objects.filter(**deleted).delete()
+    reactions.objects.filter(**deleted).delete()
+    link_previews.objects.filter(**deleted).delete()
+    interactions.objects.filter(**deleted).delete()
+    pins.objects.filter(**deleted).delete()
+    messages.objects.filter(deleted_at__isnull=False).update(
+        body="", body_html="", tool_data=None
+    )
+
+    transaction.on_commit(lambda: [delete_attachment_blob(name) for name in blob_names])

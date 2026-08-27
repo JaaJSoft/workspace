@@ -201,7 +201,8 @@ class MessageDeletePurgeTests(APITestCase):
         b"".join(warm.streaming_content)
 
         with patch(
-            "django.db.models.fields.files.FieldFile.delete", side_effect=OSError
+            "django.core.files.storage.default_storage.delete",
+            side_effect=OSError("storage gone"),
         ):
             self._delete()
 

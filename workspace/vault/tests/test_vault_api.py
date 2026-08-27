@@ -6,7 +6,6 @@ verifies against, so a change to the signed key set fails here rather than in
 a browser.
 """
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase
@@ -14,28 +13,19 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
-from workspace.vault.services.metadata import canonical_cbor, vault_metadata_payload
+from workspace.vault.services.metadata import vault_metadata_payload
+from workspace.vault.tests.factories import HPKE_SUITE, make_account, sign
 from workspace.vault.tests.reference.encoding import to_base64url
 
 User = get_user_model()
 
 VAULT_UUID = "0192f3a4-2222-7d8e-9f01-23456789abcd"
-HPKE_SUITE = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
 
 
 class VaultCreateTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="owner", password="pw")
+        self.user, self.signer, self.identity = make_account("owner")
         self.client.force_login(self.user)
-        self.signer = Ed25519PrivateKey.generate()
-        self.identity = AccountIdentity.objects.create(
-            user=self.user,
-            kdf_salt="SALT",
-            state=AccountIdentity.State.ACTIVE,
-            sig_public=to_base64url(
-                bytes([0x02]) + self.signer.public_key().public_bytes_raw()
-            ),
-        )
         self.url = reverse("vault-list")
 
     def _body(self, **overrides):
@@ -50,15 +40,14 @@ class VaultCreateTests(TestCase):
             "is_favorite": False,
         }
         fields.update(overrides)
-        payload = vault_metadata_payload(**fields)
-        signature = bytes([0x01]) + self.signer.sign(canonical_cbor(payload))
+        signature = sign(self.signer, vault_metadata_payload(**fields))
         return {
             "uuid": fields["vault_uuid"],
             "encrypted_name": fields["encrypted_name"],
             "encrypted_description": fields["encrypted_description"],
             "icon": fields["icon"],
             "color": fields["color"],
-            "metadata_sig": to_base64url(signature),
+            "metadata_sig": signature,
             "wrapped_key": to_base64url(bytes(range(64))),
             "hpke_suite": HPKE_SUITE,
         }
@@ -207,18 +196,9 @@ class VaultListTests(TestCase):
 
 class VaultUpdateTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="owner", password="pw")
+        self.user, self.signer, self.identity = make_account("owner")
         self.other = User.objects.create_user(username="other", password="pw")
         self.client.force_login(self.user)
-        self.signer = Ed25519PrivateKey.generate()
-        self.identity = AccountIdentity.objects.create(
-            user=self.user,
-            kdf_salt="SALT",
-            state=AccountIdentity.State.ACTIVE,
-            sig_public=to_base64url(
-                bytes([0x02]) + self.signer.public_key().public_bytes_raw()
-            ),
-        )
         self.vault = Vault.objects.create(
             uuid=VAULT_UUID, owner=self.user, encrypted_name="AQ", metadata_sig="AQ"
         )
@@ -236,15 +216,14 @@ class VaultUpdateTests(TestCase):
             "is_favorite": False,
         }
         fields.update(overrides)
-        payload = vault_metadata_payload(**fields)
-        signature = bytes([0x01]) + self.signer.sign(canonical_cbor(payload))
+        signature = sign(self.signer, vault_metadata_payload(**fields))
         return {
             "encrypted_name": fields["encrypted_name"],
             "encrypted_description": fields["encrypted_description"],
             "icon": fields["icon"],
             "color": fields["color"],
             "is_favorite": fields["is_favorite"],
-            "metadata_sig": to_base64url(signature),
+            "metadata_sig": signature,
         }
 
     def test_a_signed_rename_lands(self):

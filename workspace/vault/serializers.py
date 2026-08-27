@@ -10,7 +10,7 @@ import re
 
 from rest_framework import serializers
 
-from .models import AccountIdentity, Vault
+from .models import AccountIdentity, Vault, VaultFolder
 from .services.attestation import AttestationError, decode_base64url
 
 _KDF_PARAM_KEYS = ("m", "t", "p")
@@ -219,4 +219,34 @@ class VaultUpdateSerializer(serializers.Serializer):
     icon = serializers.RegexField(_ICON)
     color = serializers.RegexField(_COLOR)
     is_favorite = serializers.BooleanField()
+    metadata_sig = _OpaqueField()
+
+
+class VaultFolderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VaultFolder
+        fields = [
+            "uuid",
+            "vault",
+            "parent",
+            "encrypted_name",
+            "position",
+            "metadata_sig",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class VaultFolderWriteSerializer(serializers.Serializer):
+    """Every signed field, always - a partial write would leave the row
+    carrying a signature over values it no longer holds."""
+
+    uuid = serializers.UUIDField()
+    vault = serializers.UUIDField()
+    parent = serializers.UUIDField(allow_null=True, required=False, default=None)
+    encrypted_name = _OpaqueField()
+    # Capped rather than unbounded: it enters a PositiveIntegerField, and a
+    # value above its range is a 500 from the database rather than a 400 here.
+    position = serializers.IntegerField(min_value=0, max_value=100_000)
     metadata_sig = _OpaqueField()

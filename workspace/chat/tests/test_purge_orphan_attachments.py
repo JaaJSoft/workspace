@@ -1,8 +1,6 @@
 """Tests for the purge_orphan_attachments management command."""
 
 import os
-import shutil
-import tempfile
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -16,19 +14,21 @@ from workspace.chat.models import (
     Message,
     MessageAttachment,
 )
+from workspace.common.tests.media import IsolatedMediaRootMixin
 
 User = get_user_model()
 
 
-class PurgeTestMixin:
-    """Shared setup: temp MEDIA_ROOT, users, a bot, and helper factories."""
+class PurgeTestMixin(IsolatedMediaRootMixin):
+    """Shared setup: users, a bot, and helper factories.
+
+    The command walks ``MEDIA_ROOT/chat`` and deletes every blob no row points
+    at, so it needs a media root holding nothing but this test's attachments -
+    a rolled-back transaction leaves the previous test's files behind.
+    """
 
     def setUp(self):
-        self.media_root = tempfile.mkdtemp()
-        # Override MEDIA_ROOT for the entire test so file.save() uses it too
-        self._media_override = self.settings(MEDIA_ROOT=self.media_root)
-        self._media_override.enable()
-
+        super().setUp()
         self.human = User.objects.create_user(
             username="human",
             email="human@test.com",
@@ -45,10 +45,6 @@ class PurgeTestMixin:
             password="pass",
         )
         BotProfile.objects.create(user=self.bot_user)
-
-    def tearDown(self):
-        self._media_override.disable()
-        shutil.rmtree(self.media_root, ignore_errors=True)
 
     # -- helpers --
 

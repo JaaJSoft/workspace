@@ -1,5 +1,3 @@
-import shutil
-import tempfile
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -19,9 +17,6 @@ BASE = "/api/v1/imports"
 @override_settings(IMPORTS_ALLOWED_HOSTS=["x", "y"])
 class JobsApiTests(APITestCase):
     def setUp(self):
-        self._tmpdir = tempfile.mkdtemp()
-        self._media = override_settings(MEDIA_ROOT=self._tmpdir)
-        self._media.enable()
         self.user = User.objects.create_user(username="alice", password="pw")
         self.other = User.objects.create_user(username="bob", password="pw")
         self.provider = fake_provider()
@@ -45,8 +40,6 @@ class JobsApiTests(APITestCase):
         self.addCleanup(enqueue_patch.stop)
 
     def tearDown(self):
-        self._media.disable()
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
         cache.clear()
 
     def _create(self, **overrides):

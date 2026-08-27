@@ -42,6 +42,10 @@ APPEND_SLASH = False
 
 WSGI_APPLICATION = "workspace.wsgi.application"
 
+# Redirects MEDIA_ROOT to a temporary directory for the duration of a test
+# run, so uploads never land in the checkout.
+TEST_RUNNER = "workspace.test_runner.MediaRootTestRunner"
+
 # Application version (from env, defaults to 'dev')
 APP_VERSION = os.getenv("APP_VERSION") or "dev"
 

@@ -1,5 +1,3 @@
-import shutil
-import tempfile
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
@@ -61,9 +59,6 @@ def _tree():
 
 class ImporterTestCase(TestCase):
     def setUp(self):
-        self._tmpdir = tempfile.mkdtemp()
-        self._media = override_settings(MEDIA_ROOT=self._tmpdir)
-        self._media.enable()
         self.user = User.objects.create_user(username="alice", password="pw")
         self.provider = fake_provider()
         self.provider.tree = _tree()
@@ -77,8 +72,6 @@ class ImporterTestCase(TestCase):
         self.importer = FilesImporter()
 
     def tearDown(self):
-        self._media.disable()
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
         cache.clear()
 
     def _job(self, **options):

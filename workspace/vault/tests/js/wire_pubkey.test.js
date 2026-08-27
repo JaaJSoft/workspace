@@ -17,7 +17,7 @@ const ctx = loadScript(
     atob: globalThis.atob,
   }
 );
-const V = ctx.VaultCrypto;
+const V = ctx.vaultCrypto;
 
 // Built inside the vm: a typed array from the test realm carries that realm's
 // prototypes, and the bundle is entitled to branch on them.

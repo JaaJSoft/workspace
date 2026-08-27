@@ -27,12 +27,12 @@ window.vaultApp = (function () {
   // The metadata key is opened fresh per vault and lives only for the one
   // decryption below - nothing keeps it past this call.
   async function decryptVault(row) {
-    const V = window.VaultCrypto;
+    const V = window.vaultCrypto;
     const payload = V.vaultMetadataPayload(
       Object.assign({}, row, { vault_uuid: row.uuid })
     );
     try {
-      await window.VaultSession.verifyVaultMetadata(payload, row.metadata_sig);
+      await window.vaultSession.verifyVaultMetadata(payload, row.metadata_sig);
     } catch (err) {
       // A lock landing mid-listing fails this the same way a forged signature
       // does, and the tamper alert is the one message the user is told to act
@@ -47,7 +47,7 @@ window.vaultApp = (function () {
     }
     let metaKey;
     try {
-      metaKey = await window.VaultSession.openVaultKey(row.uuid, row.wrapped_key);
+      metaKey = await window.vaultSession.openVaultKey(row.uuid, row.wrapped_key);
       const plaintext = await V.open(
         metaKey,
         V.fromBase64Url(row.encrypted_name),
@@ -90,12 +90,12 @@ window.vaultApp = (function () {
       // reuse it.
       pendingVaultUuid: null,
       // Alpine's reactivity only sees property reads, never a call into
-      // VaultSession's own closure - so the countdown template binds this
+      // vaultSession's own closure - so the countdown template binds this
       // property, and onTick is what keeps it current.
       secondsLeft: 0,
 
       init: function () {
-        const remembered = window.VaultSession.rememberedSecret();
+        const remembered = window.vaultSession.rememberedSecret();
         if (remembered) {
           this.secretText = remembered;
           this.remember = true;
@@ -103,7 +103,7 @@ window.vaultApp = (function () {
         this.secretRequired = !remembered;
         this.secretRemembered = !!remembered;
         const self = this;
-        window.VaultSession.onLock(function () {
+        window.vaultSession.onLock(function () {
           self.vaults = [];
           self.state = 'locked';
           // showCreate has to go with the name: the dialog lives inside the
@@ -111,10 +111,10 @@ window.vaultApp = (function () {
           // next unlock reopens it on its own.
           self.closeCreateDialog();
         });
-        window.VaultSession.onTick(function () {
-          self.secondsLeft = window.VaultSession.secondsUntilLock();
+        window.vaultSession.onTick(function () {
+          self.secondsLeft = window.vaultSession.secondsUntilLock();
         });
-        window.VaultSession.watchForIdle();
+        window.vaultSession.watchForIdle();
       },
 
       secretMissing: function () {
@@ -125,7 +125,7 @@ window.vaultApp = (function () {
         this.state = 'deriving';
         this.error = '';
         try {
-          await window.VaultSession.unlock({
+          await window.vaultSession.unlock({
             password: this.password,
             secretText: this.secretText,
             remember: this.remember,
@@ -142,7 +142,7 @@ window.vaultApp = (function () {
             this.secretText = '';
             this.secretRequired = true;
             this.secretRemembered = false;
-            window.VaultSession.forgetDevice();
+            window.vaultSession.forgetDevice();
           }
           // A recovery key belonging to another account decodes cleanly and
           // then fails the very tag a mistyped password fails, so this branch
@@ -161,12 +161,12 @@ window.vaultApp = (function () {
         }
         this.password = '';
         this.state = 'unlocked';
-        this.secondsLeft = window.VaultSession.secondsUntilLock();
+        this.secondsLeft = window.vaultSession.secondsUntilLock();
         try {
           await this.loadVaults();
         } catch (err) {
           // The session opened; only the listing failed. Falling back to
-          // 'locked' here would show the password form while VaultSession
+          // 'locked' here would show the password form while vaultSession
           // still holds live keys with an unreachable countdown and Lock
           // now button - the exact disagreement this branch exists to
           // avoid, so the state stays 'unlocked' and the failure is
@@ -176,7 +176,7 @@ window.vaultApp = (function () {
       },
 
       loadVaults: async function () {
-        const rows = await window.VaultApi.listVaults();
+        const rows = await window.vaultApi.listVaults();
         let decrypted;
         try {
           decrypted = await Promise.all(rows.map(decryptVault));
@@ -192,31 +192,31 @@ window.vaultApp = (function () {
         // emptied the list. Assigning anyway would put decrypted names back
         // into a locked component - reachable state a lock exists to clear,
         // even though nothing renders it.
-        if (!window.VaultSession.isUnlocked()) return;
+        if (!window.vaultSession.isUnlocked()) return;
         this.vaults = decrypted;
       },
 
       createVault: async function () {
-        if (!window.VaultSession.isUnlocked()) return;
+        if (!window.vaultSession.isUnlocked()) return;
         const name = this.newVaultName.trim();
         if (!name) return;
         this.busy = true;
         this.error = '';
         if (!this.pendingVaultUuid) {
-          this.pendingVaultUuid = window.VaultCrypto.uuidV7();
+          this.pendingVaultUuid = window.vaultCrypto.uuidV7();
         }
         try {
           const body = await window.buildVaultCreateRequest(
-            window.VaultSession, name, this.pendingVaultUuid
+            window.vaultSession, name, this.pendingVaultUuid
           );
-          const row = await window.VaultApi.createVault(body);
+          const row = await window.vaultApi.createVault(body);
           const created = await decryptVault(row);
           // Same race loadVaults guards against: three awaits sit between the
           // check at the top of this function and here, so a lock can have
           // emptied the list already. pendingVaultUuid survives on purpose -
           // the vault was written, and a retry after re-unlocking must reuse
           // it.
-          if (!window.VaultSession.isUnlocked()) return;
+          if (!window.vaultSession.isUnlocked()) return;
           this.vaults.push(created);
           this.closeCreateDialog();
         } catch (err) {
@@ -232,7 +232,7 @@ window.vaultApp = (function () {
             // wrote into something checked.
             try {
               await this.loadVaults();
-              if (!window.VaultSession.isUnlocked()) return;
+              if (!window.vaultSession.isUnlocked()) return;
               const pending = this.pendingVaultUuid;
               if (!this.vaults.some(function (v) { return v.uuid === pending; })) {
                 this.error = 'The vault could not be created. Try again.';
@@ -257,7 +257,7 @@ window.vaultApp = (function () {
       },
 
       lockNow: function () {
-        window.VaultSession.lock();
+        window.vaultSession.lock();
       },
 
       countdown: function () {

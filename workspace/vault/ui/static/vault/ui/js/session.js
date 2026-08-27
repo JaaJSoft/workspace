@@ -58,7 +58,7 @@ function pkcs8FromSeed(seed) {
   return out;
 }
 
-window.VaultSession = (function () {
+window.vaultSession = (function () {
   let accountUuid = null;
   let signer = null;
   let recipient = null;
@@ -86,7 +86,7 @@ window.VaultSession = (function () {
   // way every Uint8Array here is. Dropping the reference is all that is left -
   // it shortens the window to the next collection instead of the page's life.
   async function publicKeyFromSeed(seed) {
-    const V = window.VaultCrypto;
+    const V = window.vaultCrypto;
     const pkcs8 = await crypto.subtle.importKey(
       'pkcs8', pkcs8FromSeed(seed), 'Ed25519', true, ['sign']
     );
@@ -126,10 +126,10 @@ window.VaultSession = (function () {
     onTick: function (callback) { tickCallbacks.push(callback); },
 
     unlock: async function (options) {
-      const V = window.VaultCrypto;
+      const V = window.vaultCrypto;
       let envelope;
       try {
-        envelope = await window.VaultApi.fetchEnvelope();
+        envelope = await window.vaultApi.fetchEnvelope();
       } catch (err) {
         // 429 is kept apart from 'network' on purpose: the envelope carries a
         // burst limit and every unlock refetches it, so this is reachable by
@@ -322,13 +322,13 @@ window.VaultSession = (function () {
 
     sign: async function (payload) {
       if (!unlocked) throw VaultUnlockError('locked');
-      const V = window.VaultCrypto;
+      const V = window.vaultCrypto;
       return V.toBase64Url(await signer.sign(V.canonicalCbor(payload)));
     },
 
     openVaultKey: async function (vaultUuid, wrappedKeyB64) {
       if (!unlocked) throw VaultUnlockError('locked');
-      const V = window.VaultCrypto;
+      const V = window.vaultCrypto;
       const raw = await recipient.open(
         V.AD.vaultKeyInfo(vaultUuid, accountUuid),
         V.fromBase64Url(wrappedKeyB64)
@@ -347,7 +347,7 @@ window.VaultSession = (function () {
 
     verifyVaultMetadata: async function (payload, signatureB64) {
       if (!unlocked) throw VaultUnlockError('locked');
-      const V = window.VaultCrypto;
+      const V = window.vaultCrypto;
       await V.verify(
         sigPublicRaw,
         V.canonicalCbor(payload),

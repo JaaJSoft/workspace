@@ -25,7 +25,7 @@ function component(extra = {}) {
     // finish() mints the first vault's UUID itself, so every test that
     // reaches it needs this much of the crypto module even when it stubs the
     // builder that would otherwise have used it.
-    VaultCrypto: { uuidV7: () => 'first-vault-uuid' },
+    vaultCrypto: { uuidV7: () => 'first-vault-uuid' },
     ...extra,
   });
   return ctx.vaultOnboarding();
@@ -183,7 +183,7 @@ const SUBTLE_STUB = {
 function sealing({ responses, ...extra } = {}) {
   const calls = [];
   const app = component({
-    VaultCrypto: CRYPTO_STUB,
+    vaultCrypto: CRYPTO_STUB,
     crypto: { subtle: SUBTLE_STUB, getRandomValues: (a) => a },
     fetch: async (url) => {
       calls.push(url);
@@ -450,7 +450,7 @@ test('the download anchor is inserted before it is clicked', () => {
     },
     URL: { createObjectURL: () => 'blob:kit', revokeObjectURL: () => {} },
     location: { origin: 'https://workspace.example' },
-    VaultOnboarding: { buildEmergencyKitPdf: () => new Uint8Array(1) },
+    vaultOnboardingTools: { buildEmergencyKitPdf: () => new Uint8Array(1) },
   });
   app.$root = { dataset: { email: 'owner@example.com' } };
   app.secretText = 'SECRET';
@@ -497,7 +497,7 @@ test('a strength estimate that throws says so instead of hanging', async () => {
   // The button is gated on the score, so a rejected estimate left it disabled
   // for good with nothing on screen to explain it.
   const app = component({
-    VaultOnboarding: {
+    vaultOnboardingTools: {
       estimateStrength: async () => {
         throw new Error('zxcvbn dictionaries missing');
       },
@@ -526,7 +526,7 @@ test('the kit download outlives the click that starts it', () => {
       revokeObjectURL: () => events.push('revoke'),
     },
     location: { origin: 'https://workspace.example' },
-    VaultOnboarding: { buildEmergencyKitPdf: () => new Uint8Array(1) },
+    vaultOnboardingTools: { buildEmergencyKitPdf: () => new Uint8Array(1) },
     setTimeout: (fn) => {
       events.push('deferred');
       fn();
@@ -598,7 +598,7 @@ test('acknowledging the kit creates the first vault', async () => {
   const created = [];
   const { app, navigated } = finishing({
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
-    VaultApi: { createVault: async (body) => { created.push(body); return body; } },
+    vaultApi: { createVault: async (body) => { created.push(body); return body; } },
   });
   app.step = 3;
   app.acknowledged = true;
@@ -611,7 +611,7 @@ test('the first vault is called Personal', async () => {
   let name = null;
   const { app } = finishing({
     buildVaultCreateRequest: async (session, vaultName) => { name = vaultName; return { uuid: 'v1' }; },
-    VaultApi: { createVault: async (body) => body },
+    vaultApi: { createVault: async (body) => body },
   });
   app.step = 3;
   app.acknowledged = true;
@@ -622,7 +622,7 @@ test('the first vault is called Personal', async () => {
 test('a failed first vault keeps the user on the kit screen', async () => {
   const { app, navigated } = finishing({
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
-    VaultApi: { createVault: async () => { throw new Error('refused'); } },
+    vaultApi: { createVault: async () => { throw new Error('refused'); } },
   });
   app.step = 3;
   app.acknowledged = true;
@@ -638,7 +638,7 @@ test('retrying the first vault never touches the account endpoints again', async
   const posted = [];
   const { app } = finishing({
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
-    VaultApi: { createVault: async () => { throw new Error('refused'); } },
+    vaultApi: { createVault: async () => { throw new Error('refused'); } },
     fetch: async (url) => { posted.push(url); return { ok: true, status: 201, json: async () => ({}) }; },
   });
   app.step = 3;
@@ -659,8 +659,8 @@ test('a retried first vault carries the UUID the first attempt sent', async () =
   const seen = [];
   const { app } = finishing({
     buildVaultCreateRequest: async (session, name, uuid) => { seen.push(uuid); return { uuid }; },
-    VaultApi: { createVault: async () => { throw new Error('refused'); } },
-    VaultCrypto: { uuidV7: () => 'first-vault-' + ++minted },
+    vaultApi: { createVault: async () => { throw new Error('refused'); } },
+    vaultCrypto: { uuidV7: () => 'first-vault-' + ++minted },
   });
   app.step = 3;
   app.acknowledged = true;
@@ -674,14 +674,14 @@ test('a retried first vault carries the UUID the first attempt sent', async () =
 test('a conflict on the first vault means it is already there', async () => {
   const { app, navigated } = finishing({
     buildVaultCreateRequest: async (session, name, uuid) => ({ uuid }),
-    VaultApi: {
+    vaultApi: {
       createVault: async () => {
         const err = new Error('conflict');
         err.status = 409;
         throw err;
       },
     },
-    VaultCrypto: { uuidV7: () => 'first-vault' },
+    vaultCrypto: { uuidV7: () => 'first-vault' },
   });
   app.step = 3;
   app.acknowledged = true;
@@ -695,7 +695,7 @@ test('the recovery key is not stored unless the box is ticked', async () => {
   const { app } = finishing({
     localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
-    VaultApi: { createVault: async () => ({}) },
+    vaultApi: { createVault: async () => ({}) },
   });
   app.step = 3;
   app.acknowledged = true;
@@ -709,7 +709,7 @@ test('ticking the box stores the key in the spelling the sheet shows', async () 
   const { app } = finishing({
     localStorage: { setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) },
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
-    VaultApi: { createVault: async () => ({}) },
+    vaultApi: { createVault: async () => ({}) },
   });
   app.step = 3;
   app.acknowledged = true;
@@ -728,7 +728,7 @@ test('with no signer for this identity, finish sends the user to the vault witho
   let attempted = false;
   const { app, navigated } = finishing({
     buildVaultCreateRequest: async () => { attempted = true; return { uuid: 'v1' }; },
-    VaultApi: { createVault: async () => { attempted = true; return {}; } },
+    vaultApi: { createVault: async () => { attempted = true; return {}; } },
   });
   app.vaultSigner = null;
   app.accountKexPublic = null;
@@ -768,7 +768,7 @@ test('a storage failure does not turn a successful creation into a reported fail
   const { app, navigated } = finishing({
     localStorage: THROWING_STORAGE,
     buildVaultCreateRequest: async () => ({ uuid: 'v1' }),
-    VaultApi: { createVault: async (body) => { created.push(body); return body; } },
+    vaultApi: { createVault: async (body) => { created.push(body); return body; } },
   });
   app.step = 3;
   app.acknowledged = true;
@@ -783,7 +783,7 @@ test('a storage failure does not block the no-signer path from reaching the vaul
   const { app, navigated } = finishing({
     localStorage: THROWING_STORAGE,
     buildVaultCreateRequest: async () => { attempted = true; return { uuid: 'v1' }; },
-    VaultApi: { createVault: async () => { attempted = true; return {}; } },
+    vaultApi: { createVault: async () => { attempted = true; return {}; } },
   });
   app.vaultSigner = null;
   app.accountKexPublic = null;

@@ -20,7 +20,7 @@ const ctx = loadScript(
     atob: globalThis.atob,
   }
 );
-const V = ctx.VaultCrypto;
+const V = ctx.vaultCrypto;
 const VECTORS = JSON.parse(
   fs.readFileSync(
     path.join(REPO_ROOT, 'workspace', 'vault', 'tests', 'crypto_vectors.json'),
@@ -31,7 +31,7 @@ const VECTORS = JSON.parse(
 // Decoded inside the vm: a Uint8Array built out here carries this realm's
 // prototypes, and the bundle is entitled to branch on them.
 const inVm = (b64) =>
-  vm.runInContext(`VaultCrypto.fromBase64Url(${JSON.stringify(b64)})`, ctx);
+  vm.runInContext(`vaultCrypto.fromBase64Url(${JSON.stringify(b64)})`, ctx);
 
 test('recovery secret vectors replay exactly', () => {
   for (const vector of VECTORS.recovery_secrets) {

@@ -31,7 +31,7 @@ const ctx = loadScript(
 // carries the test realm's constructors, and a bundled library that branches
 // on one of them takes a different path there than it does on a page.
 const VECTORS = vm.runInContext('JSON.parse(__vectorsText)', ctx);
-const V = ctx.VaultCrypto;
+const V = ctx.vaultCrypto;
 
 // Cross-realm gotcha: arrays built inside the vm carry that realm's
 // prototypes, so deepStrictEqual fails its prototype check against test-side

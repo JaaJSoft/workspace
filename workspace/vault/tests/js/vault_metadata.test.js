@@ -27,7 +27,7 @@ const ctx = loadScript(
   }
 );
 const VECTORS = vm.runInContext('JSON.parse(__vectorsText)', ctx);
-const V = ctx.VaultCrypto;
+const V = ctx.vaultCrypto;
 const vector = (kind, id) => VECTORS[kind].find((entry) => entry.id === id);
 const text = (bytes) => new TextDecoder().decode(bytes);
 
@@ -80,7 +80,7 @@ test('the payload encodes to the frozen canonical CBOR', () => {
   // Built inside the vm: cbor-x branches on constructor identity, and a
   // test-realm object takes a different path than a page would.
   const payload = vm.runInContext(
-    `VaultCrypto.vaultMetadataPayload(JSON.parse(${JSON.stringify(
+    `vaultCrypto.vaultMetadataPayload(JSON.parse(${JSON.stringify(
       JSON.stringify(frozen.payload)
     )}))`,
     ctx

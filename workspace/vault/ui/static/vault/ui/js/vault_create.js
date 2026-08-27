@@ -10,7 +10,7 @@
 // branch matches on, so a retry after a lost answer has to carry the one the
 // first attempt sent or it describes a different vault.
 window.buildVaultCreateRequest = async function buildVaultCreateRequest(session, name, vaultUuid) {
-  const V = window.VaultCrypto;
+  const V = window.vaultCrypto;
   vaultUuid = vaultUuid || V.uuidV7();
   const vaultKey = V.randomBytes(32);
   const metaKey = await V.hkdf(vaultKey, V.AD.vaultMetaInfo(vaultUuid));

@@ -47,7 +47,7 @@ function harness(overrides = {}) {
     },
   };
 
-  const VaultCrypto = {
+  const vaultCrypto = {
     AD: {
       unwrapInfo: () => 'unwrap-info',
       kexPrivAd: (uuid) => `kex:${uuid}`,
@@ -78,7 +78,7 @@ function harness(overrides = {}) {
     importSigner: async () => { calls.push('importSigner'); return { sign: async () => new Uint8Array(1) }; },
     hpkeRecipient: async () => { calls.push('hpkeRecipient'); return { open: async () => vaultKeyRaw }; },
     canonicalCbor: () => new Uint8Array(2),
-    ...(overrides.VaultCrypto || {}),
+    ...(overrides.vaultCrypto || {}),
   };
 
   const ctx = loadScripts(
@@ -88,7 +88,7 @@ function harness(overrides = {}) {
     ],
     {
       crypto,
-      VaultCrypto,
+      vaultCrypto,
       TextEncoder: globalThis.TextEncoder,
       getCSRFToken: () => 'csrf',
       localStorage: {
@@ -107,7 +107,7 @@ function harness(overrides = {}) {
     }
   );
   return {
-    ctx, calls, amk, kexPriv, sigSeed, secretBytes, vaultKeyRaw, storage, session: ctx.VaultSession,
+    ctx, calls, amk, kexPriv, sigSeed, secretBytes, vaultKeyRaw, storage, session: ctx.vaultSession,
   };
 }
 
@@ -145,7 +145,7 @@ test('a wrong password fails locally, with no request beyond the envelope', asyn
   let requests = 0;
   const h = harness({
     fetch: async () => { requests += 1; return { ok: true, status: 200, json: async () => ENVELOPE }; },
-    VaultCrypto: { open: async () => { throw new Error('tag mismatch'); } },
+    vaultCrypto: { open: async () => { throw new Error('tag mismatch'); } },
   });
   await assert.rejects(
     h.session.unlock({ password: 'wrong', secretText: SECRET, remember: false }),
@@ -165,7 +165,7 @@ test('a failure on the signing key still zeroes the already-unwrapped key exchan
 });
 
 test('a broken kdf derivation is refused with a defined reason and zeroes what was already derived', async () => {
-  const h = harness({ VaultCrypto: { hkdf: async () => { throw new Error('boom'); } } });
+  const h = harness({ vaultCrypto: { hkdf: async () => { throw new Error('boom'); } } });
   await assert.rejects(
     h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
     (err) => err.reason === 'identity'
@@ -175,7 +175,7 @@ test('a broken kdf derivation is refused with a defined reason and zeroes what w
 });
 
 test('a malformed served signing key is refused with a defined reason and zeroes both unwrapped private keys', async () => {
-  const h = harness({ VaultCrypto: { decodePublicKey: () => { throw new Error('bad algorithm byte'); } } });
+  const h = harness({ vaultCrypto: { decodePublicKey: () => { throw new Error('bad algorithm byte'); } } });
   await assert.rejects(
     h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
     (err) => err.reason === 'substituted-key'
@@ -187,7 +187,7 @@ test('a malformed served signing key is refused with a defined reason and zeroes
 });
 
 test('a broken signer import is refused with a defined reason and zeroes both unwrapped private keys', async () => {
-  const h = harness({ VaultCrypto: { importSigner: async () => { throw new Error('boom'); } } });
+  const h = harness({ vaultCrypto: { importSigner: async () => { throw new Error('boom'); } } });
   await assert.rejects(
     h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
     (err) => err.reason === 'substituted-key'
@@ -197,7 +197,7 @@ test('a broken signer import is refused with a defined reason and zeroes both un
 });
 
 test('a broken key-exchange import is refused with a defined reason and zeroes both unwrapped private keys', async () => {
-  const h = harness({ VaultCrypto: { hpkeRecipient: async () => { throw new Error('boom'); } } });
+  const h = harness({ vaultCrypto: { hpkeRecipient: async () => { throw new Error('boom'); } } });
   await assert.rejects(
     h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
     (err) => err.reason === 'substituted-key'
@@ -214,7 +214,7 @@ test('a second unlock that fails after importing keys leaves the live session ex
   let importCalls = 0;
   let hpkeCalls = 0;
   const h = harness({
-    VaultCrypto: {
+    vaultCrypto: {
       importSigner: async () => {
         importCalls += 1;
         const id = importCalls;
@@ -245,7 +245,7 @@ test('a second unlock that fails after importing keys leaves the live session ex
 });
 
 test('a broken master-key derivation is refused with a defined reason and zeroes the decoded recovery key', async () => {
-  const h = harness({ VaultCrypto: { deriveAmk: async () => { throw new Error('boom'); } } });
+  const h = harness({ vaultCrypto: { deriveAmk: async () => { throw new Error('boom'); } } });
   await assert.rejects(
     h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
     (err) => err.reason === 'identity'
@@ -254,7 +254,7 @@ test('a broken master-key derivation is refused with a defined reason and zeroes
 });
 
 test('a mistyped recovery key is refused with its own reason, not identity', async () => {
-  const h = harness({ VaultCrypto: { crockfordDecode: () => { throw new Error('invalid crockford input'); } } });
+  const h = harness({ vaultCrypto: { crockfordDecode: () => { throw new Error('invalid crockford input'); } } });
   await assert.rejects(
     h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
     (err) => err.reason === 'recovery-key'
@@ -263,7 +263,7 @@ test('a mistyped recovery key is refused with its own reason, not identity', asy
 
 test('a crash mapped to a defined reason keeps the original error as its cause', async () => {
   const original = new TypeError('kexPubPayload is not a function');
-  const h = harness({ VaultCrypto: { hkdf: async () => { throw original; } } });
+  const h = harness({ vaultCrypto: { hkdf: async () => { throw original; } } });
   await assert.rejects(
     h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
     (err) => err.reason === 'identity' && err.cause === original
@@ -304,7 +304,7 @@ test('the attestation is verified against the recomputed key, never the served o
   const servedKey = Object.assign(Uint8Array.from([115, 105, 103, 112, 117, 98]), { fromServer: true });
   let verifyBytesArg = null;
   const h = harness({
-    VaultCrypto: {
+    vaultCrypto: {
       decodePublicKey: () => servedKey,
       verifyBytes: async (pub) => { verifyBytesArg = pub; },
     },
@@ -411,7 +411,7 @@ test('signing before unlocking is refused rather than silently empty', async () 
 test('a broken metadata-key derivation still zeroes the opened vault key', async () => {
   const h = harness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
-  h.ctx.VaultCrypto.hkdf = async () => { throw new Error('boom'); };
+  h.ctx.vaultCrypto.hkdf = async () => { throw new Error('boom'); };
   await assert.rejects(h.session.openVaultKey('0192f3a4-2222-7d8e-9f01-23456789abcd', 'd3JhcHBlZA'));
   assert.ok(h.vaultKeyRaw.every((byte) => byte === 0));
 });

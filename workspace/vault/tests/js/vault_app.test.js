@@ -10,7 +10,7 @@ function app(session = {}, api = {}, crypto = {}) {
     'workspace/vault/ui/static/vault/ui/js/vault_create.js',
     'workspace/vault/ui/static/vault/ui/js/vault_app.js',
   ], {
-    VaultSession: {
+    vaultSession: {
       isUnlocked: () => false,
       unlock: async () => {},
       lock() {},
@@ -27,8 +27,8 @@ function app(session = {}, api = {}, crypto = {}) {
       accountKexPublicRaw: () => new Uint8Array(32),
       ...session,
     },
-    VaultApi: { listVaults: async () => [], createVault: async () => ({}), ...api },
-    VaultCrypto: {
+    vaultApi: { listVaults: async () => [], createVault: async () => ({}), ...api },
+    vaultCrypto: {
       uuidV7: () => 'vault-uuid',
       randomBytes: () => new Uint8Array(32),
       toBase64Url: () => 'b64',
@@ -277,7 +277,7 @@ test('a listing failure after a successful unlock keeps the session and the scre
     listVaults: async () => { throw new Error('network down'); },
   });
   await component.unlock();
-  // VaultSession reports isUnlocked() === true in this harness: the screen
+  // vaultSession reports isUnlocked() === true in this harness: the screen
   // must say the same thing, not fall back to the password form while the
   // session still holds live keys.
   assert.equal(component.state, 'unlocked');

@@ -109,7 +109,7 @@ window.vaultOnboarding = function vaultOnboarding() {
         return;
       }
       try {
-        const result = await window.VaultOnboarding.estimateStrength(this.password);
+        const result = await window.vaultOnboardingTools.estimateStrength(this.password);
         if (generation !== this.generation) return;
         this.score = result.score;
         this.feedback = (result.feedback && result.feedback.warning) || '';
@@ -237,12 +237,12 @@ window.vaultOnboarding = function vaultOnboarding() {
         // Minted here rather than inside the builder: the builder runs once
         // per attempt, and a UUID minted there would be a new one each time.
         if (!this.firstVaultUuid) {
-          this.firstVaultUuid = window.VaultCrypto.uuidV7();
+          this.firstVaultUuid = window.vaultCrypto.uuidV7();
         }
         const body = await window.buildVaultCreateRequest(
           this.vaultSession(), 'Personal', this.firstVaultUuid
         );
-        await window.VaultApi.createVault(body);
+        await window.vaultApi.createVault(body);
         this.rememberOnThisDevice();
         window.location.assign(this.$root.dataset.vaultUrl);
       } catch (err) {
@@ -271,8 +271,8 @@ window.vaultOnboarding = function vaultOnboarding() {
         accountUuid: function () { return self.accountUuid; },
         accountKexPublicRaw: function () { return self.accountKexPublic; },
         sign: async function (payload) {
-          return window.VaultCrypto.toBase64Url(
-            await self.vaultSigner.sign(window.VaultCrypto.canonicalCbor(payload))
+          return window.vaultCrypto.toBase64Url(
+            await self.vaultSigner.sign(window.vaultCrypto.canonicalCbor(payload))
           );
         },
       };
@@ -283,7 +283,7 @@ window.vaultOnboarding = function vaultOnboarding() {
     // a signer and the account's own key-exchange public key for the vault
     // this step is about to create.
     async captureVaultSigningMaterial(sigSeed, kexPrivate, kexPublic) {
-      const V = window.VaultCrypto;
+      const V = window.vaultCrypto;
       this.vaultSigner = await V.importSigner(sigSeed);
       this.accountKexPublic = V.decodePublicKey(V.fromBase64Url(kexPublic));
       sigSeed.fill(0);
@@ -293,7 +293,7 @@ window.vaultOnboarding = function vaultOnboarding() {
     // The whole sealing flow, in the order the norm sets out: init for the
     // salt and the account identifier, derive, wrap, attest, finalize.
     async generateAndSeal() {
-      const V = window.VaultCrypto;
+      const V = window.vaultCrypto;
       this.busy = true;
       this.error = '';
       // init answers 409 only when the identity is already active. On a first
@@ -476,7 +476,7 @@ window.vaultOnboarding = function vaultOnboarding() {
     },
 
     downloadKit() {
-      const blob = window.VaultOnboarding.buildEmergencyKitPdf({
+      const blob = window.vaultOnboardingTools.buildEmergencyKitPdf({
         email: this.$root.dataset.email,
         serverUrl: window.location.origin,
         secretText: this.groupedSecret(),

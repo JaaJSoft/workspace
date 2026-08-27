@@ -35,7 +35,7 @@ const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vendor/vault-crypt
 // production and report failures that do not exist.
 const CORPUS = vm.runInContext('JSON.parse(__corpusText)', ctx);
 
-const V = ctx.VaultCrypto;
+const V = ctx.vaultCrypto;
 const b64 = (bytes) => V.toBase64Url(bytes);
 
 test('every generated cbor payload encodes to the reference bytes', () => {

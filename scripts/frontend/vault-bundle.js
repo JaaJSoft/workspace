@@ -22,7 +22,7 @@ import { crockfordEncode, crockfordDecode } from './src/vault/crockford.js';
 import { VAULT_METADATA_TYPE, vaultMetadataPayload } from './src/vault/metadata.js';
 import { uuidV7 } from './src/vault/uuid.js';
 
-window.VaultCrypto = {
+window.vaultCrypto = {
   toBase64Url,
   fromBase64Url,
   randomBytes,

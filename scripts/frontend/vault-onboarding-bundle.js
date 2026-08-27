@@ -55,4 +55,4 @@ export function buildEmergencyKitPdf(kit) {
   return doc.output('blob');
 }
 
-window.VaultOnboarding = { estimateStrength, emergencyKitFields, buildEmergencyKitPdf };
+window.vaultOnboardingTools = { estimateStrength, emergencyKitFields, buildEmergencyKitPdf };

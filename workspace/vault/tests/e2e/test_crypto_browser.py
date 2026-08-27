@@ -39,8 +39,8 @@ BUNDLE_URL = "/static/vault/ui/js/vendor/vault-crypto.js"
 # milliseconds per vector, and a chatty test would pay that in latency too.
 REPLAY = """
 async (vectors) => {
-  const V = window.VaultCrypto;
-  if (!V) return ['bundle did not publish window.VaultCrypto'];
+  const V = window.vaultCrypto;
+  if (!V) return ['bundle did not publish window.vaultCrypto'];
   const failures = [];
   const b64 = (bytes) => V.toBase64Url(bytes);
   const utf8 = (text) => new TextEncoder().encode(text);
@@ -127,7 +127,7 @@ async (vectors) => {
 # an assertion about production rather than about the harness.
 REPLAY_CORPUS = """
 async (corpus) => {
-  const V = window.VaultCrypto;
+  const V = window.vaultCrypto;
   const failures = [];
   const b64 = (bytes) => V.toBase64Url(bytes);
 
@@ -305,7 +305,7 @@ class CryptoBundleBrowserTests(EngineChecks, PlaywrightTestCase):
         self._load_bundle()
         elapsed = self.page.evaluate("""
             async () => {
-              const V = window.VaultCrypto;
+              const V = window.vaultCrypto;
               const started = performance.now();
               await V.deriveAmk({
                 password: 'Tr0ub4dor&3',

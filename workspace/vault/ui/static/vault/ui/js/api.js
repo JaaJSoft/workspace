@@ -8,7 +8,7 @@ function VaultApiError(message, status) {
   return error;
 }
 
-window.VaultApi = (function () {
+window.vaultApi = (function () {
   function request(url, options) {
     const settings = options || {};
     const method = settings.method || 'GET';

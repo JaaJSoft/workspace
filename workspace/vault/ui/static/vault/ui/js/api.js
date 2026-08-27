@@ -46,5 +46,55 @@ window.vaultApi = (function () {
     deleteVault: function (uuid) {
       return request('/api/v1/vault/vaults/' + uuid, { method: 'DELETE' });
     },
+    listFolders: function (vaultUuid) {
+      return request('/api/v1/vault/folders?vault=' + encodeURIComponent(vaultUuid));
+    },
+    createFolder: function (body) {
+      return request('/api/v1/vault/folders', { method: 'POST', body: body });
+    },
+    updateFolder: function (uuid, body) {
+      return request('/api/v1/vault/folders/' + uuid, { method: 'PATCH', body: body });
+    },
+    // Not a DELETE: the folder's entries have to be re-signed with no folder,
+    // and they travel with the deletion so the two cannot half-happen.
+    deleteFolder: function (uuid, entries) {
+      return request('/api/v1/vault/folders/' + uuid + '/delete', {
+        method: 'POST',
+        body: { entries: entries },
+      });
+    },
+    listTags: function (vaultUuid) {
+      return request('/api/v1/vault/tags?vault=' + encodeURIComponent(vaultUuid));
+    },
+    createTag: function (body) {
+      return request('/api/v1/vault/tags', { method: 'POST', body: body });
+    },
+    updateTag: function (uuid, body) {
+      return request('/api/v1/vault/tags/' + uuid, { method: 'PATCH', body: body });
+    },
+    deleteTag: function (uuid) {
+      return request('/api/v1/vault/tags/' + uuid, { method: 'DELETE' });
+    },
+    listEntries: function (vaultUuid, options) {
+      var url = '/api/v1/vault/entries?vault=' + encodeURIComponent(vaultUuid);
+      if (options && options.trashed) url += '&trashed=true';
+      return request(url);
+    },
+    getEntry: function (uuid) {
+      return request('/api/v1/vault/entries/' + uuid);
+    },
+    createEntry: function (body) {
+      return request('/api/v1/vault/entries', { method: 'POST', body: body });
+    },
+    // PUT, not PATCH: the signature covers every field, so a partial write
+    // would store a signature over values the row no longer holds.
+    updateEntry: function (uuid, body) {
+      return request('/api/v1/vault/entries/' + uuid, { method: 'PUT', body: body });
+    },
+    // The trash is a view, not a rewrite: the server sets deleted_at and
+    // leaves metadata_sig alone, so the entry still verifies from the trash.
+    trashEntry: function (uuid) {
+      return request('/api/v1/vault/entries/' + uuid, { method: 'DELETE' });
+    },
   };
 })();

@@ -67,9 +67,26 @@ window.vaultSession = (function () {
   const lockCallbacks = [];
   const tickCallbacks = [];
   let unlocked = false;
+  // Moved by every lock. A key operation is several awaits long and the idle
+  // timer fires between them without asking, so checking `unlocked` once at
+  // the top is a check about a session that may no longer be the one the call
+  // finishes in.
+  let generation = 0;
   const IDLE_LOCK_MS = 5 * 60 * 1000;
   let expiresAt = 0;
   let ticker = null;
+
+  // Returns the re-check to run after every await. It refuses a call that
+  // outlived its session, and also one that spanned a lock *and* a fresh
+  // unlock: the keys such a call captured belong to a session nobody is in
+  // any more, which is why the generation is compared rather than `unlocked`.
+  function sessionGuard() {
+    if (!unlocked) throw VaultUnlockError('locked');
+    const mine = generation;
+    return function stillOurs() {
+      if (!unlocked || generation !== mine) throw VaultUnlockError('locked');
+    };
+  }
 
   function zero(buffer) {
     if (buffer && buffer.fill) buffer.fill(0);
@@ -277,6 +294,7 @@ window.vaultSession = (function () {
     lock: function () {
       if (!unlocked) return;
       unlocked = false;
+      generation += 1;
       signer = null;
       recipient = null;
       sigPublicRaw = null;
@@ -321,16 +339,18 @@ window.vaultSession = (function () {
     },
 
     sign: async function (payload) {
-      if (!unlocked) throw VaultUnlockError('locked');
+      const stillOurs = sessionGuard();
       const V = window.vaultCrypto;
-      return V.toBase64Url(await signer.sign(V.canonicalCbor(payload)));
+      const signature = await signer.sign(V.canonicalCbor(payload));
+      stillOurs();
+      return V.toBase64Url(signature);
     },
 
     // The vault key itself never encrypts anything and never leaves this
     // function: every caller wants one of its HKDF children, and handing back
     // the parent would put a key that opens everything in a caller's hands.
     _openDerivedKey: async function (vaultUuid, wrappedKeyB64, info) {
-      if (!unlocked) throw VaultUnlockError('locked');
+      const stillOurs = sessionGuard();
       const V = window.vaultCrypto;
       const raw = await recipient.open(
         V.AD.vaultKeyInfo(vaultUuid, accountUuid),
@@ -338,12 +358,18 @@ window.vaultSession = (function () {
       );
       let derived;
       try {
+        stillOurs();
         derived = await V.hkdf(raw, info);
       } finally {
         zero(raw);
       }
       try {
-        return await V.importAeadKey(derived);
+        stillOurs();
+        const key = await V.importAeadKey(derived);
+        // Re-checked once more: a lock during the import would otherwise hand
+        // back a working key for a session that is closed.
+        stillOurs();
+        return key;
       } finally {
         // The caller never gets a copy it could forget to zero: what it gets
         // back is a non-extractable key.
@@ -372,7 +398,7 @@ window.vaultSession = (function () {
     // before any cryptography, so a vault payload replayed as an entry is
     // refused on its own name rather than on a signature that would verify.
     verifyRecord: async function (payload, signatureB64, expectedType) {
-      if (!unlocked) throw VaultUnlockError('locked');
+      const stillOurs = sessionGuard();
       const V = window.vaultCrypto;
       await V.verify(
         sigPublicRaw,
@@ -380,6 +406,9 @@ window.vaultSession = (function () {
         V.fromBase64Url(signatureB64),
         expectedType
       );
+      // Returning normally is this function's way of saying "verified"; a
+      // session that closed mid-flight must not get that answer.
+      stillOurs();
     },
 
     verifyVaultMetadata: async function (payload, signatureB64) {

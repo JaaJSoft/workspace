@@ -674,3 +674,73 @@ test('verifyRecord passes the expected type through to verify', async () => {
   await h.session.verifyVaultMetadata({ v: 1 }, 'AQ');
   assert.deepStrictEqual(Array.from(seen), ['entry-metadata', 'vault-metadata']);
 });
+
+// A key operation is several awaits long and the idle timer fires between
+// them. These hold a derivation open, lock underneath it, and let it finish.
+function racingHarness(overrides = {}) {
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const derived = Uint8Array.from({ length: 32 }, (_, i) => i + 200);
+  const imported = { algorithm: { name: 'AES-GCM' }, extractable: false };
+  const h = harness({
+    vaultCrypto: {
+      hkdf: async (_raw, info) => {
+        if (info === 'unwrap-info') return Uint8Array.from([13, 14]);
+        await pending;
+        return derived;
+      },
+      importAeadKey: async () => imported,
+      ...(overrides.vaultCrypto || {}),
+    },
+  });
+  return { ...h, release, derived, imported };
+}
+
+test('a key operation that outlived its session is refused', async () => {
+  const h = racingHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const opening = h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  h.session.lock();
+  h.release();
+  await assert.rejects(opening, (err) => err.reason === 'locked');
+  assert.ok(h.vaultKeyRaw.every((byte) => byte === 0), 'the vault key must still be zeroed');
+});
+
+test('a key operation that spanned a lock and a fresh unlock is refused too', async () => {
+  // The case a plain `unlocked` re-check would miss: by the time the call
+  // resumes the flag is true again, but the keys it captured belong to a
+  // session nobody is in any more.
+  const h = racingHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const opening = h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  h.session.lock();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  assert.equal(h.session.isUnlocked(), true);
+  h.release();
+  await assert.rejects(opening, (err) => err.reason === 'locked');
+});
+
+test('a signature that outlived its session is refused', async () => {
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const h = harness({
+    vaultCrypto: {
+      importSigner: async () => ({
+        sign: async () => { await pending; return new Uint8Array(1); },
+      }),
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const signing = h.session.sign({ v: 1 });
+  h.session.lock();
+  release();
+  await assert.rejects(signing, (err) => err.reason === 'locked');
+});
+
+test('an operation still resolves when no lock interrupts it', async () => {
+  const h = racingHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const opening = h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  h.release();
+  assert.equal(await opening, h.imported);
+});

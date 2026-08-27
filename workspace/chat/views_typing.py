@@ -1,5 +1,3 @@
-import logging
-
 from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -7,12 +5,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..common.logging import scrub
 from .models import Conversation, ConversationMember, Message, MessageAttachment
 from .services.conversations import get_active_membership, get_unread_counts
+from .services.deletion import discard_attachment_files
 from .services.notifications import notify_conversation_members
-
-logger = logging.getLogger(__name__)
 
 
 @extend_schema(tags=["Chat - Conversations"])
@@ -67,14 +63,10 @@ class ConversationClearView(APIView):
 
         messages = Message.objects.filter(conversation_id=conversation_id)
 
-        # Snapshot attachment file references before the delete so we can
-        # remove them from storage AFTER the DB transaction commits. Otherwise
-        # a rollback would leave attachment rows pointing at missing blobs.
-        attachment_files = [
-            att.file
-            for att in MessageAttachment.objects.filter(message__in=messages).iterator()
-            if att.file
-        ]
+        # Snapshot the attachments before the delete: their blobs and cached
+        # metadata are cleared AFTER the DB transaction commits, or a rollback
+        # would leave live rows pointing at missing files.
+        attachments = list(MessageAttachment.objects.filter(message__in=messages))
 
         # Delete all messages (hard delete, not soft) + reset unread counts
         with transaction.atomic():
@@ -84,14 +76,7 @@ class ConversationClearView(APIView):
                 left_at__isnull=True,
             ).update(unread_count=0)
 
-            def _cleanup_files():
-                for f in attachment_files:
-                    try:
-                        f.delete(save=False)
-                    except OSError:
-                        logger.warning("Could not delete file %s", scrub(f.name))
-
-            transaction.on_commit(_cleanup_files)
+            transaction.on_commit(lambda: discard_attachment_files(attachments))
 
         notify_conversation_members(
             Conversation.objects.get(pk=conversation_id),

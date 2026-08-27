@@ -24,7 +24,6 @@ from .models import (
     ConversationMember,
     Message,
     MessageAttachment,
-    PinnedMessage,
     Reaction,
 )
 from .serializers import (
@@ -34,6 +33,7 @@ from .serializers import (
     ReactionToggleSerializer,
 )
 from .services.conversations import get_active_membership
+from .services.deletion import purge_message_dependents
 from .services.notifications import notify_conversation_members
 from .services.posting import deliver_message
 from .services.rendering import render_message_body
@@ -515,7 +515,7 @@ class MessageDetailView(APIView):
                 unread_count=Greatest(F("unread_count") - 1, 0),
             )
 
-        PinnedMessage.objects.filter(message=message).delete()
+        purge_message_dependents(message)
 
         notify_conversation_members(
             message.conversation,

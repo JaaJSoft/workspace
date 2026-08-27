@@ -340,7 +340,12 @@ def validate_field_map(value):
         try:
             qualify_field_id(field_id)
         except ValueError as exc:
-            raise serializers.ValidationError(str(exc)) from exc
+            # Fixed wording rather than the exception's: a field id is a value
+            # the caller chose, and it must not travel back out inside an error.
+            raise serializers.ValidationError(
+                "a field id must be a reserved identifier or a well-formed "
+                "custom: label"
+            ) from exc
         if not isinstance(ciphertext, str) or not ciphertext:
             raise serializers.ValidationError("a field value must be base64url text")
         # The same cap _OpaqueField applies: these values ride inside a JSON

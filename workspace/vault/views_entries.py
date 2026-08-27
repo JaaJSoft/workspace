@@ -28,7 +28,8 @@ from .queries import accessible_entries_q, active_identity, reachable_vault
 from .serializers import VaultEntrySerializer, VaultEntryWriteSerializer
 from .services.attestation import AttestationError
 from .services.entries import (
-    EntryWriteError,
+    UnknownFolder,
+    UnknownTag,
     entry_queryset,
     entry_signature_payload,
     resolve_folder,
@@ -67,13 +68,30 @@ class _EntryWriteMixin:
         if vault is None or (existing is not None and existing.vault_id != vault.pk):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        # The wording is chosen here from the kind of failure, never taken from
+        # the exception: an exception's text is a path from the server's
+        # internals to a response body.
         try:
             folder = resolve_folder(request.user, vault, data["folder"])
+        except UnknownFolder:
+            return Response(
+                {"detail": "The folder does not exist in this vault."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
             tags = resolve_tags(request.user, vault, data["tags"])
-        except EntryWriteError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except UnknownTag:
+            return Response(
+                {"detail": "A tag does not exist in this vault."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         entry = existing or VaultEntry(uuid=data["uuid"], vault=vault)
+        if existing is None:
+            # The generation the vault key is on right now, never the column
+            # default: an entry created after a rotation would otherwise sign a
+            # key generation it was not encrypted under.
+            entry.key_version = vault.key_version
         entry.type = data["type"]
         entry.folder = folder
         entry.is_favorite = data["is_favorite"]
@@ -100,9 +118,13 @@ class _EntryWriteMixin:
                     # overwriting it.
                     entry.save(force_insert=True)
                 write_entry(entry, tags=tags, fields=data["fields"])
-        except ValidationError as exc:
+        except ValidationError:
+            # resolve_folder already scoped the folder to the vault, so clean()
+            # has nothing left to reject; this stays as a floor, and says so
+            # without handing back the validator's own text.
             return Response(
-                {"detail": exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "The entry could not be validated."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except IntegrityError:
             return Response(status=status.HTTP_409_CONFLICT)

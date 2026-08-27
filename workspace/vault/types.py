@@ -44,7 +44,13 @@ class TypedEntryManager(models.Manager):
         return super().get_queryset().filter(type=self.entry_type)
 
     def create(self, **kwargs):
-        kwargs.setdefault("type", self.entry_type)
+        # setdefault alone would let LoginEntry.objects.create(type="passport")
+        # through, and as_typed could then not re-cast the row it just wrote.
+        declared = kwargs.setdefault("type", self.entry_type)
+        if declared != self.entry_type:
+            raise ValueError(
+                f"{self.model.__name__} cannot create a {declared!r} entry"
+            )
         return super().create(**kwargs)
 
 

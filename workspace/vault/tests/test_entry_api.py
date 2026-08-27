@@ -350,3 +350,19 @@ class EntryApiTests(TestCase):
         body = self.signed_entry(fields={"password": "A" * 5000})
         self.assertEqual(self._create(body).status_code, 400)
         self.assertFalse(VaultEntry.objects.filter(uuid=body["uuid"]).exists())
+
+    def test_a_new_entry_takes_its_key_generation_from_the_vault(self):
+        """key_version is inside the signature, so a column default would make
+        a rotated vault's first entry claim a generation it was never
+        encrypted under."""
+        rotated = make_vault(self.user, key_version=3)
+        body = self.signed_entry(vault=rotated, key_version=3)
+        response = self._create(body)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(VaultEntry.objects.get(uuid=body["uuid"]).key_version, 3)
+
+    def test_an_entry_signed_over_the_wrong_key_generation_is_refused(self):
+        rotated = make_vault(self.user, key_version=3)
+        body = self.signed_entry(vault=rotated, key_version=1)
+        self.assertEqual(self._create(body).status_code, 400)
+        self.assertFalse(VaultEntry.objects.filter(uuid=body["uuid"]).exists())

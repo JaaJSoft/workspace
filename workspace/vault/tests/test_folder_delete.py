@@ -6,6 +6,9 @@ signature. Both halves therefore travel in one request and commit or roll back
 together.
 """
 
+from unittest import mock
+
+from django.db.models.deletion import RestrictedError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -204,3 +207,22 @@ class FolderDeleteTests(TestCase):
         body = {"entries": [self.resigned(entry) for entry in self.entries]}
         response = self._post(self.folder, body)
         self.assertEqual(response.status_code, 409)
+
+    def test_an_entry_that_arrives_after_the_check_answers_409_not_500(self):
+        """The occupants are read inside the transaction, but a concurrent
+        write can still land between that read and the delete. RESTRICT then
+        surfaces as an IntegrityError where the same state, seen in time, is a
+        409 - and the caller must not be able to tell the two apart."""
+        body = {"entries": [self.resigned(entry) for entry in self.entries]}
+        with mock.patch.object(
+            VaultFolder,
+            "delete",
+            side_effect=RestrictedError("still referenced", set()),
+        ):
+            response = self._post(self.folder, body)
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultFolder.objects.filter(uuid=self.folder.uuid).exists())
+        for entry in self.entries:
+            entry.refresh_from_db()
+            self.assertEqual(entry.folder_id, self.folder.pk)
+            self.assertEqual(entry.metadata_sig, "AQ")

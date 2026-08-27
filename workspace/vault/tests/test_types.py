@@ -1,6 +1,7 @@
 from django.test import SimpleTestCase, TestCase
 
 from workspace.vault.models import EntryType, VaultEntry
+from workspace.vault.tests.factories import make_account, make_vault
 from workspace.vault.types import Field, LoginEntry, as_typed, registry_for, schema_for
 
 
@@ -17,13 +18,18 @@ class RegistryTests(SimpleTestCase):
                 self.assertIn(field.field_id, {"username", "password", "totp", "uri"})
 
     def test_a_schema_declaring_an_unreserved_identifier_is_refused(self):
+        # Built through type() rather than a class statement: defining the
+        # class *is* the thing under test, so the name it would bind is dead.
         with self.assertRaises(ValueError):
-
-            class BadEntry(LoginEntry):
-                class Meta:
-                    proxy = True
-
-                FIELD_SCHEMA = (Field("pin", label="PIN"),)
+            type(
+                "BadEntry",
+                (LoginEntry,),
+                {
+                    "__module__": __name__,
+                    "Meta": type("Meta", (), {"proxy": True}),
+                    "FIELD_SCHEMA": (Field("pin", label="PIN"),),
+                },
+            )
 
     def test_registry_for_an_unknown_type_raises(self):
         with self.assertRaises(KeyError):
@@ -41,3 +47,25 @@ class AsTypedTests(TestCase):
         self.assertEqual(
             LoginEntry.objects.all().query.where.children[0].rhs, EntryType.LOGIN
         )
+
+    def test_the_manager_refuses_to_create_an_entry_of_another_type(self):
+        """setdefault alone would persist the caller's type, and as_typed
+        could then not re-cast the row the manager had just written."""
+        user, _, _ = make_account("owner")
+        vault = make_vault(user)
+        with self.assertRaises(ValueError):
+            LoginEntry.objects.create(
+                vault=vault,
+                type="passport",
+                encrypted_name="AQ",
+                metadata_sig="AQ",
+            )
+        self.assertFalse(VaultEntry.objects.exists())
+
+    def test_the_manager_stamps_its_own_type_when_none_is_given(self):
+        user, _, _ = make_account("owner")
+        vault = make_vault(user)
+        entry = LoginEntry.objects.create(
+            vault=vault, encrypted_name="AQ", metadata_sig="AQ"
+        )
+        self.assertEqual(entry.type, EntryType.LOGIN)

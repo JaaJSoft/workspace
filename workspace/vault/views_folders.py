@@ -48,6 +48,19 @@ class _SignatureRefused(Exception):
     """
 
 
+class _ContentsChanged(Exception):
+    """The folder does not hold what the request says it holds.
+
+    Raised for the same reason as the one above: the checks run inside the
+    transaction, so a return would commit it. ``detail`` is chosen at the raise
+    site from a literal - never taken from a caught exception.
+    """
+
+    def __init__(self, detail):
+        super().__init__(detail)
+        self.detail = detail
+
+
 def _bad_parent():
     return Response(
         {"detail": "The parent folder does not exist in this vault."},
@@ -245,37 +258,40 @@ class FolderDeleteView(CacheControlMixin, APIView):
         if vault is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        # A folder with children is refused rather than emptied: VaultFolder.parent
-        # is CASCADE, so deleting it would take folders the client never named -
-        # and their signatures - with it, and would meet the RESTRICT on
-        # VaultEntry.folder as an unhandled IntegrityError the moment one of
-        # those children still held an entry. The client deletes bottom-up.
-        if folder.children.exists():
-            return Response(
-                {"detail": "The folder still has subfolders."},
-                status=status.HTTP_409_CONFLICT,
-            )
-
         serializer = FolderDeleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         submitted = {
             item["uuid"]: item for item in serializer.validated_data["entries"]
         }
 
-        # Trashed entries included: deleted_at is a view, folder_id is still a
-        # RESTRICT reference, and a client that skipped them would meet a 409
-        # it has no way to interpret.
-        occupants = list(
-            VaultEntry.objects.filter(folder=folder).prefetch_related("tags", "fields")
-        )
-        if {entry.uuid for entry in occupants} != set(submitted):
-            return Response(
-                {"detail": "The submitted entries do not match the folder's contents."},
-                status=status.HTTP_409_CONFLICT,
-            )
-
         try:
             with transaction.atomic():
+                # Both checks read inside the transaction. Outside it they
+                # describe a folder that may already have changed, and the
+                # delete below then meets the RESTRICT on VaultEntry.folder as
+                # an IntegrityError rather than as the 409 the same state
+                # produces when it is seen in time.
+                #
+                # A folder with children is refused rather than emptied:
+                # VaultFolder.parent is CASCADE, so deleting it would take
+                # folders the client never named - and their signatures - with
+                # it. The client deletes bottom-up.
+                if folder.children.exists():
+                    raise _ContentsChanged("The folder still has subfolders.")
+
+                # Trashed entries included: deleted_at is a view, folder_id is
+                # still a RESTRICT reference, and a client that skipped them
+                # would meet a 409 it has no way to interpret.
+                occupants = list(
+                    VaultEntry.objects.filter(folder=folder).prefetch_related(
+                        "tags", "fields"
+                    )
+                )
+                if {entry.uuid for entry in occupants} != set(submitted):
+                    raise _ContentsChanged(
+                        "The submitted entries do not match the folder's contents."
+                    )
+
                 for entry in occupants:
                     item = submitted[entry.uuid]
                     # Assigned before the payload is built, so what is verified
@@ -303,6 +319,16 @@ class FolderDeleteView(CacheControlMixin, APIView):
             return Response(
                 {"detail": "An entry signature does not verify."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        except _ContentsChanged as refusal:
+            return Response({"detail": refusal.detail}, status=status.HTTP_409_CONFLICT)
+        except IntegrityError:
+            # An entry was attached to this folder after the read above, so the
+            # RESTRICT surfaces here. The transaction has already rolled back;
+            # the caller sees the same 409 as the checked path.
+            return Response(
+                {"detail": "The folder changed while it was being deleted."},
+                status=status.HTTP_409_CONFLICT,
             )
 
         return Response(status=status.HTTP_204_NO_CONTENT)

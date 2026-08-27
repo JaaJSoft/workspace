@@ -16,11 +16,20 @@ from .metadata import entry_metadata_payload
 class EntryWriteError(Exception):
     """A folder or a tag the caller named is not in this vault.
 
-    One exception for both because the answer is the same 400: naming a row
-    from another vault and naming one that does not exist are the client's
-    error either way, and telling them apart would say whether a UUID exists
-    somewhere the caller cannot see.
+    Naming a row from another vault and naming one that does not exist raise
+    the same subclass on purpose: telling those two apart would say whether a
+    UUID exists somewhere the caller cannot see. Which *kind* of reference was
+    bad is safe to report, and the view maps the subclass to its own wording
+    rather than echoing an exception.
     """
+
+
+class UnknownFolder(EntryWriteError):
+    pass
+
+
+class UnknownTag(EntryWriteError):
+    pass
 
 
 def entry_signature_payload(entry, *, signer_account_uuid, tag_uuids, fields):
@@ -52,7 +61,7 @@ def resolve_folder(user, vault, folder_uuid):
         return None
     folder = visible_folders(user, vault).filter(uuid=folder_uuid).first()
     if folder is None:
-        raise EntryWriteError("The folder does not exist in this vault.")
+        raise UnknownFolder
     return folder
 
 
@@ -71,7 +80,7 @@ def resolve_tags(user, vault, tag_uuids):
     }
     missing = [value for value in wanted if value not in found]
     if missing:
-        raise EntryWriteError("A tag does not exist in this vault.")
+        raise UnknownTag
     return [found[value] for value in wanted]
 
 

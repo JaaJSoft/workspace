@@ -271,7 +271,10 @@ class MetadataSourceTests(SimpleTestCase):
         with self._source(handler) as source:
             self.assertEqual([t.name for t in source.tags()], ["One"])
 
-    def test_a_tag_without_the_visibility_property_is_kept(self):
+    def test_a_tag_without_the_visibility_property_is_skipped(self):
+        """Fail closed: a server that will not say the tag is the user's own
+        imports nothing rather than someone else's tag."""
+
         def handler(request):
             return httpx2.Response(
                 207,
@@ -286,7 +289,7 @@ class MetadataSourceTests(SimpleTestCase):
             )
 
         with self._source(handler) as source:
-            self.assertEqual([t.name for t in source.tags()], ["Invoices"])
+            self.assertEqual(list(source.tags()), [])
 
     def test_tags_without_a_numeric_id_or_a_name_are_skipped(self):
         def handler(request):
@@ -310,6 +313,46 @@ class MetadataSourceTests(SimpleTestCase):
         with self._source(handler) as source:
             self.assertEqual(list(source.tagged("4")), ["/a.txt"])
         self.assertIn("<oc:systemtag>4</oc:systemtag>", seen["body"])
+
+    def test_a_member_reporting_its_own_error_is_not_a_match(self):
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=(
+                    '<?xml version="1.0"?>'
+                    '<d:multistatus xmlns:d="DAV:">'
+                    "<d:response><d:href>/remote.php/dav/files/alice/kept.txt</d:href>"
+                    "<d:propstat><d:status>HTTP/1.1 200 OK</d:status>"
+                    "<d:prop><d:getetag>&quot;e&quot;</d:getetag></d:prop>"
+                    "</d:propstat></d:response>"
+                    "<d:response><d:href>/remote.php/dav/files/alice/gone.txt</d:href>"
+                    "<d:status>HTTP/1.1 404 Not Found</d:status></d:response>"
+                    "</d:multistatus>"
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual(list(source.favorites()), ["/kept.txt"])
+
+    def test_a_member_whose_property_lookup_failed_is_still_a_match(self):
+        """The filter matched the resource; the 404 is about the etag we asked
+        for alongside, so dropping it would lose a real favorite."""
+
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=(
+                    '<?xml version="1.0"?>'
+                    '<d:multistatus xmlns:d="DAV:">'
+                    "<d:response><d:href>/remote.php/dav/files/alice/a.txt</d:href>"
+                    "<d:propstat><d:status>HTTP/1.1 404 Not Found</d:status>"
+                    "<d:prop><d:getetag/></d:prop></d:propstat></d:response>"
+                    "</d:multistatus>"
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual(list(source.favorites()), ["/a.txt"])
 
     def test_a_tag_id_that_is_not_a_number_never_reaches_the_server(self):
         def handler(request):  # pragma: no cover - must not be called

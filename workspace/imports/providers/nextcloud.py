@@ -65,6 +65,21 @@ def _filter_files_body(rule: bytes) -> bytes:
     )
 
 
+def _member_failed(element) -> bool:
+    """Whether a ``<response>`` reports an error of its own.
+
+    RFC 4918 lets a member answer with a bare ``<status>`` instead of
+    properties, and such a member is not a match. A status *inside* a
+    ``<propstat>`` is a different thing entirely: it is about the property we
+    asked for alongside, and the resource still matched the filter - requiring
+    a 200 there would drop favorites whose etag the server could not read.
+    """
+    for token in (element.findtext(f"{DAV}status") or "").split():
+        if len(token) == 3 and token.isdigit():
+            return not 200 <= int(token) < 300
+    return False
+
+
 class NextcloudMetadataSource:
     """Favorites and tags, read over the same instance the files came from.
 
@@ -114,11 +129,10 @@ class NextcloudMetadataSource:
                 continue
             # Tags the user cannot see are the ones another user assigned, or
             # an app's own bookkeeping; neither belongs in a personal tag list.
-            # Tri-state on purpose: servers spell the flag "false" or "0"
-            # depending on the version, and one that omits it altogether has
-            # told us nothing - the endpoint already scopes to this user.
-            visible = (props.findtext(f"{OC}user-visible") or "").strip()
-            if visible and not is_truthy(visible):
+            # Fail closed: only an explicit true carries a tag over, so a
+            # server that omits the flag or spells it in some way we do not
+            # recognise imports nothing rather than the wrong thing.
+            if not is_truthy((props.findtext(f"{OC}user-visible") or "").strip()):
                 continue
             yield RemoteTag(id=tag_id, name=name)
 
@@ -133,8 +147,9 @@ class NextcloudMetadataSource:
         response = self._request("REPORT", self._files_url, _filter_files_body(rule))
         for element in parse_dav_xml(response.content).iter(f"{DAV}response"):
             href = element.findtext(f"{DAV}href")
-            if href:
-                yield entry_id_from_href(href, self._files_path)
+            if not href or _member_failed(element):
+                continue
+            yield entry_id_from_href(href, self._files_path)
 
     def _request(self, method, url, body, *, depth="0"):
         with _translate_transport_errors(self._host):

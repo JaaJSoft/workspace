@@ -21,23 +21,22 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from workspace.ai.services.confirmation import (
+    consume_bound_confirmation,
+    request_bound_confirmation,
+)
 from workspace.ai.tool_registry import ToolProvider, tool
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
-# How long a confirmed-but-unsent message waits in the cache. Long enough
-# for the user to read the preview and answer, short enough that a
-# confirmation they walked away from cannot be redeemed an hour later.
-PENDING_SEND_TTL = 600
+# Names the kind of write a confirmation token may redeem, so one minted
+# here can never be spent on another tool's pending action.
+SEND_ACTION = "mail.send"
 
 # The whole draft body the model is allowed to hand us in one call. A model
 # looping on its own output would otherwise APPEND megabytes to Drafts.
 BODY_MAX_CHARS = 20000
-
-
-def _pending_send_key(token):
-    return f"mail:ai:pending-send:{token}"
 
 
 def _resolve_account(user, hint):
@@ -507,8 +506,6 @@ Once they agree, call it again passing back the token you were given — the mes
 sent is the one they saw, so the other arguments are ignored on that second call. \
 Only use this when the user explicitly asks to send; draft_email is the right tool otherwise, \
 and a sent email cannot be recalled."""
-        from django.core.cache import cache
-
         profile = getattr(bot, "bot_profile", None)
         if not (profile and profile.can_send_email):
             return (
@@ -519,7 +516,7 @@ and a sent email cannot be recalled."""
 
         token = args.confirmation_token.strip()
         if token:
-            return self._send_confirmed(user, token)
+            return self._send_confirmed(user, conversation_id, token)
 
         account, error = _resolve_account(user, args.account)
         if error:
@@ -539,25 +536,16 @@ and a sent email cannot be recalled."""
 
         subject = args.subject.strip()
         body = args.body[:BODY_MAX_CHARS]
-        question = {
-            "question": (
+        token, blocked = request_bound_confirmation(
+            context,
+            (
                 f"Send this email to {', '.join(to)}?\n"
                 f"Subject: {subject or '(no subject)'}"
             ),
-            "options": ["Yes, send it", "No, keep it as a draft", "No, cancel"],
-        }
-        context.setdefault("question", question)
-        if context["question"] is not question:
-            return (
-                "Another question is already waiting for the user's answer. "
-                "Ask for the send confirmation once they have replied."
-            )
-
-        token = uuid_mod.uuid4().hex
-        cache.set(
-            _pending_send_key(token),
-            {
-                "user_id": user.pk,
+            action=SEND_ACTION,
+            user=user,
+            conversation_id=conversation_id,
+            payload={
                 "account_id": str(account.uuid),
                 "to": to,
                 "cc": cc,
@@ -565,9 +553,10 @@ and a sent email cannot be recalled."""
                 "subject": subject,
                 "body": body,
             },
-            PENDING_SEND_TTL,
+            options=["Yes, send it", "No, keep it as a draft", "No, cancel"],
         )
-        context["stop_after_round"] = True
+        if blocked:
+            return blocked
         return json.dumps(
             {
                 "status": "awaiting confirmation",
@@ -587,26 +576,21 @@ and a sent email cannot be recalled."""
             ensure_ascii=False,
         )
 
-    def _send_confirmed(self, user, token):
-        """Send the message a confirmation round left waiting in the cache.
+    def _send_confirmed(self, user, conversation_id, token):
+        """Send the message a confirmation round pinned to this token.
 
-        The payload comes from the cache rather than from the model's
+        The payload comes from the pin rather than from the model's
         arguments, so the second call can only put on the wire what the user
         was actually shown.
         """
-        from django.core.cache import cache
-
         from workspace.mail.services.sending import deliver_email
 
-        pending = cache.get(_pending_send_key(token))
-        # A token belonging to someone else is treated as unknown rather than
-        # refused: whether it exists is not this user's business.
-        if not pending or pending.get("user_id") != user.pk:
+        pending = consume_bound_confirmation(SEND_ACTION, user, conversation_id, token)
+        if pending is None:
             return (
                 "That confirmation is unknown or has expired. Call send_email "
                 "again without a token to show the user the message afresh."
             )
-        cache.delete(_pending_send_key(token))
 
         account, error = _resolve_account(user, pending["account_id"])
         if error:

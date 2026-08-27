@@ -8,12 +8,16 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.ai.models import BotProfile
+from workspace.ai.services.confirmation import (
+    consume_bound_confirmation,
+    request_bound_confirmation,
+)
 from workspace.mail.ai_tools import (
+    SEND_ACTION,
     DraftEmailParams,
     MailToolProvider,
     ReplyToEmailParams,
     SendEmailParams,
-    _pending_send_key,
 )
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.services.smtp import SentMessage
@@ -298,9 +302,15 @@ class ReplyToEmailTests(MailComposeToolsTestCase):
 
 
 class SendEmailTests(MailComposeToolsTestCase):
-    def _send(self, params, bot, context):
+    CONVERSATION = "11111111-1111-1111-1111-111111111111"
+
+    def _send(self, params, bot, context, conversation_id=CONVERSATION):
         return self.tools.send_email(
-            params, user=self.user, bot=bot, conversation_id=None, context=context
+            params,
+            user=self.user,
+            bot=bot,
+            conversation_id=conversation_id,
+            context=context,
         )
 
     def test_a_bot_without_the_capability_cannot_send(self):
@@ -330,9 +340,11 @@ class SendEmailTests(MailComposeToolsTestCase):
         self.assertIn("alice@example.com", context["question"]["question"])
         self.assertGreaterEqual(len(context["question"]["options"]), 2)
         smtp.assert_not_called()
-        self.assertIsNotNone(
-            cache.get(_pending_send_key(payload["confirmation_token"]))
+        pinned = consume_bound_confirmation(
+            SEND_ACTION, self.user, self.CONVERSATION, payload["confirmation_token"]
         )
+        self.assertEqual(pinned["to"], ["alice@example.com"])
+        self.assertEqual(pinned["subject"], "Hi")
 
     def test_confirmed_call_sends_what_the_user_was_shown(self):
         bot = self._bot(can_send_email=True)
@@ -404,24 +416,40 @@ class SendEmailTests(MailComposeToolsTestCase):
         smtp.assert_not_called()
 
     def test_a_token_belonging_to_someone_else_is_unknown(self):
-        cache.set(
-            _pending_send_key("borrowed"),
-            {
-                "user_id": self.user.pk + 1000,
-                "account_id": str(self.account.uuid),
-                "to": ["alice@example.com"],
-                "cc": [],
-                "bcc": [],
-                "subject": "Hi",
-                "body": "Hello",
-            },
-            60,
+        stranger = User.objects.create_user(username="stranger", password="pw")
+        token, _ = request_bound_confirmation(
+            {},
+            "Send this?",
+            action=SEND_ACTION,
+            user=stranger,
+            conversation_id=self.CONVERSATION,
+            payload={"account_id": str(self.account.uuid), "to": ["alice@x.test"]},
         )
         with patch("workspace.mail.services.smtp.send_email") as smtp:
             result = self._send(
-                SendEmailParams(confirmation_token="borrowed"),
+                SendEmailParams(confirmation_token=token),
                 self._bot(can_send_email=True),
                 {},
+            )
+        self.assertIn("unknown or has expired", result)
+        smtp.assert_not_called()
+
+    def test_a_token_cannot_be_carried_into_another_conversation(self):
+        bot = self._bot(can_send_email=True)
+        token = json.loads(
+            self._send(
+                SendEmailParams(to=["alice@example.com"], subject="Hi", body="Hello"),
+                bot,
+                {},
+            )
+        )["confirmation_token"]
+
+        with patch("workspace.mail.services.smtp.send_email") as smtp:
+            result = self._send(
+                SendEmailParams(confirmation_token=token),
+                bot,
+                {},
+                conversation_id="22222222-2222-2222-2222-222222222222",
             )
         self.assertIn("unknown or has expired", result)
         smtp.assert_not_called()
@@ -443,11 +471,18 @@ class SendEmailTests(MailComposeToolsTestCase):
         self.assertIn("did not complete the send", result)
 
     def test_a_pending_question_defers_the_confirmation(self):
+        # The round halts on the question the user can actually see, and
+        # nothing is pinned: a token for a prompt nobody was shown would turn
+        # their answer to the other question into approval of this send.
         context = {"question": {"question": "Something else?", "options": ["a", "b"]}}
-        result = self._send(
-            SendEmailParams(to=["alice@example.com"], subject="Hi", body="Hello"),
-            self._bot(can_send_email=True),
-            context,
-        )
+        with patch("workspace.mail.services.smtp.send_email") as smtp:
+            result = self._send(
+                SendEmailParams(to=["alice@example.com"], subject="Hi", body="Hello"),
+                self._bot(can_send_email=True),
+                context,
+            )
         self.assertIn("Another question is already waiting", result)
-        self.assertNotIn("stop_after_round", context)
+        self.assertIn("Something else?", result)
+        self.assertEqual(context["question"]["question"], "Something else?")
+        self.assertTrue(context["stop_after_round"])
+        smtp.assert_not_called()

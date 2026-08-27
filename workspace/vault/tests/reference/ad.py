@@ -75,6 +75,25 @@ def vault_field_ad(vault_uuid: str, field: str) -> bytes:
     return f"v1|vault-field|{_uuid(vault_uuid)}|{field}".encode("ascii")
 
 
+# Closed at one identifier each, for the reason the vault and entry catalogues
+# are closed: an open list would let a folder field derive a string a tag or an
+# entry field can also derive, and their ciphertexts would be interchangeable.
+FOLDER_FIELD_IDS = ("name",)
+TAG_FIELD_IDS = ("name",)
+
+
+def folder_field_ad(folder_uuid: str, field: str) -> bytes:
+    if field not in FOLDER_FIELD_IDS:
+        raise ValueError(f"{field} is not a folder metadata field")
+    return f"v1|folder-field|{_uuid(folder_uuid)}|{field}".encode("ascii")
+
+
+def tag_field_ad(tag_uuid: str, field: str) -> bytes:
+    if field not in TAG_FIELD_IDS:
+        raise ValueError(f"{field} is not a tag metadata field")
+    return f"v1|tag-field|{_uuid(tag_uuid)}|{field}".encode("ascii")
+
+
 def qualify_field_id(field_id: str) -> str:
     """Return the field_name that goes into the AD for a stored *field_id*.
 

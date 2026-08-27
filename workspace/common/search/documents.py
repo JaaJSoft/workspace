@@ -51,19 +51,16 @@ def index_document(index, pk, values, *, using=DEFAULT_DB_ALIAS):
 def drop_document(index, pk, *, using=DEFAULT_DB_ALIAS):
     """Remove row *pk*'s document from the index.
 
-    Call it while the row still exists: both backends resolve the pk against
-    the base table, and SQLite's contentless table has no other way to find
-    the posting (its rowid mirrors the base table's).
+    Only SQLite needs this: its contentless table is a separate table, keyed on
+    the base table's rowid, so it must be told the row is going away - and told
+    while the row still exists, since the rowid is resolved against it. On
+    PostgreSQL the tsvector is a column of the row and dies with it, so this is
+    deliberately a no-op there rather than a wasted UPDATE per deleted row.
     """
     conn = connections[using]
-    param = _adapt_pk(pk, conn)
-    if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
-        with conn.cursor() as cursor:
-            cursor.execute(index.pg_drop_sql(), [param])
-        return
     if conn.vendor == "sqlite" and fts5_available():
         with conn.cursor() as cursor:
-            cursor.execute(index.sqlite_delete_sql(), [param])
+            cursor.execute(index.sqlite_delete_sql(), [_adapt_pk(pk, conn)])
 
 
 def _adapt_pk(pk, conn):

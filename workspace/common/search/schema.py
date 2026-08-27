@@ -244,9 +244,6 @@ class DerivedFulltextIndex(_BaseIndex):
             f"WHERE {self.pk_column} = %s"
         )
 
-    def pg_drop_sql(self):
-        return f"UPDATE {self.table} SET {PG_TSV_COLUMN} = NULL WHERE {self.pk_column} = %s"
-
     def sqlite_forward_sql(self):
         cols = ", ".join(self.field_names)
         return (

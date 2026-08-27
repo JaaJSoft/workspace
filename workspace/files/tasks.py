@@ -183,3 +183,40 @@ def run_file_event_handlers(self, event_uuid):
     from workspace.files.services.event_dispatch import run_handlers
 
     run_handlers(event_uuid)
+
+
+@shared_task(name="files.index_search_document", bind=True, max_retries=0)
+def index_search_document(self, file_uuid, include_descendants=False):
+    """Extract *file_uuid*'s text and write its full-text search document.
+
+    max_retries=0 on purpose: an extractor that cannot read a blob will not
+    read it on the next attempt either, and a permanently unindexable file
+    must never turn into a retry loop. The file stays findable by name once
+    the backfill command runs.
+    """
+    from django.core.exceptions import ValidationError
+
+    from workspace.files.models import File
+    from workspace.files.services.search_index import index_file
+
+    try:
+        file_obj = File.objects.get(uuid=file_uuid)
+    except File.DoesNotExist, ValidationError, ValueError, TypeError:
+        # Hard-deleted between the event and this task, or a malformed id.
+        return {"status": "not_found"}
+
+    indexed = 1 if index_file(file_obj) else 0
+    skipped = 0 if indexed else 1
+
+    if include_descendants and file_obj.node_type == File.NodeType.FOLDER:
+        # A copied folder records a single CREATED event for its root, so the
+        # duplicated subtree would otherwise never be indexed.
+        for child in File.objects.filter(
+            path__startswith=f"{file_obj.path}/"
+        ).iterator():
+            if index_file(child):
+                indexed += 1
+            else:
+                skipped += 1
+
+    return {"status": "ok", "indexed": indexed, "failed": skipped}

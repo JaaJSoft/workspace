@@ -3,6 +3,8 @@ import os
 from django.apps import AppConfig
 from django.core.files.base import File as DjangoFile
 
+from workspace.common.search.schema import register_fulltext_index
+
 
 class FilesConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
@@ -133,6 +135,12 @@ class FilesConfig(AppConfig):
         # Register Prometheus metrics + storage-bytes collector.
         from workspace.files import metrics  # noqa: F401
 
+        # Declare the full-text index so post_migrate can restore its SQLite
+        # side after a migration.
+        from workspace.files.services.search_index import FILES_FTS
+
+        register_fulltext_index(FILES_FTS)
+
         # Register file-event handlers (import for the @on_file_event side effect).
-        from workspace.files.services import link_events  # noqa: F401
+        from workspace.files.services import link_events, search_events  # noqa: F401
         from workspace.files.services.thumbnails import handlers  # noqa: F401

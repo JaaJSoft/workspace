@@ -97,20 +97,29 @@ class ChatSearchTests(TestCase):
 
 
 class FilesSearchTests(TestCase):
-    def setUp(self):
-        from workspace.files.models import File
+    """File search reads the full-text index, which the indexing task writes.
 
+    Celery is not eager under test, so each fixture indexes itself - the same
+    thing manage.py reindex_files_search does for an existing install.
+    """
+
+    def setUp(self):
         self.alice = User.objects.create_user(username="alice", password="pass")
-        self.f1 = File.objects.create(
-            owner=self.alice,
-            name="report.pdf",
-            node_type=File.NodeType.FILE,
+        self.f1 = self._file("report.pdf")
+        self.folder = self._file("Documents", folder=True)
+
+    def _file(self, name, *, owner=None, parent=None, folder=False):
+        from workspace.files.models import File
+        from workspace.files.services.search_index import index_file
+
+        file_obj = File.objects.create(
+            owner=owner or self.alice,
+            name=name,
+            parent=parent,
+            node_type=File.NodeType.FOLDER if folder else File.NodeType.FILE,
         )
-        self.folder = File.objects.create(
-            owner=self.alice,
-            name="Documents",
-            node_type=File.NodeType.FOLDER,
-        )
+        index_file(file_obj)
+        return file_obj
 
     def test_search_by_filename(self):
         from workspace.files.search import search_files
@@ -126,15 +135,9 @@ class FilesSearchTests(TestCase):
         self.assertGreaterEqual(len(results), 1)
 
     def test_file_in_folder_url_opens_folder_and_viewer(self):
-        from workspace.files.models import File
         from workspace.files.search import search_files
 
-        nested = File.objects.create(
-            owner=self.alice,
-            name="nested.pdf",
-            node_type=File.NodeType.FILE,
-            parent=self.folder,
-        )
+        nested = self._file("nested.pdf", parent=self.folder)
         result = next(r for r in search_files("nested", self.alice, 10))
         # Path lands in the parent folder, ?open= triggers the file viewer.
         self.assertEqual(result.url, f"/files/{self.folder.uuid}?open={nested.uuid}")
@@ -152,11 +155,10 @@ class FilesSearchTests(TestCase):
         self.assertEqual(result.url, f"/files/{self.folder.uuid}")
 
     def test_excludes_other_users_files(self):
-        from workspace.files.models import File
         from workspace.files.search import search_files
 
         bob = User.objects.create_user(username="bob", password="pass")
-        File.objects.create(owner=bob, name="secret.txt", node_type=File.NodeType.FILE)
+        self._file("secret.txt", owner=bob)
         results = search_files("secret", self.alice, 10)
         self.assertEqual(len(results), 0)
 
@@ -173,6 +175,7 @@ class FilesSearchTests(TestCase):
 class NotesSearchTests(TestCase):
     def setUp(self):
         from workspace.files.models import File
+        from workspace.files.services.search_index import index_file
 
         self.alice = User.objects.create_user(username="alice", password="pass")
         self.note = File.objects.create(
@@ -187,6 +190,8 @@ class NotesSearchTests(TestCase):
             node_type=File.NodeType.FILE,
             mime_type="application/pdf",
         )
+        index_file(self.note)
+        index_file(self.non_note)
 
     def test_finds_markdown_files(self):
         from workspace.notes.search import search_notes

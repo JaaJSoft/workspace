@@ -112,7 +112,10 @@ class PostgresStatementTests(SimpleTestCase):
         self.assertEqual(sql.count("%s"), 3)
         self.assertNotIn("kraken", sql)
 
-    def test_drop_nulls_the_vector(self):
-        sql = USER_DOC_FTS.pg_drop_sql()
-        self.assertIn("SET search_tsv = NULL", sql)
-        self.assertIn("WHERE id = %s", sql)
+    def test_drop_is_a_noop_on_postgres(self):
+        # The tsvector is a column of the row and dies with it; issuing an
+        # UPDATE per deleted row would be pure waste on a cascade.
+        conn = mock.Mock(vendor="postgresql")
+        with mock.patch.object(documents, "connections", {"default": conn}):
+            drop_document(USER_DOC_FTS, 1)
+        conn.cursor.assert_not_called()

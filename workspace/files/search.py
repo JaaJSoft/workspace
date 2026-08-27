@@ -1,15 +1,16 @@
+from workspace.common.search import apply_fulltext
 from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.search_index import FILES_FTS, match_type_for
 
 
 def search_files(query, user, limit):
-    qs = (
-        FileService.user_files_qs(user)
-        .select_related("parent")
-        .filter(name__icontains=query)
-        .order_by("-updated_at")[:limit]
-    )
+    qs = apply_fulltext(
+        FileService.user_files_qs(user).select_related("parent"),
+        query,
+        index=FILES_FTS,
+    ).order_by("-search_rank", "-updated_at")[:limit]
     results = []
     for f in qs:
         if f.node_type == File.NodeType.FOLDER:
@@ -33,7 +34,7 @@ def search_files(query, user, limit):
                 name=f.name,
                 url=url,
                 matched_value=f.name,
-                match_type="name",
+                match_type=match_type_for(f.name, query),
                 type_icon=type_icon,
                 module_slug="files",
                 module_color="primary",

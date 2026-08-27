@@ -605,6 +605,20 @@ def delete_file_on_delete(sender, instance, **kwargs):
     delete_node_storage(instance)
 
 
+@receiver(pre_delete, sender=File)
+def unindex_file_on_delete(sender, instance, **kwargs):
+    """Drop the file's search document before its row goes away.
+
+    pre_delete rather than post_delete: on SQLite the contentless FTS5 table
+    is keyed on the base row's rowid, which is only resolvable while the row
+    still exists. Runs on queryset and cascade deletes for the same reason as
+    the storage cleanup above.
+    """
+    from workspace.files.services.search_index import unindex_file
+
+    unindex_file(instance)
+
+
 @receiver(pre_delete, sender="auth.Group")
 def soft_delete_group_files(sender, instance, **kwargs):
     """Soft-delete all files belonging to this group before it is deleted.

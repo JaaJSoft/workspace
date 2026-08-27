@@ -170,6 +170,7 @@ class MultiStepInstructionsTests(TestCase):
     AI_TTS_MODEL="test-voice-model",
     AI_TTS_VOICE_REF="/srv/voices/default.wav",
     AI_TTS_VOICE_REF_TEXT="Bonjour, je suis l'assistante de Pierre.",
+    AI_TTS_NONVERBAL_TAGS=[],
 )
 class BuildChatMessagesVoiceTests(TestCase):
     def setUp(self):
@@ -198,12 +199,22 @@ class BuildChatMessagesVoiceTests(TestCase):
     def test_the_voice_section_is_present(self):
         self.assertIn("## Your voice", self._system())
 
+    @override_settings(AI_TTS_NONVERBAL_TAGS=["[laughter]"])
     def test_the_ear_rule_spares_the_non_verbal_tags(self):
         # "Plain prose, no markdown" otherwise reads as a ban on brackets,
         # and the one expressive control a cloned voice has goes unused.
         system = self._system()
         self.assertIn("bracketed tags", system)
         self.assertIn("performed, not read", system)
+
+    def test_brackets_are_banned_outright_when_none_are_performed(self):
+        # A backend with no such vocabulary speaks the tag: qwen3-tts reads
+        # [laughter] as "la terre". Leaving the exception in the prompt is
+        # what puts that word in the audio.
+        system = self._system()
+        self.assertNotIn("bracketed tags", system)
+        self.assertNotIn("performed, not read", system)
+        self.assertIn("spoken out loud", system)
 
     def test_the_bot_is_not_offered_a_voice_it_cannot_change(self):
         # Its voice is a recording its owner uploaded. A prompt hinting the

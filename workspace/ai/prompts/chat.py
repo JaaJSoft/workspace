@@ -255,6 +255,18 @@ def build_chat_messages(
     bot_profile = getattr(bot, "bot_profile", None)
     voice_instructions = ""
     if settings.AI_TTS_MODEL and bot_profile and bot_profile.can_speak():
+        from ..services.speech import nonverbal_tags
+
+        # A backend with no non-verbal vocabulary pronounces the tag instead
+        # of performing it, so the exception is granted only where it holds.
+        bracket_rule = (
+            "The bracketed tags send_voice_message lists are the one "
+            "exception \u2014 a laugh, a sigh, a breath \u2014 and they are "
+            "performed, not read.\n"
+            if nonverbal_tags()
+            else "Brackets are not markup here: whatever you put between them "
+            "is spoken out loud, so write none.\n"
+        )
         voice_instructions = (
             "\n\n## Your voice\n"
             "You have a voice and can send voice messages with "
@@ -272,10 +284,9 @@ def build_chat_messages(
             "Write for the ear. The text is read out letter by letter, so it "
             "must be plain prose in the language you are speaking, correctly "
             "accented, with no markdown, no emoji, no lists, no URLs and no "
-            "abbreviations a listener would not recognize. The bracketed tags "
-            "send_voice_message lists are the one exception \u2014 a laugh, a "
-            "sigh, a breath \u2014 and they are performed, not read.\n"
-            "You have one voice and it is not yours to change: "
+            "abbreviations a listener would not recognize. "
+            + bracket_rule
+            + "You have one voice and it is not yours to change: "
             "send_voice_message takes the text and the language, nothing "
             "else. Asked to imitate someone or to play a character, say the "
             "line in your own voice or decline \u2014 never claim to have "

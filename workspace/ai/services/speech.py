@@ -59,6 +59,16 @@ def normalize_language(value: str) -> str:
     return language if language in supported_languages() else ""
 
 
+def nonverbal_tags() -> tuple[str, ...]:
+    """Sounds this deployment's speech model performs instead of reading out.
+
+    Empty unless the deployment names them, because a model that does not
+    know a tag speaks it rather than dropping it, and the tokens are the
+    backend's own - nothing here assumes they are bracketed.
+    """
+    return tuple(tag.strip() for tag in settings.AI_TTS_NONVERBAL_TAGS if tag.strip())
+
+
 # Statuses a later, identical call can still clear: the backend serializes
 # every request for a model behind one lock and answers 503 when the wait
 # outlives its own timeout.

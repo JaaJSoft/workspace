@@ -172,6 +172,22 @@ class DeliverEmailTests(TestCase):
         self.assertEqual(result.sent, self.delivery)
         sync.assert_not_called()
 
+    def test_an_account_with_no_sent_folder_reports_an_unarchived_copy(self):
+        # append_to_sent returns quietly when there is no Sent folder, so
+        # nothing raises - and the caller would otherwise tell the user the
+        # copy landed somewhere that does not exist.
+        self.sent.delete()
+        with (
+            patch(
+                "workspace.mail.services.smtp.send_email", return_value=self.delivery
+            ),
+            patch("workspace.mail.services.imap_messages.append_to_sent") as append,
+        ):
+            result = deliver_email(self.account, to=["bob@example.com"], subject="Hi")
+
+        self.assertFalse(result.archived)
+        append.assert_not_called()
+
     def test_an_smtp_failure_propagates(self):
         with (
             patch(

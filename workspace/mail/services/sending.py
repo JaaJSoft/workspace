@@ -74,6 +74,20 @@ def _archive(account, raw_message):
     from .imap_messages import append_to_sent
     from .imap_sync import sync_folder_messages
 
+    # Resolved before the append, not after: append_to_sent returns quietly
+    # when the folder is missing, so a check afterwards cannot tell "nowhere
+    # to file it" from "filed", and the caller would report a copy that was
+    # never made.
+    sent_folder = MailFolder.objects.filter(
+        account=account, folder_type=MailFolder.FolderType.SENT
+    ).first()
+    if not sent_folder:
+        logger.warning(
+            "No Sent folder for %s; the sent copy was not archived",
+            scrub(account.email),
+        )
+        return False
+
     try:
         # The archived variant, not the outgoing one: it is the copy that
         # carries the Bcc header, so Sent records who actually got a copy.
@@ -86,11 +100,6 @@ def _archive(account, raw_message):
         )
         return False
 
-    sent_folder = MailFolder.objects.filter(
-        account=account, folder_type=MailFolder.FolderType.SENT
-    ).first()
-    if not sent_folder:
-        return True
     try:
         sync_folder_messages(account, sent_folder)
     except Exception as exc:

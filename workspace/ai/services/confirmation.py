@@ -107,7 +107,8 @@ def consume_bound_confirmation(action, user, conversation_id, token):
     """
     if not token:
         return None
-    pending = cache.get(_pending_key(action, token))
+    key = _pending_key(action, token)
+    pending = cache.get(key)
     if not pending:
         return None
     if pending["user_id"] != user.pk:
@@ -116,5 +117,11 @@ def consume_bound_confirmation(action, user, conversation_id, token):
         str(conversation_id) if conversation_id else None
     ):
         return None
-    cache.delete(_pending_key(action, token))
+    # The delete is the claim, not the read: two responses can redeem the
+    # same token at once (the user clicking the confirm option twice starts
+    # two generations), and both would get past the read. `delete` reports
+    # whether this caller is the one that removed the key - a single DEL on
+    # Redis, lock-held on LocMem - so exactly one of them proceeds.
+    if not cache.delete(key):
+        return None
     return pending["payload"]

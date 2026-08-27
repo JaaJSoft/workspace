@@ -18,7 +18,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from workspace.mail.models import MailAccount
+from workspace.mail.models import MailAccount, MailFolder
 from workspace.mail.services.smtp import send_email
 
 User = get_user_model()
@@ -36,6 +36,15 @@ class SendBccArchivalTests(TestCase):
         )
         self.account.set_password("secret")
         self.account.save()
+        # The archival half only runs on an account that has somewhere to
+        # file the copy; without this the append is skipped and the bytes
+        # asserted below are never produced.
+        MailFolder.objects.create(
+            account=self.account,
+            name="Sent",
+            display_name="Sent",
+            folder_type="sent",
+        )
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 

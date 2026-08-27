@@ -1,9 +1,12 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 
 from workspace.ai.services.confirmation import (
     CONFIRM_OPTIONS,
+    _pending_key,
     consume_bound_confirmation,
     request_bound_confirmation,
     request_confirmation,
@@ -79,6 +82,25 @@ class BoundConfirmationTests(TestCase):
         self.assertIsNone(
             consume_bound_confirmation("test.write", self.user, CONVERSATION, token)
         )
+
+    def test_only_one_of_two_racing_callers_gets_the_payload(self):
+        # Two responses can redeem the same token at once - the user clicking
+        # the confirm option twice starts two generations, on two workers.
+        # Reading the pin is not the claim; deleting it is, and exactly one
+        # caller wins that.
+        token, _ = self._pin()
+        pinned = cache.get(_pending_key("test.write", token))
+
+        with patch("workspace.ai.services.confirmation.cache.get", return_value=pinned):
+            first = consume_bound_confirmation(
+                "test.write", self.user, CONVERSATION, token
+            )
+            second = consume_bound_confirmation(
+                "test.write", self.user, CONVERSATION, token
+            )
+
+        self.assertIsNotNone(first)
+        self.assertIsNone(second, "the loser of the race must not send anything")
 
     def test_a_token_is_bound_to_its_action(self):
         token, _ = self._pin()

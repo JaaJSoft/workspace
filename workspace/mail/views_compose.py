@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from workspace.common.closing import close_all
 from workspace.common.logging import scrub
 
-from .models import MailAccount, MailFolder, MailMessage
+from .models import MailAccount, MailMessage
 from .serializers import (
     DraftSaveSerializer,
     MailMessageDetailSerializer,
@@ -38,10 +38,7 @@ class MailSendView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        from .services.smtp import send_email
-        from .services.threads import reply_headers
-
-        in_reply_to, references = reply_headers(account, d.get("reply_message_id"))
+        from .services.sending import deliver_email
 
         attachments = list(request.FILES.getlist("attachments", []))
 
@@ -72,7 +69,9 @@ class MailSendView(APIView):
                     )
 
         try:
-            sent = send_email(
+            # A Sent copy that did not land is not a failed send: deliver_email
+            # reports it through `archived`, and the response stays 201.
+            deliver_email(
                 account=account,
                 to=d["to"],
                 subject=d["subject"],
@@ -82,33 +81,8 @@ class MailSendView(APIView):
                 bcc=d.get("bcc"),
                 reply_to=d.get("reply_to"),
                 attachments=attachments,
-                in_reply_to=in_reply_to,
-                references=references,
+                reply_message_id=d.get("reply_message_id"),
             )
-
-            # Copy to Sent folder via IMAP APPEND, then sync the Sent folder
-            from .services.imap_messages import append_to_sent
-            from .services.imap_sync import sync_folder_messages
-
-            try:
-                append_to_sent(account, sent.archived)
-            except Exception:
-                logger.warning(
-                    "Failed to append sent message to IMAP for %s", scrub(account.email)
-                )
-
-            try:
-                sent_folder = MailFolder.objects.filter(
-                    account=account,
-                    folder_type="sent",
-                ).first()
-                if sent_folder:
-                    sync_folder_messages(account, sent_folder)
-            except Exception:
-                logger.warning(
-                    "Failed to sync sent folder after send for %s", scrub(account.email)
-                )
-
             return Response({"status": "sent"}, status=status.HTTP_201_CREATED)
         except Exception as e:
             # Use logger.error + scrub(str(e)) instead of logger.exception:
@@ -144,45 +118,21 @@ class MailDraftView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        from .services.smtp import build_draft_message
-        from .services.threads import reply_headers
-
-        in_reply_to, references = reply_headers(account, d.get("reply_message_id"))
-
-        raw_msg = build_draft_message(
-            account,
-            to=d.get("to"),
-            subject=d.get("subject", ""),
-            body_html=d.get("body_html", ""),
-            body_text=d.get("body_text", ""),
-            cc=d.get("cc"),
-            bcc=d.get("bcc"),
-            reply_to=d.get("reply_to"),
-            include_bcc=True,
-            in_reply_to=in_reply_to,
-            references=references,
-        )
-
-        # If updating an existing draft, find the old IMAP UID
-        old_uid = None
-        if d.get("draft_id"):
-            try:
-                old_msg = MailMessage.objects.get(
-                    uuid=d["draft_id"],
-                    account=account,
-                    deleted_at__isnull=True,
-                )
-                old_uid = old_msg.imap_uid
-            except MailMessage.DoesNotExist:
-                # The referenced draft is gone (deleted on another device, or
-                # never existed). Fall through with old_uid=None so save_draft
-                # creates a fresh draft instead of trying to replace nothing.
-                pass
-
-        from .services.imap_messages import save_draft
+        from .services.drafts import save_composed_draft
 
         try:
-            mail_msg = save_draft(account, raw_msg, old_uid=old_uid)
+            mail_msg = save_composed_draft(
+                account,
+                to=d.get("to"),
+                subject=d.get("subject", ""),
+                body_html=d.get("body_html", ""),
+                body_text=d.get("body_text", ""),
+                cc=d.get("cc"),
+                bcc=d.get("bcc"),
+                reply_to=d.get("reply_to"),
+                reply_message_id=d.get("reply_message_id"),
+                replace_draft_uuid=d.get("draft_id"),
+            )
             if mail_msg:
                 return Response(
                     MailMessageDetailSerializer(mail_msg).data,
@@ -235,7 +185,7 @@ class MailDraftView(APIView):
                 msg.deleted_at = timezone.now()
                 msg.save(update_fields=["deleted_at", "updated_at"])
 
-        from .views import _refresh_folder_counts
+        from .services.counts import refresh_folder_counts
 
-        _refresh_folder_counts(msg.folder)
+        refresh_folder_counts(msg.folder)
         return Response(status=status.HTTP_204_NO_CONTENT)

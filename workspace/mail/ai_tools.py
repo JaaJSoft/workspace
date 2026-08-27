@@ -381,18 +381,24 @@ Use read_email with the returned UUID to get the full content."""
 
     # -- compose ------------------------------------------------------------
 
-    def _save_draft(self, account, raw_message):
-        """APPEND a built message to Drafts and describe what landed there."""
-        from workspace.mail.services.imap_messages import save_draft
+    def _save_draft(self, account, **fields):
+        """Park a composed message in Drafts and describe what landed there."""
+        from workspace.mail.models import MailFolder
+        from workspace.mail.services.drafts import save_composed_draft
 
-        draft, error = _run_remote("draft", save_draft, account, raw_message)
-        if error:
-            return error
-        if draft is None:
+        if not MailFolder.objects.filter(
+            account=account, folder_type=MailFolder.FolderType.DRAFTS
+        ).exists():
             return (
                 f"{account.email} has no Drafts folder, so there is nowhere to "
                 "put this message. Nothing was saved."
             )
+
+        draft, error = _run_remote("draft", save_composed_draft, account, **fields)
+        if error:
+            return error
+        if draft is None:
+            return "The mail server refused the draft. Nothing was saved."
         return json.dumps(
             {
                 "status": "draft saved",
@@ -421,8 +427,6 @@ Use read_email with the returned UUID to get the full content."""
 Nothing is sent: the user opens the draft in the mail app, edits it if needed, and sends it themselves. \
 Prefer this over send_email whenever the user asks you to write, prepare or draft a message. \
 Use reply_to_email instead when answering an existing message, so the reply threads properly."""
-        from workspace.mail.services.smtp import build_draft_message
-
         account, error = _resolve_account(user, args.account)
         if error:
             return error
@@ -439,18 +443,14 @@ Use reply_to_email instead when answering an existing message, so the reply thre
         if error:
             return error
 
-        raw_message = build_draft_message(
+        return self._save_draft(
             account,
             to=to,
             subject=args.subject.strip(),
             body_text=args.body[:BODY_MAX_CHARS],
             cc=cc,
             bcc=bcc,
-            # The Bcc list survives the IMAP round-trip in the header alone,
-            # and Drafts is readable by the account owner only.
-            include_bcc=True,
         )
-        return self._save_draft(account, raw_message)
 
     @tool(
         badge_icon="↩️",
@@ -464,8 +464,6 @@ Recipients, subject, the quoted original and the threading headers are filled in
 message being answered — you only write what to say. Nothing is sent. \
 Call read_email first when you need the content you are answering."""
         from workspace.mail.services.compose import build_reply
-        from workspace.mail.services.smtp import build_draft_message
-        from workspace.mail.services.threads import reply_headers
         from workspace.users.services.settings import get_user_timezone
 
         message = _resolve_message(user, args.uuid)
@@ -486,18 +484,14 @@ Call read_email first when you need the content you are answering."""
                 "account itself. Use draft_email to write a new message."
             )
 
-        in_reply_to, references = reply_headers(account, message.uuid)
-        raw_message = build_draft_message(
+        return self._save_draft(
             account,
             to=reply.to,
             subject=reply.subject,
             body_text=reply.body_text,
             cc=reply.cc,
-            include_bcc=True,
-            in_reply_to=in_reply_to,
-            references=references,
+            reply_message_id=message.uuid,
         )
-        return self._save_draft(account, raw_message)
 
     @tool(
         badge_icon="📤",
@@ -602,6 +596,8 @@ and a sent email cannot be recalled."""
         """
         from django.core.cache import cache
 
+        from workspace.mail.services.sending import deliver_email
+
         pending = cache.get(_pending_send_key(token))
         # A token belonging to someone else is treated as unknown rather than
         # refused: whether it exists is not this user's business.
@@ -616,55 +612,40 @@ and a sent email cannot be recalled."""
         if error:
             return error
 
-        from workspace.mail.services.smtp import send_email as smtp_send
-
-        sent, error = _run_remote(
+        delivery, error = _run_remote(
             "send",
-            smtp_send,
+            deliver_email,
             account=account,
             to=pending["to"],
             subject=pending["subject"],
             body_text=pending["body"],
             cc=pending["cc"],
-            # Bcc stays in the SMTP envelope: no header on the bytes that go
-            # out, or every recipient learns who else was copied.
+            # Bcc stays in the SMTP envelope: deliver_email is the one that
+            # knows which of the two serializations carries the header.
             bcc=pending["bcc"],
         )
         if error:
             return error
 
-        archived = self._archive_sent(account, sent.archived)
         return json.dumps(
             {
                 "status": "sent",
                 "from": account.email,
                 "to": pending["to"],
                 "subject": pending["subject"] or "(no subject)",
-                **({"warning": archived} if archived else {}),
+                **(
+                    {}
+                    if delivery.archived
+                    else {
+                        "warning": (
+                            "The email was sent but could not be copied to "
+                            "the Sent folder."
+                        )
+                    }
+                ),
             },
             ensure_ascii=False,
         )
-
-    def _archive_sent(self, account, raw_message):
-        """Copy a sent message into Sent. Returns a warning, or None.
-
-        The mail left the building either way, so a failure here is worth
-        mentioning but never worth reporting as a failed send.
-        """
-        from workspace.mail.models import MailFolder
-        from workspace.mail.services.imap_messages import append_to_sent
-        from workspace.mail.services.imap_sync import sync_folder_messages
-
-        _, error = _run_remote("archive", append_to_sent, account, raw_message)
-        if error:
-            return "The email was sent but could not be copied to the Sent folder."
-
-        sent_folder = MailFolder.objects.filter(
-            account=account, folder_type=MailFolder.FolderType.SENT
-        ).first()
-        if sent_folder:
-            _run_remote("sync", sync_folder_messages, account, sent_folder)
-        return None
 
     # -- triage -------------------------------------------------------------
 
@@ -737,45 +718,20 @@ returned here can be applied."""
         """Mark an email as read, unread, starred or unstarred. \
 Use it to help the user work through a backlog: star what needs an answer, \
 mark read what they have decided to ignore."""
-        from django.db import transaction
-
-        from workspace.mail.services.imap_messages import (
-            mark_read,
-            mark_unread,
-            star_message,
-            unstar_message,
-        )
-        from workspace.mail.views import (
-            _refresh_folder_counts,
-            _refresh_message_label_counts,
-        )
+        from workspace.mail.services.triage import set_flag
 
         message = _resolve_message(user, args.uuid)
         if not message:
             return "Email not found or access denied."
 
-        operations = {
-            "read": (mark_read, "is_read", True),
-            "unread": (mark_unread, "is_read", False),
-            "starred": (star_message, "is_starred", True),
-            "unstarred": (unstar_message, "is_starred", False),
-        }
-        remote, field, value = operations[args.action]
-        setattr(message, field, value)
-
-        # Local first, exactly as the mail UI does: the user sees the change
-        # in both places, and a server that refused it is reported rather
-        # than left to make the two views disagree.
-        with transaction.atomic():
-            message.save(update_fields=[field, "updated_at"])
-            _refresh_folder_counts(message.folder)
-            if field == "is_read":
-                _refresh_message_label_counts(message)
-
-        _, error = _run_remote("flag change", remote, message.account, message)
+        synced = set_flag(message, args.action)
         subject = message.subject or "(no subject)"
-        if error:
-            return f'"{subject}" is now {args.action} here, but {error[0].lower()}{error[1:]}'
+        if not synced:
+            return (
+                f'"{subject}" is now {args.action} here, but the mail server '
+                "did not take the change — it may be unreachable. The next "
+                "sync will settle it."
+            )
         return f'"{subject}" is now {args.action}.'
 
     @tool(
@@ -827,28 +783,16 @@ the user wants a message gone."""
         return self._move(message, trash)
 
     def _move(self, message, target):
-        """Move `message` to `target`, IMAP first. Returns the tool result."""
-        from django.db import transaction
-
-        from workspace.mail.services.imap_messages import move_message
-        from workspace.mail.views import _refresh_folders_counts_bulk
+        """Move `message` to `target` and describe the outcome."""
+        from workspace.mail.services.triage import move_to_folder
 
         subject = message.subject or "(no subject)"
         if message.folder_id == target.pk:
             return f'"{subject}" is already in {target.display_name}.'
 
-        # IMAP first, and no local write when it fails: moving the row on our
-        # side while the server still has the message in its old folder makes
-        # the next sync soft-delete a message that was never moved.
-        _, error = _run_remote("move", move_message, message.account, message, target)
+        _, error = _run_remote("move", move_to_folder, message, target)
         if error:
             return error
-
-        source_id = message.folder_id
-        message.folder = target
-        with transaction.atomic():
-            message.save(update_fields=["folder", "updated_at"])
-            _refresh_folders_counts_bulk({source_id, target.pk})
         return f'"{subject}" moved to {target.display_name}.'
 
     @tool(
@@ -862,10 +806,8 @@ the user wants a message gone."""
         """Attach a label to an email, or take one off. Labels live in this workspace only, \
 so this touches nothing on the mail server. Call list_labels first — only an existing \
 label can be applied."""
-        from django.db import transaction
-
-        from workspace.mail.models import MailLabel, MailMessageLabel
-        from workspace.mail.views import _refresh_label_counts
+        from workspace.mail.models import MailLabel
+        from workspace.mail.services.triage import set_label
 
         message = _resolve_message(user, args.uuid)
         if not message:
@@ -882,24 +824,16 @@ label can be applied."""
             )
 
         subject = message.subject or "(no subject)"
-        with transaction.atomic():
-            if args.action == "add":
-                _, created = MailMessageLabel.objects.get_or_create(
-                    message=message, label=label
-                )
-                outcome = (
-                    f'Labelled "{subject}" with {label.name}.'
-                    if created
-                    else f'"{subject}" already carried the {label.name} label.'
-                )
-            else:
-                removed, _ = MailMessageLabel.objects.filter(
-                    message=message, label=label
-                ).delete()
-                outcome = (
-                    f'Removed the {label.name} label from "{subject}".'
-                    if removed
-                    else f'"{subject}" did not carry the {label.name} label.'
-                )
-            _refresh_label_counts(label)
-        return outcome
+        attaching = args.action == "add"
+        changed = set_label(message, label, attaching)
+        if attaching:
+            return (
+                f'Labelled "{subject}" with {label.name}.'
+                if changed
+                else f'"{subject}" already carried the {label.name} label.'
+            )
+        return (
+            f'Removed the {label.name} label from "{subject}".'
+            if changed
+            else f'"{subject}" did not carry the {label.name} label.'
+        )

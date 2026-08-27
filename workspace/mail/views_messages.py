@@ -210,45 +210,21 @@ class MailMessageDetailView(APIView):
         ser = MailMessageUpdateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        from .services.imap_messages import (
-            mark_read,
-            mark_unread,
-            star_message,
-            unstar_message,
-        )
+        from .services.triage import set_flag
 
-        if "is_read" in ser.validated_data:
-            val = ser.validated_data["is_read"]
-            msg.is_read = val
-            try:
-                if val:
-                    mark_read(msg.account, msg)
-                else:
-                    mark_unread(msg.account, msg)
-            except Exception:
-                logger.warning("Failed to sync read flag to IMAP for %s", msg.uuid)
-
-        if "is_starred" in ser.validated_data:
-            val = ser.validated_data["is_starred"]
-            msg.is_starred = val
-            try:
-                if val:
-                    star_message(msg.account, msg)
-                else:
-                    unstar_message(msg.account, msg)
-            except Exception:
-                logger.warning("Failed to sync star flag to IMAP for %s", msg.uuid)
+        for field, flags in (
+            ("is_read", ("unread", "read")),
+            ("is_starred", ("unstarred", "starred")),
+        ):
+            if field not in ser.validated_data:
+                continue
+            if not set_flag(msg, flags[bool(ser.validated_data[field])]):
+                logger.warning("Failed to sync %s to IMAP for %s", field, msg.uuid)
 
         if "ai_summary" in ser.validated_data:
             msg.ai_summary = ser.validated_data["ai_summary"]
+            msg.save(update_fields=["ai_summary", "updated_at"])
 
-        from .views import _refresh_folder_counts, _refresh_message_label_counts
-
-        with transaction.atomic():
-            msg.save()
-            _refresh_folder_counts(msg.folder)
-            if "is_read" in ser.validated_data:
-                _refresh_message_label_counts(msg)
         return Response(MailMessageDetailSerializer(msg).data)
 
     @extend_schema(summary="Soft-delete a message")
@@ -257,15 +233,18 @@ class MailMessageDetailView(APIView):
         if not msg:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        from .services.counts import (
+            refresh_folder_counts,
+            refresh_message_label_counts,
+        )
         from .services.imap_messages import delete_message
         from .services.notifications import settle_message_notifications
-        from .views import _refresh_folder_counts, _refresh_message_label_counts
 
         with transaction.atomic():
             msg.deleted_at = timezone.now()
             msg.save(update_fields=["deleted_at", "updated_at"])
-            _refresh_folder_counts(msg.folder)
-            _refresh_message_label_counts(msg)
+            refresh_folder_counts(msg.folder)
+            refresh_message_label_counts(msg)
 
         # Soft delete never CASCADEs the row's Notification, and a deleted
         # message can never again appear on a rendered page for
@@ -298,14 +277,8 @@ class MailBatchActionView(APIView):
             deleted_at__isnull=True,
         ).select_related("account", "folder")
 
-        from .services.imap_messages import (
-            delete_message,
-            mark_read,
-            mark_unread,
-            move_message,
-            star_message,
-            unstar_message,
-        )
+        from .services.imap_messages import delete_message
+        from .services.triage import flag_operations, move_to_folder
 
         # Resolve target folder for move action
         target_folder = None
@@ -323,11 +296,14 @@ class MailBatchActionView(APIView):
             if target_folder.account.owner != request.user:
                 return Response(status=status.HTTP_404_NOT_FOUND)
 
+        # Same table the single-message path uses, keyed by this endpoint's
+        # own action names.
+        flags = flag_operations()
         action_map = {
-            "mark_read": (mark_read, {"is_read": True}),
-            "mark_unread": (mark_unread, {"is_read": False}),
-            "star": (star_message, {"is_starred": True}),
-            "unstar": (unstar_message, {"is_starred": False}),
+            "mark_read": flags["read"],
+            "mark_unread": flags["unread"],
+            "star": flags["starred"],
+            "unstar": flags["unstarred"],
         }
 
         processed = 0
@@ -352,27 +328,21 @@ class MailBatchActionView(APIView):
                     if target_folder.account_id != msg.account_id:
                         continue
                     try:
-                        move_message(msg.account, msg, target_folder)
+                        # refresh=False: the counters are recomputed once for
+                        # the whole batch below.
+                        move_to_folder(msg, target_folder, refresh=False)
                     except Exception as e:
-                        # Skip the local DB update so this row stays consistent
-                        # with what IMAP actually has. Updating msg.folder here
-                        # would create a split-brain state: the next sync would
-                        # find the message still in the source folder server
-                        # side and soft-delete the (now mis-located) row.
                         logger.warning(
                             "IMAP move failed for message %s: %s", msg.uuid, scrub(e)
                         )
                         continue
-                    msg.folder = target_folder
-                    msg.save(update_fields=["folder", "updated_at"])
-                    # Use .pk to match msg.folder_id added above. _refresh_folders_counts_bulk
+                    # Use .pk to match msg.folder_id added above. refresh_folders_counts_bulk
                     # filters via folder_id__in, so a UUID would never match.
                     affected_folders.add(target_folder.pk)
                 elif action in action_map:
-                    imap_fn, db_update = action_map[action]
-                    for key, value in db_update.items():
-                        setattr(msg, key, value)
-                    bulk_update_fields.update(db_update.keys())
+                    imap_fn, field, value = action_map[action]
+                    setattr(msg, field, value)
+                    bulk_update_fields.add(field)
                     to_bulk_update.append(msg)
                     try:
                         imap_fn(msg.account, msg)
@@ -389,9 +359,9 @@ class MailBatchActionView(APIView):
                     "Batch action '%s' failed for message %s", scrub(action), msg.uuid
                 )
 
+        from .services.counts import refresh_folders_counts_bulk
         from .services.label_counts import refresh_labels_for_messages
         from .services.notifications import settle_message_notifications
-        from .views import _refresh_folders_counts_bulk
 
         with transaction.atomic():
             if to_bulk_update:
@@ -401,7 +371,7 @@ class MailBatchActionView(APIView):
 
             # Refresh counts for all affected folders in a single batch:
             # 1 aggregate + 1 bulk_update instead of 2N queries.
-            _refresh_folders_counts_bulk(affected_folders)
+            refresh_folders_counts_bulk(affected_folders)
 
             # Refresh label counts for read/unread/delete actions
             if action in ("mark_read", "mark_unread", "delete"):

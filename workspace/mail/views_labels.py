@@ -168,9 +168,9 @@ class MailMessageLabelView(APIView):
             [MailMessageLabel(message=msg, label=lbl) for lbl in labels],
             ignore_conflicts=True,
         )
-        from .views import _refresh_label_counts
+        from .services.counts import refresh_label_counts
 
-        _refresh_label_counts(labels)
+        refresh_label_counts(labels)
         return Response({"status": "ok"})
 
     @extend_schema(
@@ -203,7 +203,7 @@ class MailMessageLabelView(APIView):
             message=msg,
             label_id__in=ser.validated_data["label_ids"],
         ).delete()
-        from .views import _refresh_label_counts
+        from .services.counts import refresh_label_counts
 
-        _refresh_label_counts(affected_labels)
+        refresh_label_counts(affected_labels)
         return Response({"status": "ok"})

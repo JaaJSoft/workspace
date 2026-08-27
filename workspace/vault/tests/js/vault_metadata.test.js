@@ -125,3 +125,55 @@ test('uuidV7 sorts by creation order', () => {
   const later = V.uuidV7();
   assert.ok(first <= later);
 });
+
+test('the entry payload sorts its tags and its fields', () => {
+  const payload = V.entryMetadataPayload({
+    entry_uuid: '018F3F6E-0000-7000-8000-00000000000A',
+    vault_uuid: '018f3f6e-0000-7000-8000-00000000000b',
+    signer_account_uuid: '018f3f6e-0000-7000-8000-00000000000c',
+    entry_type: 'login',
+    folder_uuid: null,
+    encrypted_name: 'AQ',
+    encrypted_notes: '',
+    key_version: 1,
+    entry_version: 1,
+    is_favorite: false,
+    tag_uuids: [
+      '018f3f6e-0000-7000-8000-0000000000ff',
+      '018f3f6e-0000-7000-8000-000000000011',
+    ],
+    fields: { password: 'Ag', 'custom:pin': 'Aw', username: 'BA' },
+  });
+  assert.equal(payload.entry_uuid, '018f3f6e-0000-7000-8000-00000000000a');
+  assert.equal(payload.folder_uuid, null);
+  // Cross-realm: the arrays come out of the vm carrying that realm's
+  // prototypes, so deepStrictEqual fails its prototype check without this.
+  assert.deepStrictEqual(Array.from(payload.tags), [
+    '018f3f6e-0000-7000-8000-000000000011',
+    '018f3f6e-0000-7000-8000-0000000000ff',
+  ]);
+  assert.deepStrictEqual(
+    Array.from(payload.fields, (pair) => Array.from(pair)),
+    [
+      ['custom:pin', 'Aw'],
+      ['password', 'Ag'],
+      ['username', 'BA'],
+    ]
+  );
+});
+
+test('a folder or tag field outside its catalogue is refused', () => {
+  const target = '018f3f6e-0000-7000-8000-000000000001';
+  // The accepted string first: without it, a missing builder would satisfy
+  // the two refusals below by throwing a TypeError.
+  assert.equal(
+    text(V.AD.folderFieldAd(target, 'name')),
+    'v1|folder-field|018f3f6e-0000-7000-8000-000000000001|name'
+  );
+  assert.equal(
+    text(V.AD.tagFieldAd(target, 'name')),
+    'v1|tag-field|018f3f6e-0000-7000-8000-000000000001|name'
+  );
+  assert.throws(() => V.AD.folderFieldAd(target, 'position'), /folder metadata field/);
+  assert.throws(() => V.AD.tagFieldAd(target, 'color'), /tag metadata field/);
+});

@@ -439,3 +439,11 @@ test('the refusal reports a length, never the secret_key itself', async () => {
     (error) => !error.message.includes('short') && /expected 32/.test(error.message)
   );
 });
+
+test('entry, folder and tag payloads encode as the reference does', () => {
+  for (const id of ['entry-metadata', 'folder-metadata', 'tag-metadata']) {
+    const frozen = VECTORS.cbor.find((item) => item.id === id);
+    assert.ok(frozen, `vector ${id} is missing`);
+    assert.equal(b64(V.canonicalCbor(frozen.payload)), frozen.expected_b64, id);
+  }
+});

@@ -631,3 +631,42 @@ test('a failed import still zeroes the metadata bytes', async () => {
   await assert.rejects(h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA'));
   assert.ok(h.metaRaw.every((byte) => byte === 0));
 });
+
+test('openEntryKey derives from the entry info, not the vault metadata info', async () => {
+  const seen = [];
+  const h = harness({
+    vaultCrypto: {
+      hkdf: async (_raw, info) => { seen.push(info); return new Uint8Array(32); },
+      importAeadKey: async () => ({ extractable: false }),
+      AD: {
+        unwrapInfo: () => 'unwrap-info',
+        kexPrivAd: (uuid) => `kex:${uuid}`,
+        sigPrivAd: (uuid) => `sig:${uuid}`,
+        kexPubPayload: (uuid, pub) => `kexpub:${uuid}:${pub}`,
+        vaultKeyInfo: (v, r) => `vaultkey:${v}:${r}`,
+        vaultMetaInfo: (v) => `vaultmeta:${v}`,
+        entryKeyInfo: (e) => `entrykey:${e}`,
+      },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  seen.length = 0;
+  await h.session.openEntryKey(A_VAULT, 'd3JhcHBlZA', 'an-entry');
+  assert.deepStrictEqual(Array.from(seen), ['entrykey:an-entry']);
+  await h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  assert.equal(seen[1], `vaultmeta:${A_VAULT}`);
+});
+
+test('verifyRecord passes the expected type through to verify', async () => {
+  const seen = [];
+  const h = harness({
+    vaultCrypto: {
+      VAULT_METADATA_TYPE: 'vault-metadata',
+      verify: async (_pk, _bytes, _sig, type) => { seen.push(type); },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  await h.session.verifyRecord({ v: 1 }, 'AQ', 'entry-metadata');
+  await h.session.verifyVaultMetadata({ v: 1 }, 'AQ');
+  assert.deepStrictEqual(Array.from(seen), ['entry-metadata', 'vault-metadata']);
+});

@@ -326,38 +326,65 @@ window.vaultSession = (function () {
       return V.toBase64Url(await signer.sign(V.canonicalCbor(payload)));
     },
 
-    openVaultKey: async function (vaultUuid, wrappedKeyB64) {
+    // The vault key itself never encrypts anything and never leaves this
+    // function: every caller wants one of its HKDF children, and handing back
+    // the parent would put a key that opens everything in a caller's hands.
+    _openDerivedKey: async function (vaultUuid, wrappedKeyB64, info) {
       if (!unlocked) throw VaultUnlockError('locked');
       const V = window.vaultCrypto;
       const raw = await recipient.open(
         V.AD.vaultKeyInfo(vaultUuid, accountUuid),
         V.fromBase64Url(wrappedKeyB64)
       );
-      let metaRaw;
+      let derived;
       try {
-        // The vault key never encrypts anything itself; the metadata key does.
-        metaRaw = await V.hkdf(raw, V.AD.vaultMetaInfo(vaultUuid));
+        derived = await V.hkdf(raw, info);
       } finally {
         zero(raw);
       }
       try {
-        return await V.importAeadKey(metaRaw);
+        return await V.importAeadKey(derived);
       } finally {
         // The caller never gets a copy it could forget to zero: what it gets
         // back is a non-extractable key.
-        zero(metaRaw);
+        zero(derived);
       }
     },
 
-    verifyVaultMetadata: async function (payload, signatureB64) {
+    openVaultKey: async function (vaultUuid, wrappedKeyB64) {
+      const V = window.vaultCrypto;
+      return this._openDerivedKey(
+        vaultUuid, wrappedKeyB64, V.AD.vaultMetaInfo(vaultUuid)
+      );
+    },
+
+    // An entry's fields hang off their own HKDF child, not off the metadata
+    // key: one compromised entry key must not open the vault's name, nor any
+    // other entry.
+    openEntryKey: async function (vaultUuid, wrappedKeyB64, entryUuid) {
+      const V = window.vaultCrypto;
+      return this._openDerivedKey(
+        vaultUuid, wrappedKeyB64, V.AD.entryKeyInfo(entryUuid)
+      );
+    },
+
+    // The expected type is a parameter, not a constant: verify() checks it
+    // before any cryptography, so a vault payload replayed as an entry is
+    // refused on its own name rather than on a signature that would verify.
+    verifyRecord: async function (payload, signatureB64, expectedType) {
       if (!unlocked) throw VaultUnlockError('locked');
       const V = window.vaultCrypto;
       await V.verify(
         sigPublicRaw,
         V.canonicalCbor(payload),
         V.fromBase64Url(signatureB64),
-        V.VAULT_METADATA_TYPE
+        expectedType
       );
+    },
+
+    verifyVaultMetadata: async function (payload, signatureB64) {
+      const V = window.vaultCrypto;
+      return this.verifyRecord(payload, signatureB64, V.VAULT_METADATA_TYPE);
     },
   };
 })();

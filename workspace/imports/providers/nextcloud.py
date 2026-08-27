@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 import httpx2
 
+from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
 
 from .base import ProviderError, RemoteTag
@@ -113,7 +114,11 @@ class NextcloudMetadataSource:
                 continue
             # Tags the user cannot see are the ones another user assigned, or
             # an app's own bookkeeping; neither belongs in a personal tag list.
-            if (props.findtext(f"{OC}user-visible") or "").strip().lower() == "false":
+            # Tri-state on purpose: servers spell the flag "false" or "0"
+            # depending on the version, and one that omits it altogether has
+            # told us nothing - the endpoint already scopes to this user.
+            visible = (props.findtext(f"{OC}user-visible") or "").strip()
+            if visible and not is_truthy(visible):
                 continue
             yield RemoteTag(id=tag_id, name=name)
 

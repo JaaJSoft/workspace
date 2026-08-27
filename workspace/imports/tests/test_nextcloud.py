@@ -256,6 +256,38 @@ class MetadataSourceTests(SimpleTestCase):
                 [("4", "Invoices"), ("9", "Photos")],
             )
 
+    def test_a_hidden_tag_is_skipped_however_the_server_spells_the_flag(self):
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=_systemtags(
+                    ("1", "Zero", "0"),
+                    ("2", "No", "no"),
+                    ("3", "False", "False"),
+                    ("4", "One", "1"),
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual([t.name for t in source.tags()], ["One"])
+
+    def test_a_tag_without_the_visibility_property_is_kept(self):
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=(
+                    '<?xml version="1.0"?>'
+                    '<d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">'
+                    "<d:response><d:href>/remote.php/dav/systemtags/4</d:href>"
+                    "<d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop>"
+                    "<oc:id>4</oc:id><oc:display-name>Invoices</oc:display-name>"
+                    "</d:prop></d:propstat></d:response></d:multistatus>"
+                ),
+            )
+
+        with self._source(handler) as source:
+            self.assertEqual([t.name for t in source.tags()], ["Invoices"])
+
     def test_tags_without_a_numeric_id_or_a_name_are_skipped(self):
         def handler(request):
             return httpx2.Response(

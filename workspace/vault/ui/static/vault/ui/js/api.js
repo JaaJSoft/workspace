@@ -104,5 +104,11 @@ window.vaultApi = (function () {
     purgeEntry: function (uuid) {
       return request('/api/v1/vault/entries/' + uuid + '/purge', { method: 'POST' });
     },
+    // Answers a map of UUID to action list. An entry the caller cannot reach
+    // comes back as an empty list, never as a missing key, so a caller reads
+    // the answer without checking whether the key is there.
+    fetchEntryActions: function (uuids) {
+      return request('/api/v1/vault/actions', { method: 'POST', body: { uuids: uuids } });
+    },
   };
 })();

@@ -112,7 +112,11 @@ def overview(request, project_uuid):
 
 
 def _get_project_or_404(user, project_uuid):
-    project = get_object_or_404(Project, uuid=project_uuid)
+    # created_by is rendered by the overview card; joining it here spares
+    # every project view a lazy fetch.
+    project = get_object_or_404(
+        Project.objects.select_related("created_by"), uuid=project_uuid
+    )
     role = get_project_role(user, project)
     if role is None:
         raise Http404
@@ -139,7 +143,7 @@ def _sidebar_projects(user):
     )
 
 
-def _deep_link_panel(request, project, role):
+def _deep_link_panel(request, project, role, members):
     """Panel context for a valid ?task= deep link (UUID or WR-42), else empty."""
     raw = (request.GET.get("task") or "").strip()
     if not raw:
@@ -154,7 +158,7 @@ def _deep_link_panel(request, project, role):
         task = _task_by_reference(qs, project, raw)
     if task is None:
         return {}
-    return _task_panel_context(request.user, project, role, task)
+    return _task_panel_context(request.user, project, role, task, members=members)
 
 
 def _task_by_reference(qs, project, raw):
@@ -170,6 +174,9 @@ def _task_by_reference(qs, project, raw):
 def _base_context(request, project, role, view):
     statuses = list(project.statuses.order_by("position", "created_at"))
     members = project.members.filter(left_at__isnull=True).select_related("user")
+    # Resolved once and handed down to the deep-link panel: project_users
+    # costs two queries and the panel needs the same list.
+    project_members = project_users(project)
     context = {
         "project": project,
         "role": role,
@@ -194,7 +201,7 @@ def _base_context(request, project, role, view):
                 "first_name": u.first_name,
                 "last_name": u.last_name,
             }
-            for u in project_users(project)
+            for u in project_members
         ],
         # In both render paths: the header bell re-renders on every
         # alpine-ajax view swap and must reflect the current state.
@@ -218,7 +225,7 @@ def _base_context(request, project, role, view):
             ),
         }
         context["reminder_hours"] = [(h, f"{h:02d}:00") for h in range(24)]
-        context.update(_deep_link_panel(request, project, role))
+        context.update(_deep_link_panel(request, project, role, project_members))
     return context
 
 
@@ -277,7 +284,7 @@ def _render_project_view(request, context):
     return render(request, "projects/ui/project.html", context)
 
 
-def _task_panel_context(user, project, role, task):
+def _task_panel_context(user, project, role, task, *, members=None):
     events = [
         serialize_task_event(ev)
         for ev in task.events.select_related("actor", "project")[:20]
@@ -294,7 +301,9 @@ def _task_panel_context(user, project, role, task):
     ]
     # Same send-time scope as the notification fan-out: watchers who lost
     # project or group access keep their row but are not shown.
-    allowed_ids = {u.pk for u in project_users(project) if u.is_active}
+    if members is None:
+        members = project_users(project)
+    allowed_ids = {u.pk for u in members if u.is_active}
     watch_rows = [
         w for w in task.watchers.select_related("user") if w.user_id in allowed_ids
     ]
@@ -591,7 +600,7 @@ def all_tasks(request, project_uuid):
     try:
         all_tasks_list, truncated = _filtered_tasks(
             request,
-            project.tasks.select_related("status", "epic")
+            project.tasks.select_related("status", "epic", "sprint")
             .prefetch_related("assignees", "labels")
             .order_by(
                 "status__position", "status__created_at", "position", "created_at"

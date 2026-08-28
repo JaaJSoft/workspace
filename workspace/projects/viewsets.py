@@ -119,9 +119,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
             user=self.request.user,
             left_at__isnull=True,
         ).values("role")[:1]
-        return Project.objects.filter(
-            uuid__in=user_project_ids(self.request.user)
-        ).annotate(_my_role=Subquery(my_role))
+        return (
+            Project.objects.filter(uuid__in=user_project_ids(self.request.user))
+            # The serializer exposes groups as a PK list; without this every
+            # project in the listing resolves its own auth_group query.
+            .prefetch_related("groups")
+            .annotate(_my_role=Subquery(my_role))
+        )
 
     def create(self, request, *args, **kwargs):
         # Keys are auto-generated at creation; a client-supplied value is

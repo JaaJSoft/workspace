@@ -467,7 +467,11 @@ def properties(request, uuid):
     from django.db.models import Sum
 
     # Try as owner first, then as shared recipient
-    file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+    file_obj = (
+        File.objects.select_related("owner")
+        .filter(uuid=uuid, deleted_at__isnull=True)
+        .first()
+    )
     if not file_obj:
         raise Http404
 

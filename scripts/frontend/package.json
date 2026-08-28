@@ -15,7 +15,7 @@
     "watch:css": "tailwindcss -i ./input.css -o ../../workspace/common/static/css/app.css --watch"
   },
   "dependencies": {
-    "@alpinejs/collapse": "3.16.2",
+    "@alpinejs/collapse": "3.16.3",
     "@hpke/core": "1.9.0",
     "@hpke/dhkem-x25519": "1.8.0",
     "@imacrayon/alpine-ajax": "0.12.7",
@@ -23,7 +23,7 @@
     "@milkdown/plugin-slash": "7.22.1",
     "@zxcvbn-ts/core": "3.0.4",
     "@zxcvbn-ts/language-common": "3.0.4",
-    "alpinejs": "3.16.2",
+    "alpinejs": "3.16.3",
     "cbor-x": "1.6.0",
     "codemirror": "6.0.2",
     "hash-wasm": "4.12.0",

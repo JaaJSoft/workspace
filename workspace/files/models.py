@@ -89,6 +89,15 @@ class File(models.Model):
 
     has_thumbnail = models.BooleanField(default=False)
 
+    # Key the SQLite full-text index is built on (see DerivedFulltextIndex).
+    # FTS5 rowids are integers and the index cannot be rebuilt from the
+    # database, so it cannot ride on the implicit rowid: Django rebuilds this
+    # table on any AddField and SQLite reassigns those. Derived from the uuid
+    # by the indexing task, unused on PostgreSQL.
+    fts_rowid = models.BigIntegerField(
+        null=True, blank=True, unique=True, editable=False
+    )
+
     # Folder customization
     icon = models.CharField(
         max_length=50,

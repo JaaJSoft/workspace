@@ -83,6 +83,10 @@ class _BaseIndex:
             f"ALTER TABLE {self.table} DROP COLUMN IF EXISTS {PG_TSV_COLUMN};"
         )
 
+    def sqlite_rowid_expr(self, db_table):
+        """SQL for the value the FTS table's rowid is matched against."""
+        return f'"{db_table}".rowid'
+
     def _rank_sql(self, entries):
         weights = ", ".join(_BM25_WEIGHTS[e.weight] for e in entries)
         return (
@@ -196,16 +200,23 @@ class DerivedFulltextIndex(_BaseIndex):
     either of them from the database alone, which is the point - and the
     reason a backfill command exists.
 
-    SQLite caveat: the contentless table is keyed on the base table's implicit
-    rowid. Django's SQLite schema editor remakes tables (create-copy-drop-
-    rename) for several migration operations, which reassigns rowids and
-    silently invalidates the mapping. Re-run the owning module's reindex
-    command after such a migration.
+    On SQLite the contentless table is keyed on `rowid_column`, an ordinary
+    integer column of the base table - deliberately NOT the table's implicit
+    rowid. Django's SQLite schema editor rebuilds a table for many operations
+    (create-copy-drop-rename; any AddField reaches it), and the copy does not
+    carry implicit rowids across: SQLite reassigns them. An explicit column is
+    copied like any other value, so the index still points at the right rows.
+    Getting this wrong is silent - the index keeps answering, with the wrong
+    files - and unrepairable short of a full reindex, since nothing in the
+    database can rebuild it.
     """
 
     fields: tuple = ()
     fallback_fields: tuple = ()
     pk_column: str = "uuid"
+    # Integer column the SQLite FTS rowid is keyed on. None falls back to the
+    # implicit rowid, which is only safe for a table no migration will rebuild.
+    rowid_column: str | None = None
 
     def __post_init__(self):
         normalized = tuple(Field(f) if isinstance(f, str) else f for f in self.fields)
@@ -266,20 +277,39 @@ class DerivedFulltextIndex(_BaseIndex):
         # rebuild from; only the rank config is worth re-asserting.
         return self._rank_sql(self.fields)
 
+    @property
+    def _rowid(self):
+        return self.rowid_column or "rowid"
+
+    def sqlite_rowid_expr(self, db_table):
+        return f'"{db_table}".{self._rowid}'
+
     def sqlite_insert_sql(self):
         """INSERT that writes one document, resolving the rowid inline."""
         cols = ", ".join(self.field_names)
         placeholders = ", ".join("%s" for _ in self.fields)
         return (
             f"INSERT INTO {self.fts_table}(rowid, {cols})\n"
-            f"  SELECT rowid, {placeholders} FROM {self.table} "
+            f"  SELECT {self._rowid}, {placeholders} FROM {self.table} "
             f"WHERE {self.pk_column} = %s"
         )
 
     def sqlite_delete_sql(self):
         return (
             f"DELETE FROM {self.fts_table} WHERE rowid = "
-            f"(SELECT rowid FROM {self.table} WHERE {self.pk_column} = %s)"
+            f"(SELECT {self._rowid} FROM {self.table} WHERE {self.pk_column} = %s)"
+        )
+
+    def sqlite_read_rowid_sql(self):
+        return (
+            f"SELECT {self.rowid_column} FROM {self.table} WHERE {self.pk_column} = %s"
+        )
+
+    def sqlite_assign_rowid_sql(self):
+        """Claim a key for a row that has none. No-op if one is already set."""
+        return (
+            f"UPDATE {self.table} SET {self.rowid_column} = %s "
+            f"WHERE {self.pk_column} = %s AND {self.rowid_column} IS NULL"
         )
 
 

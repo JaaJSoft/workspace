@@ -33,6 +33,7 @@ FILES_FTS = DerivedFulltextIndex(
     table="files_file",
     fields=(Field("name", weight="A"), Field("body", weight="C", cap=BODY_CAP)),
     fallback_fields=("name",),
+    rowid_column="fts_rowid",
 )
 
 

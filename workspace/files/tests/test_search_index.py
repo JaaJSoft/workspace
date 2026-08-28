@@ -5,9 +5,9 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 
-from workspace.common.search import fts5_available
+from workspace.common.search import apply_fulltext, fts5_available
 from workspace.files.models import File, FileEvent
 from workspace.files.services.search_index import (
     FILES_FTS,
@@ -79,9 +79,8 @@ class _FtsTestCase(TestCase):
             return {row[0] for row in c.fetchall()}
 
     def _rowid(self, file_obj):
-        with connection.cursor() as c:
-            c.execute("SELECT rowid FROM files_file WHERE uuid = %s", [file_obj.pk.hex])
-            return c.fetchone()[0]
+        file_obj.refresh_from_db(fields=["fts_rowid"])
+        return file_obj.fts_rowid
 
 
 class IndexWriteTests(_FtsTestCase):
@@ -321,3 +320,116 @@ class ContentIsNeverPersistedTests(_FtsTestCase):
                 if isinstance(value, bytes) and needle.encode() in value:
                     return True
         return False
+
+
+class SurvivesATableRebuildTests(TransactionTestCase):
+    """The index must outlive a migration that rewrites files_file.
+
+    Django's SQLite schema editor rebuilds a table for many operations - any
+    AddField reaches it - by creating a copy, moving the rows across and
+    renaming. Implicit rowids are NOT carried over, so an index keyed on them
+    silently starts answering with the wrong files. TransactionTestCase
+    because the rebuild commits.
+    """
+
+    def setUp(self):
+        if connection.vendor != "sqlite" or not fts5_available():
+            self.skipTest("SQLite + FTS5 required")
+        self.user = User.objects.create_user(username="alice", password="pw")
+
+    def _note(self, name, body):
+        note = File.objects.create(
+            name=name,
+            node_type=File.NodeType.FILE,
+            mime_type="text/markdown",
+            owner=self.user,
+            content=ContentFile(body, name=name),
+        )
+        index_file(note)
+        return note
+
+    def _search(self, term):
+        return [
+            f.name
+            for f in apply_fulltext(
+                File.objects.filter(owner=self.user), term, index=FILES_FTS
+            )
+        ]
+
+    @staticmethod
+    def _rebuild_files_file():
+        """What Django's SQLite backend does for an AddField, in miniature."""
+        with connection.cursor() as c:
+            c.execute("SELECT sql FROM sqlite_master WHERE name = 'files_file'")
+            create_sql = c.fetchone()[0].replace("files_file", "new__files_file", 1)
+            c.execute("SELECT name FROM pragma_table_info('files_file')")
+            cols = ", ".join(f'"{row[0]}"' for row in c.fetchall())
+            c.execute(create_sql)
+            # ORDER BY reverses the insertion order, so every implicit rowid
+            # moves - the same outcome as a real rebuild, made deterministic.
+            c.execute(
+                f"INSERT INTO new__files_file ({cols}) "
+                f"SELECT {cols} FROM files_file ORDER BY name DESC"
+            )
+            c.execute("DROP TABLE files_file")
+            c.execute("ALTER TABLE new__files_file RENAME TO files_file")
+
+    def test_search_still_finds_the_right_file_after_a_rebuild(self):
+        self._note("alpha.md", b"the kraken sleeps")
+        self._note("beta.md", b"the marina is closed")
+        self.assertEqual(self._search("kraken"), ["alpha.md"])
+
+        self._rebuild_files_file()
+
+        self.assertEqual(self._search("kraken"), ["alpha.md"])
+        self.assertEqual(self._search("marina"), ["beta.md"])
+
+    def test_the_implicit_rowids_really_did_move(self):
+        # Guards the guard: if a future Django stopped reassigning rowids the
+        # test above would pass for the wrong reason and stop proving anything.
+        self._note("alpha.md", b"body one")
+        self._note("beta.md", b"body two")
+        before = self._implicit_rowids()
+        self._rebuild_files_file()
+        self.assertNotEqual(before, self._implicit_rowids())
+
+    @staticmethod
+    def _implicit_rowids():
+        with connection.cursor() as c:
+            c.execute("SELECT uuid, rowid FROM files_file ORDER BY uuid")
+            return dict(c.fetchall())
+
+
+class KeyAssignmentTests(_FtsTestCase):
+    """The FTS key is derived from the uuid, and the database arbitrates it."""
+
+    def test_the_key_is_derived_from_the_uuid(self):
+        note = self._note("a.md", b"body")
+        index_file(note)
+        note.refresh_from_db()
+        self.assertEqual(note.fts_rowid, note.uuid.int & ((1 << 63) - 1))
+
+    def test_reindexing_keeps_the_same_key(self):
+        note = self._note("a.md", b"body")
+        index_file(note)
+        note.refresh_from_db()
+        first = note.fts_rowid
+        index_file(note)
+        note.refresh_from_db()
+        self.assertEqual(note.fts_rowid, first)
+
+    def test_a_taken_key_is_stepped_over_not_shared(self):
+        # Two files sharing one key would silently merge their documents. The
+        # unique constraint makes the database refuse it; the next candidate
+        # is tried. Forced here by parking the derived key on another row.
+        victim = self._note("victim.md", b"unrelated")
+        note = self._note("note.md", b"a rare gorgonzola reference")
+        File.objects.filter(pk=victim.pk).update(
+            fts_rowid=note.uuid.int & ((1 << 63) - 1)
+        )
+
+        self.assertTrue(index_file(note))
+        note.refresh_from_db()
+        self.assertIsNotNone(note.fts_rowid)
+        self.assertNotEqual(note.fts_rowid, victim.uuid.int & ((1 << 63) - 1))
+        self.assertEqual(self._matches('"gorgonzola"'), {note.fts_rowid})

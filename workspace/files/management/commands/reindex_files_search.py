@@ -8,9 +8,8 @@ class Command(BaseCommand):
     help = (
         "Rebuild the full-text search index for files. The index holds only "
         "lexemes, so it cannot be rebuilt from the database alone - run this "
-        "after enabling the feature on an existing install, after changing a "
-        "text extractor, and (on SQLite) after any migration that rewrote the "
-        "files_file table, which reassigns the rowids the index is keyed on."
+        "after enabling the feature on an existing install, and after changing "
+        "a text extractor."
     )
 
     def add_arguments(self, parser):

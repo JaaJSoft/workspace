@@ -8,6 +8,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
@@ -18,8 +19,11 @@ from workspace.chat.models import (
     PinnedConversation,
 )
 from workspace.chat.ui.views import _build_conversation_context
+from workspace.common.tests.rows import count_rows
 
 from .test_chat import ChatTestMixin
+
+User = get_user_model()
 
 
 class ConversationListViewPartialTests(ChatTestMixin, TestCase):
@@ -223,13 +227,13 @@ class ConversationAvatarMarkupTests(ChatTestMixin, TestCase):
         self.assertEqual(attrs["username"], self.member.username)
         self.assertEqual(attrs["initials"], "M")
 
-    def test_a_group_row_carries_its_members_initials(self):
+    def test_a_group_row_carries_its_name_initials(self):
         self.client.force_login(self.creator)
         html = self.client.get("/chat/conversations").content.decode()
 
         attrs = self._row_avatar(html, self.group.uuid)
         self.assertNotIn("user-id", attrs)
-        self.assertEqual(attrs["initials"], "M")
+        self.assertEqual(attrs["initials"], "TG")
 
     def test_the_uploaded_picture_is_flagged_on_the_row(self):
         self.client.force_login(self.creator)
@@ -239,3 +243,73 @@ class ConversationAvatarMarkupTests(ChatTestMixin, TestCase):
         Conversation.objects.filter(pk=self.group.pk).update(has_avatar=True)
         html = self.client.get("/chat/conversations").content.decode()
         self.assertIn("has-avatar", self._row_avatar(html, self.group.uuid))
+
+    def test_a_crowded_group_is_labelled_by_its_name_not_its_members(self):
+        """Who is in a group no longer changes how its row is labelled.
+
+        The circle and the text used to come from different places - the name
+        from the title, the letters from whichever members the database
+        returned first - so a busy group showed initials belonging to nobody
+        named on the row.
+        """
+        crowd = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP,
+            title="Product Launch",
+            created_by=self.creator,
+        )
+        ConversationMember.objects.create(conversation=crowd, user=self.creator)
+        for i in range(6):
+            user = User.objects.create_user(
+                username=f"crowd-{i}", password="pass", first_name=f"Crowd{i}"
+            )
+            ConversationMember.objects.create(conversation=crowd, user=user)
+
+        self.client.force_login(self.creator)
+        html = self.client.get("/chat/conversations").content.decode()
+        payload = self.client.get("/api/v1/chat/conversations").json()
+
+        api = next(c for c in payload if c["uuid"] == str(crowd.uuid))
+        self.assertEqual(self._row_avatar(html, crowd.uuid)["initials"], "PL")
+        self.assertEqual(
+            self._row_avatar(html, crowd.uuid)["initials"], api["avatar_initial"]
+        )
+        self.assertIn("Product Launch", html)
+        self.assertNotIn("Crowd0", html)
+
+
+class ConversationListRowVolumeTests(ChatTestMixin, TestCase):
+    """The sidebar refresh renders names, never the member list itself.
+
+    A group is labelled from its title and a direct message from its partner,
+    so growing a group must not grow what the endpoint reads. The query count
+    stays flat either way, so only a row count pins this down.
+    """
+
+    URL = "/chat/conversations"
+
+    def _add_members(self, count, prefix):
+        for i in range(count):
+            user = User.objects.create_user(username=f"{prefix}{i}", password="pass")
+            ConversationMember.objects.create(conversation=self.group, user=user)
+
+    def test_row_volume_does_not_scale_with_members_per_conversation(self):
+        self.client.force_login(self.creator)
+        self._add_members(5, "seed-")
+
+        with count_rows(ConversationMember) as baseline:
+            self.client.get(self.URL)
+
+        self._add_members(50, "bulk-")
+        with count_rows(ConversationMember) as after:
+            resp = self.client.get(self.URL)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            after.count,
+            baseline.count,
+            msg=(
+                "ConversationMember rows must not scale with members per "
+                f"conversation - baseline={baseline.count}, "
+                f"after adding 50 members={after.count}"
+            ),
+        )

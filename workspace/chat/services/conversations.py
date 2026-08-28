@@ -1,5 +1,13 @@
 from django.db import transaction
 
+# One order for every member list, so the member panel and the mention
+# autocomplete present people as they joined rather than as the database
+# happens to return them.
+MEMBER_ORDER = ("joined_at", "uuid")
+
+# How many names a generated group title strings together.
+TITLE_NAMES = 3
+
 
 def user_conversation_ids(user):
     """Return conversation UUIDs where the user is an active member."""
@@ -9,6 +17,122 @@ def user_conversation_ids(user):
         user=user,
         left_at__isnull=True,
     ).values_list("conversation_id", flat=True)
+
+
+def active_members_queryset():
+    """Active members with the user rows a serializer needs, in MEMBER_ORDER.
+
+    The queryset every ``Prefetch("members", ...)`` should be built from, so a
+    conversation carries the same member list wherever it is rendered.
+    """
+    from ..models import ConversationMember
+
+    return (
+        ConversationMember.objects.filter(left_at__isnull=True)
+        .select_related("user", "user__bot_profile")
+        .order_by(*MEMBER_ORDER)
+    )
+
+
+def dm_partners(user, conversation_ids):
+    """The other participant of each direct message, keyed by conversation id.
+
+    Members can only be added to a group (``ConversationMembersView`` rejects
+    anything else), so a direct message holds exactly two of them and this
+    reads one row per conversation - no ranking, no cap. Groups are absent on
+    purpose: they are labelled from their title, so the sidebar never needs to
+    know who is in one.
+    """
+    from ..models import Conversation, ConversationMember
+
+    partners = (
+        ConversationMember.objects.filter(
+            conversation_id__in=conversation_ids,
+            conversation__kind=Conversation.Kind.DM,
+            left_at__isnull=True,
+        )
+        .exclude(user_id=user.id)
+        .select_related("user")
+    )
+    return {m.conversation_id: m.user for m in partners}
+
+
+def default_group_title(users):
+    """The name a group falls back to when its creator supplies none.
+
+    Strings together the first few members, which is what an unnamed group used
+    to be *displayed* as. Storing it instead of recomputing it is what lets a
+    group row cost nothing in member rows - at the price of a name that no
+    longer follows the membership, and of listing the reader among the names.
+    """
+    names = [(u.get_full_name() or u.username) for u in users[:TITLE_NAMES]]
+    return ", ".join(names) or "Group"
+
+
+def display_name_for(kind, title, partner=None):
+    """The name a conversation is labelled with, wherever it is rendered.
+
+    The sidebar row and the voice room's heading are two renderings of the same
+    label, so they read it from here rather than each deriving it from whatever
+    they happen to have loaded - which is how the room ended up listing members
+    under a conversation the sidebar called "Group".
+
+    *partner* is only consulted for a direct message: a group is named by its
+    title, and every group has one.
+    """
+    from ..models import Conversation
+
+    if title:
+        return title
+    if kind == Conversation.Kind.DM:
+        if partner:
+            return partner.get_full_name() or partner.username
+        return "Conversation"
+    return "Group"
+
+
+def backfill_group_titles(conversation_model, member_model):
+    """Name the group conversations whose creator left the title blank.
+
+    Called by migration 0030_name_untitled_groups, which passes the historical
+    models from the app registry. Its signature therefore has to stay
+    compatible, and the body must keep working against historical model
+    classes: no model methods, no properties, only fields and the manager.
+
+    A group used to be *displayed* as the names of its first members whenever
+    it had no title, recomputed per reader and per request. The sidebar now
+    reads the stored title, so rows predating that rule need one too. The name
+    it generates is what the reader used to see, minus the exclusion of
+    themselves - a stored title is the same for everyone.
+
+    Idempotent: a conversation that already has a title is left alone.
+    """
+    untitled = list(
+        conversation_model.objects.filter(kind="group", title="").only("uuid")
+    )
+    if not untitled:
+        return 0
+
+    names = {}
+    members = (
+        member_model.objects.filter(
+            conversation_id__in=[c.uuid for c in untitled],
+            left_at__isnull=True,
+        )
+        .select_related("user")
+        .order_by(*MEMBER_ORDER)
+    )
+    for member in members:
+        bucket = names.setdefault(member.conversation_id, [])
+        if len(bucket) < TITLE_NAMES:
+            user = member.user
+            full_name = f"{user.first_name} {user.last_name}".strip()
+            bucket.append(full_name or user.username)
+
+    for conversation in untitled:
+        conversation.title = ", ".join(names.get(conversation.uuid, [])) or "Group"
+    conversation_model.objects.bulk_update(untitled, ["title"])
+    return len(untitled)
 
 
 def get_active_membership(user, conversation_id):

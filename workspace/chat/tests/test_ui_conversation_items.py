@@ -5,11 +5,15 @@ swaps (`/chat/conversations/items?uuids=...`) after a message is sent or
 received.
 """
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.chat.models import Conversation, ConversationMember, PinnedConversation
+from workspace.common.tests.rows import count_rows
 
 from .test_chat import ChatTestMixin
+
+User = get_user_model()
 
 
 class ConversationItemsViewPartialTests(ChatTestMixin, TestCase):
@@ -89,3 +93,41 @@ class ConversationItemsViewPartialTests(ChatTestMixin, TestCase):
         resp = self.client.get(self.URL, {"uuids": str(self.group.uuid)})
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, 'draggable="true"')
+
+
+class ConversationItemsRowVolumeTests(ChatTestMixin, TestCase):
+    """The swap fired after every message must not read the whole member list.
+
+    A group row is labelled from its stored title, so a conversation with five
+    members and one with fifty-five have to cost the same. The query count is
+    already constant, which is precisely why it catches nothing here.
+    """
+
+    URL = "/chat/conversations/items"
+
+    def _add_members(self, count, prefix):
+        for i in range(count):
+            user = User.objects.create_user(username=f"{prefix}{i}", password="pass")
+            ConversationMember.objects.create(conversation=self.group, user=user)
+
+    def test_row_volume_does_not_scale_with_members_per_conversation(self):
+        self.client.force_login(self.creator)
+        self._add_members(5, "seed-")
+
+        with count_rows(ConversationMember) as baseline:
+            self.client.get(self.URL, {"uuids": str(self.group.uuid)})
+
+        self._add_members(50, "bulk-")
+        with count_rows(ConversationMember) as after:
+            resp = self.client.get(self.URL, {"uuids": str(self.group.uuid)})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            after.count,
+            baseline.count,
+            msg=(
+                "ConversationMember rows must not scale with members per "
+                f"conversation - baseline={baseline.count}, "
+                f"after adding 50 members={after.count}"
+            ),
+        )

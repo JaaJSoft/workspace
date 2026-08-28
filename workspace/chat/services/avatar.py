@@ -24,18 +24,46 @@ logger = logging.getLogger(__name__)
 def conversation_avatar_initial(conversation, viewer) -> str:
     """The letters drawn when *conversation* has no uploaded avatar.
 
-    One letter for a direct message (the other participant), up to two for a
-    group (its first two other members). Reads the members off the instance,
-    so a caller that prefetched them filtered to the active ones gets those.
+    A direct message reads its partner off the instance, so a caller that
+    prefetched the members filtered to the active ones gets those.
 
     Both rendering paths go through this: the sidebar row renders it into the
     markup, the API sends it as ``avatar_initial`` for the header and the info
     panel. Computing it twice is what let them disagree.
     """
-    others = [m.user for m in conversation.members.all() if m.user_id != viewer.id]
-    if conversation.kind == Conversation.Kind.DM:
-        return _initial(others[0]) if others else "?"
-    return "".join(_initial(user) for user in others[:2]) or "G"
+    partner = next(
+        (m.user for m in conversation.members.all() if m.user_id != viewer.id), None
+    )
+    return avatar_initial_for(conversation.kind, conversation.title, partner)
+
+
+def avatar_initial_for(kind, title, partner=None) -> str:
+    """The initials for a conversation of *kind* named *title*.
+
+    A direct message shows the one letter its *partner* is drawn with, matching
+    <user-avatar>. A group shows the first letter of the first two words of its
+    name - the same name the row is labelled with, so the circle and the label
+    can no longer describe different people.
+
+    Every group carries a name (``default_group_title`` fills one in when the
+    creator gives none), so the ``"G"`` here is a guard for rows predating that,
+    not a branch worth designing around.
+    """
+    if kind == Conversation.Kind.DM:
+        return _initial(partner) if partner else "?"
+    return _name_initials(title) or "G"
+
+
+def _name_initials(name) -> str:
+    """The first letter of each of *name*'s first two parts.
+
+    Parts are separated by commas when the name lists several people ("Sam
+    Rivera, Jordan Lee" -> SJ) and by spaces otherwise ("Product Launch" -> PL).
+    A generated title is a list of names, so it is still lettered one person at
+    a time rather than twice from whoever comes first.
+    """
+    parts = name.split(",") if "," in name else name.split()
+    return "".join(part.strip()[:1].upper() for part in parts[:2] if part.strip())
 
 
 def _initial(user) -> str:

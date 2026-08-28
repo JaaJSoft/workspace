@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.files.ai_tools import FilesToolProvider, SearchFilesParams
+from workspace.files.ai_tools import FilesToolProvider, SearchFilenamesParams
 from workspace.files.models import File
 from workspace.users.services.settings import set_setting
 
@@ -30,8 +30,8 @@ class SearchFilesTimezoneTests(TestCase):
             updated_at=datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
         )
         set_setting(self.user, "core", "timezone", "Europe/Paris")
-        result = FilesToolProvider().search_files(
-            SearchFilesParams(query="boundary-report"),
+        result = FilesToolProvider().search_filenames(
+            SearchFilenamesParams(query="boundary-report"),
             user=self.user,
             bot=None,
             conversation_id=None,

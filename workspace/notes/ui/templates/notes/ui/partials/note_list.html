@@ -105,7 +105,7 @@
     <span
       class="text-xs text-base-content/50"
       x-show="_hasActiveFilters()"
-      x-text="notes.length + ' result' + (notes.length !== 1 ? 's' : '')"
+      x-text="notes.length + (hasMoreNotes ? '+' : '') + ' result' + (notes.length !== 1 ? 's' : '')"
     ></span>
     <button
       class="btn btn-ghost btn-xs text-xs"
@@ -162,6 +162,24 @@
       </div>
     </button>
   </template>
+  {% comment %}
+    The observer watches this sentinel; x-show (not x-if) keeps it in the DOM
+    so it is there to observe before the first page arrives. The button is the
+    fallback when IntersectionObserver is missing or a page failed to load.
+  {% endcomment %}
+  <div x-ref="notesSentinel" x-show="hasMoreNotes" x-cloak class="p-3 text-center">
+    <span
+      x-show="loadingMoreNotes"
+      class="loading loading-spinner loading-sm text-base-content/40"
+    ></span>
+    <button
+      x-show="!loadingMoreNotes"
+      class="btn btn-ghost btn-xs text-base-content/60"
+      @click="loadMoreNotes()"
+    >
+      Load more
+    </button>
+  </div>
   <div
     x-show="notes.length === 0 && !loadingNotes"
     class="p-4 text-center text-sm text-base-content/40"

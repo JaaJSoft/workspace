@@ -23,6 +23,7 @@ from rest_framework.response import Response
 from workspace.common.booleans import is_truthy
 from workspace.common.filters import CaseInsensitiveOrderingFilter
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.filters import FileSearchFilter
 from workspace.files.services import FilePermission, FileService
@@ -269,7 +270,7 @@ class FileViewSet(
     """
 
     serializer_class = FileSerializer
-    pagination_class = None
+    pagination_class = OptInLimitOffsetPagination
     lookup_field = "uuid"
     # FileSearchFilter comes after the ordering filter on purpose: it sorts by
     # relevance, and the ordering filter would otherwise re-apply the view's
@@ -365,6 +366,20 @@ class FileViewSet(
 
     def _is_descendants_query(self):
         return self.request.query_params.get("descendants", "").lower() in {"1", "true"}
+
+    def _is_paginated_query(self):
+        return "limit" in self.request.query_params
+
+    @staticmethod
+    def _with_stable_ordering(queryset):
+        """Append the pk to the sort so offset paging cannot skip a row.
+
+        Rows tied on the sort key - a bulk import lands them all on one
+        updated_at - have no order guaranteed across two queries, so a tied
+        row can drift over a page boundary between two fetches and never be
+        returned at all.
+        """
+        return queryset.order_by(*queryset.query.order_by, "pk")
 
     def _get_recent_limit(self):
         value = self.request.query_params.get("recent_limit")
@@ -619,9 +634,13 @@ class FileViewSet(
 
         if self._is_recent_query():
             queryset = queryset.order_by("-updated_at")
-            limit = self._get_recent_limit()
-            if limit:
-                queryset = queryset[:limit]
+            if not self._is_paginated_query():
+                limit = self._get_recent_limit()
+                if limit:
+                    queryset = queryset[:limit]
+
+        if self._is_paginated_query():
+            queryset = self._with_stable_ordering(queryset)
 
         page = self.paginate_queryset(queryset)
         if page is not None:

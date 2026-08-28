@@ -23,8 +23,13 @@ from workspace.common.booleans import is_truthy
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import VaultEntry
-from ..queries import accessible_entries_q, active_identity, reachable_vault
+from ..models import VaultEntry, VaultRole
+from ..queries import (
+    accessible_entries_q,
+    active_identity,
+    get_vault_role,
+    reachable_vault,
+)
 from ..serializers import VaultEntrySerializer, VaultEntryWriteSerializer
 from ..services.attestation import AttestationError
 from ..services.entries import (
@@ -283,19 +288,32 @@ class EntryPurgeView(CacheControlMixin, APIView):
 
     Only from the trash: that step is the confirmation, and without it one
     mistyped URL destroys a live entry with nothing to undo it.
+
+    Owner only, matching what DeleteEntryForeverAction declares. A key wrap
+    opens a vault, and every other entry action follows from that - this one
+    does not, because it is the only one no restore can undo.
     """
 
     cache_no_store = True
 
     @extend_schema(
-        tags=["Vault"], summary="Delete a trashed entry for good", responses={204: None}
+        tags=["Vault"],
+        summary="Delete a trashed entry for good",
+        responses={204: None},
     )
     def post(self, request, uuid):
-        entry = VaultEntry.objects.filter(
-            accessible_entries_q(request.user), uuid=uuid
-        ).first()
+        entry = (
+            VaultEntry.objects.filter(accessible_entries_q(request.user), uuid=uuid)
+            .select_related("vault")
+            .first()
+        )
         if entry is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        if get_vault_role(request.user, entry.vault) != VaultRole.OWNER:
+            return Response(
+                {"detail": "Only the vault owner may delete an entry for good."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if entry.deleted_at is None:
             return Response(
                 {"detail": "The entry is not in the trash."},

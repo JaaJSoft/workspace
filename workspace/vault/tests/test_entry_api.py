@@ -18,6 +18,7 @@ from workspace.vault.models import (
     EntryType,
     VaultEntry,
     VaultFolder,
+    VaultKeyWrap,
     VaultTag,
 )
 from workspace.vault.services.entries import entry_signature_payload
@@ -425,3 +426,37 @@ class EntryApiTests(TestCase):
         response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/purge")
         self.assertEqual(response.status_code, 404)
         self.assertTrue(VaultEntry.objects.filter(uuid=self.other_entry.uuid).exists())
+
+    def test_purging_is_refused_to_a_member_who_is_not_the_owner(self):
+        """The registry declares delete_forever owner-only, so the endpoint
+        has to say the same thing. A key wrap opens a vault; it does not hand
+        over the one action nothing can undo."""
+        VaultKeyWrap.objects.create(
+            vault=self.other_vault,
+            recipient=self.user,
+            wrapped_key="ZW5jfHdyYXA",
+            hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
+        )
+        self.other_entry.deleted_at = timezone.now()
+        self.other_entry.save(update_fields=["deleted_at"])
+
+        response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/purge")
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(VaultEntry.objects.filter(uuid=self.other_entry.uuid).exists())
+
+    def test_restoring_stays_open_to_a_member(self):
+        """The other direction of the same claim: the guard belongs to purge
+        alone, and a test that only proved the refusal would also pass if the
+        whole trash had been locked to owners."""
+        VaultKeyWrap.objects.create(
+            vault=self.other_vault,
+            recipient=self.user,
+            wrapped_key="ZW5jfHdyYXA",
+            hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
+        )
+        self.other_entry.deleted_at = timezone.now()
+        self.other_entry.save(update_fields=["deleted_at"])
+
+        response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/restore")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(VaultEntry.objects.get(uuid=self.other_entry.uuid).deleted_at)

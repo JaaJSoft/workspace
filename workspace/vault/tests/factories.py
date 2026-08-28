@@ -9,7 +9,7 @@ under test in the builders rather than copied across files.
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from django.contrib.auth import get_user_model
 
-from workspace.vault.models import AccountIdentity, Vault
+from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
 from workspace.vault.services.metadata import canonical_cbor
 from workspace.vault.tests.reference.encoding import to_base64url
 
@@ -52,3 +52,10 @@ def make_vault(owner, **overrides):
     }
     fields.update(overrides)
     return Vault.objects.create(owner=owner, **fields)
+
+
+def make_key_wrap(vault, recipient, **overrides):
+    """The row that makes *recipient* a member - not an owner - of *vault*."""
+    fields = {"wrapped_key": "ZW5jfHdyYXA", "hpke_suite": HPKE_SUITE}
+    fields.update(overrides)
+    return VaultKeyWrap.objects.create(vault=vault, recipient=recipient, **fields)

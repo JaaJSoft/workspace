@@ -7,6 +7,7 @@ wrong database, so the status code is never asserted alone.
 """
 
 import uuid
+from unittest.mock import patch
 
 from django.db import connection
 from django.test import TestCase
@@ -14,13 +15,20 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.vault.models import (
+    EntryField,
     EntryType,
     VaultEntry,
     VaultFolder,
+    VaultRole,
     VaultTag,
 )
 from workspace.vault.services.entries import entry_signature_payload
-from workspace.vault.tests.factories import make_account, make_vault, sign
+from workspace.vault.tests.factories import (
+    make_account,
+    make_key_wrap,
+    make_vault,
+    sign,
+)
 
 LIST_URL = "/api/v1/vault/entries"
 
@@ -366,3 +374,106 @@ class EntryApiTests(TestCase):
         body = self.signed_entry(vault=rotated, key_version=1)
         self.assertEqual(self._create(body).status_code, 400)
         self.assertFalse(VaultEntry.objects.filter(uuid=body["uuid"]).exists())
+
+    def _trash(self, entry_uuid):
+        self.assertEqual(
+            self.client.delete(f"{LIST_URL}/{entry_uuid}").status_code, 204
+        )
+
+    def test_restoring_brings_an_entry_back_without_touching_its_signature(self):
+        """deleted_at is outside the signed payload, so the round trip through
+        the trash must leave metadata_sig exactly as the client wrote it."""
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+        response = self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        self.assertEqual(response.status_code, 200)
+        entry = VaultEntry.objects.get(uuid=created["uuid"])
+        self.assertIsNone(entry.deleted_at)
+        self.assertEqual(entry.metadata_sig, created["metadata_sig"])
+
+    def test_a_restored_entry_is_listed_again(self):
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+        self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        listed = self.client.get(f"{LIST_URL}?vault={self.vault.uuid}").json()
+        self.assertIn(created["uuid"], [row["uuid"] for row in listed])
+
+    def test_restoring_an_entry_that_was_never_trashed_is_harmless(self):
+        """Idempotent on purpose: a client that retries a lost answer must not
+        be told it did something wrong."""
+        created = self._create(self.signed_entry()).json()
+        response = self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(VaultEntry.objects.get(uuid=created["uuid"]).deleted_at)
+
+    def test_restoring_an_entry_of_another_vault_answers_404(self):
+        response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/restore")
+        self.assertEqual(response.status_code, 404)
+
+    def test_purging_removes_the_entry_and_its_fields(self):
+        created = self._create(
+            self.signed_entry(fields={"password": "Ag", "totp": "Aw"})
+        ).json()
+        self._trash(created["uuid"])
+        response = self.client.post(f"{LIST_URL}/{created['uuid']}/purge")
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(VaultEntry.objects.filter(uuid=created["uuid"]).exists())
+        self.assertFalse(EntryField.objects.filter(entry_id=created["uuid"]).exists())
+
+    def test_purging_an_entry_that_is_not_in_the_trash_is_refused(self):
+        """The trash is the confirmation step. Skipping it would make one
+        mistyped URL destroy a live entry with no way back."""
+        created = self._create(self.signed_entry()).json()
+        response = self.client.post(f"{LIST_URL}/{created['uuid']}/purge")
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultEntry.objects.filter(uuid=created["uuid"]).exists())
+
+    def test_purging_an_entry_restored_in_between_leaves_it_alone(self):
+        """Check-then-act: the trash check runs on a copy read outside any
+        lock, so a restore landing before the delete would destroy an entry
+        the user has just been told is back. The patched role resolver runs
+        in exactly that window and stands in for the racing request."""
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+
+        def restore_then_answer(user, vault):
+            VaultEntry.objects.filter(uuid=created["uuid"]).update(deleted_at=None)
+            return VaultRole.OWNER
+
+        with patch("workspace.vault.views.entries.get_vault_role", restore_then_answer):
+            response = self.client.post(f"{LIST_URL}/{created['uuid']}/purge")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultEntry.objects.filter(uuid=created["uuid"]).exists())
+
+    def test_purging_an_entry_of_another_vault_answers_404(self):
+        response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/purge")
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(VaultEntry.objects.filter(uuid=self.other_entry.uuid).exists())
+
+    def _share_other_vault_and_trash_its_entry(self):
+        """Make the caller a member - not the owner - of the other vault,
+        with its entry in the trash."""
+        make_key_wrap(self.other_vault, self.user)
+        self.other_entry.deleted_at = timezone.now()
+        self.other_entry.save(update_fields=["deleted_at"])
+
+    def test_purging_is_refused_to_a_member_who_is_not_the_owner(self):
+        """The registry declares delete_forever owner-only, so the endpoint
+        has to say the same thing. A key wrap opens a vault; it does not hand
+        over the one action nothing can undo."""
+        self._share_other_vault_and_trash_its_entry()
+
+        response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/purge")
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(VaultEntry.objects.filter(uuid=self.other_entry.uuid).exists())
+
+    def test_restoring_stays_open_to_a_member(self):
+        """The other direction of the same claim: the guard belongs to purge
+        alone, and a test that only proved the refusal would also pass if the
+        whole trash had been locked to owners."""
+        self._share_other_vault_and_trash_its_entry()
+
+        response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/restore")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(VaultEntry.objects.get(uuid=self.other_entry.uuid).deleted_at)

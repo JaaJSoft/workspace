@@ -95,8 +95,23 @@ def registry_for(entry_type: str) -> type[VaultEntry]:
     return _REGISTRY[entry_type]
 
 
-def schema_for(entry_type: str):
-    return registry_for(entry_type).FIELD_SCHEMA
+_RAISE = object()
+
+
+def schema_for(entry_type: str, *, default=_RAISE):
+    """The field schema *entry_type* declares. ``KeyError`` if it has none.
+
+    ``type`` is a Python-side choice, so nothing stops a stored row from
+    naming a type no proxy claims. A caller walking a batch passes a default
+    rather than let one such row take the other answers down with it; a write
+    path leaves it strict, because there it is a bug worth surfacing.
+    """
+    try:
+        return registry_for(entry_type).FIELD_SCHEMA
+    except KeyError:
+        if default is _RAISE:
+            raise
+        return default
 
 
 def as_typed(entry: VaultEntry) -> VaultEntry:

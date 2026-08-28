@@ -87,3 +87,25 @@ test('every unsafe call carries the CSRF token, and no read does', () => {
   api.getEntry(ENTRY);
   assert.equal(calls[9].options.headers['X-CSRFToken'], undefined);
 });
+
+test('restore and purge both post, and carry the token', () => {
+  const { api, calls } = withFetch();
+  api.restoreEntry(ENTRY);
+  api.purgeEntry(ENTRY);
+  assert.equal(calls[0].options.method, 'POST');
+  assert.ok(calls[0].url.endsWith('/restore'));
+  assert.equal(calls[1].options.method, 'POST');
+  assert.ok(calls[1].url.endsWith('/purge'));
+  for (const call of calls) {
+    assert.equal(call.options.headers['X-CSRFToken'], 'token');
+  }
+});
+
+test('the action lookup posts the batch as a body, and carries the token', () => {
+  const { api, calls } = withFetch();
+  api.fetchEntryActions([ENTRY, ENTRY]);
+  assert.equal(calls[0].options.method, 'POST');
+  assert.ok(calls[0].url.endsWith('/api/v1/vault/actions'));
+  assert.deepStrictEqual(JSON.parse(calls[0].options.body), { uuids: [ENTRY, ENTRY] });
+  assert.equal(calls[0].options.headers['X-CSRFToken'], 'token');
+});

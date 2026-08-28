@@ -1,0 +1,93 @@
+from abc import ABC
+from enum import StrEnum
+
+from ..models import VaultRole
+
+
+class ActionCategory(StrEnum):
+    EDIT = "edit"
+    ORGANIZE = "organize"
+    CLIPBOARD = "clipboard"
+    DANGER = "danger"
+
+
+# Weakest to strongest. A role missing from the map ranks below every floor,
+# so one added to the model and forgotten here offers nothing, not everything.
+_ROLE_RANK = {
+    VaultRole.MEMBER: 1,
+    VaultRole.OWNER: 2,
+}
+
+
+class BaseVaultAction(ABC):
+    """Declarative action on a vault entry.
+
+    ``is_available`` is pure: the resolved role, the trash flag and the
+    type's field schema all arrive as parameters, and no database query is
+    allowed. The endpoint resolves each of those once per vault and then
+    evaluates every action in memory; an action that queried would turn one
+    request into one query per entry.
+
+    Most actions set only the attributes below. An override narrows and must
+    call ``super()`` - the base class is where the role and trash rules live,
+    and skipping it re-opens them.
+    """
+
+    id: str
+    label: str
+    icon: str
+    category: ActionCategory
+
+    # A floor, compared through _ROLE_RANK. An equality against OWNER behaves
+    # as one only while there are two roles: the next role sharing adds is
+    # likelier to sit below MEMBER, and equality would hand it everything.
+    min_role: str = VaultRole.MEMBER
+
+    # The trash is a state an entry is in, not a place it went: an entry in it
+    # keeps a different set of actions rather than none. only_when_trashed is
+    # the other half, and implies the first - setting it alone would otherwise
+    # declare an action offered nowhere.
+    available_when_trashed: bool = False
+    only_when_trashed: bool = False
+
+    supports_bulk: bool = False
+    css_class: str = ""
+
+    def is_available(self, user, entry, *, role, trashed, schema):
+        if role is None:
+            return False
+        if _ROLE_RANK.get(role, 0) < _ROLE_RANK[self.min_role]:
+            return False
+        if trashed and not (self.available_when_trashed or self.only_when_trashed):
+            return False
+        if self.only_when_trashed and not trashed:
+            return False
+        return True
+
+    def serialize(self, entry):
+        return {
+            "id": self.id,
+            "label": self.label,
+            "icon": self.icon,
+            "category": self.category.value,
+            "css_class": self.css_class,
+            "bulk": self.supports_bulk,
+        }
+
+
+class RequiresFieldMixin:
+    """Hide the action unless the entry's type declares a given field.
+
+    The field schema is the one source of what a type carries, so an action
+    that reads a field must ask it rather than name a type: adding a second
+    type that also has a TOTP field must not require editing this action.
+    """
+
+    requires_field: str
+
+    def is_available(self, user, entry, *, role, trashed, schema):
+        if not any(field.field_id == self.requires_field for field in schema):
+            return False
+        return super().is_available(
+            user, entry, role=role, trashed=trashed, schema=schema
+        )

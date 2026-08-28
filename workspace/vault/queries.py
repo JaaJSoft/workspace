@@ -47,6 +47,31 @@ def get_vault_role(user, vault):
     return None
 
 
+def vault_roles(user, vault_ids) -> dict:
+    """Resolve *user*'s role in each of *vault_ids* in two queries.
+
+    The batch form of :func:`get_vault_role`, which costs one key-wrap lookup
+    per vault the caller does not own. Vaults out of reach are absent from
+    the mapping rather than present with None.
+    """
+    vault_ids = list(vault_ids)
+    if not vault_ids:
+        return {}
+    owned = set(
+        Vault.objects.filter(owner=user, uuid__in=vault_ids).values_list(
+            "uuid", flat=True
+        )
+    )
+    wrapped = set(
+        VaultKeyWrap.objects.filter(recipient=user, vault_id__in=vault_ids).values_list(
+            "vault_id", flat=True
+        )
+    )
+    return {uuid: VaultRole.OWNER for uuid in owned} | {
+        uuid: VaultRole.MEMBER for uuid in wrapped - owned
+    }
+
+
 def accessible_entries_q(user):
     """Q filter over the entries of every vault *user* can open.
 

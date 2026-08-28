@@ -9,9 +9,12 @@ class VaultConfig(AppConfig):
         # The entry proxies are Django models, so the app registry has to hold
         # them whatever else imported them: an app registry that depends on
         # import order makes `makemigrations --check` answer differently in CI
-        # than it does here.
+        # than it does here. The actions register on import too, and are
+        # pulled in here rather than lazily so a broken import fails the boot
+        # instead of leaving a worker answering "no actions" forever.
         from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
         from workspace.vault import types  # noqa: F401
+        from workspace.vault.actions import entry as entry_actions  # noqa: F401
 
         registry.register(
             ModuleInfo(

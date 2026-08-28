@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import account, entries, folders, tags, vaults
+from .views import account, actions, entries, folders, tags, vaults
 
 urlpatterns = [
     path(
@@ -67,5 +67,20 @@ urlpatterns = [
         "api/v1/vault/entries/<uuid:uuid>",
         entries.EntryDetailView.as_view(),
         name="vault-entry-detail",
+    ),
+    path(
+        "api/v1/vault/entries/<uuid:uuid>/restore",
+        entries.EntryRestoreView.as_view(),
+        name="vault-entry-restore",
+    ),
+    path(
+        "api/v1/vault/entries/<uuid:uuid>/purge",
+        entries.EntryPurgeView.as_view(),
+        name="vault-entry-purge",
+    ),
+    path(
+        "api/v1/vault/actions",
+        actions.VaultActionsView.as_view(),
+        name="vault-actions",
     ),
 ]

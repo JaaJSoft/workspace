@@ -14,7 +14,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
-from workspace.common.uuids import UuidBatchError, parse_uuid_batch
+from workspace.common.uuids import (
+    BatchTooLarge,
+    MalformedUuid,
+    UuidBatchError,
+    parse_uuid_batch,
+)
 
 from ..actions import VaultActionRegistry
 from ..models import VaultEntry
@@ -22,6 +27,10 @@ from ..queries import accessible_entries_q, vault_roles
 from ..types import schema_for
 
 MAX_BATCH = 200
+
+
+def _refused(detail):
+    return Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @extend_schema(
@@ -56,10 +65,17 @@ class VaultActionsView(CacheControlMixin, APIView):
     cache_no_store = True
 
     def post(self, request):
+        # The wording is chosen here from the kind of failure, never taken
+        # from the exception: an exception's text is a path from the server's
+        # internals to a response body.
         try:
             parsed = parse_uuid_batch(request.data, max_items=MAX_BATCH)
-        except UuidBatchError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except BatchTooLarge:
+            return _refused(f"Too many UUIDs (max {MAX_BATCH}).")
+        except MalformedUuid:
+            return _refused("Malformed UUID in uuids.")
+        except UuidBatchError:
+            return _refused("uuids must be a non-empty list.")
 
         # Keyed by the spelling the caller sent, not by str(UUID): a client
         # that sent an uppercase or braced UUID reads back data[whatItSent],

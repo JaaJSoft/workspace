@@ -4,6 +4,9 @@ from unittest import mock
 from django.test import SimpleTestCase
 
 from workspace.common.uuids import (
+    BatchTooLarge,
+    MalformedBatch,
+    MalformedUuid,
     UuidBatchError,
     parse_uuid_batch,
     parse_uuid_or_none,
@@ -101,22 +104,29 @@ class ParseUuidBatchTests(SimpleTestCase):
         AttributeError - a 500 where the endpoint promises a 400."""
         for body in ([self.one], 42, "x", None):
             with self.subTest(body=body):
-                with self.assertRaises(UuidBatchError):
+                with self.assertRaises(MalformedBatch):
                     parse_uuid_batch(body)
 
     def test_a_missing_or_empty_list_is_refused(self):
         for body in ({}, {"uuids": []}, {"uuids": "nope"}):
             with self.subTest(body=body):
-                with self.assertRaises(UuidBatchError):
+                with self.assertRaises(MalformedBatch):
                     parse_uuid_batch(body)
 
     def test_a_malformed_uuid_is_refused(self):
-        with self.assertRaises(UuidBatchError):
+        with self.assertRaises(MalformedUuid):
             parse_uuid_batch({"uuids": [self.one, "not-a-uuid"]})
 
     def test_a_batch_above_the_cap_is_refused_not_truncated(self):
-        with self.assertRaises(UuidBatchError):
+        with self.assertRaises(BatchTooLarge):
             parse_uuid_batch({"uuids": [self.one] * 4}, max_items=3)
+
+    def test_every_kind_is_catchable_as_the_base_error(self):
+        """Views distinguish the kinds; a caller that does not care catches
+        the base and still gets every refusal."""
+        for kind in (MalformedBatch, BatchTooLarge, MalformedUuid):
+            with self.subTest(kind=kind):
+                self.assertTrue(issubclass(kind, UuidBatchError))
 
     def test_duplicates_are_kept_so_the_caller_can_map_them_back(self):
         """Deduplicating here would lose the position of each submitted

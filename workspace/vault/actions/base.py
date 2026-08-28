@@ -105,3 +105,43 @@ class RequiresFieldMixin:
             schema=schema,
             present_fields=present_fields,
         )
+
+
+class BaseVaultTargetAction(ABC):
+    """Declarative action on a vault itself.
+
+    Deliberately not a subclass of :class:`BaseVaultAction`: the state that
+    decides an entry's actions - the trash, the type's schema, the fields the
+    row carries - has no meaning for a vault, and inheriting a signature that
+    carries all three would invite an override to read a parameter that is
+    always empty.
+
+    Every action defined against this base rewrites a field the vault's
+    signed metadata covers, and that payload names the owner. There is
+    therefore no floor below ``OWNER`` to express yet; ``min_role`` is
+    carried anyway, so sharing adds a role rather than a branch.
+    """
+
+    id: str
+    label: str
+    icon: str
+    category: ActionCategory
+
+    min_role: str = VaultRole.OWNER
+    supports_bulk: bool = False
+    css_class: str = ""
+
+    def is_available(self, user, vault, *, role):
+        if role is None:
+            return False
+        return _ROLE_RANK.get(role, 0) >= _ROLE_RANK[self.min_role]
+
+    def serialize(self, vault):
+        return {
+            "id": self.id,
+            "label": self.label,
+            "icon": self.icon,
+            "category": self.category.value,
+            "css_class": self.css_class,
+            "bulk": self.supports_bulk,
+        }

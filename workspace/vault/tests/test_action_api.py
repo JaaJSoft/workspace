@@ -217,3 +217,71 @@ class ActionApiTests(TestCase):
             self._post([str(row.uuid) for row in [self.entry, *rows]])
 
         self.assertEqual(len(large), len(small))
+
+
+class VaultTargetActionApiTests(TestCase):
+    """The same endpoint, asked about vaults rather than entries."""
+
+    def setUp(self):
+        self.user, _, _ = make_account("owner")
+        self.client.force_login(self.user)
+        self.vault = make_vault(self.user)
+
+        self.other_user, _, _ = make_account("stranger")
+        self.other_vault = make_vault(self.other_user)
+
+        # A vault the user can open without owning: a key wrap makes them a
+        # member, which is the role every vault action refuses.
+        self.shared = make_vault(self.other_user)
+        make_key_wrap(self.shared, self.user)
+
+    def _post(self, uuids, target="vault"):
+        return self.client.post(
+            URL, {"uuids": uuids, "target": target}, "application/json"
+        )
+
+    def test_the_owner_gets_the_vault_action_set(self):
+        response = self._post([str(self.vault.uuid)])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [action["id"] for action in response.json()[str(self.vault.uuid)]],
+            ["rename", "set_appearance", "favorite", "unfavorite", "delete"],
+        )
+
+    def test_a_member_gets_a_key_and_an_empty_list(self):
+        """Reachable and un-actionable are different answers from absent: the
+        vault opens, and nothing about it may be rewritten."""
+        response = self._post([str(self.shared.uuid)])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[str(self.shared.uuid)], [])
+
+    def test_an_unreachable_vault_answers_like_one_that_does_not_exist(self):
+        response = self._post([str(self.other_vault.uuid), str(uuid.uuid4())])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[str(self.other_vault.uuid)], [])
+
+    def test_an_unknown_target_is_refused(self):
+        response = self._post([str(self.vault.uuid)], target="folder")
+        self.assertEqual(response.status_code, 400)
+
+    def test_the_default_target_is_still_the_entry_registry(self):
+        """Omitting the field must keep the shape every existing caller
+        already sends, or the browser's entry menus break silently."""
+        entry = VaultEntry.objects.create(
+            vault=self.vault,
+            type=EntryType.LOGIN,
+            encrypted_name="AQID",
+            metadata_sig="AQ",
+        )
+        response = self.client.post(
+            URL, {"uuids": [str(entry.uuid)]}, "application/json"
+        )
+        ids = [action["id"] for action in response.json()[str(entry.uuid)]]
+        self.assertIn("trash", ids)
+
+    def test_a_vault_uuid_asked_for_as_an_entry_gets_an_empty_list(self):
+        """The two namespaces do not overlap, and the endpoint must not fall
+        back from one to the other: a vault is not an entry, so asking about
+        it under the wrong target is the same as asking about nothing."""
+        response = self._post([str(self.vault.uuid)], target="entry")
+        self.assertEqual(response.json()[str(self.vault.uuid)], [])

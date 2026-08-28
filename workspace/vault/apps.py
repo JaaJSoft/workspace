@@ -15,6 +15,7 @@ class VaultConfig(AppConfig):
         from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
         from workspace.vault import types  # noqa: F401
         from workspace.vault.actions import entry as entry_actions  # noqa: F401
+        from workspace.vault.actions import vault as vault_actions  # noqa: F401
 
         registry.register(
             ModuleInfo(

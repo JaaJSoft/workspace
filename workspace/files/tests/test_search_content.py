@@ -159,3 +159,12 @@ class FileListSearchApiTests(APITestCase):
     def test_a_blank_search_is_not_a_filter(self):
         self._note("root.md", b"body")
         self.assertEqual(self._names({"search": "  "}), ["root.md"])
+
+    def test_the_trash_listing_can_be_searched_by_content(self):
+        # Trashing leaves the document in place, so the trash view - which
+        # runs through the same filter backend - can still find it.
+        note = self._note("minutes.md", b"the treasurer resigned")
+        note.soft_delete()
+        response = self.client.get("/api/v1/files/trash", {"search": "treasurer"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["name"] for row in response.data], ["minutes.md"])

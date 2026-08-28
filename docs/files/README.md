@@ -16,7 +16,8 @@ Upload, organize, and preview files with a full-featured file explorer.
 - **Favorites & Recent** - Star files for quick access, track recently opened items
 - **Trash** - Soft delete with configurable retention period before permanent removal
 - **Thumbnails** - Auto-generated thumbnails for image files
-- **Search** - Filter by name, file type, or MIME type with sorting options
+- **Search** - Full-text search over file names and, for text formats
+  (Markdown, plain text, CSV, HTML), file contents; filter by type and sort
 - **Tags** - Create and assign tags to organize files across folders
 - **Sharing** - Share files with specific users or via public links with optional password protection and expiration
 - **Pinned folders** - Pin frequently used folders to the sidebar

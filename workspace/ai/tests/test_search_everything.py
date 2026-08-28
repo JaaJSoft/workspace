@@ -12,6 +12,7 @@ from workspace.ai.tools import (
     SearchToolProvider,
 )
 from workspace.files.models import File
+from workspace.files.services.search_index import index_file
 
 User = get_user_model()
 
@@ -35,11 +36,14 @@ class SearchEverythingTests(TestCase):
         )
 
     def test_finds_a_file_and_reports_where_it_lives(self):
+        # File search reads the full-text index, which the indexing task
+        # writes; Celery is not eager under test, so index the fixture here.
         note = File.objects.create(
             name="Alpha migration plan",
             owner=self.user,
             node_type=File.NodeType.FILE,
         )
+        index_file(note)
 
         payload = json.loads(self._call("Alpha migration"))
 

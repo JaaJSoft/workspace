@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import SimpleTestCase, TestCase
 
-from workspace.common.search import documents
+from workspace.common.search import checks, documents
 from workspace.common.search.documents import drop_document, index_document
 from workspace.common.search.schema import DerivedFulltextIndex, Field
 
@@ -119,3 +119,25 @@ class PostgresStatementTests(SimpleTestCase):
         with mock.patch.object(documents, "connections", {"default": conn}):
             drop_document(USER_DOC_FTS, 1)
         conn.cursor.assert_not_called()
+
+
+class SqliteCapabilityCheckTests(SimpleTestCase):
+    def test_no_warning_on_a_recent_sqlite(self):
+        with mock.patch.object(checks.sqlite3, "sqlite_version_info", (3, 50, 4)):
+            self.assertEqual(checks.check_sqlite_fts_support(None), [])
+
+    def test_warning_on_a_build_without_contentless_delete(self):
+        with (
+            mock.patch.object(checks.sqlite3, "sqlite_version_info", (3, 42, 0)),
+            mock.patch.object(checks.sqlite3, "sqlite_version", "3.42.0"),
+        ):
+            warnings = checks.check_sqlite_fts_support(None)
+        self.assertEqual([w.id for w in warnings], ["common.W001"])
+
+    def test_no_warning_when_no_connection_is_sqlite(self):
+        with mock.patch.object(
+            checks,
+            "connections",
+            mock.Mock(all=lambda: [mock.Mock(vendor="postgresql")]),
+        ):
+            self.assertEqual(checks.check_sqlite_fts_support(None), [])

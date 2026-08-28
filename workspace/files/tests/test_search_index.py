@@ -137,6 +137,15 @@ class IndexWriteTests(_FtsTestCase):
         self.assertTrue(index_file(note))
         self.assertEqual(self._matches('"recipes"'), {self._rowid(note)})
 
+    def test_unindex_file_swallows_backend_failures(self):
+        # A failed unindex must not break the delete it is hooked into.
+        note = self._note("groceries.md", b"x")
+        with mock.patch(
+            "workspace.files.services.search_index.drop_document",
+            side_effect=RuntimeError("boom"),
+        ):
+            self.assertFalse(unindex_file(note))
+
     def test_index_file_swallows_backend_failures(self):
         note = self._note("groceries.md", b"x")
         with mock.patch(
@@ -249,3 +258,66 @@ class IndexTaskTests(_FtsTestCase):
                 ['"cardamom"'],
             )
             self.assertEqual(c.fetchone()[0], 1)
+
+
+class ContentIsNeverPersistedTests(_FtsTestCase):
+    """The blob stays the single copy of the content.
+
+    What lands in the database is an inverted index, never the prose: the
+    lexemes are there by design, the document is not recoverable from them,
+    and no ordinary column ever receives the text.
+    """
+
+    PHRASE = "zqxjvwphrase"
+
+    def _indexed_note(self):
+        note = self._note("minutes.md", f"the {self.PHRASE} was noted".encode())
+        index_file(note)
+        return note
+
+    def test_the_document_cannot_be_read_back(self):
+        # A contentless FTS5 table answers every column with NULL: it knows
+        # which rows contain a term, not what those rows said.
+        note = self._indexed_note()
+        with connection.cursor() as c:
+            c.execute(
+                f"SELECT name, body FROM {FILES_FTS.fts_table} WHERE rowid = %s",
+                [self._rowid(note)],
+            )
+            self.assertEqual(c.fetchone(), (None, None))
+
+    def test_the_fts5_table_has_no_content_shadow_table(self):
+        # The shadow table FTS5 creates for an external-content index is what
+        # would hold the text; content='' must keep it from existing.
+        with connection.cursor() as c:
+            c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=%s",
+                [f"{FILES_FTS.fts_table}_content"],
+            )
+            self.assertIsNone(c.fetchone())
+
+    def test_no_ordinary_table_holds_the_text(self):
+        # Guards against the obvious regression: a `search_text` column added
+        # to files_file, or any other second copy of the prose. FTS shadow
+        # tables are excluded - storing lexemes is their job.
+        self._indexed_note()
+        with connection.cursor() as c:
+            c.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name NOT LIKE 'sqlite_%%' AND name NOT LIKE %s",
+                [f"{FILES_FTS.fts_table}%"],
+            )
+            tables = [row[0] for row in c.fetchall()]
+            offenders = [t for t in tables if self._table_contains(c, t, self.PHRASE)]
+        self.assertEqual(offenders, [])
+
+    @staticmethod
+    def _table_contains(cursor, table, needle):
+        cursor.execute(f'SELECT * FROM "{table}"')
+        for row in cursor.fetchall():
+            for value in row:
+                if isinstance(value, str) and needle in value:
+                    return True
+                if isinstance(value, bytes) and needle.encode() in value:
+                    return True
+        return False

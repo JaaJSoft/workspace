@@ -59,7 +59,16 @@
     >
       <span x-text="`${results.length} Result${results.length > 1 ? 's' : ''}`"></span>
     </div>
-    <template x-for="(result, index) in results" :key="result.uuid">
+    {% comment %}
+      Two providers can legitimately return the same entity with different
+      destinations - a markdown note is both a file and a note. Keying on the
+      uuid alone gives x-for duplicate keys, and Alpine then renders none of
+      the group at all: the header says "2 results" above an empty list.
+    {% endcomment %}
+    <template
+      x-for="(result, index) in results"
+      :key="`${result.provider_slug}:${result.uuid}`"
+    >
       <a
         :href="result.url"
         {% if on_click %}@click="{{ on_click }}"{% endif %}
@@ -100,6 +109,15 @@
               class="truncate flex-1"
               x-html="highlightMatch(result.matched_value, searchQuery)"
             ></span>
+            {% comment %}
+              A content hit has nothing to highlight in the name, so it needs
+              to say why it is in the list. The index stores lexemes only, so
+              there is no snippet to show.
+            {% endcomment %}
+            <span
+              x-show="result.match_type === 'content'"
+              class="badge badge-xs badge-ghost flex-shrink-0"
+            >in content</span>
             <template x-for="tag in (result.tags || [])" :key="tag.label">
               <span
                 class="badge badge-xs flex-shrink-0"

@@ -35,14 +35,12 @@ def index_document(index, pk, values, *, using=DEFAULT_DB_ALIAS):
     """
     conn = connections[using]
     param = _adapt_pk(pk, conn)
+    texts = document_values(index, values)
     if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
         with conn.cursor() as cursor:
-            cursor.execute(
-                index.pg_update_sql(), [*document_values(index, values), param]
-            )
+            cursor.execute(index.pg_update_sql(), [*texts, param])
         return
     if conn.vendor == "sqlite" and fts5_available():
-        texts = document_values(index, values)
         with conn.cursor() as cursor:
             cursor.execute(index.sqlite_delete_sql(), [param])
             cursor.execute(index.sqlite_insert_sql(), [*texts, param])

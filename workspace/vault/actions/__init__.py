@@ -5,6 +5,17 @@ class VaultActionRegistry:
     _actions = []
     _loaded = False
 
+    def __init_subclass__(cls, **kwargs):
+        """Give every subclass a registry of its own.
+
+        Without this the class attribute is inherited, so a subclass built to
+        hold a throwaway action set would append into the base list instead -
+        polluting the real registry for the rest of the process, silently.
+        """
+        super().__init_subclass__(**kwargs)
+        cls._actions = []
+        cls._loaded = True
+
     @classmethod
     def register(cls, action_cls):
         """Class decorator - instantiates and stores an action."""
@@ -36,7 +47,8 @@ class VaultActionRegistry:
         would empty it for every test after - and importing the module again
         would not put anything back, because a second import of an already
         imported module runs nothing. A test that wants an action set of its
-        own subclasses this registry instead.
+        own subclasses this registry, which ``__init_subclass__`` gives an
+        empty list of its own.
         """
         if cls._loaded:
             return

@@ -25,12 +25,9 @@ class RegistryMachineryTests(SimpleTestCase):
     def setUp(self):
         # A registry of this test's own, rather than the global one emptied
         # and refilled: the global is process-wide, its actions register at
-        # import time, and a second import puts nothing back. Subclassing
-        # gives an isolated _actions list and cannot leak into another
-        # module.
-        self.registry = type(
-            "_TestRegistry", (VaultActionRegistry,), {"_actions": [], "_loaded": True}
-        )
+        # import time, and a second import puts nothing back. Subclassing is
+        # enough - __init_subclass__ hands out the empty list.
+        self.registry = type("_TestRegistry", (VaultActionRegistry,), {})
         self.schema = LoginEntry.FIELD_SCHEMA
 
     def _register(self, **attrs):
@@ -49,6 +46,16 @@ class RegistryMachineryTests(SimpleTestCase):
         return self.registry.get_available_actions(
             None, _Entry(), role=role, trashed=trashed, schema=self.schema
         )
+
+    def test_a_subclass_registers_into_its_own_list(self):
+        """The isolation this whole test class stands on. Were _actions
+        inherited rather than handed out fresh, every registration here would
+        land in the production registry and stay there for the rest of the
+        process."""
+        before = len(VaultActionRegistry.all())
+        self._register()
+        self.assertEqual(len(VaultActionRegistry.all()), before)
+        self.assertNotIn("sample", [action.id for action in VaultActionRegistry.all()])
 
     def test_a_registered_action_is_offered(self):
         self._register()

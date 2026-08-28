@@ -147,6 +147,53 @@ class TranscodingTests(SimpleTestCase):
         with patch.object(transcription, "_FFMPEG", None):
             self.assertIsNone(transcription._to_wav(WEBM))
 
+    @override_settings(CHAT_VOICE_MAX_SECONDS=300)
+    def test_the_decode_stops_at_the_length_the_recorder_allows(self):
+        # The upload cap is 50 MB, and Opus at its lowest bitrate packs about
+        # nineteen hours into that - two gigabytes of PCM read into a worker.
+        with (
+            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch.object(transcription.subprocess, "run") as run,
+        ):
+            transcription._to_wav(WEBM)
+
+        args = run.call_args[0][0]
+        self.assertIn("-t", args)
+        self.assertEqual(args[args.index("-t") + 1], "300")
+        # Before -i, so an overlong recording is never decoded in the first
+        # place rather than decoded whole and trimmed afterwards.
+        self.assertLess(args.index("-t"), args.index("-i"))
+
+    @override_settings(CHAT_VOICE_MAX_SECONDS=1)
+    def test_a_conversion_that_overruns_its_budget_is_refused(self):
+        # Defence for the case where the cap above did not hold: the refusal
+        # happens before the file is read, which is where the memory goes.
+        oversized = b"\x00" * (1 * 16000 * 2 + 100_000)
+
+        def fake_run(args, **kwargs):
+            with open(args[-1], "wb") as out:
+                out.write(oversized)
+            return MagicMock(returncode=0)
+
+        with (
+            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch.object(transcription.subprocess, "run", side_effect=fake_run),
+        ):
+            self.assertIsNone(transcription._to_wav(WEBM))
+
+    @override_settings(CHAT_VOICE_MAX_SECONDS=5)
+    def test_a_conversion_within_its_budget_is_returned(self):
+        def fake_run(args, **kwargs):
+            with open(args[-1], "wb") as out:
+                out.write(RECORDING)
+            return MagicMock(returncode=0)
+
+        with (
+            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch.object(transcription.subprocess, "run", side_effect=fake_run),
+        ):
+            self.assertEqual(transcription._to_wav(WEBM), RECORDING)
+
     def test_a_failing_ffmpeg_yields_no_audio(self):
         error = subprocess.CalledProcessError(1, "ffmpeg")
         with (

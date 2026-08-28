@@ -39,6 +39,12 @@ if not _FFMPEG:
         "cannot be transcribed."
     )
 
+# The recognition model reads 16 kHz mono 16-bit, and pinning the format here
+# also pins what a converted recording can weigh: seconds * rate * width.
+_SAMPLE_RATE = 16000
+_SAMPLE_WIDTH = 2
+_WAV_HEADER_SLACK = 4096
+
 
 def is_transcription_enabled() -> bool:
     """Whether a recognition backend is configured.
@@ -65,11 +71,21 @@ def _is_wav(data: bytes) -> bool:
 def _to_wav(data: bytes) -> bytes | None:
     """*data* as 16 kHz mono PCM, or None when it could not be converted.
 
-    None covers both a deploy without ffmpeg and a container it refuses; the
-    caller turns either into "nothing heard" rather than a failed reply.
+    None covers a deploy without ffmpeg, a container ffmpeg refuses, and a
+    recording that decodes to more than the recorder itself allows; the caller
+    turns any of them into "nothing heard" rather than a failed reply.
+
+    Compression is why the length is capped rather than trusted. An upload is
+    limited to 50 MB and a voice message to CHAT_VOICE_MAX_SECONDS, but that
+    duration is only checked when the client declares one, and 50 MB of Opus
+    at its lowest bitrate is around nineteen hours - some two gigabytes of PCM,
+    read whole into a worker. AI_ASR_TIMEOUT does not bound that, since ffmpeg
+    decodes far faster than real time.
     """
     if not _FFMPEG:
         return None
+    seconds = settings.CHAT_VOICE_MAX_SECONDS
+    budget = seconds * _SAMPLE_RATE * _SAMPLE_WIDTH + _WAV_HEADER_SLACK
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             source = os.path.join(tmpdir, "recording")
@@ -78,15 +94,19 @@ def _to_wav(data: bytes) -> bytes | None:
                 raw.write(data)
             # check=True so a container ffmpeg cannot read raises instead of
             # leaving an empty file that the backend would reject downstream.
+            # -t sits before -i so an overlong recording stops being decoded
+            # at the cap, rather than being decoded whole and then trimmed.
             subprocess.run(
                 [
                     _FFMPEG,
+                    "-t",
+                    str(seconds),
                     "-i",
                     source,
                     "-ac",
                     "1",
                     "-ar",
-                    "16000",
+                    str(_SAMPLE_RATE),
                     "-c:a",
                     "pcm_s16le",
                     target,
@@ -95,6 +115,18 @@ def _to_wav(data: bytes) -> bytes | None:
                 capture_output=True,
                 timeout=settings.AI_ASR_TIMEOUT,
             )
+            # Checked before the read, which is where the memory would go, in
+            # case a container ever slips past -t.
+            weight = os.path.getsize(target)
+            if weight > budget:
+                logger.warning(
+                    "Refusing a voice message that converted to %d bytes "
+                    "(budget %d for %d seconds)",
+                    weight,
+                    budget,
+                    seconds,
+                )
+                return None
             with open(target, "rb") as converted:
                 return converted.read()
     except (subprocess.SubprocessError, OSError) as exc:

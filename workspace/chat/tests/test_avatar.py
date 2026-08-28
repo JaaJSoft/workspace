@@ -19,6 +19,7 @@ from workspace.chat.services.avatar import (
     has_group_avatar,
     process_and_save_group_avatar,
 )
+from workspace.chat.services.conversations import default_group_title
 
 from .test_chat import ChatTestMixin
 
@@ -45,8 +46,10 @@ class ConversationAvatarInitialTests(TestCase):
         cls.jordan = User.objects.create_user(username="jordan", password="pass")
         cls.robin = User.objects.create_user(username="robin", password="pass")
 
-    def _conversation(self, kind, members):
-        conversation = Conversation.objects.create(kind=kind, created_by=self.viewer)
+    def _conversation(self, kind, members, title=""):
+        conversation = Conversation.objects.create(
+            kind=kind, title=title, created_by=self.viewer
+        )
         ConversationMember.objects.bulk_create(
             ConversationMember(conversation=conversation, user=user) for user in members
         )
@@ -65,13 +68,47 @@ class ConversationAvatarInitialTests(TestCase):
 
         self.assertEqual(conversation_avatar_initial(dm, self.viewer), "A")
 
-    def test_group_uses_the_first_two_other_members(self):
+    def test_group_uses_the_first_two_words_of_its_name(self):
         group = self._conversation(
             Conversation.Kind.GROUP,
             [self.viewer, self.sam, self.jordan, self.robin],
+            title="Product Launch",
+        )
+
+        self.assertEqual(conversation_avatar_initial(group, self.viewer), "PL")
+
+    def test_a_one_word_group_name_gives_one_letter(self):
+        group = self._conversation(
+            Conversation.Kind.GROUP, [self.viewer, self.sam], title="Infrastructure"
+        )
+
+        self.assertEqual(conversation_avatar_initial(group, self.viewer), "I")
+
+    def test_a_generated_name_reproduces_the_member_initials(self):
+        """The default title is the members' names, so its initials match them.
+
+        This is what keeps a group created without a name looking the way an
+        unnamed group used to look.
+        """
+        group = self._conversation(
+            Conversation.Kind.GROUP,
+            [self.viewer, self.sam, self.jordan],
+            title=default_group_title([self.sam, self.jordan]),
         )
 
         self.assertEqual(conversation_avatar_initial(group, self.viewer), "SJ")
+
+    def test_the_initials_do_not_depend_on_who_is_looking(self):
+        group = self._conversation(
+            Conversation.Kind.GROUP,
+            [self.viewer, self.sam, self.jordan],
+            title="Product Launch",
+        )
+
+        self.assertEqual(
+            conversation_avatar_initial(group, self.viewer),
+            conversation_avatar_initial(group, self.sam),
+        )
 
     def test_empty_conversations_fall_back_per_kind(self):
         dm = self._conversation(Conversation.Kind.DM, [self.viewer])
@@ -79,6 +116,28 @@ class ConversationAvatarInitialTests(TestCase):
 
         self.assertEqual(conversation_avatar_initial(dm, self.viewer), "?")
         self.assertEqual(conversation_avatar_initial(group, self.viewer), "G")
+
+
+class DefaultGroupTitleTests(TestCase):
+    """What a group is named when its creator supplies nothing."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.sam = User.objects.create_user(
+            username="sam", password="pass", first_name="Sam", last_name="Rivera"
+        )
+        cls.jordan = User.objects.create_user(username="jordan", password="pass")
+        cls.robin = User.objects.create_user(username="robin", password="pass")
+        cls.ada = User.objects.create_user(username="ada", password="pass")
+
+    def test_it_strings_the_first_three_members_together(self):
+        self.assertEqual(
+            default_group_title([self.sam, self.jordan, self.robin, self.ada]),
+            "Sam Rivera, jordan, robin",
+        )
+
+    def test_it_falls_back_when_there_is_nobody_to_name(self):
+        self.assertEqual(default_group_title([]), "Group")
 
 
 class GroupAvatarServiceTests(TestCase):

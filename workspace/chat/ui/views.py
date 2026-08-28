@@ -20,7 +20,7 @@ from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services.avatar import avatar_initial_for
 from workspace.chat.services.conversations import (
     active_members_queryset,
-    first_other_members,
+    dm_partners,
     get_active_membership,
     get_unread_counts,
     user_conversation_ids,
@@ -54,8 +54,9 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
 
     ``embed_members`` loads every active member of every conversation, which
     only the page load needs - it serializes the list into the payload the
-    Alpine app reads. The refresh paths render names and initials, so they take
-    a three-member window instead and stay flat as a group grows.
+    Alpine app reads. The refresh paths label a group from its title and a
+    direct message from its partner, so they read one row per direct message
+    and nothing at all per group.
     """
     member_convos = user_conversation_ids(user)
 
@@ -78,11 +79,7 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
     )
     conversations = conversations.annotate(_last_msg_id=Subquery(last_msg_subquery))
     conv_list = list(conversations)
-    others_by_conv = (
-        None
-        if embed_members
-        else first_other_members(user, [c.uuid for c in conv_list])
-    )
+    partners = {} if embed_members else dm_partners(user, [c.uuid for c in conv_list])
 
     last_msg_ids = [c._last_msg_id for c in conv_list if c._last_msg_id]
     last_msgs = {
@@ -111,26 +108,25 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
         c.is_pinned = pin_pos is not None
         c.pin_position = pin_pos if pin_pos is not None else None
 
-        # Everything the row is labelled with comes off this list.
         if embed_members:
-            others = [m.user for m in c.members.all() if m.user_id != user.id]
+            partner = next(
+                (m.user for m in c.members.all() if m.user_id != user.id), None
+            )
         else:
-            others = [m.user for m in others_by_conv[c.uuid]]
+            partner = partners.get(c.uuid)
 
         def _display(u):
             return u.get_full_name() or u.username
 
         if c.title:
             c.display_name = c.title
-        elif c.kind == Conversation.Kind.DM and others:
-            c.display_name = _display(others[0])
+        elif partner:
+            c.display_name = _display(partner)
         else:
-            names = [_display(u) for u in others[:3]]
-            c.display_name = ", ".join(names) if names else "Group"
+            c.display_name = "Group"
 
-        # Avatar
-        c.avatar_initial = avatar_initial_for(c.kind, others)
-        c.other_user = others[0] if c.kind == Conversation.Kind.DM and others else None
+        c.avatar_initial = avatar_initial_for(c.kind, c.title, partner)
+        c.other_user = partner if c.kind == Conversation.Kind.DM else None
 
         # Last message preview & time ago
         if c._last_message:

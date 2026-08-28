@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from workspace.chat.models import Conversation, ConversationMember
 from workspace.chat.services.conversations import (
+    dm_partners,
     get_active_membership,
     get_or_create_dm,
     get_unread_counts,
@@ -183,3 +184,48 @@ class GetUnreadCountsTests(ChatAuthzMixin, TestCase):
         ).update(unread_count=10)
         counts = get_unread_counts(self.alice)
         self.assertEqual(counts["total"], 0)
+
+
+# ── dm_partners ─────────────────────────────────────────────────
+
+
+class DmPartnersTests(ChatAuthzMixin, TestCase):
+    """What the sidebar reads to label a row, now that groups need nothing."""
+
+    def test_a_direct_message_yields_its_other_participant(self):
+        dm = self._make_conversation(Conversation.Kind.DM, [self.alice, self.bob])
+
+        self.assertEqual(dm_partners(self.alice, [dm.uuid]), {dm.uuid: self.bob})
+        self.assertEqual(dm_partners(self.bob, [dm.uuid]), {dm.uuid: self.alice})
+
+    def test_a_group_contributes_nothing(self):
+        """The whole point: a group row costs zero member rows.
+
+        Its name comes from the stored title, so however many people are in it
+        the sidebar reads none of them.
+        """
+        group = self._make_conversation(Conversation.Kind.GROUP, [self.alice])
+        for i in range(20):
+            user = User.objects.create_user(username=f"crowd-{i}", password="pass")
+            ConversationMember.objects.create(conversation=group, user=user)
+
+        self.assertEqual(dm_partners(self.alice, [group.uuid]), {})
+
+    def test_a_partner_who_left_is_dropped(self):
+        dm = self._make_conversation(Conversation.Kind.DM, [self.alice, self.bob])
+        ConversationMember.objects.filter(conversation=dm, user=self.bob).update(
+            left_at=timezone.now()
+        )
+
+        self.assertEqual(dm_partners(self.alice, [dm.uuid]), {})
+
+    def test_conversations_outside_the_list_are_not_read(self):
+        mine = self._make_conversation(Conversation.Kind.DM, [self.alice, self.bob])
+        other = self._make_conversation(Conversation.Kind.DM, [self.alice, self.bob])
+
+        self.assertEqual(dm_partners(self.alice, [mine.uuid]), {mine.uuid: self.bob})
+        self.assertNotIn(other.uuid, dm_partners(self.alice, [mine.uuid]))
+
+    def test_an_empty_list_runs_no_query(self):
+        with self.assertNumQueries(0):
+            self.assertEqual(dm_partners(self.alice, []), {})

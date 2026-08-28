@@ -23,6 +23,7 @@ from ..serializers import (
 )
 from ..services.conversations import (
     active_members_queryset,
+    default_group_title,
     get_active_membership,
     get_or_create_dm,
     get_unread_counts,
@@ -219,19 +220,15 @@ class ConversationListView(CacheControlMixin, APIView):
             else:
                 conversation = get_or_create_dm(request.user, other_user)
         else:
+            members = [request.user] + [u for u in users if u.id != request.user.id]
             conversation = Conversation.objects.create(
                 kind=Conversation.Kind.GROUP,
-                title=title,
+                title=title or default_group_title(members),
                 created_by=request.user,
             )
             created_members = [
-                ConversationMember(conversation=conversation, user=request.user),
+                ConversationMember(conversation=conversation, user=u) for u in members
             ]
-            for u in users:
-                if u.id != request.user.id:
-                    created_members.append(
-                        ConversationMember(conversation=conversation, user=u),
-                    )
             ConversationMember.objects.bulk_create(created_members)
 
         if created_members is not None:

@@ -46,7 +46,7 @@ class ConversationAvatarTests(PlaywrightTestCase):
         self.jordan = self.create_user(username="jordan", first_name="Jordan")
 
         # One of each branch: a DM, a group with an uploaded picture, and a
-        # group falling back to its members' initials.
+        # group falling back to the initials of its name.
         self.dm = self._conversation(Conversation.Kind.DM, [self.user, self.sam])
         self.pictured = self._conversation(
             Conversation.Kind.GROUP, [self.user, self.sam, self.jordan], title="Design"
@@ -75,7 +75,7 @@ class ConversationAvatarTests(PlaywrightTestCase):
         self._open_chat()
 
         row = self.page.locator(f"#conv-item-{self.lettered.uuid} conversation-avatar")
-        expect(row).to_have_text("SJ")
+        expect(row).to_have_text("L")
 
         self.page.locator(f"#conv-item-{self.lettered.uuid} button").click()
         header = self.page.locator(
@@ -83,7 +83,7 @@ class ConversationAvatarTests(PlaywrightTestCase):
             "/ancestor::div[contains(@class,'border-b')][1]"
             "//conversation-avatar"
         ).first
-        expect(header).to_have_text("SJ")
+        expect(header).to_have_text("L")
 
     def test_a_pictured_row_and_a_lettered_row_occupy_the_same_box(self):
         self._open_chat()
@@ -118,7 +118,7 @@ class ConversationAvatarTests(PlaywrightTestCase):
                 }}"""
         )
 
-        expect(self.page.locator(selector)).to_have_text("SJ")
+        expect(self.page.locator(selector)).to_have_text("D")
         after = self.page.evaluate(
             f"() => document.querySelector('{selector}').getBoundingClientRect().width"
         )

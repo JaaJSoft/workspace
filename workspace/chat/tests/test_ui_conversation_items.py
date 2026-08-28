@@ -98,9 +98,9 @@ class ConversationItemsViewPartialTests(ChatTestMixin, TestCase):
 class ConversationItemsRowVolumeTests(ChatTestMixin, TestCase):
     """The swap fired after every message must not read the whole member list.
 
-    A row is labelled from at most three other members, so a conversation with
-    five of them and one with fifty-five have to cost the same. The query count
-    is already constant, which is precisely why it catches nothing here.
+    A group row is labelled from its stored title, so a conversation with five
+    members and one with fifty-five have to cost the same. The query count is
+    already constant, which is precisely why it catches nothing here.
     """
 
     URL = "/chat/conversations/items"

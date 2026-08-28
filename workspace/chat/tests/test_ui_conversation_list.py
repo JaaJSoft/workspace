@@ -227,13 +227,13 @@ class ConversationAvatarMarkupTests(ChatTestMixin, TestCase):
         self.assertEqual(attrs["username"], self.member.username)
         self.assertEqual(attrs["initials"], "M")
 
-    def test_a_group_row_carries_its_members_initials(self):
+    def test_a_group_row_carries_its_name_initials(self):
         self.client.force_login(self.creator)
         html = self.client.get("/chat/conversations").content.decode()
 
         attrs = self._row_avatar(html, self.group.uuid)
         self.assertNotIn("user-id", attrs)
-        self.assertEqual(attrs["initials"], "M")
+        self.assertEqual(attrs["initials"], "TG")
 
     def test_the_uploaded_picture_is_flagged_on_the_row(self):
         self.client.force_login(self.creator)
@@ -244,14 +244,17 @@ class ConversationAvatarMarkupTests(ChatTestMixin, TestCase):
         html = self.client.get("/chat/conversations").content.decode()
         self.assertIn("has-avatar", self._row_avatar(html, self.group.uuid))
 
-    def test_a_crowded_group_row_and_the_api_pick_the_same_members(self):
-        """The row reads a three-member window, the API the whole list.
+    def test_a_crowded_group_is_labelled_by_its_name_not_its_members(self):
+        """Who is in a group no longer changes how its row is labelled.
 
-        They only stay in step while both walk the members in the same order,
-        which is what an untitled group of more than three exposes.
+        The circle and the text used to come from different places - the name
+        from the title, the letters from whichever members the database
+        returned first - so a busy group showed initials belonging to nobody
+        named on the row.
         """
         crowd = Conversation.objects.create(
             kind=Conversation.Kind.GROUP,
+            title="Product Launch",
             created_by=self.creator,
         )
         ConversationMember.objects.create(conversation=crowd, user=self.creator)
@@ -266,19 +269,20 @@ class ConversationAvatarMarkupTests(ChatTestMixin, TestCase):
         payload = self.client.get("/api/v1/chat/conversations").json()
 
         api = next(c for c in payload if c["uuid"] == str(crowd.uuid))
-        self.assertEqual(self._row_avatar(html, crowd.uuid)["initials"], "CC")
+        self.assertEqual(self._row_avatar(html, crowd.uuid)["initials"], "PL")
         self.assertEqual(
             self._row_avatar(html, crowd.uuid)["initials"], api["avatar_initial"]
         )
-        self.assertIn("Crowd0, Crowd1, Crowd2", html)
+        self.assertIn("Product Launch", html)
+        self.assertNotIn("Crowd0", html)
 
 
 class ConversationListRowVolumeTests(ChatTestMixin, TestCase):
     """The sidebar refresh renders names, never the member list itself.
 
-    Every row is labelled from at most three other members, so growing a group
-    must not grow what the endpoint reads. The query count stays flat either
-    way, so only a row count pins this down.
+    A group is labelled from its title and a direct message from its partner,
+    so growing a group must not grow what the endpoint reads. The query count
+    stays flat either way, so only a row count pins this down.
     """
 
     URL = "/chat/conversations"

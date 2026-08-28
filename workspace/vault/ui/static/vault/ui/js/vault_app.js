@@ -86,6 +86,15 @@ window.vaultApp = (function () {
       // vaultSession's own closure - so the countdown template binds this
       // property, and onTick is what keeps it current.
       secondsLeft: 0,
+      // What the server says may be done with each vault, keyed by uuid. It
+      // is never computed here: a rule copied into the client is a rule that
+      // drifts from the endpoint enforcing it.
+      vaultActions: {},
+      // Two listings can be in flight at once - a refresh landing on a slow
+      // one - and the slower answer must not describe rows that left the
+      // screen. Only the newest generation is allowed to write.
+      actionsGeneration: 0,
+      openMenuFor: null,
 
       init: function () {
         const remembered = window.vaultSession.rememberedSecret();
@@ -98,6 +107,8 @@ window.vaultApp = (function () {
         const self = this;
         window.vaultSession.onLock(function () {
           self.vaults = [];
+          self.vaultActions = {};
+          self.openMenuFor = null;
           self.state = 'locked';
           // showCreate has to go with the name: the dialog lives inside the
           // unlocked subtree, so a lock hides it without closing it, and the
@@ -187,6 +198,99 @@ window.vaultApp = (function () {
         // even though nothing renders it.
         if (!window.vaultSession.isUnlocked()) return;
         this.vaults = decrypted;
+        await this.loadVaultActions();
+      },
+
+      loadVaultActions: async function () {
+        this.actionsGeneration += 1;
+        const generation = this.actionsGeneration;
+        const uuids = this.vaults.map(function (vault) { return vault.uuid; });
+        if (!uuids.length) {
+          this.vaultActions = {};
+          return;
+        }
+        let answer;
+        try {
+          answer = await window.vaultApi.fetchVaultActions(uuids);
+        } catch (err) {
+          // The names are open and the list is usable. Blanking a working
+          // page over a lost menu would cost the user more than the menu.
+          if (generation === this.actionsGeneration) this.vaultActions = {};
+          return;
+        }
+        if (generation !== this.actionsGeneration) return;
+        if (!window.vaultSession.isUnlocked()) return;
+        this.vaultActions = answer;
+      },
+
+      // Both favourite verbs come back: the registry answers what the caller
+      // may do, not what the row is. Choosing between two exclusives from a
+      // flag the client already holds is not a rule copied from the server.
+      actionsFor: function (vault) {
+        const actions = (vault && this.vaultActions[vault.uuid]) || [];
+        const favorite = vault && vault.is_favorite;
+        return actions.filter(function (action) {
+          if (action.id === 'favorite') return !favorite;
+          if (action.id === 'unfavorite') return !!favorite;
+          return true;
+        });
+      },
+
+      toggleMenu: function (uuid) {
+        this.openMenuFor = this.openMenuFor === uuid ? null : uuid;
+      },
+
+      // Overridable so a test can answer without a dialog, and so the page
+      // can swap in the application's own confirm rather than the browser's.
+      confirm: function (message) {
+        return window.AppDialog
+          ? window.AppDialog.confirm(message)
+          : Promise.resolve(true);
+      },
+
+      runVaultAction: async function (action, vault) {
+        this.openMenuFor = null;
+        // The menu was built from the endpoint, but it may have been built a
+        // while ago: asking again here costs nothing and stops a stale menu
+        // producing a request the server is about to refuse.
+        const offered = this.actionsFor(vault).some(function (candidate) {
+          return candidate.id === action.id;
+        });
+        if (!offered) return;
+
+        if (action.id === 'delete') {
+          const confirmed = await this.confirm(
+            'Delete this vault and everything in it? This cannot be undone.'
+          );
+          if (!confirmed) return;
+          try {
+            await window.vaultApi.deleteVault(vault.uuid);
+            await this.loadVaults();
+          } catch (err) {
+            if (err && err.reason === 'locked') return;
+            this.error = 'The vault could not be deleted. Try again.';
+          }
+          return;
+        }
+
+        const changes = {
+          favorite: { is_favorite: true },
+          unfavorite: { is_favorite: false },
+        }[action.id];
+        // rename and set_appearance open a dialog rather than write here;
+        // they are wired with that dialog.
+        if (!changes) return;
+
+        try {
+          const body = await window.buildVaultUpdateRequest(
+            window.vaultSession, vault, changes
+          );
+          await window.vaultApi.updateVault(vault.uuid, body);
+          await this.loadVaults();
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That change could not be saved. Try again.';
+        }
       },
 
       createVault: async function () {

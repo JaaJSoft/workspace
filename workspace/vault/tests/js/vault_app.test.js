@@ -8,6 +8,7 @@ const { loadScripts } = require('../../../common/tests/js/loader');
 function app(session = {}, api = {}, crypto = {}) {
   const ctx = loadScripts([
     'workspace/vault/ui/static/vault/ui/js/vault_create.js',
+    'workspace/vault/ui/static/vault/ui/js/vault_update.js',
     'workspace/vault/ui/static/vault/ui/js/vault_app.js',
   ], {
     vaultSession: {
@@ -569,4 +570,156 @@ test('a conflict on a UUID the account does not hold is not declared a success',
   await component.createVault();
   assert.equal(component.showCreate, true);
   assert.match(component.error, /could not be created/);
+});
+
+// ---------------------------------------------------------------- vault menus
+
+const ROWS = [
+  { uuid: 'v-1', encrypted_name: 'AQ', metadata_sig: 'AQ', wrapped_key: 'AQ', is_favorite: false },
+  { uuid: 'v-2', encrypted_name: 'AQ', metadata_sig: 'AQ', wrapped_key: 'AQ', is_favorite: true },
+];
+
+const OWNER_ACTIONS = [
+  { id: 'rename', label: 'Rename', icon: 'pencil', category: 'edit', css_class: '', bulk: false },
+  { id: 'favorite', label: 'Add to favourites', icon: 'star', category: 'organize', css_class: '', bulk: false },
+  { id: 'unfavorite', label: 'Remove from favourites', icon: 'star-off', category: 'organize', css_class: '', bulk: false },
+  { id: 'delete', label: 'Delete vault', icon: 'trash-2', category: 'danger', css_class: 'text-error', bulk: false },
+];
+
+function listing(api = {}) {
+  return app(
+    { isUnlocked: () => true },
+    {
+      listVaults: async () => ROWS,
+      fetchVaultActions: async () => ({ 'v-1': OWNER_ACTIONS, 'v-2': OWNER_ACTIONS }),
+      updateVault: async () => ({}),
+      deleteVault: async () => null,
+      ...api,
+    },
+  );
+}
+
+test('the menu of a vault is what the endpoint answered, never a fixed list', async () => {
+  const component = listing();
+  await component.loadVaults();
+  assert.deepStrictEqual(
+    Array.from(component.actionsFor(component.vaults[0]).map((a) => a.id)),
+    ['rename', 'favorite', 'delete'],
+  );
+});
+
+test('a vault the caller may not act on offers nothing', async () => {
+  // A member holding a key wrap opens the vault and may rewrite nothing
+  // about it. The empty answer has to render as an empty menu, not as a
+  // menu the client fills in from what it assumes.
+  const component = listing({ fetchVaultActions: async () => ({ 'v-1': [], 'v-2': [] }) });
+  await component.loadVaults();
+  assert.deepStrictEqual(Array.from(component.actionsFor(component.vaults[0])), []);
+});
+
+test('only the favourite verb matching the row is offered', async () => {
+  // The registry answers what the caller may do, not what the row is; both
+  // verbs come back and the client picks, because it already holds the flag.
+  const component = listing();
+  await component.loadVaults();
+  const ids = (vault) => Array.from(component.actionsFor(vault).map((a) => a.id));
+  assert.ok(ids(component.vaults[0]).includes('favorite'));
+  assert.ok(!ids(component.vaults[0]).includes('unfavorite'));
+  assert.ok(ids(component.vaults[1]).includes('unfavorite'));
+  assert.ok(!ids(component.vaults[1]).includes('favorite'));
+});
+
+test('an answer that arrives after a newer listing is discarded', async () => {
+  // Two listings in flight and the slower one landing last would leave the
+  // menus describing vaults that are no longer on screen.
+  let resolveFirst;
+  let call = 0;
+  const component = listing({
+    fetchVaultActions: async () => {
+      call += 1;
+      if (call === 1) return new Promise((resolve) => { resolveFirst = resolve; });
+      return { 'v-1': [], 'v-2': [] };
+    },
+  });
+
+  const stale = component.loadVaults();
+  await component.loadVaults();
+  resolveFirst({ 'v-1': OWNER_ACTIONS, 'v-2': OWNER_ACTIONS });
+  await stale;
+
+  assert.deepStrictEqual(Array.from(component.actionsFor(component.vaults[0])), []);
+});
+
+test('locking takes the menus away with the list', async () => {
+  // They describe rows that are gone, and a menu outliving its vault is a
+  // click on a vault the page can no longer name.
+  const callbacks = [];
+  const component = app(
+    { isUnlocked: () => true, onLock: (cb) => callbacks.push(cb) },
+    {
+      listVaults: async () => ROWS,
+      fetchVaultActions: async () => ({ 'v-1': OWNER_ACTIONS, 'v-2': OWNER_ACTIONS }),
+    },
+  );
+  component.init();
+  await component.loadVaults();
+  callbacks.forEach((cb) => cb());
+  assert.deepStrictEqual(Array.from(component.actionsFor({ uuid: 'v-1' })), []);
+});
+
+test('a listing whose action lookup fails still shows the vaults', async () => {
+  // The names are open and the page is usable; losing the menus is worth
+  // saying nothing about rather than blanking a working list.
+  const component = listing({
+    fetchVaultActions: async () => { throw new Error('offline'); },
+  });
+  await component.loadVaults();
+  assert.equal(component.vaults.length, 2);
+  assert.deepStrictEqual(Array.from(component.actionsFor(component.vaults[0])), []);
+});
+
+test('an action the endpoint did not offer is refused by the handler too', async () => {
+  // Defence in depth: a menu built from a stale answer must not produce a
+  // request the server is about to refuse anyway.
+  let called = false;
+  const component = listing({
+    fetchVaultActions: async () => ({ 'v-1': [], 'v-2': [] }),
+    updateVault: async () => { called = true; return {}; },
+  });
+  await component.loadVaults();
+  await component.runVaultAction({ id: 'favorite' }, component.vaults[0]);
+  assert.equal(called, false);
+});
+
+test('favouriting a vault re-signs its whole metadata', async () => {
+  // is_favorite lives inside the signed payload, so there is no cheap write:
+  // the row is re-described and re-signed or it stops verifying.
+  const sent = [];
+  const component = listing({
+    updateVault: async (uuid, body) => { sent.push([uuid, body]); return {}; },
+  });
+  await component.loadVaults();
+  await component.runVaultAction({ id: 'favorite' }, component.vaults[0]);
+  assert.equal(sent[0][0], 'v-1');
+  assert.equal(sent[0][1].is_favorite, true);
+  assert.ok(sent[0][1].metadata_sig);
+});
+
+test('deleting a vault asks first and reloads the list', async () => {
+  const deleted = [];
+  const component = listing({
+    deleteVault: async (uuid) => { deleted.push(uuid); return null; },
+  });
+  await component.loadVaults();
+  await component.runVaultAction({ id: 'delete' }, component.vaults[0]);
+  assert.deepStrictEqual(Array.from(deleted), ['v-1']);
+});
+
+test('a refused confirmation deletes nothing', async () => {
+  const deleted = [];
+  const component = listing({ deleteVault: async (uuid) => { deleted.push(uuid); } });
+  component.confirm = async () => false;
+  await component.loadVaults();
+  await component.runVaultAction({ id: 'delete' }, component.vaults[0]);
+  assert.deepStrictEqual(Array.from(deleted), []);
 });

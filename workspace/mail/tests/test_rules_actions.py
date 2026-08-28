@@ -226,3 +226,72 @@ class MoveDeleteActionTests(_BaseActionTests):
         self.msg.refresh_from_db()
         self.assertIsNotNone(self.msg.deleted_at)
         mock_imap.assert_called_once()
+
+
+class MoveToFolderMergeTests(TestCase):
+    """A rule targeting a folder that later became an alias keeps working."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="rulemerge", email="rulemerge@test.com", password="pass123"
+        )
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email="user@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="user@example.com",
+        )
+        self.inbox = MailFolder.objects.create(
+            account=self.account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
+        )
+        self.trash = MailFolder.objects.create(
+            account=self.account,
+            name="Trash",
+            display_name="Trash",
+            folder_type="trash",
+        )
+        self.corbeille = MailFolder.objects.create(
+            account=self.account,
+            name="Corbeille",
+            display_name="Corbeille",
+            folder_type="trash",
+            alias_of=self.trash,
+        )
+
+    def _message(self, folder, uid):
+        return MailMessage.objects.create(
+            account=self.account, folder=folder, imap_uid=uid, subject="m"
+        )
+
+    @patch("workspace.mail.services.rules.actions.move_message")
+    def test_alias_target_resolves_to_the_canonical(self, move):
+        from workspace.mail.services.rules.actions import _move_to_folder
+        from workspace.mail.services.rules.schema import MoveToFolderAction
+
+        msg = self._message(self.inbox, 1)
+        action = MoveToFolderAction(
+            type="move_to_folder", folder_id=self.corbeille.uuid
+        )
+
+        result = _move_to_folder(action, msg)
+
+        msg.refresh_from_db()
+        self.assertEqual(msg.folder_id, self.trash.pk)
+        self.assertEqual(result["folder_id"], str(self.trash.uuid))
+
+    @patch("workspace.mail.services.rules.actions.move_message")
+    def test_move_within_the_group_is_a_noop(self, move):
+        from workspace.mail.services.rules.actions import _move_to_folder
+        from workspace.mail.services.rules.schema import MoveToFolderAction
+
+        msg = self._message(self.corbeille, 2)
+        action = MoveToFolderAction(type="move_to_folder", folder_id=self.trash.uuid)
+
+        result = _move_to_folder(action, msg)
+
+        move.assert_not_called()
+        self.assertTrue(result["noop"])

@@ -49,7 +49,7 @@ def merge_folder(folder, into):
         folder.folder_type = into.folder_type
         # The group's visibility is the canonical's. A hidden alias would be
         # excluded from search while the folder it belongs to stays in it.
-        folder.is_hidden = False
+        folder.is_hidden = into.is_hidden
         folder.save(
             update_fields=["alias_of", "folder_type", "is_hidden", "updated_at"]
         )

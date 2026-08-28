@@ -4,7 +4,8 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from workspace.mail.models import MailAccount, MailFolder
+from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.search import search_mail
 
 User = get_user_model()
 
@@ -124,7 +125,7 @@ class MergeFolderTests(FolderMergeTestMixin, TestCase):
         self.assertEqual(self.trash.folder_type, "trash")
         self.assertEqual(self.sent.folder_type, "trash")
 
-    def test_merge_unhides_the_alias(self):
+    def test_merge_into_a_visible_canonical_unhides_the_alias(self):
         """A hidden alias would drop out of search while its canonical stays in."""
         from workspace.mail.services.folder_merge import merge_folder
 
@@ -135,6 +136,28 @@ class MergeFolderTests(FolderMergeTestMixin, TestCase):
 
         self.corbeille.refresh_from_db()
         self.assertFalse(self.corbeille.is_hidden)
+
+    def test_merge_into_a_hidden_canonical_hides_the_alias(self):
+        """A visible alias under a hidden canonical would keep notifying and
+        surfacing in search, labelled with the folder the user just hid."""
+        from workspace.mail.services.folder_merge import merge_folder
+
+        self.trash.is_hidden = True
+        self.trash.save(update_fields=["is_hidden"])
+
+        merge_folder(self.corbeille, self.trash)
+
+        self.corbeille.refresh_from_db()
+        self.assertTrue(self.corbeille.is_hidden)
+
+        MailMessage.objects.create(
+            account=self.account,
+            folder=self.corbeille,
+            imap_uid=1,
+            subject="quarterly invoice",
+        )
+        results = search_mail("invoice", self.user, 10)
+        self.assertEqual(results, [])
 
     def test_self_merge_rejected(self):
         from workspace.mail.services.folder_merge import MergeError, merge_folder

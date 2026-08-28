@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -237,3 +239,30 @@ class PromoteAliasTests(FolderMergeTestMixin, TestCase):
         heir = promote_alias(self.trash, exclude_ids=[self.corbeille.pk])
 
         self.assertEqual(heir, self.envoyes)
+
+
+class SentCopyTargetTests(FolderMergeTestMixin, TestCase):
+    """The sent copy must land in the folder the user kept.
+
+    Regression for the pre-existing bug: with `Envoyes` and `Sent` both typed
+    sent, `filter(folder_type=SENT).first()` resolves through
+    Meta.ordering (["account", "name"]) and picks Envoyes because E < S.
+    """
+
+    def test_append_to_sent_targets_the_canonical(self):
+        from workspace.mail.services.folder_merge import merge_folder
+
+        merge_folder(self.envoyes, self.sent)
+
+        with patch("workspace.mail.services.imap_messages.connect_imap") as connect:
+            conn = connect.return_value
+            conn.select.return_value = ("OK", [b""])
+            conn.uid.return_value = ("OK", [b""])
+            conn.append.return_value = ("OK", [b""])
+            from workspace.mail.services.imap_messages import append_to_sent
+
+            append_to_sent(self.account, b"Message-ID: <x@example.com>\r\n\r\nbody")
+
+        selected = conn.select.call_args[0][0]
+        self.assertIn("Sent", selected)
+        self.assertNotIn("Envoyes", selected)

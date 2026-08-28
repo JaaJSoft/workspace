@@ -97,10 +97,9 @@ def append_to_sent(account, raw_message_bytes):
     (Gmail, Outlook, etc.) by searching for its Message-ID to avoid duplicates.
     """
     from ..models import MailFolder
+    from ..queries import special_folder
 
-    sent_folder = MailFolder.objects.filter(
-        account=account, folder_type=MailFolder.FolderType.SENT
-    ).first()
+    sent_folder = special_folder(account, MailFolder.FolderType.SENT)
     if not sent_folder:
         logger.warning(
             "No Sent folder found for %s, skipping APPEND", scrub(account.email)
@@ -166,10 +165,9 @@ def save_draft(account, raw_message_bytes, old_uid=None):
     from workspace.mail.services.imap_sync import sync_folder_messages
 
     from ..models import MailFolder
+    from ..queries import special_folder
 
-    drafts_folder = MailFolder.objects.filter(
-        account=account, folder_type=MailFolder.FolderType.DRAFTS
-    ).first()
+    drafts_folder = special_folder(account, MailFolder.FolderType.DRAFTS)
     if not drafts_folder:
         logger.warning(
             "No Drafts folder found for %s, skipping save_draft", scrub(account.email)

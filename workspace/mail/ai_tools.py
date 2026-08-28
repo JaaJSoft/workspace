@@ -383,11 +383,10 @@ Use read_email with the returned UUID to get the full content."""
     def _save_draft(self, account, **fields):
         """Park a composed message in Drafts and describe what landed there."""
         from workspace.mail.models import MailFolder
+        from workspace.mail.queries import special_folder
         from workspace.mail.services.drafts import save_composed_draft
 
-        if not MailFolder.objects.filter(
-            account=account, folder_type=MailFolder.FolderType.DRAFTS
-        ).exists():
+        if special_folder(account, MailFolder.FolderType.DRAFTS) is None:
             return (
                 f"{account.email} has no Drafts folder, so there is nowhere to "
                 "put this message. Nothing was saved."
@@ -749,14 +748,13 @@ To throw a message away, use delete_email instead."""
 so the user can undo it from their mail app. Use this rather than move_email when \
 the user wants a message gone."""
         from workspace.mail.models import MailFolder
+        from workspace.mail.queries import special_folder
 
         message = _resolve_message(user, args.uuid)
         if not message:
             return "Email not found or access denied."
 
-        trash = MailFolder.objects.filter(
-            account=message.account, folder_type=MailFolder.FolderType.TRASH
-        ).first()
+        trash = special_folder(message.account, MailFolder.FolderType.TRASH)
         if not trash:
             # Never fall back to an IMAP delete: that expunges the message for
             # good, and nothing in this loop is worth an irreversible one.

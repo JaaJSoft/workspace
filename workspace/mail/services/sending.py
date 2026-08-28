@@ -71,6 +71,7 @@ def deliver_email(
 def _archive(account, raw_message):
     """Append the sent copy to Sent and resync it. True when it landed."""
     from ..models import MailFolder
+    from ..queries import special_folder
     from .imap_messages import append_to_sent
     from .imap_sync import sync_folder_messages
 
@@ -78,9 +79,7 @@ def _archive(account, raw_message):
     # when the folder is missing, so a check afterwards cannot tell "nowhere
     # to file it" from "filed", and the caller would report a copy that was
     # never made.
-    sent_folder = MailFolder.objects.filter(
-        account=account, folder_type=MailFolder.FolderType.SENT
-    ).first()
+    sent_folder = special_folder(account, MailFolder.FolderType.SENT)
     if not sent_folder:
         logger.warning(
             "No Sent folder for %s; the sent copy was not archived",

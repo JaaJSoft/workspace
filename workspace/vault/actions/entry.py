@@ -99,7 +99,6 @@ class RestoreEntryAction(BaseVaultAction):
     label = "Restore"
     icon = "undo-2"
     category = ActionCategory.ORGANIZE
-    available_when_trashed = True
     only_when_trashed = True
     supports_bulk = True
 
@@ -112,6 +111,5 @@ class DeleteEntryForeverAction(BaseVaultAction):
     category = ActionCategory.DANGER
     css_class = "text-error"
     min_role = VaultRole.OWNER
-    available_when_trashed = True
     only_when_trashed = True
     supports_bulk = True

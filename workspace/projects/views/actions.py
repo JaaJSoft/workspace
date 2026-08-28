@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.common.uuids import parse_uuid_or_none
+from workspace.common.uuids import UuidBatchError, parse_uuid_batch
 
 from ..actions import ProjectActionRegistry
 from ..models import Project, Task
@@ -45,26 +45,10 @@ class ProjectActionsView(APIView):
     """Bulk action availability for projects and tasks (mixed UUIDs)."""
 
     def post(self, request):
-        uuids = request.data.get("uuids", [])
-        if not isinstance(uuids, list) or not uuids:
-            return Response(
-                {"detail": "uuids must be a non-empty list."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if len(uuids) > 200:
-            return Response(
-                {"detail": "Too many UUIDs (max 200)."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        parsed = []
-        for item in uuids:
-            value = parse_uuid_or_none(item)
-            if value is None:
-                return Response(
-                    {"detail": "Malformed UUID in uuids."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            parsed.append(value)
+        try:
+            parsed = parse_uuid_batch(request.data)
+        except UuidBatchError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         projects = list(Project.objects.filter(uuid__in=parsed))
         tasks = list(Task.objects.filter(uuid__in=parsed).select_related("project"))

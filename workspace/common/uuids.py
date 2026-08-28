@@ -42,3 +42,30 @@ def parse_uuid_or_none(value) -> uuid.UUID | None:
         return uuid.UUID(str(value))
     except ValueError, TypeError:
         return None
+
+
+class UuidBatchError(ValueError):
+    """A malformed batch body. Its text is the 400 a view answers with."""
+
+
+def parse_uuid_batch(data, *, key="uuids", max_items=200) -> list[uuid.UUID]:
+    """Parse a ``{"<key>": [...]}`` batch body, or raise ``UuidBatchError``.
+
+    The isinstance guard on *data* is the load-bearing one: a JSON body whose
+    top level is not an object arrives as a list or an int, and reading a key
+    off it raises AttributeError - a 500 where the schema promises a 400.
+    """
+    if not isinstance(data, dict):
+        raise UuidBatchError(f"The body must be an object with a {key} list.")
+    items = data.get(key, [])
+    if not isinstance(items, list) or not items:
+        raise UuidBatchError(f"{key} must be a non-empty list.")
+    if len(items) > max_items:
+        raise UuidBatchError(f"Too many UUIDs (max {max_items}).")
+    parsed = []
+    for item in items:
+        value = parse_uuid_or_none(item)
+        if value is None:
+            raise UuidBatchError(f"Malformed UUID in {key}.")
+        parsed.append(value)
+    return parsed

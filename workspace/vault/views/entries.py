@@ -23,6 +23,7 @@ from workspace.common.booleans import is_truthy
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 
+from ..actions import VaultActionRegistry
 from ..models import VaultEntry, VaultRole
 from ..queries import (
     accessible_entries_q,
@@ -42,6 +43,7 @@ from ..services.entries import (
     write_entry,
 )
 from ..services.metadata import verify_record
+from ..types import schema_for
 
 SENSITIVE_BODY_FIELDS = (
     "encrypted_name",
@@ -49,6 +51,22 @@ SENSITIVE_BODY_FIELDS = (
     "fields",
     "metadata_sig",
 )
+
+
+def _reachable_entry(user, uuid):
+    """The entry *user* may touch, or None - never saying which reason.
+
+    One lookup behind get, put, delete and restore, so that invariant holds in
+    one place. Purge runs a lighter query of its own, and says so there.
+    """
+    return entry_queryset().filter(accessible_entries_q(user), uuid=uuid).first()
+
+
+def _not_in_the_trash():
+    return Response(
+        {"detail": "The entry is not in the trash."},
+        status=status.HTTP_409_CONFLICT,
+    )
 
 
 def _signature_refused():
@@ -196,21 +214,12 @@ class EntryListView(_EntryWriteMixin, CacheControlMixin, APIView):
 class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
     cache_no_store = True
 
-    def _reachable(self, request, uuid):
-        """The entry the caller may touch, or None - and the caller never
-        learns which of the two reasons applied."""
-        return (
-            entry_queryset()
-            .filter(accessible_entries_q(request.user), uuid=uuid)
-            .first()
-        )
-
     @extend_schema(
         tags=["Vault"], summary="Read one entry", responses={200: VaultEntrySerializer}
     )
     @sensitive_variables()
     def get(self, request, uuid):
-        entry = self._reachable(request, uuid)
+        entry = _reachable_entry(request.user, uuid)
         if entry is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(VaultEntrySerializer(entry).data)
@@ -231,7 +240,7 @@ class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
                 {"detail": "The body names another entry."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        entry = self._reachable(request, uuid)
+        entry = _reachable_entry(request.user, uuid)
         if entry is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return self._write(request, data, existing=entry)
@@ -240,7 +249,7 @@ class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
         tags=["Vault"], summary="Move an entry to the trash", responses={204: None}
     )
     def delete(self, request, uuid):
-        entry = self._reachable(request, uuid)
+        entry = _reachable_entry(request.user, uuid)
         if entry is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         # Soft: the trash is a view, not a rewrite. metadata_sig is untouched
@@ -250,14 +259,26 @@ class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
+def _offers(action_id, user, entry, role):
+    """Whether the registry offers *action_id* on *entry* for *role*."""
+    return VaultActionRegistry.is_action_available(
+        action_id,
+        user,
+        entry,
+        role=role,
+        trashed=entry.deleted_at is not None,
+        schema=schema_for(entry.type, default=()),
+    )
+
+
 class EntryRestoreView(CacheControlMixin, APIView):
     """Take an entry back out of the trash.
 
     No signature travels: deleted_at is not inside the signed payload, so
     there is nothing for the client to re-sign and nothing for the server to
     verify. Idempotent, so a retried request after a lost answer is not an
-    error.
+    error - which is why an entry that is already live is answered rather
+    than refused, though the registry offers "restore" only in the trash.
     """
 
     cache_no_store = True
@@ -270,29 +291,31 @@ class EntryRestoreView(CacheControlMixin, APIView):
     )
     @sensitive_variables()
     def post(self, request, uuid):
-        entry = (
-            entry_queryset()
-            .filter(accessible_entries_q(request.user), uuid=uuid)
-            .first()
-        )
+        entry = _reachable_entry(request.user, uuid)
         if entry is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         if entry.deleted_at is not None:
+            role = get_vault_role(request.user, entry.vault)
+            if not _offers("restore", request.user, entry, role):
+                return Response(
+                    {"detail": "Restoring this entry is not available to you."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             entry.deleted_at = None
             entry.save(update_fields=["deleted_at", "updated_at"])
         return Response(VaultEntrySerializer(entry).data)
 
 
-@method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
 class EntryPurgeView(CacheControlMixin, APIView):
     """Destroy a trashed entry and its fields.
 
     Only from the trash: that step is the confirmation, and without it one
     mistyped URL destroys a live entry with nothing to undo it.
 
-    Owner only, matching what DeleteEntryForeverAction declares. A key wrap
-    opens a vault, and every other entry action follows from that - this one
-    does not, because it is the only one no restore can undo.
+    Owner only, and read off what DeleteEntryForeverAction declares rather
+    than written out again here. A key wrap opens a vault, and every other
+    entry action follows from that - this one does not, because it is the
+    only one no restore can undo.
     """
 
     cache_no_store = True
@@ -302,7 +325,10 @@ class EntryPurgeView(CacheControlMixin, APIView):
         summary="Delete a trashed entry for good",
         responses={204: None},
     )
+    @sensitive_variables()
     def post(self, request, uuid):
+        # Lighter than _reachable_entry: the row is about to be destroyed, so
+        # only the vault comes along, for the role.
         entry = (
             VaultEntry.objects.filter(accessible_entries_q(request.user), uuid=uuid)
             .select_related("vault")
@@ -310,15 +336,20 @@ class EntryPurgeView(CacheControlMixin, APIView):
         )
         if entry is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if get_vault_role(request.user, entry.vault) != VaultRole.OWNER:
+        role = get_vault_role(request.user, entry.vault)
+        if role != VaultRole.OWNER:
             return Response(
                 {"detail": "Only the vault owner may delete an entry for good."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if entry.deleted_at is None:
-            return Response(
-                {"detail": "The entry is not in the trash."},
-                status=status.HTTP_409_CONFLICT,
-            )
-        entry.delete()
+        if not _offers("delete_forever", request.user, entry, role):
+            return _not_in_the_trash()
+        # Conditional, because the check above ran on a copy read outside any
+        # lock: a restore landing in between would otherwise destroy an entry
+        # the user has just been told is back.
+        destroyed, _ = VaultEntry.objects.filter(
+            pk=entry.pk, deleted_at__isnull=False
+        ).delete()
+        if not destroyed:
+            return _not_in_the_trash()
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -3,7 +3,12 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from workspace.common.uuids import parse_uuid_or_none, uuid_v7_or_v4
+from workspace.common.uuids import (
+    UuidBatchError,
+    parse_uuid_batch,
+    parse_uuid_or_none,
+    uuid_v7_or_v4,
+)
 
 
 class UuidV7OrV4Tests(SimpleTestCase):
@@ -81,3 +86,44 @@ class ParseUuidOrNoneTests(SimpleTestCase):
 
     def test_returns_none_for_non_uuid_number(self):
         self.assertIsNone(parse_uuid_or_none(123))
+
+
+class ParseUuidBatchTests(SimpleTestCase):
+    def setUp(self):
+        self.one = str(uuid.uuid4())
+
+    def test_parses_a_well_formed_batch(self):
+        self.assertEqual(parse_uuid_batch({"uuids": [self.one]}), [uuid.UUID(self.one)])
+
+    def test_a_body_that_is_not_an_object_is_refused(self):
+        """The guard the callers exist for: a JSON array or scalar reaches a
+        view as a list or an int, and reading a key off it raises
+        AttributeError - a 500 where the endpoint promises a 400."""
+        for body in ([self.one], 42, "x", None):
+            with self.subTest(body=body):
+                with self.assertRaises(UuidBatchError):
+                    parse_uuid_batch(body)
+
+    def test_a_missing_or_empty_list_is_refused(self):
+        for body in ({}, {"uuids": []}, {"uuids": "nope"}):
+            with self.subTest(body=body):
+                with self.assertRaises(UuidBatchError):
+                    parse_uuid_batch(body)
+
+    def test_a_malformed_uuid_is_refused(self):
+        with self.assertRaises(UuidBatchError):
+            parse_uuid_batch({"uuids": [self.one, "not-a-uuid"]})
+
+    def test_a_batch_above_the_cap_is_refused_not_truncated(self):
+        with self.assertRaises(UuidBatchError):
+            parse_uuid_batch({"uuids": [self.one] * 4}, max_items=3)
+
+    def test_duplicates_are_kept_so_the_caller_can_map_them_back(self):
+        """Deduplicating here would lose the position of each submitted
+        spelling, which the vault endpoint keys its answer by."""
+        self.assertEqual(len(parse_uuid_batch({"uuids": [self.one] * 3})), 3)
+
+    def test_the_key_is_configurable(self):
+        self.assertEqual(
+            parse_uuid_batch({"ids": [self.one]}, key="ids"), [uuid.UUID(self.one)]
+        )

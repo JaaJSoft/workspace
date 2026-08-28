@@ -1,9 +1,10 @@
 """The action endpoint.
 
-Its one hard rule is that it answers nothing about existence: an entry in
-someone else's vault and a UUID that names nothing must be indistinguishable,
-which is where this endpoint deliberately parts company with the projects one
-it is modelled on.
+Its one hard rule is that a batch survives its worst member: an entry in
+someone else's vault and a UUID that names nothing both come back as an
+empty list under the key that was submitted, so the other 199 answers stand
+and the client reads every key it sent. That is where this endpoint parts
+company with the projects one it is modelled on, which 404s the whole batch.
 """
 
 import uuid
@@ -12,7 +13,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.vault.models import EntryType, VaultEntry
-from workspace.vault.tests.factories import make_account, make_vault
+from workspace.vault.tests.factories import make_account, make_key_wrap, make_vault
 
 URL = "/api/v1/vault/actions"
 
@@ -48,7 +49,8 @@ class ActionApiTests(TestCase):
 
     def test_an_entry_in_another_vault_gets_an_empty_list_not_an_error(self):
         """The acceptance criterion, and the reason this endpoint is not a
-        copy of the projects one: a 404 here would confirm the row exists."""
+        copy of the projects one: a 404 here would take the whole batch
+        down over a UUID the caller may simply have gone stale on."""
         response = self._post([str(self.other_entry.uuid)])
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {str(self.other_entry.uuid): []})
@@ -61,11 +63,48 @@ class ActionApiTests(TestCase):
         self.assertEqual(response.json(), {absent: [], theirs: []})
 
     def test_every_submitted_uuid_gets_a_key(self):
-        """A missing key would be a second channel saying the same thing a
-        404 would."""
+        """A missing key would force every client to check for holes."""
         absent = str(uuid.uuid4())
         response = self._post([str(self.entry.uuid), absent])
         self.assertEqual(set(response.json()), {str(self.entry.uuid), absent})
+
+    def test_a_uuid_comes_back_under_the_spelling_it_was_sent_in(self):
+        """UUIDs have several valid spellings and the client reads
+        data[whatItSent]. Keying by the canonical form silently loses every
+        caller that sent an uppercase or braced one."""
+        submitted = str(self.entry.uuid).upper()
+        response = self._post([submitted])
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(submitted, response.json())
+        self.assertTrue(response.json()[submitted])
+
+    def test_two_spellings_of_one_uuid_each_get_their_key(self):
+        lower = str(self.entry.uuid)
+        response = self._post([lower, lower.upper()])
+        body = response.json()
+        self.assertEqual(set(body), {lower, lower.upper()})
+        self.assertEqual(body[lower], body[lower.upper()])
+
+    def test_a_body_whose_top_level_is_not_an_object_answers_400(self):
+        """A JSON array or scalar hands the view a list or an int, and
+        reading a key off it would be a 500 where the schema says 400."""
+        for body in ([str(self.entry.uuid)], 42, "nope"):
+            with self.subTest(body=body):
+                response = self.client.post(URL, body, "application/json")
+                self.assertEqual(response.status_code, 400)
+
+    def test_a_row_of_an_unknown_type_does_not_take_the_batch_down(self):
+        """type is a Python-side choice, so a fixture or a migration can put
+        a value in the column that no proxy claims. One such row must not
+        cost the other entries in the batch their answer."""
+        VaultEntry.objects.filter(pk=self.entry.pk).update(type="ghost")
+        healthy = self._entry(self.vault, "AQIF")
+        response = self._post([str(self.entry.uuid), str(healthy.uuid)])
+        self.assertEqual(response.status_code, 200)
+        ids = [a["id"] for a in response.json()[str(self.entry.uuid)]]
+        self.assertIn("edit", ids)
+        self.assertNotIn("copy_password", ids)
+        self.assertTrue(response.json()[str(healthy.uuid)])
 
     def test_a_trashed_entry_gets_the_trash_actions(self):
         self.entry.deleted_at = timezone.now()
@@ -118,8 +157,19 @@ class ActionApiTests(TestCase):
                 self._post(uuids)
             return len(captured.captured_queries)
 
-        few = [str(self._entry(self.vault, f"AQ{i}").uuid) for i in range(2)]
+        few = [str(self._entry(self._member_vault(0), "AQ0").uuid)]
         count(few)  # warm whatever the first request caches
         baseline = count(few)
-        many = few + [str(self._entry(self.vault, f"AR{i}").uuid) for i in range(20)]
+        many = few + [
+            str(self._entry(self._member_vault(i), f"AR{i}").uuid) for i in range(1, 20)
+        ]
         self.assertEqual(count(many), baseline)
+
+    def _member_vault(self, index):
+        """A vault the caller reaches through a wrap, not by owning it.
+
+        An owned vault's role is decidable from the row already loaded, so
+        only these make the query count guard the member path."""
+        vault = make_vault(self.other_user, encrypted_name=f"AQ{index:02d}")
+        make_key_wrap(vault, self.user)
+        return vault

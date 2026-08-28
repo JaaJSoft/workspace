@@ -90,6 +90,46 @@ class RegistryMachineryTests(SimpleTestCase):
         self._register(available_when_trashed=True, only_when_trashed=True)
         self.assertEqual(self._available(trashed=False), [])
 
+    def test_only_when_trashed_alone_is_offered_in_the_trash(self):
+        """The natural single-flag reading. Requiring both flags makes an
+        action that sets only this one offered nowhere at all, and nothing
+        would reject the combination."""
+        self._register(only_when_trashed=True)
+        self.assertEqual(len(self._available(trashed=True)), 1)
+        self.assertEqual(self._available(trashed=False), [])
+
+    def test_a_role_the_rank_table_does_not_know_is_offered_nothing(self):
+        """The floor is a rank comparison, not an equality against OWNER.
+        A role added to the model but not to the table has to fall below
+        every action rather than clear the ones asking for MEMBER."""
+        self._register(min_role=VaultRole.MEMBER)
+        self.assertEqual(self._available(role="viewer"), [])
+
+    def test_is_action_available_answers_for_one_id(self):
+        """What the restore and purge endpoints ask instead of restating an
+        action's rules."""
+        self._register(id="sample", min_role=VaultRole.OWNER)
+
+        def ask(role):
+            return self.registry.is_action_available(
+                "sample", None, _Entry(), role=role, trashed=False, schema=self.schema
+            )
+
+        self.assertTrue(ask(VaultRole.OWNER))
+        self.assertFalse(ask(VaultRole.MEMBER))
+
+    def test_is_action_available_is_false_for_an_id_nobody_registered(self):
+        self.assertFalse(
+            self.registry.is_action_available(
+                "ghost",
+                None,
+                _Entry(),
+                role=VaultRole.OWNER,
+                trashed=False,
+                schema=self.schema,
+            )
+        )
+
     def test_serialisation_carries_exactly_what_a_menu_needs(self):
         self._register(css_class="text-error", supports_bulk=True)
         self.assertEqual(

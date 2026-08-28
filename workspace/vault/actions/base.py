@@ -11,6 +11,14 @@ class ActionCategory(StrEnum):
     DANGER = "danger"
 
 
+# Weakest to strongest. A role missing from the map ranks below every floor,
+# so one added to the model and forgotten here offers nothing, not everything.
+_ROLE_RANK = {
+    VaultRole.MEMBER: 1,
+    VaultRole.OWNER: 2,
+}
+
+
 class BaseVaultAction(ABC):
     """Declarative action on a vault entry.
 
@@ -30,16 +38,15 @@ class BaseVaultAction(ABC):
     icon: str
     category: ActionCategory
 
-    # Ownership is the stronger role, so this is a floor and not an equality:
-    # an action open to members stays open to the owner. Nothing but an owner
-    # exists until sharing lands, and carrying the attribute now is what makes
-    # sharing an addition rather than a rewrite.
+    # A floor, compared through _ROLE_RANK. An equality against OWNER behaves
+    # as one only while there are two roles: the next role sharing adds is
+    # likelier to sit below MEMBER, and equality would hand it everything.
     min_role: str = VaultRole.MEMBER
 
     # The trash is a state an entry is in, not a place it went: an entry in it
     # keeps a different set of actions rather than none. only_when_trashed is
-    # the other half - restoring an entry that was never trashed is not a
-    # narrower version of anything, it is meaningless.
+    # the other half, and implies the first - setting it alone would otherwise
+    # declare an action offered nowhere.
     available_when_trashed: bool = False
     only_when_trashed: bool = False
 
@@ -49,9 +56,9 @@ class BaseVaultAction(ABC):
     def is_available(self, user, entry, *, role, trashed, schema):
         if role is None:
             return False
-        if self.min_role == VaultRole.OWNER and role != VaultRole.OWNER:
+        if _ROLE_RANK.get(role, 0) < _ROLE_RANK[self.min_role]:
             return False
-        if trashed and not self.available_when_trashed:
+        if trashed and not (self.available_when_trashed or self.only_when_trashed):
             return False
         if self.only_when_trashed and not trashed:
             return False

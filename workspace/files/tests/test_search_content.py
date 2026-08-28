@@ -160,6 +160,43 @@ class FileListSearchApiTests(APITestCase):
         self._note("root.md", b"body")
         self.assertEqual(self._names({"search": "  "}), ["root.md"])
 
+    def test_search_no_longer_matches_the_file_type(self):
+        # `type` left the search document on purpose: ?search=pdf must find
+        # what is named or written "pdf", not every PDF in the tree.
+        File.objects.create(
+            owner=self.user,
+            name="invoice.pdf",
+            node_type=File.NodeType.FILE,
+            mime_type="application/pdf",
+            type="pdf",
+        )
+        self.assertEqual(self._names({"search": "pdf"}), [])
+
+    def test_search_composes_with_the_type_filter(self):
+        # Narrowing a search to one file type is ?search=<term>&type=<type>.
+        for name, file_type, mime in (
+            ("quarterly.pdf", "pdf", "application/pdf"),
+            ("quarterly.md", "markdown", "text/markdown"),
+        ):
+            File.objects.create(
+                owner=self.user,
+                name=name,
+                node_type=File.NodeType.FILE,
+                mime_type=mime,
+                type=file_type,
+                content=ContentFile(b"revenue", name=name),
+            )
+        index_file(File.objects.get(name="quarterly.pdf"))
+        index_file(File.objects.get(name="quarterly.md"))
+
+        self.assertEqual(
+            sorted(self._names({"search": "quarterly"})),
+            ["quarterly.md", "quarterly.pdf"],
+        )
+        self.assertEqual(
+            self._names({"search": "quarterly", "type": "pdf"}), ["quarterly.pdf"]
+        )
+
     def test_the_trash_listing_can_be_searched_by_content(self):
         # Trashing leaves the document in place, so the trash view - which
         # runs through the same filter backend - can still find it.

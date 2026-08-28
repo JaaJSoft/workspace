@@ -48,6 +48,16 @@ def sync_folders(account):
             account.save(update_fields=["imap_delimiter", "updated_at"])
 
     existing = {f.name: f for f in MailFolder.objects.filter(account=account)}
+    # Folders in a merge group carry the type the user chose for the group.
+    # Re-detecting it from the mailbox name would silently drop a merged Sent
+    # or Inbox out of the unified inbox, the activity feed and the
+    # notification filter, all of which key on folder_type rather than on a
+    # folder UUID.
+    canonical_ids = set(
+        MailFolder.objects.filter(account=account, alias_of__isnull=False).values_list(
+            "alias_of_id", flat=True
+        )
+    )
     remote_names = set()
 
     with transaction.atomic():
@@ -65,7 +75,8 @@ def sync_folders(account):
             if name in existing:
                 folder = existing[name]
                 changed = False
-                if folder.folder_type != folder_type:
+                grouped = folder.alias_of_id is not None or folder.pk in canonical_ids
+                if not grouped and folder.folder_type != folder_type:
                     folder.folder_type = folder_type
                     changed = True
                 if folder.display_name != display:
@@ -86,6 +97,11 @@ def sync_folders(account):
         # Remove folders that no longer exist remotely
         gone = set(existing.keys()) - remote_names
         if gone:
+            from .folder_merge import promote_alias
+
+            gone_pks = [existing[name].pk for name in gone]
+            for name in gone:
+                promote_alias(existing[name], exclude_ids=gone_pks)
             MailFolder.objects.filter(account=account, name__in=gone).delete()
 
 

@@ -925,3 +925,26 @@ class MailFolderMergeApiTests(MailTestMixin, APITestCase):
             self.url(self.other_folder), {"into": str(self.sent.uuid)}, format="json"
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class MailFolderDeletePromotesAliasTests(MailTestMixin, APITestCase):
+    """DELETE /api/v1/mail/folders/<uuid> on a canonical promotes an heir."""
+
+    def setUp(self):
+        super().setUp()
+        self.alias = MailFolder.objects.create(
+            account=self.account,
+            name="MyFolder2",
+            display_name="MyFolder2",
+            folder_type="other",
+            alias_of=self.custom,
+        )
+        self.client.force_authenticate(self.user)
+
+    @patch("workspace.mail.services.imap_folders.delete_folder")
+    def test_alias_survives_as_a_standalone_folder(self, delete_folder):
+        resp = self.client.delete(f"/api/v1/mail/folders/{self.custom.uuid}")
+
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.alias.refresh_from_db()
+        self.assertIsNone(self.alias.alias_of_id)

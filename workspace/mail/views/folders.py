@@ -214,7 +214,15 @@ class MailFolderUpdateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from ..services.folder_merge import promote_alias
         from ..services.imap_folders import delete_folder
+
+        # Before, not after: delete_folder ends with folder.delete(), and the
+        # FK's SET_NULL would scatter the group into standalone folders with
+        # no heir to hold it together. If the IMAP call below then fails, the
+        # group has re-formed under the heir and this folder is standalone -
+        # every folder still visible, no mail lost, and the retry succeeds.
+        promote_alias(folder)
 
         try:
             delete_folder(folder.account, folder)

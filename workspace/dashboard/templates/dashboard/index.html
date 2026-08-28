@@ -79,7 +79,7 @@
       x-data="commandPaletteDropdown()"
     >
       <div class="relative">
-        {% include 'ui/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
+        {% include 'core/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
 
         {# ── Dropdown ── #}
         <div
@@ -88,8 +88,8 @@
           @click.outside="close()"
           class="absolute z-[100] mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
         >
-          {% include 'ui/partials/search/quick_actions.html' with size='lg' %}
-          {% include 'ui/partials/search/search_results.html' with size='lg' %}
+          {% include 'core/partials/search/quick_actions.html' with size='lg' %}
+          {% include 'core/partials/search/search_results.html' with size='lg' %}
 
           {# ── Footer hints ── #}
           <div
@@ -163,7 +163,7 @@
                 <p class="text-sm text-base-content/60">What's happening across your workspace.</p>
               </div>
               <div class="flex items-center gap-2 min-w-0">
-                {% include "ui/partials/activity_tabs.html" with activity_prefix="dashboard-activity" %}
+                {% include "core/partials/activity_tabs.html" with activity_prefix="dashboard-activity" %}
                 <button
                   class="btn btn-ghost btn-sm btn-square"
                   :class="searchOpen && 'btn-active'"
@@ -175,7 +175,7 @@
                 {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="dashboard-activity" loading_expr="false" %}
               </div>
             </div>
-            {% include "ui/partials/activity_search.html" with activity_prefix="dashboard-activity" %}
+            {% include "core/partials/activity_search.html" with activity_prefix="dashboard-activity" %}
 
             {% comment %}
           Self-loading feed. The skeleton (feedSkeleton) is shown before every
@@ -218,6 +218,7 @@
 
   </div>
 
+  <script src="{% static 'calendar/ui/js/event_card.js' %}"></script>
   <script src="{% static 'dashboard/js/badges.js' %}"></script>
   <script>
     const _weatherCodes = {

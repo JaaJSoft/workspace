@@ -29,12 +29,17 @@
   });
 
   themeToggle.addEventListener('change', function () {
+    const previousTheme = getCurrentTheme();
     const newTheme = this.checked ? getDarkTheme() : getLightTheme();
     html.setAttribute('data-theme', newTheme);
+    // Optimistic: the page switches at once and rolls back if the setting
+    // was not saved, so what the user sees matches what the next load shows.
     fetch('/api/v1/settings/core/theme', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
       body: JSON.stringify({ value: newTheme }),
-    }).catch(() => {});
+    })
+      .then((response) => { if (!response.ok) throw new Error(response.status); })
+      .catch(() => { html.setAttribute('data-theme', previousTheme); });
   });
 })();

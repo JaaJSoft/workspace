@@ -10,7 +10,7 @@ const { loadScript, loadScripts, CUSTOM_ELEMENT_STUBS } = require('../../../comm
 function load() {
   return loadScripts(
     [
-      'workspace/common/static/ui/js/user_avatar.js',
+      'workspace/users/ui/static/users/ui/js/user_avatar.js',
       'workspace/chat/ui/static/chat/ui/js/conversation_avatar.js',
     ],
     {

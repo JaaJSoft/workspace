@@ -188,7 +188,7 @@
 
         <h4 class="text-sm font-medium text-base-content/70">People</h4>
         {% if writable %}
-          {% include "ui/partials/user_selector.html" with on_select_event="project-member-selected" placeholder="Add a member by username or name" %}
+          {% include "users/ui/partials/user_selector.html" with on_select_event="project-member-selected" placeholder="Add a member by username or name" %}
         {% endif %}
         <ul class="flex flex-col gap-1.5">
           <template x-for="member in items" :key="member.uuid">

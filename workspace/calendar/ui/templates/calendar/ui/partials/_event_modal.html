@@ -193,7 +193,7 @@
 
       <div>
         <div class="label"><span class="label-text">Invite guests</span></div>
-        {% include "ui/partials/user_selector.html" with on_select_event="calendar-member-selected" placeholder="Search users to invite..." %}
+        {% include "users/ui/partials/user_selector.html" with on_select_event="calendar-member-selected" placeholder="Search users to invite..." %}
         <div class="flex flex-wrap gap-1 mt-2">
           <template x-for="member in selectedMembers" :key="member.id">
             {% include "ui/partials/user_chip.html" with user_id_expr="member.id" username_expr="member.username" remove_expr="removeMember(member.id)" %}

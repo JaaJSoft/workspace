@@ -6,7 +6,7 @@ store encrypted credentials or secrets in the database.
 
 Usage::
 
-    from workspace.core.encryption import encrypt, decrypt
+    from workspace.common.encryption import encrypt, decrypt
 
     ciphertext = encrypt("my-secret")   # bytes
     plaintext  = decrypt(ciphertext)    # str

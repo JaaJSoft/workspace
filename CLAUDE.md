@@ -36,8 +36,8 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `ai` | LLM tools, AI assistants, prompt routing |
 | `calendar` | Events, recurrence, external calendar sync |
 | `chat` | Conversations, messages, typing indicators, link previews |
-| `common` | Cross-cutting helpers: UUIDs, booleans, logging, cache, mixins |
-| `core` | Auth, navigation, changelog, dashboard scaffolding |
+| `common` | Toolbox: Python helpers, DRF plumbing, full-text search abstraction, UI kit. Names no other app - see *core vs common* below |
+| `core` | The app itself: plugin registries (modules, search, activity, SSE), unified search and activity endpoints, health and `/metrics`, changelog, onboarding, admin dashboard, DB maintenance, project-level tests |
 | `dashboard` | User home page widgets |
 | `files` | File/folder model, permissions, WebDAV, thumbnails, sharing |
 | `imports` | Import data from other clouds (WebDAV/Nextcloud, later OAuth drives) |
@@ -47,6 +47,18 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `projects` | Projects and kanban boards: tasks, statuses, members, comments, task references |
 | `users` | User model, settings, profile, activity feed |
 | `vault` | End-to-end encrypted password vault (preview) |
+
+### `core` vs `common`
+
+`common` is a **leaf**, `core` is the **root**. One rule, the same on the Python side and the frontend side.
+
+- **`common` is the toolbox**: code that would work unchanged in another Django project. Helpers, DRF mixins/pagination/filters, the full-text search abstraction, the UI kit (partials, custom elements, JS helpers, CSS, vendored bundles), test helpers. It has no `urls.py`, no models, no Celery tasks, no setting keys, and it **never names another app**: no `from workspace.<app>`, no `{% url 'app:...' %}`, no `{% include 'app/...' %}`, no hard-coded `/api/v1/...` or `/<app>/...` path. What a widget needs from a module is a parameter - `comments.html` takes `list_url`, `iconPicker()` takes `apiEndpoint`.
+- **`core` is the app itself**: whatever is neither a business module nor a generic tool. The registries modules plug into (`module_registry`, `activity_registry`, `sse_registry`), the pages and endpoints that span modules (unified search, activity feed, health, `/metrics`, changelog, onboarding), deployment plumbing (DB maintenance, PostgreSQL migration, admin dashboard) and the project-level tests (CI matrix, settings layout, media root). `core` is the composition root: it may import from any module. Nothing generic belongs there - a helper that does not need to know about the app is `common`.
+- **Shared but module-specific stays in the module that owns the concept.** Two modules needing the same file picker, avatar widget or WebRTC config is not a reason to put it in `common` or `core`: it goes in `files`, `users`, `chat`, and the other module imports or includes it - `notes` already builds on `files` that way.
+
+Decide with three questions, in order. Does it name a module (import, URL name, endpoint, template path)? Then it belongs to that module - or to `core` when it names several, because then it *is* the app (the navbar, the service worker). Is it about running this app - a page, an endpoint, a registry, a task, a management command? Then `core`. Otherwise `common`.
+
+`core/tests/test_core_common_layout.py` enforces the leaf half mechanically: it fails on any `workspace.<app>` import, `{% url %}` namespace, app template path or hard-coded endpoint under `common`. The shell lives in `core` (`base.html`, the navbar, the notification drawer, the service worker, the global stores), module widgets live in their module (`files/ui/partials/file_picker.html`, `users/ui/js/user_avatar.js`, `calendar/ui/js/event_card.js`) and `base.html` composes them - that is what `core` is for.
 
 ## Infrastructure
 
@@ -903,11 +915,9 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 - `app_logo.html` - Application logo
 - `breadcrumbs.html` - Breadcrumb navigation
 - `comments.html` - comment thread (list + collapsed-until-focused composer + inline edit) backed by `commentsComponent()` from `common/static/ui/js/comments.js`. Params: `list_url` (collection endpoint; item endpoints are `<list_url>/<uuid>`), `current_user_id`, `can_comment`. Used by the files properties panel and the task panel - reuse it for any new commentable entity instead of copying the markup.
-- `navbar.html` - Navigation bar
 - `refresh_button.html` - Alpine-AJAX refresh button (spins while `loading` is truthy). Params: `url_expr`, `target`, optional `loading_expr` / `title` / `size`.
-- `user_avatar.html` - User avatar display
 - `user_chip.html` - removable avatar+name chip for "selected users" lists (guests, invitees, assignees, member pickers). Params are Alpine expression fragments: `user_id_expr`, `username_expr`, optional `remove_expr` (omit for read-only) and `remove_show_expr`. Never hand-roll this chip again - every hand-rolled copy has ended up with an off-center avatar.
-- `user_selector.html` / `group_selector.html` - search-as-you-type pickers dispatching a custom event on select (see the comment block at the top of each file for params)
+- `group_selector.html` - search-as-you-type group picker dispatching a custom event on select (see the comment block at the top of the file for params). Its user counterpart is `users/ui/partials/user_selector.html`, and the `<user-avatar>` element comes from `users/ui/js/user_avatar.js` - both loaded for every page by `base.html`
 
 ### File Actions
 

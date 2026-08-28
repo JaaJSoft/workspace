@@ -583,7 +583,7 @@
             <i data-lucide="user-plus" class="w-3 h-3"></i>
             Invite members
           </div>
-          {% include "ui/partials/user_selector.html" with on_select_event="poll-invitee-selected" placeholder="Search users to invite..." %}
+          {% include "users/ui/partials/user_selector.html" with on_select_event="poll-invitee-selected" placeholder="Search users to invite..." %}
           <div
             class="flex flex-wrap gap-1 mt-2"
             x-show="(currentPoll?.invitees || []).length > 0"

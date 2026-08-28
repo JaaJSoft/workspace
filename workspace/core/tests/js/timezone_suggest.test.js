@@ -45,7 +45,7 @@ function boot({ stored = 'UTC', detected = 'Europe/Paris', dismissed = null,
   const state = { fetches: [], warnings: [], stored: dismissed, reloaded: false };
   let resolveFetch;
 
-  const ctx = loadScript('workspace/common/static/ui/js/timezone_suggest.js', {
+  const ctx = loadScript('workspace/core/static/core/js/timezone_suggest.js', {
     getCSRFToken: () => 'token',
     fetch: (url, options) => {
       state.fetches.push({ url, options });

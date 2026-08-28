@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('./loader');
+const { loadScript } = require('../../../common/tests/js/loader');
 
 const USERS = [
   { id: '1', username: 'alice', first_name: 'Alice', last_name: 'Doe' },
@@ -11,7 +11,7 @@ const USERS = [
 ];
 
 function makeLocal() {
-  const ctx = loadScript('workspace/common/static/ui/js/user_selector.js');
+  const ctx = loadScript('workspace/users/ui/static/users/ui/js/user_selector.js');
   return ctx.userSelector('evt', () => USERS);
 }
 
@@ -45,7 +45,7 @@ test('local mode: single character queries filter (no 2-char minimum)', async ()
 
 test('remote mode: short query clears results, never fetches, focus is inert', async () => {
   let fetched = false;
-  const ctx = loadScript('workspace/common/static/ui/js/user_selector.js', {
+  const ctx = loadScript('workspace/users/ui/static/users/ui/js/user_selector.js', {
     fetch: () => {
       fetched = true;
       return Promise.resolve({ ok: false });

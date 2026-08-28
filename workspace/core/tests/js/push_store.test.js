@@ -42,7 +42,7 @@ function loadPushStore({ subscription = null, fetchOk = true } = {}) {
       ready: Promise.resolve(registration),
     },
   };
-  loadScript('workspace/common/static/ui/js/stores.js', {
+  loadScript('workspace/core/static/core/js/stores.js', {
     Alpine,
     document,
     navigator,

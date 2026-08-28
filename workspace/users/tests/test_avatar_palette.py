@@ -1,6 +1,6 @@
 """The initials-avatar palette is written twice, in two languages.
 
-``AVATAR_COLORS`` in ``common/static/ui/js/user_avatar.js`` names Tailwind
+``AVATAR_COLORS`` in ``users/ui/static/users/ui/js/user_avatar.js`` names Tailwind
 classes; ``AVATAR_PALETTE`` in ``scripts/seed_demo.py`` holds the same colours
 as RGB tuples, because Pillow paints the demo avatars and has no idea what a
 Tailwind class is. Neither can import the other, so the only thing keeping the
@@ -27,7 +27,15 @@ from django.test import SimpleTestCase
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 JS_SOURCE = (
-    REPO_ROOT / "workspace" / "common" / "static" / "ui" / "js" / "user_avatar.js"
+    REPO_ROOT
+    / "workspace"
+    / "users"
+    / "ui"
+    / "static"
+    / "users"
+    / "ui"
+    / "js"
+    / "user_avatar.js"
 )
 SEEDER_SOURCE = REPO_ROOT / "scripts" / "seed_demo.py"
 CSS_BUNDLE = REPO_ROOT / "workspace" / "common" / "static" / "css" / "app.css"
@@ -35,7 +43,7 @@ CSS_BUNDLE = REPO_ROOT / "workspace" / "common" / "static" / "css" / "app.css"
 
 def _js_palette() -> list[str]:
     """The Tailwind class names in AVATAR_COLORS, in declaration order."""
-    source = JS_SOURCE.read_text()
+    source = JS_SOURCE.read_text(encoding="utf-8")
     match = re.search(r"const AVATAR_COLORS = \[(.*?)\]", source, re.DOTALL)
     if match is None:
         raise AssertionError(f"AVATAR_COLORS not found in {JS_SOURCE}")
@@ -44,7 +52,7 @@ def _js_palette() -> list[str]:
 
 def _seeder_palette() -> list[tuple[int, ...]]:
     """The RGB tuples in AVATAR_PALETTE, in declaration order."""
-    tree = ast.parse(SEEDER_SOURCE.read_text())
+    tree = ast.parse(SEEDER_SOURCE.read_text(encoding="utf-8"))
     for node in tree.body:
         targets = getattr(node, "targets", [])
         if any(getattr(t, "id", None) == "AVATAR_PALETTE" for t in targets):
@@ -54,7 +62,7 @@ def _seeder_palette() -> list[tuple[int, ...]]:
 
 def _rendered_rgb(class_name: str) -> tuple[int, int, int]:
     """What the compiled bundle actually paints for a `bg-*` utility."""
-    css = CSS_BUNDLE.read_text()
+    css = CSS_BUNDLE.read_text(encoding="utf-8")
     rule = re.search(rf"\.{re.escape(class_name)}\s*\{{([^}}]*)\}}", css)
     if rule is None:
         raise AssertionError(

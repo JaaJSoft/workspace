@@ -2,14 +2,14 @@
 
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('./loader');
+const { loadScript } = require('../../../common/tests/js/loader');
 
 // The element itself needs a DOM and is covered by
 // workspace/common/tests/e2e/test_user_avatar.py. What is testable here is
 // the size scale, the host geometry and the palette both paths share.
 function load() {
   const noop = () => {};
-  return loadScript('workspace/common/static/ui/js/user_avatar.js', {
+  return loadScript('workspace/users/ui/static/users/ui/js/user_avatar.js', {
     HTMLElement: class {},
     customElements: { get: () => undefined, define: noop },
     document: { createElement: () => ({ setAttribute: noop, addEventListener: noop }), addEventListener: noop },

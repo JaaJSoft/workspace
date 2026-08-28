@@ -3,7 +3,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from workspace.common.webrtc import DEFAULT_STUN_URL, build_ice_servers
+from workspace.chat.services.webrtc import DEFAULT_STUN_URL, build_ice_servers
 
 _ENV_KEYS = (
     "CHAT_CALL_ICE_SERVERS",

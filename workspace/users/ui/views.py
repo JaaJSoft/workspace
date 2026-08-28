@@ -253,9 +253,9 @@ def profile_activity_feed(request, username):
     append = offset > 0
     if request.headers.get("X-Alpine-Request"):
         template = (
-            "ui/partials/activity_page.html"
+            "core/partials/activity_page.html"
             if append
-            else "ui/partials/activity_feed.html"
+            else "core/partials/activity_feed.html"
         )
         return render(request, template, activity_ctx)
 

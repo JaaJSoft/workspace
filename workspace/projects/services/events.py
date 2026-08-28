@@ -43,7 +43,7 @@ def serialize_task_event(ev):
     """Normalize a TaskEvent into the activity-feed event dict shape.
 
     Shared between the activity provider and the task detail panel so both
-    render through dashboard/partials/activity_item.html.
+    render through core/partials/activity_item.html.
     """
     if ev.actor is not None:
         actor = {

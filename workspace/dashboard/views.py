@@ -229,9 +229,9 @@ def activity_feed(request):
             request.user, source=source, offset=offset, search=search
         )
         template = (
-            "ui/partials/activity_page.html"
+            "core/partials/activity_page.html"
             if append
-            else "ui/partials/activity_feed.html"
+            else "core/partials/activity_feed.html"
         )
         return render(request, template, context)
 

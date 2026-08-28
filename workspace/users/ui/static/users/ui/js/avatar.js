@@ -107,7 +107,7 @@ window._setPopoverContent = function _setPopoverContent(el, html) {
 
 /**
  * Show the user card popover for a wrapper element.
- * Waits 1 second before showing to avoid accidental triggers.
+ * Waits 500ms before showing to avoid accidental triggers.
  * The popover is appended to document.body with position:fixed to avoid overflow clipping.
  */
 window._userCardShow = function(wrapper, userId) {
@@ -184,7 +184,7 @@ window._userCardShow = function(wrapper, userId) {
  * Also cancels any pending show timeout.
  */
 window._userCardScheduleHide = function(wrapper) {
-  // Cancel pending show if user leaves before the 1s delay
+  // Cancel pending show if user leaves before the 500ms delay
   if (wrapper._showTimeout) {
     clearTimeout(wrapper._showTimeout);
     wrapper._showTimeout = null;

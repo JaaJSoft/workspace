@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block navbar %}
-  {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+  {% include 'core/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
 
 {% block drawer_class %}lg:drawer-open{% endblock %}
@@ -267,6 +267,7 @@
   ></script>
   <script src="{% static 'calendar/ui/js/polls.js' %}"></script>
   <script src="{% static 'calendar/ui/js/calendar_calendars.js' %}"></script>
+  <script src="{% static 'calendar/ui/js/event_card.js' %}"></script>
   <script src="{% static 'calendar/ui/js/calendar_events.js' %}"></script>
   <script src="{% static 'calendar/ui/js/calendar_tasks.js' %}"></script>
   <script src="{% static 'calendar/ui/js/calendar_recurrence.js' %}"></script>

@@ -73,12 +73,12 @@ class MailAccount(models.Model):
         return self.email
 
     def set_password(self, plaintext):
-        from workspace.core.encryption import encrypt
+        from workspace.common.encryption import encrypt
 
         self.password_encrypted = encrypt(plaintext)
 
     def get_password(self):
-        from workspace.core.encryption import decrypt
+        from workspace.common.encryption import decrypt
 
         if not self.password_encrypted:
             return ""
@@ -87,14 +87,14 @@ class MailAccount(models.Model):
     def set_oauth2_data(self, data):
         import orjson
 
-        from workspace.core.encryption import encrypt
+        from workspace.common.encryption import encrypt
 
         self.oauth2_data_encrypted = encrypt(orjson.dumps(data).decode())
 
     def get_oauth2_data(self):
         import orjson
 
-        from workspace.core.encryption import decrypt
+        from workspace.common.encryption import decrypt
 
         if not self.oauth2_data_encrypted:
             return None

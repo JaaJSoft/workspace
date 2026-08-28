@@ -265,7 +265,7 @@
       class="p-2 border-t border-base-300"
     >
       <button
-        @click="$store.notifications.items.forEach(n => { if (!n.is_read) $store.notifications.markRead(n.uuid); }); notificationsOpen = false;"
+        @click="$store.notifications.markAllRead(); notificationsOpen = false;"
         class="btn btn-ghost btn-sm btn-block text-primary hover:bg-primary/10"
       >
         Dismiss all

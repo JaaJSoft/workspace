@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScripts } = require('./loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 // _patchCardStatus reads the presence store and fills the status dot, label
 // and "last seen" text. The relative-time wording itself is pinned down in
@@ -13,7 +13,7 @@ function patchWithStatus(status, lastSeen) {
   const ctx = loadScripts(
     [
       'workspace/common/static/ui/js/timeago.js',
-      'workspace/common/static/ui/js/avatar.js',
+      'workspace/users/ui/static/users/ui/js/avatar.js',
     ],
     { Alpine: { store: () => ({ statusOf: () => status }) } },
   );

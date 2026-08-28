@@ -88,6 +88,7 @@ Env vars do not persist across shell tool calls: chain migrate/seed/runserver in
 | `--no-files` / `--no-chat` / `--no-calendar` / `--no-projects` | Skip a generator |
 | `--min-tasks N` / `--max-tasks N` | Tasks per shared project (defaults 6 / 30) |
 | `--no-avatars` | Faster, skips Pillow avatar generation |
+| `--keep-intro-modals` | Leave the onboarding tour + changelog popup pending (they are pre-dismissed by default) |
 | `--history-days N` | Spread activity over the last N days (default 180) |
 | `--password X` | Change the shared password (default `demo1234`) |
 
@@ -95,6 +96,7 @@ Env vars do not persist across shell tool calls: chain migrate/seed/runserver in
 
 - Re-running is additive: each run adds a new batch of faker users, plus new shared projects and tasks. Personal projects are reused via get-or-create (never duplicated), though they gain a few tasks per run. Use `--purge --yes` to reset. The `demo` user is reused (its password is reset to `--password`), never duplicated.
 - The `demo` user gets files, calendars and conversations like everyone else, so its account looks lived-in. It is also the admin of the first shared kanban project and has its own personal board.
+- Every seeded user starts with the onboarding tour and the changelog popup already marked as seen, so the first page load is not covered by two modals. Pass `--keep-intro-modals` when you are specifically testing one of them.
 - The seeder does not create a superuser. For `/admin`: `$env:DJANGO_SUPERUSER_PASSWORD='admin1234'; uv run python manage.py createsuperuser --noinput --username admin --email admin@demo.local` (PowerShell), or `DJANGO_SUPERUSER_PASSWORD=admin1234 uv run python manage.py createsuperuser --noinput --username admin --email admin@demo.local` (bash).
 - `scripts/_screenshot_seed.py` is NOT for this: it feeds `scripts/screenshots.py` into a temporary DB that is deleted after the run.
 - Seeding uses the service layer directly (no HTTP), so no server needs to be running while seeding.

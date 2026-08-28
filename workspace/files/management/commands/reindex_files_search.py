@@ -36,14 +36,31 @@ class Command(BaseCommand):
         if options["owner"]:
             qs = qs.filter(owner__username=options["owner"])
 
-        indexed = failed = 0
-        for file_obj in qs.iterator(chunk_size=options["batch_size"]):
-            if index_file(file_obj):
-                indexed += 1
-            else:
-                failed += 1
-            if (indexed + failed) % 1000 == 0:
-                self.stdout.write(f"  {indexed + failed} files processed...")
+        indexed = failed = reported = 0
+        # Keyset pagination, one fully materialised page at a time. A
+        # streaming iterator would keep a read cursor open on the connection
+        # while each index_file() opens a write transaction; on SQLite that
+        # can fail with "database is locked" (SQLITE_BUSY_SNAPSHOT, which
+        # busy_timeout does not cover) once the running app commits meanwhile.
+        # Same reason as backfill_file_hashes.
+        last_uuid = None
+        while True:
+            page_qs = qs.order_by("uuid")
+            if last_uuid is not None:
+                page_qs = page_qs.filter(uuid__gt=last_uuid)
+            page = list(page_qs[: options["batch_size"]])
+            if not page:
+                break
+            last_uuid = page[-1].uuid
+
+            for file_obj in page:
+                if index_file(file_obj):
+                    indexed += 1
+                else:
+                    failed += 1
+            if (indexed + failed) - reported >= 1000:
+                reported = indexed + failed
+                self.stdout.write(f"  {reported} files processed...")
 
         self.stdout.write(
             self.style.SUCCESS(f"Indexed {indexed} files ({failed} failed).")

@@ -162,6 +162,16 @@ class ReindexCommandTests(_FtsTestCase):
         self.assertEqual(self._matches('"wisdom"'), {self._rowid(note)})
         self.assertIn("Indexed", out.getvalue())
 
+    def test_every_page_is_covered(self):
+        # The backfill pages by keyset rather than streaming a cursor, so it
+        # is worth pinning that the paging itself walks the whole table: an
+        # off-by-one in the "uuid > last" bound silently skips or repeats.
+        notes = [self._note(f"n{i}.md", f"needle{i}".encode()) for i in range(7)]
+        call_command("reindex_files_search", "--batch-size", "2", stdout=StringIO())
+        for i, note in enumerate(notes):
+            with self.subTest(i=i):
+                self.assertEqual(self._matches(f'"needle{i}"'), {self._rowid(note)})
+
     def test_trashed_files_are_skipped_by_default(self):
         note = self._note("old.md", b"forgotten wisdom")
         note.soft_delete()

@@ -187,7 +187,7 @@ The one case that still warrants an isolated root is a test that **walks** the m
 
 ### CI
 
-Tests run in parallel in CI with one job per module (see `.github/workflows/tests.yml`). When creating a new Django app module, add it to the `matrix.module` list in the workflow file.
+Tests run in parallel in CI with one job per module (see `.github/workflows/tests.yml`), in three separate matrices: `test` (Django), `e2e` (Playwright) and `js` (Node). When creating a new Django app module, add it to the `test` matrix; add it to the `e2e` and `js` matrices as soon as it grows a `tests/e2e/` or `tests/js/` case. `core.tests.test_ci_workflow` fails when either of those two lists drifts from the tree - a module missing from a matrix is never run, silently.
 
 **CI coverage floors** (`.github/workflows/tests.yml`): each module pins a `min_coverage` (45-95%). Lowering a threshold is forbidden by the workflow's own comment - raise it after adding coverage, never lower it.
 
@@ -214,7 +214,7 @@ assert.equal(ctx.isValidUuid('...'), true);
 - If a script touches `document`/`fetch` at load time, pass stubs: `loadScript(path, { document: stub })`.
 - **Cross-realm gotcha:** arrays/objects created inside the vm carry that realm's prototypes, so `assert.deepStrictEqual` fails its prototype check against test-side literals ("same structure but not reference-equal"). Normalize first: `Array.from(ctx.fn(...))` or `{ ...result }`.
 - **Cross-realm, the dangerous half:** it is not only assertions. A value built on the test side and passed *into* the vm carries the outer realm's prototypes, and a bundled library that branches on `constructor === Array` (or any other identity check against a built-in) then takes a different path than it would in a browser — same input, different output, silently. We hit this with `cbor-x`, which fell through to its iterator branch and emitted indefinite-length CBOR arrays that a browser encodes with a definite length; the suite reported 142 failures that did not exist in production. **When the test feeds data to the bundle, build that data inside the vm:** pass the JSON as a string through `extraGlobals` and parse it in the context (`vm.runInContext('JSON.parse(__text)', ctx)`), rather than parsing on the test side. If the output has to match a browser byte for byte, assert it in a real browser too — see `workspace/vault/tests/e2e/test_crypto_browser.py`.
-- CI runs these in the `js` job of `.github/workflows/tests.yml`.
+- CI runs these in the per-module `js` matrix of `.github/workflows/tests.yml`, one `JS (<module>)` job each.
 
 ## Backend Conventions
 

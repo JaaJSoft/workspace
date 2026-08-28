@@ -12,8 +12,8 @@
       API, and the dropdown opens on focus with the full list.
 
   Usage:
-    {% include "ui/partials/user_selector.html" with on_select_event="user-selected" placeholder="Add a user..." %}
-    {% include "ui/partials/user_selector.html" with on_select_event="assignee-selected" local_source="unassignedUsers()" %}
+    {% include "users/ui/partials/user_selector.html" with on_select_event="user-selected" placeholder="Add a user..." %}
+    {% include "users/ui/partials/user_selector.html" with on_select_event="assignee-selected" local_source="unassignedUsers()" %}
 
   The dispatched event contains { detail: { user: { id, username, first_name, last_name } } }
 {% endcomment %}

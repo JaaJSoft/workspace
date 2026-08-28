@@ -229,7 +229,6 @@ jobs:
         module:
           - calendar
           - chat
-          - common
           - core
           - dashboard
           - files
@@ -284,6 +283,7 @@ jobs:
           - mail
           - notes
           - projects
+          - users
           - vault
     name: JS (${{ matrix.module }})
     steps:

@@ -58,7 +58,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 
 Decide with three questions, in order. Does it name a module (import, URL name, endpoint, template path)? Then it belongs to that module - or to `core` when it names several, because then it *is* the app (the navbar, the service worker). Is it about running this app - a page, an endpoint, a registry, a task, a management command? Then `core`. Otherwise `common`.
 
-`core/tests/test_core_common_layout.py` enforces the leaf half mechanically and carries `KNOWN_DEVIATIONS`, the files that still break it (the navbar, the notification and presence stores, the widgets calling `/api/v1/users`...). That list is a backlog, not a precedent: it only shrinks. Move a file out of `common` when you touch it, never add a new one next to it - the test fails on a new deviation and on a stale entry alike.
+`core/tests/test_core_common_layout.py` enforces the leaf half mechanically: it fails on any `workspace.<app>` import, `{% url %}` namespace, app template path or hard-coded endpoint under `common`. The shell lives in `core` (`base.html`, the navbar, the notification drawer, the service worker, the global stores), module widgets live in their module (`files/ui/partials/file_picker.html`, `users/ui/js/user_avatar.js`, `calendar/ui/js/event_card.js`) and `base.html` composes them - that is what `core` is for.
 
 ## Infrastructure
 
@@ -912,11 +912,9 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 - `app_logo.html` - Application logo
 - `breadcrumbs.html` - Breadcrumb navigation
 - `comments.html` - comment thread (list + collapsed-until-focused composer + inline edit) backed by `commentsComponent()` from `common/static/ui/js/comments.js`. Params: `list_url` (collection endpoint; item endpoints are `<list_url>/<uuid>`), `current_user_id`, `can_comment`. Used by the files properties panel and the task panel - reuse it for any new commentable entity instead of copying the markup.
-- `navbar.html` - Navigation bar
 - `refresh_button.html` - Alpine-AJAX refresh button (spins while `loading` is truthy). Params: `url_expr`, `target`, optional `loading_expr` / `title` / `size`.
-- `user_avatar.html` - User avatar display
 - `user_chip.html` - removable avatar+name chip for "selected users" lists (guests, invitees, assignees, member pickers). Params are Alpine expression fragments: `user_id_expr`, `username_expr`, optional `remove_expr` (omit for read-only) and `remove_show_expr`. Never hand-roll this chip again - every hand-rolled copy has ended up with an off-center avatar.
-- `user_selector.html` / `group_selector.html` - search-as-you-type pickers dispatching a custom event on select (see the comment block at the top of each file for params)
+- `group_selector.html` - search-as-you-type group picker dispatching a custom event on select (see the comment block at the top of the file for params). Its user counterpart is `users/ui/partials/user_selector.html`, and the `<user-avatar>` element comes from `users/ui/js/user_avatar.js` - both loaded for every page by `base.html`
 
 ### File Actions
 

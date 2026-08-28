@@ -39,7 +39,7 @@ function loadSse({ hidden = false } = {}) {
     }
   }
 
-  loadScript('workspace/common/static/ui/js/sse.js', {
+  loadScript('workspace/core/static/core/js/sse.js', {
     EventSource: FakeEventSource,
     CustomEvent: class {
       constructor(type, init) {

@@ -4,10 +4,6 @@
 can import it without creating a cycle. ``core`` is the root: the app itself,
 free to import from every module. The rule is documented in CLAUDE.md
 ("core vs common"); this test makes the leaf half of it mechanical.
-
-``KNOWN_DEVIATIONS`` lists the files that still break the rule. It is a
-backlog, not a precedent: it may only shrink. A new deviation fails, and so
-does an entry that no longer deviates, so the list stays honest.
 """
 
 import ast
@@ -21,25 +17,6 @@ from django.test import SimpleTestCase
 import workspace.common
 
 COMMON_DIR = Path(workspace.common.__file__).parent
-
-# Paths relative to workspace/common. Move the file to the module it names
-# (or parametrize the reference) and delete the entry.
-KNOWN_DEVIATIONS = {
-    "static/ui/js/avatar.js",
-    "static/ui/js/card_popover.js",
-    "static/ui/js/command_palette_dropdown.js",
-    "static/ui/js/note_card.js",
-    "static/ui/js/sse.js",
-    "static/ui/js/stores.js",
-    "static/ui/js/theme_toggle.js",
-    "static/ui/js/timezone_suggest.js",
-    "static/ui/js/user_avatar.js",
-    "static/ui/js/user_selector.js",
-    "templates/ui/partials/activity_feed.html",
-    "templates/ui/partials/activity_page.html",
-    "templates/ui/partials/file_picker.html",
-    "templates/ui/partials/navbar.html",
-}
 
 
 def _workspace_apps():
@@ -136,21 +113,10 @@ class CommonIsALeafTests(SimpleTestCase):
             self.assertFalse((COMMON_DIR / filename).exists(), filename)
 
     def test_common_never_names_another_app(self):
-        found = _deviations()
-        new = {path: found[path] for path in found.keys() - KNOWN_DEVIATIONS}
         self.assertEqual(
-            new,
+            _deviations(),
             {},
             "workspace/common must not know about other apps - move the file "
             "to the module it names, or make the reference a parameter "
             "(see 'core vs common' in CLAUDE.md)",
-        )
-
-    def test_known_deviations_still_deviate(self):
-        stale = KNOWN_DEVIATIONS - _deviations().keys()
-        self.assertEqual(
-            stale,
-            set(),
-            "these entries no longer break the rule - remove them from "
-            "KNOWN_DEVIATIONS so the list stays a backlog",
         )

@@ -34,7 +34,7 @@
         x-data="commandPaletteDropdown()"
       >
         <!-- Search input trigger -->
-        {% include 'ui/partials/search/search_input.html' with input_class='input-sm hover:border-primary/30' show_kbd=True %}
+        {% include 'core/partials/search/search_input.html' with input_class='input-sm hover:border-primary/30' show_kbd=True %}
 
         <!-- Dropdown results -->
         <div
@@ -44,8 +44,8 @@
           class="absolute z-[100] mt-3 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
         >
           <!-- Quick actions & Search results -->
-          {% include 'ui/partials/search/quick_actions.html' %}
-          {% include 'ui/partials/search/search_results.html' %}
+          {% include 'core/partials/search/quick_actions.html' %}
+          {% include 'core/partials/search/search_results.html' %}
 
           <!-- Footer hints -->
           <div
@@ -100,7 +100,7 @@
         >
           <!-- Mobile search header -->
           <div class="px-3 py-2.5 border-b border-base-300 flex items-center gap-2">
-            {% include 'ui/partials/search/search_input.html' with on_escape='mobileSearchOpen = false' %}
+            {% include 'core/partials/search/search_input.html' with on_escape='mobileSearchOpen = false' %}
             <button
               @click="mobileSearchOpen = false"
               class="btn btn-ghost btn-circle btn-sm flex-shrink-0"
@@ -111,8 +111,8 @@
 
           <!-- Mobile search content -->
           <div class="flex-1 overflow-y-auto overscroll-contain">
-            {% include 'ui/partials/search/quick_actions.html' with on_click='mobileSearchOpen = false' %}
-            {% include 'ui/partials/search/search_results.html' with on_click='mobileSearchOpen = false' container_class='p-2' %}
+            {% include 'core/partials/search/quick_actions.html' with on_click='mobileSearchOpen = false' %}
+            {% include 'core/partials/search/search_results.html' with on_click='mobileSearchOpen = false' container_class='p-2' %}
           </div>
 
           <!-- Footer hints -->
@@ -162,7 +162,7 @@
           <i data-lucide="moon" class="w-5 h-5 text-info"></i>
         </div>
       </label>
-      {% include 'ui/partials/notifications.html' %}
+      {% include 'core/partials/notifications.html' %}
 
       <!-- User menu dropdown -->
       <div class="dropdown dropdown-end leading-[0]">
@@ -505,4 +505,4 @@
   </dialog>
 {% endif %}
 
-{% include 'ui/partials/search/command_palette_dropdown_scripts.html' %}
+{% include 'core/partials/search/command_palette_dropdown_scripts.html' %}

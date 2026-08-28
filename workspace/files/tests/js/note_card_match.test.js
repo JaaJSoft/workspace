@@ -2,7 +2,7 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-const ctx = loadScript('workspace/common/static/ui/js/note_card.js');
+const ctx = loadScript('workspace/files/ui/static/files/ui/js/note_card.js');
 
 test('extracts uuid from /notes?file=', () => {
   assert.equal(

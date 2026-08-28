@@ -70,7 +70,7 @@ readable while the panel is closed.
       >
         <div class="flex flex-col gap-1.5">
           <span class="text-xs font-medium text-base-content/60">Assignee</span>
-          {% include "ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" icon="users" %}
+          {% include "users/ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" icon="users" %}
           <div
             class="flex flex-wrap items-center gap-1.5"
             x-show="assigneeFilterChips().length"

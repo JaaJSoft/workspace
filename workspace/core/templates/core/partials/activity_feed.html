@@ -6,7 +6,7 @@
       x-merge="append"
     >
       {% for event in activity_events %}
-        {% include 'dashboard/partials/activity_item.html' %}
+        {% include 'core/partials/activity_item.html' %}
       {% endfor %}
     </ul>
     {% if activity_has_more %}

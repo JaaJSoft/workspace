@@ -111,7 +111,7 @@ urlpatterns = [
         serve,
         {
             "path": "sw.js",
-            "document_root": Path(__file__).resolve().parent / "common" / "static",
+            "document_root": Path(__file__).resolve().parent / "core" / "static",
         },
         name="service-worker",
     ),
@@ -121,7 +121,7 @@ urlpatterns = [
         serve,
         {
             "path": "manifest.json",
-            "document_root": Path(__file__).resolve().parent / "common" / "static",
+            "document_root": Path(__file__).resolve().parent / "core" / "static",
         },
         name="manifest",
     ),

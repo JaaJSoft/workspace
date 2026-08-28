@@ -99,7 +99,7 @@
           </template>
         </div>
         <div x-show="formUnassignedUsers().length">
-          {% include "ui/partials/user_selector.html" with on_select_event="modal-assignee-selected" placeholder="Add assignee..." local_source="formUnassignedUsers()" %}
+          {% include "users/ui/partials/user_selector.html" with on_select_event="modal-assignee-selected" placeholder="Add assignee..." local_source="formUnassignedUsers()" %}
         </div>
       </div>
       <div

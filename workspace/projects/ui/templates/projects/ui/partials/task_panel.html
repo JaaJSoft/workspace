@@ -264,7 +264,7 @@
           No assignees.
         </p>
         <div x-show="can('assign') && unassignedUsers().length" x-cloak>
-          {% include "ui/partials/user_selector.html" with on_select_event="panel-assignee-selected" placeholder="Add assignee..." local_source="unassignedUsers()" %}
+          {% include "users/ui/partials/user_selector.html" with on_select_event="panel-assignee-selected" placeholder="Add assignee..." local_source="unassignedUsers()" %}
         </div>
       </div>
     </section>
@@ -747,7 +747,7 @@
       </h3>
       <ul class="divide-y divide-base-200" x-show="sectionsOpen.activity">
         {% for event in panel_events %}
-          {% include "dashboard/partials/activity_item.html" with activity_hide_view=True %}
+          {% include "core/partials/activity_item.html" with activity_hide_view=True %}
         {% empty %}
           <li class="py-2 text-sm text-base-content/50 italic">No activity yet.</li>
         {% endfor %}

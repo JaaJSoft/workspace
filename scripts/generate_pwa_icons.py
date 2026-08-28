@@ -6,9 +6,9 @@ white Lucide "users" icon centered.
 Usage: npm install @resvg/resvg-js && python scripts/generate_pwa_icons.py
 
 Outputs:
-  workspace/common/static/icons/icon-192.png
-  workspace/common/static/icons/icon-512.png
-  workspace/common/static/icons/badge-72.png
+  workspace/core/static/icons/icon-192.png
+  workspace/core/static/icons/icon-512.png
+  workspace/core/static/icons/badge-72.png
 """
 
 import json
@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 OUTPUT_DIR = (
-    Path(__file__).resolve().parent.parent / "workspace" / "common" / "static" / "icons"
+    Path(__file__).resolve().parent.parent / "workspace" / "core" / "static" / "icons"
 )
 SCRIPT_DIR = Path(__file__).resolve().parent
 

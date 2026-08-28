@@ -31,7 +31,7 @@ function loadPresenceStore() {
     },
     body: { dataset: {} },
   };
-  loadScript('workspace/common/static/ui/js/stores.js', {
+  loadScript('workspace/core/static/core/js/stores.js', {
     Alpine,
     document,
     navigator: {},

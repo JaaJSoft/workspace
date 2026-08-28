@@ -1,4 +1,4 @@
-"""Helpers for WebRTC configuration (chat calls)."""
+"""ICE server configuration for chat calls."""
 
 import os
 

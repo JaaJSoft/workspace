@@ -2,13 +2,13 @@
 
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('./loader');
+const { loadScript } = require('../../../common/tests/js/loader');
 
 // sw.js reads self.location at module scope and registers four listeners at
 // load time. URL is a Node global rather than an ECMAScript intrinsic, so a
 // bare vm context does not have it.
 function loadServiceWorker() {
-  return loadScript('workspace/common/static/sw.js', {
+  return loadScript('workspace/core/static/sw.js', {
     URL,
     self: {
       location: 'https://example.test/sw.js?v=test',

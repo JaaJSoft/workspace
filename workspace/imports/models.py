@@ -43,12 +43,12 @@ class ImportConnection(models.Model):
         return f"{self.label} ({self.provider})"
 
     def set_secret(self, plaintext):
-        from workspace.core.encryption import encrypt
+        from workspace.common.encryption import encrypt
 
         self.secret_encrypted = encrypt(plaintext)
 
     def get_secret(self):
-        from workspace.core.encryption import decrypt
+        from workspace.common.encryption import decrypt
 
         if not self.secret_encrypted:
             return ""
@@ -57,14 +57,14 @@ class ImportConnection(models.Model):
     def set_oauth2_data(self, data):
         import orjson
 
-        from workspace.core.encryption import encrypt
+        from workspace.common.encryption import encrypt
 
         self.oauth2_data_encrypted = encrypt(orjson.dumps(data).decode())
 
     def get_oauth2_data(self):
         import orjson
 
-        from workspace.core.encryption import decrypt
+        from workspace.common.encryption import decrypt
 
         if not self.oauth2_data_encrypted:
             return None

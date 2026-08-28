@@ -786,7 +786,7 @@ class ActivityFeedViewTests(TestCase):
             HTTP_X_ALPINE_REQUEST="true",
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, "ui/partials/activity_feed.html")
+        self.assertTemplateUsed(resp, "core/partials/activity_feed.html")
 
     @patch("workspace.dashboard.views._get_activity_context")
     @patch("workspace.dashboard.views._build_dashboard_context")
@@ -807,7 +807,7 @@ class ActivityFeedViewTests(TestCase):
             HTTP_X_ALPINE_REQUEST="true",
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, "ui/partials/activity_page.html")
+        self.assertTemplateUsed(resp, "core/partials/activity_page.html")
 
     @patch("workspace.dashboard.views._build_dashboard_context")
     def test_source_param_sets_activity_tab(self, mock_ctx):

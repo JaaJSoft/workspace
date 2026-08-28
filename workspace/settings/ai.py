@@ -101,6 +101,17 @@ AI_TTS_LANGUAGES = env_list("AI_TTS_LANGUAGES") or [
 # [laughter] [sigh] [breath] [surprise-oh] [dissatisfaction-hnn] and omnivoice
 # almost none of them - so a deployment lists a tag only once it has heard it.
 AI_TTS_NONVERBAL_TAGS = env_list("AI_TTS_NONVERBAL_TAGS")
+# Speech-to-text for the voice messages a user sends a bot. The chat model has
+# no ears, so a recording only reaches it as the words this model heard in it.
+# An empty model disables the feature, and the bot is told a recording it
+# cannot listen to arrived - which is what it was told before this existed.
+# No language is configured here: the recognition model identifies it, unlike
+# the speech models above, which refuse one they do not know.
+AI_ASR_MODEL = os.getenv("AI_ASR_MODEL", "")
+AI_ASR_BASE_URL = os.getenv("AI_ASR_BASE_URL") or None
+AI_ASR_TIMEOUT = int(
+    os.getenv("AI_ASR_TIMEOUT", "120")
+)  # seconds per transcription; recognition runs far faster than real time
 # Recording a bot with no reference of its own is cloned from, and the exact
 # words it says. There is no other way to give it a voice - a bot reaching
 # synthesis with neither its own reference nor this one cannot speak, so a

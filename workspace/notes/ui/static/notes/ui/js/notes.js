@@ -175,7 +175,6 @@ window.notesApp = function notesApp(config) {
         loadingNotes: false,
         loadingMoreNotes: false,
         hasMoreNotes: false,
-        notesOffset: 0,
         // Bumped by every fresh load; an in-flight page whose generation no
         // longer matches belongs to a view the user has already left.
         _notesGeneration: 0,
@@ -535,7 +534,6 @@ window.notesApp = function notesApp(config) {
                 this.loadingMoreNotes = true;
             } else {
                 this.notes = [];
-                this.notesOffset = 0;
                 this.hasMoreNotes = false;
                 this.loadingNotes = true;
             }
@@ -549,7 +547,6 @@ window.notesApp = function notesApp(config) {
                     // only thing that knows whether a further page exists.
                     this.hasMoreNotes = resp.headers.get('X-Has-More') === 'true';
                     this.notes = append ? this._mergeNotes(this.notes, page) : page;
-                    this.notesOffset = this.notes.length;
                 }
             } finally {
                 if (generation === this._notesGeneration) {
@@ -568,7 +565,11 @@ window.notesApp = function notesApp(config) {
 
         async loadMoreNotes() {
             if (!this.hasMoreNotes || this.loadingNotes || this.loadingMoreNotes) return;
-            await this.loadNotes(this._buildNotesUrl(this.notesOffset), { append: true });
+            // Derived rather than tracked: deleting or inserting a note locally
+            // shortens the server's list by the same row, and a stale counter
+            // would step over the note that moved into the gap. Erring small
+            // only costs an overlap, which _mergeNotes drops.
+            await this.loadNotes(this._buildNotesUrl(this.notes.length), { append: true });
         },
 
         _setupNotesObserver() {
@@ -1407,7 +1408,7 @@ window.notesApp = function notesApp(config) {
             if (this.activeView === 'graph') return;
             // Reload every page the user had scrolled through, not just the
             // first: refetching one page would shrink the list under them.
-            const restore = Math.max(this.notesOffset, NOTES_PAGE_SIZE);
+            const restore = Math.max(this.notes.length, NOTES_PAGE_SIZE);
             await this.loadNotes(this._buildNotesUrl());
             while (this.hasMoreNotes && this.notes.length < restore) {
                 const before = this.notes.length;

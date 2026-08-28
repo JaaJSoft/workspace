@@ -211,3 +211,40 @@ test('resync gives up instead of spinning when a page fails to load', async () =
 
   assert.ok(calls < 10, `resync looped ${calls} times on a failing page`);
 });
+
+test('deleting a loaded note does not make the next page skip one', async () => {
+  const ctx = loadNotes();
+  const app = makeApp(ctx);
+  app.activeView = 'all';
+
+  ctx.fetch = () => page(['a', 'b', 'c'], true);
+  await app.loadNotes(app._buildNotesUrl());
+
+  // Any local removal - delete, unfavorite off the Favorites view, a move out
+  // of the current folder - shortens the list the server is also shorter by.
+  app.notes = app.notes.filter((n) => n.uuid !== 'b');
+
+  let requested = null;
+  ctx.fetch = (url) => { requested = url; return page(['d'], false); };
+  await app.loadMoreNotes();
+
+  assert.match(requested, /[?&]offset=2(&|$)/,
+    'the next page must resume at the number of notes actually held');
+});
+
+test('a locally added note shifts the next page by one as well', async () => {
+  const ctx = loadNotes();
+  const app = makeApp(ctx);
+  app.activeView = 'all';
+
+  ctx.fetch = () => page(['a', 'b'], true);
+  await app.loadNotes(app._buildNotesUrl());
+
+  app.notes.unshift({ uuid: 'new', name: 'new.md' });
+
+  let requested = null;
+  ctx.fetch = (url) => { requested = url; return page(['c'], false); };
+  await app.loadMoreNotes();
+
+  assert.match(requested, /[?&]offset=3(&|$)/);
+});

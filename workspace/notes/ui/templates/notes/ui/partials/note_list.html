@@ -167,7 +167,12 @@
     so it is there to observe before the first page arrives. The button is the
     fallback when IntersectionObserver is missing or a page failed to load.
   {% endcomment %}
-  <div x-ref="notesSentinel" x-show="hasMoreNotes" x-cloak class="p-3 text-center">
+  <div
+    x-ref="notesSentinel"
+    x-show="hasMoreNotes"
+    x-cloak
+    class="p-3 text-center"
+  >
     <span
       x-show="loadingMoreNotes"
       class="loading loading-spinner loading-sm text-base-content/40"

@@ -579,8 +579,11 @@ const ROWS = [
   { uuid: 'v-2', encrypted_name: 'AQ', metadata_sig: 'AQ', wrapped_key: 'AQ', is_favorite: true },
 ];
 
+// The set the registry really answers with, so the harness cannot drift from
+// workspace/vault/actions/vault.py without a test noticing.
 const OWNER_ACTIONS = [
   { id: 'rename', label: 'Rename', icon: 'pencil', category: 'edit', css_class: '', bulk: false },
+  { id: 'set_appearance', label: 'Icon and colour', icon: 'palette', category: 'edit', css_class: '', bulk: false },
   { id: 'favorite', label: 'Add to favourites', icon: 'star', category: 'organize', css_class: '', bulk: false },
   { id: 'unfavorite', label: 'Remove from favourites', icon: 'star-off', category: 'organize', css_class: '', bulk: false },
   { id: 'delete', label: 'Delete vault', icon: 'trash-2', category: 'danger', css_class: 'text-error', bulk: false },
@@ -604,7 +607,7 @@ test('the menu of a vault is what the endpoint answered, never a fixed list', as
   await component.loadVaults();
   assert.deepStrictEqual(
     Array.from(component.actionsFor(component.vaults[0]).map((a) => a.id)),
-    ['rename', 'favorite', 'delete'],
+    ['rename', 'set_appearance', 'favorite', 'delete'],
   );
 });
 
@@ -722,4 +725,64 @@ test('a refused confirmation deletes nothing', async () => {
   await component.loadVaults();
   await component.runVaultAction({ id: 'delete' }, component.vaults[0]);
   assert.deepStrictEqual(Array.from(deleted), []);
+});
+
+test('rename opens a dialog rather than writing straight away', async () => {
+  const sent = [];
+  const component = listing({ updateVault: async (u, b) => { sent.push(b); return {}; } });
+  await component.loadVaults();
+  await component.runVaultAction({ id: 'rename' }, component.vaults[0]);
+  assert.equal(component.vaultDialog.mode, 'rename');
+  assert.equal(component.vaultDialog.name, 'Personal');
+  assert.deepStrictEqual(Array.from(sent), []);
+});
+
+test('saving the dialog re-signs the vault under its new name', async () => {
+  const sent = [];
+  const component = listing({ updateVault: async (u, b) => { sent.push([u, b]); return {}; } });
+  await component.loadVaults();
+  await component.runVaultAction({ id: 'rename' }, component.vaults[0]);
+  component.vaultDialog.name = 'Archives';
+  await component.saveVaultDialog();
+  assert.equal(sent[0][0], 'v-1');
+  assert.ok(sent[0][1].metadata_sig);
+  assert.equal(component.vaultDialog, null);
+});
+
+test('an empty name saves nothing', async () => {
+  // A vault with no name is one the user cannot tell apart from another.
+  const sent = [];
+  const component = listing({ updateVault: async (u, b) => { sent.push(b); return {}; } });
+  await component.loadVaults();
+  await component.runVaultAction({ id: 'rename' }, component.vaults[0]);
+  component.vaultDialog.name = '   ';
+  await component.saveVaultDialog();
+  assert.deepStrictEqual(Array.from(sent), []);
+  assert.notEqual(component.vaultDialog, null);
+});
+
+test('the appearance dialog stores the role name, not the css class', async () => {
+  // The picker's markup works in classes; the vault's signed metadata holds
+  // the role. Converting on the way out is what lets the shared partial be
+  // reused without widening what the server accepts.
+  const sent = [];
+  const component = listing({ updateVault: async (u, b) => { sent.push(b); return {}; } });
+  await component.loadVaults();
+  await component.runVaultAction({ id: 'set_appearance' }, component.vaults[0]);
+  component.selectColor('text-success');
+  component.selectIcon('briefcase');
+  await component.saveVaultDialog();
+  assert.equal(sent[0].color, 'success');
+  assert.equal(sent[0].icon, 'briefcase');
+});
+
+test('a locked session closes the dialog and writes nothing', async () => {
+  const sent = [];
+  const component = listing({ updateVault: async (u, b) => { sent.push(b); return {}; } });
+  await component.loadVaults();
+  await component.runVaultAction({ id: 'rename' }, component.vaults[0]);
+  component.vaultDialog.name = 'Archives';
+  component.closeVaultDialog();
+  await component.saveVaultDialog();
+  assert.deepStrictEqual(Array.from(sent), []);
 });

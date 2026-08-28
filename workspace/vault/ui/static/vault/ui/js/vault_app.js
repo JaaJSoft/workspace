@@ -3,6 +3,20 @@
 // hundred milliseconds by design - an unexplained wait on a login form reads
 // as broken, so the screen says what is happening instead of just spinning.
 
+// The swatches the vault offers. Not ICON_PICKER_COLORS: that list is written
+// in full CSS classes, two of which the vault's colour column refuses, and the
+// signed metadata holds a bare daisyUI role rather than a class.
+window.VAULT_COLOR_SWATCHES = [
+  { name: 'Primary', class: 'text-primary' },
+  { name: 'Secondary', class: 'text-secondary' },
+  { name: 'Accent', class: 'text-accent' },
+  { name: 'Info', class: 'text-info' },
+  { name: 'Success', class: 'text-success' },
+  { name: 'Warning', class: 'text-warning' },
+  { name: 'Error', class: 'text-error' },
+  { name: 'Neutral', class: 'text-neutral' },
+];
+
 window.vaultApp = (function () {
   // The message a wrong password gets must say the check happened locally:
   // no request carries the password, so there is nothing for the user to
@@ -90,6 +104,15 @@ window.vaultApp = (function () {
       // is never computed here: a rule copied into the client is a rule that
       // drifts from the endpoint enforcing it.
       vaultActions: {},
+      // { vault, mode, name, icon, color } while a rename or an appearance
+      // change is open, null otherwise.
+      vaultDialog: null,
+      // Read by ui/partials/icon_picker.html, which renders against whatever
+      // component it is included in.
+      icons: [],
+      colors: [],
+      selectedIcon: 'lock',
+      selectedColor: 'text-primary',
       // Two listings can be in flight at once - a refresh landing on a slow
       // one - and the slower answer must not describe rows that left the
       // screen. Only the newest generation is allowed to write.
@@ -97,6 +120,8 @@ window.vaultApp = (function () {
       openMenuFor: null,
 
       init: function () {
+        this.icons = window.ICON_PICKER_ICONS || [];
+        this.colors = window.VAULT_COLOR_SWATCHES || [];
         const remembered = window.vaultSession.rememberedSecret();
         if (remembered) {
           this.secretText = remembered;
@@ -109,6 +134,7 @@ window.vaultApp = (function () {
           self.vaults = [];
           self.vaultActions = {};
           self.openMenuFor = null;
+          self.vaultDialog = null;
           self.state = 'locked';
           // showCreate has to go with the name: the dialog lives inside the
           // unlocked subtree, so a lock hides it without closing it, and the
@@ -273,12 +299,15 @@ window.vaultApp = (function () {
           return;
         }
 
+        if (action.id === 'rename' || action.id === 'set_appearance') {
+          this.openVaultDialog(action.id, vault);
+          return;
+        }
+
         const changes = {
           favorite: { is_favorite: true },
           unfavorite: { is_favorite: false },
         }[action.id];
-        // rename and set_appearance open a dialog rather than write here;
-        // they are wired with that dialog.
         if (!changes) return;
 
         try {
@@ -342,6 +371,57 @@ window.vaultApp = (function () {
           } else {
             this.error = 'The vault could not be created. Try again.';
           }
+        } finally {
+          this.busy = false;
+        }
+      },
+
+      openVaultDialog: function (mode, vault) {
+        this.vaultDialog = { vault: vault, mode: mode, name: vault.name };
+        // The picker's markup works in CSS classes; the signed metadata holds
+        // the bare role. Converting at the edges is what lets the shared
+        // partial be reused without widening what the server accepts.
+        this.selectedIcon = vault.icon || 'lock';
+        this.selectedColor = 'text-' + (vault.color || 'primary');
+      },
+
+      closeVaultDialog: function () {
+        this.vaultDialog = null;
+      },
+
+      // Named as the shared icon-picker markup expects, so ui/partials/
+      // icon_picker.html renders against this component unchanged.
+      selectIcon: function (icon) {
+        this.selectedIcon = icon;
+      },
+
+      selectColor: function (colorClass) {
+        this.selectedColor = colorClass;
+      },
+
+      saveVaultDialog: async function () {
+        const dialog = this.vaultDialog;
+        if (!dialog) return;
+        const name = (dialog.name || '').trim();
+        // A vault with no name is one the user cannot tell from another.
+        if (!name) return;
+        this.busy = true;
+        try {
+          const body = await window.buildVaultUpdateRequest(
+            window.vaultSession,
+            dialog.vault,
+            {
+              name: name,
+              icon: this.selectedIcon,
+              color: String(this.selectedColor).replace(/^text-/, ''),
+            }
+          );
+          await window.vaultApi.updateVault(dialog.vault.uuid, body);
+          this.closeVaultDialog();
+          await this.loadVaults();
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That change could not be saved. Try again.';
         } finally {
           this.busy = false;
         }

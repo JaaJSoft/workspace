@@ -134,6 +134,10 @@ window.notesPreferences = function notesPreferences() {
 };
 
 // ── Notes App ────────────────────────────────────────────
+// Rows per request. The list is not virtualized, so this also caps how
+// much DOM one scroll step adds.
+const NOTES_PAGE_SIZE = 100;
+
 window.notesApp = function notesApp(config) {
     config = config || {};
     const prefs = window._notesPrefsCache;
@@ -169,6 +173,11 @@ window.notesApp = function notesApp(config) {
         // Note list
         notes: [],
         loadingNotes: false,
+        loadingMoreNotes: false,
+        hasMoreNotes: false,
+        // Bumped by every fresh load; an in-flight page whose generation no
+        // longer matches belongs to a view the user has already left.
+        _notesGeneration: 0,
         togglingFavorite: false,
 
         // Filters
@@ -267,6 +276,8 @@ window.notesApp = function notesApp(config) {
             } else {
                 await this.setView(initialView, config.id, null, true);
             }
+
+            this.$nextTick(function() { this._setupNotesObserver(); }.bind(this));
 
             // Auto-open note if specified
             if (config.file) {
@@ -516,14 +527,68 @@ window.notesApp = function notesApp(config) {
             }
         },
 
-        async loadNotes(url) {
-            this.notes = [];
-            this.loadingNotes = true;
-            const resp = await fetch(url);
-            if (resp.ok) {
-                this.notes = await resp.json();
+        async loadNotes(url, options) {
+            const append = !!(options && options.append);
+            const generation = append ? this._notesGeneration : ++this._notesGeneration;
+            if (append) {
+                this.loadingMoreNotes = true;
+            } else {
+                this.notes = [];
+                this.hasMoreNotes = false;
+                this.loadingNotes = true;
             }
-            this.loadingNotes = false;
+            try {
+                const resp = await fetch(url);
+                if (generation !== this._notesGeneration) return;
+                if (resp.ok) {
+                    const page = await resp.json();
+                    if (generation !== this._notesGeneration) return;
+                    // The endpoint answers a bare array, so the header is the
+                    // only thing that knows whether a further page exists.
+                    this.hasMoreNotes = resp.headers.get('X-Has-More') === 'true';
+                    this.notes = append ? this._mergeNotes(this.notes, page) : page;
+                }
+            } finally {
+                if (generation === this._notesGeneration) {
+                    this.loadingNotes = false;
+                    this.loadingMoreNotes = false;
+                }
+            }
+        },
+
+        // A note created between two pages shifts the window, so the next
+        // page can legitimately repeat a row the list already holds.
+        _mergeNotes(current, page) {
+            const seen = new Set(current.map(function(n) { return n.uuid; }));
+            return current.concat(page.filter(function(n) { return !seen.has(n.uuid); }));
+        },
+
+        async loadMoreNotes() {
+            if (!this.hasMoreNotes || this.loadingNotes || this.loadingMoreNotes) return;
+            // Derived rather than tracked: deleting or inserting a note locally
+            // shortens the server's list by the same row, and a stale counter
+            // would step over the note that moved into the gap. Erring small
+            // only costs an overlap, which _mergeNotes drops.
+            await this.loadNotes(this._buildNotesUrl(this.notes.length), { append: true });
+        },
+
+        _setupNotesObserver() {
+            if (this._notesObserver) return;
+            // No IntersectionObserver: the fallback button in the template is
+            // the only way to page, and it stays visible for that reason.
+            if (typeof IntersectionObserver === 'undefined') return;
+            const sentinel = this.$refs.notesSentinel;
+            if (!sentinel) return;
+
+            this._notesObserver = new IntersectionObserver(function(entries) {
+                for (const entry of entries) {
+                    // loadMoreNotes() guards on its own state, so the observer
+                    // is free to fire on every scroll tick.
+                    if (entry.isIntersecting) this.loadMoreNotes();
+                }
+            }.bind(this), { root: sentinel.parentElement, rootMargin: '300px 0px', threshold: 0 });
+
+            this._notesObserver.observe(sentinel);
         },
 
         _openGraph() {
@@ -1264,7 +1329,7 @@ window.notesApp = function notesApp(config) {
 
         // ── Helpers ─────────────────────────────────────────
 
-        _buildNotesUrl() {
+        _buildNotesUrl(offset) {
             const sort = '&ordering=' + this._sortParam();
             let base = '/api/v1/files?type=markdown';
             const hasSearch = this.filters.search.trim();
@@ -1280,16 +1345,16 @@ window.notesApp = function notesApp(config) {
                     }
                 } else if (!hasSearch) {
                     // Prefs not ready: fall back to the legacy "all markdown" list.
-                    base += '&recent=1&recent_limit=200';
+                    base += '&recent=1';
                 }
                 base += sort;
             } else if (this.activeView === 'favorites') {
                 base += '&favorites=1' + sort;
             } else if (this.activeView === 'recent') {
-                if (!hasSearch) base += '&recent=1&recent_limit=50';
+                if (!hasSearch) base += '&recent=1';
                 base += sort;
             } else if (this.activeView === 'tag') {
-                if (!hasSearch) base += '&recent=1&recent_limit=200';
+                if (!hasSearch) base += '&recent=1';
                 base += '&tags=' + this.activeId + sort;
             } else if (this.activeView === 'folder' || this.activeView === 'group_folder') {
                 base += '&parent=' + this.activeId + sort;
@@ -1297,9 +1362,11 @@ window.notesApp = function notesApp(config) {
             } else if (this.activeView === 'journal') {
                 base += '&parent=' + this.activeId + '&ordering=-name';
             } else {
-                if (!hasSearch) base += '&recent=1&recent_limit=200';
+                if (!hasSearch) base += '&recent=1';
                 base += sort;
             }
+
+            base += '&limit=' + NOTES_PAGE_SIZE + '&offset=' + (offset || 0);
 
             // Append filter params
             if (hasSearch) {
@@ -1335,10 +1402,21 @@ window.notesApp = function notesApp(config) {
             this.loadNotes(this._buildNotesUrl());
         },
 
-        resync() {
+        async resync() {
             this.refreshSidebar();
             // The graph owns its own data and is not driven by loadNotes().
-            if (this.activeView !== 'graph') this.loadNotes(this._buildNotesUrl());
+            if (this.activeView === 'graph') return;
+            // Reload every page the user had scrolled through, not just the
+            // first: refetching one page would shrink the list under them.
+            const restore = Math.max(this.notes.length, NOTES_PAGE_SIZE);
+            await this.loadNotes(this._buildNotesUrl());
+            while (this.hasMoreNotes && this.notes.length < restore) {
+                const before = this.notes.length;
+                await this.loadMoreNotes();
+                // A failed page leaves hasMoreNotes true and the list the same
+                // length, which would spin here forever.
+                if (this.notes.length === before) break;
+            }
         },
 
         toggleFilter(name) {
@@ -1433,6 +1511,10 @@ window.notesApp = function notesApp(config) {
 
         destroy() {
             this.teardownViewerPanel();
+            if (this._notesObserver) {
+                this._notesObserver.disconnect();
+                this._notesObserver = null;
+            }
         },
     };
 };

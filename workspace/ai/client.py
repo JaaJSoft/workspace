@@ -48,6 +48,26 @@ def get_speech_client() -> OpenAI | None:
     )
 
 
+def get_transcription_client() -> OpenAI | None:
+    """Return an OpenAI client configured for speech recognition.
+
+    Built without an API key when none is set, for the same reason as
+    ``get_speech_client``: the speech server authenticates nothing.
+
+    Retries are left off because a failed transcription costs nothing - the
+    text is not stored, so the next turn of the conversation asks again.
+    """
+    base_url = settings.AI_ASR_BASE_URL or settings.AI_BASE_URL
+    if not base_url:
+        return None
+    return OpenAI(
+        api_key=settings.AI_API_KEY or "unused",
+        base_url=base_url,
+        timeout=settings.AI_ASR_TIMEOUT,
+        max_retries=0,
+    )
+
+
 def is_ai_enabled() -> bool:
     """Check whether AI features are available."""
     return bool(settings.AI_API_KEY)

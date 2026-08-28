@@ -437,6 +437,76 @@ class VoiceMessageHistoryTests(TestCase):
         self.assertEqual(note[0]["role"], "user")
         self.assertIn("cannot listen", note[0]["content"])
 
+    @override_settings(
+        AI_ASR_MODEL="test-listen-model",
+        AI_ASR_BASE_URL="https://speech.test/v1/",
+    )
+    @patch("workspace.ai.services.transcription.ai_transcribe_audio")
+    def test_user_voice_message_reaches_the_model_as_what_was_said(self, listen):
+        listen.return_value = "Tu peux me rappeler demain ?"
+        m = Message.objects.create(conversation=self.conv, author=self.user, body="")
+        attach_voice(m)
+
+        note = [
+            e
+            for e in self._history()
+            if "Voice message from the user" in str(e.get("content", ""))
+        ]
+
+        self.assertEqual(len(note), 1)
+        self.assertEqual(note[0]["role"], "user")
+        self.assertIn("Tu peux me rappeler demain ?", note[0]["content"])
+        self.assertNotIn("cannot listen", note[0]["content"])
+
+    @override_settings(
+        AI_ASR_MODEL="test-listen-model",
+        AI_ASR_BASE_URL="https://speech.test/v1/",
+    )
+    @patch("workspace.ai.services.transcription.ai_transcribe_audio")
+    def test_a_recording_is_transcribed_once_and_replayed_afterwards(self, listen):
+        # Every later turn rebuilds the same history; paying the backend
+        # again for a recording that has not changed is pure waste.
+        listen.return_value = "Bonjour Pierre."
+        m = Message.objects.create(conversation=self.conv, author=self.user, body="")
+        att = attach_voice(m)
+
+        self._history()
+        att.refresh_from_db()
+        self.assertEqual(att.ai_description, "Bonjour Pierre.")
+
+        self._history()
+        self.assertEqual(listen.call_count, 1)
+
+    @override_settings(
+        AI_ASR_MODEL="test-listen-model",
+        AI_ASR_BASE_URL="https://speech.test/v1/",
+    )
+    @patch("workspace.ai.services.transcription.ai_transcribe_audio")
+    def test_a_failed_transcription_falls_back_to_the_old_announcement(self, listen):
+        # Nothing is stored, so the next turn asks the backend again.
+        listen.return_value = ""
+        m = Message.objects.create(conversation=self.conv, author=self.user, body="")
+        att = attach_voice(m)
+
+        note = [
+            e
+            for e in self._history()
+            if "voice message" in str(e.get("content", "")).lower()
+        ]
+
+        self.assertIn("cannot listen", note[0]["content"])
+        att.refresh_from_db()
+        self.assertEqual(att.ai_description, "")
+
+    @patch("workspace.ai.services.transcription.ai_transcribe_audio")
+    def test_an_unconfigured_deployment_never_calls_the_backend(self, listen):
+        m = Message.objects.create(conversation=self.conv, author=self.user, body="")
+        attach_voice(m)
+
+        self._history()
+
+        listen.assert_not_called()
+
     def test_a_non_vision_bot_still_hears_about_voice_messages(self):
         # Voice notes are not vision: a bot with images turned off must
         # still know it already answered out loud.

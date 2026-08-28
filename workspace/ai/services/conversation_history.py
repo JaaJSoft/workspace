@@ -81,22 +81,66 @@ def _image_note(att):
     return f"[image: {att.original_name} - {att.ai_description}]"
 
 
+def _heard_in(att):
+    """What the user's recording says, transcribed once and stored on it.
+
+    Empty when the deployment configures no recognition model, when the blob
+    is gone, or when the backend failed. Nothing is stored in those cases, so
+    the next turn of the conversation asks again.
+    """
+    if att.ai_description:
+        return att.ai_description
+
+    from workspace.ai.services.transcription import (
+        ai_transcribe_audio,
+        is_transcription_enabled,
+    )
+
+    if not is_transcription_enabled():
+        return ""
+    try:
+        with att.file.open("rb") as recording:
+            data = recording.read()
+    except (FileNotFoundError, OSError) as exc:
+        logger.warning(
+            "Unreadable voice message %s: %s", scrub(att.file.name), scrub(str(exc))
+        )
+        return ""
+    if not data:
+        return ""
+
+    text = ai_transcribe_audio(data)
+    if text:
+        from workspace.chat.models import MessageAttachment
+
+        MessageAttachment.objects.filter(uuid=att.uuid).update(ai_description=text)
+    return text
+
+
 def _audio_notes(atts, is_bot):
     """Textual stand-ins for the voice messages of one chat message.
 
     Audio never reaches the model - the chat model has no ears. What the bot
     said out loud is replayed from the text the speech tool stored on the
-    attachment, so it does not repeat itself; a voice message from the user
-    is only announced, since nothing transcribes it yet and silence would
-    read as an empty message.
+    attachment, so it does not repeat itself; what the user said is replayed
+    from the recognition model, and only announced when there is none, since
+    silence would read as an empty message.
+
+    The note says the words were transcribed rather than typed: a bot that
+    knows it was spoken to can answer out loud, and can ask again about a
+    word the recognition got wrong instead of answering the wrong question.
     """
     notes = []
     for att in atts:
         if not att.is_audio:
             continue
         if not is_bot:
+            heard = _heard_in(att)
             notes.append(
-                "[The user sent a voice message. You cannot listen to it — "
+                f"[Voice message from the user, transcribed automatically "
+                f'(a word may be wrong): "{heard}"]'
+                if heard
+                else "[The user sent a voice message. You cannot listen to it — "
                 "say so if it matters.]"
             )
         elif att.ai_description:

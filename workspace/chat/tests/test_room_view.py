@@ -89,6 +89,16 @@ class ChatRoomViewTests(TestCase):
         usernames = {mbr["user"]["username"] for mbr in members}
         self.assertIn("other_member", usernames)
 
+    def test_room_page_loads_the_message_shell(self):
+        """Regression: the room reuses conversation_pane.html, whose messages are
+        server-rendered as <chat-message-group> shells with slotted children. The
+        bubble chrome - avatar column, bubble colours, author line, footer - is
+        built by message_shell.js; without it the element never upgrades and every
+        message renders as bare text."""
+        self.client.force_login(self.member)
+        resp = self.client.get(self._url())
+        self.assertIn("chat/ui/js/message_shell.js", resp.content.decode())
+
 
 class RoomTitleMatchesTheSidebarTests(TestCase):
     """The room heading and the sidebar row must name a conversation alike.

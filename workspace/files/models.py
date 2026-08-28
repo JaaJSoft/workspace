@@ -89,6 +89,15 @@ class File(models.Model):
 
     has_thumbnail = models.BooleanField(default=False)
 
+    # Key the SQLite full-text index is built on (see DerivedFulltextIndex).
+    # FTS5 rowids are integers and the index cannot be rebuilt from the
+    # database, so it cannot ride on the implicit rowid: Django rebuilds this
+    # table on any AddField and SQLite reassigns those. Derived from the uuid
+    # by the indexing task, unused on PostgreSQL.
+    fts_rowid = models.BigIntegerField(
+        null=True, blank=True, unique=True, editable=False
+    )
+
     # Folder customization
     icon = models.CharField(
         max_length=50,
@@ -603,6 +612,20 @@ def delete_file_on_delete(sender, instance, **kwargs):
     from workspace.files.services._storage_ops import delete_node_storage
 
     delete_node_storage(instance)
+
+
+@receiver(pre_delete, sender=File)
+def unindex_file_on_delete(sender, instance, **kwargs):
+    """Drop the file's search document before its row goes away.
+
+    pre_delete rather than post_delete: on SQLite the contentless FTS5 table
+    is keyed on the base row's rowid, which is only resolvable while the row
+    still exists. Runs on queryset and cascade deletes for the same reason as
+    the storage cleanup above.
+    """
+    from workspace.files.services.search_index import unindex_file
+
+    unindex_file(instance)
 
 
 @receiver(pre_delete, sender="auth.Group")

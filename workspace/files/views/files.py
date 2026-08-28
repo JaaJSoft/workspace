@@ -18,13 +18,13 @@ from drf_spectacular.utils import (
 )
 from rest_framework import status, viewsets
 from rest_framework.exceptions import ValidationError
-from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
 from workspace.common.booleans import is_truthy
 from workspace.common.filters import CaseInsensitiveOrderingFilter
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.files.filters import FileSearchFilter
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.content_hash import find_duplicates
 from workspace.notifications.services.notifications import notify, notify_many
@@ -128,7 +128,10 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, "RECENT_FILES_MAX_LIMIT", 200)
             OpenApiParameter(
                 name="search",
                 type=OpenApiTypes.STR,
-                description="Search in name or type.",
+                description=(
+                    "Full-text search over file names and, for text "
+                    "formats, file contents."
+                ),
             ),
             OpenApiParameter(
                 name="ordering",
@@ -268,14 +271,20 @@ class FileViewSet(
     serializer_class = FileSerializer
     pagination_class = None
     lookup_field = "uuid"
-    filter_backends = [DjangoFilterBackend, SearchFilter, CaseInsensitiveOrderingFilter]
+    # FileSearchFilter comes after the ordering filter on purpose: it sorts by
+    # relevance, and the ordering filter would otherwise re-apply the view's
+    # default ordering on top of it.
+    filter_backends = [
+        DjangoFilterBackend,
+        CaseInsensitiveOrderingFilter,
+        FileSearchFilter,
+    ]
     filterset_fields = {
         "node_type": ["exact"],
         "parent": ["exact"],
         "owner": ["exact"],
         "type": ["exact"],
     }
-    search_fields = ["name", "type"]
     ordering_fields = ["name", "created_at", "updated_at", "size"]
     ordering_case_insensitive_fields = ["name"]
     ordering = ["node_type", Lower("name")]

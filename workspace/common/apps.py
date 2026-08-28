@@ -7,7 +7,12 @@ class CommonConfig(AppConfig):
     name = "workspace.common"
 
     def ready(self):
+        from django.core.checks import register
+
+        from workspace.common.search.checks import check_sqlite_fts_support
         from workspace.common.search.schema import rebuild_sqlite_fts_indexes
+
+        register(check_sqlite_fts_support)
 
         # Django emits every post_migrate signal at the end of the whole
         # migrate command, so this single hookup runs after all apps'

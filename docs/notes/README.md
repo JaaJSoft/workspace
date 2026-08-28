@@ -14,7 +14,7 @@ A Markdown-based note-taking module with journal mode, folders, tags, and full-t
 - **Tags** - Tag notes for cross-folder organization
 - **Favorites** - Star notes for quick access
 - **Recent** - Track recently opened notes
-- **Search** - Full-text search across all notes
+- **Search** - Full-text search across note titles and note contents
 - **Quick Access sidebar** - All notes, favorites, recent, and journal in one place
 - **Preferences** - Choose default and journal folder locations
 

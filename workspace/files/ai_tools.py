@@ -17,7 +17,7 @@ class ReadFileParams(BaseModel):
     uuid: uuid_mod.UUID = Field(description="The UUID of the file to read.")
 
 
-class SearchFilesParams(BaseModel):
+class SearchFilenamesParams(BaseModel):
     query: str = Field(description="The search term to look for in file names.")
     file_type: str = Field(default="", description="Filter by type: file or folder.")
 
@@ -33,7 +33,7 @@ class FilesToolProvider(ToolProvider):
     )
     def read_file(self, args, user, bot, conversation_id, context):
         """Read the content of a file by its UUID. Supports text files (returns text) and images (returns the image). \
-Call this after finding a file via search_files to get its content, \
+Call this after finding a file via search_filenames or search_everything to get its content, \
 or when the user asks to read, open, view, or see a specific file."""
         from workspace.files.models import File
         from workspace.files.services import FileService
@@ -68,13 +68,15 @@ or when the user asks to read, open, view, or see a specific file."""
         badge_label="Searched files",
         badge_running_label="Searching files",
         detail_key="query",
-        params=SearchFilesParams,
+        params=SearchFilenamesParams,
         concurrent=True,
     )
-    def search_files(self, args, user, bot, conversation_id, context):
-        """Search through your files and folders by name. \
+    def search_filenames(self, args, user, bot, conversation_id, context):
+        """Search your files and folders by NAME only - it does not look inside them. \
 Returns up to 20 matches with name, type, and parent folder. \
-Call this when the user asks to find, look up, or locate a file or folder. \
+Call this when the user names the file they are after ("open my budget spreadsheet"). \
+When they describe what is written inside instead ("the note about the catamaran"), \
+call search_everything, which searches file contents too. \
 Use read_file with the returned UUID to get the content."""
         query = args.query.strip()
         if not query:

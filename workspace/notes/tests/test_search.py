@@ -1,51 +1,54 @@
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from django.db import connection
 from django.test import TestCase
 
+from workspace.common.search import fts5_available
 from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.files.models import File
+from workspace.files.services.search_index import index_file
 from workspace.notes.search import search_notes
 
 User = get_user_model()
 
 
 class SearchNotesTests(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.alice = User.objects.create_user(username="alice", password="pass")
-        cls.bob = User.objects.create_user(username="bob", password="pass")
+    """Search reads the full-text index, which the indexing task writes.
+
+    Nothing dispatches that task here (Celery is not eager under test), so
+    every fixture indexes itself explicitly - the same thing the backfill
+    command does for an existing install.
+    """
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="pass")
+        self.bob = User.objects.create_user(username="bob", password="pass")
 
         # Alice's parent folder (used as a tag on search results).
-        cls.folder = File.objects.create(
-            owner=cls.alice,
-            name="Daily",
-            node_type=File.NodeType.FOLDER,
+        self.folder = self._note(self.alice, "Daily", folder=True)
+        self.alice_note = self._note(
+            self.alice,
+            "Meeting Notes",
+            parent=self.folder,
+            body=b"Discussed the kraken migration plan.",
         )
+        self.alice_orphan_note = self._note(self.alice, "Grocery List")
+        self.alice_non_md = self._note(
+            self.alice, "Notes Screenshot.png", mime="image/png"
+        )
+        self.bob_note = self._note(self.bob, "Bob Secret Notes")
 
-        cls.alice_note = File.objects.create(
-            owner=cls.alice,
-            parent=cls.folder,
-            name="Meeting Notes",
-            node_type=File.NodeType.FILE,
-            mime_type="text/markdown",
+    def _note(self, owner, name, *, parent=None, folder=False, mime=None, body=None):
+        file_obj = File.objects.create(
+            owner=owner,
+            parent=parent,
+            name=name,
+            node_type=File.NodeType.FOLDER if folder else File.NodeType.FILE,
+            mime_type=None if folder else (mime or "text/markdown"),
+            content=ContentFile(body, name=name) if body else None,
         )
-        cls.alice_orphan_note = File.objects.create(
-            owner=cls.alice,
-            name="Grocery List",
-            node_type=File.NodeType.FILE,
-            mime_type="text/markdown",
-        )
-        cls.alice_non_md = File.objects.create(
-            owner=cls.alice,
-            name="Notes Screenshot.png",
-            node_type=File.NodeType.FILE,
-            mime_type="image/png",
-        )
-        cls.bob_note = File.objects.create(
-            owner=cls.bob,
-            name="Bob Secret Notes",
-            node_type=File.NodeType.FILE,
-            mime_type="text/markdown",
-        )
+        index_file(file_obj)
+        return file_obj
 
     def test_returns_markdown_notes_matching_query(self):
         results = search_notes("meeting", self.alice, limit=10)
@@ -84,22 +87,37 @@ class SearchNotesTests(TestCase):
         self.assertEqual(results, [])
 
     def test_limit_is_respected(self):
-        # Create enough markdown notes to exceed the limit.
         for i in range(5):
-            File.objects.create(
-                owner=self.alice,
-                name=f"Bulk Note {i}",
-                node_type=File.NodeType.FILE,
-                mime_type="text/markdown",
-            )
+            self._note(self.alice, f"Bulk Note {i}")
         results = search_notes("bulk", self.alice, limit=3)
         self.assertEqual(len(results), 3)
 
-    def test_empty_query_returns_all_markdown_notes_within_limit(self):
-        # Empty string is treated as icontains='' which matches everything.
-        results = search_notes("", self.alice, limit=10)
-        names = {r.name for r in results}
-        self.assertIn("Meeting Notes", names)
-        self.assertIn("Grocery List", names)
-        self.assertNotIn("Notes Screenshot.png", names)
-        self.assertNotIn("Bob Secret Notes", names)
+    def test_empty_query_returns_nothing(self):
+        # A blank query matches no lexeme. The user-facing entry point
+        # (core.services.search) refuses queries shorter than 2 chars anyway.
+        self.assertEqual(search_notes("", self.alice, limit=10), [])
+        self.assertEqual(search_notes("   ", self.alice, limit=10), [])
+
+    def test_a_phrase_only_in_the_body_finds_the_note(self):
+        if connection.vendor != "sqlite" or not fts5_available():
+            self.skipTest("SQLite + FTS5 required")
+        results = search_notes("kraken", self.alice, limit=10)
+        self.assertEqual([r.name for r in results], ["Meeting Notes"])
+        self.assertEqual(results[0].match_type, "content")
+
+    def test_name_search_is_accent_insensitive(self):
+        if connection.vendor != "sqlite" or not fts5_available():
+            self.skipTest("SQLite + FTS5 required")
+        self._note(self.alice, "Réunion trimestrielle")
+        results = search_notes("reunion", self.alice, limit=10)
+        self.assertEqual([r.name for r in results], ["Réunion trimestrielle"])
+        self.assertEqual(results[0].match_type, "name")
+
+    def test_a_name_match_outranks_a_body_only_match(self):
+        if connection.vendor != "sqlite" or not fts5_available():
+            self.skipTest("SQLite + FTS5 required")
+        self._note(self.alice, "Kraken sightings")
+        results = search_notes("kraken", self.alice, limit=10)
+        self.assertEqual(
+            [r.name for r in results], ["Kraken sightings", "Meeting Notes"]
+        )

@@ -85,7 +85,10 @@ class TrashMixin:
             OpenApiParameter(
                 name="search",
                 type=OpenApiTypes.STR,
-                description="Search in name or mime_type.",
+                description=(
+                    "Full-text search over file names and, for text "
+                    "formats, file contents."
+                ),
             ),
             OpenApiParameter(
                 name="ordering",

@@ -47,6 +47,7 @@ def apply_fulltext(qs, query, *, index):
         query,
         pg_column=PG_TSV_COLUMN,
         sqlite_fts_table=index.fts_table,
+        sqlite_rowid_expr=index.sqlite_rowid_expr(qs.model._meta.db_table),
         fallback_fields=index.fallback_fields,
     )
 

@@ -538,7 +538,7 @@ Call this when you don't know which module holds the answer ("what do we have on
 "find anything about Marie's contract"). Each hit gives a uuid, a module and a type, \
 so you can then chain into the matching reader (read_file, read_email, read_event, ...). \
 Returns at most 3 hits per source by default (5 max), so prefer the per-module search tools \
-(search_files, search_emails, search_events, search_messages) once you know where to look — \
+(search_filenames, search_emails, search_events, search_messages) once you know where to look - \
 they alone support filters like unread-only, attachments or date ranges."""
         from workspace.core.services.search import MIN_QUERY_LENGTH, search_modules
 

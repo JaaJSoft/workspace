@@ -76,7 +76,7 @@ window.vaultApi = (function () {
       return request('/api/v1/vault/tags/' + uuid, { method: 'DELETE' });
     },
     listEntries: function (vaultUuid, options) {
-      var url = '/api/v1/vault/entries?vault=' + encodeURIComponent(vaultUuid);
+      let url = '/api/v1/vault/entries?vault=' + encodeURIComponent(vaultUuid);
       if (options && options.trashed) url += '&trashed=true';
       return request(url);
     },

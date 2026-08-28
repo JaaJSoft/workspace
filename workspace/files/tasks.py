@@ -200,7 +200,11 @@ def index_search_document(self, file_uuid, include_descendants=False):
     from django.core.exceptions import ValidationError
 
     from workspace.files.models import File
-    from workspace.files.services.search_index import index_file
+    from workspace.files.services.search_index import (
+        build_documents,
+        index_file,
+        write_documents,
+    )
 
     try:
         file_obj = File.objects.get(uuid=file_uuid)
@@ -227,10 +231,9 @@ def index_search_document(self, file_uuid, include_descendants=False):
             if not page:
                 break
             last_uuid = page[-1].uuid
-            for child in page:
-                if index_file(child):
-                    indexed += 1
-                else:
-                    skipped += 1
+            batch = build_documents(page)
+            written = write_documents(batch)
+            indexed += written
+            skipped += len(page) - written
 
     return {"status": "ok", "indexed": indexed, "failed": skipped}

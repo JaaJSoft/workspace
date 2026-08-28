@@ -15,6 +15,8 @@ import logging
 import re
 import unicodedata
 
+from django.db import transaction
+
 from workspace.common.logging import scrub
 from workspace.common.search.documents import drop_document, index_document
 from workspace.common.search.schema import DerivedFulltextIndex, Field
@@ -50,6 +52,42 @@ def index_file(file_obj):
         logger.exception("Failed to index file %s", scrub(file_obj.pk))
         return False
     return True
+
+
+def build_documents(file_objs):
+    """Documents for a batch, as [(pk, document)]. Reads blobs, writes nothing.
+
+    Kept apart from the write so the extraction - a blob read per file, far
+    slower than the statement it feeds - happens outside the transaction.
+    Inside it, the write lock would be held for the whole batch and every
+    other writer would stall behind it.
+    """
+    documents = []
+    for file_obj in file_objs:
+        try:
+            documents.append((file_obj.pk, build_document(file_obj)))
+        except Exception:
+            logger.exception("Failed to read file %s", scrub(file_obj.pk))
+    return documents
+
+
+def write_documents(documents):
+    """Write a batch of built documents in one transaction. Returns the count.
+
+    One transaction per batch rather than per file: the write lock is taken
+    once for the batch, and an interrupted run keeps every batch it committed.
+    """
+    written = 0
+    with transaction.atomic():
+        for pk, document in documents:
+            try:
+                # index_document opens its own atomic, which nests here as a
+                # savepoint, so one bad document rolls back only itself.
+                index_document(FILES_FTS, pk, document)
+                written += 1
+            except Exception:
+                logger.exception("Failed to index file %s", scrub(pk))
+    return written
 
 
 def unindex_file(file_obj):

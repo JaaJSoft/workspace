@@ -96,7 +96,7 @@ urlpatterns = [
     ),
     path(
         "api/v1/mail/folders/<uuid:uuid>/merge",
-        views_folders.MailFolderMergeView.as_view(),
+        folders.MailFolderMergeView.as_view(),
         name="mail-folder-merge",
     ),
     path(

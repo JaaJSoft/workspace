@@ -193,7 +193,7 @@ class MailFolderUpdateView(APIView):
         # is_hidden on a canonical with aliases must propagate to the whole
         # group, so it is not part of the plain field loop below.
         if "is_hidden" in ser.validated_data and folder.aliases.all():
-            from .services.folder_merge import set_group_hidden
+            from ..services.folder_merge import set_group_hidden
 
             set_group_hidden(folder, ser.validated_data.pop("is_hidden"))
 
@@ -282,7 +282,7 @@ class MailFolderMergeView(APIView):
         if not target:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        from .services.folder_merge import MergeError, merge_folder
+        from ..services.folder_merge import MergeError, merge_folder
 
         try:
             canonical = merge_folder(folder, target)
@@ -296,7 +296,7 @@ class MailFolderMergeView(APIView):
         if not folder:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        from .services.folder_merge import unmerge_folder
+        from ..services.folder_merge import unmerge_folder
 
         unmerge_folder(folder)
         return self._serialized(folder)

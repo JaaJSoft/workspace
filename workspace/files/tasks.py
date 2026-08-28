@@ -25,6 +25,9 @@ User = get_user_model()
 # worker is killed outright.
 SYNC_USER_LOCK_TTL = max(int(2 * getattr(settings, "FILES_SYNC_INTERVAL", 1800)), 1800)
 
+# Rows fetched per page when indexing a subtree (see index_search_document).
+_INDEX_PAGE_SIZE = 500
+
 
 @shared_task(name="files.sync_all_users", bind=True, max_retries=0)
 def sync_all_users(self):
@@ -197,7 +200,11 @@ def index_search_document(self, file_uuid, include_descendants=False):
     from django.core.exceptions import ValidationError
 
     from workspace.files.models import File
-    from workspace.files.services.search_index import index_file
+    from workspace.files.services.search_index import (
+        build_documents,
+        index_file,
+        write_documents,
+    )
 
     try:
         file_obj = File.objects.get(uuid=file_uuid)
@@ -210,13 +217,23 @@ def index_search_document(self, file_uuid, include_descendants=False):
 
     if include_descendants and file_obj.node_type == File.NodeType.FOLDER:
         # A copied folder records a single CREATED event for its root, so the
-        # duplicated subtree would otherwise never be indexed.
-        for child in File.objects.filter(
-            path__startswith=f"{file_obj.path}/"
-        ).iterator():
-            if index_file(child):
-                indexed += 1
-            else:
-                skipped += 1
+        # duplicated subtree would otherwise never be indexed. Paged by
+        # keyset rather than streamed: a read cursor held open across the
+        # write transactions below is what makes SQLite raise "database is
+        # locked" (see reindex_files_search for the full reason).
+        descendants = File.objects.filter(path__startswith=f"{file_obj.path}/")
+        last_uuid = None
+        while True:
+            page_qs = descendants.order_by("uuid")
+            if last_uuid is not None:
+                page_qs = page_qs.filter(uuid__gt=last_uuid)
+            page = list(page_qs[:_INDEX_PAGE_SIZE])
+            if not page:
+                break
+            last_uuid = page[-1].uuid
+            batch = build_documents(page)
+            written = write_documents(batch)
+            indexed += written
+            skipped += len(page) - written
 
     return {"status": "ok", "indexed": indexed, "failed": skipped}

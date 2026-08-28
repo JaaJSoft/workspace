@@ -4,6 +4,7 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import connection
 from django.test import TestCase, TransactionTestCase
 
@@ -160,7 +161,46 @@ class ReindexCommandTests(_FtsTestCase):
         out = StringIO()
         call_command("reindex_files_search", stdout=out)
         self.assertEqual(self._matches('"wisdom"'), {self._rowid(note)})
-        self.assertIn("Indexed", out.getvalue())
+        self.assertIn("Indexed:", out.getvalue())
+
+    def test_dry_run_writes_nothing(self):
+        note = self._note("old.md", b"forgotten wisdom")
+        out = StringIO()
+        call_command("reindex_files_search", "--dry-run", stdout=out)
+        self.assertEqual(self._matches('"wisdom"'), set())
+        self.assertIn("Dry run", out.getvalue())
+        note.refresh_from_db()
+        self.assertIsNone(note.fts_rowid)
+
+    def test_limit_stops_early(self):
+        for i in range(5):
+            self._note(f"n{i}.md", f"needle{i}".encode())
+        call_command(
+            "reindex_files_search",
+            "--limit",
+            "2",
+            "--batch-size",
+            "1",
+            stdout=StringIO(),
+        )
+        found = sum(1 for i in range(5) if self._matches(f'"needle{i}"'))
+        self.assertEqual(found, 2)
+
+    def test_a_bad_batch_size_is_rejected(self):
+        with self.assertRaises(CommandError):
+            call_command("reindex_files_search", "--batch-size", "0")
+        with self.assertRaises(CommandError):
+            call_command("reindex_files_search", "--limit", "-1")
+
+    def test_every_page_is_covered(self):
+        # The backfill pages by keyset rather than streaming a cursor, so it
+        # is worth pinning that the paging itself walks the whole table: an
+        # off-by-one in the "uuid > last" bound silently skips or repeats.
+        notes = [self._note(f"n{i}.md", f"needle{i}".encode()) for i in range(7)]
+        call_command("reindex_files_search", "--batch-size", "2", stdout=StringIO())
+        for i, note in enumerate(notes):
+            with self.subTest(i=i):
+                self.assertEqual(self._matches(f'"needle{i}"'), {self._rowid(note)})
 
     def test_trashed_files_are_skipped_by_default(self):
         note = self._note("old.md", b"forgotten wisdom")

@@ -45,7 +45,12 @@ def index_document(index, pk, values, *, using=DEFAULT_DB_ALIAS):
             cursor.execute(index.pg_update_sql(), [*texts, param])
         return
     if conn.vendor == "sqlite" and fts5_available():
-        with conn.cursor() as cursor:
+        # One transaction for the whole document. Left in autocommit these
+        # would be three separate write transactions per row, so a backfill
+        # would take the write lock three times per file - and a failure
+        # between the delete and the insert would drop the document from the
+        # index without anything noticing.
+        with transaction.atomic(using=using), conn.cursor() as cursor:
             if index.rowid_column and not _ensure_rowid(index, pk, param, cursor):
                 return
             cursor.execute(index.sqlite_delete_sql(), [param])

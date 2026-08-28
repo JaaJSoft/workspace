@@ -17,8 +17,10 @@ from workspace.chat.models import (
     PinnedMessage,
 )
 from workspace.chat.serializers import ConversationListSerializer
-from workspace.chat.services.avatar import conversation_avatar_initial
+from workspace.chat.services.avatar import avatar_initial_for
 from workspace.chat.services.conversations import (
+    active_members_queryset,
+    first_other_members,
     get_active_membership,
     get_unread_counts,
     user_conversation_ids,
@@ -42,28 +44,29 @@ def _chat_prefs(user):
     return prefs if isinstance(prefs, dict) else {}
 
 
-def _build_conversation_context(user, conversation_uuids=None):
+def _build_conversation_context(user, conversation_uuids=None, *, embed_members=False):
     """Build conversation list with display data for templates.
 
     ``conversation_uuids`` optionally restricts the build to a subset of the
     user's conversations (used by the per-item partial refresh). UUIDs the
     user is not an active member of are silently dropped by the membership
     filter, so callers can pass untrusted ids.
+
+    ``embed_members`` loads every active member of every conversation, which
+    only the page load needs - it serializes the list into the payload the
+    Alpine app reads. The refresh paths render names and initials, so they take
+    a three-member window instead and stay flat as a group grows.
     """
     member_convos = user_conversation_ids(user)
 
     conversations = Conversation.objects.filter(uuid__in=member_convos)
     if conversation_uuids is not None:
         conversations = conversations.filter(uuid__in=conversation_uuids)
-    conversations = conversations.prefetch_related(
-        Prefetch(
-            "members",
-            queryset=ConversationMember.objects.filter(
-                left_at__isnull=True,
-            ).select_related("user", "user__bot_profile"),
-        ),
-        "groups",
-    ).order_by("-updated_at")
+    if embed_members:
+        conversations = conversations.prefetch_related(
+            Prefetch("members", queryset=active_members_queryset()),
+        )
+    conversations = conversations.prefetch_related("groups").order_by("-updated_at")
 
     last_msg_subquery = (
         Message.objects.filter(
@@ -75,6 +78,11 @@ def _build_conversation_context(user, conversation_uuids=None):
     )
     conversations = conversations.annotate(_last_msg_id=Subquery(last_msg_subquery))
     conv_list = list(conversations)
+    others_by_conv = (
+        None
+        if embed_members
+        else first_other_members(user, [c.uuid for c in conv_list])
+    )
 
     last_msg_ids = [c._last_msg_id for c in conv_list if c._last_msg_id]
     last_msgs = {
@@ -103,28 +111,26 @@ def _build_conversation_context(user, conversation_uuids=None):
         c.is_pinned = pin_pos is not None
         c.pin_position = pin_pos if pin_pos is not None else None
 
-        # Resolve display name
-        active_members = list(c.members.all())
-        other_members = [m for m in active_members if m.user_id != user.id]
+        # Everything the row is labelled with comes off this list.
+        if embed_members:
+            others = [m.user for m in c.members.all() if m.user_id != user.id]
+        else:
+            others = [m.user for m in others_by_conv[c.uuid]]
 
         def _display(u):
             return u.get_full_name() or u.username
 
         if c.title:
             c.display_name = c.title
-        elif c.kind == Conversation.Kind.DM and other_members:
-            c.display_name = _display(other_members[0].user)
+        elif c.kind == Conversation.Kind.DM and others:
+            c.display_name = _display(others[0])
         else:
-            names = [_display(m.user) for m in other_members[:3]]
+            names = [_display(u) for u in others[:3]]
             c.display_name = ", ".join(names) if names else "Group"
 
         # Avatar
-        c.avatar_initial = conversation_avatar_initial(c, user)
-        c.other_user = (
-            other_members[0].user
-            if c.kind == Conversation.Kind.DM and other_members
-            else None
-        )
+        c.avatar_initial = avatar_initial_for(c.kind, others)
+        c.other_user = others[0] if c.kind == Conversation.Kind.DM and others else None
 
         # Last message preview & time ago
         if c._last_message:
@@ -150,7 +156,7 @@ def _build_conversation_context(user, conversation_uuids=None):
 @ensure_csrf_cookie
 def chat_view(request, conversation_uuid=None):
     """Main chat page with server-rendered conversation list."""
-    conv_list = _build_conversation_context(request.user)
+    conv_list = _build_conversation_context(request.user, embed_members=True)
     serializer = ConversationListSerializer(
         conv_list, many=True, context={"request": request}
     )
@@ -202,12 +208,7 @@ def chat_room_view(request, conversation_uuid):
     conversation = membership.conversation
     prefetch_related_objects(
         [conversation],
-        Prefetch(
-            "members",
-            queryset=ConversationMember.objects.filter(
-                left_at__isnull=True,
-            ).select_related("user", "user__bot_profile"),
-        ),
+        Prefetch("members", queryset=active_members_queryset()),
         "groups",
     )
 

@@ -1,4 +1,14 @@
+from collections import defaultdict
+
 from django.db import transaction
+from django.db.models import F, Window
+from django.db.models.functions import RowNumber
+
+# Ties the ordering of every member list back to one place. Avatar initials and
+# the name of an untitled conversation are built from the *first* members, so
+# the sidebar, the REST payload and the room page only label a conversation
+# alike while they all walk it in the same order.
+MEMBER_ORDER = ("joined_at", "uuid")
 
 
 def user_conversation_ids(user):
@@ -9,6 +19,55 @@ def user_conversation_ids(user):
         user=user,
         left_at__isnull=True,
     ).values_list("conversation_id", flat=True)
+
+
+def active_members_queryset():
+    """Active members with the user rows a serializer needs, in MEMBER_ORDER.
+
+    The queryset every ``Prefetch("members", ...)`` should be built from, so a
+    conversation carries the same member list wherever it is rendered.
+    """
+    from ..models import ConversationMember
+
+    return (
+        ConversationMember.objects.filter(left_at__isnull=True)
+        .select_related("user", "user__bot_profile")
+        .order_by(*MEMBER_ORDER)
+    )
+
+
+def first_other_members(user, conversation_ids, limit=3):
+    """The first *limit* active members other than *user*, per conversation.
+
+    Labelling a sidebar row needs no more than that - a name, two initials, the
+    DM partner - so ranking in SQL keeps a five-hundred-member group from
+    hydrating five hundred rows to produce two letters. Returns
+    ``{conversation_id: [ConversationMember]}``, each list in MEMBER_ORDER.
+    """
+    from ..models import ConversationMember
+
+    ranked = (
+        ConversationMember.objects.filter(
+            conversation_id__in=conversation_ids,
+            left_at__isnull=True,
+        )
+        .exclude(user_id=user.id)
+        .annotate(
+            _rank=Window(
+                RowNumber(),
+                partition_by=F("conversation_id"),
+                order_by=[F(field).asc() for field in MEMBER_ORDER],
+            )
+        )
+        .filter(_rank__lte=limit)
+        .select_related("user")
+        .order_by(*MEMBER_ORDER)
+    )
+
+    windows = defaultdict(list)
+    for member in ranked:
+        windows[member.conversation_id].append(member)
+    return windows
 
 
 def get_active_membership(user, conversation_id):

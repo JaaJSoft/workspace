@@ -24,18 +24,28 @@ logger = logging.getLogger(__name__)
 def conversation_avatar_initial(conversation, viewer) -> str:
     """The letters drawn when *conversation* has no uploaded avatar.
 
-    One letter for a direct message (the other participant), up to two for a
-    group (its first two other members). Reads the members off the instance,
-    so a caller that prefetched them filtered to the active ones gets those.
+    Reads the members off the instance, so a caller that prefetched them
+    filtered to the active ones gets those.
 
     Both rendering paths go through this: the sidebar row renders it into the
     markup, the API sends it as ``avatar_initial`` for the header and the info
     panel. Computing it twice is what let them disagree.
     """
     others = [m.user for m in conversation.members.all() if m.user_id != viewer.id]
-    if conversation.kind == Conversation.Kind.DM:
-        return _initial(others[0]) if others else "?"
-    return "".join(_initial(user) for user in others[:2]) or "G"
+    return avatar_initial_for(conversation.kind, others)
+
+
+def avatar_initial_for(kind, other_users) -> str:
+    """The initials for a *kind* of conversation seen alongside *other_users*.
+
+    One letter for a direct message (the other participant), up to two for a
+    group. Takes the participants as an argument for the caller that never
+    loads the full member list - the sidebar only fetches the first few - so
+    the letter rules still live in one place.
+    """
+    if kind == Conversation.Kind.DM:
+        return _initial(other_users[0]) if other_users else "?"
+    return "".join(_initial(user) for user in other_users[:2]) or "G"
 
 
 def _initial(user) -> str:

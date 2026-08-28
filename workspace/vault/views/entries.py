@@ -268,6 +268,7 @@ class EntryRestoreView(CacheControlMixin, APIView):
         request=None,
         responses={200: VaultEntrySerializer},
     )
+    @sensitive_variables()
     def post(self, request, uuid):
         entry = (
             entry_queryset()

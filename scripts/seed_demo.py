@@ -34,7 +34,9 @@ All seeded users share the ``--email-domain`` (default ``demo.local``) and the
 ``--password`` (default ``demo1234``). A deterministic login is always created
 on top of the faker users: username ``demo`` / the ``--password`` value, so
 tooling and UI agents can sign in without scraping the seeder output. Note the
-login form authenticates by USERNAME, not email. ``--purge`` deletes every
+login form authenticates by USERNAME, not email. Every seeded user also
+starts with the onboarding tour and the changelog popup already dismissed
+(pass ``--keep-intro-modals`` to test those). ``--purge`` deletes every
 user on that domain and cascades their files/conversations/projects (including
 the on-disk blobs, via the File post_delete signal) before (re)seeding.
 """
@@ -73,6 +75,8 @@ from workspace.chat.models import (  # noqa: E402
 from workspace.chat.services import avatar as group_avatar_service  # noqa: E402
 from workspace.chat.services.conversations import get_or_create_dm  # noqa: E402
 from workspace.chat.services.rendering import render_message_body  # noqa: E402
+from workspace.core import setting_keys  # noqa: E402
+from workspace.core.changelog import get_latest_version  # noqa: E402
 from workspace.files.models import File, FileEvent  # noqa: E402
 from workspace.files.services import FileService  # noqa: E402
 from workspace.projects.models import (  # noqa: E402
@@ -93,6 +97,7 @@ from workspace.projects.services.tasks import (  # noqa: E402
 )
 from workspace.users.models import UserPresence  # noqa: E402
 from workspace.users.services import avatar as avatar_service  # noqa: E402
+from workspace.users.services.settings import set_setting  # noqa: E402
 
 User = get_user_model()
 
@@ -464,12 +469,30 @@ def _backdate_file(file_obj, ts):
 # --- Seeding logic ----------------------------------------------------------
 
 
-def create_users(count, domain, password, avatar_ratio):
+def _skip_intro_modals(user):
+    """Pre-dismiss the two modals a fresh account auto-opens on first load.
+
+    Both keys are needed: the changelog only fires once onboarding is done,
+    so setting one alone just uncovers the other.
+    """
+    set_setting(user, setting_keys.MODULE, setting_keys.ONBOARDING_COMPLETED, True)
+    latest = get_latest_version()
+    if latest:
+        set_setting(
+            user,
+            setting_keys.MODULE,
+            setting_keys.CHANGELOG_LAST_SEEN_VERSION,
+            latest,
+        )
+
+
+def create_users(count, domain, password, avatar_ratio, keep_intro_modals=False):
     """Create ``count`` demo users, their presence rows and avatars.
 
     Returns (users, n_avatars). ``avatar_ratio`` (0..1) is the share of users
     that get a generated avatar; the rest fall back to the app's default
-    initials rendering.
+    initials rendering. Unless ``keep_intro_modals`` is set, every user starts
+    with the onboarding tour and the changelog popup already dismissed.
     """
     users, n_avatars = [], 0
 
@@ -498,6 +521,8 @@ def create_users(count, domain, password, avatar_ratio):
             demo, BytesIO(png), 0, 0, AVATAR_SIZE, AVATAR_SIZE
         )
         n_avatars += 1
+    if not keep_intro_modals:
+        _skip_intro_modals(demo)
     users.append(demo)
     print(f"  user demo: {DEMO_USERNAME} (deterministic login)", flush=True)
 
@@ -529,6 +554,8 @@ def create_users(count, domain, password, avatar_ratio):
                 user, BytesIO(png), 0, 0, AVATAR_SIZE, AVATAR_SIZE
             )
             n_avatars += 1
+        if not keep_intro_modals:
+            _skip_intro_modals(user)
         users.append(user)
         print(f"  user {i + 1}/{count}: {username}", flush=True)
     return users, n_avatars
@@ -1017,6 +1044,11 @@ def main():
         "--no-avatars", action="store_true", help="skip generated avatars"
     )
     parser.add_argument(
+        "--keep-intro-modals",
+        action="store_true",
+        help="leave the onboarding tour and changelog popup pending on first login",
+    )
+    parser.add_argument(
         "--avatar-ratio",
         type=float,
         default=0.85,
@@ -1044,7 +1076,11 @@ def main():
 
     print(f"\nCreating {args.users} users on @{args.email_domain} ...")
     users, user_avatars = create_users(
-        args.users, args.email_domain, args.password, avatar_ratio
+        args.users,
+        args.email_domain,
+        args.password,
+        avatar_ratio,
+        keep_intro_modals=args.keep_intro_modals,
     )
 
     total_files = 0

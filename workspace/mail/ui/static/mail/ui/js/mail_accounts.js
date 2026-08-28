@@ -298,6 +298,9 @@ window.mailAccountsMixin = function mailAccountsMixin() {
         case 'hidden_folders':
           this._showHiddenFolders(account);
           break;
+        case 'merged_folders':
+          this._showMergedFolders(account);
+          break;
         case 'filters_rules':
           this.showRules(account);
           break;

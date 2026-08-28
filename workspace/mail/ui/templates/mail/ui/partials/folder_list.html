@@ -99,6 +99,13 @@
           </span>
           <span class="flex-1 text-left truncate" x-text="node.folder.display_name"></span>
           <span
+            x-show="(node.folder.aliases || []).length > 0"
+            class="flex-shrink-0 text-base-content/40"
+            :title="'Merged: ' + (node.folder.aliases || []).map(a => a.display_name).join(', ')"
+          >
+            <i data-lucide="git-merge" class="w-3 h-3"></i>
+          </span>
+          <span
             x-show="getSubtreeUnreadCount(node) > 0 && !['sent', 'drafts'].includes(node.folder.folder_type)"
             class="badge badge-xs badge-warning"
             x-text="getSubtreeUnreadCount(node)"

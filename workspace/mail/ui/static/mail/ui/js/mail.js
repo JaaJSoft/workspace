@@ -87,6 +87,10 @@ function mailApp() {
     hiddenFolders: [],
     hiddenFoldersSearch: '',
 
+    // Merged folders
+    mergedGroups: [],
+    mergedGroupsAccount: null,
+
     // Compose
     compose: _defaultCompose(),
     showCcBcc: false,

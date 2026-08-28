@@ -17,6 +17,8 @@ or deleted, hence the shared `folder_type !== 'other'` disabling.
   {% include "ui/partials/context_menu_item.html" with icon="pencil" label="Rename" click="folderCtxAction('rename')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
   {% include "ui/partials/context_menu_item.html" with icon="folder-input" label="Move to..." click="folderCtxAction('move')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
   {% include "ui/partials/context_menu_item.html" with icon="eye-off" label="Hide" click="folderCtxAction('hide')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="git-merge" label="Merge into..." click="folderCtxAction('merge')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="git-pull-request-arrow" label="Merged folders..." click="folderCtxAction('merged_folders')" show="(folderCtx.folder?.aliases || []).length > 0" only %}
   {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="folderCtxAction('delete')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
 
   <hr class="my-1 border-base-300" />

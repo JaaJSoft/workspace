@@ -20,6 +20,7 @@
 {% block main_layout_class %}{% endblock %}
 
 {% block content %}
+  {{ vault_uuid|json_script:"vault-uuid" }}
   <div class="mx-auto max-w-4xl w-full py-8" x-data="vaultApp()">
     <template x-if="state !== 'unlocked'">
       <div

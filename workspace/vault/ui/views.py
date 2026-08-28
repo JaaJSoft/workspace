@@ -10,10 +10,13 @@ from workspace.vault.queries import active_identity
 @csp(settings.VAULT_CSP)
 @login_required
 @ensure_csrf_cookie
-def index(request):
+def index(request, vault_uuid=None):
     if active_identity(request.user) is None:
         return redirect("vault_ui:onboarding")
-    return render(request, "vault/ui/index.html")
+    # Handed to the page, never resolved here. The server cannot read a
+    # vault's name, so it has nothing to render from one - and answering 404
+    # for a vault out of reach would say it exists in another account.
+    return render(request, "vault/ui/index.html", {"vault_uuid": vault_uuid})
 
 
 @csp(settings.VAULT_CSP)

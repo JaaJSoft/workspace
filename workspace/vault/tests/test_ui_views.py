@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from workspace.vault.models import AccountIdentity
+from workspace.vault.tests.factories import make_vault
 
 User = get_user_model()
 
@@ -55,3 +56,61 @@ class OnboardingRoutingTests(TestCase):
                 response = self.client.get(reverse(name))
                 self.assertEqual(response.status_code, 302)
                 self.assertIn("/login", response["Location"])
+
+
+class BrowserRoutingTests(TestCase):
+    """`/vault` and `/vault/<uuid>` are one view.
+
+    A palette command is a plain link, so it can name no UUID: the two URLs
+    have to share a view for `?action=new` to reach a page able to honour it.
+    The uuid path converter validates at routing time, so nothing in the view
+    parses one.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.client.force_login(self.user)
+        AccountIdentity.objects.create(
+            user=self.user, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE
+        )
+
+    def test_the_browser_route_renders_the_same_template(self):
+        vault = make_vault(self.user)
+        response = self.client.get(reverse("vault_ui:vault", args=[vault.uuid]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "vault/ui/index.html")
+
+    def test_a_vault_out_of_reach_is_still_answered_by_the_page(self):
+        """Never a 404, for the same reason the action endpoint never answers
+        one: a 404 here would say the vault exists in somebody else's
+        account. The page loads and finds nothing it can open."""
+        stranger = User.objects.create_user(username="stranger", password="pw")
+        response = self.client.get(
+            reverse("vault_ui:vault", args=[make_vault(stranger).uuid])
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_the_page_is_handed_the_vault_it_was_asked_for(self):
+        vault = make_vault(self.user)
+        response = self.client.get(reverse("vault_ui:vault", args=[vault.uuid]))
+        self.assertEqual(str(response.context["vault_uuid"]), str(vault.uuid))
+
+    def test_the_listing_is_handed_no_vault(self):
+        response = self.client.get(reverse("vault_ui:index"))
+        self.assertIsNone(response.context["vault_uuid"])
+
+    def test_a_malformed_uuid_never_reaches_the_view(self):
+        """The path converter refuses it at routing time, which is why the
+        view carries no parse_uuid_or_none."""
+        self.assertEqual(self.client.get("/vault/not-a-uuid").status_code, 404)
+
+    def test_an_unfinished_account_is_still_sent_to_onboarding(self):
+        """The redirect guard belongs to the view, so it must hold on both
+        routes rather than only on the one that had it."""
+        AccountIdentity.objects.filter(user=self.user).update(
+            state=AccountIdentity.State.PENDING
+        )
+        response = self.client.get(
+            reverse("vault_ui:vault", args=[make_vault(self.user).uuid])
+        )
+        self.assertRedirects(response, reverse("vault_ui:onboarding"))

@@ -27,7 +27,11 @@ class MailFolderListView(APIView):
 
     @extend_schema(
         summary="List folders for a mail account",
-        parameters=[OpenApiParameter("account", str, required=True)],
+        parameters=[
+            OpenApiParameter("account", str, required=True),
+            OpenApiParameter("show_hidden", bool, required=False),
+            OpenApiParameter("include_aliases", bool, required=False),
+        ],
     )
     def get(self, request):
         account_id = request.query_params.get("account")
@@ -51,7 +55,9 @@ class MailFolderListView(APIView):
         except MailAccount.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        folders = MailFolder.objects.filter(account=account)
+        folders = MailFolder.objects.filter(account=account).prefetch_related("aliases")
+        if not is_truthy(request.query_params.get("include_aliases")):
+            folders = folders.filter(alias_of__isnull=True)
         if not is_truthy(request.query_params.get("show_hidden")):
             folders = folders.filter(is_hidden=False)
         return Response(MailFolderSerializer(folders, many=True).data)
@@ -97,7 +103,11 @@ class MailFolderUpdateView(APIView):
 
     def _get_folder(self, request, uuid):
         try:
-            folder = MailFolder.objects.select_related("account").get(uuid=uuid)
+            folder = (
+                MailFolder.objects.select_related("account")
+                .prefetch_related("aliases")
+                .get(uuid=uuid)
+            )
         except MailFolder.DoesNotExist:
             return None
         if folder.account.owner != request.user:

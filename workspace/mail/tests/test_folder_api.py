@@ -794,3 +794,60 @@ class MailFolderAiClassifyTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.sent.refresh_from_db()
         self.assertTrue(self.sent.ai_classify_disabled)
+
+
+class MailFolderListMergeTests(MailTestMixin, APITestCase):
+    """GET /api/v1/mail/folders with merged folders in the account."""
+
+    url = "/api/v1/mail/folders"
+
+    def setUp(self):
+        super().setUp()
+        self.alias = MailFolder.objects.create(
+            account=self.account,
+            name="Envoyes",
+            display_name="Envoyes",
+            folder_type="sent",
+            alias_of=self.sent,
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_aliases_are_excluded_by_default(self):
+        resp = self.client.get(self.url, {"account": self.account.uuid})
+        names = {f["name"] for f in resp.data}
+        self.assertNotIn("Envoyes", names)
+        self.assertIn("Sent", names)
+
+    def test_include_aliases_returns_them(self):
+        resp = self.client.get(
+            self.url, {"account": self.account.uuid, "include_aliases": "true"}
+        )
+        names = {f["name"] for f in resp.data}
+        self.assertIn("Envoyes", names)
+
+    def test_canonical_carries_its_aliases(self):
+        resp = self.client.get(self.url, {"account": self.account.uuid})
+        sent = next(f for f in resp.data if f["name"] == "Sent")
+        self.assertEqual(
+            sent["aliases"], [{"uuid": str(self.alias.uuid), "display_name": "Envoyes"}]
+        )
+
+    def test_alias_reports_its_canonical(self):
+        resp = self.client.get(
+            self.url, {"account": self.account.uuid, "include_aliases": "true"}
+        )
+        alias = next(f for f in resp.data if f["name"] == "Envoyes")
+        self.assertEqual(str(alias["alias_of"]), str(self.sent.uuid))
+
+    def test_counts_are_summed_over_the_group(self):
+        MailFolder.objects.filter(pk=self.sent.pk).update(
+            message_count=3, unread_count=1
+        )
+        MailFolder.objects.filter(pk=self.alias.pk).update(
+            message_count=4, unread_count=2
+        )
+
+        resp = self.client.get(self.url, {"account": self.account.uuid})
+        sent = next(f for f in resp.data if f["name"] == "Sent")
+        self.assertEqual(sent["message_count"], 7)
+        self.assertEqual(sent["unread_count"], 3)

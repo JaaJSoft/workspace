@@ -44,10 +44,10 @@ window.commandPaletteDropdown = function () {
     query: '',
     commands: [],
     results: [],
-    hasMore: false,
     loading: false,
-    loadingMore: false,
     searchQuery: '',
+    // Bumped per search(); a response whose id no longer matches is stale.
+    _searchRequestId: 0,
     activeIndex: -1,
     quickActions: [],
     _cachedItems: null,
@@ -108,10 +108,12 @@ window.commandPaletteDropdown = function () {
 
     search() {
       this.searchQuery = this.query;
+      const requestId = ++this._searchRequestId;
       if (this.query.length < 2) {
         this.commands = [];
         this.results = [];
         this.activeIndex = -1;
+        this.loading = false;
         return;
       }
 
@@ -120,22 +122,17 @@ window.commandPaletteDropdown = function () {
       fetch(`/api/v1/search?q=${q}`, { credentials: 'same-origin' })
         .then(r => r.json())
         .then(data => {
+          if (requestId !== this._searchRequestId) return;
           this.commands = data.commands || [];
           this.results = data.results || [];
           this.loading = false;
         })
         .catch(() => {
+          if (requestId !== this._searchRequestId) return;
           this.commands = [];
           this.results = [];
           this.loading = false;
         });
-    },
-
-    loadMore() {
-      this.loadingMore = true;
-      setTimeout(() => {
-        this.loadingMore = false;
-      }, 500);
     },
 
     close() {
@@ -270,20 +267,7 @@ window.commandPaletteDropdown = function () {
     isActive(el) {
       if (!this.open) return false;
       if (this.activeIndex < 0) return false;
-
-      const root = this.$root;
-      const allLinks = Array.from(root.querySelectorAll('a[href]'));
-      const visibleLinks = allLinks.filter(link => {
-        let current = link;
-        while (current && current !== root) {
-          const style = window.getComputedStyle(current);
-          if (style.display === 'none') return false;
-          current = current.parentElement;
-        }
-        return true;
-      });
-
-      return visibleLinks.indexOf(el) === this.activeIndex;
+      return this.getAllItems().indexOf(el) === this.activeIndex;
     }
   };
 };

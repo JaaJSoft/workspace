@@ -11,7 +11,14 @@ const OFFLINE_URL = '/static/offline.html';
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      return cache.add(OFFLINE_URL);
+      // The offline page and everything it links: it must render on the
+      // very first outage, before cacheFirst() has ever seen these assets.
+      return cache.addAll([
+        OFFLINE_URL,
+        '/static/css/app.css',
+        '/static/icons/favicon.svg',
+        '/static/ui/js/vendor/lucide/lucide.js',
+      ]);
     }).then(function () {
       return self.skipWaiting();
     })
@@ -106,7 +113,10 @@ function staleWhileRevalidate(request) {
 function networkFirstWithOffline(request) {
   return fetch(request)
     .then(function (response) {
-      if (response.ok) {
+      // `private, no-cache` (the app default) allows a browser-side copy
+      // that is revalidated; only `no-store` forbids keeping one at all.
+      const cacheControl = response.headers.get('Cache-Control') || '';
+      if (response.ok && !/\bno-store\b/i.test(cacheControl)) {
         const clone = response.clone();
         caches.open(CACHE_NAME).then(function (cache) { cache.put(request, clone); });
       }

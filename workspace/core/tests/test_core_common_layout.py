@@ -74,6 +74,17 @@ def _text_offences(path):
     return offences
 
 
+def _inside_common(dotted):
+    return dotted == "workspace.common" or dotted.startswith("workspace.common.")
+
+
+def _package_of(path):
+    """Dotted package a relative import in *path* resolves against."""
+    parts = ["workspace", "common", *path.relative_to(COMMON_DIR).with_suffix("").parts]
+    parts.pop()  # the module itself, or "__init__" for a package
+    return parts
+
+
 def _import_offences(path):
     tree = ast.parse(path.read_text(encoding="utf-8"))
     offences = []
@@ -82,12 +93,18 @@ def _import_offences(path):
             names = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom) and node.level == 0:
             names = [node.module or ""]
+        elif isinstance(node, ast.ImportFrom):
+            # `from ..x import y`: one dot is the current package, each
+            # extra dot climbs one level - enough of them escape common.
+            base = _package_of(path)
+            base = base[: len(base) - (node.level - 1)] if node.level > 1 else base
+            names = [".".join([*base, node.module] if node.module else base)]
         else:
             continue
         for name in names:
-            if name.startswith("workspace.") and not name.startswith(
-                "workspace.common"
-            ):
+            if (
+                name == "workspace" or name.startswith("workspace.")
+            ) and not _inside_common(name):
                 offences.append(f"imports {name}")
     return offences
 

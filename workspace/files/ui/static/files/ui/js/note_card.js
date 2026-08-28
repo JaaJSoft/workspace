@@ -97,8 +97,11 @@ window._noteCardShow = function(anchor, uuid) {
       fetch('/files/' + uuid + '/card', { credentials: 'same-origin' })
         .then(function(r) { return r.ok ? r.text() : ''; })
         .then(function(html) {
-          _noteCardCache[uuid] = html;
-          _noteCardCacheTimes[uuid] = Date.now();
+          // A failed or empty card is not cached, so the next hover retries.
+          if (html) {
+            _noteCardCache[uuid] = html;
+            _noteCardCacheTimes[uuid] = Date.now();
+          }
           if (_noteCardFetchingUuid === uuid) _noteCardFetchingUuid = null;
           // Inject only if this is still the note being shown.
           if (_noteCardPopover && _noteCardUuid === uuid) {

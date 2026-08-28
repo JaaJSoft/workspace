@@ -112,17 +112,6 @@
       </a>
     </template>
 
-    <!-- Load more button -->
-    <div x-show="hasMore" class="px-3 py-2">
-      <button
-        @click="loadMore()"
-        :disabled="loadingMore"
-        class="w-full btn btn-sm btn-ghost"
-      >
-        <span x-show="!loadingMore">Load more...</span>
-        <span x-show="loadingMore" class="loading loading-spinner loading-sm"></span>
-      </button>
-    </div>
   </div>
 
   <!-- No results -->

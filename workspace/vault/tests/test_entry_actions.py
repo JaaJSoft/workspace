@@ -17,7 +17,9 @@ class _Entry:
 
 
 class EntryActionTests(SimpleTestCase):
-    def _ids(self, *, role=VaultRole.OWNER, trashed=False, schema=None):
+    def _ids(
+        self, *, role=VaultRole.OWNER, trashed=False, schema=None, present_fields=None
+    ):
         return [
             action["id"]
             for action in VaultActionRegistry.get_available_actions(
@@ -26,6 +28,11 @@ class EntryActionTests(SimpleTestCase):
                 role=role,
                 trashed=trashed,
                 schema=LoginEntry.FIELD_SCHEMA if schema is None else schema,
+                present_fields=(
+                    frozenset({"username", "password", "totp", "uri"})
+                    if present_fields is None
+                    else present_fields
+                ),
             )
         ]
 
@@ -97,3 +104,27 @@ class EntryActionTests(SimpleTestCase):
         schema it cannot produce would be an entry with no actions at all."""
         for entry_type in EntryType.values:
             self.assertTrue(schema_for(entry_type))
+
+    def test_a_field_action_needs_the_entry_to_carry_the_field(self):
+        """Declaring a field and having one are different things. A login
+        entry with no authenticator key must not be offered the action that
+        copies a code it does not have - the menu would be lying, and the
+        endpoint behind it would have nothing to act on."""
+        carried = frozenset({"username", "password"})
+        ids = self._ids(present_fields=carried)
+        self.assertNotIn("copy_totp", ids)
+        self.assertIn("copy_password", ids)
+
+    def test_a_field_action_is_offered_once_the_entry_carries_the_field(self):
+        self.assertIn("copy_totp", self._ids(present_fields=frozenset({"totp"})))
+
+    def test_a_field_the_type_does_not_declare_is_never_offered(self):
+        """Both gates hold: carrying a value cannot buy an action the type
+        never declared, or a custom field could reach a reserved action."""
+        without_totp = tuple(
+            field for field in LoginEntry.FIELD_SCHEMA if field.field_id != "totp"
+        )
+        self.assertNotIn(
+            "copy_totp",
+            self._ids(schema=without_totp, present_fields=frozenset({"totp"})),
+        )

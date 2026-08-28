@@ -268,6 +268,9 @@ def _offers(action_id, user, entry, role):
         role=role,
         trashed=entry.deleted_at is not None,
         schema=schema_for(entry.type, default=()),
+        # One entry, so one query: the batch shape the actions endpoint needs
+        # would buy nothing here.
+        present_fields=frozenset(entry.fields.values_list("field_id", flat=True)),
     )
 
 

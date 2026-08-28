@@ -88,10 +88,23 @@ class VaultActionsView(CacheControlMixin, APIView):
         # could ever tell them apart.
         result = {key: [] for keys in spellings.values() for key in keys}
 
-        entries = VaultEntry.objects.filter(
-            accessible_entries_q(request.user), uuid__in=parsed
-        ).select_related("vault")
+        entries = (
+            VaultEntry.objects.filter(
+                accessible_entries_q(request.user), uuid__in=parsed
+            )
+            .select_related("vault")
+            .prefetch_related("fields")
+        )
         entries = list(entries)
+        # What each row carries, resolved with the batch rather than per
+        # action: an action asking for it would put back the per-row query
+        # the registry's purity rule exists to prevent. encrypted_name and
+        # encrypted_notes live on the row, not in EntryField, so they are
+        # absent here - and no action requires them.
+        present = {
+            entry.uuid: frozenset(field.field_id for field in entry.fields.all())
+            for entry in entries
+        }
 
         # Every role in two queries, then pure in-memory evaluation: asking
         # per vault would put back the per-row shape the registry avoids.
@@ -108,6 +121,7 @@ class VaultActionsView(CacheControlMixin, APIView):
                 role=role,
                 trashed=entry.deleted_at is not None,
                 schema=schema_for(entry.type, default=()),
+                present_fields=present[entry.uuid],
             )
             for key in spellings[entry.uuid]:
                 result[key] = actions

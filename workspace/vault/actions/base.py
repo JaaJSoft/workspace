@@ -22,9 +22,9 @@ _ROLE_RANK = {
 class BaseVaultAction(ABC):
     """Declarative action on a vault entry.
 
-    ``is_available`` is pure: the resolved role, the trash flag and the
-    type's field schema all arrive as parameters, and no database query is
-    allowed. The endpoint resolves each of those once per vault and then
+    ``is_available`` is pure: the resolved role, the trash flag, the type's
+    field schema and the field ids the row actually carries all arrive as
+    parameters, and no database query is allowed. The endpoint resolves each of those once per vault and then
     evaluates every action in memory; an action that queried would turn one
     request into one query per entry.
 
@@ -53,7 +53,7 @@ class BaseVaultAction(ABC):
     supports_bulk: bool = False
     css_class: str = ""
 
-    def is_available(self, user, entry, *, role, trashed, schema):
+    def is_available(self, user, entry, *, role, trashed, schema, present_fields):
         if role is None:
             return False
         if _ROLE_RANK.get(role, 0) < _ROLE_RANK[self.min_role]:
@@ -76,18 +76,32 @@ class BaseVaultAction(ABC):
 
 
 class RequiresFieldMixin:
-    """Hide the action unless the entry's type declares a given field.
+    """Hide the action unless the entry carries a given field.
 
-    The field schema is the one source of what a type carries, so an action
-    that reads a field must ask it rather than name a type: adding a second
-    type that also has a TOTP field must not require editing this action.
+    Two gates, and both are needed. The schema is the one source of what a
+    type may hold, so an action that reads a field asks it rather than names
+    a type: a second type that also has a TOTP field gets the action without
+    this class being edited. But declaring a field and holding one are
+    different things - a login entry with no authenticator key would
+    otherwise be offered a copy of a code that does not exist, and the
+    endpoint behind the menu item would have nothing to act on.
+
+    The schema gate stays in front: without it, a value stored under a field
+    id the type never declared could reach a reserved action.
     """
 
     requires_field: str
 
-    def is_available(self, user, entry, *, role, trashed, schema):
+    def is_available(self, user, entry, *, role, trashed, schema, present_fields):
         if not any(field.field_id == self.requires_field for field in schema):
             return False
+        if self.requires_field not in present_fields:
+            return False
         return super().is_available(
-            user, entry, role=role, trashed=trashed, schema=schema
+            user,
+            entry,
+            role=role,
+            trashed=trashed,
+            schema=schema,
+            present_fields=present_fields,
         )

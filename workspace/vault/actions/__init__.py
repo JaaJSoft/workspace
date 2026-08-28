@@ -25,17 +25,26 @@ class VaultActionRegistry:
         return action_cls
 
     @classmethod
-    def get_available_actions(cls, user, entry, *, role, trashed, schema):
+    def get_available_actions(
+        cls, user, entry, *, role, trashed, schema, present_fields
+    ):
         return [
             action.serialize(entry)
             for action in cls._actions
             if action.is_available(
-                user, entry, role=role, trashed=trashed, schema=schema
+                user,
+                entry,
+                role=role,
+                trashed=trashed,
+                schema=schema,
+                present_fields=present_fields,
             )
         ]
 
     @classmethod
-    def is_action_available(cls, action_id, user, entry, *, role, trashed, schema):
+    def is_action_available(
+        cls, action_id, user, entry, *, role, trashed, schema, present_fields
+    ):
         """Whether *action_id* is offered, for the endpoint that performs it.
 
         Asked instead of restating an action's rules: a menu that offers what
@@ -45,7 +54,12 @@ class VaultActionRegistry:
         for action in cls._actions:
             if action.id == action_id:
                 return action.is_available(
-                    user, entry, role=role, trashed=trashed, schema=schema
+                    user,
+                    entry,
+                    role=role,
+                    trashed=trashed,
+                    schema=schema,
+                    present_fields=present_fields,
                 )
         return False
 

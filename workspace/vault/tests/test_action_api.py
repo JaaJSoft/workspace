@@ -9,10 +9,12 @@ company with the projects one it is modelled on, which 404s the whole batch.
 
 import uuid
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from workspace.vault.models import EntryType, VaultEntry
+from workspace.vault.models import EntryField, EntryType, VaultEntry
 from workspace.vault.tests.factories import make_account, make_key_wrap, make_vault
 
 URL = "/api/v1/vault/actions"
@@ -173,3 +175,45 @@ class ActionApiTests(TestCase):
         vault = make_vault(self.other_user, encrypted_name=f"AQ{index:02d}")
         make_key_wrap(vault, self.user)
         return vault
+
+    def test_a_login_entry_without_a_key_is_not_offered_the_totp_action(self):
+        """The type declares a totp field; this row does not carry one. The
+        menu must not offer a copy of a code that does not exist."""
+        EntryField.objects.create(
+            entry=self.entry, field_id="password", encrypted_value="AQID"
+        )
+        response = self._post([str(self.entry.uuid)])
+        ids = [action["id"] for action in response.json()[str(self.entry.uuid)]]
+        self.assertIn("copy_password", ids)
+        self.assertNotIn("copy_totp", ids)
+
+    def test_the_totp_action_appears_once_the_row_carries_a_key(self):
+        EntryField.objects.create(
+            entry=self.entry, field_id="totp", encrypted_value="AQID"
+        )
+        response = self._post([str(self.entry.uuid)])
+        ids = [action["id"] for action in response.json()[str(self.entry.uuid)]]
+        self.assertIn("copy_totp", ids)
+
+    def test_the_field_lookup_does_not_cost_a_query_per_entry(self):
+        """The prefetch is the point: without it a batch of 200 entries would
+        issue 200 extra queries, which is the shape the registry's purity
+        rule exists to keep out.
+
+        Asserted as an invariant rather than as a number - a fixed count
+        passes for the wrong reason the day an unrelated query is added or
+        removed, while "growing the batch does not grow the query count"
+        fails only for the defect it names.
+        """
+        rows = [self._entry(self.vault, f"AQI{n}") for n in range(3)]
+        for row in [self.entry, *rows]:
+            EntryField.objects.create(
+                entry=row, field_id="totp", encrypted_value="AQID"
+            )
+
+        with CaptureQueriesContext(connection) as small:
+            self._post([str(self.entry.uuid)])
+        with CaptureQueriesContext(connection) as large:
+            self._post([str(row.uuid) for row in [self.entry, *rows]])
+
+        self.assertEqual(len(large), len(small))

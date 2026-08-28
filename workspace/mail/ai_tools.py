@@ -649,7 +649,11 @@ between providers, so a folder name you guessed is a call that fails."""
         if error:
             return error
 
-        folders = MailFolder.objects.filter(account=account).order_by("display_name")
+        folders = (
+            MailFolder.objects.filter(account=account, alias_of__isnull=True)
+            .prefetch_related("aliases")
+            .order_by("display_name")
+        )
         if not folders:
             return f"{account.email} has no folders synced yet."
         return json.dumps(
@@ -657,8 +661,10 @@ between providers, so a folder name you guessed is a call that fails."""
                 {
                     "name": folder.display_name,
                     "type": folder.folder_type,
-                    "messages": folder.message_count,
-                    "unread": folder.unread_count,
+                    "messages": folder.message_count
+                    + sum(a.message_count for a in folder.aliases.all()),
+                    "unread": folder.unread_count
+                    + sum(a.unread_count for a in folder.aliases.all()),
                 }
                 for folder in folders
             ],

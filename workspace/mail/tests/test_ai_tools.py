@@ -1,10 +1,15 @@
+import json
 from datetime import UTC, datetime
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.mail.ai_tools import MailToolProvider, ReadEmailParams
+from workspace.mail.ai_tools import (
+    ListMailAccountScopedParams,
+    MailToolProvider,
+    ReadEmailParams,
+)
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.users.services.settings import set_setting
 
@@ -51,3 +56,55 @@ class ReadEmailTimezoneTests(TestCase):
             context={},
         )
         self.assertIn("Date: 2026-02-01 00:30", result)
+
+
+class ListFoldersMergeTests(TestCase):
+    """The AI must not be offered an alias as a move target."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="aimerge", email="aimerge@test.com", password="pass123"
+        )
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email="user@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="user@example.com",
+        )
+        self.trash = MailFolder.objects.create(
+            account=self.account,
+            name="Trash",
+            display_name="Trash",
+            folder_type="trash",
+            message_count=3,
+            unread_count=1,
+        )
+        MailFolder.objects.create(
+            account=self.account,
+            name="Corbeille",
+            display_name="Corbeille",
+            folder_type="trash",
+            alias_of=self.trash,
+            message_count=4,
+            unread_count=2,
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_listing_skips_aliases_and_sums_the_group(self):
+        raw = MailToolProvider().list_folders(
+            ListMailAccountScopedParams(account="user@example.com"),
+            user=self.user,
+            bot=None,
+            conversation_id=None,
+            context={},
+        )
+        folders = json.loads(raw)
+
+        names = {f["name"] for f in folders}
+        self.assertNotIn("Corbeille", names)
+        trash = next(f for f in folders if f["name"] == "Trash")
+        self.assertEqual(trash["messages"], 7)
+        self.assertEqual(trash["unread"], 3)

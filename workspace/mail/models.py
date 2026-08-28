@@ -135,6 +135,18 @@ class MailFolder(models.Model):
     # affect AI event extraction or user-defined rules.
     ai_classify_disabled = models.BooleanField(default=False)
 
+    # Merged duplicates: this folder is a synonym of `alias_of`, and the app
+    # reads, counts and files under that one instead. Purely local - the
+    # mailbox keeps syncing on its own UIDs. Groups are exactly two levels
+    # deep, which is what lets folder_group_ids() be a single query.
+    alias_of = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="aliases",
+    )
+
     uid_validity = models.BigIntegerField(default=0)
     message_count = models.IntegerField(default=0)
     unread_count = models.IntegerField(default=0)
@@ -149,6 +161,10 @@ class MailFolder(models.Model):
             models.UniqueConstraint(
                 fields=["account", "name"],
                 name="unique_mail_folder",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(alias_of=models.F("uuid")),
+                name="mail_folder_alias_not_self",
             ),
         ]
         indexes = [

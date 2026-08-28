@@ -22,11 +22,11 @@ from rest_framework.views import APIView
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 
-from .models import VaultTag
-from .queries import active_identity, reachable_vault, visible_tags
-from .serializers import VaultTagSerializer, VaultTagWriteSerializer
-from .services.attestation import AttestationError
-from .services.metadata import tag_metadata_payload, verify_record
+from ..models import VaultTag
+from ..queries import active_identity, reachable_vault, visible_tags
+from ..serializers import VaultTagSerializer, VaultTagWriteSerializer
+from ..services.attestation import AttestationError
+from ..services.metadata import tag_metadata_payload, verify_record
 
 SENSITIVE_BODY_FIELDS = ("encrypted_name", "metadata_sig")
 

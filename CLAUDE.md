@@ -294,8 +294,9 @@ Examples in the codebase: `files/services/{files,mime,thumbnails,sharing,events}
 
 A module starts with a flat `views.py`. The moment it needs a second view module, it becomes a
 `views/` **package** with an empty `__init__.py` - never a sprawl of `views_<topic>.py` siblings at
-the module root. `chat`, `mail`, `files`, `core`, `projects` and `calendar` are already there;
-`vault` still has the flat pair and will convert when it grows a third.
+the module root. `chat`, `mail`, `files`, `core`, `projects`, `calendar` and `vault` are already
+there; `users`, `ai`, `imports`, `notifications`, `dashboard` and `common` still hold a single
+`views.py`, which is the right shape until they need a second.
 
 ```
 workspace/<module>/

@@ -26,15 +26,15 @@ from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
 
-from .models import AccountIdentity
-from .serializers import (
+from ..models import AccountIdentity
+from ..serializers import (
     AccountEnvelopeSerializer,
     AccountFinalizeSerializer,
     AccountInitResponseSerializer,
     AccountRotateSerializer,
 )
-from .services.attestation import AttestationError, verify_kex_pub_attestation
-from .throttling import (
+from ..services.attestation import AttestationError, verify_kex_pub_attestation
+from ..throttling import (
     AccountEnvelopeBurstThrottle,
     AccountEnvelopeIpThrottle,
     AccountEnvelopeUserThrottle,

@@ -1,71 +1,71 @@
 from django.urls import path
 
-from . import views, views_entries, views_folders, views_tags, views_vaults
+from .views import account, entries, folders, tags, vaults
 
 urlpatterns = [
     path(
         "api/v1/vault/account/init",
-        views.AccountInitView.as_view(),
+        account.AccountInitView.as_view(),
         name="vault-account-init",
     ),
     path(
         "api/v1/vault/account/finalize",
-        views.AccountFinalizeView.as_view(),
+        account.AccountFinalizeView.as_view(),
         name="vault-account-finalize",
     ),
     path(
         "api/v1/vault/account/envelope",
-        views.AccountEnvelopeView.as_view(),
+        account.AccountEnvelopeView.as_view(),
         name="vault-account-envelope",
     ),
     path(
         "api/v1/vault/account/rotate",
-        views.AccountRotateView.as_view(),
+        account.AccountRotateView.as_view(),
         name="vault-account-rotate",
     ),
     path(
         "api/v1/vault/vaults",
-        views_vaults.VaultListView.as_view(),
+        vaults.VaultListView.as_view(),
         name="vault-list",
     ),
     path(
         "api/v1/vault/vaults/<uuid:uuid>",
-        views_vaults.VaultDetailView.as_view(),
+        vaults.VaultDetailView.as_view(),
         name="vault-detail",
     ),
     path(
         "api/v1/vault/folders",
-        views_folders.FolderListView.as_view(),
+        folders.FolderListView.as_view(),
         name="vault-folder-list",
     ),
     path(
         "api/v1/vault/folders/<uuid:uuid>",
-        views_folders.FolderDetailView.as_view(),
+        folders.FolderDetailView.as_view(),
         name="vault-folder-detail",
     ),
     path(
         "api/v1/vault/folders/<uuid:uuid>/delete",
-        views_folders.FolderDeleteView.as_view(),
+        folders.FolderDeleteView.as_view(),
         name="vault-folder-delete",
     ),
     path(
         "api/v1/vault/tags",
-        views_tags.TagListView.as_view(),
+        tags.TagListView.as_view(),
         name="vault-tag-list",
     ),
     path(
         "api/v1/vault/tags/<uuid:uuid>",
-        views_tags.TagDetailView.as_view(),
+        tags.TagDetailView.as_view(),
         name="vault-tag-detail",
     ),
     path(
         "api/v1/vault/entries",
-        views_entries.EntryListView.as_view(),
+        entries.EntryListView.as_view(),
         name="vault-entry-list",
     ),
     path(
         "api/v1/vault/entries/<uuid:uuid>",
-        views_entries.EntryDetailView.as_view(),
+        entries.EntryDetailView.as_view(),
         name="vault-entry-detail",
     ),
 ]

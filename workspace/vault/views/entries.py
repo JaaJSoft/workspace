@@ -23,11 +23,11 @@ from workspace.common.booleans import is_truthy
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 
-from .models import VaultEntry
-from .queries import accessible_entries_q, active_identity, reachable_vault
-from .serializers import VaultEntrySerializer, VaultEntryWriteSerializer
-from .services.attestation import AttestationError
-from .services.entries import (
+from ..models import VaultEntry
+from ..queries import accessible_entries_q, active_identity, reachable_vault
+from ..serializers import VaultEntrySerializer, VaultEntryWriteSerializer
+from ..services.attestation import AttestationError
+from ..services.entries import (
     UnknownFolder,
     UnknownTag,
     entry_queryset,
@@ -36,7 +36,7 @@ from .services.entries import (
     resolve_tags,
     write_entry,
 )
-from .services.metadata import verify_record
+from ..services.metadata import verify_record
 
 SENSITIVE_BODY_FIELDS = (
     "encrypted_name",

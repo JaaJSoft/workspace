@@ -198,6 +198,6 @@ def verify_record(payload, sig_public_b64, metadata_sig_b64) -> None:
         raise AttestationError("record signature does not verify") from exc
 
 
-# The name views_vaults.py calls. Kept because a vault's signature is verified
+# The name views/vaults.py calls. Kept because a vault's signature is verified
 # no differently from any other record's.
 verify_vault_metadata = verify_record

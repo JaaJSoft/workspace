@@ -18,16 +18,16 @@ from rest_framework.views import APIView
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 
-from .models import VaultEntry, VaultFolder
-from .queries import active_identity, reachable_vault, visible_folders
-from .serializers import (
+from ..models import VaultEntry, VaultFolder
+from ..queries import active_identity, reachable_vault, visible_folders
+from ..serializers import (
     FolderDeleteSerializer,
     VaultFolderSerializer,
     VaultFolderWriteSerializer,
 )
-from .services.attestation import AttestationError
-from .services.entries import entry_signature_payload
-from .services.metadata import folder_metadata_payload, verify_record
+from ..services.attestation import AttestationError
+from ..services.entries import entry_signature_payload
+from ..services.metadata import folder_metadata_payload, verify_record
 
 SENSITIVE_BODY_FIELDS = ("encrypted_name", "metadata_sig")
 

@@ -38,7 +38,7 @@ dependencies = [
     # webdav
     "wsgidav>=4.3.5",
     # server
-    "gunicorn>=26.1.0",
+    "gunicorn>=26.2.0",
     "django-http-compression[brotli]>=1.4.0",
     "gevent>=26.8.0",
     "django-prometheus>=2.5.0",

@@ -267,9 +267,25 @@ jobs:
 
   js:
     runs-on: ubuntu-latest
-    name: JS unit tests
     needs: changes
     if: needs.changes.outputs.js == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # Only modules that actually have tests/js/ test cases.
+        module:
+          - calendar
+          - chat
+          - common
+          - core
+          - dashboard
+          - files
+          - imports
+          - mail
+          - notes
+          - projects
+          - vault
+    name: JS (${{ matrix.module }})
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -280,7 +296,7 @@ jobs:
           node-version: '24'
 
       - name: Run JS unit tests
-        run: node --test "workspace/*/tests/js/**/*.test.js"
+        run: node --test "workspace/${{ matrix.module }}/tests/js/**/*.test.js"
 
   webdav-mount:
     runs-on: ubuntu-latest

@@ -73,8 +73,11 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/tests.yml'
+            # The bundle tests read scripts/frontend as input: a dependency bump
+            # there is exactly the change that can leave a vendored artifact stale.
             js:
               - 'workspace/**/*.js'
+              - 'scripts/frontend/**'
               - '.github/workflows/tests.yml'
             # djlint only reads HTML files and its config in pyproject.toml.
             templates:

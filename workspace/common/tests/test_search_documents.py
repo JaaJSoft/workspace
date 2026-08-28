@@ -122,17 +122,30 @@ class PostgresStatementTests(SimpleTestCase):
 
 
 class SqliteCapabilityCheckTests(SimpleTestCase):
+    # The version branch is only reached once a connection reports sqlite, so
+    # these pin the connection too: read against a PostgreSQL default database
+    # the check would short-circuit, and the tests would stop testing anything.
+    def _sqlite_connections(self):
+        return mock.patch.object(
+            checks, "connections", mock.Mock(all=lambda: [mock.Mock(vendor="sqlite")])
+        )
+
     def test_no_warning_on_a_recent_sqlite(self):
-        with mock.patch.object(checks.sqlite3, "sqlite_version_info", (3, 50, 4)):
+        with (
+            self._sqlite_connections(),
+            mock.patch.object(checks.sqlite3, "sqlite_version_info", (3, 50, 4)),
+        ):
             self.assertEqual(checks.check_sqlite_fts_support(None), [])
 
     def test_warning_on_a_build_without_contentless_delete(self):
         with (
+            self._sqlite_connections(),
             mock.patch.object(checks.sqlite3, "sqlite_version_info", (3, 42, 0)),
             mock.patch.object(checks.sqlite3, "sqlite_version", "3.42.0"),
         ):
             warnings = checks.check_sqlite_fts_support(None)
         self.assertEqual([w.id for w in warnings], ["common.W001"])
+        self.assertIn("3.42.0", warnings[0].msg)
 
     def test_no_warning_when_no_connection_is_sqlite(self):
         with mock.patch.object(

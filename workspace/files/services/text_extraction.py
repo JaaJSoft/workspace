@@ -30,6 +30,8 @@ _MAX_READ_BYTES = BODY_CAP * 4
 
 _SCRIPT_OR_STYLE_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.I | re.S)
 
+_WHITESPACE_RE = re.compile(r"\s+")
+
 _EXTRACTORS: dict[str, callable] = {}
 
 
@@ -78,7 +80,16 @@ def _extract_plain(text):
 def _extract_html(text):
     # Script and style bodies are markup payload, not prose: strip_tags alone
     # would keep their contents and index minified JavaScript.
-    return html.unescape(strip_tags(_SCRIPT_OR_STYLE_RE.sub(" ", text)))
+    text = _SCRIPT_OR_STYLE_RE.sub(" ", text)
+    # strip_tags leaves nothing where a tag was, so "<h1>Title</h1><p>Body</p>"
+    # collapses to the single token "TitleBody" and neither word is findable.
+    # A space in front of every "<" restores the boundary - it can only add a
+    # separator, never swallow content, and unlike a tag-shaped regex it leaves
+    # the actual parsing to strip_tags.
+    text = html.unescape(strip_tags(text.replace("<", " <")))
+    # Markup indentation would otherwise eat into the character budget that
+    # real prose needs.
+    return _WHITESPACE_RE.sub(" ", text).strip()
 
 
 register_extractor("text/html", _extract_html)

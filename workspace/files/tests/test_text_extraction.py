@@ -61,6 +61,29 @@ class ExtractTextTests(TestCase):
         self.assertNotIn("secretvar", body)
         self.assertNotIn("color", body)
 
+    def test_adjacent_html_blocks_stay_separate_words(self):
+        # strip_tags puts nothing in a removed tag's place, so without a
+        # boundary "<h1>Title</h1><p>Body</p>" becomes the single token
+        # "TitleBody" and neither word can ever be found.
+        for payload in (
+            b"<p>alpha</p><p>beta</p>",
+            b"<h1>alpha</h1><p>beta</p>",
+            b"<ul><li>alpha</li><li>beta</li></ul>",
+            b"<table><tr><td>alpha</td><td>beta</td></tr></table>",
+        ):
+            with self.subTest(payload=payload):
+                words = extract_text(self._file("a.html", "text/html", payload)).split()
+                self.assertIn("alpha", words)
+                self.assertIn("beta", words)
+
+    def test_html_whitespace_is_collapsed(self):
+        # The body is capped, so runs of markup indentation must not eat the
+        # budget that real prose needs.
+        payload = b"<p>alpha</p>\n\n   \t<p>beta</p>"
+        self.assertEqual(
+            extract_text(self._file("a.html", "text/html", payload)), "alpha beta"
+        )
+
     def test_html_entities_are_decoded(self):
         f = self._file("a.html", "text/html", b"<p>caf&eacute; &amp; cr&egrave;me</p>")
         self.assertIn("café", extract_text(f))

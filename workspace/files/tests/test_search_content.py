@@ -63,6 +63,22 @@ class SearchFilesProviderTests(ContentSearchTestCase):
             ["page.html"],
         )
 
+    def test_adjacent_html_blocks_are_searchable_as_separate_words(self):
+        # Real markup has no whitespace between block tags; without a boundary
+        # the two headings would be indexed as one unsearchable token.
+        self._file(
+            self.user,
+            "handbook.html",
+            b"<h1>Onboarding</h1><p>Expenses</p>",
+            mime="text/html",
+        )
+        for term in ("onboarding", "expenses"):
+            with self.subTest(term=term):
+                self.assertEqual(
+                    [r.name for r in search_files(term, self.user, limit=10)],
+                    ["handbook.html"],
+                )
+
     def test_name_search_is_accent_insensitive(self):
         self._file(self.user, "Réunion.md")
         results = search_files("reunion", self.user, limit=10)

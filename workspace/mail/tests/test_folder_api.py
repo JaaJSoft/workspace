@@ -933,7 +933,7 @@ class MailFolderMergeApiTests(MailTestMixin, APITestCase):
             self.url(self.custom), {"into": str(self.custom.uuid)}, format="json"
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("detail", resp.data)
+        self.assertEqual(resp.data["detail"], "A folder cannot be merged into itself")
 
     def test_chained_merge_returns_400(self):
         self.client.post(
@@ -949,6 +949,28 @@ class MailFolderMergeApiTests(MailTestMixin, APITestCase):
             self.url(extra), {"into": str(self.custom.uuid)}, format="json"
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            resp.data["detail"], "The target folder is already merged into another one"
+        )
+
+    def test_rejected_merges_carry_distinct_details(self):
+        """Each invariant names itself, so a client can tell them apart."""
+        self_merge = self.client.post(
+            self.url(self.custom), {"into": str(self.custom.uuid)}, format="json"
+        )
+        self.client.post(
+            self.url(self.custom), {"into": str(self.sent.uuid)}, format="json"
+        )
+        extra = MailFolder.objects.create(
+            account=self.account,
+            name="Extra2",
+            display_name="Extra2",
+            folder_type="other",
+        )
+        chained = self.client.post(
+            self.url(extra), {"into": str(self.custom.uuid)}, format="json"
+        )
+        self.assertNotEqual(self_merge.data["detail"], chained.data["detail"])
 
     def test_missing_into_returns_400(self):
         resp = self.client.post(self.url(self.custom), {}, format="json")

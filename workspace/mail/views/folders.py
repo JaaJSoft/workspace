@@ -247,6 +247,16 @@ class MailFolderUpdateView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# Keyed by MergeError.code so the response body is built from literals here
+# rather than from anything carried on the exception.
+_MERGE_ERROR_DETAIL = {
+    "self": "A folder cannot be merged into itself",
+    "cross_account": "Only folders of the same account can be merged",
+    "target_is_alias": "The target folder is already merged into another one",
+    "has_aliases": "Unmerge this folder's own aliases before merging it",
+}
+
+
 @extend_schema(tags=["Mail - Folders & Labels"])
 class MailFolderMergeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -287,7 +297,14 @@ class MailFolderMergeView(APIView):
         try:
             canonical = merge_folder(folder, target)
         except MergeError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "detail": _MERGE_ERROR_DETAIL.get(
+                        e.code, "This merge is not allowed"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return self._serialized(canonical)
 
     @extend_schema(summary="Detach a folder from its merge group")

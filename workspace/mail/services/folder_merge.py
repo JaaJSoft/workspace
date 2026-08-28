@@ -20,19 +20,28 @@ logger = logging.getLogger(__name__)
 
 
 class MergeError(ValueError):
-    """A merge that would break a group invariant."""
+    """A merge that would break a group invariant.
+
+    Carries a stable `code` rather than prose: the wording belongs to the API
+    layer, next to the other folder errors, and nothing derived from an
+    exception should reach a response body.
+    """
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
 
 
 def merge_folder(folder, into):
     """Make `folder` an alias of `into`. Returns the canonical folder."""
     if folder.pk == into.pk:
-        raise MergeError("A folder cannot be merged into itself.")
+        raise MergeError("self")
     if folder.account_id != into.account_id:
-        raise MergeError("Only folders of the same account can be merged.")
+        raise MergeError("cross_account")
     if into.alias_of_id:
-        raise MergeError("The target folder is already merged into another one.")
+        raise MergeError("target_is_alias")
     if MailFolder.objects.filter(alias_of=folder).exists():
-        raise MergeError("Unmerge this folder's own aliases before merging it.")
+        raise MergeError("has_aliases")
 
     with transaction.atomic():
         # A canonical typed `other` takes the alias's special type: merging

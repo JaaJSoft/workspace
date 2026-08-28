@@ -65,6 +65,26 @@ class ExtractTextTests(TestCase):
         f = self._file("a.html", "text/html", b"<p>caf&eacute; &amp; cr&egrave;me</p>")
         self.assertIn("café", extract_text(f))
 
+    def test_text_like_application_types_are_extracted(self):
+        # The app files these under the "text" category with a text viewer,
+        # so search must see what the viewer shows.
+        for name, mime, payload in (
+            ("conf.json", "application/json", b'{"region": "lisbon"}'),
+            ("feed.xml", "application/xml", b"<city>lisbon</city>"),
+            ("app.js", "application/javascript", b"const city = 'lisbon';"),
+            ("mod.py", "application/x-python-code", b"CITY = 'lisbon'"),
+        ):
+            with self.subTest(mime=mime):
+                self.assertIn("lisbon", extract_text(self._file(name, mime, payload)))
+
+    def test_binary_application_types_yield_nothing(self):
+        for name, mime, payload in (
+            ("doc.pdf", "application/pdf", b"%PDF-1.4 lisbon"),
+            ("arch.zip", "application/zip", b"PK lisbon"),
+        ):
+            with self.subTest(mime=mime):
+                self.assertIsNone(extract_text(self._file(name, mime, payload)))
+
     def test_binary_content_yields_nothing(self):
         f = self._file("a.png", "image/png", b"\x89PNG\r\n\x1a\n\xff\xfe")
         self.assertIsNone(extract_text(f))

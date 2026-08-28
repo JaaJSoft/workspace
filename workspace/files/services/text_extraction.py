@@ -83,6 +83,19 @@ def _extract_html(text):
 
 register_extractor("text/html", _extract_html)
 
+# Text the app already treats as text: MimeTypeRule files these under the
+# "text" category with the text viewer, so a user reading one on screen would
+# not understand why search cannot see the words in front of them. Indexed
+# raw - element and key names are usually what someone searches an XML or
+# JSON file for.
+for _mime in (
+    "application/json",
+    "application/xml",
+    "application/javascript",
+    "application/x-python-code",
+):
+    register_extractor(_mime, _extract_plain)
+
 
 def _read_bounded(file_obj):
     if not file_obj.content or not file_obj.content.name:

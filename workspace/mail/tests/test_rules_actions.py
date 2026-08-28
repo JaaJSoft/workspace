@@ -138,7 +138,7 @@ class FlagActionTests(_BaseActionTests):
     )
     def test_mark_read_imap_failure_still_writes_db(self, _mock):
         """IMAP failure must not abort the DB update (existing pattern in
-        views_messages.MailMessageDetailView)."""
+        views/messages.py MailMessageDetailView)."""
         action = parse_actions([{"type": "mark_read"}])[0]
         result = apply_action(action, self.msg)
         self.assertTrue(result["ok"])  # DB write succeeded

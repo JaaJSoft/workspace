@@ -1,5 +1,5 @@
 // Polls UI: list, create, edit, detail (voting grid), finalize, share,
-// and invitee management. Backend already lives in calendar/views_polls.py.
+// and invitee management. Backend already lives in calendar/views/polls.py.
 // Calls into pollUtils helpers from polls.js for vote-class/icon and
 // slot date/time formatting (kept in polls.js because they're shared with
 // the standalone /polls/<token> guest-vote page).

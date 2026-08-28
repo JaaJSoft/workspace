@@ -84,11 +84,11 @@ class SendMessageEndpointTests(MessagePostingMixin, APITestCase):
     def _send(self, body="hello"):
         # The bot member would otherwise answer eagerly (Celery runs inline in
         # tests), fail on the missing API key, and post an error message whose
-        # own side effects would land in these assertions. views_messages
+        # own side effects would land in these assertions. views/messages.py
         # imports the trigger lazily, so the definition site is the one to
-        # patch; views_interactions binds it at import time and needs its own.
+        # patch; views/interactions.py binds it at import time and needs its own.
         with self.captureOnCommitCallbacks(execute=True):
-            with patch("workspace.chat.views._trigger_bot_response"):
+            with patch("workspace.chat.views.conversations._trigger_bot_response"):
                 return self.client.post(self.url, {"body": body}, format="json")
 
     def test_increments_unread_for_others_and_not_the_author(self, _push, _sse):
@@ -132,7 +132,7 @@ class FanOutIsolationTests(MessagePostingMixin, APITestCase):
 
     def _send(self):
         with self.captureOnCommitCallbacks(execute=True):
-            with patch("workspace.chat.views._trigger_bot_response"):
+            with patch("workspace.chat.views.conversations._trigger_bot_response"):
                 return self.client.post(self.url, {"body": "hello"}, format="json")
 
     @patch(
@@ -239,7 +239,7 @@ class InteractionAnswerTests(MessagePostingMixin, APITestCase):
 
     def _answer(self):
         with self.captureOnCommitCallbacks(execute=True):
-            with patch("workspace.chat.views_interactions._trigger_bot_response"):
+            with patch("workspace.chat.views.interactions._trigger_bot_response"):
                 return self.client.post(self.url, {"option_index": 0}, format="json")
 
     def test_posts_the_answer_as_a_message(self, _push, _sse):

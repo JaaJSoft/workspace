@@ -600,7 +600,7 @@ class ExternalCalendarAPITests(APITestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, http_status.HTTP_403_FORBIDDEN)
 
-    @patch("workspace.calendar.views_external.sync_external_calendar_task")
+    @patch("workspace.calendar.views.external.sync_external_calendar_task")
     def test_create_external_calendar(self, mock_task):
         mock_task.delay = MagicMock()
 
@@ -668,7 +668,7 @@ class ExternalCalendarAPITests(APITestCase):
         resp = self.client.put(f"{self.url}/{ext.uuid}", {"name": "Hacked"})
         self.assertEqual(resp.status_code, http_status.HTTP_404_NOT_FOUND)
 
-    @patch("workspace.calendar.views_external.sync_external_calendar_task")
+    @patch("workspace.calendar.views.external.sync_external_calendar_task")
     def test_manual_sync(self, mock_task):
         mock_task.delay = MagicMock()
         cal = Calendar.objects.create(name="SyncMe", owner=self.user)

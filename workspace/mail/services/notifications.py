@@ -157,7 +157,7 @@ def settle_message_notifications(user, message_pks) -> int:
 
     Lightweight, unsaved ``MailMessage`` instances stand in for the rows,
     mirroring the pattern already used for a single source in
-    ``chat/views_messages.py``.
+    ``chat/views/messages.py``.
     """
     message_pks = list(message_pks)
     if not message_pks:

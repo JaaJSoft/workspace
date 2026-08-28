@@ -417,12 +417,15 @@ def conversation_messages_view(request, conversation_uuid):
         m for m in messages_page if m.author_id == request.user.id and not m.deleted_at
     ]
     if own_msgs:
-        active_members = ConversationMember.objects.filter(
-            conversation_id=conversation_uuid,
-            left_at__isnull=True,
-        ).exclude(user=request.user)
-        total_recipients = active_members.count()
-        member_read_ats = list(active_members.values_list("last_read_at", flat=True))
+        member_read_ats = list(
+            ConversationMember.objects.filter(
+                conversation_id=conversation_uuid,
+                left_at__isnull=True,
+            )
+            .exclude(user=request.user)
+            .values_list("last_read_at", flat=True)
+        )
+        total_recipients = len(member_read_ats)
         for msg in own_msgs:
             read_count = sum(1 for ra in member_read_ats if ra and ra >= msg.created_at)
             msg.read_count = read_count

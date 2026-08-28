@@ -1,6 +1,8 @@
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -325,3 +327,64 @@ class ProjectEstimateUnitApiTests(ProjectTestMixin, APITestCase):
     def test_unknown_unit_is_rejected(self):
         resp = self._patch({"estimate_unit": "days"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ProjectListQueryCountTests(ProjectTestMixin, APITestCase):
+    """The listing is unpaginated, so anything resolved per project is
+    unbounded work."""
+
+    def _add_projects(self, count):
+        # Numbered from the current total so a second call keeps minting
+        # unique group names.
+        start = Project.objects.count()
+        for i in range(start, start + count):
+            project = create_project(self.admin, name=f"Scale {i}")
+            project.groups.add(Group.objects.create(name=f"scale-group-{i}"))
+
+    def _group_queries(self):
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get("/api/v1/projects")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Access control resolves the caller's own groups too, so count the
+        # queries rather than expecting none of them.
+        return [q for q in ctx.captured_queries if 'FROM "auth_group"' in q["sql"]]
+
+    def test_groups_are_not_fetched_once_per_project(self):
+        self.client.force_authenticate(self.admin)
+        self._add_projects(2)
+        baseline = len(self._group_queries())
+
+        self._add_projects(10)
+
+        after = len(self._group_queries())
+        self.assertEqual(
+            after,
+            baseline,
+            msg=(
+                f"the groups M2M must be prefetched - baseline={baseline}, "
+                f"after adding 10 projects={after}"
+            ),
+        )
+
+    def test_query_count_does_not_scale_with_project_count(self):
+        self.client.force_authenticate(self.admin)
+        self._add_projects(2)
+
+        with CaptureQueriesContext(connection) as ctx_baseline:
+            self.client.get("/api/v1/projects")
+        baseline = len(ctx_baseline)
+
+        self._add_projects(10)
+
+        with CaptureQueriesContext(connection) as ctx_after:
+            response = self.client.get("/api/v1/projects")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            len(ctx_after),
+            baseline,
+            msg=(
+                f"Query count must not scale with project count - "
+                f"baseline={baseline}, after adding 10 projects={len(ctx_after)}"
+            ),
+        )

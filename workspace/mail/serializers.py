@@ -183,6 +183,10 @@ class MailFolderUpdateSerializer(serializers.Serializer):
     ai_classify_disabled = serializers.BooleanField(required=False)
 
 
+class MailFolderMergeSerializer(serializers.Serializer):
+    into = serializers.UUIDField()
+
+
 class MailAttachmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = MailAttachment

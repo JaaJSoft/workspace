@@ -95,6 +95,11 @@ urlpatterns = [
         name="mail-folder-mark-read",
     ),
     path(
+        "api/v1/mail/folders/<uuid:uuid>/merge",
+        views_folders.MailFolderMergeView.as_view(),
+        name="mail-folder-merge",
+    ),
+    path(
         "api/v1/mail/contacts/autocomplete",
         contacts.ContactAutocompleteView.as_view(),
         name="mail-contact-autocomplete",

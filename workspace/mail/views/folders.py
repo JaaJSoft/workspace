@@ -14,6 +14,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from ..models import MailAccount, MailFolder, MailMessage
 from ..serializers import (
     MailFolderCreateSerializer,
+    MailFolderMergeSerializer,
     MailFolderSerializer,
     MailFolderUpdateSerializer,
 )
@@ -227,6 +228,61 @@ class MailFolderUpdateView(APIView):
             )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=["Mail - Folders & Labels"])
+class MailFolderMergeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_folder(self, request, uuid):
+        try:
+            folder = MailFolder.objects.select_related("account", "alias_of").get(
+                uuid=uuid
+            )
+        except MailFolder.DoesNotExist:
+            return None
+        if folder.account.owner != request.user:
+            return None
+        return folder
+
+    def _serialized(self, folder):
+        folder = MailFolder.objects.prefetch_related("aliases").get(pk=folder.pk)
+        return Response(MailFolderSerializer(folder).data)
+
+    @extend_schema(
+        summary="Merge a folder into another one",
+        request=MailFolderMergeSerializer,
+    )
+    def post(self, request, uuid):
+        folder = self._get_folder(request, uuid)
+        if not folder:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailFolderMergeSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        target = self._get_folder(request, ser.validated_data["into"])
+        if not target:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from .services.folder_merge import MergeError, merge_folder
+
+        try:
+            canonical = merge_folder(folder, target)
+        except MergeError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return self._serialized(canonical)
+
+    @extend_schema(summary="Detach a folder from its merge group")
+    def delete(self, request, uuid):
+        folder = self._get_folder(request, uuid)
+        if not folder:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from .services.folder_merge import unmerge_folder
+
+        unmerge_folder(folder)
+        return self._serialized(folder)
 
 
 @extend_schema(tags=["Mail - Folders & Labels"])

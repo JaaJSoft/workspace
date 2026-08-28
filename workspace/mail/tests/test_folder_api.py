@@ -851,3 +851,77 @@ class MailFolderListMergeTests(MailTestMixin, APITestCase):
         sent = next(f for f in resp.data if f["name"] == "Sent")
         self.assertEqual(sent["message_count"], 7)
         self.assertEqual(sent["unread_count"], 3)
+
+
+class MailFolderMergeApiTests(MailTestMixin, APITestCase):
+    """POST/DELETE /api/v1/mail/folders/<uuid>/merge"""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.user)
+
+    def url(self, folder):
+        return f"/api/v1/mail/folders/{folder.uuid}/merge"
+
+    def test_merge_returns_the_canonical(self):
+        resp = self.client.post(
+            self.url(self.custom), {"into": str(self.sent.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["uuid"], str(self.sent.uuid))
+        self.assertEqual(
+            resp.data["aliases"],
+            [{"uuid": str(self.custom.uuid), "display_name": "MyFolder"}],
+        )
+        self.custom.refresh_from_db()
+        self.assertEqual(self.custom.alias_of_id, self.sent.pk)
+
+    def test_cross_account_merge_returns_404(self):
+        resp = self.client.post(
+            self.url(self.custom), {"into": str(self.other_folder.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_self_merge_returns_400(self):
+        resp = self.client.post(
+            self.url(self.custom), {"into": str(self.custom.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", resp.data)
+
+    def test_chained_merge_returns_400(self):
+        self.client.post(
+            self.url(self.custom), {"into": str(self.sent.uuid)}, format="json"
+        )
+        extra = MailFolder.objects.create(
+            account=self.account,
+            name="Extra",
+            display_name="Extra",
+            folder_type="other",
+        )
+        resp = self.client.post(
+            self.url(extra), {"into": str(self.custom.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_missing_into_returns_400(self):
+        resp = self.client.post(self.url(self.custom), {}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unmerge_detaches(self):
+        self.client.post(
+            self.url(self.custom), {"into": str(self.sent.uuid)}, format="json"
+        )
+
+        resp = self.client.delete(self.url(self.custom))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsNone(resp.data["alias_of"])
+        self.custom.refresh_from_db()
+        self.assertIsNone(self.custom.alias_of_id)
+
+    def test_other_users_folder_returns_404(self):
+        resp = self.client.post(
+            self.url(self.other_folder), {"into": str(self.sent.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

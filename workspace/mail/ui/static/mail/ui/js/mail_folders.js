@@ -13,6 +13,16 @@ window.mailFoldersMixin = function mailFoldersMixin() {
 
     },
 
+    // Resolve a folder UUID that may predate a merge to the folder actually
+    // in the sidebar: the canonical that owns it. Aliases are absent from
+    // the folder payload, so a bare uuid match misses them.
+    _resolveFolderUuid(accountUuid, folderUuid) {
+      const flds = this.folders[accountUuid] || [];
+      return flds.find(f => f.uuid === folderUuid)
+        || flds.find(f => (f.aliases || []).some(a => a.uuid === folderUuid))
+        || null;
+    },
+
     getFolders(accountUuid) {
       const flds = this.folders[accountUuid] || [];
       // Sort: inbox first, then by type, then alpha

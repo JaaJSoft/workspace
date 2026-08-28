@@ -152,7 +152,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         from unittest.mock import patch
 
         self.client.force_authenticate(self.member)
-        with patch("workspace.projects.viewsets.MAX_UPLOAD_BYTES", 4):
+        with patch("workspace.projects.views.viewsets.MAX_UPLOAD_BYTES", 4):
             resp = self.client.post(
                 self.url,
                 data={"files": [SimpleUploadedFile("big.bin", b"12345")]},

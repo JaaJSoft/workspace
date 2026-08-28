@@ -1,0 +1,73 @@
+from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import status, viewsets
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from workspace.common.uuids import parse_uuid_or_none
+from workspace.files.services import FileService
+
+from ..models import FileTag, Tag
+from ..serializers_tags import TagSerializer
+
+
+@extend_schema_view(
+    list=extend_schema(summary="List tags", tags=["Files - Tags"]),
+    create=extend_schema(summary="Create a tag", tags=["Files - Tags"]),
+    partial_update=extend_schema(summary="Update a tag", tags=["Files - Tags"]),
+    destroy=extend_schema(summary="Delete a tag", tags=["Files - Tags"]),
+)
+@extend_schema(tags=["Files - Tags"])
+class TagViewSet(viewsets.ModelViewSet):
+    serializer_class = TagSerializer
+    lookup_field = "uuid"
+    http_method_names = ["get", "post", "patch", "delete"]
+    pagination_class = None
+
+    def get_queryset(self):
+        return Tag.objects.filter(owner=self.request.user)
+
+
+class FileTagView(APIView):
+    """Add or remove tags on a file."""
+
+    @extend_schema(summary="Add a tag to a file", tags=["Files - Tags"])
+    def post(self, request, file_uuid):
+        file_obj = get_object_or_404(
+            FileService.user_files_qs(request.user),
+            uuid=file_uuid,
+        )
+        tag_uuid_raw = request.data.get("tag")
+        if not tag_uuid_raw:
+            return Response(
+                {"tag": "This field is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tag_uuid = parse_uuid_or_none(tag_uuid_raw)
+        if tag_uuid is None:
+            return Response({"tag": "Invalid tag."}, status=status.HTTP_400_BAD_REQUEST)
+
+        tag = Tag.objects.filter(uuid=tag_uuid, owner=request.user).first()
+        if not tag:
+            return Response({"tag": "Invalid tag."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if FileTag.objects.filter(file=file_obj, tag=tag).exists():
+            return Response(
+                {"detail": "Tag already assigned."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        FileTag.objects.create(file=file_obj, tag=tag)
+        return Response(TagSerializer(tag).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(summary="Remove a tag from a file", tags=["Files - Tags"])
+    def delete(self, request, file_uuid, tag_uuid):
+        file_obj = get_object_or_404(
+            FileService.user_files_qs(request.user),
+            uuid=file_uuid,
+        )
+        ft = FileTag.objects.filter(file=file_obj, tag__uuid=tag_uuid).first()
+        if not ft:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        ft.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

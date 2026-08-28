@@ -1,17 +1,17 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from .views import FileViewSet
-from .views_graph import FileGraphView
-from .views_share_links import (
+from .views.files import FileViewSet
+from .views.graph import FileGraphView
+from .views.share_links import (
     SharedFileContentView,
     SharedFileDownloadView,
     SharedFileMetaView,
     SharedFileVerifyView,
 )
-from .views_tags import FileTagView, TagViewSet
-from .views_thumbnails import GenerateThumbnailsView
-from .views_wopi import WopiFileContentsView, WopiFileView
+from .views.tags import FileTagView, TagViewSet
+from .views.thumbnails import GenerateThumbnailsView
+from .views.wopi import WopiFileContentsView, WopiFileView
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r"files", FileViewSet, basename="file")

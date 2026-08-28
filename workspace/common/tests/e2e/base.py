@@ -83,7 +83,7 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
             cls._playwright.stop()
             super().tearDownClass()
 
-    # The SSE handler in ``workspace/core/views_sse.py`` is a 600s long-poll
+    # The SSE handler in ``workspace/core/views/sse.py`` is a 600s long-poll
     # that runs in a server worker thread. The thread doesn't observe
     # client disconnect between ``time.sleep(1)`` ticks, so when a test
     # ends its in-flight stream keeps holding a DB connection. On Windows

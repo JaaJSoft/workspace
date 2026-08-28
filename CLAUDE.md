@@ -29,7 +29,7 @@ cd scripts/frontend && npm run build:vault && npm run build:vault-onboarding
 
 ## Module Map
 
-Each Django app under `workspace/` follows the same shape (`models.py`, `views.py`, `services/`, `tests/`, `ui/`, `urls.py`):
+Each Django app under `workspace/` follows the same shape (`models.py`, `views.py` or `views/`, `services/`, `tests/`, `ui/`, `urls.py`):
 
 | Module | Purpose |
 |---|---|
@@ -290,6 +290,39 @@ Examples in the codebase: `files/services/{files,mime,thumbnails,sharing,events}
 
 `@patch('workspace.<module>.services.<name>.symbol')` patches the symbol at its **definition site**. Patch there, not at a re-export alias - patches at an alias site bind a different name and the actual call site keeps running unmocked.
 
+### Views - one file while it fits, a `views/` package once it doesn't
+
+A module starts with a flat `views.py`. The moment it needs a second view module, it becomes a
+`views/` **package** with an empty `__init__.py` - never a sprawl of `views_<topic>.py` siblings at
+the module root. `chat`, `mail`, `files`, `core`, `projects` and `calendar` are already there;
+`vault` still has the flat pair and will convert when it grows a third.
+
+```
+workspace/<module>/
+├── views/
+│   ├── __init__.py    # empty - DO NOT re-export
+│   ├── <topic1>.py
+│   └── <topic2>.py
+└── urls.py
+```
+
+- File names are the topic alone, never prefixed: `chat/views/messages.py`, not
+  `chat/views/views_messages.py` and not `chat/views_messages.py`.
+- The module's original `views.py` gets a name too, after what it actually holds
+  (`chat/views/conversations.py`, `mail/views/accounts.py`, `files/views/files.py`). A file called
+  `views/views.py` is never the answer.
+- `urls.py` imports the submodules, not the package: `from .views import messages, pins`.
+- Moving a view one directory deeper changes every relative import inside it - `from .models import X`
+  becomes `from ..models import X`, including the lazy ones inside function bodies. Cross-app imports
+  that were `from ..common.x import y` become absolute `from workspace.common.x import y` rather than
+  growing a third dot.
+- Sibling views import each other by their real module (`from .conversations import _trigger_bot_response`).
+  `from ..views import ...` would resolve to the empty `__init__.py` and fail.
+- The same applies to `@patch` targets: `workspace.chat.views.conversations._trigger_bot_response`,
+  never `workspace.chat.views._trigger_bot_response`. The latter raises `AttributeError` against the
+  empty package, so a stale patch string fails loudly rather than silently - but only if a test
+  exercises it.
+
 ### Re-exports - ask before adding
 
 Re-exporting a symbol (via `__all__`, a top-level `from .x import y` whose only purpose is to surface `y` from a different module, or any other indirection that lets a caller `from workspace.A import X` when `X` is actually defined in `workspace.B`) creates a "where is this defined?" maze. It also breaks `@patch` at the call site (see *Test patches* above) and makes refactors that move the definition silently leak the old path.
@@ -540,7 +573,7 @@ with source.content.open('rb') as f:
 - Always pin this with a regression test that asserts `dest.content.name != source.content.name` after the copy AND that the bytes round-trip. Don't rely on a "content equality" check alone - the buggy version with a shared blob also passes a content check (it's the same blob).
 - Wrap the open + save in `try/except (FileNotFoundError, OSError)` whenever copying user-uploaded content. A vanished blob otherwise surfaces as a bare 500 with no breadcrumbs. Mirror the response code of the closest read endpoint (404 for chat / mail attachment paths) and log the path through `scrub()` before re-raising or returning.
 - `ContentFile(source.read(), ...)` happens to be _committed=False so it copies correctly, but it buffers the entire file in memory before re-emitting it. For anything that could grow (>1MB), prefer the `DjangoFile(open_stream, ...)` idiom.
-- Existing precedent in the codebase: `workspace/files/webdav/resources.py:_copy_as` (already correct), `workspace/chat/views_attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views.py:MailAttachmentSaveToFilesView`, `workspace/files/services/_storage_ops.py:copy_node`.
+- Existing precedent in the codebase: `workspace/files/webdav/resources.py:_copy_as` (already correct), `workspace/chat/views/attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views/attachments.py:MailAttachmentSaveToFilesView`, `workspace/files/services/_storage_ops.py:copy_node`.
 
 ### Prefer the standard library over hand-rolled collection plumbing
 

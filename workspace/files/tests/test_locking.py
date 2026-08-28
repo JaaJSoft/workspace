@@ -224,7 +224,7 @@ class FileLockAPITests(APITestCase):
             lock_expires_at=boundary,
         )
         self.client.force_authenticate(self.user)
-        with patch("workspace.files.views.timezone.now", return_value=boundary):
+        with patch("workspace.files.views.files.timezone.now", return_value=boundary):
             resp = self.client.get(self._url())
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["is_expired"])

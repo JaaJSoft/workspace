@@ -32,7 +32,7 @@ from drf_spectacular.views import (
 from mozilla_django_oidc import views as oidc_views
 
 from workspace.core.metrics_auth import metrics_basic_auth
-from workspace.core.views_health import LiveView, ReadyView, StartupView
+from workspace.core.views.health import LiveView, ReadyView, StartupView
 from workspace.users.ui.views import WorkspaceLoginView
 
 api_urlpatterns = [

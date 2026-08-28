@@ -1,10 +1,10 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from .views_actions import ProjectActionsView
-from .views_calendar import TaskCalendarView
-from .views_search import TaskSearchView
-from .viewsets import (
+from .views.actions import ProjectActionsView
+from .views.calendar import TaskCalendarView
+from .views.search import TaskSearchView
+from .views.viewsets import (
     EpicViewSet,
     LabelViewSet,
     MemberViewSet,

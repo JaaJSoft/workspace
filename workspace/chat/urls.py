@@ -1,238 +1,238 @@
 from django.urls import path
 
-from . import (
-    views,
-    views_attachments,
-    views_avatar,
-    views_bots,
-    views_calls,
-    views_goals,
-    views_interactions,
-    views_messages,
-    views_pins,
-    views_scheduled,
-    views_search,
-    views_threads,
-    views_typing,
+from .views import (
+    attachments,
+    avatar,
+    bots,
+    calls,
+    conversations,
+    goals,
+    interactions,
+    messages,
+    pins,
+    scheduled,
+    search,
+    threads,
+    typing,
 )
 
 urlpatterns = [
     # Conversations
     path(
         "api/v1/chat/conversations",
-        views.ConversationListView.as_view(),
+        conversations.ConversationListView.as_view(),
         name="chat-conversations",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>",
-        views.ConversationDetailView.as_view(),
+        conversations.ConversationDetailView.as_view(),
         name="chat-conversation-detail",
     ),
     # Threads
     path(
         "api/v1/chat/threads/<uuid:root_uuid>/read",
-        views_threads.ThreadReadView.as_view(),
+        threads.ThreadReadView.as_view(),
         name="chat-thread-read",
     ),
     # Members
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/members",
-        views.ConversationMembersView.as_view(),
+        conversations.ConversationMembersView.as_view(),
         name="chat-conversation-members",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/members/<int:user_id>",
-        views.ConversationMemberRemoveView.as_view(),
+        conversations.ConversationMemberRemoveView.as_view(),
         name="chat-conversation-member-remove",
     ),
     # Per-member notification level
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/notification-level",
-        views.ConversationNotificationLevelView.as_view(),
+        conversations.ConversationNotificationLevelView.as_view(),
         name="chat-conversation-notification-level",
     ),
     # Messages
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/messages/search",
-        views_search.ConversationMessageSearchView.as_view(),
+        search.ConversationMessageSearchView.as_view(),
         name="chat-message-search",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/messages",
-        views_messages.MessageListView.as_view(),
+        messages.MessageListView.as_view(),
         name="chat-messages",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/messages/<uuid:message_id>",
-        views_messages.MessageDetailView.as_view(),
+        messages.MessageDetailView.as_view(),
         name="chat-message-detail",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/messages/<uuid:message_id>/readers",
-        views_messages.MessageReadersView.as_view(),
+        messages.MessageReadersView.as_view(),
         name="chat-message-readers",
     ),
     # Reactions
     path(
         "api/v1/chat/messages/<uuid:message_id>/reactions",
-        views_messages.ReactionToggleView.as_view(),
+        messages.ReactionToggleView.as_view(),
         name="chat-reaction-toggle",
     ),
     # Stats
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/stats",
-        views_search.ConversationStatsView.as_view(),
+        search.ConversationStatsView.as_view(),
         name="chat-conversation-stats",
     ),
     # Media gallery
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/media",
-        views_search.ConversationMediaView.as_view(),
+        search.ConversationMediaView.as_view(),
         name="chat-conversation-media",
     ),
     # Read / Unread
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/read",
-        views_messages.MarkReadView.as_view(),
+        messages.MarkReadView.as_view(),
         name="chat-mark-read",
     ),
     path(
         "api/v1/chat/unread-counts",
-        views_typing.UnreadCountsView.as_view(),
+        typing.UnreadCountsView.as_view(),
         name="chat-unread-counts",
     ),
     # Typing indicator
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/typing",
-        views_typing.TypingIndicatorView.as_view(),
+        typing.TypingIndicatorView.as_view(),
         name="chat-typing",
     ),
     # Calls
     # Call connection diagnostic (user-scoped, no conversation)
     path(
         "api/v1/chat/call/diagnostic/signal",
-        views_calls.CallDiagnosticSignalView.as_view(),
+        calls.CallDiagnosticSignalView.as_view(),
         name="chat-call-diagnostic-signal",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/call",
-        views_calls.CallStateView.as_view(),
+        calls.CallStateView.as_view(),
         name="chat-call-state",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/call/join",
-        views_calls.CallJoinView.as_view(),
+        calls.CallJoinView.as_view(),
         name="chat-call-join",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/call/leave",
-        views_calls.CallLeaveView.as_view(),
+        calls.CallLeaveView.as_view(),
         name="chat-call-leave",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/call/signal",
-        views_calls.CallSignalView.as_view(),
+        calls.CallSignalView.as_view(),
         name="chat-call-signal",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/call/heartbeat",
-        views_calls.CallHeartbeatView.as_view(),
+        calls.CallHeartbeatView.as_view(),
         name="chat-call-heartbeat",
     ),
     # Group avatars
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/avatar",
-        views_avatar.GroupAvatarUploadView.as_view(),
+        avatar.GroupAvatarUploadView.as_view(),
         name="chat-group-avatar-upload",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/avatar/image",
-        views_avatar.GroupAvatarRetrieveView.as_view(),
+        avatar.GroupAvatarRetrieveView.as_view(),
         name="chat-group-avatar-retrieve",
     ),
     # Pinning (pin-reorder before uuid patterns to avoid ambiguity)
     path(
         "api/v1/chat/conversations/pin-reorder",
-        views_pins.ConversationPinReorderView.as_view(),
+        pins.ConversationPinReorderView.as_view(),
         name="chat-conversation-pin-reorder",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/pin",
-        views_pins.ConversationPinView.as_view(),
+        pins.ConversationPinView.as_view(),
         name="chat-conversation-pin",
     ),
     # Message pinning
     path(
         "api/v1/chat/messages/<uuid:message_id>/pin",
-        views_pins.MessagePinToggleView.as_view(),
+        pins.MessagePinToggleView.as_view(),
         name="chat-message-pin-toggle",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/pinned-messages",
-        views_pins.ConversationPinnedMessagesView.as_view(),
+        pins.ConversationPinnedMessagesView.as_view(),
         name="chat-conversation-pinned-messages",
     ),
     # Interactive AI questions
     path(
         "api/v1/chat/messages/<uuid:message_id>/answer",
-        views_interactions.MessageInteractionAnswerView.as_view(),
+        interactions.MessageInteractionAnswerView.as_view(),
         name="chat-message-interaction-answer",
     ),
     # Clear conversation
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/clear",
-        views_typing.ConversationClearView.as_view(),
+        typing.ConversationClearView.as_view(),
         name="chat-conversation-clear",
     ),
     # Scheduled messages
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/schedules",
-        views_scheduled.ScheduledMessageListView.as_view(),
+        scheduled.ScheduledMessageListView.as_view(),
         name="chat-scheduled-messages",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/schedules/<uuid:schedule_id>",
-        views_scheduled.ScheduledMessageDetailView.as_view(),
+        scheduled.ScheduledMessageDetailView.as_view(),
         name="chat-scheduled-message-detail",
     ),
     # Agent goals
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/goals",
-        views_goals.AgentGoalListView.as_view(),
+        goals.AgentGoalListView.as_view(),
         name="chat-agent-goals",
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/goals/<uuid:goal_id>",
-        views_goals.AgentGoalDetailView.as_view(),
+        goals.AgentGoalDetailView.as_view(),
         name="chat-agent-goal-detail",
     ),
     # Bot retry
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/messages/<uuid:message_id>/retry",
-        views_bots.BotRetryView.as_view(),
+        bots.BotRetryView.as_view(),
         name="chat-bot-retry",
     ),
     # Bot cancel
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/bot-cancel",
-        views_bots.BotCancelView.as_view(),
+        bots.BotCancelView.as_view(),
         name="chat-bot-cancel",
     ),
     # Regenerate AI conversation title
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/regenerate-title",
-        views_bots.ConversationRegenerateTitleView.as_view(),
+        bots.ConversationRegenerateTitleView.as_view(),
         name="chat-conversation-regenerate-title",
     ),
     # Attachments
     path(
         "api/v1/chat/attachments/<uuid:attachment_id>",
-        views_attachments.AttachmentDownloadView.as_view(),
+        attachments.AttachmentDownloadView.as_view(),
         name="chat-attachment-download",
     ),
     path(
         "api/v1/chat/attachments/<uuid:attachment_id>/save-to-files",
-        views_attachments.AttachmentSaveToFilesView.as_view(),
+        attachments.AttachmentSaveToFilesView.as_view(),
         name="chat-attachment-save-to-files",
     ),
 ]

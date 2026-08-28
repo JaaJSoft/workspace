@@ -362,7 +362,7 @@ class OAuthProvidersViewTest(TestCase):
         OAUTH_GENERIC_CLIENT_SECRET="",
     )
     def test_returns_available_providers(self):
-        from workspace.mail.views_oauth2 import OAuthProvidersView
+        from workspace.mail.views.oauth2 import OAuthProvidersView
 
         request = self.factory.get("/api/v1/mail/oauth2/providers")
         request.user = self.user
@@ -523,8 +523,8 @@ class OAuthReconnectTest(TestCase):
             last_sync_error="Authorization expired or revoked.",
         )
 
-    @patch("workspace.mail.views_oauth2.fetch_userinfo")
-    @patch("workspace.mail.views_oauth2.exchange_code")
+    @patch("workspace.mail.views.oauth2.fetch_userinfo")
+    @patch("workspace.mail.views.oauth2.exchange_code")
     def test_callback_reactivates_existing_account(self, mock_exchange, mock_userinfo):
         mock_exchange.return_value = {
             "access_token": "new_tok",

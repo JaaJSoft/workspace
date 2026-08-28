@@ -1,6 +1,6 @@
 from django.urls import path
 
-from workspace.mail.views_oauth2 import oauth2_callback
+from workspace.mail.views.oauth2 import oauth2_callback
 
 from . import views
 

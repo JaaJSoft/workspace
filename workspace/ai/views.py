@@ -278,7 +278,7 @@ class ClassifyView(APIView):
         serializer.is_valid(raise_exception=True)
 
         from workspace.mail.models import MailFolder, MailMessage
-        from workspace.mail.queries import user_account_ids
+        from workspace.mail.queries import folder_group_ids, user_account_ids
 
         account_ids = user_account_ids(request.user)
         account_id = serializer.validated_data.get("account_id")
@@ -290,10 +290,13 @@ class ClassifyView(APIView):
                 return Response(status=status.HTTP_404_NOT_FOUND)
             account_ids = account_ids.filter(pk=account_id)
 
+        folder = None
         if folder_id:
-            if not MailFolder.objects.filter(
-                uuid=folder_id, account_id__in=account_ids
-            ).exists():
+            try:
+                folder = MailFolder.objects.get(
+                    uuid=folder_id, account_id__in=account_ids
+                )
+            except MailFolder.DoesNotExist:
                 return Response(status=status.HTTP_404_NOT_FOUND)
 
         # Rate limit: 1 per user per 5 minutes
@@ -322,8 +325,8 @@ class ClassifyView(APIView):
         ).filter(
             message_labels__isnull=True,
         )
-        if folder_id:
-            qs = qs.filter(folder_id=folder_id)
+        if folder:
+            qs = qs.filter(folder_id__in=folder_group_ids(folder))
         else:
             qs = qs.filter(folder__folder_type="inbox")
 

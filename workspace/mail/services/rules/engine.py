@@ -180,9 +180,11 @@ def apply_rule_to_folder(rule, folder, *, dry_run: bool, limit: int = 500) -> di
 
     Returns ``{scanned, total, matched, applied, imap_failed, capped}``.
     """
+    from ...queries import folder_group_ids
+
     base = MailMessage.objects.filter(
         account=rule.account,
-        folder=folder,
+        folder_id__in=folder_group_ids(folder),
         deleted_at__isnull=True,
     )
     total = base.count()

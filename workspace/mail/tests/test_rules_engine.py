@@ -231,6 +231,21 @@ class ApplyRuleToFolderTests(TestCase):
         self.assertEqual(result["scanned"], 2)
         self.assertTrue(result["capped"])
 
+    def test_scans_alias_folder_too(self):
+        alias = MailFolder.objects.create(
+            account=self.account,
+            name="Corbeille",
+            display_name="Corbeille",
+            folder_type="other",
+            alias_of=self.folder,
+        )
+        self._msg(imap_uid=1)
+        self._msg(imap_uid=2, folder=alias)
+        rule = self._rule()
+        result = apply_rule_to_folder(rule, self.folder, dry_run=True)
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(result["matched"], 2)
+
     def test_disabled_rule_still_applies(self):
         self._msg(imap_uid=1)
         rule = self._rule(is_enabled=False)

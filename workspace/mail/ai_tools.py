@@ -91,17 +91,24 @@ def _resolve_message(user, uuid):
 def _resolve_folder(account, hint):
     """Return ``(folder, error)`` for a folder named by UUID or by name."""
     from workspace.mail.models import MailFolder
+    from workspace.mail.queries import canonical_folder
 
     hint = (hint or "").strip()
-    folders = list(MailFolder.objects.filter(account=account).order_by("display_name"))
+    # Aliases are absent from list_folders, so the model never sees one as a
+    # move target - only canonicals are candidates here too.
+    folders = list(
+        MailFolder.objects.filter(account=account, alias_of__isnull=True).order_by(
+            "display_name"
+        )
+    )
     if not hint:
         return None, "A folder is required."
     for folder in folders:
         if str(folder.uuid) == hint:
-            return folder, None
+            return canonical_folder(folder), None
     for folder in folders:
         if hint.casefold() in (folder.display_name.casefold(), folder.name.casefold()):
-            return folder, None
+            return canonical_folder(folder), None
     return None, (
         f'No folder named "{hint}" on {account.email}. '
         f"Call list_folders to see what exists."
@@ -277,7 +284,7 @@ class MailToolProvider(ToolProvider):
 Call this after finding an email via search_emails to get its complete content, \
 or when the user asks to read, open, or see the details of a specific email."""
         from workspace.mail.models import MailMessage
-        from workspace.mail.queries import user_account_ids
+        from workspace.mail.queries import canonical_folder, user_account_ids
 
         msg = (
             MailMessage.objects.filter(
@@ -285,7 +292,7 @@ or when the user asks to read, open, or see the details of a specific email."""
                 account_id__in=user_account_ids(user),
                 deleted_at__isnull=True,
             )
-            .select_related("folder", "account")
+            .select_related("folder__alias_of", "account")
             .first()
         )
         if not msg:
@@ -310,7 +317,7 @@ or when the user asks to read, open, or see the details of a specific email."""
 
             local_date = msg.date.astimezone(get_user_timezone(user))
             parts.append(f"Date: {local_date.strftime('%Y-%m-%d %H:%M')}")
-        parts.append(f"Folder: {msg.folder.display_name}")
+        parts.append(f"Folder: {canonical_folder(msg.folder).display_name}")
         if msg.has_attachments:
             parts.append("Attachments: yes")
         parts.append("")
@@ -336,7 +343,7 @@ Use read_email with the returned UUID to get the full content."""
             return "Error: query is required"
 
         from workspace.mail.models import MailMessage
-        from workspace.mail.queries import user_account_ids
+        from workspace.mail.queries import canonical_folder, user_account_ids
         from workspace.mail.search import fts_messages
 
         account_ids = user_account_ids(user)
@@ -345,7 +352,7 @@ Use read_email with the returned UUID to get the full content."""
                 account_id__in=account_ids, deleted_at__isnull=True
             )
             .exclude(folder__is_hidden=True)
-            .select_related("folder")
+            .select_related("folder__alias_of")
         )
         if args.unread_only:
             base = base.filter(is_read=False)
@@ -371,7 +378,9 @@ Use read_email with the returned UUID to get the full content."""
                     "date": msg.date.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
                     if msg.date
                     else "",
-                    "folder": msg.folder.display_name if msg.folder else "",
+                    "folder": canonical_folder(msg.folder).display_name
+                    if msg.folder
+                    else "",
                     "is_read": msg.is_read,
                     "has_attachments": msg.has_attachments,
                 }
@@ -772,10 +781,11 @@ the user wants a message gone."""
 
     def _move(self, message, target):
         """Move `message` to `target` and describe the outcome."""
+        from workspace.mail.queries import canonical_folder_id
         from workspace.mail.services.triage import move_to_folder
 
         subject = message.subject or "(no subject)"
-        if message.folder_id == target.pk:
+        if canonical_folder_id(message.folder) == target.pk:
             return f'"{subject}" is already in {target.display_name}.'
 
         _, error = _run_remote("move", move_to_folder, message, target)

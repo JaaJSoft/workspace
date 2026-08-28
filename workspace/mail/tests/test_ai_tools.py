@@ -80,7 +80,7 @@ class ListFoldersMergeTests(TestCase):
             message_count=3,
             unread_count=1,
         )
-        MailFolder.objects.create(
+        self.corbeille = MailFolder.objects.create(
             account=self.account,
             name="Corbeille",
             display_name="Corbeille",
@@ -108,3 +108,48 @@ class ListFoldersMergeTests(TestCase):
         trash = next(f for f in folders if f["name"] == "Trash")
         self.assertEqual(trash["messages"], 7)
         self.assertEqual(trash["unread"], 3)
+
+    def test_search_emails_reports_the_canonical_folder_name(self):
+        from workspace.mail.ai_tools import SearchEmailsParams
+
+        MailMessage.objects.create(
+            account=self.account,
+            folder=self.corbeille,
+            imap_uid=1,
+            subject="quarterly invoice",
+        )
+        raw = MailToolProvider().search_emails(
+            SearchEmailsParams(query="invoice"),
+            user=self.user,
+            bot=None,
+            conversation_id=None,
+            context={},
+        )
+        results = json.loads(raw)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["folder"], "Trash")
+
+    def test_read_email_reports_the_canonical_folder_name(self):
+        msg = MailMessage.objects.create(
+            account=self.account,
+            folder=self.corbeille,
+            imap_uid=2,
+            subject="hi",
+            from_name="Ext",
+            from_email="ext@example.com",
+        )
+        result = MailToolProvider().read_email(
+            ReadEmailParams(uuid=str(msg.uuid)),
+            user=self.user,
+            bot=None,
+            conversation_id=None,
+            context={},
+        )
+        self.assertIn("Folder: Trash", result)
+
+    def test_resolve_folder_does_not_offer_the_alias_as_a_target(self):
+        from workspace.mail.ai_tools import _resolve_folder
+
+        folder, error = _resolve_folder(self.account, "Corbeille")
+        self.assertIsNone(folder)
+        self.assertIn("No folder named", error)

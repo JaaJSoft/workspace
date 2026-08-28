@@ -199,6 +199,45 @@ class UnmergeFolderTests(FolderMergeTestMixin, TestCase):
         self.assertIsNone(self.trash.alias_of_id)
         self.assertEqual(self.trash.folder_type, "trash")
 
+    def test_unmerge_inherits_the_canonicals_hidden_state(self):
+        """The user hid the group; detaching a member must not resurface it."""
+        from workspace.mail.services.folder_merge import merge_folder, unmerge_folder
+
+        merge_folder(self.corbeille, self.trash)
+        # Simulate the canonical being hidden after the merge (the write
+        # that hides a canonical does not touch this row directly).
+        self.trash.is_hidden = True
+        self.trash.save(update_fields=["is_hidden"])
+        self.corbeille.refresh_from_db()
+        self.assertFalse(self.corbeille.is_hidden)
+
+        unmerge_folder(self.corbeille)
+
+        self.corbeille.refresh_from_db()
+        self.assertTrue(self.corbeille.is_hidden)
+
+
+class SetGroupHiddenTests(FolderMergeTestMixin, TestCase):
+    def test_hiding_the_canonical_hides_every_alias(self):
+        from workspace.mail.services.folder_merge import merge_folder, set_group_hidden
+
+        merge_folder(self.corbeille, self.trash)
+
+        set_group_hidden(self.trash, True)
+
+        self.corbeille.refresh_from_db()
+        self.assertTrue(self.corbeille.is_hidden)
+
+    def test_hiding_a_standalone_folder_does_not_touch_other_folders(self):
+        from workspace.mail.services.folder_merge import set_group_hidden
+
+        set_group_hidden(self.envoyes, True)
+
+        self.envoyes.refresh_from_db()
+        self.assertTrue(self.envoyes.is_hidden)
+        self.trash.refresh_from_db()
+        self.assertFalse(self.trash.is_hidden)
+
 
 class PromoteAliasTests(FolderMergeTestMixin, TestCase):
     def test_promotes_the_oldest_alias_and_repoints_the_rest(self):

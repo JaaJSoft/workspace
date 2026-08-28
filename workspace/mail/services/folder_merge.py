@@ -60,12 +60,30 @@ def unmerge_folder(folder):
     """Detach `folder` from its group. Returns it, standalone."""
     if not folder.alias_of_id:
         return folder
+    # Group visibility governs while grouped; the last group visibility
+    # sticks on detach. The user hid that mail, so detaching a member must
+    # not resurface it.
+    folder.is_hidden = folder.alias_of.is_hidden
     folder.alias_of = None
     # Back to what its own name says. Keeping the inherited type would put a
     # second trash-typed folder next to the real Trash.
     folder.folder_type = _detect_folder_type(folder.name, "")
-    folder.save(update_fields=["alias_of", "folder_type", "updated_at"])
+    folder.save(update_fields=["alias_of", "folder_type", "is_hidden", "updated_at"])
     return folder
+
+
+def set_group_hidden(folder, is_hidden):
+    """Apply the canonical's visibility to its whole group.
+
+    Search and the notification filter both key on the message's physical
+    folder, so an alias left visible under a hidden canonical keeps
+    notifying and keeps surfacing in search.
+    """
+    with transaction.atomic():
+        folder.is_hidden = is_hidden
+        folder.save(update_fields=["is_hidden", "updated_at"])
+        if folder.alias_of_id is None:
+            MailFolder.objects.filter(alias_of=folder).update(is_hidden=is_hidden)
 
 
 def promote_alias(folder, exclude_ids=()):

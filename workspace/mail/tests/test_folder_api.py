@@ -670,6 +670,52 @@ class MailFolderHideTests(MailTestMixin, APITestCase):
         self.assertEqual(len(resp.data), 3)
 
 
+class MailFolderHideGroupTests(MailTestMixin, APITestCase):
+    """Hiding a canonical with aliases must hide the whole group.
+
+    Search and the notification filter key on the message's physical
+    folder, so a visible alias under a hidden canonical would keep
+    surfacing mail the user just hid.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.alias = MailFolder.objects.create(
+            account=self.account,
+            name="MyFolder2",
+            display_name="MyFolder2",
+            folder_type="other",
+            alias_of=self.custom,
+        )
+
+    def _url(self, folder):
+        return f"/api/v1/mail/folders/{folder.uuid}"
+
+    def test_hiding_the_canonical_hides_the_alias(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._url(self.custom), {"is_hidden": True}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.alias.refresh_from_db()
+        self.assertTrue(self.alias.is_hidden)
+
+    def test_hiding_the_canonical_removes_alias_mail_from_search(self):
+        from workspace.mail.search import search_mail
+
+        MailMessage.objects.create(
+            account=self.account,
+            folder=self.alias,
+            imap_uid=1,
+            subject="quarterly invoice",
+        )
+        self.client.force_authenticate(self.user)
+        self.client.patch(self._url(self.custom), {"is_hidden": True}, format="json")
+
+        results = search_mail("invoice", self.user, 10)
+        self.assertEqual(results, [])
+
+
 # ---------- Mark All Read ----------
 
 

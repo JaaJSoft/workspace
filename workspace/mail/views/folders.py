@@ -190,6 +190,13 @@ class MailFolderUpdateView(APIView):
                         status=status.HTTP_502_BAD_GATEWAY,
                     )
 
+        # is_hidden on a canonical with aliases must propagate to the whole
+        # group, so it is not part of the plain field loop below.
+        if "is_hidden" in ser.validated_data and folder.aliases.all():
+            from .services.folder_merge import set_group_hidden
+
+            set_group_hidden(folder, ser.validated_data.pop("is_hidden"))
+
         # Update icon/color/is_hidden/ai_classify_disabled locally
         update_fields = ["updated_at"]
         for field in ("icon", "color", "is_hidden", "ai_classify_disabled"):

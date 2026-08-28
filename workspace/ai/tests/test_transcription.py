@@ -1,9 +1,11 @@
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import httpx2
 from django.test import SimpleTestCase, override_settings
 from openai import APIStatusError
 
+from workspace.ai.services import transcription
 from workspace.ai.services.transcription import (
     ai_transcribe_audio,
     is_transcription_enabled,
@@ -106,6 +108,99 @@ class TranscribeAudioTests(SimpleTestCase):
     def test_rejects_an_unconfigured_backend(self):
         with self.assertRaises(ValueError):
             ai_transcribe_audio(RECORDING)
+
+
+# What a browser actually uploads: MediaRecorder offers webm/opus and m4a,
+# never WAV, and this backend takes WAV only ("only WAV audio uploads are
+# currently supported for transcription").
+WEBM = bytes([0x1A, 0x45, 0xDF, 0xA3]) + bytes(64)  # EBML header
+
+
+@override_settings(**ASR_SETTINGS)
+class TranscodingTests(SimpleTestCase):
+    def test_a_wav_recording_is_sent_untouched(self):
+        with patch.object(transcription, "_to_wav") as convert:
+            with _ClientPatch("Bonjour.") as http:
+                ai_transcribe_audio(RECORDING)
+
+        convert.assert_not_called()
+        self.assertEqual(http.calls[0]["file"].read(), RECORDING)
+
+    def test_a_browser_recording_is_transcoded_before_it_is_sent(self):
+        with patch.object(transcription, "_to_wav", return_value=RECORDING) as convert:
+            with _ClientPatch("Bonjour.") as http:
+                self.assertEqual(ai_transcribe_audio(WEBM), "Bonjour.")
+
+        convert.assert_called_once_with(WEBM)
+        self.assertEqual(http.calls[0]["file"].read(), RECORDING)
+
+    def test_nothing_is_sent_when_the_recording_cannot_be_transcoded(self):
+        # ffmpeg missing or refusing the container: the caller keeps its
+        # "could not listen" note rather than the backend answering 400.
+        with patch.object(transcription, "_to_wav", return_value=None):
+            with _ClientPatch("Bonjour.") as http:
+                self.assertEqual(ai_transcribe_audio(WEBM), "")
+
+        self.assertEqual(http.calls, [])
+
+    def test_transcoding_is_skipped_without_ffmpeg(self):
+        with patch.object(transcription, "_FFMPEG", None):
+            self.assertIsNone(transcription._to_wav(WEBM))
+
+    @override_settings(CHAT_VOICE_MAX_SECONDS=300)
+    def test_the_decode_stops_at_the_length_the_recorder_allows(self):
+        # The upload cap is 50 MB, and Opus at its lowest bitrate packs about
+        # nineteen hours into that - two gigabytes of PCM read into a worker.
+        with (
+            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch.object(transcription.subprocess, "run") as run,
+        ):
+            transcription._to_wav(WEBM)
+
+        args = run.call_args[0][0]
+        self.assertIn("-t", args)
+        self.assertEqual(args[args.index("-t") + 1], "300")
+        # Before -i, so an overlong recording is never decoded in the first
+        # place rather than decoded whole and trimmed afterwards.
+        self.assertLess(args.index("-t"), args.index("-i"))
+
+    @override_settings(CHAT_VOICE_MAX_SECONDS=1)
+    def test_a_conversion_that_overruns_its_budget_is_refused(self):
+        # Defence for the case where the cap above did not hold: the refusal
+        # happens before the file is read, which is where the memory goes.
+        oversized = b"\x00" * (1 * 16000 * 2 + 100_000)
+
+        def fake_run(args, **kwargs):
+            with open(args[-1], "wb") as out:
+                out.write(oversized)
+            return MagicMock(returncode=0)
+
+        with (
+            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch.object(transcription.subprocess, "run", side_effect=fake_run),
+        ):
+            self.assertIsNone(transcription._to_wav(WEBM))
+
+    @override_settings(CHAT_VOICE_MAX_SECONDS=5)
+    def test_a_conversion_within_its_budget_is_returned(self):
+        def fake_run(args, **kwargs):
+            with open(args[-1], "wb") as out:
+                out.write(RECORDING)
+            return MagicMock(returncode=0)
+
+        with (
+            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch.object(transcription.subprocess, "run", side_effect=fake_run),
+        ):
+            self.assertEqual(transcription._to_wav(WEBM), RECORDING)
+
+    def test_a_failing_ffmpeg_yields_no_audio(self):
+        error = subprocess.CalledProcessError(1, "ffmpeg")
+        with (
+            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch.object(transcription.subprocess, "run", side_effect=error),
+        ):
+            self.assertIsNone(transcription._to_wav(WEBM))
 
 
 @override_settings(**ASR_SETTINGS)

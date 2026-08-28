@@ -1,6 +1,7 @@
 import logging
 
 from django.db import transaction
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +13,7 @@ from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import MailAccount, MailFolder, MailMessage
+from ..queries import folder_group_ids
 from ..serializers import (
     MailFolderCreateSerializer,
     MailFolderMergeSerializer,
@@ -300,8 +302,9 @@ class MailFolderMarkReadView(APIView):
         if folder.account.owner != request.user:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        group_ids = folder_group_ids(folder)
         qs = MailMessage.objects.filter(
-            folder=folder,
+            folder_id__in=group_ids,
             is_read=False,
             deleted_at__isnull=True,
         )
@@ -312,8 +315,9 @@ class MailFolderMarkReadView(APIView):
         affected_ids = list(qs.values_list("pk", flat=True))
         updated = qs.update(is_read=True)
 
-        folder.unread_count = 0
-        folder.save(update_fields=["unread_count", "updated_at"])
+        MailFolder.objects.filter(uuid__in=group_ids).update(
+            unread_count=0, updated_at=timezone.now()
+        )
 
         from ..services.label_counts import refresh_labels_for_messages
 

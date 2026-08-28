@@ -16,7 +16,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import mark_sources_read
 
 from ..models import MailFolder, MailLabel, MailMessage, MailMessageLabel
-from ..queries import user_account_ids
+from ..queries import folder_group_ids, user_account_ids
 from ..serializers import (
     BatchActionSerializer,
     MailMessageDetailSerializer,
@@ -104,7 +104,9 @@ class MailMessageListView(CacheControlMixin, APIView):
                 deleted_at__isnull=True,
             )
         elif folder:
-            qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
+            qs = MailMessage.objects.filter(
+                folder_id__in=folder_group_ids(folder), deleted_at__isnull=True
+            )
         else:
             # label-only: cross-folder for the label's account
             qs = MailMessage.objects.filter(

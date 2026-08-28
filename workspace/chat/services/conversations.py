@@ -69,6 +69,28 @@ def default_group_title(users):
     return ", ".join(names) or "Group"
 
 
+def display_name_for(kind, title, partner=None):
+    """The name a conversation is labelled with, wherever it is rendered.
+
+    The sidebar row and the voice room's heading are two renderings of the same
+    label, so they read it from here rather than each deriving it from whatever
+    they happen to have loaded - which is how the room ended up listing members
+    under a conversation the sidebar called "Group".
+
+    *partner* is only consulted for a direct message: a group is named by its
+    title, and every group has one.
+    """
+    from ..models import Conversation
+
+    if title:
+        return title
+    if kind == Conversation.Kind.DM:
+        if partner:
+            return partner.get_full_name() or partner.username
+        return "Conversation"
+    return "Group"
+
+
 def backfill_group_titles(conversation_model, member_model):
     """Name the group conversations whose creator left the title blank.
 

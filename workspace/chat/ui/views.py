@@ -20,6 +20,7 @@ from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services.avatar import avatar_initial_for
 from workspace.chat.services.conversations import (
     active_members_queryset,
+    display_name_for,
     dm_partners,
     get_active_membership,
     get_unread_counts,
@@ -36,6 +37,11 @@ from workspace.users.services.settings import get_setting
 def _user_chat_groups(user):
     """Groups the user can attach conversations to, shaped for json_script."""
     return [{"id": g.pk, "name": g.name} for g in user.groups.order_by("name")]
+
+
+def _display(user):
+    """The name a person is shown under in a message preview."""
+    return user.get_full_name() or user.username
 
 
 def _chat_prefs(user):
@@ -115,16 +121,7 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
         else:
             partner = partners.get(c.uuid)
 
-        def _display(u):
-            return u.get_full_name() or u.username
-
-        if c.title:
-            c.display_name = c.title
-        elif partner:
-            c.display_name = _display(partner)
-        else:
-            c.display_name = "Group"
-
+        c.display_name = display_name_for(c.kind, c.title, partner)
         c.avatar_initial = avatar_initial_for(c.kind, c.title, partner)
         c.other_user = partner if c.kind == Conversation.Kind.DM else None
 
@@ -212,19 +209,12 @@ def chat_room_view(request, conversation_uuid):
         conversation, context={"request": request}
     ).data
 
-    # Reuse the prefetched members for the title.
-    active_members = sorted(conversation.members.all(), key=lambda m: m.user_id)
-
-    def _display(u):
-        return u.get_full_name() or u.username
-
-    title = (
-        conversation.title
-        or ", ".join(
-            _display(m.user) for m in active_members if m.user_id != request.user.id
-        )
-        or "Conversation"
+    # Reuse the prefetched members so the heading matches the sidebar row.
+    partner = next(
+        (m.user for m in conversation.members.all() if m.user_id != request.user.id),
+        None,
     )
+    title = display_name_for(conversation.kind, conversation.title, partner)
 
     return render(
         request,

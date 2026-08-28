@@ -66,6 +66,49 @@ class GroupCreationTitleTests(APITestCase):
         self.assertTrue(conversation.title.startswith("Cleo Rand"))
 
 
+class CreationResponseOrderTests(APITestCase):
+    """The create response must present members the way every later read will.
+
+    It serializes a cache built by hand rather than a queryset, so nothing
+    forces it into MEMBER_ORDER - except that `bulk_create` stamps `joined_at`
+    and the v7 `uuid` in list order, which is that same order. This pins that
+    coincidence, since the payload feeds the member panel and the mention
+    autocomplete.
+    """
+
+    URL = "/api/v1/chat/conversations"
+
+    def setUp(self):
+        # The creator is registered last, so its id is the highest: creation
+        # order and user-id order disagree, which is what lets the assertion
+        # below tell them apart.
+        self.others = [
+            User.objects.create_user(username=f"u{i}", password="p") for i in range(5)
+        ]
+        self.creator = User.objects.create_user(username="creator", password="p")
+        self.client.force_authenticate(self.creator)
+
+    def test_the_fresh_payload_matches_a_later_read(self):
+        created = self.client.post(
+            self.URL,
+            {"member_ids": [u.id for u in self.others], "title": "Product Launch"},
+            format="json",
+        ).json()
+
+        listed = next(
+            c for c in self.client.get(self.URL).json() if c["uuid"] == created["uuid"]
+        )
+
+        self.assertEqual(
+            [m["user"]["id"] for m in created["members"]],
+            [m["user"]["id"] for m in listed["members"]],
+        )
+        self.assertEqual(created["avatar_initial"], listed["avatar_initial"])
+        # The creator joined first despite carrying the highest id, so an
+        # order that merely happened to be sorted by id would not look like this.
+        self.assertEqual(created["members"][0]["user"]["id"], self.creator.id)
+
+
 class BackfillGroupTitlesTests(TestCase):
     def setUp(self):
         self.alice = User.objects.create_user(

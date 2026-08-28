@@ -56,6 +56,20 @@ def accessible_entries_q(user):
     return Q(vault_id__in=user_vault_ids(user))
 
 
+def reachable_vault(user, vault_uuid):
+    """The vault *user* can open under that UUID, or None.
+
+    One helper rather than a role check written out in every view: a caller
+    that gets None must answer 404 without saying which of "no such vault" and
+    "not yours" applied, and centralising it is what keeps the two answers
+    indistinguishable.
+    """
+    vault = Vault.objects.filter(uuid=vault_uuid).first()
+    if vault is None or get_vault_role(user, vault) is None:
+        return None
+    return vault
+
+
 def visible_folders(user, vault):
     """Folders of *vault*, or an empty queryset if *user* cannot open it."""
     if get_vault_role(user, vault) is None:

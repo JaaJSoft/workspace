@@ -206,7 +206,7 @@ class AccountEnvelopeTests(TestCase):
         self._identity(self.user)
         self.client.raise_request_exception = False
         with patch(
-            "workspace.vault.views.AccountEnvelopeSerializer",
+            "workspace.vault.views.account.AccountEnvelopeSerializer",
             side_effect=RuntimeError("boom"),
         ):
             response = self.client.get(ENVELOPE_URL)
@@ -323,7 +323,7 @@ class AccountFinalizeTests(TestCase):
             )
 
         with patch(
-            "workspace.vault.views.verify_kex_pub_attestation",
+            "workspace.vault.views.account.verify_kex_pub_attestation",
             side_effect=activate_meanwhile,
         ):
             response = self._post()
@@ -350,7 +350,7 @@ class AccountFinalizeTests(TestCase):
         every frame's locals."""
         self.client.raise_request_exception = False
         with patch(
-            "workspace.vault.views.verify_kex_pub_attestation",
+            "workspace.vault.views.account.verify_kex_pub_attestation",
             side_effect=RuntimeError("boom"),
         ):
             response = self._post()

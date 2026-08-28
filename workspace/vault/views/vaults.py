@@ -19,11 +19,11 @@ from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
 
-from .models import Vault, VaultKeyWrap, VaultRole
-from .queries import active_identity, get_vault_role, user_vault_ids
-from .serializers import VaultCreateSerializer, VaultSerializer, VaultUpdateSerializer
-from .services.attestation import AttestationError
-from .services.metadata import vault_metadata_payload, verify_vault_metadata
+from ..models import Vault, VaultKeyWrap, VaultRole
+from ..queries import active_identity, get_vault_role, user_vault_ids
+from ..serializers import VaultCreateSerializer, VaultSerializer, VaultUpdateSerializer
+from ..services.attestation import AttestationError
+from ..services.metadata import vault_metadata_payload, verify_vault_metadata
 
 SENSITIVE_BODY_FIELDS = (
     "encrypted_name",

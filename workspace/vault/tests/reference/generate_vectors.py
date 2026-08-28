@@ -23,6 +23,8 @@ VECTORS_PATH = pathlib.Path(__file__).resolve().parent.parent / "crypto_vectors.
 ENTRY_UUID = "0192f3a4-5b6c-7d8e-9f01-23456789abcd"
 ACCOUNT_UUID = "0192f3a4-1111-7d8e-9f01-23456789abcd"
 VAULT_UUID = "0192f3a4-2222-7d8e-9f01-23456789abcd"
+FOLDER_UUID = "0192f3a4-3333-7d8e-9f01-23456789abcd"
+TAG_UUID = "0192f3a4-4444-7d8e-9f01-23456789abcd"
 
 # Fixed key material. These are test vectors, not secrets: readability beats
 # entropy here, and a reviewer can recompute any line by hand.
@@ -52,12 +54,35 @@ def build_vectors() -> dict:
     # The stored form, prefix included: it is what the attestation signs.
     kex_pub_stored = primitives.encode_public_key(recipient.public_key())
 
-    signed_payload = {
-        "v": 1,
-        "type": "entry_metadata",
-        "uuid": ENTRY_UUID,
-        "ts": 1755000000000,
-    }
+    entry_payload = metadata.entry_metadata_payload(
+        entry_uuid=ENTRY_UUID,
+        vault_uuid=VAULT_UUID,
+        signer_account_uuid=ACCOUNT_UUID,
+        entry_type="login",
+        folder_uuid=FOLDER_UUID,
+        encrypted_name="AQIDBA",
+        encrypted_notes="",
+        key_version=1,
+        entry_version=1,
+        is_favorite=True,
+        tag_uuids=[TAG_UUID],
+        fields={"username": "BQYHCA", "password": "CQoLDA", "custom:pin": "DQ4PEA"},
+    )
+    folder_payload = metadata.folder_metadata_payload(
+        folder_uuid=FOLDER_UUID,
+        vault_uuid=VAULT_UUID,
+        signer_account_uuid=ACCOUNT_UUID,
+        parent_uuid=None,
+        position=0,
+        encrypted_name="AQIDBA",
+    )
+    tag_payload = metadata.tag_metadata_payload(
+        tag_uuid=TAG_UUID,
+        vault_uuid=VAULT_UUID,
+        signer_account_uuid=ACCOUNT_UUID,
+        encrypted_name="AQIDBA",
+        color="primary",
+    )
 
     vault_meta_key = primitives.hkdf(vault_key, ad.vault_meta_info(VAULT_UUID))
     vault_metadata = metadata.vault_metadata_payload(
@@ -193,8 +218,18 @@ def build_vectors() -> dict:
         "cbor": [
             {
                 "id": "entry-metadata",
-                "payload": signed_payload,
-                "expected_b64": to_base64url(primitives.canonical_cbor(signed_payload)),
+                "payload": entry_payload,
+                "expected_b64": to_base64url(primitives.canonical_cbor(entry_payload)),
+            },
+            {
+                "id": "folder-metadata",
+                "payload": folder_payload,
+                "expected_b64": to_base64url(primitives.canonical_cbor(folder_payload)),
+            },
+            {
+                "id": "tag-metadata",
+                "payload": tag_payload,
+                "expected_b64": to_base64url(primitives.canonical_cbor(tag_payload)),
             },
             {
                 "id": "short-key-sorts-before-long-key",
@@ -236,10 +271,26 @@ def build_vectors() -> dict:
                 "id": "entry-metadata-signature",
                 "sk_b64": to_base64url(SIG_SK),
                 "pk_b64": to_base64url(primitives.public_bytes(signer.public_key())),
-                "payload": signed_payload,
+                "payload": entry_payload,
                 "expected_sig_b64": to_base64url(
-                    primitives.sign(signer, signed_payload)
+                    primitives.sign(signer, entry_payload)
                 ),
+            },
+            {
+                "id": "folder-metadata-signature",
+                "sk_b64": to_base64url(SIG_SK),
+                "pk_b64": to_base64url(primitives.public_bytes(signer.public_key())),
+                "payload": folder_payload,
+                "expected_sig_b64": to_base64url(
+                    primitives.sign(signer, folder_payload)
+                ),
+            },
+            {
+                "id": "tag-metadata-signature",
+                "sk_b64": to_base64url(SIG_SK),
+                "pk_b64": to_base64url(primitives.public_bytes(signer.public_key())),
+                "payload": tag_payload,
+                "expected_sig_b64": to_base64url(primitives.sign(signer, tag_payload)),
             },
             {
                 # The account key attestation signs the catalogue string

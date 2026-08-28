@@ -294,8 +294,9 @@ Examples in the codebase: `files/services/{files,mime,thumbnails,sharing,events}
 
 A module starts with a flat `views.py`. The moment it needs a second view module, it becomes a
 `views/` **package** with an empty `__init__.py` - never a sprawl of `views_<topic>.py` siblings at
-the module root. `chat`, `mail`, `files`, `core`, `projects` and `calendar` are already there;
-`vault` still has the flat pair and will convert when it grows a third.
+the module root. `chat`, `mail`, `files`, `core`, `projects`, `calendar` and `vault` are already
+there; `users`, `ai`, `imports`, `notifications`, `dashboard` and `common` still hold a single
+`views.py`, which is the right shape until they need a second.
 
 ```
 workspace/<module>/
@@ -423,10 +424,12 @@ Task-level queries filter with `project_id__in=user_project_ids(user)` - see `ta
 ```python
 from workspace.vault.models import VaultEntry
 from workspace.vault.queries import (
-    accessible_entries_q, active_identity, get_vault_role, user_vault_ids, visible_folders, visible_tags,
+    accessible_entries_q, active_identity, get_vault_role, reachable_vault, user_vault_ids,
+    visible_folders, visible_tags,
 )
 
 vault_ids = user_vault_ids(user)              # vaults the user can open
+vault = reachable_vault(user, vault_uuid)     # the vault or None - 404 on None
 role = get_vault_role(user, vault)            # 'owner' | 'member' | None
 qs = VaultEntry.objects.filter(accessible_entries_q(user))  # does NOT filter deleted_at
 folders = visible_folders(user, vault)        # empty queryset when the vault is out of reach

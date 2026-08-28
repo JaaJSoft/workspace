@@ -606,3 +606,145 @@ class VaultMetadataCatalogueTests(SimpleTestCase):
         )
         self.assertEqual(payload["vault_uuid"], self.VAULT)
         self.assertEqual(payload["owner_account_uuid"], self.ACCOUNT)
+
+    def test_folder_and_tag_ad_are_closed_catalogues(self):
+        target = "018f3f6e-0000-7000-8000-000000000001"
+        self.assertEqual(
+            ad.folder_field_ad(target, "name"),
+            b"v1|folder-field|018f3f6e-0000-7000-8000-000000000001|name",
+        )
+        self.assertEqual(
+            ad.tag_field_ad(target, "name"),
+            b"v1|tag-field|018f3f6e-0000-7000-8000-000000000001|name",
+        )
+        with self.assertRaises(ValueError):
+            ad.folder_field_ad(target, "description")
+        with self.assertRaises(ValueError):
+            ad.tag_field_ad(target, "color")
+
+    def test_no_two_catalogues_agree_on_a_string(self):
+        """The whole point of a closed catalogue: same uuid, same field name,
+        four different associated data strings."""
+        same = "018f3f6e-0000-7000-8000-000000000001"
+        strings = {
+            ad.folder_field_ad(same, "name"),
+            ad.tag_field_ad(same, "name"),
+            ad.vault_field_ad(same, "name"),
+            ad.entry_field_ad(same, "name"),
+        }
+        self.assertEqual(len(strings), 4)
+
+    def test_entry_payload_sorts_tags_and_fields(self):
+        payload = metadata.entry_metadata_payload(
+            entry_uuid="018F3F6E-0000-7000-8000-00000000000A",
+            vault_uuid="018f3f6e-0000-7000-8000-00000000000b",
+            signer_account_uuid="018f3f6e-0000-7000-8000-00000000000c",
+            entry_type="login",
+            folder_uuid=None,
+            encrypted_name="AQ",
+            encrypted_notes="",
+            key_version=1,
+            entry_version=1,
+            is_favorite=False,
+            tag_uuids=[
+                "018f3f6e-0000-7000-8000-0000000000ff",
+                "018f3f6e-0000-7000-8000-000000000011",
+            ],
+            fields={"password": "Ag", "custom:pin": "Aw", "username": "BA"},
+        )
+        self.assertEqual(payload["type"], "entry-metadata")
+        self.assertEqual(payload["entry_uuid"], "018f3f6e-0000-7000-8000-00000000000a")
+        self.assertIsNone(payload["folder_uuid"])
+        self.assertEqual(
+            payload["tags"],
+            [
+                "018f3f6e-0000-7000-8000-000000000011",
+                "018f3f6e-0000-7000-8000-0000000000ff",
+            ],
+        )
+        self.assertEqual(
+            payload["fields"],
+            [["custom:pin", "Aw"], ["password", "Ag"], ["username", "BA"]],
+        )
+
+    def test_entry_payload_key_set_is_frozen(self):
+        payload = metadata.entry_metadata_payload(
+            entry_uuid="018f3f6e-0000-7000-8000-00000000000a",
+            vault_uuid="018f3f6e-0000-7000-8000-00000000000b",
+            signer_account_uuid="018f3f6e-0000-7000-8000-00000000000c",
+            entry_type="login",
+            folder_uuid=None,
+            encrypted_name="AQ",
+            encrypted_notes="",
+            key_version=1,
+            entry_version=1,
+            is_favorite=False,
+            tag_uuids=[],
+            fields={},
+        )
+        self.assertEqual(
+            set(payload),
+            {
+                "v",
+                "type",
+                "entry_uuid",
+                "vault_uuid",
+                "signer_account_uuid",
+                "entry_type",
+                "folder_uuid",
+                "encrypted_name",
+                "encrypted_notes",
+                "key_version",
+                "entry_version",
+                "is_favorite",
+                "tags",
+                "fields",
+            },
+        )
+
+    def test_folder_payload_key_set_is_frozen(self):
+        payload = metadata.folder_metadata_payload(
+            folder_uuid="018f3f6e-0000-7000-8000-000000000001",
+            vault_uuid="018f3f6e-0000-7000-8000-00000000000b",
+            signer_account_uuid="018f3f6e-0000-7000-8000-00000000000c",
+            parent_uuid="018F3F6E-0000-7000-8000-000000000002",
+            position=3,
+            encrypted_name="AQ",
+        )
+        self.assertEqual(payload["type"], "folder-metadata")
+        self.assertEqual(payload["parent_uuid"], "018f3f6e-0000-7000-8000-000000000002")
+        self.assertEqual(
+            set(payload),
+            {
+                "v",
+                "type",
+                "folder_uuid",
+                "vault_uuid",
+                "signer_account_uuid",
+                "parent_uuid",
+                "position",
+                "encrypted_name",
+            },
+        )
+
+    def test_tag_payload_key_set_is_frozen(self):
+        payload = metadata.tag_metadata_payload(
+            tag_uuid="018f3f6e-0000-7000-8000-000000000001",
+            vault_uuid="018f3f6e-0000-7000-8000-00000000000b",
+            signer_account_uuid="018f3f6e-0000-7000-8000-00000000000c",
+            encrypted_name="AQ",
+            color="primary",
+        )
+        self.assertEqual(payload["type"], "tag-metadata")
+        self.assertEqual(
+            set(payload),
+            {
+                "v",
+                "type",
+                "tag_uuid",
+                "vault_uuid",
+                "signer_account_uuid",
+                "encrypted_name",
+                "color",
+            },
+        )

@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -32,6 +34,11 @@ def make_identity(user, **overrides):
     }
     fields.update(overrides)
     return AccountIdentity.objects.create(**fields)
+
+
+# Any non-empty value: what the constraint checks is that a row carries a
+# signature at all, and the bytes are the API layer's business.
+SIGNATURE = "AQ"
 
 
 class AccountIdentityTests(TestCase):
@@ -161,6 +168,7 @@ class VaultFolderTests(TestCase):
         self.vault = make_vault(self.user)
 
     def _folder(self, name="AQEBAAEGZm9sZGVy", **overrides):
+        overrides.setdefault("metadata_sig", SIGNATURE)
         return VaultFolder.objects.create(
             vault=self.vault, encrypted_name=name, **overrides
         )
@@ -195,7 +203,9 @@ class VaultFolderTests(TestCase):
     def test_rejects_a_parent_from_another_vault(self):
         other_vault = make_vault(self.user)
         outsider = VaultFolder.objects.create(
-            vault=other_vault, encrypted_name="AQEBAAEGb3RoZXI"
+            vault=other_vault,
+            encrypted_name="AQEBAAEGb3RoZXI",
+            metadata_sig=SIGNATURE,
         )
         folder = self._folder()
         folder.parent = outsider
@@ -211,6 +221,24 @@ class VaultFolderTests(TestCase):
         folder = self._folder()
         self.assertEqual(str(folder), f"Folder {folder.uuid}")
 
+    def test_a_folder_with_a_phantom_parent_raises_validation_not_lookup(self):
+        """A parent_id naming no row is a client's bad request, not a server
+        fault: full_clean must say so rather than let the descriptor raise."""
+        folder = VaultFolder(
+            vault=self.vault,
+            parent_id=uuid.uuid4(),
+            encrypted_name="AQ",
+            metadata_sig=SIGNATURE,
+        )
+        with self.assertRaises(ValidationError):
+            folder.full_clean(exclude=["uuid"])
+
+    def test_an_unsigned_folder_is_refused_by_the_database(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            VaultFolder.objects.create(
+                vault=self.vault, encrypted_name="AQ", metadata_sig=""
+            )
+
 
 class VaultTagTests(TestCase):
     def setUp(self):
@@ -218,16 +246,28 @@ class VaultTagTests(TestCase):
         self.vault = make_vault(self.user)
 
     def test_defaults_to_a_neutral_color(self):
-        tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        tag = VaultTag.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEDdGFn", metadata_sig=SIGNATURE
+        )
         self.assertEqual(tag.color, "neutral")
         self.assertEqual(list(self.vault.tags.all()), [tag])
 
     def test_string_representation_names_the_tag(self):
-        tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        tag = VaultTag.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEDdGFn", metadata_sig=SIGNATURE
+        )
         self.assertEqual(str(tag), f"Tag {tag.uuid}")
 
+    def test_an_unsigned_tag_is_refused_by_the_database(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            VaultTag.objects.create(
+                vault=self.vault, encrypted_name="AQ", metadata_sig=""
+            )
+
     def test_deleted_with_its_vault(self):
-        VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        VaultTag.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEDdGFn", metadata_sig=SIGNATURE
+        )
         self.vault.delete()
         self.assertEqual(VaultTag.objects.count(), 0)
 
@@ -265,7 +305,7 @@ class VaultEntryTests(TestCase):
         re-signed client side.
         """
         folder = VaultFolder.objects.create(
-            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy", metadata_sig=SIGNATURE
         )
         self._entry(folder=folder)
         with self.assertRaises(RestrictedError), transaction.atomic():
@@ -273,10 +313,13 @@ class VaultEntryTests(TestCase):
 
     def test_blocks_deleting_a_parent_whose_subtree_holds_entries(self):
         parent = VaultFolder.objects.create(
-            vault=self.vault, encrypted_name="AQEBAAEGcGFyZW50"
+            vault=self.vault, encrypted_name="AQEBAAEGcGFyZW50", metadata_sig=SIGNATURE
         )
         child = VaultFolder.objects.create(
-            vault=self.vault, parent=parent, encrypted_name="AQEBAAEFY2hpbGQ"
+            vault=self.vault,
+            parent=parent,
+            encrypted_name="AQEBAAEFY2hpbGQ",
+            metadata_sig=SIGNATURE,
         )
         self._entry(folder=child)
         with self.assertRaises(RestrictedError), transaction.atomic():
@@ -284,7 +327,7 @@ class VaultEntryTests(TestCase):
 
     def test_an_emptied_folder_can_be_deleted(self):
         folder = VaultFolder.objects.create(
-            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy", metadata_sig=SIGNATURE
         )
         entry = self._entry(folder=folder)
         entry.folder = None
@@ -298,7 +341,7 @@ class VaultEntryTests(TestCase):
         go with the vault by their own cascade, so the folder is free to go.
         """
         folder = VaultFolder.objects.create(
-            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy", metadata_sig=SIGNATURE
         )
         self._entry(folder=folder)
         self.vault.delete()
@@ -311,7 +354,7 @@ class VaultEntryTests(TestCase):
         declared.
         """
         folder = VaultFolder.objects.create(
-            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy", metadata_sig=SIGNATURE
         )
         self._entry(folder=folder)
         self.user.delete()
@@ -320,7 +363,9 @@ class VaultEntryTests(TestCase):
         self.assertEqual(VaultEntry.objects.count(), 0)
 
     def test_carries_tags(self):
-        tag = VaultTag.objects.create(vault=self.vault, encrypted_name="AQEBAAEDdGFn")
+        tag = VaultTag.objects.create(
+            vault=self.vault, encrypted_name="AQEBAAEDdGFn", metadata_sig=SIGNATURE
+        )
         entry = self._entry()
         entry.tags.add(tag)
         self.assertEqual(list(tag.entries.all()), [entry])
@@ -336,7 +381,7 @@ class VaultEntryTests(TestCase):
         """
         other_vault = make_vault(self.user)
         outsider_tag = VaultTag.objects.create(
-            vault=other_vault, encrypted_name="AQEBAAEDdGFn"
+            vault=other_vault, encrypted_name="AQEBAAEDdGFn", metadata_sig=SIGNATURE
         )
         entry = self._entry()
         entry.tags.add(outsider_tag)
@@ -358,7 +403,9 @@ class VaultEntryTests(TestCase):
     def test_rejects_a_folder_from_another_vault(self):
         other_vault = make_vault(self.user)
         outsider = VaultFolder.objects.create(
-            vault=other_vault, encrypted_name="AQEBAAEGb3RoZXI"
+            vault=other_vault,
+            encrypted_name="AQEBAAEGb3RoZXI",
+            metadata_sig=SIGNATURE,
         )
         entry = self._entry()
         entry.folder = outsider
@@ -367,10 +414,20 @@ class VaultEntryTests(TestCase):
 
     def test_accepts_a_folder_from_its_own_vault(self):
         folder = VaultFolder.objects.create(
-            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy"
+            vault=self.vault, encrypted_name="AQEBAAEGZm9sZGVy", metadata_sig=SIGNATURE
         )
         entry = self._entry(folder=folder)
         entry.clean()
+
+    def test_an_entry_with_a_phantom_folder_raises_validation_not_lookup(self):
+        entry = VaultEntry(
+            vault=self.vault,
+            folder_id=uuid.uuid4(),
+            encrypted_name="AQ",
+            metadata_sig="AQ",
+        )
+        with self.assertRaises(ValidationError):
+            entry.full_clean(exclude=["uuid"])
 
 
 class EntryFieldTests(TestCase):

@@ -439,3 +439,82 @@ test('the refusal reports a length, never the secret_key itself', async () => {
     (error) => !error.message.includes('short') && /expected 32/.test(error.message)
   );
 });
+
+test('entry, folder and tag payloads encode as the reference does', () => {
+  for (const id of ['entry-metadata', 'folder-metadata', 'tag-metadata']) {
+    const frozen = VECTORS.cbor.find((item) => item.id === id);
+    assert.ok(frozen, `vector ${id} is missing`);
+    assert.equal(b64(V.canonicalCbor(frozen.payload)), frozen.expected_b64, id);
+  }
+});
+
+test('open accepts raw bytes and a CryptoKey interchangeably', async () => {
+  const frozen = VECTORS.aead.find((item) => item.id === 'entry-field-password');
+  const raw = V.fromBase64Url(frozen.key_b64);
+  const wire = V.fromBase64Url(frozen.expected_wire_b64);
+  const associated = new TextEncoder().encode(frozen.ad);
+  const viaBytes = await V.open(raw, wire, associated);
+  const imported = await V.importAeadKey(raw);
+  assert.equal(imported.extractable, false, 'an imported aead key must not be extractable');
+  const viaKey = await V.open(imported, wire, associated);
+  assert.deepStrictEqual(Array.from(viaBytes), Array.from(viaKey));
+  // The same key, used twice: the reason this call shape exists at all.
+  assert.deepStrictEqual(
+    Array.from(await V.open(imported, wire, associated)),
+    Array.from(viaBytes)
+  );
+});
+
+test('seal accepts a CryptoKey and produces bytes the raw form opens', async () => {
+  const frozen = VECTORS.aead.find((item) => item.id === 'entry-field-password');
+  const raw = V.fromBase64Url(frozen.key_b64);
+  const associated = new TextEncoder().encode(frozen.ad);
+  const imported = await V.importAeadKey(raw);
+  const sealed = await V.seal(imported, new TextEncoder().encode('hello'), associated, {
+    keyVersion: frozen.key_version,
+    kdfId: frozen.kdf_id,
+  });
+  assert.deepStrictEqual(
+    Array.from(await V.open(raw, sealed, associated)),
+    Array.from(new TextEncoder().encode('hello'))
+  );
+});
+
+test('a raw key is measured by its byte length, whatever shape it arrives in', async () => {
+  const frozen = VECTORS.aead.find((item) => item.id === 'entry-field-password');
+  const bytes = V.fromBase64Url(frozen.key_b64);
+  const wire = V.fromBase64Url(frozen.expected_wire_b64);
+  const associated = new TextEncoder().encode(frozen.ad);
+  const expected = Array.from(await V.open(bytes, wire, associated));
+  // ArrayBuffer and DataView have no `length` at all: measuring by it would
+  // refuse these two with "got undefined".
+  for (const shape of [bytes.buffer, new DataView(bytes.buffer)]) {
+    assert.deepStrictEqual(Array.from(await V.open(shape, wire, associated)), expected);
+  }
+});
+
+test('a key of the wrong length is refused whatever shape it arrives in', async () => {
+  const short = new Uint8Array(16);
+  for (const shape of [short, short.buffer, new DataView(short.buffer)]) {
+    await assert.rejects(
+      () => V.importAeadKey(shape),
+      /32-byte key, got 16/,
+      'the refusal must name the real length'
+    );
+  }
+});
+
+test('a CryptoKey that is not aes-256-gcm is refused rather than mislabelled', async () => {
+  // Imported outside importAeadKey, which is the only path that could produce
+  // one: sealing under it would write an AES-256-GCM header over AES-128-GCM.
+  const weak = await crypto.subtle.importKey(
+    'raw', new Uint8Array(16), 'AES-GCM', false, ['encrypt', 'decrypt']
+  );
+  await assert.rejects(
+    () => V.seal(weak, new TextEncoder().encode('x'), new Uint8Array(0), {
+      keyVersion: 1,
+      kdfId: 1,
+    }),
+    /AES-GCM 256-bit key/
+  );
+});

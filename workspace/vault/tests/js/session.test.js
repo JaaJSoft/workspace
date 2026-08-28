@@ -586,3 +586,161 @@ test('a storage that refuses every access does not take the screen down with it'
   assert.equal(session.rememberedSecret(), null);
   assert.doesNotThrow(() => session.forgetDevice());
 });
+
+// A metadata-key harness: the unlock path's hkdf stub returns a two-byte
+// placeholder, which says nothing about what openVaultKey does with it.
+function metaKeyHarness(overrides = {}) {
+  const metaRaw = Uint8Array.from({ length: 32 }, (_, i) => i + 200);
+  const imported = { algorithm: { name: 'AES-GCM' }, extractable: false };
+  const seen = [];
+  const h = harness({
+    vaultCrypto: {
+      // The unwrap key gets its own buffer. Handing metaRaw back for both
+      // derivations would let unlock() zero it before openVaultKey ever runs,
+      // and the zeroing assertions below would hold with no zeroing at all.
+      hkdf: async (_raw, info) =>
+        (info === 'unwrap-info' ? Uint8Array.from([13, 14]) : metaRaw),
+      importAeadKey: async (raw) => {
+        seen.push(raw);
+        if (overrides.failImport) throw new Error('import failed');
+        return imported;
+      },
+    },
+  });
+  return { ...h, metaRaw, imported, seen };
+}
+
+const A_VAULT = '0192f3a4-2222-7d8e-9f01-23456789abcd';
+
+test('openVaultKey hands back an imported key, never the raw metadata bytes', async () => {
+  const h = metaKeyHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const key = await h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  assert.equal(key, h.imported);
+  assert.equal(h.seen.length, 1, 'the derived bytes must be imported exactly once');
+  assert.ok(!(key instanceof Uint8Array), 'openVaultKey must not return raw bytes');
+});
+
+test('openVaultKey zeroes the metadata bytes it derived', async () => {
+  const h = metaKeyHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  await h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  assert.ok(h.metaRaw.every((byte) => byte === 0));
+  assert.ok(h.vaultKeyRaw.every((byte) => byte === 0));
+});
+
+test('a failed import still zeroes the metadata bytes', async () => {
+  const h = metaKeyHarness({ failImport: true });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  await assert.rejects(h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA'));
+  assert.ok(h.metaRaw.every((byte) => byte === 0));
+});
+
+test('openEntryKey derives from the entry info, not the vault metadata info', async () => {
+  const seen = [];
+  const h = harness({
+    vaultCrypto: {
+      hkdf: async (_raw, info) => { seen.push(info); return new Uint8Array(32); },
+      importAeadKey: async () => ({ extractable: false }),
+      AD: {
+        unwrapInfo: () => 'unwrap-info',
+        kexPrivAd: (uuid) => `kex:${uuid}`,
+        sigPrivAd: (uuid) => `sig:${uuid}`,
+        kexPubPayload: (uuid, pub) => `kexpub:${uuid}:${pub}`,
+        vaultKeyInfo: (v, r) => `vaultkey:${v}:${r}`,
+        vaultMetaInfo: (v) => `vaultmeta:${v}`,
+        entryKeyInfo: (e) => `entrykey:${e}`,
+      },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  seen.length = 0;
+  await h.session.openEntryKey(A_VAULT, 'd3JhcHBlZA', 'an-entry');
+  assert.deepStrictEqual(Array.from(seen), ['entrykey:an-entry']);
+  await h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  assert.equal(seen[1], `vaultmeta:${A_VAULT}`);
+});
+
+test('verifyRecord passes the expected type through to verify', async () => {
+  const seen = [];
+  const h = harness({
+    vaultCrypto: {
+      VAULT_METADATA_TYPE: 'vault-metadata',
+      verify: async (_pk, _bytes, _sig, type) => { seen.push(type); },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  await h.session.verifyRecord({ v: 1 }, 'AQ', 'entry-metadata');
+  await h.session.verifyVaultMetadata({ v: 1 }, 'AQ');
+  assert.deepStrictEqual(Array.from(seen), ['entry-metadata', 'vault-metadata']);
+});
+
+// A key operation is several awaits long and the idle timer fires between
+// them. These hold a derivation open, lock underneath it, and let it finish.
+function racingHarness(overrides = {}) {
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const derived = Uint8Array.from({ length: 32 }, (_, i) => i + 200);
+  const imported = { algorithm: { name: 'AES-GCM' }, extractable: false };
+  const h = harness({
+    vaultCrypto: {
+      hkdf: async (_raw, info) => {
+        if (info === 'unwrap-info') return Uint8Array.from([13, 14]);
+        await pending;
+        return derived;
+      },
+      importAeadKey: async () => imported,
+      ...(overrides.vaultCrypto || {}),
+    },
+  });
+  return { ...h, release, derived, imported };
+}
+
+test('a key operation that outlived its session is refused', async () => {
+  const h = racingHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const opening = h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  h.session.lock();
+  h.release();
+  await assert.rejects(opening, (err) => err.reason === 'locked');
+  assert.ok(h.vaultKeyRaw.every((byte) => byte === 0), 'the vault key must still be zeroed');
+});
+
+test('a key operation that spanned a lock and a fresh unlock is refused too', async () => {
+  // The case a plain `unlocked` re-check would miss: by the time the call
+  // resumes the flag is true again, but the keys it captured belong to a
+  // session nobody is in any more.
+  const h = racingHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const opening = h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  h.session.lock();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  assert.equal(h.session.isUnlocked(), true);
+  h.release();
+  await assert.rejects(opening, (err) => err.reason === 'locked');
+});
+
+test('a signature that outlived its session is refused', async () => {
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const h = harness({
+    vaultCrypto: {
+      importSigner: async () => ({
+        sign: async () => { await pending; return new Uint8Array(1); },
+      }),
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const signing = h.session.sign({ v: 1 });
+  h.session.lock();
+  release();
+  await assert.rejects(signing, (err) => err.reason === 'locked');
+});
+
+test('an operation still resolves when no lock interrupts it', async () => {
+  const h = racingHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const opening = h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  h.release();
+  assert.equal(await opening, h.imported);
+});

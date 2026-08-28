@@ -10,8 +10,17 @@ import re
 
 from rest_framework import serializers
 
-from .models import AccountIdentity, Vault
+from .models import (
+    AccountIdentity,
+    EntryField,
+    EntryType,
+    Vault,
+    VaultEntry,
+    VaultFolder,
+    VaultTag,
+)
 from .services.attestation import AttestationError, decode_base64url
+from .services.fields import qualify_field_id
 
 _KDF_PARAM_KEYS = ("m", "t", "p")
 
@@ -56,13 +65,16 @@ def validate_base64url(value):
     return value
 
 
+_OPAQUE_MAX_LENGTH = 4096
+
+
 class _OpaqueField(serializers.CharField):
     """base64url text the server stores and can never open."""
 
     def __init__(self, **kwargs):
         kwargs.setdefault("allow_blank", False)
         kwargs.setdefault("trim_whitespace", False)
-        kwargs.setdefault("max_length", 4096)
+        kwargs.setdefault("max_length", _OPAQUE_MAX_LENGTH)
         kwargs.setdefault("validators", [validate_base64url])
         super().__init__(**kwargs)
 
@@ -220,3 +232,167 @@ class VaultUpdateSerializer(serializers.Serializer):
     color = serializers.RegexField(_COLOR)
     is_favorite = serializers.BooleanField()
     metadata_sig = _OpaqueField()
+
+
+class VaultFolderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VaultFolder
+        fields = [
+            "uuid",
+            "vault",
+            "parent",
+            "encrypted_name",
+            "position",
+            "metadata_sig",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class VaultFolderWriteSerializer(serializers.Serializer):
+    """Every signed field, always - a partial write would leave the row
+    carrying a signature over values it no longer holds."""
+
+    uuid = serializers.UUIDField()
+    vault = serializers.UUIDField()
+    parent = serializers.UUIDField(allow_null=True, required=False, default=None)
+    encrypted_name = _OpaqueField()
+    # Capped rather than unbounded: it enters a PositiveIntegerField, and a
+    # value above its range is a 500 from the database rather than a 400 here.
+    position = serializers.IntegerField(min_value=0, max_value=100_000)
+    metadata_sig = _OpaqueField()
+
+
+class VaultTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VaultTag
+        fields = [
+            "uuid",
+            "vault",
+            "encrypted_name",
+            "color",
+            "metadata_sig",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class VaultTagWriteSerializer(serializers.Serializer):
+    """Every signed field, always - a partial write would leave the row
+    carrying a signature over values it no longer holds."""
+
+    uuid = serializers.UUIDField()
+    vault = serializers.UUIDField()
+    encrypted_name = _OpaqueField()
+    color = serializers.RegexField(_COLOR)
+    metadata_sig = _OpaqueField()
+
+
+class EntryFieldSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EntryField
+        fields = ["field_id", "encrypted_value"]
+        read_only_fields = fields
+
+
+class VaultEntrySerializer(serializers.ModelSerializer):
+    # Named entry_fields on the wire: `fields` is Meta's own attribute name on
+    # a ModelSerializer, so the declared field cannot carry it.
+    entry_fields = EntryFieldSerializer(source="fields", many=True, read_only=True)
+    tags = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VaultEntry
+        fields = [
+            "uuid",
+            "vault",
+            "type",
+            "folder",
+            "tags",
+            "is_favorite",
+            "encrypted_name",
+            "encrypted_notes",
+            "key_version",
+            "entry_version",
+            "metadata_sig",
+            "deleted_at",
+            "last_used_at",
+            "created_at",
+            "updated_at",
+            "entry_fields",
+        ]
+        read_only_fields = fields
+
+    def get_tags(self, entry):
+        # Sorted so the client can rebuild the signed payload from the response
+        # without re-sorting - and so two reads of one entry are byte-identical.
+        return sorted(str(tag.uuid) for tag in entry.tags.all())
+
+
+def validate_field_map(value):
+    """A mapping of stored field id to ciphertext, catalogue-checked."""
+    if not isinstance(value, dict):
+        raise serializers.ValidationError("fields must be an object")
+    if len(value) > 64:
+        raise serializers.ValidationError("an entry carries at most 64 fields")
+    for field_id, ciphertext in value.items():
+        try:
+            qualify_field_id(field_id)
+        except ValueError as exc:
+            # Fixed wording rather than the exception's: a field id is a value
+            # the caller chose, and it must not travel back out inside an error.
+            raise serializers.ValidationError(
+                "a field id must be a reserved identifier or a well-formed "
+                "custom: label"
+            ) from exc
+        if not isinstance(ciphertext, str) or not ciphertext:
+            raise serializers.ValidationError("a field value must be base64url text")
+        # The same cap _OpaqueField applies: these values ride inside a JSON
+        # object rather than as serializer fields, and must not escape it by
+        # doing so.
+        if len(ciphertext) > _OPAQUE_MAX_LENGTH:
+            raise serializers.ValidationError("a field value is too long")
+        validate_base64url(ciphertext)
+    return value
+
+
+class VaultEntryWriteSerializer(serializers.Serializer):
+    """Every signed field, always.
+
+    key_version and entry_version are absent: both are the server's at
+    creation and the row's on update. They are still inside the signature, so
+    a client that signed anything else fails verification rather than writing
+    a row it cannot re-verify.
+    """
+
+    uuid = serializers.UUIDField()
+    vault = serializers.UUIDField()
+    type = serializers.ChoiceField(choices=EntryType.choices)
+    folder = serializers.UUIDField(allow_null=True, required=False, default=None)
+    tags = serializers.ListField(
+        child=serializers.UUIDField(), allow_empty=True, max_length=64, default=list
+    )
+    is_favorite = serializers.BooleanField()
+    encrypted_name = _OpaqueField()
+    encrypted_notes = _OpaqueField(allow_blank=True)
+    fields = serializers.JSONField(validators=[validate_field_map])
+    metadata_sig = _OpaqueField()
+
+
+class FolderDeleteEntrySerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    metadata_sig = _OpaqueField()
+
+
+class FolderDeleteSerializer(serializers.Serializer):
+    """The folder's entries, re-signed with no folder.
+
+    Capped rather than paginated: a folder with 500 entries is a UI problem,
+    and a silent truncation here would delete a folder while leaving entries
+    in it.
+    """
+
+    entries = serializers.ListField(
+        child=FolderDeleteEntrySerializer(), allow_empty=True, max_length=500
+    )

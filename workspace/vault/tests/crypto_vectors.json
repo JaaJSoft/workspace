@@ -63,13 +63,65 @@
   ],
   "cbor": [
     {
-      "expected_b64": "pGF2AWJ0cxsAAAGYnibOAGR0eXBlbmVudHJ5X21ldGFkYXRhZHV1aWR4JDAxOTJmM2E0LTViNmMtN2Q4ZS05ZjAxLTIzNDU2Nzg5YWJjZA",
+      "expected_b64": "rmF2AWR0YWdzgXgkMDE5MmYzYTQtNDQ0NC03ZDhlLTlmMDEtMjM0NTY3ODlhYmNkZHR5cGVuZW50cnktbWV0YWRhdGFmZmllbGRzg4JqY3VzdG9tOnBpbmZEUTRQRUGCaHBhc3N3b3JkZkNRb0xEQYJodXNlcm5hbWVmQlFZSENBamVudHJ5X3R5cGVlbG9naW5qZW50cnlfdXVpZHgkMDE5MmYzYTQtNWI2Yy03ZDhlLTlmMDEtMjM0NTY3ODlhYmNkanZhdWx0X3V1aWR4JDAxOTJmM2E0LTIyMjItN2Q4ZS05ZjAxLTIzNDU2Nzg5YWJjZGtmb2xkZXJfdXVpZHgkMDE5MmYzYTQtMzMzMy03ZDhlLTlmMDEtMjM0NTY3ODlhYmNka2lzX2Zhdm9yaXRl9WtrZXlfdmVyc2lvbgFtZW50cnlfdmVyc2lvbgFuZW5jcnlwdGVkX25hbWVmQVFJREJBb2VuY3J5cHRlZF9ub3Rlc2Bzc2lnbmVyX2FjY291bnRfdXVpZHgkMDE5MmYzYTQtMTExMS03ZDhlLTlmMDEtMjM0NTY3ODlhYmNk",
       "id": "entry-metadata",
       "payload": {
-        "ts": 1755000000000,
-        "type": "entry_metadata",
-        "uuid": "0192f3a4-5b6c-7d8e-9f01-23456789abcd",
-        "v": 1
+        "encrypted_name": "AQIDBA",
+        "encrypted_notes": "",
+        "entry_type": "login",
+        "entry_uuid": "0192f3a4-5b6c-7d8e-9f01-23456789abcd",
+        "entry_version": 1,
+        "fields": [
+          [
+            "custom:pin",
+            "DQ4PEA"
+          ],
+          [
+            "password",
+            "CQoLDA"
+          ],
+          [
+            "username",
+            "BQYHCA"
+          ]
+        ],
+        "folder_uuid": "0192f3a4-3333-7d8e-9f01-23456789abcd",
+        "is_favorite": true,
+        "key_version": 1,
+        "signer_account_uuid": "0192f3a4-1111-7d8e-9f01-23456789abcd",
+        "tags": [
+          "0192f3a4-4444-7d8e-9f01-23456789abcd"
+        ],
+        "type": "entry-metadata",
+        "v": 1,
+        "vault_uuid": "0192f3a4-2222-7d8e-9f01-23456789abcd"
+      }
+    },
+    {
+      "expected_b64": "qGF2AWR0eXBlb2ZvbGRlci1tZXRhZGF0YWhwb3NpdGlvbgBqdmF1bHRfdXVpZHgkMDE5MmYzYTQtMjIyMi03ZDhlLTlmMDEtMjM0NTY3ODlhYmNka2ZvbGRlcl91dWlkeCQwMTkyZjNhNC0zMzMzLTdkOGUtOWYwMS0yMzQ1Njc4OWFiY2RrcGFyZW50X3V1aWT2bmVuY3J5cHRlZF9uYW1lZkFRSURCQXNzaWduZXJfYWNjb3VudF91dWlkeCQwMTkyZjNhNC0xMTExLTdkOGUtOWYwMS0yMzQ1Njc4OWFiY2Q",
+      "id": "folder-metadata",
+      "payload": {
+        "encrypted_name": "AQIDBA",
+        "folder_uuid": "0192f3a4-3333-7d8e-9f01-23456789abcd",
+        "parent_uuid": null,
+        "position": 0,
+        "signer_account_uuid": "0192f3a4-1111-7d8e-9f01-23456789abcd",
+        "type": "folder-metadata",
+        "v": 1,
+        "vault_uuid": "0192f3a4-2222-7d8e-9f01-23456789abcd"
+      }
+    },
+    {
+      "expected_b64": "p2F2AWR0eXBlbHRhZy1tZXRhZGF0YWVjb2xvcmdwcmltYXJ5aHRhZ191dWlkeCQwMTkyZjNhNC00NDQ0LTdkOGUtOWYwMS0yMzQ1Njc4OWFiY2RqdmF1bHRfdXVpZHgkMDE5MmYzYTQtMjIyMi03ZDhlLTlmMDEtMjM0NTY3ODlhYmNkbmVuY3J5cHRlZF9uYW1lZkFRSURCQXNzaWduZXJfYWNjb3VudF91dWlkeCQwMTkyZjNhNC0xMTExLTdkOGUtOWYwMS0yMzQ1Njc4OWFiY2Q",
+      "id": "tag-metadata",
+      "payload": {
+        "color": "primary",
+        "encrypted_name": "AQIDBA",
+        "signer_account_uuid": "0192f3a4-1111-7d8e-9f01-23456789abcd",
+        "tag_uuid": "0192f3a4-4444-7d8e-9f01-23456789abcd",
+        "type": "tag-metadata",
+        "v": 1,
+        "vault_uuid": "0192f3a4-2222-7d8e-9f01-23456789abcd"
       }
     },
     {
@@ -116,13 +168,69 @@
   ],
   "ed25519": [
     {
-      "expected_sig_b64": "Ab_pD_BxFNzIft9GWkCP9ZaLPIR5oxXnF1bAVNioBe0bNhxLHwNe9ZUJ4PhUg9ssZigFEjwNNQR_eWhXC8Vo3A0",
+      "expected_sig_b64": "Aauu8eoFp0Vpj-w0tJejM74DOEYnGVpMD6NI4RnUTmlazMj6KehroVNrXXzCZPb0sei7RcfRb9JLledpPNk96Qo",
       "id": "entry-metadata-signature",
       "payload": {
-        "ts": 1755000000000,
-        "type": "entry_metadata",
-        "uuid": "0192f3a4-5b6c-7d8e-9f01-23456789abcd",
-        "v": 1
+        "encrypted_name": "AQIDBA",
+        "encrypted_notes": "",
+        "entry_type": "login",
+        "entry_uuid": "0192f3a4-5b6c-7d8e-9f01-23456789abcd",
+        "entry_version": 1,
+        "fields": [
+          [
+            "custom:pin",
+            "DQ4PEA"
+          ],
+          [
+            "password",
+            "CQoLDA"
+          ],
+          [
+            "username",
+            "BQYHCA"
+          ]
+        ],
+        "folder_uuid": "0192f3a4-3333-7d8e-9f01-23456789abcd",
+        "is_favorite": true,
+        "key_version": 1,
+        "signer_account_uuid": "0192f3a4-1111-7d8e-9f01-23456789abcd",
+        "tags": [
+          "0192f3a4-4444-7d8e-9f01-23456789abcd"
+        ],
+        "type": "entry-metadata",
+        "v": 1,
+        "vault_uuid": "0192f3a4-2222-7d8e-9f01-23456789abcd"
+      },
+      "pk_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+      "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
+    },
+    {
+      "expected_sig_b64": "AWZBnzrPOH-zkKetngwfvdML5WjOKxzDFdHM70KbUHGw6A3HHdiA7wEVT6rqhLg5glV36pbgagFWs0MgPghzlww",
+      "id": "folder-metadata-signature",
+      "payload": {
+        "encrypted_name": "AQIDBA",
+        "folder_uuid": "0192f3a4-3333-7d8e-9f01-23456789abcd",
+        "parent_uuid": null,
+        "position": 0,
+        "signer_account_uuid": "0192f3a4-1111-7d8e-9f01-23456789abcd",
+        "type": "folder-metadata",
+        "v": 1,
+        "vault_uuid": "0192f3a4-2222-7d8e-9f01-23456789abcd"
+      },
+      "pk_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
+      "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"
+    },
+    {
+      "expected_sig_b64": "AYFVThBiKqJr1mY6J8NtFQcJ6YD5zJWYdZrp_wp5ggAMheWOpHzRBx8j2fRoCI2Yf0A9p9DFfdqBSxnu7ihCgAs",
+      "id": "tag-metadata-signature",
+      "payload": {
+        "color": "primary",
+        "encrypted_name": "AQIDBA",
+        "signer_account_uuid": "0192f3a4-1111-7d8e-9f01-23456789abcd",
+        "tag_uuid": "0192f3a4-4444-7d8e-9f01-23456789abcd",
+        "type": "tag-metadata",
+        "v": 1,
+        "vault_uuid": "0192f3a4-2222-7d8e-9f01-23456789abcd"
       },
       "pk_b64": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4",
       "sk_b64": "MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM"

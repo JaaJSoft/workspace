@@ -149,6 +149,10 @@ class VaultFolder(models.Model):
         on_delete=models.CASCADE,
         related_name="folders",
     )
+    # parent and position are plaintext, so nothing but metadata_sig covers
+    # them: without it a server could re-parent a folder and no client could
+    # tell, where the same move on an entry is caught by the entry's own
+    # signature.
     parent = models.ForeignKey(
         "self",
         null=True,
@@ -157,6 +161,7 @@ class VaultFolder(models.Model):
         related_name="children",
     )
     encrypted_name = models.TextField()
+    metadata_sig = models.TextField()
     position = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -166,22 +171,33 @@ class VaultFolder(models.Model):
         indexes = [
             models.Index(fields=["vault", "parent"]),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(metadata_sig=""),
+                name="folder_metadata_sig_not_empty",
+            ),
+        ]
 
     def __str__(self):
         return f"Folder {self.uuid}"
 
     def clean(self):
-        """Reject a cross-vault parent and any parent cycle.
+        """Reject a cross-vault parent, a parent that does not exist, and any
+        cycle.
 
-        Neither is expressible as a database constraint without a recursive
+        None is expressible as a database constraint without a recursive
         trigger, so callers must run ``full_clean()`` before saving.
         """
         if self.parent_id is None:
             return
-        if self.parent.vault_id != self.vault_id:
+        try:
+            parent = self.parent
+        except VaultFolder.DoesNotExist as exc:
+            raise ValidationError({"parent": "Parent folder does not exist."}) from exc
+        if parent.vault_id != self.vault_id:
             raise ValidationError({"parent": "Parent folder belongs to another vault."})
         seen = {self.pk}
-        ancestor = self.parent
+        ancestor = parent
         while ancestor is not None:
             if ancestor.pk in seen:
                 raise ValidationError({"parent": "Folder cannot contain itself."})
@@ -197,11 +213,20 @@ class VaultTag(models.Model):
         related_name="tags",
     )
     encrypted_name = models.TextField()
+    # color is plaintext, like a folder's parent and position: metadata_sig is
+    # the only thing that covers it.
+    metadata_sig = models.TextField()
     color = models.CharField(max_length=32, default="neutral")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(metadata_sig=""),
+                name="tag_metadata_sig_not_empty",
+            ),
+        ]
 
     def __str__(self):
         return f"Tag {self.uuid}"
@@ -284,7 +309,11 @@ class VaultEntry(models.Model):
         """
         if self.folder_id is None:
             return
-        if self.folder.vault_id != self.vault_id:
+        try:
+            folder = self.folder
+        except VaultFolder.DoesNotExist as exc:
+            raise ValidationError({"folder": "Folder does not exist."}) from exc
+        if folder.vault_id != self.vault_id:
             raise ValidationError({"folder": "Folder belongs to another vault."})
 
 

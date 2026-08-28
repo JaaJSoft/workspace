@@ -5,7 +5,8 @@
 // node:vm test loader.
 import { toBase64Url, fromBase64Url, randomBytes, equalBytes } from './src/vault/encoding.js';
 import {
-  AD, RESERVED_FIELD_IDS, ENTRY_COLUMN_FIELD_IDS, VAULT_FIELD_IDS, qualifyFieldId,
+  AD, RESERVED_FIELD_IDS, ENTRY_COLUMN_FIELD_IDS, VAULT_FIELD_IDS, FOLDER_FIELD_IDS,
+  TAG_FIELD_IDS, qualifyFieldId,
 } from './src/vault/ad.js';
 import {
   FORMAT_VERSION, AEAD_AES_256_GCM, KDF_DIRECT, KDF_HKDF_SHA256,
@@ -14,12 +15,15 @@ import {
   encodePublicKey, decodePublicKey,
 } from './src/vault/wire.js';
 import { ARGON2_PARAMS, deriveAmk, hkdf } from './src/vault/kdf.js';
-import { seal, open } from './src/vault/aead.js';
+import { seal, open, importAeadKey } from './src/vault/aead.js';
 import { HPKE_SUITE_V1, hpkeSeal, hpkeOpen, hpkeRecipient } from './src/vault/hpke.js';
 import { canonicalCbor, decodeCbor } from './src/vault/cbor.js';
 import { SIG_ALG_ED25519, sign, verify, signBytes, verifyBytes, importSigner } from './src/vault/sign.js';
 import { crockfordEncode, crockfordDecode } from './src/vault/crockford.js';
-import { VAULT_METADATA_TYPE, vaultMetadataPayload } from './src/vault/metadata.js';
+import {
+  VAULT_METADATA_TYPE, vaultMetadataPayload, ENTRY_METADATA_TYPE, FOLDER_METADATA_TYPE,
+  TAG_METADATA_TYPE, entryMetadataPayload, folderMetadataPayload, tagMetadataPayload,
+} from './src/vault/metadata.js';
 import { uuidV7 } from './src/vault/uuid.js';
 
 window.vaultCrypto = {
@@ -31,6 +35,8 @@ window.vaultCrypto = {
   RESERVED_FIELD_IDS,
   ENTRY_COLUMN_FIELD_IDS,
   VAULT_FIELD_IDS,
+  FOLDER_FIELD_IDS,
+  TAG_FIELD_IDS,
   qualifyFieldId,
   FORMAT_VERSION,
   AEAD_AES_256_GCM,
@@ -48,6 +54,7 @@ window.vaultCrypto = {
   hkdf,
   seal,
   open,
+  importAeadKey,
   HPKE_SUITE_V1,
   hpkeSeal,
   hpkeOpen,
@@ -64,5 +71,11 @@ window.vaultCrypto = {
   crockfordDecode,
   VAULT_METADATA_TYPE,
   vaultMetadataPayload,
+  ENTRY_METADATA_TYPE,
+  FOLDER_METADATA_TYPE,
+  TAG_METADATA_TYPE,
+  entryMetadataPayload,
+  folderMetadataPayload,
+  tagMetadataPayload,
   uuidV7,
 };

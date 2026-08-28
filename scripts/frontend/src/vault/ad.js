@@ -27,6 +27,10 @@ export const ENTRY_COLUMN_FIELD_IDS = Object.freeze(['name', 'notes']);
 // and a ciphertext could be moved between the two and still verify.
 export const VAULT_FIELD_IDS = Object.freeze(['name', 'description']);
 
+// Closed at one identifier each, for the same reason as VAULT_FIELD_IDS.
+export const FOLDER_FIELD_IDS = Object.freeze(['name']);
+export const TAG_FIELD_IDS = Object.freeze(['name']);
+
 const CUSTOM_PREFIX = 'custom:';
 
 // The account identifier in these strings is the UUID of the account's
@@ -49,6 +53,18 @@ export const AD = {
       throw new Error(`${field} is not a vault metadata field`);
     }
     return ascii(`v1|vault-field|${uuid(vaultUuid)}|${field}`);
+  },
+  folderFieldAd: (folderUuid, field) => {
+    if (!FOLDER_FIELD_IDS.includes(field)) {
+      throw new Error(`${field} is not a folder metadata field`);
+    }
+    return ascii(`v1|folder-field|${uuid(folderUuid)}|${field}`);
+  },
+  tagFieldAd: (tagUuid, field) => {
+    if (!TAG_FIELD_IDS.includes(field)) {
+      throw new Error(`${field} is not a tag metadata field`);
+    }
+    return ascii(`v1|tag-field|${uuid(tagUuid)}|${field}`);
   },
 };
 

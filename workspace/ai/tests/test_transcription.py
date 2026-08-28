@@ -1,9 +1,11 @@
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import httpx2
 from django.test import SimpleTestCase, override_settings
 from openai import APIStatusError
 
+from workspace.ai.services import transcription
 from workspace.ai.services.transcription import (
     ai_transcribe_audio,
     is_transcription_enabled,
@@ -106,6 +108,52 @@ class TranscribeAudioTests(SimpleTestCase):
     def test_rejects_an_unconfigured_backend(self):
         with self.assertRaises(ValueError):
             ai_transcribe_audio(RECORDING)
+
+
+# What a browser actually uploads: MediaRecorder offers webm/opus and m4a,
+# never WAV, and this backend takes WAV only ("only WAV audio uploads are
+# currently supported for transcription").
+WEBM = bytes([0x1A, 0x45, 0xDF, 0xA3]) + bytes(64)  # EBML header
+
+
+@override_settings(**ASR_SETTINGS)
+class TranscodingTests(SimpleTestCase):
+    def test_a_wav_recording_is_sent_untouched(self):
+        with patch.object(transcription, "_to_wav") as convert:
+            with _ClientPatch("Bonjour.") as http:
+                ai_transcribe_audio(RECORDING)
+
+        convert.assert_not_called()
+        self.assertEqual(http.calls[0]["file"].read(), RECORDING)
+
+    def test_a_browser_recording_is_transcoded_before_it_is_sent(self):
+        with patch.object(transcription, "_to_wav", return_value=RECORDING) as convert:
+            with _ClientPatch("Bonjour.") as http:
+                self.assertEqual(ai_transcribe_audio(WEBM), "Bonjour.")
+
+        convert.assert_called_once_with(WEBM)
+        self.assertEqual(http.calls[0]["file"].read(), RECORDING)
+
+    def test_nothing_is_sent_when_the_recording_cannot_be_transcoded(self):
+        # ffmpeg missing or refusing the container: the caller keeps its
+        # "could not listen" note rather than the backend answering 400.
+        with patch.object(transcription, "_to_wav", return_value=None):
+            with _ClientPatch("Bonjour.") as http:
+                self.assertEqual(ai_transcribe_audio(WEBM), "")
+
+        self.assertEqual(http.calls, [])
+
+    def test_transcoding_is_skipped_without_ffmpeg(self):
+        with patch.object(transcription, "_FFMPEG", None):
+            self.assertIsNone(transcription._to_wav(WEBM))
+
+    def test_a_failing_ffmpeg_yields_no_audio(self):
+        error = subprocess.CalledProcessError(1, "ffmpeg")
+        with (
+            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch.object(transcription.subprocess, "run", side_effect=error),
+        ):
+            self.assertIsNone(transcription._to_wav(WEBM))
 
 
 @override_settings(**ASR_SETTINGS)

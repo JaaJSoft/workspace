@@ -1,4 +1,4 @@
-// Navbar module switcher: Alt+M opens it, arrows and letters move across its
+// Navbar module switcher: Alt+K opens it, arrows and letters move across its
 // tile grid. The tiles are plain links, so Enter needs no handling.
 
 const MODULE_SWITCHER_COLUMNS = 4;
@@ -53,8 +53,8 @@ window.moduleSwitcher = function moduleSwitcher() {
     },
 
     isShortcut(event) {
-      // event.code covers macOS, where Alt+M yields "µ" as event.key.
-      return event.altKey && (event.key.toLowerCase() === 'm' || event.code === 'KeyM');
+      // event.code covers macOS, where Alt+K yields a dead key as event.key.
+      return event.altKey && (event.key.toLowerCase() === 'k' || event.code === 'KeyK');
     },
 
     onKeydown(event) {

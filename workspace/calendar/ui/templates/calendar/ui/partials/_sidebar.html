@@ -30,7 +30,7 @@
           <i data-lucide="chevron-left" class="w-4 h-4"></i>
         </button>
         <span
-          class="text-sm font-semibold text-base-content truncate"
+          class="flex-1 text-center text-sm font-semibold text-base-content truncate"
           x-text="currentTitle"
         ></span>
         <button
@@ -41,17 +41,17 @@
         >
           <i data-lucide="chevron-right" class="w-4 h-4"></i>
         </button>
-      </div>
-      <!-- View mode -->
-      <div class="flex gap-1 mb-2">
         <button
           type="button"
-          class="btn btn-xs btn-ghost"
+          class="btn btn-ghost btn-xs ml-1"
           @click="calendarToday()"
           title="Go to today"
         >
           Today
         </button>
+      </div>
+      <!-- View mode -->
+      <div class="flex gap-1 mb-2">
         <button
           type="button"
           class="btn btn-xs flex-1"

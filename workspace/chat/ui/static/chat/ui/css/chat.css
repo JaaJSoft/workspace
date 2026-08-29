@@ -43,6 +43,40 @@
   transition: box-shadow 0.3s ease, outline 0.3s ease;
 }
 
+/* ── Message entrance ──────────────────────────────────────
+   messages.js puts .msg-enter on the one bubble a refresh actually added
+   (or on the optimistic group of a send). The bubble slides in from the
+   side it is aligned to: own messages from the right, others from the left. */
+@keyframes msg-enter {
+  from {
+    opacity: 0;
+    transform: translate(var(--msg-enter-x, 0), 0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.msg-enter {
+  animation: msg-enter 0.22s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.msg-group-start .msg-enter {
+  --msg-enter-x: -0.5rem;
+}
+
+.msg-group-end .msg-enter,
+.msg-group-end.msg-enter {
+  --msg-enter-x: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-enter {
+    animation: none;
+  }
+}
+
 /* Prevent code blocks and pre from causing horizontal overflow in bubbles */
 .msg-body pre,
 .msg-body code {

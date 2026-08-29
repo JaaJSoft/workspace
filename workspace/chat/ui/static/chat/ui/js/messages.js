@@ -395,7 +395,17 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       group.body = body || '';
       group.replyInfo = replyInfo || null;
       group.pendingFiles = files || [];
+      // The server-rendered bubble that replaces this one on the next merge
+      // does not animate: the entrance was already played here.
+      group.classList.add('msg-enter');
       container.appendChild(group);
+    },
+
+    // Play the entrance animation on one bubble. Called right after the merge
+    // that inserted it: every refresh re-renders the whole list, so the class
+    // has to be put on the bubble that is actually new, never on the group.
+    _animateMessageEntry(uuid) {
+      document.getElementById(`${this._messageIdPrefix()}-${uuid}`)?.classList.add('msg-enter');
     },
 
     _removeOptimisticMessage(tempId) {

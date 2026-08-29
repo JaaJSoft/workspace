@@ -48,6 +48,7 @@ window.chatSseMixin = function chatSseMixin() {
         if (!document.getElementById(`${this._messageIdPrefix()}-${detail.message.uuid}`)) {
           const wasAtBottom = this._isNearBottom();
           await this._refreshCurrentMessages();
+          this._animateMessageEntry(detail.message.uuid);
           if (wasAtBottom) this.scrollToBottom();
           await this.markAsRead(detail.conversation_id);
         }

@@ -267,6 +267,7 @@ function buildSseApp({ openThreadRoot = null, showInline = false } = {}) {
     clearBotStep() {},
     // Provided by chatMessagesMixin on the real component.
     _messageIdPrefix: () => 'msg',
+    _animateMessageEntry() {},
     _isNearBottom: () => true,
     async _refreshCurrentMessages() {
       counters.refreshed++;
@@ -412,6 +413,7 @@ function buildSseAppCapturingFetch({ openThreadRoot = null } = {}) {
     isBotMessage: () => false,
     clearBotStep() {},
     _messageIdPrefix: () => 'msg',
+    _animateMessageEntry() {},
     _isNearBottom: () => true,
     async _refreshCurrentMessages() {},
     scrollToBottom() {},

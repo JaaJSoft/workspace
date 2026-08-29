@@ -44,6 +44,7 @@ function buildDom() {
         tagName: tag.toUpperCase(),
         attrs: {},
         id: '',
+        classList: { add() {} },
         setAttribute(name, value) { this.attrs[name] = String(value); },
         remove() { byId.delete(this.id); },
       };

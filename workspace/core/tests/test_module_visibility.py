@@ -7,6 +7,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from workspace.core.context_processors import workspace_modules
 from workspace.core.module_registry import CommandInfo, ModuleInfo
 from workspace.core.services.module_visibility import (
+    current_module,
     filter_visible_commands,
     hidden_module_slugs,
     is_module_slug_visible,
@@ -150,6 +151,42 @@ class VisibleModulesTests(TestCase):
         self.assertEqual([c.module_slug for c in result], ["files"])
 
 
+class CurrentModuleTests(TestCase):
+    def setUp(self):
+        self.files = _module("files")
+        self.notes = _module("notes")
+        self.home = ModuleInfo(
+            name="Dashboard",
+            slug="dashboard",
+            description="",
+            icon="i",
+            color="c",
+            url="/",
+        )
+        self.tool = ModuleInfo(
+            name="Tasks", slug="tasks", description="", icon="i", color="c", url=None
+        )
+        self.modules = [self.home, self.files, self.notes, self.tool]
+
+    def test_exact_module_home(self):
+        self.assertIs(current_module(self.modules, "/files"), self.files)
+
+    def test_sub_page(self):
+        self.assertIs(current_module(self.modules, "/notes/abc/edit"), self.notes)
+
+    def test_prefix_must_end_on_a_path_segment(self):
+        self.assertIsNone(current_module(self.modules, "/filesystem"))
+
+    def test_dashboard_is_never_current(self):
+        self.assertIsNone(current_module(self.modules, "/"))
+
+    def test_page_outside_any_module(self):
+        self.assertIsNone(current_module(self.modules, "/users/settings"))
+
+    def test_module_without_url_is_skipped(self):
+        self.assertIsNone(current_module([self.tool], "/tasks"))
+
+
 class ContextProcessorVisibilityTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -193,3 +230,27 @@ class ContextProcessorVisibilityTests(TestCase):
         self.assertIn("lab", staff_slugs)
         normal_cmd_mods = {c["module_slug"] for c in normal_ctx["workspace_commands"]}
         self.assertNotIn("lab", normal_cmd_mods)
+
+    @patch("workspace.core.context_processors.registry")
+    @patch("workspace.core.services.module_visibility.registry")
+    def test_current_module_follows_the_request_path(self, svc_registry, cp_registry):
+        mods = [_module("files"), _module("notes")]
+        cp_registry.get_active.return_value = mods
+        cp_registry.get_active_commands.return_value = []
+        svc_registry.get_active.return_value = mods
+
+        request = self.factory.get("/notes/some-note")
+        request.user = self.normal
+        ctx = workspace_modules(request)
+
+        self.assertEqual(ctx["workspace_current_module"]["slug"], "notes")
+
+    @patch("workspace.core.context_processors.registry")
+    @patch("workspace.core.services.module_visibility.registry")
+    def test_current_module_is_none_on_the_home_page(self, svc_registry, cp_registry):
+        mods = [_module("files")]
+        cp_registry.get_active.return_value = mods
+        cp_registry.get_active_commands.return_value = []
+        svc_registry.get_active.return_value = mods
+
+        self.assertIsNone(self._ctx(self.normal)["workspace_current_module"])

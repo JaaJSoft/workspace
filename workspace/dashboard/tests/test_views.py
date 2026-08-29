@@ -742,6 +742,29 @@ class ModulesFragmentTests(TestCase):
 
         self.assertContains(resp, 'id="dashboard-modules-grid"')
 
+    @patch("workspace.dashboard.views.get_unread_badges")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_marks_the_current_module_tile(self, mock_visible, mock_badges):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_badges.return_value = {}
+        self.client.login(username="moduser", password="pass123")
+
+        resp = self.client.get("/dashboard/modules?current=mail")
+
+        self.assertContains(resp, 'aria-current="page"', count=1)
+        self.assertEqual(resp.context["current_slug"], "mail")
+
+    @patch("workspace.dashboard.views.get_unread_badges")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_marks_nothing_without_a_current_module(self, mock_visible, mock_badges):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_badges.return_value = {}
+        self.client.login(username="moduser", password="pass123")
+
+        for url in ("/dashboard/modules", "/dashboard/modules?current=nope"):
+            resp = self.client.get(url)
+            self.assertNotContains(resp, 'aria-current="page"')
+
 
 # ── activity_feed view ──────────────────────────────────────────
 

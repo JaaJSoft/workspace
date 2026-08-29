@@ -166,12 +166,19 @@ def index(request):
 
 @login_required
 def modules_fragment(request):
-    """Dashboard app grid, re-rendered after a visibility change (alpine-ajax swap)."""
+    """Dashboard app grid (alpine-ajax swap).
+
+    Re-rendered after a visibility change on the home page, and loaded into
+    the navbar module switcher, which passes the slug of the module the page
+    belongs to as ``?current=`` so its tile is marked.
+    """
     modules, _ = _dashboard_modules(request.user)
+    current = request.GET.get("current")
+    current_slug = current if any(m["slug"] == current for m in modules) else None
     return render(
         request,
         "dashboard/partials/modules_grid_fragment.html",
-        {"modules": modules},
+        {"modules": modules, "current_slug": current_slug},
     )
 
 

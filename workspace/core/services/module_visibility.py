@@ -40,6 +40,23 @@ def visible_modules(user):
     return [m for m in registry.get_active() if user_can_see_module(user, m)]
 
 
+def current_module(modules, path):
+    """The module whose url the request *path* is under, or None.
+
+    A module is current on its home (``/files``) and on any sub-page
+    (``/files/abc``), never on a mere string prefix (``/filesystem``). The
+    dashboard lives at ``/`` and would match every path, so it is never
+    current: the home page and the pages outside any module both yield None.
+    """
+    for module in modules:
+        url = module.url
+        if not url or url == "/":
+            continue
+        if path == url or path.startswith(url + "/"):
+            return module
+    return None
+
+
 def hidden_module_slugs(user) -> set[str]:
     """Slugs of registered modules *user* may NOT see.
 

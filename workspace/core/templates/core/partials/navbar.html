@@ -4,14 +4,88 @@
   <div
     class="{% if navbar_full_width %}container mx-auto max-w-none{% else %}container mx-auto{% endif %}"
   >
-    <!-- Brand -->
+    <!-- Brand, or the module switcher when the page belongs to a module -->
     <div class="flex-1">
-      <a
-        href="/"
-        class="btn btn-ghost normal-case hover:bg-primary/10 transition-all"
-      >
-        {% include 'ui/partials/app_logo.html' with size='sm' %}
-      </a>
+      {% if workspace_current_module %}
+        {% with module=workspace_current_module %}
+          {% comment %}
+            The grid is the dashboard's, fetched on the first open only: rendering
+            it on every page would cost the unread-badge queries everywhere. The
+            placeholder carries the fragment's own id (the swap keeps the
+            response's element); it never coexists with the home page grid
+            because the switcher is not rendered there.
+          {% endcomment %}
+          <div
+            id="module-switcher"
+            class="dropdown leading-[0]"
+            x-data="{
+              loaded: false,
+              load() {
+                if (this.loaded) return;
+                this.loaded = true;
+                this.$ajax('{% url 'dashboard:modules_fragment' %}?current={{ module.slug }}', {
+                  target: 'dashboard-modules-grid',
+                  focus: false,
+                });
+              },
+            }"
+            @focusin="load()"
+            @keydown.escape.prevent="document.activeElement.blur()"
+          >
+            <label
+              tabindex="0"
+              class="btn btn-ghost normal-case gap-2 px-2 cursor-pointer hover:bg-{{ module.color }}/10 transition-all"
+              title="Switch module"
+              aria-label="Switch module, currently {{ module.name }}"
+            >
+              <span
+                class="w-8 h-8 rounded-lg bg-{{ module.color }}/10 text-{{ module.color }} flex items-center justify-center"
+              >
+                <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
+              </span>
+              <span class="hidden sm:inline text-base font-semibold text-base-content">{{ module.name }}</span>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-base-content/60"></i>
+            </label>
+            <div
+              tabindex="0"
+              class="dropdown-content mt-3 z-[100] p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-[min(22rem,calc(100vw-1rem))]"
+            >
+              <a
+                href="/"
+                class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary/10 hover:text-secondary transition-colors"
+              >
+                <span
+                  class="w-8 h-8 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center"
+                >
+                  <i data-lucide="home" class="w-4 h-4"></i>
+                </span>
+                <span class="font-medium">Dashboard</span>
+              </a>
+              <div class="divider my-1"></div>
+              <section id="dashboard-modules-grid" aria-label="Modules">
+                <div class="grid grid-cols-[repeat(auto-fit,5rem)] justify-center gap-3">
+                  {% for module in workspace_active_modules %}
+                    {% if module.show_on_dashboard and module.url and module.slug != 'dashboard' %}
+                      <div class="flex flex-col items-center gap-1.5 p-3">
+                        <div class="skeleton w-12 h-12 rounded-xl"></div>
+                        <div class="skeleton h-3 w-10"></div>
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              </section>
+            </div>
+          </div>
+        {% endwith %}
+      {% else %}
+        <a
+          id="navbar-brand"
+          href="/"
+          class="btn btn-ghost normal-case hover:bg-primary/10 transition-all"
+        >
+          {% include 'ui/partials/app_logo.html' with size='sm' %}
+        </a>
+      {% endif %}
     </div>
 
     <!-- Command palette dropdown -->

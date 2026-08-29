@@ -5,6 +5,7 @@ from django.conf import settings
 from workspace.core.changelog import get_latest_version
 from workspace.core.module_registry import registry
 from workspace.core.services.module_visibility import (
+    current_module,
     filter_visible_commands,
     visible_modules,
 )
@@ -30,8 +31,11 @@ def workspace_modules(request):
                 last_seen = core_settings.get(CHANGELOG_LAST_SEEN_VERSION)
                 changelog_unread = last_seen != latest
 
+    modules = visible_modules(request.user)
+    current = current_module(modules, request.path)
     return {
-        "workspace_active_modules": [asdict(m) for m in visible_modules(request.user)],
+        "workspace_active_modules": [asdict(m) for m in modules],
+        "workspace_current_module": asdict(current) if current else None,
         "workspace_commands": [
             asdict(c)
             for c in filter_visible_commands(

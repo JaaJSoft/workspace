@@ -51,8 +51,13 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
             "?.shadowRoot?.querySelector('input.search')",
         )
 
-    def _search_field_has_focus(self):
-        return self.page.evaluate(
+    def _wait_for_search_field_focus(self):
+        # The focus lands after the click has returned: Alpine reveals the
+        # x-show wrapper on the next animation frame (so the opening click
+        # does not trip @click.outside) and only then does the deferred
+        # focus() find a rendered field. Reading activeElement right after
+        # click() races that, so poll for it instead.
+        self.page.wait_for_function(
             """() => {
                 const picker = document.querySelector('emoji-picker');
                 return document.activeElement === picker
@@ -70,7 +75,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         self._open_conversation()
         self.page.get_by_title("Emoji", exact=True).click()
 
-        self.assertTrue(self._search_field_has_focus())
+        self._wait_for_search_field_focus()
 
         # The whole point of the focus: the next keystrokes filter the grid
         # instead of going nowhere.
@@ -87,7 +92,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         self._open_conversation()
         picker = self.page.locator("div:has(> emoji-picker)")
         self.page.get_by_title("Emoji", exact=True).click()
-        self.assertTrue(self._search_field_has_focus())
+        self._wait_for_search_field_focus()
 
         # Escape is pressed with the caret in the picker, so the composer's
         # own keydown handler never sees it - the picker wrapper must.
@@ -100,7 +105,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         self._open_conversation()
         picker = self.page.locator("div:has(> emoji-picker)")
         self.page.get_by_title("Emoji", exact=True).click()
-        self.assertTrue(self._search_field_has_focus())
+        self._wait_for_search_field_focus()
 
         # Empty space in the middle of the message area: no focusable element
         # takes the focus, so the browser drops it on <body> — the case that
@@ -125,7 +130,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         # latches on a touch device, so this path is reachable on a phone.
         message.hover()
         message.get_by_title("More reactions").click()
-        self.assertTrue(self._search_field_has_focus())
+        self._wait_for_search_field_focus()
 
         self.page.keyboard.press("Escape")
 
@@ -138,7 +143,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         self._open_conversation()
         picker = self.page.locator("div:has(> emoji-picker)")
         self.page.get_by_title("Emoji", exact=True).click()
-        self.assertTrue(self._search_field_has_focus())
+        self._wait_for_search_field_focus()
 
         search_box = self.page.locator('input[placeholder="Search conversations"]')
         search_box.click()

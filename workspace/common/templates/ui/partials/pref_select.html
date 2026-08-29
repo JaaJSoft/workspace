@@ -1,0 +1,28 @@
+{% comment %}
+One select row of a module preferences panel: label on the left, daisyUI
+select on the right. The counterpart of pref_toggle.html for a preference
+that picks one value out of a few.
+
+Required context:
+- label: visible text of the row.
+- key: preference key, quoted into the handler call and into the :value
+  expression ("prefs.<key>").
+- options: iterable of (value, label) pairs, rendered in order. Pass it
+  from the view - a template cannot build the list itself.
+
+Optional context:
+- handler: function called as <handler>('<key>', $event.target.value)
+  on change (default "update").
+{% endcomment %}
+<label class="flex items-center justify-between gap-2">
+  <span class="text-sm">{{ label }}</span>
+  <select
+    class="select select-bordered select-sm"
+    :value="prefs.{{ key }}"
+    @change="{% firstof handler 'update' %}('{{ key }}', $event.target.value)"
+  >
+    {% for value, name in options %}
+      <option value="{{ value }}">{{ name }}</option>
+    {% endfor %}
+  </select>
+</label>

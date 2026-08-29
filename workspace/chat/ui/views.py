@@ -44,6 +44,17 @@ def _display(user):
     return user.get_full_name() or user.username
 
 
+# Entrance animation styles offered in the preferences panel; the values are
+# the data-msg-animation variants chat.css knows.
+MESSAGE_ANIMATIONS = [
+    ("slide", "Slide"),
+    ("pop", "Pop"),
+    ("fade", "Fade"),
+    ("bounce", "Bounce"),
+    ("none", "None"),
+]
+
+
 def _chat_prefs(user):
     """Chat preferences shaped for json_script, guarded against non-dict values."""
     prefs = get_setting(user, "chat", "preferences", default={})
@@ -177,6 +188,7 @@ def chat_view(request, conversation_uuid=None):
                 request.user, "chat", "call_sounds", default=True
             ),
             "chat_prefs": _chat_prefs(request.user),
+            "message_animations": MESSAGE_ANIMATIONS,
             "chat_groups": _user_chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
@@ -228,6 +240,7 @@ def chat_room_view(request, conversation_uuid):
                 request.user, "chat", "call_sounds", default=True
             ),
             "chat_prefs": _chat_prefs(request.user),
+            "message_animations": MESSAGE_ANIMATIONS,
             "current_user_id": request.user.id,
             "chat_groups": _user_chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,

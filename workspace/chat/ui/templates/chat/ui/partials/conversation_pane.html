@@ -225,7 +225,11 @@
                  the placeholder the first $ajax load replaces; @ajax:merge
                  refuses content stamped for another conversation (the pane is
                  not torn down on a switch). -->
-            <div id="messages-container" @ajax:merge="_vetoStaleMerge($event)">
+            <div
+              id="messages-container"
+              :data-msg-animation="chatPrefs.messageAnimation"
+              @ajax:merge="_vetoStaleMerge($event)"
+            >
               <div id="message-list"></div>
             </div>
 

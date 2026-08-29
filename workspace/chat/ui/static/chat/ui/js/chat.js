@@ -90,7 +90,9 @@ function chatApp(currentUserId) {
       // Keep listening for cross-component updates fired by the
       // preferences popover/dialog.
       window.addEventListener('chat:preferences-changed', (e) => {
+        const animationChanged = e.detail.messageAnimation !== this.chatPrefs.messageAnimation;
         this.chatPrefs = { ...e.detail };
+        if (animationChanged) this.$nextTick(() => this.replayMessageAnimation());
       });
 
       // Load conversations from embedded JSON (fast first paint)

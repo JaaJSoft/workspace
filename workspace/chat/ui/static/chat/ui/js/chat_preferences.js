@@ -3,6 +3,9 @@ window._chatPrefsDefaults = {
     compactConversationList: false,
     compactMessageView: false,
     showThreadRepliesInline: false,
+    // slide | pop | fade | bounce | none - the CSS in chat.css keys the
+    // entrance keyframes on this value.
+    messageAnimation: 'slide',
 };
 // Initial prefs are embedded server-side via |json_script (index.html and
 // room.html). Reading them synchronously means the first Alpine paint

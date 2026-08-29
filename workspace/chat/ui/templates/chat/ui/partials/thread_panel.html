@@ -16,7 +16,7 @@
   x-data="chatThreadPanel(openThreadRoot)"
   tabindex="-1"
   @keydown.escape.prevent.stop="closeThread()"
-  @thread-reply-received.window="if ($event.detail.root === threadRootUuid) loadMessages()"
+  @thread-reply-received.window="onReplyReceived($event.detail)"
   {# A reaction toggled in the main flow repainted the flow only; the panel's copy of the message goes stale without this. #}
   @chat-refresh-thread.window="refreshPanelOnly()"
   @ajax:missing="_onAjaxMissing($event)"

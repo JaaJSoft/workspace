@@ -32,7 +32,9 @@ window.chatSseMixin = function chatSseMixin() {
           // those back. Fire-and-forget, same as openThread's call.
           this.markThreadRead(route.bumpRoot);
           window.dispatchEvent(
-            new CustomEvent('thread-reply-received', { detail: { root: route.bumpRoot } }),
+            new CustomEvent('thread-reply-received', {
+              detail: { root: route.bumpRoot, uuid: detail.message.uuid },
+            }),
           );
         } else {
           this.bumpThreadUnread(route.bumpRoot);
@@ -48,6 +50,7 @@ window.chatSseMixin = function chatSseMixin() {
         if (!document.getElementById(`${this._messageIdPrefix()}-${detail.message.uuid}`)) {
           const wasAtBottom = this._isNearBottom();
           await this._refreshCurrentMessages();
+          this._animateMessageEntry(detail.message.uuid);
           if (wasAtBottom) this.scrollToBottom();
           await this.markAsRead(detail.conversation_id);
         }

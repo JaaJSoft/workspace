@@ -267,6 +267,7 @@ function buildSseApp({ openThreadRoot = null, showInline = false } = {}) {
     clearBotStep() {},
     // Provided by chatMessagesMixin on the real component.
     _messageIdPrefix: () => 'msg',
+    _animateMessageEntry() {},
     _isNearBottom: () => true,
     async _refreshCurrentMessages() {
       counters.refreshed++;
@@ -312,8 +313,8 @@ test('a live reply reaches an open panel through a window event', async () => {
   const { app, dispatched } = buildSseApp({ openThreadRoot: 'r1' });
   await app.handleSSEMessage(reply('r1'));
   assert.deepStrictEqual(
-    dispatched.map((e) => [e.type, e.detail.root]),
-    [['thread-reply-received', 'r1']],
+    dispatched.map((e) => [e.type, e.detail.root, e.detail.uuid]),
+    [['thread-reply-received', 'r1', 'm9']],
   );
 });
 
@@ -412,6 +413,7 @@ function buildSseAppCapturingFetch({ openThreadRoot = null } = {}) {
     isBotMessage: () => false,
     clearBotStep() {},
     _messageIdPrefix: () => 'msg',
+    _animateMessageEntry() {},
     _isNearBottom: () => true,
     async _refreshCurrentMessages() {},
     scrollToBottom() {},

@@ -43,6 +43,105 @@
   transition: box-shadow 0.3s ease, outline 0.3s ease;
 }
 
+/* ── Message entrance ──────────────────────────────────────
+   messages.js puts .msg-enter on the one bubble a refresh actually added
+   (or on the optimistic group of a send). The style comes from the
+   messageAnimation chat preference, mirrored as data-msg-animation on the
+   messages container; an unknown value falls back to the slide. Directional
+   styles start from the side the bubble is aligned to: own messages from
+   the right, others from the left. */
+.msg-group-start .msg-enter {
+  --msg-enter-x: -1rem;
+  --msg-enter-origin: bottom left;
+}
+
+.msg-group-end .msg-enter,
+.msg-group-end.msg-enter {
+  --msg-enter-x: 1rem;
+  --msg-enter-origin: bottom right;
+}
+
+.msg-enter {
+  animation: msg-enter-slide 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  transform-origin: var(--msg-enter-origin, bottom left);
+}
+
+@keyframes msg-enter-slide {
+  from {
+    opacity: 0;
+    transform: translate(var(--msg-enter-x, 0), 0.75rem) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-msg-animation="pop"] .msg-enter {
+  animation: msg-enter-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes msg-enter-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-msg-animation="fade"] .msg-enter {
+  animation: msg-enter-fade 0.4s ease-out both;
+}
+
+@keyframes msg-enter-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+[data-msg-animation="bounce"] .msg-enter {
+  animation: msg-enter-bounce 0.55s ease-out both;
+}
+
+@keyframes msg-enter-bounce {
+  0% {
+    opacity: 0;
+    transform: translateY(-1.5rem);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(0.35rem);
+  }
+  60% {
+    transform: translateY(-0.2rem);
+  }
+  80% {
+    transform: translateY(0.08rem);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+[data-msg-animation="none"] .msg-enter {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-enter {
+    animation: none;
+  }
+}
+
 /* Prevent code blocks and pre from causing horizontal overflow in bubbles */
 .msg-body pre,
 .msg-body code {

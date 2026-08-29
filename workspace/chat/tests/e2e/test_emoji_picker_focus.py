@@ -110,6 +110,30 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         expect(picker).to_be_hidden()
         self.assertTrue(self._textarea_has_focus())
 
+    def test_closing_a_reaction_picker_leaves_the_composer_alone(self):
+        self._open_conversation()
+        composer = self.page.locator('textarea[placeholder="Type a message..."]')
+        composer.fill("hi")
+        composer.press("Enter")
+        # The optimistic bubble is replaced by the server-rendered one, which
+        # is the copy that carries the hover toolbar.
+        message = self.page.locator("#messages-container .group\\/msg").last
+        expect(message.get_by_title("More reactions")).to_be_attached()
+        picker = self.page.locator("div:has(> emoji-picker)")
+
+        # The reaction toolbar only materialises on hover - which a tap also
+        # latches on a touch device, so this path is reachable on a phone.
+        message.hover()
+        message.get_by_title("More reactions").click()
+        self.assertTrue(self._search_field_has_focus())
+
+        self.page.keyboard.press("Escape")
+
+        expect(picker).to_be_hidden()
+        # Reacting never involved the composer, and landing the caret there
+        # would raise the virtual keyboard on a phone for nothing.
+        self.assertFalse(self._textarea_has_focus())
+
     def test_clicking_another_control_does_not_steal_its_focus(self):
         self._open_conversation()
         picker = self.page.locator("div:has(> emoji-picker)")

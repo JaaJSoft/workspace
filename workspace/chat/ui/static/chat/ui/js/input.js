@@ -115,8 +115,12 @@ window.chatInputMixin = function chatInputMixin() {
       // composer - but only when the picker was the one holding it. This also
       // runs on click-outside, where focus already belongs to whatever the
       // user just clicked and stealing it would break their next keystroke.
+      // Reactions are excluded: that flow never involved the composer, and
+      // sending the caret there would raise the virtual keyboard on a phone
+      // just for having reacted to a message.
       const active = document.activeElement;
-      const restoreFocus = this._emojiSearchFocused
+      const restoreFocus = this.emojiPickerMode === 'input'
+        && this._emojiSearchFocused
         && (active === this.$refs.emojiPicker || active === document.body);
 
       this._emojiSearchFocused = false;

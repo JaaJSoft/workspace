@@ -121,6 +121,22 @@ test('closing does not steal focus from the element the user just clicked', () =
   assert.equal(textarea.focusCount, 0);
 });
 
+test('closing a reaction picker leaves the composer alone', () => {
+  const search = makeInput();
+  const picker = makeUpgradedPicker(search);
+  const textarea = makeInput();
+  const composer = makeComposer({ picker, textarea });
+
+  composer.openEmojiPicker('reaction', triggerEvent(), 'msg-uuid');
+  assert.equal(search.focusCount, 1);
+  documentStub.activeElement = picker;
+  composer.closeEmojiPicker();
+
+  // Reacting never involved the composer; sending the caret there would pop
+  // the virtual keyboard on a phone.
+  assert.equal(textarea.focusCount, 0);
+});
+
 test('closing leaves focus alone when the search was never focused', () => {
   const textarea = makeInput();
   const composer = makeComposer({ picker: makePendingPicker(), textarea });

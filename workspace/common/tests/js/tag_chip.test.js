@@ -61,3 +61,32 @@ test('the sm pill is shorter, in both variants', () => {
   assert.ok(removable.includes('pl-2'));
   assert.ok(removable.includes('pr-1'));
 });
+
+test('a daisyUI semantic color name resolves to the theme variable', () => {
+  const { tagChipColor } = load();
+
+  assert.equal(tagChipColor('primary'), 'oklch(var(--p))');
+  assert.equal(tagChipColor('secondary'), 'oklch(var(--s))');
+  assert.equal(tagChipColor('accent'), 'oklch(var(--a))');
+  assert.equal(tagChipColor('info'), 'oklch(var(--in))');
+  assert.equal(tagChipColor('success'), 'oklch(var(--su))');
+  assert.equal(tagChipColor('warning'), 'oklch(var(--wa))');
+  assert.equal(tagChipColor('error'), 'oklch(var(--er))');
+});
+
+test('ghost and empty both mean the neutral pill', () => {
+  const { tagChipColor } = load();
+
+  assert.equal(tagChipColor('ghost'), '');
+  assert.equal(tagChipColor(''), '');
+  assert.equal(tagChipColor(null), '');
+  assert.equal(tagChipColor('  '), '');
+});
+
+test('a CSS color passes through untouched', () => {
+  const { tagChipColor } = load();
+
+  assert.equal(tagChipColor('#ef4444'), '#ef4444');
+  assert.equal(tagChipColor(' #ef4444 '), '#ef4444');
+  assert.equal(tagChipColor('rgb(1, 2, 3)'), 'rgb(1, 2, 3)');
+});

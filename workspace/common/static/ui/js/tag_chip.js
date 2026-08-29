@@ -9,7 +9,9 @@
  *
  * Attributes:
  *   - name       text of the pill.
- *   - color      any CSS color. Empty renders the neutral pill.
+ *   - color      any CSS color, or a daisyUI semantic name ("primary",
+ *                "accent", "info", ...) resolved against the active theme.
+ *                Empty or "ghost" renders the neutral pill.
  *   - icon       lucide icon name, rendered before the label.
  *   - size       "sm" for dense lists (board cards, backlog rows, listings).
  *   - removable  the chip carries a trailing control, so the pill gets the
@@ -62,6 +64,27 @@ window.tagChipClasses = function tagChipClasses(size, removable) {
   return classes;
 };
 
+// Semantic names map onto the theme so a chip colored like its module
+// ("primary" for files, "success" for notes) follows the light/dark switch.
+// daisyUI 4 stores each theme color as raw oklch channels in a short
+// variable, hence the wrapping.
+const TAG_CHIP_THEME_VARS = {
+  primary: '--p',
+  secondary: '--s',
+  accent: '--a',
+  info: '--in',
+  success: '--su',
+  warning: '--wa',
+  error: '--er',
+};
+
+window.tagChipColor = function tagChipColor(value) {
+  const color = (value || '').trim();
+  if (!color || color === 'ghost') return '';
+  const themeVar = TAG_CHIP_THEME_VARS[color];
+  return themeVar ? `oklch(var(${themeVar}))` : color;
+};
+
 (function defineTagChip() {
   // The line box sits low on the font's baseline, so a chip centered by
   // flex alone reads ~1px too low. text-box trims the box to the cap
@@ -105,7 +128,7 @@ window.tagChipClasses = function tagChipClasses(size, removable) {
       this._appliedClasses = window.tagChipClasses(this.getAttribute('size'), removable);
       this.classList.add(...this._appliedClasses);
 
-      const color = (this.getAttribute('color') || '').trim();
+      const color = window.tagChipColor(this.getAttribute('color'));
       this.style.borderColor = color;
       this.style.color = color;
 

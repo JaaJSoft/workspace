@@ -505,6 +505,12 @@ def _validate_setting_value(module, key, value):
             or not 0 <= value <= 23
         ):
             return "reminder_hour must be an integer between 0 and 23."
+    if module == "vault" and key == "default_sort" and value is not None:
+        # The four the preferences panel offers. Stored unchecked, an unknown
+        # value reaches the listing as a sort nothing implements, and the sort
+        # control renders on a value none of its options carries.
+        if value not in ("default", "name", "favorite", "created"):
+            return "default_sort must be one of: default, name, favorite, created."
     if module == "vault" and key == "lock_after_minutes" and value is not None:
         # A vault that never locks is the failure a bad value here causes, so
         # it is refused rather than stored and quietly ignored by the page.

@@ -54,7 +54,6 @@ window.vaultApp = (function () {
     return {
       ...window.vaultUnlockMixin(),
       ...window.vaultPrefsMixin(),
-      error: '',
       vaults: [],
       busy: false,
       // Which sidebar view is on. The toolbar deliberately carries no filter
@@ -103,7 +102,6 @@ window.vaultApp = (function () {
       // one - and the slower answer must not describe rows that left the
       // screen. Only the newest generation is allowed to write.
       actionsGeneration: 0,
-      openMenuFor: null,
 
       init: function () {
         this.icons = window.ICON_PICKER_ICONS || [];
@@ -442,7 +440,6 @@ window.vaultApp = (function () {
         this.vaults = [];
         this.vaultActions = {};
         this.selected = [];
-        this.openMenuFor = null;
         this.closeMenus();
         this.vaultDialog = null;
         // The dialog lives inside the unlocked subtree, so a lock hides it
@@ -523,10 +520,6 @@ window.vaultApp = (function () {
         });
       },
 
-      toggleMenu: function (uuid) {
-        this.openMenuFor = this.openMenuFor === uuid ? null : uuid;
-      },
-
       // The bare global, not window.AppDialog: dialogs.js declares it with a
       // top-level `const`, which lives in the global lexical scope and never
       // becomes a property of window. Reading it through window returns
@@ -542,7 +535,6 @@ window.vaultApp = (function () {
       },
 
       runVaultAction: async function (action, vault) {
-        this.openMenuFor = null;
         // The menu was built from the endpoint, but it may have been built a
         // while ago: asking again here costs nothing and stops a stale menu
         // producing a request the server is about to refuse.

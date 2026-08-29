@@ -14,6 +14,26 @@
 // tree is not - and because the keys live in vaultSession's closure, that
 // navigation drops them. Every page load starts locked, which is why the
 // vault is loaded by afterUnlock and never by init.
+// Every id runAction can carry out. The registry answers what the caller may
+// do; an id it offers that lands on no branch here would be a menu row that
+// does nothing when clicked - worse than an absent one, and exactly the drift
+// a server-driven menu exists to prevent. So the menu is narrowed to this
+// list, and a test holds the list against the registry.
+//
+// `move`, `set_tags` and `copy_totp` are what the registry offers and this
+// client does not do yet. They are hidden rather than shown dead.
+window.VAULT_HANDLED_ENTRY_ACTIONS = [
+  'edit',
+  'copy_username',
+  'copy_password',
+  'open_uri',
+  'favorite',
+  'unfavorite',
+  'trash',
+  'restore',
+  'delete_forever',
+];
+
 window.vaultBrowser = (function () {
   const TILE_SIZE_KEY = 'vault.browser.tileSize';
   const VIEW_MODE_KEY = 'vault.browser.viewMode';
@@ -109,7 +129,6 @@ window.vaultBrowser = (function () {
       // property reads and cannot see into another module's closure.
       clipboard: { active: false, label: '', secondsLeft: 0, note: '' },
       loading: false,
-      error: '',
       // What the server says may be done with each entry, keyed by uuid. It
       // is never computed here: a rule copied into the client is a rule that
       // drifts from the endpoint enforcing it.
@@ -312,6 +331,7 @@ window.vaultBrowser = (function () {
         const actions = (entry && this.entryActions[entry.uuid]) || [];
         const favorite = entry && entry.favorite;
         return actions.filter(function (action) {
+          if (!window.VAULT_HANDLED_ENTRY_ACTIONS.includes(action.id)) return false;
           if (action.id === 'favorite') return !favorite;
           if (action.id === 'unfavorite') return !!favorite;
           return true;
@@ -334,7 +354,11 @@ window.vaultBrowser = (function () {
       bulkActions: function () {
         const rows = this.selectedEntries();
         if (!rows.length) return [];
-        const lists = rows.map((entry) => this.entryActions[entry.uuid] || []);
+        const lists = rows.map((entry) =>
+          (this.entryActions[entry.uuid] || []).filter((action) =>
+            window.VAULT_HANDLED_ENTRY_ACTIONS.includes(action.id),
+          ),
+        );
         const shared = lists[0].filter(
           (action) =>
             action.bulk &&
@@ -506,10 +530,15 @@ window.vaultBrowser = (function () {
       // than pressing on: a batch that half-happened and said nothing is
       // worse than one that stopped and said where.
       applyTo: async function (actionId, rows) {
+        const self = this;
         const call = {
           trash: function (uuid) { return window.vaultApi.trashEntry(uuid); },
           restore: function (uuid) { return window.vaultApi.restoreEntry(uuid); },
           delete_forever: function (uuid) { return window.vaultApi.purgeEntry(uuid); },
+          // Not a flag the server flips: is_favorite is inside the signed
+          // payload, so changing it is a re-signature of the whole record.
+          favorite: function (uuid) { return self.setFavorite(uuid, true); },
+          unfavorite: function (uuid) { return self.setFavorite(uuid, false); },
         }[actionId];
         if (!call) return;
         this.busy = true;
@@ -532,6 +561,21 @@ window.vaultBrowser = (function () {
           this.error =
             'That change could not be applied to every entry. The listing above is current.';
         }
+      },
+
+      // The row as the server stores it, not as the listing decrypted it: the
+      // signature covers the ciphertexts, so they are what has to be signed
+      // again.
+      setFavorite: async function (uuid, value) {
+        const row = this.rowFor(uuid);
+        if (!row || !this.openVault) return;
+        const body = await window.buildEntryResignRequest(
+          window.vaultSession,
+          this.openVault,
+          row,
+          { is_favorite: value },
+        );
+        await window.vaultApi.updateEntry(uuid, body);
       },
 
       // The bare global, not window.AppDialog: dialogs.js declares it with a

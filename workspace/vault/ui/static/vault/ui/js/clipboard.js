@@ -41,10 +41,13 @@ window.vaultClipboard = (function () {
     try {
       const current = await navigator.clipboard.readText();
       if (current !== ours) return 'moved-on';
+      await navigator.clipboard.writeText('');
     } catch (err) {
+      // Both halves under the same guard: a write that threw on its own
+      // escaped expire(), so the countdown was never stopped and the interval
+      // came back a second later to try again, for ever.
       return 'refused';
     }
-    await navigator.clipboard.writeText('');
     return 'cleared';
   }
 

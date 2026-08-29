@@ -375,6 +375,8 @@ function entryWith(uuid, overrides = {}) {
 
 const ACTION = {
   edit: { id: 'edit', label: 'Edit', icon: 'pencil', bulk: false, css_class: '' },
+  // Offered by the registry and not implemented by the browser, which is what
+  // several tests here use it for.
   move: { id: 'move', label: 'Move to folder', icon: 'folder', bulk: true, css_class: '' },
   trash: { id: 'trash', label: 'Move to trash', icon: 'trash-2', bulk: true, css_class: 'text-error' },
   favorite: { id: 'favorite', label: 'Add to favourites', icon: 'star', bulk: true, css_class: '' },
@@ -392,11 +394,11 @@ test('the bulk bar offers only what every selected row offers', async () => {
       listEntries: async (uuid, opts) =>
         opts && opts.trashed ? [] : [entryWith('e-1'), entryWith('e-2')],
       fetchEntryActions: async () => ({
-        'e-1': [ACTION.edit, ACTION.move, ACTION.trash, ACTION.copy_password],
+        'e-1': [ACTION.edit, ACTION.favorite, ACTION.trash, ACTION.copy_password],
         // No trash on this one: a member whose wrap was revoked mid-listing
         // is the realistic case, and the bar must not offer what one row
         // would refuse.
-        'e-2': [ACTION.edit, ACTION.move],
+        'e-2': [ACTION.edit, ACTION.favorite],
       }),
     },
   });
@@ -404,20 +406,22 @@ test('the bulk bar offers only what every selected row offers', async () => {
   await component.load();
   component.toggleSelection('e-1');
   component.toggleSelection('e-2');
-  assert.deepStrictEqual(ids(component.bulkActions()), ['move']);
+  assert.deepStrictEqual(ids(component.bulkActions()), ['favorite']);
 });
 
 test('a bulk action the registry marks single-row is never offered in bulk', async () => {
   const { component } = browser({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
-      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit, ACTION.copy_password, ACTION.move] }),
+      fetchEntryActions: async () => ({
+        'e-1': [ACTION.edit, ACTION.copy_password, ACTION.favorite],
+      }),
     },
   });
   component.init();
   await component.load();
   component.toggleSelection('e-1');
-  assert.deepStrictEqual(ids(component.bulkActions()), ['move']);
+  assert.deepStrictEqual(ids(component.bulkActions()), ['favorite']);
 });
 
 test('favorite goes when every selected row is already one', async () => {
@@ -1372,4 +1376,78 @@ test('a new folder is still created rather than updated', async () => {
   await component.saveFolder();
   assert.equal(written.length, 0);
   assert.equal(created.length, 1);
+});
+
+test('an action the client cannot carry out is never put in the menu', async () => {
+  // The endpoint offers `move`, `set_tags` and `copy_totp`; nothing here can
+  // run them yet. A row that does nothing when clicked is worse than one that
+  // is not there.
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({
+        'e-1': [
+          { id: 'edit', label: 'Edit', icon: 'pen', category: 'edit' },
+          { id: 'move', label: 'Move to folder', icon: 'folder', category: 'organize', bulk: true },
+          { id: 'set_tags', label: 'Edit tags', icon: 'tag', category: 'organize', bulk: true },
+          { id: 'copy_totp', label: 'Copy code', icon: 'clock', category: 'clipboard' },
+        ],
+      }),
+    },
+  });
+  component.init();
+  await component.load();
+  assert.deepStrictEqual(
+    component.actionsFor(component.entries[0]).map((a) => a.id),
+    ['edit']
+  );
+  component.selected = ['e-1'];
+  assert.deepStrictEqual(component.bulkActions().map((a) => a.id), []);
+});
+
+test('favouriting an entry re-signs the record instead of asking for a flag', async () => {
+  // is_favorite is inside the signed payload, so there is no endpoint that
+  // flips it: the whole record is signed again and put back.
+  const written = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({
+        'e-1': [{ id: 'favorite', label: 'Add to favourites', icon: 'star', category: 'organize', bulk: true }],
+      }),
+      updateEntry: async (uuid, body) => { written.push([uuid, body]); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.runAction({ id: 'favorite' }, component.entries[0]);
+  assert.equal(written.length, 1);
+  assert.equal(written[0][0], 'e-1');
+  assert.equal(written[0][1].is_favorite, true);
+  assert.equal(written[0][1].metadata_sig, 'signature');
+});
+
+test('the bulk bar unfavourites every selected row', async () => {
+  const written = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? []
+          : [
+              { ...entryWith('e-1'), is_favorite: true },
+              { ...entryWith('e-2'), is_favorite: true },
+            ],
+      fetchEntryActions: async () => ({
+        'e-1': [{ id: 'unfavorite', label: 'Remove', icon: 'star-off', category: 'organize', bulk: true }],
+        'e-2': [{ id: 'unfavorite', label: 'Remove', icon: 'star-off', category: 'organize', bulk: true }],
+      }),
+      updateEntry: async (uuid, body) => { written.push([uuid, body.is_favorite]); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.selected = ['e-1', 'e-2'];
+  await component.runBulkAction({ id: 'unfavorite' });
+  assert.deepStrictEqual(Array.from(written), [['e-1', false], ['e-2', false]]);
 });

@@ -198,6 +198,10 @@ window.vaultStore = function vaultStore() {
         name: (a, b) => a.name.localeCompare(b.name),
         favorite: (a, b) => Number(b.favorite) - Number(a.favorite),
         modified: (a, b) => String(a.modified).localeCompare(String(b.modified)),
+        // Offered by the preferences panel, which both screens now show: a
+        // default sort this screen did not know left the listing unsorted and
+        // its select on a value no option carried.
+        created: (a, b) => String(a.created).localeCompare(String(b.created)),
       }[this.sortField];
       if (!compare) return rows;
       // A copy: sorting the array the caller handed us would reorder the

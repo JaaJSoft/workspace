@@ -126,10 +126,7 @@
     </div>
   {% else %}
     {# The component is on the drawer wrapper: the sidebar shares it. #}
-    <div
-      class="h-full flex flex-col min-h-0"
-      @keydown.escape.window="openMenuFor = null"
-    >
+    <div class="h-full flex flex-col min-h-0">
       <template x-if="state !== 'unlocked'">
         <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
       </template>

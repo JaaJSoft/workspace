@@ -544,6 +544,26 @@ class SettingDetailTests(UserTestMixin, APITestCase):
             )
             self.assertIn(resp.status_code, (200, 201), value)
 
+    def test_put_rejects_an_unknown_default_sort(self):
+        """Stored unchecked, it reaches the listing as a sort nothing
+        implements and leaves the sort control on a value no option carries."""
+        for value in ["size", "", 3, "NAME"]:
+            resp = self.client.put(
+                self._url("vault", "default_sort"),
+                {"value": value},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 400, value)
+
+    def test_put_accepts_the_sorts_the_panel_offers(self):
+        for value in ["default", "name", "favorite", "created"]:
+            resp = self.client.put(
+                self._url("vault", "default_sort"),
+                {"value": value},
+                format="json",
+            )
+            self.assertIn(resp.status_code, (200, 201), value)
+
     def test_put_creates_setting(self):
         resp = self.client.put(
             self._url("core", "theme"),

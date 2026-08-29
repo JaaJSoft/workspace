@@ -233,3 +233,25 @@ class VaultBrowserTests(PlaywrightTestCase):
             self.page.locator("#entry-listing-menu").is_visible(),
             "a right-click on a row must not raise the listing's menu",
         )
+
+    def test_favouriting_an_entry_re_signs_it_and_the_server_accepts_it(self):
+        """The one write in the menu that is not an endpoint call: is_favorite
+        is inside the signed payload, so the whole record is signed again.
+        Only a browser proves the server accepts what the page produced."""
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+
+        self.page.locator("tbody tr", has_text="GitHub").click(button="right")
+        menu = self.page.locator("#entry-context-menu")
+        menu.get_by_text("Add to favourites").click()
+        self.page.wait_for_selector(
+            "tbody tr:has-text('GitHub') .text-warning", timeout=30000
+        )
+
+        # The sidebar view is the other half: a favourite is what it lists.
+        self.page.get_by_role("button", name="Favorites").first.click()
+        self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=10000)
+
+        self.page.locator("tbody tr", has_text="GitHub").click(button="right")
+        menu.get_by_text("Remove from favourites").click()
+        self.page.wait_for_selector("tbody tr:has-text('GitHub')", state="detached")

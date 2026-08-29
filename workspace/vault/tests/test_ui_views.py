@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from workspace.vault.models import AccountIdentity
+from workspace.vault.models import AccountIdentity, EntryType
 from workspace.vault.tests.factories import make_vault
 
 User = get_user_model()
@@ -103,6 +103,16 @@ class BrowserRoutingTests(TestCase):
         """The path converter refuses it at routing time, which is why the
         view carries no parse_uuid_or_none."""
         self.assertEqual(self.client.get("/vault/not-a-uuid").status_code, 404)
+
+    def test_the_page_carries_the_entry_type_catalogue(self):
+        """The New menu and the entry form are built from the Python registry,
+        so a type never has to be named twice."""
+        response = self.client.get(reverse("vault_ui:index"))
+        self.assertEqual(
+            [entry["id"] for entry in response.context["entry_types"]],
+            [EntryType.LOGIN],
+        )
+        self.assertContains(response, 'id="entry-types"')
 
     def test_an_unfinished_account_is_still_sent_to_onboarding(self):
         """The redirect guard belongs to the view, so it must hold on both

@@ -14,285 +14,271 @@
   {% include 'core/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
 
-{% block body_class %}bg-base-100 min-h-screen flex flex-col{% endblock %}
-{% block drawer_wrapper_class %}{% endblock %}
-{% block drawer_content_class %}{% endblock %}
-{% block main_layout_class %}{% endblock %}
+{% comment %}
+  One template, two screens, because one view serves two URLs: /vault lists
+  the vaults, /vault/<uuid> browses one. A palette command is a plain link and
+  can name no UUID, which is what forces them to share a view - and sharing a
+  view is what makes the unlock gate below common to both.
+
+  The two differ in how they use the viewport: the listing scrolls with the
+  page, the browser is a fixed shell with its own scrolling pane.
+{% endcomment %}
+{% block body_class %}bg-base-100 flex flex-col {% if vault_uuid %}h-dvh overflow-hidden{% else %}min-h-screen{% endif %}{% endblock %}
+{% block drawer_wrapper_class %}{% if vault_uuid %}flex-1 min-h-0{% endif %}{% endblock %}
+{% block drawer_content_class %}{% if vault_uuid %}h-full overflow-hidden{% endif %}{% endblock %}
+{% block main_class %}{% if vault_uuid %}p-0 flex flex-col h-full overflow-hidden{% else %}container mx-auto p-4{% endif %}{% endblock %}
+{% block main_layout_class %}{% if vault_uuid %}flex-1 min-h-0{% endif %}{% endblock %}
 
 {% block content %}
   {{ vault_uuid|json_script:"vault-uuid" }}
-  <div class="mx-auto max-w-4xl w-full py-8" x-data="vaultApp()">
-    <template x-if="state !== 'unlocked'">
-      <div
-        class="card bg-base-100 border border-base-300 shadow-sm max-w-lg mx-auto"
-      >
-        <div class="card-body">
-          <h1 class="text-xl font-semibold">Unlock your vaults</h1>
-          <inline-alert type="error" x-show="error" x-cloak>
-          <span x-text="error"></span>
-          </inline-alert>
-          <form @submit.prevent="unlock()">
-            <label class="form-control">
-              <span class="label-text">Master password</span>
-              <input
-                type="password"
-                class="input input-bordered"
-                autocomplete="current-password"
-                x-model="password"
-                :disabled="state === 'deriving'"
-              />
-            </label>
-            <template x-if="secretRequired">
-              <label class="form-control mt-4">
-                <span class="label-text">Recovery key</span>
-                <input
-                  type="text"
-                  class="input input-bordered font-mono"
-                  autocomplete="off"
-                  spellcheck="false"
-                  x-model="secretText"
-                  :disabled="state === 'deriving'"
-                />
-                <span class="label-text-alt">From your emergency kit. Dashes and case are ignored.</span>
-              </label>
-            </template>
-            <label class="label cursor-pointer justify-start gap-3 mt-4">
-              <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
-              <span class="label-text">
-                Remember my recovery key on this device. Anything that can run
-                code on this page can then read it, so leave it off on a shared
-                computer.
-              </span>
-            </label>
-            <button
-              type="submit"
-              class="btn btn-primary mt-4"
-              :disabled="state === 'deriving' || !password || secretMissing()"
-            >
-              <span x-show="state !== 'deriving'">Unlock</span>
-              <span x-show="state === 'deriving'" x-cloak>
-                <span class="loading loading-spinner loading-xs"></span>
-                Unlocking - the wait is deliberate
-              </span>
-            </button>
-          </form>
+  {{ entry_types|json_script:"entry-types" }}
+
+  {% if vault_uuid %}
+    <div x-data="vaultBrowser()" class="h-full flex min-h-0">
+      <template x-if="state !== 'unlocked'">
+        <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
+      </template>
+
+      <template x-if="state === 'unlocked'">
+        <div class="h-full flex min-h-0 w-full relative">
+          {% include "vault/ui/partials/browser_sidebar.html" %}
+
+          <main class="flex-1 flex flex-col min-w-0">
+            {% include "vault/ui/partials/browser_header.html" %}
+
+            <inline-alert type="warning" title="This vault is out of reach" message="Nothing here holds a key for your account, or the vault does not exist." class="mx-5 mt-4" x-show="missing" x-cloak></inline-alert>
+
+            <inline-alert type="error" x-show="error" x-cloak class="mx-5 mt-4">
+            <span x-text="error"></span>
+            </inline-alert>
+
+            {% comment %}
+              The listing itself, the selection bar and the properties panel
+              land in the next commits of this branch; the shell above is what
+              they hang from.
+            {% endcomment %}
+            <div class="flex-1 overflow-auto px-2 pt-2 min-h-0">
+              <p class="text-sm text-base-content/50 px-3 py-2" x-text="statusLine()"></p>
+            </div>
+          </main>
         </div>
-      </div>
-    </template>
+      </template>
+    </div>
+  {% else %}
+    <div class="mx-auto max-w-4xl w-full py-8" x-data="vaultApp()">
+      <template x-if="state !== 'unlocked'">
+        {% include "vault/ui/partials/unlock_form.html" %}
+      </template>
 
-    <template x-if="state === 'unlocked'">
-      <div>
-        <div class="flex items-center gap-3 flex-wrap mb-1">
-          <h1 class="text-2xl font-semibold flex items-center gap-2">
-            <i data-lucide="key-round" class="w-6 h-6 text-error"></i>
-            Your vaults
-          </h1>
-          <div class="ml-auto flex items-center gap-2">
-            <span class="badge badge-success badge-outline gap-1">
-              <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-              Everything encrypted
-            </span>
-            <span
-              class="text-sm"
-              :class="secondsLeft < 60 ? 'text-warning font-medium' : 'text-base-content/60'"
-            >
-              Locks in <span x-text="countdown()"></span>
-            </span>
-            <button class="btn btn-sm btn-ghost" @click="lockNow()">Lock now</button>
-            <button class="btn btn-primary btn-sm gap-2" @click="showCreate = true">
-              <i data-lucide="plus" class="w-4 h-4"></i>
-              New vault
-            </button>
-          </div>
-        </div>
-        <p class="text-sm text-base-content/60 mb-6">
-          Open a vault to browse its entries. The countdown covers all of them.
-        </p>
-
-        <inline-alert type="error" x-show="error" x-cloak class="mb-4">
-        <span x-text="error"></span>
-        </inline-alert>
-
-        <template x-if="vaults.length === 0">
-          <div class="card bg-base-100 border border-base-300">
-            <div class="card-body items-center text-center py-12 gap-3">
-              <i data-lucide="key-round" class="w-12 h-12 opacity-20"></i>
-              <p class="text-lg font-medium text-base-content/60">No vault yet</p>
-              <p class="text-sm text-base-content/60">
-                Create one to start keeping credentials in it.
-              </p>
+      <template x-if="state === 'unlocked'">
+        <div>
+          <div class="flex items-center gap-3 flex-wrap mb-1">
+            <h1 class="text-2xl font-semibold flex items-center gap-2">
+              <i data-lucide="key-round" class="w-6 h-6 text-error"></i>
+              Your vaults
+            </h1>
+            <div class="ml-auto flex items-center gap-2">
+              <span class="badge badge-success badge-outline gap-1">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                Everything encrypted
+              </span>
+              <span
+                class="text-sm"
+                :class="secondsLeft < 60 ? 'text-warning font-medium' : 'text-base-content/60'"
+              >
+                Locks in <span x-text="countdown()"></span>
+              </span>
+              <button class="btn btn-sm btn-ghost" @click="lockNow()">Lock now</button>
+              <button class="btn btn-primary btn-sm gap-2" @click="showCreate = true">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                New vault
+              </button>
             </div>
           </div>
-        </template>
+          <p class="text-sm text-base-content/60 mb-6">Open a vault to browse its entries. The countdown covers all of them.</p>
 
-        <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <template x-for="vault in vaults" :key="vault.uuid">
-            <li class="relative">
-              <a
-                :href="'/vault/' + vault.uuid"
-                class="card bg-base-100 border border-base-300 hover:border-error hover:shadow-md transition-all h-full"
-              >
-                <div class="card-body p-4 gap-3">
-                  <div class="flex items-start gap-3">
-                    <div
-                      class="w-10 h-10 rounded-lg bg-base-200 flex items-center justify-center flex-shrink-0"
-                    >
-                      <i
-                        :data-lucide="vault.icon || 'lock'"
-                        class="w-5 h-5"
-                        :class="'text-' + (vault.color || 'primary')"
-                      ></i>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-center gap-2 min-w-0">
-                        <span class="font-medium truncate" x-text="vault.name"></span>
+          <inline-alert type="error" x-show="error" x-cloak class="mb-4">
+          <span x-text="error"></span>
+          </inline-alert>
+
+          <template x-if="vaults.length === 0">
+            <div class="card bg-base-100 border border-base-300">
+              <div class="card-body items-center text-center py-12 gap-3">
+                <i data-lucide="key-round" class="w-12 h-12 opacity-20"></i>
+                <p class="text-lg font-medium text-base-content/60">No vault yet</p>
+                <p class="text-sm text-base-content/60">Create one to start keeping credentials in it.</p>
+              </div>
+            </div>
+          </template>
+
+          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <template x-for="vault in vaults" :key="vault.uuid">
+              <li class="relative">
+                <a
+                  :href="'/vault/' + vault.uuid"
+                  class="card bg-base-100 border border-base-300 hover:border-error hover:shadow-md transition-all h-full"
+                >
+                  <div class="card-body p-4 gap-3">
+                    <div class="flex items-start gap-3">
+                      <div
+                        class="w-10 h-10 rounded-lg bg-base-200 flex items-center justify-center flex-shrink-0"
+                      >
                         <i
-                          data-lucide="star"
-                          class="w-4 h-4 fill-current text-warning flex-shrink-0"
-                          x-show="vault.is_favorite"
+                          :data-lucide="vault.icon || 'lock'"
+                          class="w-5 h-5"
+                          :class="'text-' + (vault.color || 'primary')"
                         ></i>
                       </div>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="font-medium truncate" x-text="vault.name"></span>
+                          <i
+                            data-lucide="star"
+                            class="w-4 h-4 fill-current text-warning flex-shrink-0"
+                            x-show="vault.is_favorite"
+                          ></i>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                        x-show="actionsFor(vault).length > 0"
+                        @click.prevent.stop="toggleMenu(vault.uuid)"
+                        aria-label="Vault actions"
+                      >
+                        <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      class="btn btn-ghost btn-xs btn-square flex-shrink-0"
-                      x-show="actionsFor(vault).length > 0"
-                      @click.prevent.stop="toggleMenu(vault.uuid)"
-                      aria-label="Vault actions"
-                    >
-                      <i data-lucide="more-horizontal" class="w-4 h-4"></i>
-                    </button>
-                  </div>
 
-                  {% comment %}
+                    {% comment %}
                     Three states the listing must carry without dressing them
                     up as ordinary vaults. Each alert is written out rather
                     than bound, because inline-alert reads its attributes once
                     when it connects and a bound :type never arrives in time.
-                  {% endcomment %}
-                  <template x-if="vault.tampered">
-                    <inline-alert
-                      type="error"
-                      title="Signature does not verify"
-                      message="This vault's metadata was not signed by your account. Its name is not shown."
-                    ></inline-alert>
-                  </template>
-                  <template x-if="vault.unopenable">
-                    <inline-alert
-                      type="warning"
-                      title="No key on this device"
-                      message="This vault holds no key wrap for your account, so it cannot be opened here."
-                    ></inline-alert>
-                  </template>
-                  <template x-if="vault.unreadable">
-                    <inline-alert
-                      type="error"
-                      title="Could not be decrypted"
-                      message="This vault's data could not be read. It may be corrupted."
-                    ></inline-alert>
-                  </template>
-                </div>
-              </a>
+                    {% endcomment %}
+                    <template x-if="vault.tampered">
+                      <inline-alert type="error" title="Signature does not verify" message="This vault's metadata was not signed by your account. Its name is not shown."></inline-alert>
+                    </template>
+                    <template x-if="vault.unopenable">
+                      <inline-alert type="warning" title="No key on this device" message="This vault holds no key wrap for your account, so it cannot be opened here."></inline-alert>
+                    </template>
+                    <template x-if="vault.unreadable">
+                      <inline-alert type="error" title="Could not be decrypted" message="This vault's data could not be read. It may be corrupted."></inline-alert>
+                    </template>
+                  </div>
+                </a>
 
-              <div
-                x-show="openMenuFor === vault.uuid"
-                x-cloak
-                @click.outside="openMenuFor = null"
-                class="absolute right-2 top-12 z-50"
-              >
-                <ul
-                  class="menu bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 w-56 text-sm p-2"
+                <div
+                  x-show="openMenuFor === vault.uuid"
+                  x-cloak
+                  @click.outside="openMenuFor = null"
+                  class="absolute right-2 top-12 z-50"
                 >
-                  <template x-for="action in actionsFor(vault)" :key="action.id">
-                    <li>
-                      <button
-                        type="button"
-                        class="gap-3"
-                        :class="action.css_class"
-                        @click="runVaultAction(action, vault)"
-                      >
-                        <i :data-lucide="action.icon" class="w-4 h-4"></i>
-                        <span x-text="action.label"></span>
-                      </button>
-                    </li>
-                  </template>
-                </ul>
-              </div>
-            </li>
-          </template>
-        </ul>
+                  <ul
+                    class="menu bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 w-56 text-sm p-2"
+                  >
+                    <template x-for="action in actionsFor(vault)" :key="action.id">
+                      <li>
+                        <button
+                          type="button"
+                          class="gap-3"
+                          :class="action.css_class"
+                          @click="runVaultAction(action, vault)"
+                        >
+                          <i :data-lucide="action.icon" class="w-4 h-4"></i>
+                          <span x-text="action.label"></span>
+                        </button>
+                      </li>
+                    </template>
+                  </ul>
+                </div>
+              </li>
+            </template>
+          </ul>
 
-        {% comment %}
+          {% comment %}
           Rename and appearance share one dialog: both rewrite the same signed
           payload, and splitting them would be two screens over one request.
           The icon grid is the shared partial, driven by selectIcon /
           selectColor below - its own iconPicker() component cannot be used
           here, because it PATCHes an endpoint directly and a vault needs a
           re-signed body.
-        {% endcomment %}
-        <template x-if="vaultDialog">
-          <div class="modal modal-open">
-            <div class="modal-box max-w-md">
-              <h2 class="font-semibold text-lg" x-text="vaultDialog.mode === 'rename' ? 'Rename vault' : 'Icon and colour'"></h2>
+          {% endcomment %}
+          <template x-if="vaultDialog">
+            <div class="modal modal-open">
+              <div class="modal-box max-w-md">
+                <h2
+                  class="font-semibold text-lg"
+                  x-text="vaultDialog.mode === 'rename' ? 'Rename vault' : 'Icon and colour'"
+                ></h2>
 
-              <label class="form-control mt-4" x-show="vaultDialog.mode === 'rename'">
-                <span class="label-text">Name</span>
-                <input
-                  type="text"
-                  class="input input-bordered w-full"
-                  autocomplete="off"
-                  spellcheck="false"
-                  x-model="vaultDialog.name"
-                />
-              </label>
+                <label class="form-control mt-4" x-show="vaultDialog.mode === 'rename'">
+                  <span class="label-text">Name</span>
+                  <input
+                    type="text"
+                    class="input input-bordered w-full"
+                    autocomplete="off"
+                    spellcheck="false"
+                    x-model="vaultDialog.name"
+                  />
+                </label>
 
-              <div class="mt-4" x-show="vaultDialog.mode === 'set_appearance'">
-                {% include "ui/partials/icon_picker.html" %}
-              </div>
+                <div class="mt-4" x-show="vaultDialog.mode === 'set_appearance'">{% include "ui/partials/icon_picker.html" %}</div>
 
-              <div class="modal-action">
-                <button type="button" class="btn btn-ghost" @click="closeVaultDialog()">Cancel</button>
-                <button type="button" class="btn btn-primary" :disabled="busy" @click="saveVaultDialog()">Save</button>
-              </div>
-            </div>
-          </div>
-        </template>
-
-        <template x-if="showCreate">
-          <div class="modal modal-open">
-            <div class="modal-box">
-              <h2 class="font-semibold text-lg">New vault</h2>
-              <inline-alert type="error" x-show="error" x-cloak class="mt-4">
-              <span x-text="error"></span>
-              </inline-alert>
-              <form @submit.prevent="createVault()">
-                <input
-                  type="text"
-                  class="input input-bordered w-full mt-4"
-                  autocomplete="off"
-                  spellcheck="false"
-                  x-model="newVaultName"
-                  placeholder="Vault name"
-                />
                 <div class="modal-action">
-                  <button type="button" class="btn btn-ghost" @click="closeCreateDialog()">Cancel</button>
-                  <button type="submit" class="btn btn-primary" :disabled="busy">Create</button>
+                  <button type="button" class="btn btn-ghost" @click="closeVaultDialog()">Cancel</button>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    :disabled="busy"
+                    @click="saveVaultDialog()"
+                  >
+                    Save
+                  </button>
                 </div>
-              </form>
+              </div>
             </div>
-          </div>
-        </template>
-      </div>
-    </template>
-  </div>
+          </template>
+
+          <template x-if="showCreate">
+            <div class="modal modal-open">
+              <div class="modal-box">
+                <h2 class="font-semibold text-lg">New vault</h2>
+                <inline-alert type="error" x-show="error" x-cloak class="mt-4">
+                <span x-text="error"></span>
+                </inline-alert>
+                <form @submit.prevent="createVault()">
+                  <input
+                    type="text"
+                    class="input input-bordered w-full mt-4"
+                    autocomplete="off"
+                    spellcheck="false"
+                    x-model="newVaultName"
+                    placeholder="Vault name"
+                  />
+                  <div class="modal-action">
+                    <button type="button" class="btn btn-ghost" @click="closeCreateDialog()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" :disabled="busy">Create</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+  {% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
   <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
   <script src="{% static 'vault/ui/js/api.js' %}"></script>
   <script src="{% static 'vault/ui/js/session.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_unlock.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_create.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_update.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_store.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_reader.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_app.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>
 {% endblock %}

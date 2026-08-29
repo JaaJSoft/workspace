@@ -5,6 +5,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.vault.queries import active_identity
+from workspace.vault.types import type_catalogue
 
 
 @csp(settings.VAULT_CSP)
@@ -16,7 +17,11 @@ def index(request, vault_uuid=None):
     # Handed to the page, never resolved here. The server cannot read a
     # vault's name, so it has nothing to render from one - and answering 404
     # for a vault out of reach would say it exists in another account.
-    return render(request, "vault/ui/index.html", {"vault_uuid": vault_uuid})
+    return render(
+        request,
+        "vault/ui/index.html",
+        {"vault_uuid": vault_uuid, "entry_types": type_catalogue()},
+    )
 
 
 @csp(settings.VAULT_CSP)

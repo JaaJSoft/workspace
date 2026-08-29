@@ -2,7 +2,14 @@ from django.test import SimpleTestCase, TestCase
 
 from workspace.vault.models import EntryType, VaultEntry
 from workspace.vault.tests.factories import make_account, make_vault
-from workspace.vault.types import Field, LoginEntry, as_typed, registry_for, schema_for
+from workspace.vault.types import (
+    Field,
+    LoginEntry,
+    as_typed,
+    registry_for,
+    schema_for,
+    type_catalogue,
+)
 
 
 class RegistryTests(SimpleTestCase):
@@ -34,6 +41,48 @@ class RegistryTests(SimpleTestCase):
     def test_registry_for_an_unknown_type_raises(self):
         with self.assertRaises(KeyError):
             registry_for("passport")
+
+
+class CatalogueTests(SimpleTestCase):
+    """What the browser's New menu and entry form are built from.
+
+    The catalogue is the registry rendered for the page: adding a type has to
+    stay one Python class, so nothing on the JavaScript side may hold a list
+    of types or of the fields one carries.
+    """
+
+    def test_the_catalogue_covers_every_registered_type(self):
+        self.assertEqual(
+            {entry["id"] for entry in type_catalogue()}, set(EntryType.values)
+        )
+
+    def test_a_type_carries_what_a_menu_needs_to_render_it(self):
+        login = next(entry for entry in type_catalogue() if entry["id"] == "login")
+        self.assertEqual(login["label"], "Login")
+        self.assertTrue(login["icon"])
+
+    def test_a_field_carries_what_a_form_needs_to_render_it(self):
+        login = next(entry for entry in type_catalogue() if entry["id"] == "login")
+        password = next(
+            field for field in login["fields"] if field["field_id"] == "password"
+        )
+        self.assertEqual(
+            password,
+            {
+                "field_id": "password",
+                "label": "Password",
+                "secret": True,
+                "generator": True,
+                "kind": "text",
+            },
+        )
+
+    def test_the_catalogue_holds_nothing_but_json(self):
+        """It is rendered by |json_script, which serializes with Django's own
+        encoder: a dataclass or a proxy class reaching it is a 500."""
+        import json
+
+        json.dumps(type_catalogue())
 
 
 class AsTypedTests(TestCase):

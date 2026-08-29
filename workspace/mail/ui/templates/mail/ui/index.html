@@ -38,7 +38,7 @@
       >
         <button
           type="button"
-          class="btn btn-ghost btn-sm btn-square hover:text-warning"
+          class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-warning"
           @click="showAddAccount()"
           title="Add account"
           aria-label="Add account"
@@ -47,7 +47,7 @@
         </button>
         <button
           type="button"
-          class="btn btn-ghost btn-sm gap-1.5 hover:text-warning"
+          class="btn btn-ghost border border-base-300 bg-base-100 btn-sm gap-1.5 hover:text-warning"
           :class="collapsed ? 'btn-square' : 'flex-1'"
           @click="showCompose()"
           title="Compose (C)"
@@ -58,7 +58,7 @@
         </button>
         <button
           type="button"
-          class="btn btn-ghost btn-sm btn-square hover:text-warning"
+          class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-warning"
           x-show="accounts.length > 0"
           @click="showEditAccount(accounts.find(a => a.uuid === selectedFolder?.account) || accounts[0])"
           title="Manage account"

@@ -127,7 +127,7 @@ be defined before the parser reaches the markup using it, or server-rendered
           </label>
           <button
             type="button"
-            class="btn btn-ghost btn-sm btn-square hover:text-info"
+            class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-info"
             @click="showNewConversationDialog()"
             title="New conversation (Alt+N)"
             aria-label="New conversation"
@@ -137,7 +137,7 @@ be defined before the parser reaches the markup using it, or server-rendered
           {% if ai_enabled %}
             <button
               type="button"
-              class="btn btn-ghost btn-sm btn-square hover:text-secondary"
+              class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-secondary"
               @click="botFilter = ''; showBotPicker = true"
               title="New AI chat"
               aria-label="New AI chat"

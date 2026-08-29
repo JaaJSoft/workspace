@@ -44,11 +44,19 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         # The debug toolbar overlays the page when DEBUG is on and swallows
         # clicks aimed at the composer.
         self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
-        # The picker's module comes from a CDN and builds the shadow DOM on
-        # upgrade, so wait for the search field to exist before driving it.
+        # The picker's module builds the shadow DOM on upgrade, so wait for
+        # the search field to exist before driving it.
         self.page.wait_for_function(
             "() => document.querySelector('emoji-picker')"
             "?.shadowRoot?.querySelector('input.search')",
+        )
+        # Selecting a conversation ends, after the messages, read receipts and
+        # pins have loaded, by focusing the composer. A picker opened before
+        # that last step has its search field's focus stolen by it, so wait
+        # for the load to be over before driving the picker.
+        self.page.wait_for_function(
+            "() => document.activeElement?.matches("
+            "'textarea[placeholder=\"Type a message...\"]')",
         )
 
     def _wait_for_search_field_focus(self):

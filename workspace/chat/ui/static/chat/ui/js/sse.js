@@ -32,7 +32,9 @@ window.chatSseMixin = function chatSseMixin() {
           // those back. Fire-and-forget, same as openThread's call.
           this.markThreadRead(route.bumpRoot);
           window.dispatchEvent(
-            new CustomEvent('thread-reply-received', { detail: { root: route.bumpRoot } }),
+            new CustomEvent('thread-reply-received', {
+              detail: { root: route.bumpRoot, uuid: detail.message.uuid },
+            }),
           );
         } else {
           this.bumpThreadUnread(route.bumpRoot);

@@ -153,6 +153,15 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
       window.dispatchEvent(new CustomEvent('chat:refresh-messages'));
     },
 
+    // A live reply to the thread on screen: reload the panel, then animate
+    // the bubble the reload inserted, like the main flow does for its own
+    // new messages. Replies to other threads are the flow's business.
+    async onReplyReceived(detail) {
+      if (detail?.root !== this.threadRootUuid) return;
+      await this.loadMessages();
+      this._animateMessageEntry(detail.uuid);
+    },
+
     // The panel-only repaint, without the chat:refresh-messages echo above.
     // Used by the chat:refresh-thread listener: a reaction toggled in the main
     // flow already repainted the flow, so echoing back would fetch it twice.

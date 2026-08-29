@@ -6,7 +6,7 @@
   - size: 'lg' pour des éléments plus grands avec des icônes plus grandes (optionnel)
 {% endcomment %}
 <div
-  x-show="query.length >= 2"
+  x-show="showResults()"
   class="{{ container_class|default:'overflow-y-auto scroll-smooth' }} {% if size == 'lg' %}max-h-[28rem]{% elif not container_class %}max-h-96{% endif %}"
 >
 
@@ -138,6 +138,9 @@
     class="px-4 py-8 text-center"
   >
     <i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
-    <div class="text-sm text-base-content/60">No results found</div>
+    <div
+      class="text-sm text-base-content/60"
+      x-text="isCommandMode() ? 'No matching action' : 'No results found'"
+    ></div>
   </div>
 </div>

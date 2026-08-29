@@ -62,6 +62,15 @@
             </span>
             <button
               type="button"
+              @click="enterCommandMode()"
+              class="flex items-center gap-1 hover:text-base-content"
+              title="Actions and apps only (Ctrl/Cmd+Shift+K)"
+            >
+              <kbd class="kbd kbd-xs">&gt;</kbd>
+              actions
+            </button>
+            <button
+              type="button"
               @click="close()"
               class="btn btn-ghost btn-xs ml-auto"
               title="Close"
@@ -127,6 +136,15 @@
               <kbd class="kbd kbd-xs">⏎</kbd>
               select
             </span>
+            <button
+              type="button"
+              @click="enterCommandMode()"
+              class="flex items-center gap-1 hover:text-base-content"
+              title="Actions and apps only (Ctrl/Cmd+Shift+K)"
+            >
+              <kbd class="kbd kbd-xs">&gt;</kbd>
+              actions
+            </button>
             <span class="flex items-center gap-1">
               <kbd class="kbd kbd-xs">Esc</kbd>
               close

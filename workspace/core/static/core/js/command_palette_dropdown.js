@@ -1,6 +1,10 @@
 window.commandPaletteDropdown = function () {
   const STORAGE_KEY = 'workspace:recentCommands';
   const MAX_QUICK_ACTIONS = 5;
+  // VS Code's idiom: a leading `>` narrows the palette to actions and apps,
+  // whatever comes after it is matched against the command list alone.
+  const COMMAND_PREFIX = '>';
+  const MIN_SEARCH_LENGTH = 2;
   const allCommands = JSON.parse(
     document.getElementById('workspace-commands')?.textContent || '[]'
   );
@@ -39,6 +43,23 @@ window.commandPaletteDropdown = function () {
     return result;
   }
 
+  // Same ranking as ModuleRegistry.search_commands: name hits first, keyword
+  // hits after, each group in registration order (allCommands is pre-sorted).
+  function filterCommands(term) {
+    const q = term.toLowerCase();
+    if (!q) return allCommands.slice();
+    const nameMatches = [];
+    const keywordMatches = [];
+    for (const cmd of allCommands) {
+      if (cmd.name.toLowerCase().includes(q)) {
+        nameMatches.push(cmd);
+      } else if ((cmd.keywords || []).some(kw => kw.toLowerCase().includes(q))) {
+        keywordMatches.push(cmd);
+      }
+    }
+    return nameMatches.concat(keywordMatches);
+  }
+
   return {
     open: false,
     query: '',
@@ -58,13 +79,21 @@ window.commandPaletteDropdown = function () {
 
       if (!window.__commandPaletteShortcutBound) {
         document.addEventListener('keydown', (e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-            e.preventDefault();
-            const input = document.getElementById('dashboard-search')?.querySelector('input')
-              || document.querySelector('[x-data*="commandPaletteDropdown"]')?.querySelector('input');
-            input?.focus();
-            input?.select?.();
+          // Shift makes the browser report 'K', hence the case fold.
+          if (!(e.metaKey || e.ctrlKey) || (e.key || '').toLowerCase() !== 'k') return;
+          e.preventDefault();
+          const input = document.getElementById('dashboard-search')?.querySelector('input')
+            || document.querySelector('[x-data*="commandPaletteDropdown"]')?.querySelector('input');
+          if (!input) return;
+          if (e.shiftKey) {
+            // The listener is bound once for the page, so it cannot reach the
+            // component's state directly; the input's own palette picks the
+            // event up through @palette:commands.
+            input.dispatchEvent(new CustomEvent('palette:commands'));
+            return;
           }
+          input.focus();
+          input.select?.();
         });
         window.__commandPaletteShortcutBound = true;
       }
@@ -106,10 +135,46 @@ window.commandPaletteDropdown = function () {
       } catch {}
     },
 
+    isCommandMode() {
+      return this.query.startsWith(COMMAND_PREFIX);
+    },
+
+    commandTerm() {
+      return this.query.slice(COMMAND_PREFIX.length).trim();
+    },
+
+    showQuickActions() {
+      return this.query.length === 0;
+    },
+
+    showResults() {
+      return this.isCommandMode() || this.query.length >= MIN_SEARCH_LENGTH;
+    },
+
+    enterCommandMode() {
+      this.query = COMMAND_PREFIX;
+      this.open = true;
+      this.search();
+      this.$nextTick(() => {
+        const input = this.$refs.input;
+        if (!input) return;
+        input.focus();
+        input.setSelectionRange?.(COMMAND_PREFIX.length, COMMAND_PREFIX.length);
+      });
+    },
+
     search() {
-      this.searchQuery = this.query;
       const requestId = ++this._searchRequestId;
-      if (this.query.length < 2) {
+      if (this.isCommandMode()) {
+        this.searchQuery = this.commandTerm();
+        this.commands = filterCommands(this.searchQuery);
+        this.results = [];
+        this.activeIndex = -1;
+        this.loading = false;
+        return;
+      }
+      this.searchQuery = this.query;
+      if (this.query.length < MIN_SEARCH_LENGTH) {
         this.commands = [];
         this.results = [];
         this.activeIndex = -1;
@@ -228,10 +293,10 @@ window.commandPaletteDropdown = function () {
     },
 
     getItemCount() {
-      if (this.query.length >= 2) {
+      if (this.showResults()) {
         return this.commands.length + this.results.length;
       }
-      if (this.query.length === 0) {
+      if (this.showQuickActions()) {
         return this.quickActions.length;
       }
       return 0;
@@ -240,28 +305,19 @@ window.commandPaletteDropdown = function () {
     isCommandActive(index) {
       if (!this.open) return false;
       if (this.activeIndex < 0) return false;
-      if (this.query.length >= 2) {
-        return this.activeIndex === index;
-      }
-      return false;
+      return this.showResults() && this.activeIndex === index;
     },
 
     isResultActive(index) {
       if (!this.open) return false;
       if (this.activeIndex < 0) return false;
-      if (this.query.length >= 2) {
-        return this.activeIndex === this.commands.length + index;
-      }
-      return false;
+      return this.showResults() && this.activeIndex === this.commands.length + index;
     },
 
     isQuickActionActive(index) {
       if (!this.open) return false;
       if (this.activeIndex < 0) return false;
-      if (this.query.length === 0) {
-        return this.activeIndex === index;
-      }
-      return false;
+      return this.showQuickActions() && this.activeIndex === index;
     },
 
     isActive(el) {

@@ -124,6 +124,9 @@ window.vaultBrowser = (function () {
       // The folder being created, or null. A folder carries a name and
       // nothing else the user picks, so its dialog is one input.
       folderDraft: null,
+      // The tag being written, or null. A tag is created from the sidebar
+      // section that lists them, because that is where its absence is felt.
+      tagDraft: null,
       busy: false,
       // A mirror of vaultClipboard's own state, because Alpine tracks
       // property reads and cannot see into another module's closure.
@@ -828,6 +831,42 @@ window.vaultBrowser = (function () {
           // without meaning.
           position: this.folders.filter((row) => row.parent === parent).length,
         };
+      },
+
+      newTag: function () {
+        this.closeMenu();
+        this.tagDraft = {
+          uuid: window.vaultCrypto.uuidV7(),
+          name: '',
+          color: window.TAG_CHIP_COLORS[1].value,
+        };
+      },
+
+      closeTagDialog: function () {
+        this.tagDraft = null;
+      },
+
+      saveTag: async function () {
+        const draft = this.tagDraft;
+        if (!draft || !this.openVault) return;
+        const name = (draft.name || '').trim();
+        if (!name) return;
+        this.busy = true;
+        try {
+          const body = await window.buildTagWriteRequest(
+            window.vaultSession,
+            this.openVault,
+            Object.assign({}, draft, { name: name }),
+          );
+          await window.vaultApi.createTag(body);
+          this.tagDraft = null;
+          await this.load();
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That tag could not be created. Try again.';
+        } finally {
+          this.busy = false;
+        }
       },
 
       closeFolderDialog: function () {

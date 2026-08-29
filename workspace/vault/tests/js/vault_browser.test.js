@@ -77,6 +77,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
       'workspace/vault/ui/static/vault/ui/js/entry_write.js',
       'workspace/vault/ui/static/vault/ui/js/folder_write.js',
+      'workspace/vault/ui/static/vault/ui/js/tag_write.js',
       'workspace/vault/ui/static/vault/ui/js/clipboard.js',
       'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
@@ -102,6 +103,10 @@ function browser(options = {}) {
         removeItem(key) { delete this.values[key]; },
       },
       addEventListener() {},
+      TAG_CHIP_COLORS: [
+        { name: 'None', value: '' },
+        { name: 'Red', value: '#ef4444' },
+      ],
       open: (url) => { visited.push(url); },
       setInterval: () => 1,
       clearInterval() {},
@@ -134,6 +139,7 @@ function browser(options = {}) {
         ...options.session,
       },
       vaultApi: {
+        createTag: async () => ({}),
         listVaults: async () => [vaultRow(VAULT_UUID, 'Personal')],
         listFolders: async () => [],
         listTags: async () => [],
@@ -1450,4 +1456,55 @@ test('the bulk bar unfavourites every selected row', async () => {
   component.selected = ['e-1', 'e-2'];
   await component.runBulkAction({ id: 'unfavorite' });
   assert.deepStrictEqual(Array.from(written), [['e-1', false], ['e-2', false]]);
+});
+
+test('a tag is created with its name sealed and the record signed', async () => {
+  // The section that lists tags was the only place one could be missing from,
+  // and until now the only place they could not be made.
+  const posted = [];
+  const { component } = browser({
+    api: { createTag: async (body) => { posted.push(body); return body; } },
+  });
+  component.init();
+  await component.load();
+  component.newTag();
+  assert.equal(component.tagDraft.color, '#ef4444', 'a real colour, not "None"');
+  component.tagDraft.name = '  Banking  ';
+  await component.saveTag();
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0].vault, VAULT_UUID);
+  assert.equal(posted[0].color, '#ef4444');
+  assert.equal(posted[0].metadata_sig, 'signature');
+  assert.equal(posted[0].encrypted_name, 'b64');
+  assert.equal(component.tagDraft, null);
+});
+
+test('a tag with no colour is written as neutral, not as an empty string', async () => {
+  // The palette's "None" is '', which the column's vocabulary does not
+  // include: the write would come back 400.
+  const posted = [];
+  const { component } = browser({
+    api: { createTag: async (body) => { posted.push(body); return body; } },
+  });
+  component.init();
+  await component.load();
+  component.newTag();
+  component.tagDraft.name = 'Plain';
+  component.tagDraft.color = '';
+  await component.saveTag();
+  assert.equal(posted[0].color, 'neutral');
+});
+
+test('a nameless tag is never written', async () => {
+  const posted = [];
+  const { component } = browser({
+    api: { createTag: async (body) => { posted.push(body); return body; } },
+  });
+  component.init();
+  await component.load();
+  component.newTag();
+  component.tagDraft.name = '   ';
+  await component.saveTag();
+  assert.equal(posted.length, 0);
+  assert.notEqual(component.tagDraft, null, 'the dialog stays open to be corrected');
 });

@@ -20,7 +20,7 @@ imitate a hostile server.
 from django.core.cache import cache
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.vault.models import VaultEntry
+from workspace.vault.models import VaultEntry, VaultTag
 
 GOOD_PASSWORD = "correct-horse-battery-staple-42"
 CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
@@ -255,3 +255,26 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.locator("tbody tr", has_text="GitHub").click(button="right")
         menu.get_by_text("Remove from favourites").click()
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", state="detached")
+
+    def test_a_tag_is_created_from_the_sidebar_and_can_be_worn(self):
+        """The tag section listed tags and could not make one, so a vault that
+        had none could never get one. The name is sealed and the record signed
+        in the page, so only a browser proves the server takes it."""
+        self._open_vault()
+        self.page.get_by_role("button", name="New tag").click()
+        self.page.fill(".modal-box input[type=text]", "Banking")
+        self.page.click(".modal-box button:has-text('Create')")
+        self.page.wait_for_selector("aside tag-chip", timeout=30000)
+
+        self.assertNotIn(
+            "Banking",
+            VaultTag.objects.get().encrypted_name,
+            "the tag name must not reach the database in the clear",
+        )
+
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self.page.click("tbody tr:has-text('GitHub')")
+        self.page.click(f"{PANEL} button:has-text('Edit')")
+        self.page.locator(".modal-box").get_by_text("Banking").click()
+        self.page.click(".modal-box button:has-text('Save')")
+        self.page.wait_for_selector("tbody tr:has-text('GitHub') tag-chip", timeout=30000)

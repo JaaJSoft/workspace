@@ -46,9 +46,14 @@ window.vaultBrowser = (function () {
   }
 
   return function vaultBrowser() {
+    // Kept as well as spread: the component overrides `apply` and still needs
+    // the store's own, and a spread copies the function rather than leaving a
+    // way back to it.
+    const store = window.vaultStore();
+
     return {
       ...window.vaultUnlockMixin(),
-      ...window.vaultStore(),
+      ...store,
 
       // The keys live in vaultSession's closure, so every page load starts
       // locked and the vault is loaded by afterUnlock rather than by init.
@@ -83,6 +88,17 @@ window.vaultBrowser = (function () {
       mobileNav: false,
       loading: false,
       error: '',
+      // What the server says may be done with each entry, keyed by uuid. It
+      // is never computed here: a rule copied into the client is a rule that
+      // drifts from the endpoint enforcing it.
+      entryActions: {},
+      // Two listings can be in flight at once - a refresh landing on a slow
+      // one - and the slower answer must not describe rows that left the
+      // screen. Only the newest generation is allowed to write.
+      actionsGeneration: 0,
+      // The row whose properties are on screen. Distinct from the selection:
+      // the checkbox owns that, the row body opens this.
+      panelEntry: null,
 
       init: function () {
         this.vaultUuid = readJson('vault-uuid');
@@ -115,6 +131,8 @@ window.vaultBrowser = (function () {
         this.vaults = [];
         this.openVault = null;
         this.error = '';
+        this.entryActions = {};
+        this.panelEntry = null;
         this.pendingNewEntry = false;
         this.pendingNewFolder = false;
         this.draftType = null;
@@ -213,6 +231,30 @@ window.vaultBrowser = (function () {
           // banner speaks about entries.
           tamperedCount: entries.tamperedCount,
         });
+        this.panelEntry = null;
+        await this.loadEntryActions();
+      },
+
+      loadEntryActions: async function () {
+        this.actionsGeneration += 1;
+        const generation = this.actionsGeneration;
+        const uuids = this.entries.map(function (entry) { return entry.uuid; });
+        if (!uuids.length) {
+          this.entryActions = {};
+          return;
+        }
+        let answer;
+        try {
+          answer = await window.vaultApi.fetchEntryActions(uuids);
+        } catch (err) {
+          // The names are open and the listing is usable. Blanking a working
+          // page over a lost menu would cost the user more than the menu.
+          if (generation === this.actionsGeneration) this.entryActions = {};
+          return;
+        }
+        if (generation !== this.actionsGeneration) return;
+        if (!window.vaultSession.isUnlocked()) return;
+        this.entryActions = answer;
       },
 
       refresh: function () {
@@ -225,6 +267,78 @@ window.vaultBrowser = (function () {
         return Boolean(
           vault && vault.owner_account_uuid !== window.vaultSession.accountUuid()
         );
+      },
+
+      // ---- actions ---------------------------------------------------------
+
+      // Both favourite verbs come back from the registry: it answers what the
+      // caller may do, not what the row is. Choosing between two exclusives
+      // from a flag the client already holds is not a rule copied from the
+      // server.
+      actionsFor: function (entry) {
+        const actions = (entry && this.entryActions[entry.uuid]) || [];
+        const favorite = entry && entry.favorite;
+        return actions.filter(function (action) {
+          if (action.id === 'favorite') return !favorite;
+          if (action.id === 'unfavorite') return !!favorite;
+          return true;
+        });
+      },
+
+      hasAction: function (entry, actionId) {
+        return this.actionsFor(entry).some(function (action) {
+          return action.id === actionId;
+        });
+      },
+
+      // What the whole selection can be told to do: the actions the registry
+      // marks as working on a batch, kept only where every selected row was
+      // offered them. The unfiltered lists are intersected on purpose - the
+      // favourite verbs are then decided over the selection as a whole, which
+      // intersecting the filtered lists could not do (one row offers only
+      // `favorite`, another only `unfavorite`, and the answer would be
+      // neither).
+      bulkActions: function () {
+        const rows = this.selectedEntries();
+        if (!rows.length) return [];
+        const lists = rows.map((entry) => this.entryActions[entry.uuid] || []);
+        const shared = lists[0].filter(
+          (action) =>
+            action.bulk &&
+            lists.every((list) => list.some((other) => other.id === action.id)),
+        );
+        const allFavorite = rows.every((entry) => entry.favorite);
+        const noneFavorite = rows.every((entry) => !entry.favorite);
+        return shared.filter(function (action) {
+          if (action.id === 'favorite') return !allFavorite;
+          if (action.id === 'unfavorite') return !noneFavorite;
+          return true;
+        });
+      },
+
+      // ---- gestures --------------------------------------------------------
+
+      // The gesture of the file browser: the checkbox selects, the row body
+      // opens. A row that both selected and opened would make every attempt
+      // to pick two rows navigate away from the first.
+      openFolderFromRow: function (folder) {
+        this.openFolder(folder.uuid);
+      },
+
+      openEntryFromRow: function (entry) {
+        this.panelEntry = entry;
+      },
+
+      closePanel: function () {
+        this.panelEntry = null;
+      },
+
+      // Every navigation the store knows about lands here - forward, back,
+      // up, a view, a tag - so this is the one place that has to take the
+      // panel with it. The row it describes has left the screen.
+      apply: function (state) {
+        store.apply.call(this, state);
+        this.panelEntry = null;
       },
 
       newEntry: function (typeId) {
@@ -255,6 +369,38 @@ window.vaultBrowser = (function () {
         }
         const folder = this.folderById(this.folderUuid);
         return folder ? folder.name : 'All entries';
+      },
+
+      // The type registry is the server's; the browser only looks a row's type
+      // up in what it was handed. A row whose type no proxy claims - possible,
+      // since `type` is a Python-side choice - still gets a row rather than
+      // an exception.
+      typeFor: function (typeId) {
+        return this.entryTypes.find(function (type) {
+          return type.id === typeId;
+        }) || null;
+      },
+
+      typeLabel: function (typeId) {
+        const type = this.typeFor(typeId);
+        return type ? type.label : typeId;
+      },
+
+      typeIcon: function (typeId) {
+        const type = this.typeFor(typeId);
+        return type ? type.icon : 'file-question';
+      },
+
+      // The server sends ISO timestamps; the table has a 32-unit column. The
+      // locale is the browser's, deliberately: nothing about a vault is
+      // server-rendered, this included.
+      shortDate: function (value) {
+        if (!value) return '-';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '-';
+        return date.toLocaleDateString(undefined, {
+          year: 'numeric', month: 'short', day: 'numeric',
+        });
       },
 
       vaultName: function () {

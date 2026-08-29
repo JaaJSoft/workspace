@@ -250,3 +250,39 @@ test('tampered rows are counted, never listed', () => {
   assert.equal(s.tamperedCount, 2);
   assert.equal(s.visibleEntries().length + s.visibleFolders().length, 3);
 });
+
+test('select-all covers what is on screen and nothing else', () => {
+  const s = store();
+  assert.equal(s.selectAllState(), 'none');
+  s.toggleSelectAll();
+  // The vault root holds one loose entry; the ones inside folders and the one
+  // in the trash are not in this listing, so "all" must not have taken them.
+  assert.deepStrictEqual(Array.from(s.selected), ['e-3']);
+  assert.equal(s.selectAllState(), 'all');
+  s.toggleSelectAll();
+  assert.deepStrictEqual(Array.from(s.selected), []);
+});
+
+test('select-all reports partial once one row of several is picked', () => {
+  const s = store();
+  s.setView('favorites');
+  s.toggleSelection('e-1');
+  assert.equal(s.selectAllState(), 'partial');
+  s.toggleSelectAll();
+  assert.deepStrictEqual(Array.from(s.selected).sort(), ['e-1', 'e-3']);
+  assert.equal(s.selectAllState(), 'all');
+});
+
+test('unticking select-all leaves a selection made outside the listing alone', () => {
+  const s = store();
+  s.selected = ['e-3', 'e-4'];
+  s.toggleSelectAll();
+  assert.deepStrictEqual(Array.from(s.selected), ['e-4']);
+});
+
+test('an empty listing is never "all selected"', () => {
+  // Otherwise the header box ticks itself on a folder holding nothing.
+  const s = store();
+  s.search = 'nothing matches this';
+  assert.equal(s.selectAllState(), 'none');
+});

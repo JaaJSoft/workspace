@@ -338,3 +338,207 @@ test('the heading names the folder being looked at', async () => {
   component.setView('trash');
   assert.equal(component.heading(), 'Trash');
 });
+
+// --- the listing, its selection and the bar the selection raises -----------
+
+function entryWith(uuid, overrides = {}) {
+  return Object.assign(entryRow(uuid), overrides);
+}
+
+const ACTION = {
+  edit: { id: 'edit', label: 'Edit', icon: 'pencil', bulk: false, css_class: '' },
+  move: { id: 'move', label: 'Move to folder', icon: 'folder', bulk: true, css_class: '' },
+  trash: { id: 'trash', label: 'Move to trash', icon: 'trash-2', bulk: true, css_class: 'text-error' },
+  favorite: { id: 'favorite', label: 'Add to favourites', icon: 'star', bulk: true, css_class: '' },
+  unfavorite: { id: 'unfavorite', label: 'Remove from favourites', icon: 'star-off', bulk: true, css_class: '' },
+  copy_password: { id: 'copy_password', label: 'Copy password', icon: 'key-round', bulk: false, css_class: '' },
+};
+
+function ids(actions) {
+  return Array.from(actions, (action) => action.id);
+}
+
+test('the bulk bar offers only what every selected row offers', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1'), entryWith('e-2')],
+      fetchEntryActions: async () => ({
+        'e-1': [ACTION.edit, ACTION.move, ACTION.trash, ACTION.copy_password],
+        // No trash on this one: a member whose wrap was revoked mid-listing
+        // is the realistic case, and the bar must not offer what one row
+        // would refuse.
+        'e-2': [ACTION.edit, ACTION.move],
+      }),
+    },
+  });
+  component.init();
+  await component.load();
+  component.toggleSelection('e-1');
+  component.toggleSelection('e-2');
+  assert.deepStrictEqual(ids(component.bulkActions()), ['move']);
+});
+
+test('a bulk action the registry marks single-row is never offered in bulk', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit, ACTION.copy_password, ACTION.move] }),
+    },
+  });
+  component.init();
+  await component.load();
+  component.toggleSelection('e-1');
+  assert.deepStrictEqual(ids(component.bulkActions()), ['move']);
+});
+
+test('favorite goes when every selected row is already one', async () => {
+  const both = [ACTION.favorite, ACTION.unfavorite];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? []
+          : [
+              entryWith('e-1', { is_favorite: true }),
+              entryWith('e-2', { is_favorite: true }),
+            ],
+      fetchEntryActions: async () => ({ 'e-1': both, 'e-2': both }),
+    },
+  });
+  component.init();
+  await component.load();
+  component.toggleSelection('e-1');
+  component.toggleSelection('e-2');
+  assert.deepStrictEqual(ids(component.bulkActions()), ['unfavorite']);
+});
+
+test('a mixed selection is offered both favourite verbs', async () => {
+  // Intersecting the filtered lists would drop both: one row offers only
+  // favorite, the other only unfavorite. The rule is applied to the whole
+  // selection, not row by row.
+  const both = [ACTION.favorite, ACTION.unfavorite];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? []
+          : [entryWith('e-1', { is_favorite: true }), entryWith('e-2')],
+      fetchEntryActions: async () => ({ 'e-1': both, 'e-2': both }),
+    },
+  });
+  component.init();
+  await component.load();
+  component.toggleSelection('e-1');
+  component.toggleSelection('e-2');
+  assert.deepStrictEqual(ids(component.bulkActions()), ['favorite', 'unfavorite']);
+});
+
+test('a single row is offered one favourite verb, decided by the row', async () => {
+  const both = [ACTION.favorite, ACTION.unfavorite];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { is_favorite: true })],
+      fetchEntryActions: async () => ({ 'e-1': both }),
+    },
+  });
+  component.init();
+  await component.load();
+  assert.deepStrictEqual(ids(component.actionsFor(component.entries[0])), ['unfavorite']);
+});
+
+test('nothing selected raises no bar', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.move] }),
+    },
+  });
+  component.init();
+  await component.load();
+  assert.deepStrictEqual(ids(component.bulkActions()), []);
+});
+
+test('an action list that lands after the vault reloaded is dropped', async () => {
+  // Two listings can be in flight at once, and the slower answer must not
+  // describe rows that left the screen.
+  let resolveFirst;
+  let call = 0;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: () => {
+        call += 1;
+        if (call === 1) return new Promise((resolve) => { resolveFirst = resolve; });
+        return Promise.resolve({ 'e-1': [ACTION.move] });
+      },
+    },
+  });
+  component.init();
+  const first = component.load();
+  await component.load();
+  resolveFirst({ 'e-1': [ACTION.edit, ACTION.move, ACTION.trash] });
+  await first;
+  assert.deepStrictEqual(ids(component.entryActions['e-1'] || []), ['move']);
+});
+
+test('clicking a folder enters it and clicking an entry opens the panel', async () => {
+  const { component } = browser({
+    api: {
+      listFolders: async () => [
+        { uuid: 'f-1', vault: VAULT_UUID, parent: null, position: 0,
+          encrypted_name: 'ct', metadata_sig: 'sig' },
+      ],
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+    },
+  });
+  component.init();
+  await component.load();
+
+  component.openFolderFromRow(component.folders[0]);
+  assert.equal(component.folderUuid, 'f-1');
+  assert.equal(component.panelEntry, null);
+
+  component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelEntry.uuid, 'e-1');
+  // The panel is not a selection: the checkbox owns that, as in files.
+  assert.deepStrictEqual(Array.from(component.selected), []);
+});
+
+test('leaving a folder closes the panel it was opened from', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  component.setView('trash');
+  assert.equal(component.panelEntry, null);
+});
+
+test('a row is labelled and drawn from the type catalogue', () => {
+  const { component } = browser();
+  component.init();
+  assert.equal(component.typeLabel('login'), 'Login');
+  assert.equal(component.typeIcon('login'), 'key-round');
+});
+
+test('a type no catalogue entry claims still renders a row', () => {
+  // `type` is a Python-side choice, so nothing stops a stored row from naming
+  // a type no proxy claims. It must cost that row its label, not the listing.
+  const { component } = browser();
+  component.init();
+  assert.equal(component.typeLabel('passport'), 'passport');
+  assert.ok(component.typeIcon('passport'));
+});
+
+test('an unreadable timestamp shows a dash rather than "Invalid Date"', () => {
+  const { component } = browser();
+  component.init();
+  assert.equal(component.shortDate(''), '-');
+  assert.equal(component.shortDate('not a date'), '-');
+  assert.ok(component.shortDate('2026-08-28T10:00:00Z').length > 3);
+});

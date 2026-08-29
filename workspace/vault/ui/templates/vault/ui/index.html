@@ -52,14 +52,8 @@
             <span x-text="error"></span>
             </inline-alert>
 
-            {% comment %}
-              The listing itself, the selection bar and the properties panel
-              land in the next commits of this branch; the shell above is what
-              they hang from.
-            {% endcomment %}
-            <div class="flex-1 overflow-auto px-2 pt-2 min-h-0">
-              <p class="text-sm text-base-content/50 px-3 py-2" x-text="statusLine()"></p>
-            </div>
+            {% include "vault/ui/partials/browser_content.html" %}
+
           </main>
         </div>
       </template>

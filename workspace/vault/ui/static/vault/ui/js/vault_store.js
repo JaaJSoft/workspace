@@ -249,6 +249,25 @@ window.vaultStore = function vaultStore() {
       this.selected = [];
     },
 
+    // Over what is on screen, not over everything the vault holds: a filter
+    // narrowing the listing has to narrow what "all" means, or the box would
+    // tick rows the user cannot see.
+    selectAllState() {
+      const rows = this.visibleEntries();
+      if (!rows.length) return 'none';
+      const picked = rows.filter((entry) => this.isSelected(entry.uuid)).length;
+      if (picked === 0) return 'none';
+      return picked === rows.length ? 'all' : 'partial';
+    },
+
+    toggleSelectAll() {
+      const uuids = this.visibleEntries().map((entry) => entry.uuid);
+      this.selected =
+        this.selectAllState() === 'all'
+          ? this.selected.filter((uuid) => !uuids.includes(uuid))
+          : [...new Set([...this.selected, ...uuids])];
+    },
+
     selectedEntries() {
       return this.entries.filter((entry) => this.isSelected(entry.uuid));
     },

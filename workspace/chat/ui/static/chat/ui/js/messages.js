@@ -408,6 +408,19 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       document.getElementById(`${this._messageIdPrefix()}-${uuid}`)?.classList.add('msg-enter');
     },
 
+    // Restart the entrance animation on the last bubble on screen, so a
+    // change of animation preference shows itself without a new message.
+    // Reading layout between the removal and the re-add is what makes the
+    // browser treat the second add as a fresh animation.
+    replayMessageAnimation() {
+      const bubbles = document.getElementById(this._messageListItemsId())?.querySelectorAll('.msg-bubble');
+      const last = bubbles?.[bubbles.length - 1];
+      if (!last) return;
+      last.classList.remove('msg-enter');
+      void last.offsetWidth;
+      last.classList.add('msg-enter');
+    },
+
     _removeOptimisticMessage(tempId) {
       const el = document.getElementById(tempId);
       if (el) el.remove();

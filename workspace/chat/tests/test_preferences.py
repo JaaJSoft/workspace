@@ -107,6 +107,10 @@ class ChatIndexPreferencesUITests(TestCase):
         # Both compact toggles must be wired.
         self.assertContains(resp, "compactConversationList")
         self.assertContains(resp, "compactMessageView")
+        # The message animation picker offers every style plus the off switch.
+        self.assertContains(resp, "messageAnimation")
+        for style in ("slide", "pop", "fade", "bounce", "none"):
+            self.assertContains(resp, f'<option value="{style}"')
 
     def test_chat_index_embeds_the_stored_prefs_for_the_first_paint(self):
         # chat_preferences.js seeds its cache synchronously from this

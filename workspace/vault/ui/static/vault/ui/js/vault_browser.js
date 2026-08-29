@@ -90,6 +90,9 @@ window.vaultBrowser = (function () {
       // nothing else the user picks, so its dialog is one input.
       folderDraft: null,
       busy: false,
+      // A mirror of vaultClipboard's own state, because Alpine tracks
+      // property reads and cannot see into another module's closure.
+      clipboard: { active: false, label: '', secondsLeft: 0, note: '' },
       collapsed: false,
       // The sidebar is a column from md up and an overlay below it, so on a
       // phone it has to be opened before it is anything.
@@ -123,6 +126,10 @@ window.vaultBrowser = (function () {
         if (viewMode) this.viewMode = viewMode;
         this.initUnlock();
         this.readCommand();
+        const self = this;
+        window.vaultClipboard.onChange(function (state) {
+          self.clipboard = state;
+        });
       },
 
       // A palette command is a plain link, so the only thing it can carry is
@@ -142,6 +149,10 @@ window.vaultBrowser = (function () {
       },
 
       onLocked: function () {
+        // A secret on the clipboard outlives the keys that opened it, so a
+        // lock takes it back rather than leaving it for the next person at
+        // this machine.
+        window.vaultClipboard.cancel();
         this.setData({});
         this.vaults = [];
         this.entryRows = [];
@@ -433,7 +444,61 @@ window.vaultBrowser = (function () {
       runAction: async function (action, entry) {
         this.closeMenu();
         if (!entry || !this.hasAction(entry, action.id)) return;
-        if (action.id === 'edit') await this.editEntry(entry);
+        if (action.id === 'edit') return this.editEntry(entry);
+        const copies = {
+          copy_username: ['Username', 'username', false],
+          copy_password: ['Password', 'password', true],
+        }[action.id];
+        if (copies) return this.copyField(entry, copies[0], copies[1], copies[2]);
+        if (action.id === 'open_uri') return this.openUri(entry);
+      },
+
+      // The one moment a secret is decrypted. It is opened, handed to the
+      // platform and dropped: nothing on this side keeps a reference, which
+      // is why the value never becomes component state on the way through.
+      copyField: async function (entry, label, fieldId, transient) {
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        try {
+          const value = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, fieldId
+          );
+          if (!value) return;
+          await window.vaultClipboard.copy(label, value, { transient: transient });
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That value could not be copied.';
+        }
+      },
+
+      // Opened rather than rendered as a link: the address is a field of the
+      // entry, and a link sitting in the page would leak it to a referrer
+      // header and to anything reading the DOM.
+      openUri: async function (entry) {
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        let uri;
+        try {
+          uri = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'uri'
+          );
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That website could not be opened.';
+          return;
+        }
+        // A stored value decides the destination, so the scheme is checked
+        // here: javascript: and data: are the two that turn a saved address
+        // into code running on this page.
+        if (!/^https?:\/\//i.test(uri || '')) {
+          this.error = 'That entry does not hold a web address.';
+          return;
+        }
+        window.open(uri, '_blank', 'noopener,noreferrer');
+      },
+
+      cancelCopy: function () {
+        return window.vaultClipboard.cancel();
       },
 
       // ---- writing ---------------------------------------------------------

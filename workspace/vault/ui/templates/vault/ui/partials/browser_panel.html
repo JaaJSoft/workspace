@@ -35,6 +35,15 @@
           <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Username</div>
           <div class="flex items-center gap-2">
             <span class="flex-1 truncate" x-text="panelEntry.username"></span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="panelHasAction('copy_username')"
+              @click="copyField(panelEntry, 'Username', 'username', false)"
+              aria-label="Copy the username"
+            >
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
           </div>
         </div>
 
@@ -42,6 +51,15 @@
           <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Password</div>
           <div class="flex items-center gap-2">
             <span class="flex-1 font-mono">••••••••••</span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="panelHasAction('copy_password')"
+              @click="copyField(panelEntry, 'Password', 'password', true)"
+              aria-label="Copy the password"
+            >
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
           </div>
         </div>
 

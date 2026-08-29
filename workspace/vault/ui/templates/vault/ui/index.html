@@ -63,6 +63,7 @@
           {% include "vault/ui/partials/browser_panel.html" %}
           {% include "vault/ui/partials/browser_menu.html" %}
           {% include "vault/ui/partials/entry_dialog.html" %}
+          {% include "vault/ui/partials/clipboard_banner.html" %}
         </div>
       </template>
     </div>
@@ -283,6 +284,7 @@
   <script src="{% static 'vault/ui/js/vault_reader.js' %}"></script>
   <script src="{% static 'vault/ui/js/entry_write.js' %}"></script>
   <script src="{% static 'vault/ui/js/folder_write.js' %}"></script>
+  <script src="{% static 'vault/ui/js/clipboard.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_app.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>
 {% endblock %}

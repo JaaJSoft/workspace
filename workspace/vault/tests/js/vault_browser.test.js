@@ -64,6 +64,8 @@ function browser(options = {}) {
   const opened = [];
   const entryKeys = [];
   const locks = [];
+  const copied = [];
+  const visited = [];
   const ctx = loadScripts(
     [
       'workspace/vault/ui/static/vault/ui/js/vault_unlock.js',
@@ -71,6 +73,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
       'workspace/vault/ui/static/vault/ui/js/entry_write.js',
       'workspace/vault/ui/static/vault/ui/js/folder_write.js',
+      'workspace/vault/ui/static/vault/ui/js/clipboard.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -94,6 +97,15 @@ function browser(options = {}) {
         removeItem(key) { delete this.values[key]; },
       },
       addEventListener() {},
+      open: (url) => { visited.push(url); },
+      setInterval: () => 1,
+      clearInterval() {},
+      navigator: {
+        clipboard: {
+          writeText: async (text) => { copied.push(text); },
+          readText: async () => copied[copied.length - 1],
+        },
+      },
       vaultSession: {
         isUnlocked: () => true,
         unlock: async () => {},
@@ -148,7 +160,7 @@ function browser(options = {}) {
       },
     },
   );
-  return { component: ctx.vaultBrowser(), opened, entryKeys, locks, ctx };
+  return { component: ctx.vaultBrowser(), opened, entryKeys, locks, copied, visited, ctx };
 }
 
 test('the browser reads the vault it was routed to from the page', () => {
@@ -810,4 +822,79 @@ test('a lock closes the form and writes nothing', async () => {
   component.newEntry('login');
   listeners.forEach((callback) => callback());
   assert.strictEqual(component.draft, null);
+});
+
+// --- copying a secret ------------------------------------------------------
+
+test('copying a password opens that field and nothing else', async () => {
+  const { component, opened, copied } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_password] }),
+    },
+  });
+  component.init();
+  await component.load();
+  const beforeCopy = opened.length;
+  await component.runAction(ACTION.copy_password, component.entries[0]);
+  assert.deepStrictEqual(opened.slice(beforeCopy), ['e-1|password']);
+  assert.deepStrictEqual(Array.from(copied), ['open:e-1|password']);
+  // Opened, handed over, dropped: it never lands in component state.
+  assert.ok(!('password' in component.entries[0]));
+});
+
+test('an action the registry did not offer is refused even from a stale menu', async () => {
+  const { component, copied } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+    },
+  });
+  component.init();
+  await component.load();
+  await component.runAction(ACTION.copy_password, component.entries[0]);
+  assert.deepStrictEqual(Array.from(copied), []);
+});
+
+test('a stored address that is not a web address is never opened', async () => {
+  // The destination comes out of the vault, so a javascript: or data: value
+  // saved there would be a saved address that runs as code on this page.
+  const { component, visited } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? []
+          : [
+              Object.assign(entryWith('e-1'), {
+                entry_fields: [{ field_id: 'uri', encrypted_value: 'ct' }],
+              }),
+            ],
+      fetchEntryActions: async () => ({ 'e-1': [{ id: 'open_uri', bulk: false }] }),
+    },
+    crypto: {
+      open: async () => new TextEncoder().encode('javascript:alert(1)'),
+    },
+  });
+  component.init();
+  await component.load();
+  await component.runAction({ id: 'open_uri' }, component.entries[0]);
+  assert.deepStrictEqual(Array.from(visited), []);
+  assert.match(component.error, /web address/i);
+});
+
+test('a lock takes the secret back off the clipboard', async () => {
+  const listeners = [];
+  const { component, copied } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_password] }),
+    },
+    session: { onLock: (callback) => listeners.push(callback) },
+  });
+  component.init();
+  await component.load();
+  await component.runAction(ACTION.copy_password, component.entries[0]);
+  listeners.forEach((callback) => callback());
+  // The last write wins, and it is the empty one.
+  assert.equal(copied[copied.length - 1], '');
 });

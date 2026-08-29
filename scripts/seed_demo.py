@@ -39,6 +39,13 @@ starts with the onboarding tour and the changelog popup already dismissed
 (pass ``--keep-intro-modals`` to test those). ``--purge`` deletes every
 user on that domain and cascades their files/conversations/projects (including
 the on-disk blobs, via the File post_delete signal) before (re)seeding.
+
+The ``demo`` user also gets two encrypted vaults, written through the same
+reference implementation the crypto vectors come from - real seals, real
+signatures, so the browser opens them rather than reporting them as tampered.
+Their master password and recovery key are printed at the end and stored
+nowhere: the vault cannot be opened without both, by design. ``--no-vault``
+skips that step.
 """
 
 import argparse
@@ -1034,6 +1041,7 @@ def main():
     parser.add_argument(
         "--no-projects", action="store_true", help="skip project/task generation"
     )
+    parser.add_argument("--no-vault", action="store_true", help="skip vault generation")
     parser.add_argument(
         "--purge", action="store_true", help="delete existing demo users first"
     )
@@ -1127,6 +1135,19 @@ def main():
         )
         groups, dms, msgs, group_avatars = g, d, gm + dmm, ga
 
+    vault_summary = None
+    if not args.no_vault:
+        print("\nGenerating the demo vault ...")
+        from seed_vault import MASTER_PASSWORD, seed_vault_for
+
+        demo_user = next(u for u in users if u.username == DEMO_USERNAME)
+        vault_summary = seed_vault_for(demo_user)
+        vault_summary["password"] = MASTER_PASSWORD
+        print(
+            f"  {vault_summary['vaults']} vaults, {vault_summary['entries']} entries",
+            flush=True,
+        )
+
     print("\n--- Done ---")
     print(f"  users:         {len(users)}")
     print(f"  avatars:       {user_avatars} user + {group_avatars} group")
@@ -1144,6 +1165,13 @@ def main():
         f"'{args.password}' (any printed username works too - the form takes "
         f"the USERNAME, not the email)."
     )
+    if vault_summary and vault_summary.get("recovery_key"):
+        # Both halves, because the derivation takes both: the vault cannot
+        # be opened with the master password alone, by design.
+        print()
+        print(f"  Vault master password: {vault_summary['password']}")
+        print(f"  Vault recovery key:    {vault_summary['recovery_key']}")
+        print("  Neither is stored anywhere else - this line is the only copy.")
 
 
 if __name__ == "__main__":

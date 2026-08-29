@@ -18,7 +18,7 @@ Collapsed, and on mobile, the row opens the dialog instead: the 16rem panel
 cannot open inside the 4rem rail, whose drawer-side clips overflow.
 {% endcomment %}
 {% with ce=collapse_expr|default:"collapsed" %}
-  <div class="border-t border-base-300 py-4 px-3">
+  <div class="px-3 pb-4">
     <div
       class="dropdown dropdown-top w-full hidden lg:block"
       x-show="!{{ ce }}"
@@ -41,8 +41,10 @@ cannot open inside the 4rem rail, whose drawer-side clips overflow.
     <ul class="menu p-0 lg:hidden" :class="{{ ce }} ? 'lg:!block' : ''">
       {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color=color collapse_expr=ce onclick="document.getElementById('"|add:prefs_dialog_id|add:"').showModal()" tooltip="Preferences" %}
     </ul>
-    <ul class="menu p-0 hidden lg:block">
-      {% include "ui/partials/drawer_item.html" with icon_expr=ce icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color=color collapse_expr=ce onclick="toggleCollapse()" title_binding=ce|add:" ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding=ce|add:" ? 'Expand sidebar' : 'Collapse sidebar'" %}
-    </ul>
+    <div class="hidden lg:block border-t border-base-300 mt-3 pt-3">
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon_expr=ce icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color=color collapse_expr=ce onclick="toggleCollapse()" title_binding=ce|add:" ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding=ce|add:" ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+    </div>
   </div>
 {% endwith %}

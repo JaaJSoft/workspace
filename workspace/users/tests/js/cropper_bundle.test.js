@@ -14,12 +14,13 @@ const STYLESHEET = path.join(STATIC, 'css', 'vendor', 'cropper', 'cropper.css');
 const MANIFEST = path.join(REPO_ROOT, 'scripts', 'frontend', 'package.json');
 
 const pinned = JSON.parse(fs.readFileSync(MANIFEST, 'utf8')).dependencies.cropperjs;
-const banner = new RegExp(`Cropper\\.js v${pinned.replace(/\./g, '\\.')}\\b`);
+// The banner line ends right after the version: "v1.6.2\n" cannot match "v1.6.20".
+const banner = `Cropper.js v${pinned}\n`;
 
 test('the script is the pinned UMD build', () => {
   assert.ok(fs.existsSync(SCRIPT), `missing artifact: ${SCRIPT}`);
   const src = fs.readFileSync(SCRIPT, 'utf8');
-  assert.match(src, banner, 'version banner does not match the pinned cropperjs');
+  assert.ok(src.includes(banner), 'version banner does not match the pinned cropperjs');
   // Loaded without type="module" on pages with no AMD loader: the UMD
   // wrapper must fall through to the global assignment.
   assert.match(src, /typeof define&&define\.amd/, 'UMD wrapper missing');
@@ -29,7 +30,7 @@ test('the script is the pinned UMD build', () => {
 test('the stylesheet is the pinned build and needs nothing remote', () => {
   assert.ok(fs.existsSync(STYLESHEET), `missing artifact: ${STYLESHEET}`);
   const src = fs.readFileSync(STYLESHEET, 'utf8');
-  assert.match(src, banner, 'version banner does not match the pinned cropperjs');
+  assert.ok(src.includes(banner), 'version banner does not match the pinned cropperjs');
   assert.match(src, /\.cropper-container\{/, 'cropper styles missing');
   assert.doesNotMatch(src, /url\(\s*["']?https?:/, 'remote url() left in the vendored stylesheet');
 });

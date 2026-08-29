@@ -24,7 +24,9 @@ test('the bundle is an ES module with a default export', () => {
   assert.ok(fs.statSync(BUNDLE).size > 100_000, 'artifact suspiciously small');
   assert.match(src, /export\{\w+ as default\}/, 'no default export: notes_graph.js reads mod.default');
   assert.doesNotMatch(src, /^\/\/# sourceMappingURL=/m, 'source map reference left in');
-  assert.doesNotMatch(src, /esm\.sh|cdn\.jsdelivr\.net|unpkg\.com/, 'CDN reference');
+  for (const host of ['esm.sh', 'cdn.jsdelivr.net', 'unpkg.com']) {
+    assert.ok(!src.includes(host), `references ${host}`);
+  }
 });
 
 test('the graph partial hands the module URL to the script', () => {

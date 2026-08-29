@@ -16,6 +16,7 @@ const ENTRY = path.join(JS_DIR, 'monaco-editor.js');
 const CSS_DIR = path.join(STATIC, 'css', 'vendor', 'monaco');
 const STYLESHEET = path.join(CSS_DIR, 'editor.css');
 const WORKERS = ['editor', 'json', 'css', 'html', 'ts'].map((name) => `${name}.worker.js`);
+const THIRD_PARTY_HOSTS = ['cdn.jsdelivr.net', 'unpkg.com', 'esm.sh'];
 
 const scripts = () => fs.readdirSync(JS_DIR).filter((name) => name.endsWith('.js'));
 const read = (name) => fs.readFileSync(path.join(JS_DIR, name), 'utf8');
@@ -76,6 +77,8 @@ test('no script references a source map or a CDN', () => {
     // worker mentions the marker in the compiler's own strings, and
     // collectstatic anchors its pattern at line start too.
     assert.doesNotMatch(src, /^\/\/# sourceMappingURL=/m, `${name}: source map reference left in`);
-    assert.doesNotMatch(src, /cdn\.jsdelivr\.net|unpkg\.com/, `${name}: CDN reference`);
+    for (const host of THIRD_PARTY_HOSTS) {
+      assert.ok(!src.includes(host), `${name}: references ${host}`);
+    }
   }
 });

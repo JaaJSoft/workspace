@@ -14,10 +14,10 @@ const VENDOR = path.join(
 );
 const MANIFEST = path.join(REPO_ROOT, 'scripts', 'frontend', 'package.json');
 const ARTIFACTS = ['fullcalendar.js', 'luxon.js', 'luxon3.js'];
+const THIRD_PARTY_HOSTS = ['cdn.jsdelivr.net', 'unpkg.com', 'esm.sh'];
 
 const pinned = JSON.parse(fs.readFileSync(MANIFEST, 'utf8')).dependencies;
 const read = (name) => fs.readFileSync(path.join(VENDOR, name), 'utf8');
-const literal = (version) => version.replace(/\./g, '\\.');
 
 test('the three artifacts exist and are not empty', () => {
   for (const name of ARTIFACTS) {
@@ -29,19 +29,26 @@ test('the three artifacts exist and are not empty', () => {
 
 test('fullcalendar.js is the pinned standard bundle and defines the global', () => {
   const src = read('fullcalendar.js');
-  assert.match(src, new RegExp(`FullCalendar Standard Bundle v${literal(pinned.fullcalendar)}\\b`));
+  // The banner line ends right after the version: "v6.1.15\n" cannot match "v6.1.150".
+  assert.ok(
+    src.includes(`FullCalendar Standard Bundle v${pinned.fullcalendar}\n`),
+    'version banner does not match the pinned fullcalendar'
+  );
   assert.match(src, /^var FullCalendar=/m, 'the global build assigns `var FullCalendar`');
 });
 
 test('luxon.js is the pinned luxon build and defines the global', () => {
   const src = read('luxon.js');
   assert.match(src, /^var luxon=/m, 'the global build assigns `var luxon`');
-  assert.match(src, new RegExp(`VERSION="${literal(pinned.luxon)}"`));
+  assert.ok(src.includes(`VERSION="${pinned.luxon}"`), 'VERSION does not match the pinned luxon');
 });
 
 test('luxon3.js is the pinned bridge and registers itself as a global plugin', () => {
   const src = read('luxon3.js');
-  assert.match(src, new RegExp(`FullCalendar Luxon 3 Plugin v${literal(pinned['@fullcalendar/luxon3'])}\\b`));
+  assert.ok(
+    src.includes(`FullCalendar Luxon 3 Plugin v${pinned['@fullcalendar/luxon3']}\n`),
+    'version banner does not match the pinned @fullcalendar/luxon3'
+  );
   assert.match(src, /^FullCalendar\.Luxon3=/m, 'the bridge hangs itself off the FullCalendar global');
   // calendar_events.js never lists the plugin: it relies on this push.
   assert.match(src, /globalPlugins\.push\(/);
@@ -56,6 +63,8 @@ test('no artifact is ESM, references a source map, or points at a CDN', () => {
     const src = read(name);
     assert.doesNotMatch(src, /^\s*(import|export)[\s{*]/m, `${name}: ESM declaration found`);
     assert.doesNotMatch(src, /sourceMappingURL/, `${name}: source map reference left in`);
-    assert.doesNotMatch(src, /cdn\.jsdelivr\.net|unpkg\.com/, `${name}: CDN reference`);
+    for (const host of THIRD_PARTY_HOSTS) {
+      assert.ok(!src.includes(host), `${name}: references ${host}`);
+    }
   }
 });

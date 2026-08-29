@@ -2,8 +2,7 @@
   {% for module in modules %}
     <a
       href="{{ module.url }}"
-      class="group relative flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-base-200 transition-colors{% if module.slug == current_slug %} bg-base-200 ring-2 ring-{{ module.color }}/40{% endif %}"
-      {% if module.slug == current_slug %}aria-current="page"{% endif %}
+      class="group relative flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-base-200 transition-colors"
     >
       <div class="relative">
         <div

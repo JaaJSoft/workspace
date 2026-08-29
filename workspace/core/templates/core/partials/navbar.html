@@ -33,23 +33,49 @@
             </label>
             <div
               tabindex="0"
-              class="dropdown-content mt-3 z-[100] p-2 pb-3 shadow-xl bg-base-100 border border-base-300 rounded-box w-[min(18rem,calc(100vw-1rem))]"
+              class="dropdown-content mt-3 z-[100] p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-[16.5rem]"
             >
-              <a
-                href="/"
-                class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary/10 hover:text-secondary transition-colors"
+              <div
+                class="px-2 pt-1 pb-2 text-xs font-semibold uppercase tracking-wider text-base-content/50"
               >
-                <span
-                  class="w-8 h-8 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center"
+                Apps
+              </div>
+              <div
+                id="module-switcher-grid"
+                class="grid grid-cols-4 gap-1"
+                aria-label="Modules"
+              >
+                <a
+                  href="/"
+                  class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-base-200 transition-colors"
                 >
-                  <i data-lucide="home" class="w-4 h-4"></i>
-                </span>
-                <span class="font-medium">Dashboard</span>
-              </a>
-              <div class="divider my-1"></div>
-              <section id="module-switcher-grid" aria-label="Modules">
-                {% include 'dashboard/partials/modules_grid.html' with modules=workspace_switcher_modules current_slug=module.slug %}
-              </section>
+                  <span
+                    class="w-9 h-9 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center"
+                  >
+                    <i data-lucide="home" class="w-5 h-5"></i>
+                  </span>
+                  <span class="text-[11px] font-medium leading-tight">Home</span>
+                </a>
+                {% for m in workspace_switcher_modules %}
+                  <a
+                    href="{{ m.url }}"
+                    class="flex flex-col items-center gap-1 p-2 rounded-lg transition-colors {% if m.slug == module.slug %}bg-base-200{% else %}hover:bg-base-200{% endif %}"
+                    {% if m.slug == module.slug %}aria-current="page"{% endif %}
+                  >
+                    <span
+                      class="relative w-9 h-9 rounded-lg bg-{{ m.color }}/10 text-{{ m.color }} flex items-center justify-center"
+                    >
+                      <i data-lucide="{{ m.icon }}" class="w-5 h-5"></i>
+                      {% if m.notification_count %}
+                        <span
+                          class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-{{ m.color }} text-{{ m.color }}-content text-[10px] font-bold flex items-center justify-center"
+                        >{{ m.notification_count }}</span>
+                      {% endif %}
+                    </span>
+                    <span class="text-[11px] font-medium leading-tight text-center">{{ m.name }}</span>
+                  </a>
+                {% endfor %}
+              </div>
             </div>
           </div>
         {% endwith %}

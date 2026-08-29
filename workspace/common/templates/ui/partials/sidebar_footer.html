@@ -29,7 +29,7 @@ cannot open inside the 4rem rail, whose drawer-side clips overflow.
       </ul>
       <div
         tabindex="0"
-        class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mb-1"
+        class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mb-1 max-h-[70vh] overflow-y-auto"
       >
         <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
           <i data-lucide="sliders-horizontal" class="w-4 h-4 text-{{ color }}"></i>
@@ -38,7 +38,7 @@ cannot open inside the 4rem rail, whose drawer-side clips overflow.
         {% include prefs_template %}
       </div>
     </div>
-    <ul class="menu p-0" :class="{{ ce }} ? '' : 'lg:hidden'">
+    <ul class="menu p-0 lg:hidden" :class="{{ ce }} ? 'lg:!block' : ''">
       {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color=color collapse_expr=ce onclick="document.getElementById('"|add:prefs_dialog_id|add:"').showModal()" tooltip="Preferences" %}
     </ul>
     <ul class="menu p-0 hidden lg:block">

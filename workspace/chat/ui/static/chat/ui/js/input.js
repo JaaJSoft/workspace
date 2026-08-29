@@ -19,6 +19,7 @@ window.chatInputMixin = function chatInputMixin() {
     emojiPickerTargetMsg: null,  // message UUID for reaction mode
     emojiPickerX: 0,
     emojiPickerY: 0,
+    _emojiSearchFocused: false,
 
     // ── Mention autocomplete ─────────────────────────────────
     mentionActive: false,
@@ -94,12 +95,40 @@ window.chatInputMixin = function chatInputMixin() {
       this.emojiPickerX = x;
       this.emojiPickerY = y;
       this.emojiPickerVisible = true;
+      this.$nextTick(() => this.focusEmojiSearch());
+    },
+
+    // The picker is a singleton toggled with x-show, never re-created, so the
+    // search field has to be focused on every open rather than once at mount.
+    focusEmojiSearch() {
+      // The field lives in the web component's shadow DOM, which only exists
+      // once the component's module has loaded. Until then there is nothing
+      // to focus and leaving focus where it is beats throwing.
+      const search = this.$refs.emojiPicker?.shadowRoot?.querySelector('input.search');
+      if (!search) return;
+      search.focus();
+      this._emojiSearchFocused = true;
     },
 
     closeEmojiPicker() {
+      // Hiding the panel drops focus to <body>, so hand it back to the
+      // composer - but only when the picker was the one holding it. This also
+      // runs on click-outside, where focus already belongs to whatever the
+      // user just clicked and stealing it would break their next keystroke.
+      // Reactions are excluded: that flow never involved the composer, and
+      // sending the caret there would raise the virtual keyboard on a phone
+      // just for having reacted to a message.
+      const active = document.activeElement;
+      const restoreFocus = this.emojiPickerMode === 'input'
+        && this._emojiSearchFocused
+        && (active === this.$refs.emojiPicker || active === document.body);
+
+      this._emojiSearchFocused = false;
       this.emojiPickerVisible = false;
       this.emojiPickerMode = null;
       this.emojiPickerTargetMsg = null;
+
+      if (restoreFocus) this.getMessageInput()?.focus();
     },
 
     // ── Input keyboard shortcuts ─────────────────────────────

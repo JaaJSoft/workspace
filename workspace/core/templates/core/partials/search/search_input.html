@@ -24,6 +24,7 @@
     @keydown.arrow-up.prevent="navigate(-1)"
     @keydown.enter.prevent="select()"
     @keydown.escape="{{ on_escape|default:'close() ' }}"
+    @palette:commands="enterCommandMode()"
     class="input input-bordered w-full {% if size == 'lg' %}pl-12{% else %}pl-10{% endif %} pr-10 {% if show_kbd %}sm:pr-20{% endif %} bg-base-200/50 focus:bg-base-100 border-base-300 focus:border-primary/50 transition-all {{ input_class }}"
     placeholder="Search..."
     autocomplete="off"

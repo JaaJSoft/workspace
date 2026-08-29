@@ -16,9 +16,14 @@ class ModuleSwitcherNavbarTests(TestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="module-switcher"')
-        self.assertContains(resp, 'id="dashboard-modules-grid"')
-        self.assertContains(resp, "/dashboard/modules?current=files")
         self.assertNotContains(resp, 'id="navbar-brand"')
+
+    def test_grid_is_rendered_with_the_page_and_marks_the_current_module(self):
+        resp = self.client.get("/files")
+
+        self.assertContains(resp, 'id="module-switcher-grid"')
+        self.assertContains(resp, 'aria-current="page"', count=1)
+        self.assertNotContains(resp, "/dashboard/modules")
 
     def test_home_page_keeps_the_logo(self):
         resp = self.client.get("/")

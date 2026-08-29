@@ -1,4 +1,3 @@
-from dataclasses import asdict
 from datetime import datetime, time
 
 from django.contrib.auth.decorators import login_required
@@ -15,16 +14,16 @@ from workspace.core.services.activity import (
 )
 from workspace.core.services.module_visibility import (
     is_module_slug_visible,
-    visible_modules,
 )
 from workspace.files.services.quota import (
     effective_quota,
     personal_usage,
     usage_percent,
 )
-from workspace.notifications.services.notifications import get_unread_badges
 from workspace.projects.queries import assigned_open_tasks
 from workspace.users.services.settings import get_module_settings, get_setting
+
+from .services.modules import dashboard_modules
 
 ACTIVITY_LIMIT = 10
 MY_TASKS_LIMIT = 5
@@ -85,47 +84,9 @@ def _activity_shell_context(user, source=None):
     }
 
 
-def _dashboard_modules(user):
-    """Build the dashboard app tiles and the settings-popover app list.
-
-    Returns ``(modules, dashboard_apps)`` where ``modules`` is the visible grid
-    (hidden slugs and the dashboard tile excluded, unread notification counts
-    attached) and ``dashboard_apps`` is every visible app with a ``hidden``
-    flag for the settings popover.
-
-    A tile links to its module home unless the module has exactly one unread
-    notification with a url, in which case it opens that item directly (the
-    unread conversation, the due task, ...).
-    """
-    badges = get_unread_badges(user)
-    hidden = set(get_module_settings(user, "dashboard").get("hidden_modules") or [])
-    modules = []
-    dashboard_apps = []
-    for m in visible_modules(user):
-        if m.slug == "dashboard" or not m.show_on_dashboard:
-            continue
-        dashboard_apps.append(
-            {
-                "slug": m.slug,
-                "name": m.name,
-                "icon": m.icon,
-                "color": m.color,
-                "hidden": m.slug in hidden,
-            }
-        )
-        if m.slug in hidden:
-            continue
-        badge = badges.get(m.slug)
-        data = asdict(m)
-        data["notification_count"] = badge["count"] if badge else 0
-        data["url"] = (badge["url"] if badge else None) or m.url
-        modules.append(data)
-    return modules, dashboard_apps
-
-
 def _build_dashboard_context(user, include_activity=True, activity_source=None):
     dashboard_settings = get_module_settings(user, "dashboard")
-    modules, dashboard_apps = _dashboard_modules(user)
+    modules, dashboard_apps = dashboard_modules(user)
 
     my_tasks_available = is_module_slug_visible(user, "projects")
 
@@ -166,19 +127,12 @@ def index(request):
 
 @login_required
 def modules_fragment(request):
-    """Dashboard app grid (alpine-ajax swap).
-
-    Re-rendered after a visibility change on the home page, and loaded into
-    the navbar module switcher, which passes the slug of the module the page
-    belongs to as ``?current=`` so its tile is marked.
-    """
-    modules, _ = _dashboard_modules(request.user)
-    current = request.GET.get("current")
-    current_slug = current if any(m["slug"] == current for m in modules) else None
+    """Dashboard app grid, re-rendered after a visibility change (alpine-ajax swap)."""
+    modules, _ = dashboard_modules(request.user)
     return render(
         request,
         "dashboard/partials/modules_grid_fragment.html",
-        {"modules": modules, "current_slug": current_slug},
+        {"modules": modules},
     )
 
 

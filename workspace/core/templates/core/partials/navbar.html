@@ -8,28 +8,10 @@
     <div class="flex-1">
       {% if workspace_current_module %}
         {% with module=workspace_current_module %}
-          {% comment %}
-            The grid is the dashboard's, fetched on the first open only: rendering
-            it on every page would cost the unread-badge queries everywhere. The
-            placeholder carries the fragment's own id (the swap keeps the
-            response's element); it never coexists with the home page grid
-            because the switcher is not rendered there.
-          {% endcomment %}
           <div
             id="module-switcher"
             class="dropdown leading-[0]"
-            x-data="{
-              loaded: false,
-              load() {
-                if (this.loaded) return;
-                this.loaded = true;
-                this.$ajax('{% url 'dashboard:modules_fragment' %}?current={{ module.slug }}', {
-                  target: 'dashboard-modules-grid',
-                  focus: false,
-                });
-              },
-            }"
-            @focusin="load()"
+            x-data
             @keydown.escape.prevent="document.activeElement.blur()"
           >
             <label
@@ -62,17 +44,8 @@
                 <span class="font-medium">Dashboard</span>
               </a>
               <div class="divider my-1"></div>
-              <section id="dashboard-modules-grid" aria-label="Modules">
-                <div class="grid grid-cols-[repeat(auto-fit,5rem)] justify-center gap-3">
-                  {% for module in workspace_active_modules %}
-                    {% if module.show_on_dashboard and module.url and module.slug != 'dashboard' %}
-                      <div class="flex flex-col items-center gap-1.5 p-3">
-                        <div class="skeleton w-12 h-12 rounded-xl"></div>
-                        <div class="skeleton h-3 w-10"></div>
-                      </div>
-                    {% endif %}
-                  {% endfor %}
-                </div>
+              <section id="module-switcher-grid" aria-label="Modules">
+                {% include 'dashboard/partials/modules_grid.html' with modules=workspace_switcher_modules current_slug=module.slug %}
               </section>
             </div>
           </div>

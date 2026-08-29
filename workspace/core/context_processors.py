@@ -14,6 +14,7 @@ from workspace.core.setting_keys import (
     MODULE,
     ONBOARDING_COMPLETED,
 )
+from workspace.dashboard.services.modules import dashboard_modules
 from workspace.users.services.settings import get_module_settings
 
 
@@ -33,9 +34,15 @@ def workspace_modules(request):
 
     modules = visible_modules(request.user)
     current = current_module(modules, request.path)
+    # Rendered with the page (no fetch on open); only pages inside a module
+    # show the switcher, so only they pay the unread-badge query.
+    switcher_modules = []
+    if current and request.user.is_authenticated:
+        switcher_modules, _ = dashboard_modules(request.user)
     return {
         "workspace_active_modules": [asdict(m) for m in modules],
         "workspace_current_module": asdict(current) if current else None,
+        "workspace_switcher_modules": switcher_modules,
         "workspace_commands": [
             asdict(c)
             for c in filter_visible_commands(

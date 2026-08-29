@@ -55,5 +55,8 @@ def switcher_modules_for(user, current):
     """
     modules, _ = dashboard_modules(user, deep_links=False)
     if current is not None and all(m["slug"] != current.slug for m in modules):
-        modules.append({**asdict(current), "notification_count": 0})
+        badge = get_unread_badges(user).get(current.slug)
+        modules.append(
+            {**asdict(current), "notification_count": badge["count"] if badge else 0}
+        )
     return modules

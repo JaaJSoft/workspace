@@ -150,7 +150,9 @@ class SettingsQueryBudgetTests(TestCase):
         cache.clear()
 
     def test_settings_render_stays_within_its_query_budget(self):
-        # 2 of these belong to the storage gauge (usage aggregate + quota row).
-        with self.assertNumQueries(24):
+        # 2 of these belong to the storage gauge (usage aggregate + quota row)
+        # and 2 to the navbar module switcher (unread badges, dashboard
+        # preferences), both cached after the first render.
+        with self.assertNumQueries(26):
             resp = self.client.get(reverse("users_ui:settings"))
         self.assertEqual(resp.status_code, 200)

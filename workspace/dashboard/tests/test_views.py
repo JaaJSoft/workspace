@@ -381,6 +381,21 @@ class SwitcherModulesTests(TestCase):
 
     @patch("workspace.dashboard.services.modules.get_unread_badges")
     @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_appended_current_module_keeps_its_unread_count(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_badges.return_value = {"mail": {"count": 3, "url": "/mail/one"}}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+
+        switcher = switcher_modules_for(self.user, _mod("mail"))
+
+        mail = next(m for m in switcher if m["slug"] == "mail")
+        self.assertEqual(mail["notification_count"], 3)
+        self.assertEqual(mail["url"], "/mail")
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_switcher_tile_links_to_the_module_home_not_a_single_unread_item(
         self, mock_visible, mock_badges
     ):

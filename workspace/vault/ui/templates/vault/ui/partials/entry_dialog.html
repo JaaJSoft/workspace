@@ -92,7 +92,10 @@
 <template x-if="folderDraft">
   <div class="modal modal-open">
     <div class="modal-box max-w-sm">
-      <h2 class="font-semibold text-lg">New folder</h2>
+      <h2
+        class="font-semibold text-lg"
+        x-text="folderDraft.existing ? 'Rename folder' : 'New folder'"
+      ></h2>
       <form @submit.prevent="saveFolder()">
         <input
           type="text"
@@ -108,9 +111,8 @@
             type="submit"
             class="btn btn-primary"
             :disabled="busy || !folderDraft.name.trim()"
-          >
-            Create
-          </button>
+            x-text="folderDraft.existing ? 'Rename' : 'Create'"
+          ></button>
         </div>
       </form>
     </div>

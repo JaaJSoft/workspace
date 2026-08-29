@@ -20,16 +20,6 @@ window.vaultApp = (function () {
   const VIEW_MODE_KEY = 'vault.list.viewMode';
   const TILE_SIZE_KEY = 'vault.list.tileSize';
 
-  // The five steps of the tile slider, as the file browser draws them: a
-  // minimum column width, the gap between tiles, and the icon inside.
-  const TILE_STEPS = {
-    1: { width: 110, gap: 8, icon: 28 },
-    2: { width: 140, gap: 10, icon: 36 },
-    3: { width: 180, gap: 12, icon: 44 },
-    4: { width: 230, gap: 14, icon: 56 },
-    5: { width: 290, gap: 16, icon: 72 },
-  };
-  const DEFAULT_PREFS = { lockAfterMinutes: 5, defaultSort: 'default' };
 
   function readJson(elementId) {
     const element = document.getElementById(elementId);
@@ -63,6 +53,7 @@ window.vaultApp = (function () {
   return function vaultApp() {
     return {
       ...window.vaultUnlockMixin(),
+      ...window.vaultPrefsMixin(),
       error: '',
       vaults: [],
       busy: false,
@@ -82,7 +73,6 @@ window.vaultApp = (function () {
       // a row. Creating a vault is not an action on an existing one, so it
       // cannot come from the action endpoint.
       backgroundMenu: { open: false, x: 0, y: 0 },
-      prefs: Object.assign({}, DEFAULT_PREFS),
       // The vault being created, or null. It carries everything the form
       // offers, because all of it is inside the signed payload.
       newVault: null,
@@ -121,7 +111,7 @@ window.vaultApp = (function () {
         const viewMode = readPreference(VIEW_MODE_KEY);
         if (viewMode) this.viewMode = viewMode;
         const tileSize = Number(readPreference(TILE_SIZE_KEY));
-        if (TILE_STEPS[tileSize]) this.tileSize = tileSize;
+        if (window.vaultTiles.isStep(tileSize)) this.tileSize = tileSize;
         this.loadPrefs();
         this.initUnlock();
       },
@@ -136,53 +126,13 @@ window.vaultApp = (function () {
 
       // ---- preferences -----------------------------------------------------
 
-      loadPrefs: function () {
-        const stored = readJson('vault-prefs') || {};
-        this.prefs = {
-          lockAfterMinutes: Number(stored.lock_after_minutes) || DEFAULT_PREFS.lockAfterMinutes,
-          defaultSort: stored.default_sort || DEFAULT_PREFS.defaultSort,
-        };
-        this.sortField = this.prefs.defaultSort;
-        window.vaultSession.setIdleTimeout(this.prefs.lockAfterMinutes);
-      },
 
       // Overridable so a test can answer without a network. The endpoint is
       // the application's own settings API, which owns the cache the value
       // would otherwise go stale in.
-      putSetting: function (key, value) {
-        return fetch('/api/v1/settings/vault/' + key, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken(),
-          },
-          body: JSON.stringify({ value: value }),
-        }).then(function (response) {
-          if (!response.ok) throw new Error('the setting was refused');
-        });
-      },
 
       // Applied before it is stored, and put back if the store refuses: a
       // preference that changes nothing until the next reload is not one.
-      updatePref: async function (key, value) {
-        const previous = Object.assign({}, this.prefs);
-        if (key === 'default_sort') {
-          this.prefs.defaultSort = value;
-          this.sortField = value;
-        }
-        if (key === 'lock_after_minutes') {
-          this.prefs.lockAfterMinutes = value;
-          window.vaultSession.setIdleTimeout(value);
-        }
-        try {
-          await this.putSetting(key, value);
-        } catch (err) {
-          this.prefs = previous;
-          this.sortField = previous.defaultSort;
-          window.vaultSession.setIdleTimeout(previous.lockAfterMinutes);
-          this.error = 'That preference could not be saved. Try again.';
-        }
-      },
 
       // ---- what the listing shows -----------------------------------------
 
@@ -408,21 +358,21 @@ window.vaultApp = (function () {
         const step = Number(size);
         // Off the scale is a bug or a stale preference, and a tile of zero
         // pixels is not a smaller tile.
-        if (!TILE_STEPS[step]) return;
+        if (!window.vaultTiles.isStep(step)) return;
         this.tileSize = step;
         writePreference(TILE_SIZE_KEY, String(step));
       },
 
       tileMinWidth: function () {
-        return TILE_STEPS[this.tileSize].width;
+        return window.vaultTiles.width(this.tileSize);
       },
 
       tileGap: function () {
-        return TILE_STEPS[this.tileSize].gap;
+        return window.vaultTiles.gap(this.tileSize);
       },
 
       tileIconSize: function () {
-        return TILE_STEPS[this.tileSize].icon;
+        return window.vaultTiles.icon(this.tileSize);
       },
 
       // ---- menus -----------------------------------------------------------
@@ -487,18 +437,6 @@ window.vaultApp = (function () {
       // The only way back out of "remember my recovery key on this device".
       // Until now the key was dropped solely when it failed to decode, which
       // left anyone who ticked the box with no way to untick it.
-      forgetDevice: async function () {
-        const confirmed = await this.confirm(
-          'Forget the recovery key stored in this browser? You will need your '
-            + 'emergency kit the next time you unlock here.',
-          { title: 'Forget the key on this device', okLabel: 'Forget it', okClass: 'btn-error' }
-        );
-        if (!confirmed) return;
-        window.vaultSession.forgetDevice();
-        this.secretRequired = true;
-        this.secretRemembered = false;
-        this.secretText = '';
-      },
 
       onLocked: function () {
         this.vaults = [];

@@ -38,7 +38,7 @@
   listing the content renders, and its Lock button empties it.
 {% endcomment %}
 {% block drawer_attrs %}
-  {% if not vault_uuid %}x-data="vaultApp()"{% endif %}
+  x-data="{% if vault_uuid %}vaultBrowser(){% else %}vaultApp(){% endif %}"
 {% endblock %}
 
 {% comment %}
@@ -47,11 +47,13 @@
   header - the shape onboarding already has.
 {% endcomment %}
 {% block drawer_sidebar %}
-  {% if not vault_uuid %}
-    <template x-if="state === 'unlocked'">
+  <template x-if="state === 'unlocked'">
+    {% if vault_uuid %}
+      {% include "vault/ui/partials/browser_sidebar.html" %}
+    {% else %}
       {% include "vault/ui/partials/list_sidebar.html" %}
-    </template>
-  {% endif %}
+    {% endif %}
+  </template>
 {% endblock %}
 
 {% block content %}
@@ -60,20 +62,22 @@
   {{ vault_prefs|json_script:"vault-prefs" }}
 
   {% if vault_uuid %}
+    {# The component is on the drawer wrapper: the sidebar shares it. #}
     <div
-      x-data="vaultBrowser()"
-      class="h-full flex min-h-0"
+      class="h-full flex flex-col min-h-0"
       @keydown.escape.window="closeMenu()"
     >
       <template x-if="state !== 'unlocked'">
         <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
       </template>
 
+      {% comment %}
+        A row, not a column: the properties panel sits beside the listing, and
+        the drawer already took the sidebar out of this branch.
+      {% endcomment %}
       <template x-if="state === 'unlocked'">
-        <div class="h-full flex min-h-0 w-full relative">
-          {% include "vault/ui/partials/browser_sidebar.html" %}
-
-          <main class="flex-1 flex flex-col min-w-0">
+        <div class="h-full flex min-h-0 w-full">
+          <main class="flex-1 flex flex-col min-w-0 min-h-0">
             {% include "vault/ui/partials/browser_header.html" %}
 
             <inline-alert type="warning" title="This vault is out of reach" message="Nothing here holds a key for your account, or the vault does not exist." class="mx-5 mt-4" x-show="missing" x-cloak></inline-alert>
@@ -112,7 +116,9 @@
 
           {% include "vault/ui/partials/browser_panel.html" %}
           {% include "vault/ui/partials/browser_menu.html" %}
+          {% include "vault/ui/partials/browser_folder_menu.html" %}
           {% include "vault/ui/partials/entry_dialog.html" %}
+          {% include "vault/ui/partials/help_dialog.html" %}
           {% include "vault/ui/partials/clipboard_banner.html" %}
         </div>
       </template>
@@ -154,6 +160,8 @@
   <script src="{% static 'vault/ui/js/vault_resign.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_format.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_menu.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_tiles.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_prefs.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_sidebar.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_app.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>

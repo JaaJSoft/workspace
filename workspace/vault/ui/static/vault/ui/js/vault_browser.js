@@ -15,7 +15,7 @@
 // navigation drops them. Every page load starts locked, which is why the
 // vault is loaded by afterUnlock and never by init.
 window.vaultBrowser = (function () {
-  const COLLAPSED_KEY = 'vault.sidebar.collapsed';
+  const TILE_SIZE_KEY = 'vault.browser.tileSize';
   const VIEW_MODE_KEY = 'vault.browser.viewMode';
 
   // Its own title and a red button, so an irreversible question does not read
@@ -73,6 +73,7 @@ window.vaultBrowser = (function () {
 
     return {
       ...window.vaultUnlockMixin(),
+      ...window.vaultPrefsMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the listing
@@ -107,10 +108,6 @@ window.vaultBrowser = (function () {
       // A mirror of vaultClipboard's own state, because Alpine tracks
       // property reads and cannot see into another module's closure.
       clipboard: { active: false, label: '', secondsLeft: 0, note: '' },
-      collapsed: false,
-      // The sidebar is a column from md up and an overlay below it, so on a
-      // phone it has to be opened before it is anything.
-      mobileNav: false,
       loading: false,
       error: '',
       // What the server says may be done with each entry, keyed by uuid. It
@@ -125,15 +122,23 @@ window.vaultBrowser = (function () {
       panelEntry: null,
       // The context menu: which row it belongs to and where it was raised.
       menu: { open: false, entry: null, x: 0, y: 0 },
+      // The folder menu is its own, and its rows are written rather than
+      // fetched: the action endpoint answers for entries and vaults, which
+      // carry per-row rules - a trashed entry, a field a type does not have,
+      // a role floor. A folder carries none: whoever can open the vault can
+      // write any folder in it, so there is nothing to ask.
+      folderMenu: { open: false, folder: null, x: 0, y: 0 },
       // Only the newest opening may write its answer; see openMenu.
       menuGeneration: 0,
 
       init: function () {
         this.vaultUuid = readJson('vault-uuid');
         this.entryTypes = readJson('entry-types') || [];
-        this.collapsed = readPreference(COLLAPSED_KEY) === 'true';
         const viewMode = readPreference(VIEW_MODE_KEY);
         if (viewMode) this.viewMode = viewMode;
+        const tileSize = Number(readPreference(TILE_SIZE_KEY));
+        if (window.vaultTiles.isStep(tileSize)) this.tileSize = tileSize;
+        this.loadPrefs();
         this.initUnlock();
         this.readCommand();
         const self = this;
@@ -373,7 +378,24 @@ window.vaultBrowser = (function () {
         return this.actionsFor(this.menu.entry);
       },
 
+      openFolderMenu: function (event, folder) {
+        if (event && event.preventDefault) event.preventDefault();
+        this.closeMenu();
+        this.folderMenu = {
+          open: true,
+          folder: folder,
+          x: (event && event.clientX) || 0,
+          y: (event && event.clientY) || 0,
+        };
+        window.vaultMenu.fit(this, 'folder-context-menu', 'folderMenu');
+      },
+
+      closeFolderMenu: function () {
+        this.folderMenu = { open: false, folder: null, x: 0, y: 0 };
+      },
+
       closeMenu: function () {
+        this.folderMenu = { open: false, folder: null, x: 0, y: 0 };
         // The generation moves too: a request in flight for the menu just
         // closed must not reopen anything when it lands.
         this.menuGeneration += 1;
@@ -715,6 +737,21 @@ window.vaultBrowser = (function () {
         }
       },
 
+      renameFolder: function (folder) {
+        this.closeMenu();
+        // Everything the signature covers travels with the draft: a rename
+        // re-signs the whole record, so dropping the parent or the position
+        // here would move the folder to the root as a side effect of
+        // renaming it.
+        this.folderDraft = {
+          uuid: folder.uuid,
+          parent: folder.parent || null,
+          name: folder.name,
+          position: folder.position || 0,
+          existing: true,
+        };
+      },
+
       newFolder: function () {
         this.closeMenu();
         const parent = this.view === 'all' && !this.tagFilter ? this.folderUuid : null;
@@ -745,25 +782,49 @@ window.vaultBrowser = (function () {
             this.openVault,
             Object.assign({}, draft, { name: name }),
           );
-          await window.vaultApi.createFolder(body);
+          if (draft.existing) {
+            await window.vaultApi.updateFolder(draft.uuid, body);
+          } else {
+            await window.vaultApi.createFolder(body);
+          }
           this.folderDraft = null;
           await this.load();
         } catch (err) {
           if (err && err.reason === 'locked') return;
-          this.error = 'That folder could not be created. Try again.';
+          this.error = draft.existing
+            ? 'That folder could not be renamed. Try again.'
+            : 'That folder could not be created. Try again.';
         } finally {
           this.busy = false;
         }
       },
 
-      toggleCollapsed: function () {
-        this.collapsed = !this.collapsed;
-        writePreference(COLLAPSED_KEY, String(this.collapsed));
-      },
-
       setViewMode: function (mode) {
         this.viewMode = mode;
         writePreference(VIEW_MODE_KEY, mode);
+      },
+
+      // ---- tiles -----------------------------------------------------------
+
+      setTileSize: function (size) {
+        const step = Number(size);
+        // Off the scale is a bug or a stale preference, and a tile of zero
+        // pixels is not a smaller tile.
+        if (!window.vaultTiles.isStep(step)) return;
+        this.tileSize = step;
+        writePreference(TILE_SIZE_KEY, String(step));
+      },
+
+      tileMinWidth: function () {
+        return window.vaultTiles.width(this.tileSize);
+      },
+
+      tileGap: function () {
+        return window.vaultTiles.gap(this.tileSize);
+      },
+
+      tileIconSize: function () {
+        return window.vaultTiles.icon(this.tileSize);
       },
 
       heading: function () {

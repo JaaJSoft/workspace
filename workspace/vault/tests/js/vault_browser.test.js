@@ -70,6 +70,8 @@ function browser(options = {}) {
     [
       'workspace/vault/ui/static/vault/ui/js/vault_format.js',
       'workspace/vault/ui/static/vault/ui/js/vault_menu.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_tiles.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_prefs.js',
       'workspace/vault/ui/static/vault/ui/js/vault_unlock.js',
       'workspace/vault/ui/static/vault/ui/js/vault_store.js',
       'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
@@ -125,6 +127,7 @@ function browser(options = {}) {
           entryKeys.push(entryUuid);
           return new Uint8Array(32);
         },
+        setIdleTimeout() {},
         verifyRecord: async () => {},
         verifyVaultMetadata: async () => {},
         sign: async () => 'signature',
@@ -292,15 +295,26 @@ test('a lock drops a creation nobody has confirmed', () => {
   assert.strictEqual(component.pendingNewEntry, false);
 });
 
-test('the collapsed sidebar survives a reload', () => {
+test('the tile size survives a reload, and belongs to this screen alone', () => {
+  // The collapse is vaultSidebar's business now; what this screen still
+  // stores for itself is how big its tiles are - an entry card and a vault
+  // card are not looked at from the same distance.
   const { component, ctx } = browser();
   component.init();
-  assert.equal(component.collapsed, false);
-  component.toggleCollapsed();
-  assert.equal(component.collapsed, true);
+  assert.equal(component.tileSize, 3);
+  component.setTileSize(5);
   const second = ctx.vaultBrowser();
   second.init();
-  assert.equal(second.collapsed, true);
+  assert.equal(second.tileSize, 5);
+  assert.equal(ctx.localStorage.getItem('vault.list.tileSize'), null);
+});
+
+test('a tile size off the scale is refused rather than drawn', () => {
+  const { component } = browser();
+  component.init();
+  component.setTileSize(9);
+  assert.equal(component.tileSize, 3);
+  assert.equal(component.tileMinWidth(), 180);
 });
 
 test('the entry types come from the server, never from the client', () => {
@@ -1306,4 +1320,56 @@ test('a field that will not open leaves the form shut and says so', async () => 
   });
   assert.strictEqual(component.draft, null);
   assert.match(component.error, /could not be opened/i);
+});
+
+test('renaming a folder updates it, and keeps where it sits in the tree', async () => {
+  // The signature covers the parent and the position too, so a rename that
+  // dropped them would move the folder to the root as a side effect.
+  const written = [];
+  const created = [];
+  const { component } = browser({
+    api: {
+      listFolders: async () => [
+        {
+          uuid: 'f-1',
+          vault: VAULT_UUID,
+          parent: 'f-parent',
+          position: 3,
+          encrypted_name: 'ct',
+          metadata_sig: 'sig',
+        },
+      ],
+      updateFolder: async (uuid, body) => { written.push([uuid, body]); return body; },
+      createFolder: async (body) => { created.push(body); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.renameFolder(component.folders[0]);
+  assert.equal(component.folderDraft.existing, true);
+  component.folderDraft.name = 'Bills';
+  await component.saveFolder();
+  assert.equal(created.length, 0, 'a rename must not create a second folder');
+  assert.equal(written.length, 1);
+  assert.equal(written[0][0], 'f-1');
+  assert.equal(written[0][1].parent, 'f-parent');
+  assert.equal(written[0][1].position, 3);
+});
+
+test('a new folder is still created rather than updated', async () => {
+  const written = [];
+  const created = [];
+  const { component } = browser({
+    api: {
+      updateFolder: async (uuid, body) => { written.push(body); return body; },
+      createFolder: async (body) => { created.push(body); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.newFolder();
+  component.folderDraft.name = 'Travel';
+  await component.saveFolder();
+  assert.equal(written.length, 0);
+  assert.equal(created.length, 1);
 });

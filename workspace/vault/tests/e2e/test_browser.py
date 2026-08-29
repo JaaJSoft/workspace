@@ -140,7 +140,9 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.click("button[aria-label='Copy the password']")
         self.page.wait_for_selector("text=Password copied", timeout=10000)
 
-        self.page.get_by_role("button", name="Lock", exact=True).click()
+        # Not exact: drawer_item renders the countdown as a badge inside the
+        # row, so the accessible name carries it too.
+        self.page.get_by_role("button", name="Lock").first.click()
         self.page.wait_for_selector("input[autocomplete='current-password']")
         # A secret on the clipboard outlives the keys that opened it, so the
         # lock takes it back rather than leaving it for the next person here.
@@ -183,3 +185,27 @@ class VaultBrowserTests(PlaywrightTestCase):
 
         self.page.get_by_role("button", name="All entries").first.click()
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=10000)
+
+    def test_a_folder_is_created_renamed_and_deleted_from_its_menu(self):
+        """The folder row's menu, end to end. A rename re-signs the whole
+        record, so only a real browser proves the server accepts what the page
+        produced - a JS test asserts the call, not the signature."""
+        self._open_vault()
+        self.page.get_by_role("button", name="New", exact=True).click()
+        # .first: the file picker dialog, mounted by the shared layout, carries
+        # a "New folder" button of its own.
+        self.page.get_by_role("button", name="New folder").first.click()
+        self.page.fill(".modal-box input[type=text]", "Banking")
+        self.page.click(".modal-box button:has-text('Create')")
+        self.page.wait_for_selector("tbody tr:has-text('Banking')", timeout=30000)
+
+        self.page.locator("tbody tr", has_text="Banking").click(button="right")
+        self.page.locator("#folder-context-menu").get_by_text("Rename").click()
+        self.page.fill(".modal-box input[type=text]", "Money")
+        self.page.click(".modal-box button:has-text('Rename')")
+        self.page.wait_for_selector("tbody tr:has-text('Money')", timeout=30000)
+        self.assertEqual(
+            self.page.locator("tbody tr", has_text="Banking").count(),
+            0,
+            "the folder was renamed, not duplicated",
+        )

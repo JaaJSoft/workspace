@@ -37,6 +37,7 @@ window.vaultStore = function vaultStore() {
     sortField: 'default',
     sortDir: 'asc',
     viewMode: 'list',
+    tileSize: 3,
 
     selected: [],
 

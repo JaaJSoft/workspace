@@ -72,7 +72,11 @@
     </thead>
     <tbody>
       <template x-for="folder in visibleFolders()" :key="folder.uuid">
-        <tr class="hover cursor-pointer" @click="openFolderFromRow(folder)">
+        <tr
+          class="hover cursor-pointer"
+          @click="openFolderFromRow(folder)"
+          @contextmenu.stop="openFolderMenu($event, folder)"
+        >
           <td></td>
           <td>
             <i data-lucide="folder" class="w-5 h-5 text-warning"></i>
@@ -89,12 +93,11 @@
           <td @click.stop>
             <button
               type="button"
-              class="btn btn-ghost btn-xs btn-square text-error"
-              :disabled="busy"
-              @click="deleteFolder(folder)"
-              :aria-label="'Delete the folder ' + folder.name"
+              class="btn btn-ghost btn-xs btn-square"
+              :aria-label="'Actions for ' + folder.name"
+              @click="openFolderMenu($event, folder)"
             >
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              <i data-lucide="more-horizontal" class="w-4 h-4"></i>
             </button>
           </td>
         </tr>
@@ -105,7 +108,7 @@
           class="hover cursor-pointer"
           :class="[isSelected(entry.uuid) ? 'bg-primary/5' : '', panelEntry === entry ? 'bg-primary/10' : '']"
           @click="openEntryFromRow(entry)"
-          @contextmenu="openMenu($event, entry)"
+          @contextmenu.stop="openMenu($event, entry)"
         >
           <td @click.stop>
             <input
@@ -160,46 +163,7 @@
     </tbody>
   </table>
 
-  <div
-    class="grid gap-3 p-2 grid-cols-[repeat(auto-fill,minmax(170px,1fr))]"
-    x-show="viewMode === 'mosaic' && !isEmpty()"
-    x-cloak
-  >
-    <template x-for="folder in visibleFolders()" :key="folder.uuid">
-      <div
-        class="card bg-base-100 border border-base-300 hover:border-warning cursor-pointer"
-        @click="openFolderFromRow(folder)"
-      >
-        <div class="card-body p-3 items-center gap-2">
-          <i data-lucide="folder" class="w-8 h-8 text-warning"></i>
-          <span
-            class="text-sm font-medium truncate w-full text-center"
-            x-text="folder.name"
-          ></span>
-        </div>
-      </div>
-    </template>
-    <template x-for="entry in visibleEntries()" :key="entry.uuid">
-      <div
-        class="card bg-base-100 border cursor-pointer"
-        :class="panelEntry === entry ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-error'"
-        @click="openEntryFromRow(entry)"
-        @contextmenu="openMenu($event, entry)"
-      >
-        <div class="card-body p-3 items-center gap-2">
-          <i :data-lucide="typeIcon(entry.type)" class="w-8 h-8 text-error"></i>
-          <span
-            class="text-sm font-medium truncate w-full text-center"
-            x-text="entry.name"
-          ></span>
-          <span
-            class="text-xs opacity-50 truncate w-full text-center"
-            x-text="entry.username"
-          ></span>
-        </div>
-      </div>
-    </template>
-  </div>
+  {% include "vault/ui/partials/browser_mosaic.html" %}
 </div>
 
 {% comment %}

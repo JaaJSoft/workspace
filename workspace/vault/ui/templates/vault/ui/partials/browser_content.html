@@ -6,7 +6,15 @@
   by entering it, an entry by opening the panel. A row that did both would
   make every attempt to pick a second row navigate away from the first.
 {% endcomment %}
-<div class="flex-1 overflow-auto px-2 pt-2 min-h-0">
+{% comment %}
+  The right-click lands here when it misses a row: the rows stop the event
+  themselves, so reaching this handler means the click was on empty space.
+{% endcomment %}
+<div
+  id="entry-list-pane"
+  class="flex-1 overflow-auto px-2 pt-2 min-h-0"
+  @contextmenu="openBackgroundMenu($event)"
+>
   <template x-if="isEmpty() && !filtering()">
     <div
       class="flex flex-col items-center justify-center h-full gap-3 text-base-content/40 py-16"

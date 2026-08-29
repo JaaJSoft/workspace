@@ -93,7 +93,9 @@ class VaultBrowserTests(PlaywrightTestCase):
         # get_by_role with exact=True: the navbar carries a "What's new"
         # control, and a substring match reaches it first.
         self.page.get_by_role("button", name="New", exact=True).click()
-        self.page.get_by_text("New login").click()
+        # .first: the same rows are offered by the listing's own context menu,
+        # which is in the DOM whether or not it is on screen.
+        self.page.get_by_role("button", name="New login").first.click()
         self.page.wait_for_selector(".modal-box input[type=text]")
         self.page.fill(".modal-box input[type=text] >> nth=0", name)
         self.page.fill(".modal-box input[type=text] >> nth=1", username)
@@ -208,4 +210,26 @@ class VaultBrowserTests(PlaywrightTestCase):
             self.page.locator("tbody tr", has_text="Banking").count(),
             0,
             "the folder was renamed, not duplicated",
+        )
+
+    def test_the_empty_space_offers_the_listing_its_own_menu(self):
+        """Right-clicking a row and right-clicking beside it are two different
+        questions. Only a browser settles which one gets answered: the row's
+        handler and the pane's are the same event travelling up."""
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+
+        self.page.locator("#entry-list-pane").click(
+            button="right", position={"x": 400, "y": 400}
+        )
+        menu = self.page.locator("#entry-listing-menu")
+        menu.get_by_text("New folder").wait_for(timeout=5000)
+        menu.get_by_text("Select all").click()
+        self.page.wait_for_selector("text=1 selected", timeout=10000)
+
+        self.page.locator("tbody tr", has_text="GitHub").click(button="right")
+        self.page.locator("#entry-context-menu").wait_for(timeout=5000)
+        self.assertFalse(
+            self.page.locator("#entry-listing-menu").is_visible(),
+            "a right-click on a row must not raise the listing's menu",
         )

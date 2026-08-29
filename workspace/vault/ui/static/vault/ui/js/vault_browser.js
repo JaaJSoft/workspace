@@ -128,6 +128,10 @@ window.vaultBrowser = (function () {
       // a role floor. A folder carries none: whoever can open the vault can
       // write any folder in it, so there is nothing to ask.
       folderMenu: { open: false, folder: null, x: 0, y: 0 },
+      // The menu the empty space carries. It addresses the listing rather
+      // than a row, so the endpoint has nothing to say about it either:
+      // creating an entry is not something done to an existing one.
+      backgroundMenu: { open: false, x: 0, y: 0 },
       // Only the newest opening may write its answer; see openMenu.
       menuGeneration: 0,
 
@@ -394,8 +398,24 @@ window.vaultBrowser = (function () {
         this.folderMenu = { open: false, folder: null, x: 0, y: 0 };
       },
 
+      openBackgroundMenu: function (event) {
+        if (event && event.preventDefault) event.preventDefault();
+        this.closeMenu();
+        this.backgroundMenu = {
+          open: true,
+          x: (event && event.clientX) || 0,
+          y: (event && event.clientY) || 0,
+        };
+        window.vaultMenu.fit(this, 'entry-listing-menu', 'backgroundMenu');
+      },
+
+      closeBackgroundMenu: function () {
+        this.backgroundMenu = { open: false, x: 0, y: 0 };
+      },
+
       closeMenu: function () {
         this.folderMenu = { open: false, folder: null, x: 0, y: 0 };
+        this.backgroundMenu = { open: false, x: 0, y: 0 };
         // The generation moves too: a request in flight for the menu just
         // closed must not reopen anything when it lands.
         this.menuGeneration += 1;

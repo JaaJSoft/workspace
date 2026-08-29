@@ -1,0 +1,9 @@
+{% comment %}
+  The menu the empty space carries: it addresses the listing, not a row, so
+  the action endpoint has nothing to say about it - creating an entry is not
+  something done to an existing one. Its rows are the New menu's, because a
+  second way to create must offer the same things as the first.
+
+  Nothing is created in the trash, so there the menu is the selection alone.
+{% endcomment %}
+{% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/browser_listing_menu_items.html" open="backgroundMenu.open" close="closeBackgroundMenu()" x="backgroundMenu.x" y="backgroundMenu.y" id="entry-listing-menu" width="w-52" %}

@@ -286,3 +286,21 @@ test('an empty listing is never "all selected"', () => {
   s.search = 'nothing matches this';
   assert.equal(s.selectAllState(), 'none');
 });
+
+test('select all takes what is on screen, and leaves the rest of the vault alone', () => {
+  // The listing menu offers it against a filtered view, so "all" has to mean
+  // the rows the user can see - and it must not drop a selection made in
+  // another view on the way.
+  const s = store();
+  s.setData({
+    entries: [
+      { uuid: 'e-1', name: 'GitHub', folder: null, tags: [], deleted_at: null },
+      { uuid: 'e-2', name: 'Gitlab', folder: null, tags: [], deleted_at: null },
+      { uuid: 'e-3', name: 'Bank', folder: null, tags: [], deleted_at: null },
+    ],
+  });
+  s.selected = ['e-3'];
+  s.search = 'git';
+  s.selectAll();
+  assert.deepStrictEqual(Array.from(s.selected).sort(), ['e-1', 'e-2', 'e-3']);
+});

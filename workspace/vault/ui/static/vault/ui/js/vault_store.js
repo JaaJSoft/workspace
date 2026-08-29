@@ -261,6 +261,15 @@ window.vaultStore = function vaultStore() {
       return picked === rows.length ? 'all' : 'partial';
     },
 
+    selectAll() {
+      this.selected = [
+        ...new Set([
+          ...this.selected,
+          ...this.visibleEntries().map((entry) => entry.uuid),
+        ]),
+      ];
+    },
+
     toggleSelectAll() {
       const uuids = this.visibleEntries().map((entry) => entry.uuid);
       this.selected =

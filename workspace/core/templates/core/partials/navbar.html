@@ -6,7 +6,7 @@
   >
     <!-- Brand, or the module switcher when the page belongs to a module -->
     <div class="flex-1">
-      {% if workspace_current_module %}
+      {% if user.is_authenticated %}
         {% with module=workspace_current_module %}
           <div
             id="module-switcher"
@@ -15,22 +15,35 @@
             @keydown.escape.prevent="document.activeElement.blur()"
             @keydown.window="if ($event.altKey && $event.key.toLowerCase() === 'm') { $event.preventDefault(); $el.querySelector('label').focus(); }"
           >
-            <label
-              tabindex="0"
-              class="btn btn-ghost normal-case flex-nowrap gap-2 px-2 cursor-pointer hover:bg-{{ module.color }}/10 transition-all"
-              title="Switch module (Alt+M)"
-              aria-label="Switch module, currently {{ module.name }}"
-            >
-              <span
-                class="w-8 h-8 shrink-0 rounded-lg bg-{{ module.color }}/10 text-{{ module.color }} flex items-center justify-center"
+            {% if module %}
+              <label
+                tabindex="0"
+                class="btn btn-ghost normal-case flex-nowrap gap-2 px-2 cursor-pointer hover:bg-{{ module.color }}/10 transition-all"
+                title="Switch module (Alt+M)"
+                aria-label="Switch module, currently {{ module.name }}"
               >
-                <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
-              </span>
-              <span
-                class="hidden lg:inline whitespace-nowrap text-base font-semibold text-base-content"
-              >{{ module.name }}</span>
-              <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-base-content/60"></i>
-            </label>
+                <span
+                  class="w-8 h-8 shrink-0 rounded-lg bg-{{ module.color }}/10 text-{{ module.color }} flex items-center justify-center"
+                >
+                  <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
+                </span>
+                <span
+                  class="hidden lg:inline whitespace-nowrap text-base font-semibold text-base-content"
+                >{{ module.name }}</span>
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-base-content/60"></i>
+              </label>
+            {% else %}
+              <label
+                id="navbar-brand"
+                tabindex="0"
+                class="btn btn-ghost normal-case flex-nowrap gap-2 cursor-pointer hover:bg-primary/10 transition-all"
+                title="Switch module (Alt+M)"
+                aria-label="Switch module"
+              >
+                {% include 'ui/partials/app_logo.html' with size='sm' %}
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-base-content/60"></i>
+              </label>
+            {% endif %}
             <div
               tabindex="0"
               class="dropdown-content mt-3 z-[100] p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-[16.5rem]"
@@ -47,7 +60,8 @@
               >
                 <a
                   href="/"
-                  class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-base-200 transition-colors"
+                  class="flex flex-col items-center gap-1 p-2 rounded-lg transition-colors {% if request.path == '/' %}bg-base-200{% else %}hover:bg-base-200{% endif %}"
+                  {% if request.path == '/' %}aria-current="page"{% endif %}
                 >
                   <span
                     class="w-9 h-9 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center"
@@ -59,8 +73,8 @@
                 {% for m in workspace_switcher_modules %}
                   <a
                     href="{{ m.url }}"
-                    class="flex flex-col items-center gap-1 p-2 rounded-lg transition-colors {% if m.slug == module.slug %}bg-base-200{% else %}hover:bg-base-200{% endif %}"
-                    {% if m.slug == module.slug %}aria-current="page"{% endif %}
+                    class="flex flex-col items-center gap-1 p-2 rounded-lg transition-colors {% if module and m.slug == module.slug %}bg-base-200{% else %}hover:bg-base-200{% endif %}"
+                    {% if module and m.slug == module.slug %}aria-current="page"{% endif %}
                   >
                     <span
                       class="relative w-9 h-9 rounded-lg bg-{{ m.color }}/10 text-{{ m.color }} flex items-center justify-center"

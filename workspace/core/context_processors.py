@@ -36,10 +36,10 @@ def workspace_modules(request):
     modules = visible_modules(request.user)
     current = current_module(modules, request.path)
     # Rendered with the page (no fetch on open); lazy so the unread-badge
-    # query only runs when a template actually iterates the switcher, not on
-    # every render under a module path (fragment endpoints included).
+    # query only runs when a template actually iterates the switcher, never
+    # on a fragment render that draws no navbar.
     switcher_modules = []
-    if current and request.user.is_authenticated:
+    if request.user.is_authenticated:
         switcher_modules = SimpleLazyObject(
             lambda: switcher_modules_for(request.user, current)
         )

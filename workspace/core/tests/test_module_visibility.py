@@ -264,7 +264,9 @@ class ContextProcessorVisibilityTests(TestCase):
 
         ctx = self._ctx(self.normal)
         self.assertIsNone(ctx["workspace_current_module"])
-        self.assertEqual(ctx["workspace_switcher_modules"], [])
+        self.assertEqual(
+            [m["slug"] for m in ctx["workspace_switcher_modules"]], ["files"]
+        )
 
     @patch("workspace.core.context_processors.registry")
     @patch("workspace.core.services.module_visibility.registry")

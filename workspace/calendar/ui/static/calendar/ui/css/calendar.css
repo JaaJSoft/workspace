@@ -117,6 +117,22 @@
 .fc .fc-event.event-color-warning { background-color: oklch(var(--wa)); color: oklch(var(--wac)); }
 .fc .fc-event.event-color-error { background-color: oklch(var(--er)); color: oklch(var(--erc)); }
 
+/* Inline icons next to an event title (task marker, recurring marker).
+   A box exactly one line tall, aligned to the top of the line box, centres
+   the icon on the line regardless of the font's ascent/descent split -
+   vertical-align on the SVG itself sits on the x-height and reads low. */
+.fc .fc-event-icon {
+  display: inline-flex;
+  align-items: center;
+  height: 1.5em; /* the title line-height, for browsers without lh */
+  height: 1lh;
+  vertical-align: top;
+  opacity: 0.7;
+}
+.fc .fc-event-icon svg { display: block; }
+.fc .fc-event-icon-leading { margin-right: 3px; }
+.fc .fc-event-icon-trailing { margin-left: 3px; }
+
 /* Task due dates: outlined, never filled, so a deadline reads as an
    annotation on the day rather than as a block of booked time. */
 .fc .fc-event.event-task {

@@ -13,11 +13,12 @@
             class="dropdown leading-[0]"
             x-data
             @keydown.escape.prevent="document.activeElement.blur()"
+            @keydown.window="if ($event.altKey && $event.key.toLowerCase() === 'm') { $event.preventDefault(); $el.querySelector('label').focus(); }"
           >
             <label
               tabindex="0"
               class="btn btn-ghost normal-case flex-nowrap gap-2 px-2 cursor-pointer hover:bg-{{ module.color }}/10 transition-all"
-              title="Switch module"
+              title="Switch module (Alt+M)"
               aria-label="Switch module, currently {{ module.name }}"
             >
               <span

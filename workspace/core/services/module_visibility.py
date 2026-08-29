@@ -47,6 +47,10 @@ def current_module(modules, path):
     (``/files/abc``), never on a mere string prefix (``/filesystem``). The
     dashboard lives at ``/`` and would match every path, so it is never
     current: the home page and the pages outside any module both yield None.
+
+    First match wins: *modules* is walked in registry order, so a module
+    registered under another module's url prefix must come first in the
+    registry to ever become current.
     """
     for module in modules:
         url = module.url

@@ -9,6 +9,7 @@ from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
 from workspace.core.module_registry import ModuleInfo, registry
+from workspace.dashboard.services.modules import dashboard_modules, switcher_modules_for
 from workspace.dashboard.views import (
     ACTIVITY_LIMIT,
     _build_dashboard_context,
@@ -330,6 +331,79 @@ class BuildDashboardContextTests(TestCase):
         self.assertFalse(context["show_my_tasks"])
         self.assertFalse(context["my_tasks_available"])
         mock_module_visible.assert_called_once_with(self.user, "projects")
+
+
+# ── switcher_modules_for ────────────────────────────────────────
+
+
+class SwitcherModulesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="switcheruser",
+            email="switcher@test.com",
+            password="pass123",
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_current_module_off_the_dashboard_is_appended(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [
+            _mod("files"),
+            _mod("imports", show_on_dashboard=False),
+        ]
+        mock_badges.return_value = {}
+
+        switcher = switcher_modules_for(
+            self.user, _mod("imports", show_on_dashboard=False)
+        )
+
+        imports_tile = next(m for m in switcher if m["slug"] == "imports")
+        self.assertEqual(imports_tile["notification_count"], 0)
+        self.assertEqual(imports_tile["url"], "/imports")
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_current_module_hidden_by_preference_is_appended(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_badges.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+
+        switcher = switcher_modules_for(self.user, _mod("mail"))
+
+        self.assertIn("mail", [m["slug"] for m in switcher])
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_switcher_tile_links_to_the_module_home_not_a_single_unread_item(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [_mod("chat")]
+        mock_badges.return_value = {"chat": {"count": 1, "url": "/chat/abc"}}
+
+        dashboard_grid, _ = dashboard_modules(self.user)
+        self.assertEqual(dashboard_grid[0]["url"], "/chat/abc")
+
+        switcher = switcher_modules_for(self.user, _mod("chat"))
+        self.assertEqual(switcher[0]["url"], "/chat")
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_current_module_already_in_the_grid_is_not_duplicated(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [_mod("files")]
+        mock_badges.return_value = {}
+
+        switcher = switcher_modules_for(self.user, _mod("files"))
+
+        self.assertEqual(len(switcher), 1)
 
 
 # ── _get_activity_context ───────────────────────────────────────

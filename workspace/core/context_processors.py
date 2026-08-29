@@ -1,6 +1,7 @@
 from dataclasses import asdict
 
 from django.conf import settings
+from django.utils.functional import SimpleLazyObject
 
 from workspace.core.changelog import get_latest_version
 from workspace.core.module_registry import registry
@@ -14,7 +15,7 @@ from workspace.core.setting_keys import (
     MODULE,
     ONBOARDING_COMPLETED,
 )
-from workspace.dashboard.services.modules import dashboard_modules
+from workspace.dashboard.services.modules import switcher_modules_for
 from workspace.users.services.settings import get_module_settings
 
 
@@ -34,11 +35,14 @@ def workspace_modules(request):
 
     modules = visible_modules(request.user)
     current = current_module(modules, request.path)
-    # Rendered with the page (no fetch on open); only pages inside a module
-    # show the switcher, so only they pay the unread-badge query.
+    # Rendered with the page (no fetch on open); lazy so the unread-badge
+    # query only runs when a template actually iterates the switcher, not on
+    # every render under a module path (fragment endpoints included).
     switcher_modules = []
     if current and request.user.is_authenticated:
-        switcher_modules, _ = dashboard_modules(request.user)
+        switcher_modules = SimpleLazyObject(
+            lambda: switcher_modules_for(request.user, current)
+        )
     return {
         "workspace_active_modules": [asdict(m) for m in modules],
         "workspace_current_module": asdict(current) if current else None,

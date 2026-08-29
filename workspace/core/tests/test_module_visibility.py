@@ -2,7 +2,10 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.core.cache import cache
+from django.db import connection
 from django.test import RequestFactory, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 
 from workspace.core.context_processors import workspace_modules
 from workspace.core.module_registry import CommandInfo, ModuleInfo
@@ -195,6 +198,9 @@ class ContextProcessorVisibilityTests(TestCase):
             username="cs", password="x", is_staff=True
         )
 
+    def tearDown(self):
+        cache.clear()
+
     def _ctx(self, user):
         request = self.factory.get("/")
         request.user = user
@@ -259,3 +265,32 @@ class ContextProcessorVisibilityTests(TestCase):
         ctx = self._ctx(self.normal)
         self.assertIsNone(ctx["workspace_current_module"])
         self.assertEqual(ctx["workspace_switcher_modules"], [])
+
+    @patch("workspace.core.context_processors.registry")
+    @patch("workspace.core.services.module_visibility.registry")
+    def test_switcher_modules_are_resolved_lazily(self, svc_registry, cp_registry):
+        mods = [_module("files"), _module("notes")]
+        cp_registry.get_active.return_value = mods
+        cp_registry.get_active_commands.return_value = []
+        svc_registry.get_active.return_value = mods
+
+        request = self.factory.get("/notes/some-note")
+        request.user = self.normal
+
+        with CaptureQueriesContext(connection) as capture:
+            ctx = workspace_modules(request)
+        self.assertFalse(
+            any(
+                "notifications_notification" in q["sql"]
+                for q in capture.captured_queries
+            )
+        )
+
+        with CaptureQueriesContext(connection) as capture:
+            list(ctx["workspace_switcher_modules"])
+        self.assertTrue(
+            any(
+                "notifications_notification" in q["sql"]
+                for q in capture.captured_queries
+            )
+        )

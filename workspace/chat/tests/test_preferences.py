@@ -3,7 +3,7 @@
 The preferences themselves are persisted through the generic
 ``/api/v1/settings/<module>/<key>`` endpoint, which is exercised below to
 confirm the chat module name and key are wired end-to-end. The chat index
-page is also rendered to verify the preferences UI (script, popover,
+page is also rendered to verify the preferences UI (script, dropdown,
 dialog) is present.
 """
 

@@ -84,39 +84,14 @@ be defined before the parser reaches the markup using it, or server-rendered
            'transition-all duration-300': sidebarMounted,
          }"
     >
-      <!-- Sidebar header -->
-      <div class="border-b border-base-300 py-4 px-3 relative">
-        <div
-          class="flex items-center"
-          :class="collapsed ? 'justify-center' : 'justify-between'"
-        >
-          <h2
-            class="text-xl font-semibold flex items-center gap-2"
-            :class="collapsed ? '' : 'pl-2'"
-          >
-            <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
-            <span x-show="!collapsed" x-transition>Chat</span>
-          </h2>
-          <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
-            {% include "ui/partials/preferences_popover.html" with component="chatPreferences()" content="chat/ui/partials/_preferences_content.html" accent="text-info" button_class="hover:text-info" close_on_event="chat-run-diagnostic" %}
-            {% if ai_enabled %}
-              <button
-                class="btn btn-ghost btn-sm btn-square hover:text-secondary"
-                @click="botFilter = ''; showBotPicker = true"
-                title="New AI Chat"
-              >
-                <i data-lucide="sparkles" class="w-4 h-4"></i>
-              </button>
-            {% endif %}
-            <button
-              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-info"
-              @click="showNewConversationDialog()"
-              title="New conversation (Alt+N)"
-            >
-              <i data-lucide="plus" class="w-4 h-4"></i>
-            </button>
-          </div>
-        </div>
+      <!-- Primary actions -->
+      <div class="px-3 pt-4 pb-2">
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon="plus" label="New conversation" color="info" onclick="showNewConversationDialog()" title_binding="'New conversation (Alt+N)'" aria_label="New conversation" %}
+          {% if ai_enabled %}
+            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="New AI chat" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI chat" %}
+          {% endif %}
+        </ul>
       </div>
 
       <!-- Search + conversation list (shared convSearch scope) -->
@@ -160,16 +135,6 @@ be defined before the parser reaches the markup using it, or server-rendered
         <div class="flex-1 overflow-y-auto py-4 px-3" x-cloak="invisible">
           {% include "chat/ui/partials/conversation_list.html" %}
         </div>
-      </div>
-
-      <!-- New chat buttons (visible when collapsed) -->
-      <div class="px-3 pb-2" x-show="collapsed" x-cloak>
-        <ul class="menu p-0">
-          {% if ai_enabled %}
-            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" %}
-          {% endif %}
-          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="info" onclick="showNewConversationDialog()" tooltip="New chat" %}
-        </ul>
       </div>
 
       <!-- Passive call banner. The call itself lives in the dedicated room tab;
@@ -226,15 +191,7 @@ be defined before the parser reaches the markup using it, or server-rendered
         </ul>
       </div>
 
-      <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
-      <div class="border-t border-base-300 py-4 px-3">
-        <ul class="menu p-0 hidden lg:block">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
-        </ul>
-        <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
-        </ul>
-      </div>
+      {% include "ui/partials/sidebar_footer.html" with color="info" prefs_dialog_id="chat-prefs-dialog" prefs_template="chat/ui/partials/_preferences_content.html" prefs_data="chatPreferences()" %}
     </aside>
   </div>
 

@@ -149,7 +149,7 @@ be defined before the parser reaches the markup using it, or server-rendered
         {% comment %}The cloak wrapper stays outside the #conversation-list swap
       target so alpine-ajax refreshes never re-hide the list; "invisible" keeps
         its space reserved while Alpine boots.{% endcomment %}
-        <div class="flex-1 overflow-y-auto py-4 px-3" x-cloak="invisible">
+        <div class="flex-1 overflow-y-auto pt-2 pb-4 px-3" x-cloak="invisible">
           {% include "chat/ui/partials/conversation_list.html" %}
         </div>
       </div>

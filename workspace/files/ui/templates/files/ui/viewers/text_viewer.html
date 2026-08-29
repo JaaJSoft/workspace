@@ -1,3 +1,4 @@
+{% load static %}
 <!-- Monaco DaisyUI theme bridge — overrides inline styles via !important -->
 <style>
   .monaco-editor,
@@ -267,6 +268,7 @@
 <script>
   window.textViewerMonaco = function() {
     // Keep complex objects OUT of Alpine's reactive scope
+    let _monaco = null;
     let _editor = null;
     let _themeObserver = null;
     let _prefsSaveTimer = null;
@@ -274,6 +276,22 @@
     let _aiPollTimer = null;
 
     const PREFS_URL = '/api/v1/settings/files/editor';
+    const MONACO_URL = '{% static "files/ui/js/vendor/monaco/monaco-editor.js" %}';
+    const MONACO_CSS_URL = '{% static "files/ui/css/vendor/monaco/editor.css" %}';
+    const MONACO_EDITOR_WORKER_URL = '{% static "files/ui/js/vendor/monaco/editor.worker.js" %}';
+    // One worker build per language service; every other language runs on the
+    // generic editor worker.
+    const MONACO_LANGUAGE_WORKER_URLS = {
+      json: '{% static "files/ui/js/vendor/monaco/json.worker.js" %}',
+      css: '{% static "files/ui/js/vendor/monaco/css.worker.js" %}',
+      scss: '{% static "files/ui/js/vendor/monaco/css.worker.js" %}',
+      less: '{% static "files/ui/js/vendor/monaco/css.worker.js" %}',
+      html: '{% static "files/ui/js/vendor/monaco/html.worker.js" %}',
+      handlebars: '{% static "files/ui/js/vendor/monaco/html.worker.js" %}',
+      razor: '{% static "files/ui/js/vendor/monaco/html.worker.js" %}',
+      typescript: '{% static "files/ui/js/vendor/monaco/ts.worker.js" %}',
+      javascript: '{% static "files/ui/js/vendor/monaco/ts.worker.js" %}',
+    };
     const PREFS_DEFAULTS = {
       wordWrap: true,
       minimap: true,
@@ -306,6 +324,26 @@
       }, 500);
     }
 
+    // The stylesheet and the worker map are page-wide and survive the viewer:
+    // the browser caches the module, so a second file opens without a fetch.
+    function _loadMonaco() {
+      if (!document.getElementById('monaco-editor-css')) {
+        const link = document.createElement('link');
+        link.id = 'monaco-editor-css';
+        link.rel = 'stylesheet';
+        link.href = MONACO_CSS_URL;
+        document.head.appendChild(link);
+      }
+      if (!window.MonacoEnvironment) {
+        window.MonacoEnvironment = {
+          getWorkerUrl: function(_moduleId, label) {
+            return MONACO_LANGUAGE_WORKER_URLS[label] || MONACO_EDITOR_WORKER_URL;
+          }
+        };
+      }
+      return import(MONACO_URL);
+    }
+
     function _detectTheme() {
       const dt = (document.documentElement.getAttribute('data-theme') || '').toLowerCase();
       const dark = ['dark', 'dracula', 'night', 'sunset', 'dim', 'black', 'luxury', 'halloween', 'forest', 'coffee', 'business', 'synthwave'];
@@ -318,7 +356,7 @@
       _editor.onDidChangeModelContent(function() {
         self.isDirty = _editor.getValue() !== self.originalContent;
       });
-      _editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+      _editor.addCommand(_monaco.KeyMod.CtrlCmd | _monaco.KeyCode.KeyS, function() {
         self.save();
       });
     }
@@ -374,27 +412,8 @@
       _createEditor(container, content, language) {
         const self = this;
 
-        if (!window._monacoConfigured) {
-          require.config({
-            paths: {
-              vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'
-            }
-          });
-          window._monacoConfigured = true;
-        }
-
-        require(['vs/editor/editor.main'], function() {
-          if (!window.MonacoEnvironment) {
-            window.MonacoEnvironment = {
-              getWorkerUrl: function() {
-                return 'data:text/javascript;charset=utf-8,' + encodeURIComponent(
-                  'self.MonacoEnvironment = { baseUrl: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/" };' +
-                  'importScripts("https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/base/worker/workerMain.js");'
-                );
-              }
-            };
-          }
-
+        _loadMonaco().then(function(monaco) {
+          _monaco = monaco;
           _editor = monaco.editor.create(container, {
             value: content,
             language: language,

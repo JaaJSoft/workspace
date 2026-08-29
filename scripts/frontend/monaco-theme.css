@@ -1,0 +1,5 @@
+/* Stylesheet entry for the vendored Monaco editor. Bundled by esbuild into
+   files/ui/static/files/ui/css/vendor/monaco/editor.css together with the
+   codicon icon font it references, so the text viewer loads nothing from a
+   CDN. The DaisyUI bridge stays inline in the text viewer template. */
+@import "monaco-editor/min/vs/editor/editor.main.css";

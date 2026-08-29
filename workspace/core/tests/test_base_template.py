@@ -59,36 +59,20 @@ def _base_template_source() -> str:
 
 
 class BaseTemplateScriptOriginTests(TestCase):
-    """Alpine must never be served from a third-party CDN.
+    """Alpine and Lucide come from the vendored builds.
 
     Alpine evaluates every component expression, and its reactive state holds
     decrypted vault entries on the ``vault`` pages: a tampered third-party
-    build would exfiltrate the whole vault.
+    build would exfiltrate the whole vault. Lucide runs on every page and draws
+    into the DOM, so it has the same reach. ``test_asset_origins`` walks every
+    template for CDN hosts; these pin the positive half for the shell.
     """
-
-    def test_alpine_core_is_not_loaded_from_a_cdn(self):
-        self.assertNotIn("cdn.jsdelivr.net/npm/alpinejs", _base_template_source())
-
-    def test_alpine_plugins_are_not_loaded_from_a_cdn(self):
-        source = _base_template_source()
-        self.assertNotIn("cdn.jsdelivr.net/npm/@alpinejs", source)
-        self.assertNotIn("cdn.jsdelivr.net/npm/@imacrayon", source)
 
     def test_alpine_is_loaded_from_the_vendored_bundle(self):
         self.assertIn("ui/js/vendor/alpine/alpine.js", _base_template_source())
 
-    def test_lucide_is_not_loaded_from_a_cdn(self):
-        # Lucide runs on every page and draws into the DOM: a tampered build
-        # has the same reach as a tampered Alpine.
-        self.assertNotIn("unpkg.com", _base_template_source())
-
     def test_lucide_is_loaded_from_the_vendored_artifact(self):
         self.assertIn("ui/js/vendor/lucide/lucide.js", _base_template_source())
-
-    def test_the_favicon_is_served_from_this_origin(self):
-        # fav.farm renders the emoji server-side: every page load would
-        # announce itself to a third party.
-        self.assertNotIn("fav.farm", _base_template_source())
 
     def test_the_vendored_bundle_is_deferred(self):
         # Without `defer`, Alpine would start before stores.js (end of <body>,
@@ -109,12 +93,13 @@ class BaseTemplateScriptOriginTests(TestCase):
 
 
 class StandalonePageOriginTests(TestCase):
-    """The two pages that do not extend ``base.html``.
+    """The offline and error pages do not extend ``base.html``.
 
     The service worker serves ``offline.html`` when the network is gone, so an
     asset it fetches from a CDN is an asset it never gets. ``500.html`` is
     served while the application is already failing, which is no moment to
-    depend on a third party either.
+    depend on a third party either. ``test_asset_origins`` checks both for CDN
+    hosts along with every other template.
     """
 
     def _offline_source(self) -> str:
@@ -122,32 +107,9 @@ class StandalonePageOriginTests(TestCase):
             Path(__file__).resolve().parents[1] / "static" / "offline.html"
         ).read_text(encoding="utf-8")
 
-    def _error_page_source(self) -> str:
-        return Path(get_template("500.html").origin.name).read_text(encoding="utf-8")
-
-    def test_the_offline_page_fetches_nothing_from_a_third_party(self):
-        source = self._offline_source()
-        for host in (
-            "cdn.tailwindcss.com",
-            "cdn.jsdelivr.net",
-            "unpkg.com",
-            "fav.farm",
-        ):
-            self.assertNotIn(host, source)
-
     def test_the_offline_page_styles_itself_from_this_origin(self):
         # app.css already carries both Tailwind and DaisyUI.
         self.assertIn("/static/css/app.css", self._offline_source())
-
-    def test_the_error_page_fetches_nothing_from_a_third_party(self):
-        source = self._error_page_source()
-        for host in (
-            "cdn.tailwindcss.com",
-            "cdn.jsdelivr.net",
-            "unpkg.com",
-            "fav.farm",
-        ):
-            self.assertNotIn(host, source)
 
     def test_the_error_page_renders(self):
         """It is rendered while the application is already broken: a template

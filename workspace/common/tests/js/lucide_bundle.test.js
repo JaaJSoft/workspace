@@ -16,7 +16,7 @@ const MANIFEST = path.join(REPO_ROOT, 'scripts', 'frontend', 'package.json');
 // The published build's SHA-384. Update it - from the npm tarball, never from
 // a browser - in the same commit that bumps the pinned version.
 const PUBLISHED_SHA384 = 'TkyaYJPudUfB9a60ZTQjPXXxBGDxeXJy48PDE1DeZnOdKs/QdAs3pP/B9ApNJIH8';
-// What vendor-lucide.mjs strips, and what the digest above needs back.
+// What vendor-copy.mjs strips, and what the digest above needs back.
 const SOURCE_MAP_COMMENT = '//# sourceMappingURL=lucide.min.js.map\n';
 
 test('the artifact exists and is not empty', () => {

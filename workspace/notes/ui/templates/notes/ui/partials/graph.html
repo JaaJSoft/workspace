@@ -1,3 +1,4 @@
+{% load static %}
 <div class="flex flex-col h-full w-full bg-base-100">
   <!-- Toolbar: controls live here (not floating over the canvas), so the graph
        gets the full area below. Two rows, like the note-list header + filters. -->
@@ -149,9 +150,14 @@
     </div>
   </div>
 
-  <!-- Canvas mount (force-graph draws here, sized to this area by notes.js) -->
+  <!-- Canvas mount (force-graph draws here, sized to this area by notes.js).
+       notes_graph.js imports the vendored force-graph module from the URL below. -->
   <div class="relative flex-1 min-h-0">
-    <div x-ref="graphCanvas" class="absolute inset-0"></div>
+    <div
+      x-ref="graphCanvas"
+      class="absolute inset-0"
+      data-force-graph-url="{% static 'notes/ui/js/vendor/force-graph/force-graph.js' %}"
+    ></div>
     <!-- Loading overlay: shown while the graph module imports force-graph and
          fetches the (scope + filters)-filtered data. Driven by graphLoading,
          toggled through the onLoading callback wired in _openGraph(). -->

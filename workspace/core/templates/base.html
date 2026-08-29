@@ -12,10 +12,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Workspace{% endblock %}</title>
 
-    <!-- Warm up TLS + DNS for jsDelivr. Nothing on this page loads from it;
-       several templates that extend it still do. -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-
     <!-- Tailwind + DaisyUI + Typography - locally built (see scripts/frontend/:
        tailwind.config.js, input.css). Replaces the Tailwind Play
        CDN which shipped a 140KB JIT compiler that re-ran on every page. -->

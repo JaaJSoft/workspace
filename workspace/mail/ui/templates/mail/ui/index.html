@@ -36,42 +36,17 @@
         class="px-3 py-2 border-b border-base-300 flex items-center gap-2"
         :class="collapsed ? 'flex-col' : ''"
       >
-        <div class="dropdown">
-          <button
-            type="button"
-            tabindex="0"
-            class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-warning"
-            title="Accounts"
-            aria-label="Accounts"
-          >
-            <i data-lucide="at-sign" class="w-4 h-4"></i>
-          </button>
-          <ul
-            tabindex="0"
-            class="dropdown-content menu menu-sm z-50 mt-1 w-56 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
-          >
-            <template x-for="account in accounts" :key="account.uuid">
-              <li>
-                <button
-                  type="button"
-                  @click="document.activeElement.blur(); showEditAccount(account)"
-                  :title="account.email"
-                >
-                  <span class="truncate" x-text="account.display_name || account.email"></span>
-                </button>
-              </li>
-            </template>
-            <li :class="accounts.length ? 'border-t border-base-300 mt-1 pt-1' : ''">
-              <button
-                type="button"
-                @click="document.activeElement.blur(); showAddAccount()"
-              >
-                <i data-lucide="mail-plus" class="w-4 h-4"></i>
-                Add account
-              </button>
-            </li>
-          </ul>
-        </div>
+        <button
+          type="button"
+          class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-warning"
+          @click.stop="openAccountsMenu($event)"
+          :aria-expanded="accountsMenu.open"
+          aria-controls="accounts-menu"
+          title="Accounts"
+          aria-label="Accounts"
+        >
+          <i data-lucide="at-sign" class="w-4 h-4"></i>
+        </button>
         <button
           type="button"
           class="btn btn-ghost border border-base-300 bg-base-100 btn-sm gap-1.5 hover:text-warning"
@@ -157,6 +132,9 @@
 
   <!-- Move-messages-to-a-folder dialog (right-click / bulk toolbar) -->
   {% include "mail/ui/partials/move_dialog.html" %}
+
+  <!-- Sidebar accounts menu -->
+  {% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/accounts_menu.html" open="accountsMenu.open" close="accountsMenu.open = false" x="accountsMenu.x" y="accountsMenu.y" width="w-56" id="accounts-menu" %}
 
   <!-- Account context menu -->
   {% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/account_context_menu.html" open="accountCtx.open" close="accountCtx.open = false" x="accountCtx.x" y="accountCtx.y" width="w-44" id="account-context-menu" %}

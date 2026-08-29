@@ -35,6 +35,21 @@ class MailIndexAIFeaturesContextTests(TestCase):
         self.assertTrue(resp.context["mail_ai_features"]["manual"])
 
 
+class MailIndexSidebarTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sidebar", password="pw")
+        self.client.force_login(self.user)
+
+    def test_renders_the_accounts_menu(self):
+        resp = self.client.get(reverse("mail_ui:index"))
+
+        self.assertEqual(resp.status_code, 200)
+        # The sidebar button targets the panel by id through aria-controls.
+        self.assertContains(resp, 'aria-controls="accounts-menu"')
+        self.assertContains(resp, 'id="accounts-menu"')
+        self.assertContains(resp, "Add account")
+
+
 class MailAccountSignatureApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="sig-api", password="x")

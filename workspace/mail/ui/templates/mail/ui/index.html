@@ -31,20 +31,11 @@
       class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14"
       :class="collapsed ? 'w-16' : 'w-72'"
     >
-      <!-- Account actions -->
+      <!-- Compose and the accounts menu -->
       <div
         class="px-3 py-2 border-b border-base-300 flex items-center gap-2"
         :class="collapsed ? 'flex-col' : ''"
       >
-        <button
-          type="button"
-          class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-warning"
-          @click="showAddAccount()"
-          title="Add account"
-          aria-label="Add account"
-        >
-          <i data-lucide="mail-plus" class="w-4 h-4"></i>
-        </button>
         <button
           type="button"
           class="btn btn-ghost border border-base-300 bg-base-100 btn-sm gap-1.5 hover:text-warning"
@@ -56,16 +47,42 @@
           <i data-lucide="square-pen" class="w-4 h-4"></i>
           <span x-show="!collapsed">Compose</span>
         </button>
-        <button
-          type="button"
-          class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-warning"
-          x-show="accounts.length > 0"
-          @click="showEditAccount(accounts.find(a => a.uuid === selectedFolder?.account) || accounts[0])"
-          title="Manage account"
-          aria-label="Manage account"
-        >
-          <i data-lucide="settings" class="w-4 h-4"></i>
-        </button>
+        <div class="dropdown" :class="collapsed ? '' : 'dropdown-end'">
+          <button
+            type="button"
+            tabindex="0"
+            class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-warning"
+            title="Accounts"
+            aria-label="Accounts"
+          >
+            <i data-lucide="at-sign" class="w-4 h-4"></i>
+          </button>
+          <ul
+            tabindex="0"
+            class="dropdown-content menu menu-sm z-50 mt-1 w-56 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
+          >
+            <template x-for="account in accounts" :key="account.uuid">
+              <li>
+                <button
+                  type="button"
+                  @click="document.activeElement.blur(); showEditAccount(account)"
+                  :title="account.email"
+                >
+                  <span class="truncate" x-text="account.display_name || account.email"></span>
+                </button>
+              </li>
+            </template>
+            <li :class="accounts.length ? 'border-t border-base-300 mt-1 pt-1' : ''">
+              <button
+                type="button"
+                @click="document.activeElement.blur(); showAddAccount()"
+              >
+                <i data-lucide="mail-plus" class="w-4 h-4"></i>
+                Add account
+              </button>
+            </li>
+          </ul>
+        </div>
       </div>
 
       <!-- Folder list -->

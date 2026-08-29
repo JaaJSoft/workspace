@@ -9,35 +9,20 @@ Parameters:
                  that decouple the mobile overlay from the stored preference)
 - prefs_dialog_id: id of the module's preferences <dialog>
 - prefs_template: path of the module's preferences content partial
-- prefs_data: optional Alpine factory for the dropdown content; omit when the
+- prefs_data: optional Alpine factory for the panel content; omit when the
               content binds to the page component directly
+- close_on_event: optional window event that also closes the panel (see
+                  ui/partials/preferences_popover.html)
 
-Expanded on desktop, the Preferences row is the trigger of an upward daisyUI
-dropdown (it opens on :focus-within, and the drawer_item button is focusable).
-Collapsed, and on mobile, the row opens the dialog instead: the 16rem panel
-cannot open inside the 4rem rail, whose drawer-side clips overflow.
+Expanded on desktop, the Preferences row is the trigger of the shared
+preferences popover, opening upward over the sidebar (the wrapper is the
+positioned ancestor the panel spans). Collapsed, and on mobile, the row opens
+the dialog instead: the panel cannot fit in the 4rem rail, whose drawer-side
+clips overflow.
 {% endcomment %}
 {% with ce=collapse_expr|default:"collapsed" %}
-  <div class="px-3 pb-4">
-    <div
-      class="dropdown dropdown-top w-full hidden lg:block"
-      x-show="!{{ ce }}"
-      {% if prefs_data %}x-data="{{ prefs_data }}"{% endif %}
-    >
-      <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color=color collapse_expr=ce tooltip="Preferences" %}
-      </ul>
-      <div
-        tabindex="0"
-        class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mb-1 max-h-[70vh] overflow-y-auto"
-      >
-        <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-          <i data-lucide="sliders-horizontal" class="w-4 h-4 text-{{ color }}"></i>
-          Preferences
-        </h4>
-        {% include prefs_template %}
-      </div>
-    </div>
+  <div class="px-3 pb-4 relative">
+    {% include "ui/partials/preferences_popover.html" with component=prefs_data content=prefs_template accent="text-"|add:color placement="above" trigger_class="hidden lg:flex items-center w-full text-left p-2 gap-3 text-base rounded-lg transition-colors text-base-content/70 hover:bg-base-content/5 hover:text-"|add:color trigger_label="Preferences" show_expr="!"|add:ce close_on_event=close_on_event %}
     <ul class="menu p-0 lg:hidden" :class="{{ ce }} ? 'lg:!block' : ''">
       {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color=color collapse_expr=ce onclick="document.getElementById('"|add:prefs_dialog_id|add:"').showModal()" tooltip="Preferences" %}
     </ul>

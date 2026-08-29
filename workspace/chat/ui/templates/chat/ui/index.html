@@ -191,7 +191,7 @@ be defined before the parser reaches the markup using it, or server-rendered
         </ul>
       </div>
 
-      {% include "ui/partials/sidebar_footer.html" with color="info" prefs_dialog_id="chat-prefs-dialog" prefs_template="chat/ui/partials/_preferences_content.html" prefs_data="chatPreferences()" %}
+      {% include "ui/partials/sidebar_footer.html" with color="info" prefs_dialog_id="chat-prefs-dialog" prefs_template="chat/ui/partials/_preferences_content.html" prefs_data="chatPreferences()" close_on_event="chat-run-diagnostic" %}
     </aside>
   </div>
 

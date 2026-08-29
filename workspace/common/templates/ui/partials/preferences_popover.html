@@ -7,10 +7,8 @@ site must therefore be inside a header that carries `relative` and the usual
 `px-3` padding - every module sidebar already looks like that, but a header
 missing `relative` silently anchors the panel to the page instead.
 
-Escape closes the panel and hands focus back to the trigger; a click anywhere
-outside closes it too. Do not reach for daisyUI's `dropdown` here: it opens on
-`:focus-within` alone, which means it opens on Tab and never closes on a second
-click.
+Do not reach for daisyUI's `dropdown` here: it opens on `:focus-within` alone,
+which means it opens on Tab and never closes on a second click.
 
 Required context:
 - content: template path of the panel body, included as-is.

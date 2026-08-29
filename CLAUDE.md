@@ -733,6 +733,37 @@ The failure mode is silent and easy to misread: no console error, and sibling bi
 - Reviewing a mixin: `grep -n "get [a-zA-Z_]*()" workspace/*/ui/static/*/ui/js/*.js` and check each hit is on a root literal.
 - Getters on Alpine **stores** (`Alpine.store(...)`) are safe - stores are registered as objects, not spread.
 
+### `:style` takes an object, never a string, on anything `x-show` also touches
+
+Alpine binds a **string** `:style` by writing the whole `style` attribute, and
+that erases whatever else lives there - including the `display: none` `x-show`
+had just put on the same element. Given an **object** it sets one property at a
+time and leaves the rest alone.
+
+```html
+<!-- ❌ WRONG - the two directives fight over one attribute -->
+<div x-show="menu.open" :style="'left:' + menu.x + 'px; top:' + menu.y + 'px'">
+
+<!-- ✅ Correct - property by property, display untouched -->
+<div x-show="menu.open" :style="{ left: menu.x + 'px', top: menu.y + 'px' }">
+```
+
+The failure is intermittent, which is what makes it expensive: both effects
+re-run when the state they read changes, and only the flush order decides
+whether `x-show`'s `display: none` survives. A hidden element reappears -
+empty, at whatever coordinates it last held - long after the interaction that
+should have closed it. We shipped it on the vault's context menu, where the
+menu stayed on screen at 0,0 with no row behind it.
+
+**Rules:**
+- Any element carrying both `x-show` (or `x-transition`, or `x-collapse`) and
+  `:style` must use the object form. When in doubt, use the object form: it is
+  never wrong.
+- The string form is only safe on an element nothing else styles at runtime.
+- A unit test cannot see this - it is the browser's style attribute. Check it
+  in a real browser by reading `getComputedStyle(el).display` after the state
+  that should have hidden the element.
+
 ### `$root` is a DOM element, not the parent component's data
 
 `$root` resolves to `closestRoot(el)`: the nearest ancestor carrying `x-data`, **including the element's own component root**. Reading a data property off it therefore yields `undefined` whenever the expression sits inside a nested `x-data`, because you are asking a DOM node for a property it doesn't have.

@@ -7,12 +7,18 @@
 
   Positioned with Alpine's :style, which is written through the CSSOM and is
   not what style-src-attr sees; a coordinate cannot be a utility class.
+
+  It MUST be the object form. A string value makes Alpine write the whole
+  style attribute, which erases the `display: none` x-show had just put
+  there - the menu then stays on screen at 0,0 with no row behind it, and
+  only sometimes, because it depends on which of the two effects flushes
+  last. The object form sets one property at a time and leaves display alone.
 {% endcomment %}
 <div
   x-show="menu.open"
   x-cloak
   class="fixed z-50"
-  :style="'left:' + menu.x + 'px; top:' + menu.y + 'px'"
+  :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
   @click.outside="closeMenu()"
 >
   <ul
@@ -24,7 +30,12 @@
     ></li>
     <template x-for="action in menuActions()" :key="action.id">
       <li>
-        <button type="button" class="gap-3" :class="action.css_class">
+        <button
+          type="button"
+          class="gap-3"
+          :class="action.css_class"
+          @click="runAction(action, menu.entry)"
+        >
           <i :data-lucide="action.icon" class="w-4 h-4"></i>
           <span x-text="action.label"></span>
         </button>

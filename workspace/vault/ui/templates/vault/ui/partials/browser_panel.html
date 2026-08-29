@@ -79,6 +79,7 @@
           type="button"
           class="btn btn-sm btn-ghost flex-1 gap-2"
           x-show="panelHasAction('edit')"
+          @click="editEntry(panelEntry)"
         >
           <i data-lucide="pencil" class="w-4 h-4"></i>
           Edit

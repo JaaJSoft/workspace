@@ -69,6 +69,8 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_unlock.js',
       'workspace/vault/ui/static/vault/ui/js/vault_store.js',
       'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
+      'workspace/vault/ui/static/vault/ui/js/entry_write.js',
+      'workspace/vault/ui/static/vault/ui/js/folder_write.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -110,6 +112,7 @@ function browser(options = {}) {
         },
         verifyRecord: async () => {},
         verifyVaultMetadata: async () => {},
+        sign: async () => 'signature',
         ...options.session,
       },
       vaultApi: {
@@ -122,7 +125,11 @@ function browser(options = {}) {
         ...options.api,
       },
       vaultCrypto: {
+        uuidV7: () => 'entry-uuid',
         fromBase64Url: (value) => value,
+        toBase64Url: (value) => 'b64',
+        seal: async () => new Uint8Array(4),
+        KDF_HKDF_SHA256: 0x01,
         open: async (key, ciphertext, ad) => {
           opened.push(ad);
           return new TextEncoder().encode('open:' + ad);
@@ -258,14 +265,6 @@ test('no command means nothing is locked and nothing is pending', () => {
   assert.equal(component.pendingNewEntry, false);
 });
 
-test('the New menu names the type it was asked for', () => {
-  const { component } = browser();
-  component.init();
-  component.newEntry('login');
-  assert.equal(component.pendingNewEntry, true);
-  assert.equal(component.draftType, 'login');
-});
-
 test('a lock drops a creation nobody has confirmed', () => {
   const listeners = [];
   const { component } = browser({ session: { onLock: (cb) => listeners.push(cb) } });
@@ -273,9 +272,9 @@ test('a lock drops a creation nobody has confirmed', () => {
   component.newEntry('login');
   component.newFolder();
   listeners.forEach((callback) => callback());
-  assert.equal(component.pendingNewEntry, false);
-  assert.equal(component.pendingNewFolder, false);
-  assert.equal(component.draftType, null);
+  assert.strictEqual(component.draft, null);
+  assert.strictEqual(component.folderDraft, null);
+  assert.strictEqual(component.pendingNewEntry, false);
 });
 
 test('the collapsed sidebar survives a reload', () => {
@@ -672,4 +671,143 @@ test('the panel says which fields a row carries without opening one', async () =
   assert.equal(component.panelCarries('totp'), false);
   // Knowing a password is there is not holding it: nothing opened it.
   assert.ok(!('password' in component.panelEntry));
+});
+
+// --- the entry form, driven by the type registry ---------------------------
+
+const LOGIN_TYPE = {
+  id: 'login',
+  label: 'Login',
+  icon: 'key-round',
+  fields: [
+    { field_id: 'username', label: 'Username', secret: false, generator: false, kind: 'text' },
+    { field_id: 'password', label: 'Password', secret: true, generator: true, kind: 'text' },
+    { field_id: 'totp', label: 'Authenticator key', secret: true, generator: false, kind: 'totp' },
+    { field_id: 'uri', label: 'Website', secret: false, generator: false, kind: 'text' },
+  ],
+};
+
+function typed(options = {}) {
+  return browser({ data: { 'entry-types': [LOGIN_TYPE] }, ...options });
+}
+
+test('the form renders one input per declared field, minus the authenticator key', () => {
+  // The TOTP field is a shared secret, not a value to type into a box, and
+  // what it needs is the next issue's. Rendering it here would offer to
+  // overwrite one with whatever was typed.
+  const { component } = typed();
+  component.init();
+  component.newEntry('login');
+  assert.deepStrictEqual(
+    Array.from(component.formFields(), (field) => field.field_id),
+    ['username', 'password', 'uri'],
+  );
+});
+
+test('a new entry starts empty, with a fresh uuid and the current folder', async () => {
+  const { component } = typed();
+  component.init();
+  await component.load();
+  component.openFolder('f-1');
+  component.newEntry('login');
+  assert.equal(component.draft.name, '');
+  assert.equal(component.draft.folder, 'f-1');
+  assert.equal(component.draft.uuid, 'entry-uuid');
+  assert.deepStrictEqual({ ...component.draft.values }, {});
+});
+
+test('editing loads the row and opens only the fields the form shows', async () => {
+  const opened = [];
+  const { component } = typed({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+    },
+    session: {
+      openEntryKey: async () => new Uint8Array(32),
+    },
+  });
+  component.init();
+  await component.load();
+  await component.editEntry(component.entries[0]);
+  assert.equal(component.draft.uuid, 'e-1');
+  assert.equal(component.draft.name, 'open:e-1|name');
+  // The row carries a username and a password; both are form fields, so both
+  // are opened - and nothing else is.
+  assert.deepStrictEqual(Object.keys({ ...component.draft.values }).sort(), [
+    'password',
+    'username',
+  ]);
+});
+
+test('saving a new entry posts, saving an edit puts', async () => {
+  const calls = [];
+  const { component } = typed({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      createEntry: async (body) => { calls.push(['post', body]); return {}; },
+      updateEntry: async (uuid, body) => { calls.push(['put:' + uuid, body]); return {}; },
+    },
+  });
+  component.init();
+  await component.load();
+
+  component.newEntry('login');
+  component.draft.name = 'Fresh';
+  await component.saveEntry();
+  assert.equal(calls[0][0], 'post');
+
+  await component.editEntry(component.entries[0]);
+  await component.saveEntry();
+  assert.equal(calls[1][0], 'put:e-1');
+});
+
+test('the saved body carries every signed field', async () => {
+  const calls = [];
+  const { component } = typed({
+    api: { createEntry: async (body) => { calls.push(body); return {}; } },
+  });
+  component.init();
+  await component.load();
+  component.newEntry('login');
+  component.draft.name = 'Fresh';
+  component.draft.values.username = 'jc';
+  await component.saveEntry();
+  const body = calls[0];
+  assert.deepStrictEqual(Object.keys(body).sort(), [
+    'encrypted_name',
+    'encrypted_notes',
+    'fields',
+    'is_favorite',
+    'metadata_sig',
+    'tags',
+    'type',
+    'uuid',
+    'vault',
+  ].concat(['folder']).sort());
+});
+
+test('an entry with no name is never written', async () => {
+  // The name is the only thing a listing shows; one without is a row the user
+  // cannot tell from another.
+  const calls = [];
+  const { component } = typed({
+    api: { createEntry: async (body) => { calls.push(body); return {}; } },
+  });
+  component.init();
+  await component.load();
+  component.newEntry('login');
+  component.draft.name = '   ';
+  await component.saveEntry();
+  assert.deepStrictEqual(Array.from(calls), []);
+});
+
+test('a lock closes the form and writes nothing', async () => {
+  const listeners = [];
+  const { component } = typed({ session: { onLock: (cb) => listeners.push(cb) } });
+  component.init();
+  await component.load();
+  component.newEntry('login');
+  listeners.forEach((callback) => callback());
+  assert.strictEqual(component.draft, null);
 });

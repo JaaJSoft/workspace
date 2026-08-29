@@ -68,6 +68,9 @@ window.vaultBrowser = (function () {
       vaults: [],
       // The one being browsed, with its name opened, or null.
       openVault: null,
+      // The stored rows behind `entries`, still sealed. A field opened on
+      // demand is opened from one of these.
+      entryRows: [],
       // The routed UUID names no vault this account can reach. Never a 404
       // from the server - that would say it exists in another account - so
       // saying it is the page's job.
@@ -76,12 +79,17 @@ window.vaultBrowser = (function () {
       // Python registry. The New menu is built from it rather than from a
       // list written here, so adding a type stays one class.
       entryTypes: [],
-      // Something asked for a row to be created - the palette command, or the
-      // New menu. The dialog that honours it is the entry form's, so what is
-      // held here is the intention and the type it names.
+      // A palette command asked for an entry before the vault was open. It
+      // is honoured once the listing lands, because the form needs a vault to
+      // write into.
       pendingNewEntry: false,
-      pendingNewFolder: false,
-      draftType: null,
+      // The entry being written, or null. It holds plaintext - it is a form -
+      // so a lock drops it with everything else.
+      draft: null,
+      // The folder being created, or null. A folder carries a name and
+      // nothing else the user picks, so its dialog is one input.
+      folderDraft: null,
+      busy: false,
       collapsed: false,
       // The sidebar is a column from md up and an overlay below it, so on a
       // phone it has to be opened before it is anything.
@@ -136,14 +144,16 @@ window.vaultBrowser = (function () {
       onLocked: function () {
         this.setData({});
         this.vaults = [];
+        this.entryRows = [];
         this.openVault = null;
         this.error = '';
         this.entryActions = {};
         this.panelEntry = null;
         this.closeMenu();
         this.pendingNewEntry = false;
-        this.pendingNewFolder = false;
-        this.draftType = null;
+        // The drafts hold typed-in plaintext, so they go with the keys.
+        this.draft = null;
+        this.folderDraft = null;
       },
 
       load: async function () {
@@ -208,6 +218,10 @@ window.vaultBrowser = (function () {
         }
       },
 
+      rowFor: function (uuid) {
+        return this.entryRows.find(function (row) { return row.uuid === uuid; }) || null;
+      },
+
       loadContents: async function () {
         const vault = this.openVault;
         // The trash is a view over rows this vault already holds, so they
@@ -223,13 +237,15 @@ window.vaultBrowser = (function () {
         const reader = window.vaultReader;
         const folders = await reader.readFolders(session, vault, folderRows);
         const tags = await reader.readTags(session, vault, tagRows);
-        const entries = await reader.readEntries(
-          session, vault, [...liveRows, ...trashedRows]
-        );
+        const rows = [...liveRows, ...trashedRows];
+        const entries = await reader.readEntries(session, vault, rows);
         // Neither await is atomic with the lock: an idle timeout can fire in
         // between, and by then onLocked has already emptied the store.
         // Assigning anyway would put opened names back into a locked page.
         if (!session.isUnlocked()) return;
+        // Kept beside the opened rows: opening one field later needs the
+        // ciphertexts, and an opened row deliberately carries none.
+        this.entryRows = rows;
         this.setData({
           folders: folders.rows,
           tags: tags.rows,
@@ -241,6 +257,13 @@ window.vaultBrowser = (function () {
         });
         this.panelEntry = null;
         await this.loadEntryActions();
+        // The palette command reaches the page before there is a vault to
+        // write into, so it waits here for one.
+        if (this.pendingNewEntry) {
+          this.pendingNewEntry = false;
+          const first = this.entryTypes[0];
+          if (first) this.newEntry(first.id);
+        }
       },
 
       loadEntryActions: async function () {
@@ -403,13 +426,152 @@ window.vaultBrowser = (function () {
         this.closeMenu();
       },
 
+      // Every menu item and every panel button comes through here. The action
+      // was offered by the endpoint, but the menu it came from may be old, so
+      // the offer is checked again before anything runs - a stale menu must
+      // not produce a request the server is about to refuse.
+      runAction: async function (action, entry) {
+        this.closeMenu();
+        if (!entry || !this.hasAction(entry, action.id)) return;
+        if (action.id === 'edit') await this.editEntry(entry);
+      },
+
+      // ---- writing ---------------------------------------------------------
+
+      // What the form shows: the type's own schema, minus the authenticator
+      // key. A TOTP secret is a shared key rather than a value to type into a
+      // box, and offering a text input for one is offering to overwrite it
+      // with whatever was typed.
+      formFields: function () {
+        const type = this.draft && this.typeFor(this.draft.type);
+        return (type ? type.fields : []).filter(function (field) {
+          return field.kind !== 'totp';
+        });
+      },
+
       newEntry: function (typeId) {
-        this.draftType = typeId;
-        this.pendingNewEntry = true;
+        this.closeMenu();
+        this.draft = {
+          uuid: window.vaultCrypto.uuidV7(),
+          // Created where the user is looking: a filtered listing is a claim
+          // about where the row belongs, so it seeds the folder and the tag.
+          folder: this.view === 'all' && !this.tagFilter ? this.folderUuid : null,
+          tags: this.tagFilter ? [this.tagFilter] : [],
+          type: typeId,
+          favorite: false,
+          name: '',
+          notes: '',
+          values: {},
+          entryVersion: 1,
+          isNew: true,
+        };
+      },
+
+      // The row on screen holds a name and a login, never a secret, so the
+      // form opens what it is about to let the user edit - and only that.
+      editEntry: async function (entry) {
+        this.closeMenu();
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        const values = {};
+        const type = this.typeFor(entry.type);
+        for (const field of type ? type.fields : []) {
+          if (field.kind === 'totp') continue;
+          if (!(entry.fieldIds || []).includes(field.field_id)) continue;
+          values[field.field_id] = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, field.field_id
+          );
+        }
+        if (!window.vaultSession.isUnlocked()) return;
+        this.draft = {
+          uuid: entry.uuid,
+          type: entry.type,
+          folder: entry.folder,
+          tags: [...entry.tags],
+          favorite: entry.favorite,
+          name: entry.name,
+          notes: '',
+          values: values,
+          entryVersion: row.entry_version || 1,
+          isNew: false,
+        };
+      },
+
+      closeEntryDialog: function () {
+        this.draft = null;
+      },
+
+      toggleDraftTag: function (uuid) {
+        const tags = this.draft.tags;
+        this.draft.tags = tags.includes(uuid)
+          ? tags.filter(function (value) { return value !== uuid; })
+          : [...tags, uuid];
+      },
+
+      saveEntry: async function () {
+        const draft = this.draft;
+        if (!draft || !this.openVault) return;
+        const name = (draft.name || '').trim();
+        // The name is the only thing a listing shows: a row without one is a
+        // row the user cannot tell from another.
+        if (!name) return;
+        this.busy = true;
+        try {
+          const body = await window.buildEntryWriteRequest(
+            window.vaultSession,
+            this.openVault,
+            Object.assign({}, draft, { name: name }),
+          );
+          if (draft.isNew) {
+            await window.vaultApi.createEntry(body);
+          } else {
+            await window.vaultApi.updateEntry(draft.uuid, body);
+          }
+          this.draft = null;
+          await this.load();
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That entry could not be saved. Try again.';
+        } finally {
+          this.busy = false;
+        }
       },
 
       newFolder: function () {
-        this.pendingNewFolder = true;
+        this.closeMenu();
+        this.folderDraft = {
+          uuid: window.vaultCrypto.uuidV7(),
+          parent: this.view === 'all' && !this.tagFilter ? this.folderUuid : null,
+          name: '',
+          position: this.folders.length,
+        };
+      },
+
+      closeFolderDialog: function () {
+        this.folderDraft = null;
+      },
+
+      saveFolder: async function () {
+        const draft = this.folderDraft;
+        if (!draft || !this.openVault) return;
+        const name = (draft.name || '').trim();
+        if (!name) return;
+        this.busy = true;
+        try {
+          const body = await window.buildFolderWriteRequest(
+            window.vaultSession,
+            this.openVault,
+            Object.assign({}, draft, { name: name }),
+          );
+          await window.vaultApi.createFolder(body);
+          this.folderDraft = null;
+          await this.load();
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That folder could not be created. Try again.';
+        } finally {
+          this.busy = false;
+        }
       },
 
       toggleCollapsed: function () {

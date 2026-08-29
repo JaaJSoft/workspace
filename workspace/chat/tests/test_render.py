@@ -61,6 +61,13 @@ class RenderMessageBodyTest(TestCase):
         self.assertIn("<p>para two</p>", html)
         self.assertNotIn("<br />", html)
 
+    def test_trailing_backslash_stays_visible(self):
+        # Markdown's backslash hard-break would swallow the character. In a
+        # chat that loses a line of a pasted shell command, so the newline
+        # alone carries the break and the backslash renders as typed.
+        html = render_message_body("docker run -it \\\n  ubuntu bash")
+        self.assertIn("docker run -it \\<br />", html)
+
     def test_blockquote(self):
         html = render_message_body("> quote")
         self.assertIn("<blockquote>", html)

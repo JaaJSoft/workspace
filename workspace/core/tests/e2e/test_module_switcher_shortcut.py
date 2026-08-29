@@ -10,6 +10,7 @@ from workspace.common.tests.e2e.base import PlaywrightTestCase
 
 TRIGGER = "#module-switcher label"
 PANEL = "#module-switcher .dropdown-content"
+TILES = "#module-switcher-grid a"
 
 
 class ModuleSwitcherShortcutTests(PlaywrightTestCase):
@@ -45,10 +46,10 @@ class ModuleSwitcherShortcutTests(PlaywrightTestCase):
         expect(self.page.locator(PANEL)).to_be_visible()
 
         self.page.keyboard.press("ArrowDown")
-        expect(self.page.locator(f"{PANEL} a").first).to_be_focused()
+        expect(self.page.locator(TILES).first).to_be_focused()
 
         self.page.keyboard.press("ArrowRight")
-        expect(self.page.locator(f"{PANEL} a").nth(1)).to_be_focused()
+        expect(self.page.locator(TILES).nth(1)).to_be_focused()
 
         self.page.keyboard.press("c")
         focused = self.page.evaluate("document.activeElement.textContent.trim()")

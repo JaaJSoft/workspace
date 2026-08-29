@@ -49,16 +49,28 @@
               tabindex="0"
               class="dropdown-content mt-3 z-[100] p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-[16.5rem]"
             >
-              <div class="px-2 pt-1 pb-2 mb-2 border-b border-base-300 flex items-center justify-between">
+              <div
+                class="px-2 pt-1 pb-2 mb-2 border-b border-base-300 flex items-center justify-between"
+              >
                 <span
                   class="text-xs font-semibold uppercase tracking-wider text-base-content/50"
                 >Apps</span>
-                <span
-                  class="flex items-center gap-0.5"
-                  title="Open the switcher with Alt+K"
-                >
-                  <kbd class="kbd kbd-xs">Alt</kbd>
-                  <kbd class="kbd kbd-xs">K</kbd>
+                <span class="flex items-center gap-1.5">
+                  <span
+                    class="flex items-center gap-0.5"
+                    title="Open the switcher with Alt+K"
+                  >
+                    <kbd class="kbd kbd-xs">Alt</kbd>
+                    <kbd class="kbd kbd-xs">K</kbd>
+                  </span>
+                  <a
+                    href="{% url 'users_ui:settings' %}"
+                    class="btn btn-ghost btn-xs btn-square text-base-content/60 hover:text-base-content"
+                    title="Settings"
+                    aria-label="Settings"
+                  >
+                    <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+                  </a>
                 </span>
               </div>
               <section

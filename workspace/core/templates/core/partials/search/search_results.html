@@ -114,16 +114,9 @@
               to say why it is in the list. The index stores lexemes only, so
               there is no snippet to show.
             {% endcomment %}
-            <span
-              x-show="result.match_type === 'content'"
-              class="badge badge-xs badge-ghost flex-shrink-0"
-            >in content</span>
+            <tag-chip x-show="result.match_type === 'content'" name="in content" size="sm" class="flex-shrink-0"></tag-chip>
             <template x-for="tag in (result.tags || [])" :key="tag.label">
-              <span
-                class="badge badge-xs flex-shrink-0"
-                :class="`badge-${tag.color || 'ghost'}`"
-                x-text="tag.label"
-              ></span>
+              <tag-chip :name="tag.label" :color="tag.color" size="sm" class="flex-shrink-0"></tag-chip>
             </template>
           </div>
         </div>

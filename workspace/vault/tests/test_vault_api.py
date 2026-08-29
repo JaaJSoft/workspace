@@ -11,10 +11,22 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
-from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
+from workspace.vault.models import (
+    AccountIdentity,
+    EntryType,
+    Vault,
+    VaultEntry,
+    VaultKeyWrap,
+)
 from workspace.vault.services.metadata import vault_metadata_payload
-from workspace.vault.tests.factories import HPKE_SUITE, make_account, sign
+from workspace.vault.tests.factories import (
+    HPKE_SUITE,
+    make_account,
+    make_vault,
+    sign,
+)
 from workspace.vault.tests.reference.encoding import to_base64url
 
 User = get_user_model()
@@ -319,3 +331,62 @@ class VaultUpdateTests(TestCase):
         response = self.client.delete(reverse("vault-detail", args=[theirs.uuid]))
         self.assertEqual(response.status_code, 404)
         self.assertTrue(Vault.objects.filter(uuid=theirs.uuid).exists())
+
+
+class VaultEntryCountTests(TestCase):
+    """What the listing shows about a vault it has not opened.
+
+    The count is metadata the server already holds - it stores the rows - so
+    answering it reveals nothing a listing request did not already imply. It
+    is also the one thing about a vault's contents the client cannot work out
+    without opening it.
+    """
+
+    def setUp(self):
+        self.user, _signer, self.identity = make_account()
+        self.client.force_login(self.user)
+        self.vault = make_vault(self.user)
+
+    def _entry(self, vault, **overrides):
+        return VaultEntry.objects.create(
+            vault=vault,
+            type=EntryType.LOGIN,
+            encrypted_name="ct",
+            encrypted_notes="",
+            metadata_sig="sig",
+            **overrides,
+        )
+
+    def test_an_empty_vault_counts_zero(self):
+        response = self.client.get("/api/v1/vault/vaults")
+        self.assertEqual(response.data[0]["entry_count"], 0)
+
+    def test_entries_are_counted(self):
+        for _ in range(3):
+            self._entry(self.vault)
+        response = self.client.get("/api/v1/vault/vaults")
+        self.assertEqual(response.data[0]["entry_count"], 3)
+
+    def test_a_trashed_entry_is_not_counted(self):
+        """The listing says how much is in the vault, and the trash is not."""
+        self._entry(self.vault)
+        self._entry(self.vault, deleted_at=timezone.now())
+        response = self.client.get("/api/v1/vault/vaults")
+        self.assertEqual(response.data[0]["entry_count"], 1)
+
+    def test_the_count_costs_no_query_per_vault(self):
+        """Counting per row would put the listing back on one query per vault,
+        which is the shape the listing's prefetch exists to avoid."""
+        for _ in range(2):
+            self._entry(self.vault)
+        with CaptureQueriesContext(connection) as few:
+            self.client.get("/api/v1/vault/vaults")
+
+        for _ in range(6):
+            other = make_vault(self.user)
+            self._entry(other)
+        with CaptureQueriesContext(connection) as many:
+            response = self.client.get("/api/v1/vault/vaults")
+
+        self.assertEqual(len(response.data), 7)
+        self.assertEqual(len(many), len(few))

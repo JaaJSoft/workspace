@@ -5,8 +5,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { loadScripts } = require('../../../common/tests/js/loader');
 
+const visited = [];
+
 function app(session = {}, api = {}, crypto = {}) {
+  visited.length = 0;
   const ctx = loadScripts([
+    'workspace/vault/ui/static/vault/ui/js/vault_format.js',
     'workspace/vault/ui/static/vault/ui/js/vault_unlock.js',
     'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
     'workspace/vault/ui/static/vault/ui/js/vault_create.js',
@@ -59,6 +63,7 @@ function app(session = {}, api = {}, crypto = {}) {
       addEventListener() {},
       getElementById: () => null,
     },
+    location: { assign: (url) => visited.push(url) },
     addEventListener() {},
     localStorage: (globalThis.__vaultAppStore = globalThis.__vaultAppStore || {
       values: {},
@@ -1030,4 +1035,206 @@ test('a preference the server refuses is put back, not left lying', async () => 
   await component.updatePref('default_sort', 'name');
   assert.equal(component.prefs.defaultSort, 'default');
   assert.match(component.error, /could not be saved/i);
+});
+
+// --- selection, tiles and context menus -------------------------------------
+
+test('a vault can be selected, and select-all covers what is shown', () => {
+  const component = listed(app());
+  assert.equal(component.selectAllState(), 'none');
+  component.toggleSelection('v-1');
+  assert.equal(component.selectAllState(), 'partial');
+  component.selectAll();
+  assert.deepStrictEqual(Array.from(component.selected).sort(), ['v-1', 'v-2', 'v-3']);
+  assert.equal(component.selectAllState(), 'all');
+  component.clearSelection();
+  assert.deepStrictEqual(Array.from(component.selected), []);
+});
+
+test('select-all under a filter takes only what the filter shows', () => {
+  const component = listed(app());
+  component.filter = 'favorites';
+  component.selectAll();
+  assert.deepStrictEqual(Array.from(component.selected), ['v-1']);
+});
+
+test('a vault that leaves the listing leaves the selection with it', () => {
+  // Otherwise the bar counts rows nobody can see, and acts on them.
+  const component = listed(app());
+  component.selectAll();
+  component.search = 'personal';
+  assert.deepStrictEqual(Array.from(component.selectedVaults(), (v) => v.uuid), ['v-1']);
+});
+
+test('the bulk bar offers only what every selected vault offers', () => {
+  const component = listed(app());
+  component.vaultActions = {
+    'v-1': [{ id: 'favorite', bulk: true }, { id: 'delete', bulk: true }, { id: 'rename', bulk: false }],
+    'v-2': [{ id: 'delete', bulk: true }],
+  };
+  component.toggleSelection('v-1');
+  component.toggleSelection('v-2');
+  assert.deepStrictEqual(
+    Array.from(component.bulkActions(), (action) => action.id),
+    ['delete'],
+  );
+});
+
+test('the tile size is remembered and clamped to the scale', () => {
+  const component = app();
+  component.init();
+  assert.equal(component.tileSize, 3);
+  component.setTileSize(5);
+  const second = app();
+  second.init();
+  assert.equal(second.tileSize, 5);
+  // Anything off the 1..5 scale is a bug or a stale preference, and a tile of
+  // zero pixels is not a smaller tile.
+  component.setTileSize(0);
+  assert.equal(component.tileSize, 5);
+  component.setTileSize(99);
+  assert.equal(component.tileSize, 5);
+});
+
+test('the tile size drives the geometry rather than a class per step', () => {
+  const component = app();
+  component.init();
+  component.setTileSize(1);
+  const small = component.tileMinWidth();
+  component.setTileSize(5);
+  assert.ok(component.tileMinWidth() > small);
+});
+
+test('a right-click on a vault opens its menu where it was raised', () => {
+  const component = listed(app());
+  component.openVaultMenu({ clientX: 40, clientY: 90, preventDefault() {} }, component.vaults[0]);
+  assert.equal(component.menu.open, true);
+  assert.equal(component.menu.vault.uuid, 'v-1');
+  assert.equal(component.menu.x, 40);
+  assert.equal(component.backgroundMenu.open, false);
+});
+
+test('a right-click on the empty listing opens the listing menu', () => {
+  const component = listed(app());
+  component.openBackgroundMenu({ clientX: 10, clientY: 20, preventDefault() {} });
+  assert.equal(component.backgroundMenu.open, true);
+  assert.equal(component.menu.open, false);
+});
+
+test('opening one menu closes the other', () => {
+  const component = listed(app());
+  component.openVaultMenu({ clientX: 0, clientY: 0, preventDefault() {} }, component.vaults[0]);
+  component.openBackgroundMenu({ clientX: 0, clientY: 0, preventDefault() {} });
+  assert.equal(component.menu.open, false);
+  component.openVaultMenu({ clientX: 0, clientY: 0, preventDefault() {} }, component.vaults[1]);
+  assert.equal(component.backgroundMenu.open, false);
+});
+
+test('the heading names the view being looked at', () => {
+  const component = app();
+  assert.equal(component.heading(), 'My vaults');
+  component.filter = 'favorites';
+  assert.equal(component.heading(), 'Favorites');
+});
+
+test('clicking a row opens the vault', () => {
+  const component = listed(app());
+  component.openVault(component.vaults[0], { });
+  assert.deepStrictEqual(Array.from(visited), ['/vault/v-1']);
+});
+
+test('a vault that will not open is never navigated to', () => {
+  // It has no contents to show and no key to show them with; following it
+  // would land on a browser screen that can only report the same failure.
+  const component = listed(app(), [{ uuid: 'v-9', name: '', tampered: true }]);
+  visited.length = 0;
+  component.openVault(component.vaults[0], {});
+  assert.deepStrictEqual(Array.from(visited), []);
+});
+
+test('the favourite button is offered only when the registry offers the verb', () => {
+  const component = listed(app());
+  component.vaultActions = { 'v-1': [{ id: 'favorite', bulk: true }], 'v-2': [] };
+  assert.equal(component.canFavorite(component.vaults[0]), true);
+  assert.equal(component.canFavorite(component.vaults[1]), false);
+});
+
+test('the star writes the verb the row is missing', async () => {
+  // One component per write: a write reloads the listing, and the reload is
+  // what makes the action map current again.
+  async function star(isFavorite) {
+    const written = [];
+    const component = listed(
+      app({ isUnlocked: () => true }, {
+        updateVault: async (uuid, body) => { written.push([uuid, body.is_favorite]); return {}; },
+        listVaults: async () => [],
+      }),
+      [{ uuid: 'v-1', name: 'A', is_favorite: isFavorite }],
+    );
+    component.vaultActions = { 'v-1': [{ id: 'favorite' }, { id: 'unfavorite' }] };
+    await component.toggleFavorite(component.vaults[0]);
+    return written;
+  }
+
+  assert.deepStrictEqual(Array.from(await star(true)), [['v-1', false]]);
+  assert.deepStrictEqual(Array.from(await star(false)), [['v-1', true]]);
+});
+
+test('sorting by entry count reads the number the server gave', () => {
+  const component = listed(app(), [
+    { uuid: 'v-1', name: 'A', entry_count: 9 },
+    { uuid: 'v-2', name: 'B', entry_count: 2 },
+  ]);
+  component.sortField = 'entries';
+  assert.deepStrictEqual(shown(component), ['B', 'A']);
+  component.sortDir = 'desc';
+  assert.deepStrictEqual(shown(component), ['A', 'B']);
+});
+
+test('a bulk verb runs over every selected vault and asks once', async () => {
+  const deleted = [];
+  let asked = 0;
+  const component = listed(app({ isUnlocked: () => true }, {
+    deleteVault: async (uuid) => { deleted.push(uuid); return null; },
+    listVaults: async () => [],
+  }));
+  component.vaultActions = {
+    'v-1': [{ id: 'delete', bulk: true }],
+    'v-2': [{ id: 'delete', bulk: true }],
+    'v-3': [{ id: 'delete', bulk: true }],
+  };
+  component.confirm = async () => { asked += 1; return true; };
+  component.toggleSelection('v-1');
+  component.toggleSelection('v-2');
+  await component.runBulkVaultAction({ id: 'delete' });
+  assert.deepStrictEqual(Array.from(deleted).sort(), ['v-1', 'v-2']);
+  assert.equal(asked, 1);
+});
+
+test('a refused confirmation deletes nothing', async () => {
+  const deleted = [];
+  const component = listed(app({ isUnlocked: () => true }, {
+    deleteVault: async (uuid) => { deleted.push(uuid); return null; },
+    listVaults: async () => [],
+  }));
+  component.vaultActions = { 'v-1': [{ id: 'delete', bulk: true }] };
+  component.confirm = async () => false;
+  component.toggleSelection('v-1');
+  await component.runBulkVaultAction({ id: 'delete' });
+  assert.deepStrictEqual(Array.from(deleted), []);
+});
+
+test('a bulk verb the selection was not offered is refused', async () => {
+  const deleted = [];
+  const component = listed(app({ isUnlocked: () => true }, {
+    deleteVault: async (uuid) => { deleted.push(uuid); return null; },
+    listVaults: async () => [],
+  }));
+  // v-2 was offered nothing, so the bar offers nothing for the pair.
+  component.vaultActions = { 'v-1': [{ id: 'delete', bulk: true }], 'v-2': [] };
+  component.confirm = async () => true;
+  component.toggleSelection('v-1');
+  component.toggleSelection('v-2');
+  await component.runBulkVaultAction({ id: 'delete' });
+  assert.deepStrictEqual(Array.from(deleted), []);
 });

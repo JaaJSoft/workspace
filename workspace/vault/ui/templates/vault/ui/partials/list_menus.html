@@ -1,0 +1,73 @@
+{% comment %}
+  Two menus, and the difference between them is what they address.
+
+  The vault menu is whatever POST /api/v1/vault/actions answered for that
+  vault - never a list written here. The listing menu is not a menu of
+  actions at all: creating a vault is not something done to an existing one,
+  so the endpoint has nothing to say about it.
+{% endcomment %}
+<div
+  x-show="menu.open"
+  x-cloak
+  class="fixed z-50"
+  :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
+  @click.outside="closeVaultMenu()"
+>
+  <ul
+    class="menu bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 w-56 text-sm p-2"
+  >
+    <li
+      class="menu-title text-xs truncate"
+      x-text="menu.vault ? menu.vault.name : ''"
+    ></li>
+    <template x-for="action in actionsFor(menu.vault)" :key="action.id">
+      <li>
+        <button
+          type="button"
+          class="gap-3"
+          :class="action.css_class"
+          @click="runVaultAction(action, menu.vault); closeVaultMenu()"
+        >
+          <i :data-lucide="action.icon" class="w-4 h-4"></i>
+          <span x-text="action.label"></span>
+        </button>
+      </li>
+    </template>
+    <li x-show="!actionsFor(menu.vault).length">
+      <span class="opacity-50">Nothing can be done with this vault</span>
+    </li>
+  </ul>
+</div>
+
+<div
+  x-show="backgroundMenu.open"
+  x-cloak
+  class="fixed z-50"
+  :style="{ left: backgroundMenu.x + 'px', top: backgroundMenu.y + 'px' }"
+  @click.outside="closeBackgroundMenu()"
+>
+  <ul
+    class="menu bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 w-56 text-sm p-2"
+  >
+    <li>
+      <button
+        type="button"
+        class="gap-3"
+        @click="closeBackgroundMenu(); openCreateDialog()"
+      >
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        New vault
+      </button>
+    </li>
+    <li x-show="visibleVaults().length">
+      <button
+        type="button"
+        class="gap-3"
+        @click="closeBackgroundMenu(); selectAll()"
+      >
+        <i data-lucide="check-check" class="w-4 h-4"></i>
+        Select all
+      </button>
+    </li>
+  </ul>
+</div>

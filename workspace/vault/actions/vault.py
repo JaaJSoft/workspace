@@ -35,6 +35,7 @@ class FavoriteVaultAction(BaseVaultTargetAction):
     label = "Add to favourites"
     icon = "star"
     category = ActionCategory.ORGANIZE
+    supports_bulk = True
 
 
 @VaultTargetActionRegistry.register
@@ -43,12 +44,17 @@ class UnfavoriteVaultAction(BaseVaultTargetAction):
     label = "Remove from favourites"
     icon = "star-off"
     category = ActionCategory.ORGANIZE
+    supports_bulk = True
 
 
 @VaultTargetActionRegistry.register
+# The verbs a selection can be told to run. Renaming and re-describing are
+# single-row by nature - one name, one icon - so they stay off a bar that
+# addresses several vaults at once.
 class DeleteVaultAction(BaseVaultTargetAction):
     id = "delete"
     label = "Delete vault"
     icon = "trash-2"
     category = ActionCategory.DANGER
     css_class = "text-error"
+    supports_bulk = True

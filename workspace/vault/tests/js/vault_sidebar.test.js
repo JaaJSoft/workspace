@@ -5,9 +5,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-function sidebar(store) {
+function sidebar(store, narrow = false) {
   const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_sidebar.js', {
     localStorage: store,
+    matchMedia: () => ({ matches: narrow, addEventListener() {} }),
   });
   return ctx.vaultSidebar();
 }
@@ -55,4 +56,34 @@ test('storage that refuses to be read leaves the sidebar open, not broken', () =
   assert.equal(instance.collapsed, false);
   instance.toggleCollapse();
   assert.equal(instance.collapsed, true);
+});
+
+test('a narrow screen narrows the sidebar instead of taking it away', () => {
+  // The drawer stays open at every width, so the rail is the shape that fits.
+  const instance = sidebar(memory(), true);
+  instance.init();
+  assert.equal(instance.collapsed, true);
+});
+
+test('the control does nothing while the rail is the only shape that fits', () => {
+  const store = memory();
+  const instance = sidebar(store, true);
+  instance.init();
+  instance.toggleCollapse();
+  assert.equal(instance.collapsed, true);
+  // And the narrow state is not written down as a preference: widening the
+  // window must give back the sidebar the user actually chose.
+  assert.equal(store.values['vault.sidebar.collapsed'], undefined);
+});
+
+test('a wide screen restores what was chosen', () => {
+  const store = memory();
+  const wide = sidebar(store, false);
+  wide.init();
+  wide.toggleCollapse();
+  assert.equal(store.values['vault.sidebar.collapsed'], 'true');
+
+  const narrow = sidebar(store, true);
+  narrow.init();
+  assert.equal(narrow.collapsed, true);
 });

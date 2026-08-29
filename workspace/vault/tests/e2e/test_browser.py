@@ -82,9 +82,9 @@ class VaultBrowserTests(PlaywrightTestCase):
         self._onboard()
         self._unlock()
         self.page.wait_for_selector('a[href^="/vault/"]', timeout=30000)
-        self.vault_uuid = self.page.get_attribute(
-            'a[href^="/vault/"]', "href"
-        ).rsplit("/", 1)[1]
+        self.vault_uuid = self.page.get_attribute('a[href^="/vault/"]', "href").rsplit(
+            "/", 1
+        )[1]
         self.page.goto(f"{self.live_server_url}/vault/{self.vault_uuid}")
         self._unlock()
         self.page.wait_for_selector("text=All entries", timeout=30000)
@@ -131,9 +131,7 @@ class VaultBrowserTests(PlaywrightTestCase):
 
         self.page.click("button:has-text('Clear now')")
         self.page.wait_for_selector("text=Password copied", state="hidden")
-        self.assertEqual(
-            self.page.evaluate("() => navigator.clipboard.readText()"), ""
-        )
+        self.assertEqual(self.page.evaluate("() => navigator.clipboard.readText()"), "")
 
     def test_locking_empties_the_screen_and_the_clipboard(self):
         self._open_vault()
@@ -146,9 +144,7 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.wait_for_selector("input[autocomplete='current-password']")
         # A secret on the clipboard outlives the keys that opened it, so the
         # lock takes it back rather than leaving it for the next person here.
-        self.assertEqual(
-            self.page.evaluate("() => navigator.clipboard.readText()"), ""
-        )
+        self.assertEqual(self.page.evaluate("() => navigator.clipboard.readText()"), "")
         self.assertNotIn("octocat", self.page.locator("body").inner_text())
 
     def test_a_forged_signature_removes_the_row_and_raises_the_banner(self):

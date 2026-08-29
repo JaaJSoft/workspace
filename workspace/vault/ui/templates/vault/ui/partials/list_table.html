@@ -1,0 +1,130 @@
+{% comment %}
+  The columns of files/ui/partials/folder_content.html, with what a vault
+  actually has: Entries where a file has a size, and no tags column, because
+  tags belong to a vault's contents rather than to the vault.
+
+  The description is the second line of the name cell rather than a column of
+  its own - a vault's description explains its name, and reads as part of it.
+{% endcomment %}
+<table
+  class="table table-fixed min-w-[46rem] [&_td]:align-middle [&_th]:align-middle"
+>
+  <thead class="sticky top-0 z-10">
+    <tr class="bg-base-200">
+      <th class="w-10">
+        <input
+          type="checkbox"
+          class="checkbox checkbox-sm align-middle"
+          aria-label="Select every vault shown"
+          :checked="selectAllState() === 'all'"
+          x-effect="$el.indeterminate = selectAllState() === 'partial'"
+          @click="toggleSelectAll()"
+        />
+      </th>
+      <th class="w-12"><span class="sr-only">Icon</span></th>
+      <th>Name</th>
+      <th class="w-10 text-center">Fav</th>
+      <th class="hidden sm:table-cell w-24 text-right">Entries</th>
+      <th class="hidden lg:table-cell w-32">Created</th>
+      <th class="hidden md:table-cell w-32">Modified</th>
+      <th class="w-14"><span class="sr-only">Actions</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    <template x-for="vault in visibleVaults()" :key="vault.uuid">
+      <tr
+        class="hover cursor-pointer"
+        :class="isSelected(vault.uuid) ? 'bg-primary/5' : ''"
+        @click="openVault(vault, $event)"
+        @contextmenu.stop="openVaultMenu($event, vault)"
+      >
+        <td @click.stop>
+          <input
+            type="checkbox"
+            class="checkbox checkbox-sm align-middle"
+            :aria-label="'Select ' + vault.name"
+            :checked="isSelected(vault.uuid)"
+            @click="toggleSelection(vault.uuid)"
+          />
+        </td>
+        <td>
+          <div
+            class="w-8 h-8 rounded-lg flex items-center justify-center"
+            :class="'bg-' + (vault.color || 'primary') + '/10'"
+          >
+            <i
+              :data-lucide="vault.icon || 'lock'"
+              class="w-4 h-4"
+              :class="'text-' + (vault.color || 'primary')"
+            ></i>
+          </div>
+        </td>
+        <td class="truncate">
+          <div class="flex items-center gap-2 min-w-0">
+            {% comment %}
+              A real link, not a click handler: opening a vault in a new tab
+              is a thing people do, and a div cannot be middle-clicked.
+            {% endcomment %}
+            <a
+              class="font-medium truncate link-hover"
+              :href="'/vault/' + vault.uuid"
+              x-text="vault.name"
+              @click.stop
+            ></a>
+            <span
+              class="badge badge-ghost badge-sm flex-shrink-0"
+              x-show="isMember(vault)"
+            >member</span>
+          </div>
+          <div
+            class="text-xs text-base-content/50 truncate"
+            x-show="vault.description"
+            x-text="vault.description"
+          ></div>
+        </td>
+        <td class="text-center" @click.stop>
+          {% comment %}
+            The star writes: it is the one action worth a click of its own,
+            and the registry decides whether this account may take it.
+          {% endcomment %}
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square"
+            :disabled="busy || !canFavorite(vault)"
+            :aria-label="vault.is_favorite ? 'Remove from favourites' : 'Add to favourites'"
+            @click="toggleFavorite(vault)"
+          >
+            <i
+              data-lucide="star"
+              class="w-4 h-4"
+              :class="vault.is_favorite ? 'fill-current text-warning' : 'opacity-25'"
+            ></i>
+          </button>
+        </td>
+        <td
+          class="hidden sm:table-cell text-right opacity-60 text-sm"
+          x-text="vault.entry_count"
+        ></td>
+        <td
+          class="hidden lg:table-cell opacity-60 text-sm"
+          x-text="shortDate(vault.created_at)"
+        ></td>
+        <td
+          class="hidden md:table-cell opacity-60 text-sm"
+          x-text="shortDate(vault.updated_at)"
+        ></td>
+        <td @click.stop>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square"
+            x-show="actionsFor(vault).length"
+            :aria-label="'Actions for ' + vault.name"
+            @click="openVaultMenu($event, vault)"
+          >
+            <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+          </button>
+        </td>
+      </tr>
+    </template>
+  </tbody>
+</table>

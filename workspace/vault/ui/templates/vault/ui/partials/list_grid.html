@@ -1,0 +1,106 @@
+{% comment %}
+  The tile of the file browser: a square face carrying the icon, a name strip
+  under a border, a checkbox that appears on hover at the top left and the
+  favourite at the top right. The slider drives the geometry, so the sizes
+  are bound rather than written as a class per step.
+{% endcomment %}
+<div
+  class="grid p-4"
+  :style="{ gridTemplateColumns: 'repeat(auto-fill, minmax(' + tileMinWidth() + 'px, 1fr))',
+            gap: tileGap() + 'px' }"
+>
+  <template x-for="vault in visibleVaults()" :key="vault.uuid">
+    <div
+      class="bg-base-100 border border-base-300 rounded-lg hover:border-error hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
+      :class="isSelected(vault.uuid) ? 'ring-2 ring-primary border-primary' : ''"
+      @click="openVault(vault, $event)"
+      @contextmenu.stop="openVaultMenu($event, vault)"
+    >
+      <div class="absolute top-2 left-2 z-10" @click.stop>
+        <input
+          type="checkbox"
+          class="checkbox checkbox-sm bg-base-100/80 backdrop-blur-sm"
+          :class="isSelected(vault.uuid) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+          :checked="isSelected(vault.uuid)"
+          :aria-label="'Select ' + vault.name"
+          @click="toggleSelection(vault.uuid)"
+        />
+      </div>
+
+      <div class="absolute top-2 right-2 z-10" @click.stop>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm"
+          :class="vault.is_favorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+          :disabled="busy || !canFavorite(vault)"
+          :aria-label="vault.is_favorite ? 'Remove from favourites' : 'Add to favourites'"
+          @click="toggleFavorite(vault)"
+        >
+          <i
+            data-lucide="star"
+            class="w-3.5 h-3.5"
+            :class="vault.is_favorite ? 'fill-current text-warning' : ''"
+          ></i>
+        </button>
+      </div>
+
+      <div class="relative w-full pb-[100%]">
+        <div
+          class="absolute inset-0 flex items-center justify-center"
+          :class="'bg-' + (vault.color || 'primary') + '/5'"
+        >
+          <div
+            :style="{ width: tileIconSize() + 'px', height: tileIconSize() + 'px' }"
+          >
+            <i
+              :data-lucide="vault.icon || 'lock'"
+              class="w-full h-full"
+              :class="'text-' + (vault.color || 'primary')"
+            ></i>
+          </div>
+        </div>
+      </div>
+
+      <div
+        class="border-t border-base-300 flex-1"
+        :class="tileSize <= 2 ? 'px-2 py-1.5' : 'p-3'"
+      >
+        <div class="flex items-start justify-between gap-1">
+          <div class="flex-1 min-w-0">
+            <h3
+              class="font-medium truncate"
+              :class="tileSize <= 2 ? 'text-xs' : 'text-sm'"
+              :title="vault.name"
+            >
+              <a
+                class="link-hover"
+                :href="'/vault/' + vault.uuid"
+                x-text="vault.name"
+                @click.stop
+              ></a>
+            </h3>
+            <p
+              class="text-xs text-base-content/60 truncate"
+              :class="tileSize <= 1 ? 'hidden' : 'mt-0.5'"
+              x-text="vault.entry_count + (vault.entry_count === 1 ? ' entry' : ' entries')"
+            ></p>
+            <p
+              class="text-xs text-base-content/40 truncate"
+              :class="tileSize <= 3 || !vault.description ? 'hidden' : 'mt-0.5'"
+              x-text="vault.description"
+            ></p>
+          </div>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 flex-shrink-0"
+            x-show="actionsFor(vault).length"
+            :aria-label="'Actions for ' + vault.name"
+            @click.stop="openVaultMenu($event, vault)"
+          >
+            <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>

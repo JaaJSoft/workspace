@@ -71,3 +71,29 @@ class VaultActionTests(SimpleTestCase):
         self.assertEqual(
             set(action), {"id", "label", "icon", "category", "css_class", "bulk"}
         )
+
+
+class VaultBulkActionTests(SimpleTestCase):
+    """Which vault actions a selection can be told to run.
+
+    Renaming and re-describing are single-row by nature - one name, one icon.
+    The three that answer "do this to all of them" are the ones a selection
+    bar can offer, and they mirror the entry registry, where favourite,
+    unfavourite and trash are the bulk verbs.
+    """
+
+    def test_the_favourite_verbs_and_delete_work_on_a_batch(self):
+        bulk = {
+            action.id
+            for action in VaultTargetActionRegistry.all()
+            if action.supports_bulk
+        }
+        self.assertEqual(bulk, {"favorite", "unfavorite", "delete"})
+
+    def test_renaming_and_appearance_stay_single_row(self):
+        single = {
+            action.id
+            for action in VaultTargetActionRegistry.all()
+            if not action.supports_bulk
+        }
+        self.assertEqual(single, {"rename", "set_appearance"})

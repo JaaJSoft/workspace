@@ -171,6 +171,10 @@ class VaultSerializer(serializers.ModelSerializer):
     owner_account_uuid = serializers.SerializerMethodField()
     wrapped_key = serializers.SerializerMethodField()
     hpke_suite = serializers.SerializerMethodField()
+    # Annotated by the listing. The default keeps a serializer used from a
+    # shell or a single-vault read from raising on a queryset that did not
+    # annotate.
+    entry_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Vault
@@ -186,6 +190,7 @@ class VaultSerializer(serializers.ModelSerializer):
             "metadata_sig",
             "wrapped_key",
             "hpke_suite",
+            "entry_count",
             "created_at",
             "updated_at",
         ]

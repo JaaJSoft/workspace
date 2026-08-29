@@ -18,6 +18,17 @@ window.VAULT_COLOR_SWATCHES = [
 
 window.vaultApp = (function () {
   const VIEW_MODE_KEY = 'vault.list.viewMode';
+  const TILE_SIZE_KEY = 'vault.list.tileSize';
+
+  // The five steps of the tile slider, as the file browser draws them: a
+  // minimum column width, the gap between tiles, and the icon inside.
+  const TILE_STEPS = {
+    1: { width: 110, gap: 8, icon: 28 },
+    2: { width: 140, gap: 10, icon: 36 },
+    3: { width: 180, gap: 12, icon: 44 },
+    4: { width: 230, gap: 14, icon: 56 },
+    5: { width: 290, gap: 16, icon: 72 },
+  };
   const DEFAULT_PREFS = { lockAfterMinutes: 5, defaultSort: 'default' };
 
   function readJson(elementId) {
@@ -63,6 +74,14 @@ window.vaultApp = (function () {
       sortField: 'default',
       sortDir: 'asc',
       viewMode: 'list',
+      tileSize: 3,
+      selected: [],
+      // Which vault the context menu belongs to, and where it was raised.
+      menu: { open: false, vault: null, x: 0, y: 0 },
+      // The menu of the listing itself - what can be done here rather than to
+      // a row. Creating a vault is not an action on an existing one, so it
+      // cannot come from the action endpoint.
+      backgroundMenu: { open: false, x: 0, y: 0 },
       prefs: Object.assign({}, DEFAULT_PREFS),
       // The vault being created, or null. It carries everything the form
       // offers, because all of it is inside the signed payload.
@@ -101,6 +120,8 @@ window.vaultApp = (function () {
         this.colors = window.VAULT_COLOR_SWATCHES || [];
         const viewMode = readPreference(VIEW_MODE_KEY);
         if (viewMode) this.viewMode = viewMode;
+        const tileSize = Number(readPreference(TILE_SIZE_KEY));
+        if (TILE_STEPS[tileSize]) this.tileSize = tileSize;
         this.loadPrefs();
         this.initUnlock();
       },
@@ -199,7 +220,9 @@ window.vaultApp = (function () {
         const compare = {
           name: (a, b) => a.name.localeCompare(b.name),
           favorite: (a, b) => Number(b.is_favorite) - Number(a.is_favorite),
+          entries: (a, b) => (a.entry_count || 0) - (b.entry_count || 0),
           created: (a, b) => String(a.created_at).localeCompare(String(b.created_at)),
+          modified: (a, b) => String(a.updated_at).localeCompare(String(b.updated_at)),
         }[this.sortField];
         if (!compare) return rows;
         // A copy: sorting the array the caller handed us would reorder the
@@ -219,6 +242,229 @@ window.vaultApp = (function () {
         }
         if (unavailable) parts.push(unavailable + ' unavailable');
         return parts.join(' \u00b7 ');
+      },
+
+      shortDate: function (value) {
+        return window.vaultFormat.shortDate(value);
+      },
+
+      heading: function () {
+        return this.filter === 'favorites' ? 'Favorites' : 'My vaults';
+      },
+
+      filtering: function () {
+        return Boolean(this.search.trim()) || this.filter !== 'all';
+      },
+
+      // The row is the link. A vault that will not open is not one: it has no
+      // contents to show and no key to show them with, so following it would
+      // land on a screen that can only report the same failure.
+      openVault: function (vault) {
+        if (!vault || vault.tampered || vault.unopenable || vault.unreadable) return;
+        window.location.assign('/vault/' + vault.uuid);
+      },
+
+      // ---- the favourite star ----------------------------------------------
+
+      // Whether the registry offers either verb for this vault. Asking it
+      // rather than assuming keeps the star from being a button the server
+      // will refuse.
+      canFavorite: function (vault) {
+        const actions = (vault && this.vaultActions[vault.uuid]) || [];
+        return actions.some(function (action) {
+          return action.id === 'favorite' || action.id === 'unfavorite';
+        });
+      },
+
+      toggleFavorite: function (vault) {
+        const wanted = vault.is_favorite ? 'unfavorite' : 'favorite';
+        return this.runVaultAction({ id: wanted }, vault);
+      },
+
+      // ---- selection -------------------------------------------------------
+
+      isSelected: function (uuid) {
+        return this.selected.includes(uuid);
+      },
+
+      toggleSelection: function (uuid) {
+        this.selected = this.isSelected(uuid)
+          ? this.selected.filter(function (value) { return value !== uuid; })
+          : [...this.selected, uuid];
+      },
+
+      clearSelection: function () {
+        this.selected = [];
+      },
+
+      // Over what is on screen, never over everything the account holds: a
+      // filter that narrows the listing has to narrow what "all" means.
+      selectAll: function () {
+        this.selected = this.visibleVaults().map(function (vault) { return vault.uuid; });
+      },
+
+      selectAllState: function () {
+        const rows = this.visibleVaults();
+        if (!rows.length) return 'none';
+        const self = this;
+        const picked = rows.filter(function (vault) { return self.isSelected(vault.uuid); });
+        if (!picked.length) return 'none';
+        return picked.length === rows.length ? 'all' : 'partial';
+      },
+
+      toggleSelectAll: function () {
+        if (this.selectAllState() === 'all') return this.clearSelection();
+        return this.selectAll();
+      },
+
+      // Only what is both selected and shown: a row the filter hides is a row
+      // the bar must not count, and must not act on.
+      selectedVaults: function () {
+        const self = this;
+        return this.visibleVaults().filter(function (vault) {
+          return self.isSelected(vault.uuid);
+        });
+      },
+
+      // The actions every selected vault was offered, kept to the ones the
+      // registry marks as working on a batch. The favourite verbs are decided
+      // over the selection as a whole, for the reason the entry bar does it:
+      // intersecting the filtered lists would offer neither on a mixed one.
+      bulkActions: function () {
+        const rows = this.selectedVaults();
+        if (!rows.length) return [];
+        const self = this;
+        const lists = rows.map(function (vault) {
+          return self.vaultActions[vault.uuid] || [];
+        });
+        const shared = lists[0].filter(function (action) {
+          return (
+            action.bulk &&
+            lists.every(function (list) {
+              return list.some(function (other) { return other.id === action.id; });
+            })
+          );
+        });
+        const allFavorite = rows.every(function (vault) { return vault.is_favorite; });
+        const noneFavorite = rows.every(function (vault) { return !vault.is_favorite; });
+        return shared.filter(function (action) {
+          if (action.id === 'favorite') return !allFavorite;
+          if (action.id === 'unfavorite') return !noneFavorite;
+          return true;
+        });
+      },
+
+      // The bar addresses several vaults at once, and asks once for the
+      // batch: one confirmation per row is what trains people to click
+      // through the question that matters.
+      runBulkVaultAction: async function (action) {
+        const rows = this.selectedVaults();
+        if (!rows.length) return;
+        const offered = this.bulkActions().some(function (candidate) {
+          return candidate.id === action.id;
+        });
+        if (!offered) return;
+
+        if (action.id === 'delete') {
+          const confirmed = await this.confirm(
+            rows.length === 1
+              ? 'Delete this vault and everything in it?'
+              : 'Delete these ' + rows.length + ' vaults and everything in them?',
+            {
+              title: 'This cannot be undone',
+              okLabel: 'Delete',
+              okClass: 'btn-error',
+            }
+          );
+          if (!confirmed) return;
+        }
+
+        this.busy = true;
+        let failed = false;
+        try {
+          for (const vault of rows) {
+            if (action.id === 'delete') {
+              await window.vaultApi.deleteVault(vault.uuid);
+            } else {
+              const body = await window.buildVaultUpdateRequest(
+                window.vaultSession, vault, { is_favorite: action.id === 'favorite' }
+              );
+              await window.vaultApi.updateVault(vault.uuid, body);
+            }
+          }
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          failed = true;
+        } finally {
+          this.busy = false;
+        }
+        // Reloaded before the message: the listing is what says where the
+        // batch got to, and it clears the error line on its way in.
+        await this.loadVaults();
+        if (failed) {
+          this.error = 'That change could not be applied to every vault. The listing is current.';
+        }
+      },
+
+      // ---- tiles -----------------------------------------------------------
+
+      setTileSize: function (size) {
+        const step = Number(size);
+        // Off the scale is a bug or a stale preference, and a tile of zero
+        // pixels is not a smaller tile.
+        if (!TILE_STEPS[step]) return;
+        this.tileSize = step;
+        writePreference(TILE_SIZE_KEY, String(step));
+      },
+
+      tileMinWidth: function () {
+        return TILE_STEPS[this.tileSize].width;
+      },
+
+      tileGap: function () {
+        return TILE_STEPS[this.tileSize].gap;
+      },
+
+      tileIconSize: function () {
+        return TILE_STEPS[this.tileSize].icon;
+      },
+
+      // ---- menus -----------------------------------------------------------
+
+      openVaultMenu: function (event, vault) {
+        if (event && event.preventDefault) event.preventDefault();
+        this.backgroundMenu = { open: false, x: 0, y: 0 };
+        this.menu = {
+          open: true,
+          vault: vault,
+          x: (event && event.clientX) || 0,
+          y: (event && event.clientY) || 0,
+        };
+      },
+
+      closeVaultMenu: function () {
+        this.menu = { open: false, vault: null, x: 0, y: 0 };
+      },
+
+      // Raised on the listing rather than on a row. The row handlers stop the
+      // event, so reaching here means the click landed on empty space.
+      openBackgroundMenu: function (event) {
+        if (event && event.preventDefault) event.preventDefault();
+        this.closeVaultMenu();
+        this.backgroundMenu = {
+          open: true,
+          x: (event && event.clientX) || 0,
+          y: (event && event.clientY) || 0,
+        };
+      },
+
+      closeBackgroundMenu: function () {
+        this.backgroundMenu = { open: false, x: 0, y: 0 };
+      },
+
+      closeMenus: function () {
+        this.closeVaultMenu();
+        this.closeBackgroundMenu();
       },
 
       setViewMode: function (mode) {
@@ -254,7 +500,9 @@ window.vaultApp = (function () {
       onLocked: function () {
         this.vaults = [];
         this.vaultActions = {};
+        this.selected = [];
         this.openMenuFor = null;
+        this.closeMenus();
         this.vaultDialog = null;
         // The dialog lives inside the unlocked subtree, so a lock hides it
         // without closing it, and the next unlock would reopen it on its own.
@@ -293,6 +541,9 @@ window.vaultApp = (function () {
         // even though nothing renders it.
         if (!window.vaultSession.isUnlocked()) return;
         this.vaults = decrypted;
+        // The rows the selection named have just been replaced.
+        this.selected = [];
+        this.closeMenus();
         await this.loadVaultActions();
       },
 

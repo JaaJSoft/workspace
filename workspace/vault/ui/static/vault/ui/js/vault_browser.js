@@ -796,15 +796,8 @@ window.vaultBrowser = (function () {
         return type ? type.icon : 'file-question';
       },
 
-      // Formatted here rather than by the server, like everything else on
-      // this page: the locale is the browser's.
       shortDate: function (value) {
-        if (!value) return '-';
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return '-';
-        return date.toLocaleDateString(undefined, {
-          year: 'numeric', month: 'short', day: 'numeric',
-        });
+        return window.vaultFormat.shortDate(value);
       },
 
       vaultName: function () {

@@ -23,7 +23,12 @@
   The two differ in how they use the viewport: the listing scrolls with the
   page, the browser is a fixed shell with its own scrolling pane.
 {% endcomment %}
-{% block drawer_class %}lg:drawer-open{% endblock %}
+{% comment %}
+  drawer-open, not lg:drawer-open. Below lg the latter turns the drawer into
+  an overlay that slides over the page and needs a hamburger to summon it;
+  files keeps it open at every width and narrows it to the icon rail instead.
+{% endcomment %}
+{% block drawer_class %}drawer-open{% endblock %}
 {% block drawer_id %}vault-drawer{% endblock %}
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
@@ -146,6 +151,7 @@
   <script src="{% static 'vault/ui/js/folder_write.js' %}"></script>
   <script src="{% static 'vault/ui/js/clipboard.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_resign.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_format.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_sidebar.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_app.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>

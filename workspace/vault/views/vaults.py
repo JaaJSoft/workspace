@@ -9,7 +9,7 @@ which is the only part of the trust chain it can hold.
 """
 
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch, Q
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
 from drf_spectacular.utils import extend_schema
@@ -60,6 +60,13 @@ class VaultListView(CacheControlMixin, APIView):
                     queryset=VaultKeyWrap.objects.filter(recipient=request.user),
                     to_attr="own_wraps",
                 )
+            )
+            # Annotated, not counted per row: a count in the serializer would
+            # put the listing back on one query per vault. The trash is left
+            # out because the number answers "how much is in this vault", and
+            # a trashed entry is on its way out of it.
+            .annotate(
+                entry_count=Count("entries", filter=Q(entries__deleted_at__isnull=True))
             )
         )
         return Response(

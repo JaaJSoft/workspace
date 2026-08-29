@@ -195,3 +195,25 @@ class UnlockWalkTests(PlaywrightTestCase):
         self.page.reload()
         self._unlock()
         self._wait_for_vault_named("Work", timeout=60000)
+
+    def test_the_two_context_menus_answer_to_what_was_right_clicked(self):
+        """A row's menu addresses that vault, the empty space's addresses the
+        listing. Only a browser settles it: the row's handler and the pane's
+        handler are the same event travelling up, and a missing ``.stop``
+        replaces the vault menu with the listing one without failing."""
+        self._onboard()
+        self.page.reload()
+        self._unlock()
+        self._wait_for_vault_named("Personal", timeout=60000)
+
+        self.page.get_by_text("Personal", exact=True).click(button="right")
+        menu = self.page.locator("ul.menu:visible")
+        menu.get_by_text("Personal", exact=True).wait_for(timeout=5000)
+        self.assertEqual(menu.get_by_text("New vault", exact=True).count(), 0)
+
+        self.page.locator("#vault-list-pane").click(
+            button="right", position={"x": 400, "y": 400}
+        )
+        self.page.locator("ul.menu:visible").get_by_text(
+            "New vault", exact=True
+        ).wait_for(timeout=5000)

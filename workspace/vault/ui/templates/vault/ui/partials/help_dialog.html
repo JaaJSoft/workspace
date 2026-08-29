@@ -1,0 +1,52 @@
+{% comment %}
+  What the sidebar's Help row opens. It answers the questions this module
+  cannot answer anywhere else: nothing here can recover a master password, and
+  a user who does not know that before losing one finds out too late.
+{% endcomment %}
+<dialog id="vault-help-dialog" class="modal">
+  <div class="modal-box max-w-lg">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i data-lucide="circle-help" class="w-5 h-5 text-error"></i>
+      About your vault
+    </h3>
+
+    <div class="mt-4 space-y-4 text-sm">
+      <div>
+        <h4 class="font-semibold mb-1">Everything is encrypted here</h4>
+        <p class="text-base-content/70">
+          Names, passwords and notes are sealed in this page before anything is
+          sent. The server stores ciphertext it cannot read, and every record
+          carries a signature from your account that it cannot forge.
+        </p>
+      </div>
+
+      <div>
+        <h4 class="font-semibold mb-1">Your master password cannot be reset</h4>
+        <p class="text-base-content/70">
+          It never leaves this page, so nobody - not an administrator, not the
+          server - can recover it or the vaults it opens. Your recovery key is
+          the only other way in: keep it somewhere you would still have if you
+          lost this device.
+        </p>
+      </div>
+
+      <div>
+        <h4 class="font-semibold mb-1">The vault locks itself</h4>
+        <p class="text-base-content/70">
+          After a few idle minutes the keys are dropped from memory and the
+          screen empties. The delay is yours to set, in Preferences, beside the
+          countdown in the sidebar.
+        </p>
+      </div>
+    </div>
+
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

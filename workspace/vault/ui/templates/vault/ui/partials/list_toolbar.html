@@ -1,35 +1,46 @@
 {% comment %}
-  The title, then the controls - rather than controls straight against the
-  top of the pane, which read as a fragment of a page whose heading had been
-  forgotten.
+  The two bars the file browser has: what the page is, then how it is being
+  looked at. They are separated by a rule because they answer different
+  questions - one names the listing, the other narrows it.
 {% endcomment %}
-<div class="px-4 pt-4 pb-3 border-b border-base-300 flex-shrink-0">
-  <div class="flex items-center gap-3 flex-wrap">
-    <h1 class="text-2xl font-bold" x-text="heading()"></h1>
+<div
+  class="bg-base-100 border-b border-base-300 px-4 py-3 lg:px-6 lg:py-4 flex-shrink-0"
+>
+  {% comment %}
+    No flex-wrap: wrapping pulls the button up beside the title as soon as the
+    viewport narrows, and an action that moves is an action to look for.
+  {% endcomment %}
+  <div class="flex items-center gap-3">
+    <h1 class="text-2xl font-bold truncate" x-text="heading()"></h1>
     <span
-      class="badge badge-success badge-outline gap-1 hidden lg:inline-flex ml-auto"
+      class="badge badge-success badge-outline gap-1 hidden sm:inline-flex flex-shrink-0"
       title="Every field of every vault is encrypted before it leaves this page"
     >
       <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
       Everything encrypted
     </span>
+    <div class="flex-1"></div>
     <button
       type="button"
-      class="btn btn-primary btn-sm gap-2"
+      class="btn btn-error btn-sm gap-2 flex-shrink-0"
       @click="openCreateDialog()"
     >
       <i data-lucide="plus" class="w-4 h-4"></i>
       <span class="hidden sm:inline">New vault</span>
     </button>
   </div>
+</div>
 
-  <div class="flex items-center gap-2 mt-3 flex-wrap">
-    <label class="input input-sm input-bordered flex items-center gap-2 w-64">
-      <i data-lucide="search" class="w-4 h-4 opacity-50"></i>
+<div class="bg-base-100 border-b border-base-300 px-3 py-2 flex-shrink-0">
+  <div class="flex flex-wrap items-center gap-2">
+    <label
+      class="input input-sm input-bordered flex items-center gap-2 w-full sm:w-48 md:w-64"
+    >
+      <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
       <input
         type="search"
         class="grow"
-        placeholder="Search vaults…"
+        placeholder="Filter by name"
         x-model.debounce.200ms="search"
         autocomplete="off"
         spellcheck="false"
@@ -42,7 +53,7 @@
         x-model="sortField"
         aria-label="Sort by"
       >
-        <option value="default">Sort: default</option>
+        <option value="default">Default</option>
         <option value="name">Name</option>
         <option value="favorite">Favorite</option>
         <option value="entries">Entries</option>
@@ -69,57 +80,61 @@
     <button
       type="button"
       class="btn btn-sm btn-ghost"
-      x-show="filtering()"
-      @click="clearFilter()"
+      title="Reset filters and sorting"
+      @click="resetAll()"
     >
       Reset
     </button>
 
-    {% comment %}
-      The tile slider, in the grid only: it drives the grid's own geometry, so
-      in the list there is nothing for it to size.
-    {% endcomment %}
-    <div
-      class="flex items-center gap-1.5 text-error ml-auto"
-      x-show="viewMode === 'grid'"
-      x-cloak
-    >
-      <i data-lucide="grid-2x2" class="w-3 h-3 opacity-60"></i>
-      <input
-        type="range"
-        min="1"
-        max="5"
-        step="1"
-        x-model.number="tileSize"
-        @change="setTileSize(tileSize)"
-        class="range range-xs range-error w-24"
-        title="Tile size"
-        aria-label="Tile size"
-      />
-      <i data-lucide="grid-2x2" class="w-5 h-5 opacity-60"></i>
-    </div>
+    <div class="flex-1"></div>
 
-    <div class="join" :class="viewMode === 'grid' ? '' : 'ml-auto'">
-      <button
-        type="button"
-        class="btn btn-sm btn-outline join-item"
-        :class="viewMode === 'list' ? 'bg-error/10 text-error' : ''"
-        @click="setViewMode('list')"
-        title="List view"
-        aria-label="List view"
+    <div class="flex items-center gap-2 shrink-0">
+      {% comment %}
+        The tile slider, in the grid only: it drives the grid's own geometry,
+        so in the list there is nothing for it to size.
+      {% endcomment %}
+      <div
+        class="flex items-center gap-1.5 text-error"
+        x-show="viewMode === 'grid'"
+        x-cloak
       >
-        <i data-lucide="list" class="w-4 h-4"></i>
-      </button>
-      <button
-        type="button"
-        class="btn btn-sm btn-outline join-item"
-        :class="viewMode === 'grid' ? 'bg-error/10 text-error' : ''"
-        @click="setViewMode('grid')"
-        title="Grid view"
-        aria-label="Grid view"
-      >
-        <i data-lucide="grid-2x2" class="w-4 h-4"></i>
-      </button>
+        <i data-lucide="grid-2x2" class="w-3 h-3 opacity-60"></i>
+        <input
+          type="range"
+          min="1"
+          max="5"
+          step="1"
+          x-model.number="tileSize"
+          @change="setTileSize(tileSize)"
+          class="range range-xs range-error w-24"
+          title="Tile size"
+          aria-label="Tile size"
+        />
+        <i data-lucide="grid-2x2" class="w-5 h-5 opacity-60"></i>
+      </div>
+
+      <div class="join">
+        <button
+          type="button"
+          class="btn btn-sm btn-outline join-item"
+          :class="viewMode === 'list' ? 'bg-error/10 text-error' : ''"
+          @click="setViewMode('list')"
+          title="List view"
+          aria-label="List view"
+        >
+          <i data-lucide="list" class="w-4 h-4"></i>
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline join-item"
+          :class="viewMode === 'grid' ? 'bg-error/10 text-error' : ''"
+          @click="setViewMode('grid')"
+          title="Grid view"
+          aria-label="Grid view"
+        >
+          <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+        </button>
+      </div>
     </div>
   </div>
 </div>

@@ -130,6 +130,7 @@
       <template x-if="state === 'unlocked'">
         <div class="h-full flex flex-col min-h-0">
           {% include "vault/ui/partials/list_content.html" %}
+          {% include "vault/ui/partials/help_dialog.html" %}
           {% include "vault/ui/partials/create_vault_dialog.html" %}
           {% include "vault/ui/partials/vault_dialog.html" %}
         </div>
@@ -152,6 +153,7 @@
   <script src="{% static 'vault/ui/js/clipboard.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_resign.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_format.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_menu.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_sidebar.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_app.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>

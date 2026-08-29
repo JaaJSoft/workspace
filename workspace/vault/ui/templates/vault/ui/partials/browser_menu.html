@@ -3,41 +3,5 @@
   names, in the order the server returned. No fallback list: an entry the
   caller cannot reach comes back empty, and an empty menu is the honest
   rendering of that.
-
-  The :style MUST stay the object form. A string makes Alpine write the whole
-  style attribute, erasing the display:none x-show had just set - the menu
-  then stays on screen at 0,0, and only sometimes, depending on which effect
-  flushes last.
 {% endcomment %}
-<div
-  x-show="menu.open"
-  x-cloak
-  class="fixed z-50"
-  :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
-  @click.outside="closeMenu()"
->
-  <ul
-    class="menu bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 w-60 text-sm p-2"
-  >
-    <li
-      class="menu-title text-xs truncate"
-      x-text="menu.entry ? menu.entry.name : ''"
-    ></li>
-    <template x-for="action in menuActions()" :key="action.id">
-      <li>
-        <button
-          type="button"
-          class="gap-3"
-          :class="action.css_class"
-          @click="runAction(action, menu.entry)"
-        >
-          <i :data-lucide="action.icon" class="w-4 h-4"></i>
-          <span x-text="action.label"></span>
-        </button>
-      </li>
-    </template>
-    <li x-show="menuActions().length === 0">
-      <span class="opacity-50">Nothing can be done with this entry</span>
-    </li>
-  </ul>
-</div>
+{% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/browser_menu_items.html" open="menu.open" close="closeMenu()" x="menu.x" y="menu.y" id="entry-context-menu" width="w-60" %}

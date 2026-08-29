@@ -252,10 +252,6 @@ window.vaultApp = (function () {
         return this.filter === 'favorites' ? 'Favorites' : 'My vaults';
       },
 
-      filtering: function () {
-        return Boolean(this.search.trim()) || this.filter !== 'all';
-      },
-
       // The row is the link. A vault that will not open is not one: it has no
       // contents to show and no key to show them with, so following it would
       // land on a screen that can only report the same failure.
@@ -440,6 +436,7 @@ window.vaultApp = (function () {
           x: (event && event.clientX) || 0,
           y: (event && event.clientY) || 0,
         };
+        window.vaultMenu.fit(this, 'vault-context-menu', 'menu');
       },
 
       closeVaultMenu: function () {
@@ -456,6 +453,7 @@ window.vaultApp = (function () {
           x: (event && event.clientX) || 0,
           y: (event && event.clientY) || 0,
         };
+        window.vaultMenu.fit(this, 'vault-listing-menu', 'backgroundMenu');
       },
 
       closeBackgroundMenu: function () {
@@ -472,9 +470,14 @@ window.vaultApp = (function () {
         writePreference(VIEW_MODE_KEY, mode);
       },
 
-      clearFilter: function () {
+      // Back to the listing this account would get on a fresh load: the
+      // saved default sort, not "no sort", or the button would undo a
+      // preference the user set on purpose.
+      resetAll: function () {
         this.search = '';
         this.filter = 'all';
+        this.sortField = this.prefs.defaultSort;
+        this.sortDir = 'asc';
       },
 
       toggleSortDir: function () {
@@ -694,6 +697,9 @@ window.vaultApp = (function () {
           if (!window.vaultSession.isUnlocked()) return;
           this.vaults.push(created);
           this.closeCreateDialog();
+          // The actions map is keyed by uuid and was answered before this
+          // vault existed, so without this the new row offers nothing.
+          await this.loadVaultActions();
         } catch (err) {
           // The vault is written; only the local half was cut short. Saying
           // it could not be created would be false, and the retry after the

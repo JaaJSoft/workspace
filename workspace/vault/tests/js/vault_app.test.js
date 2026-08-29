@@ -11,6 +11,7 @@ function app(session = {}, api = {}, crypto = {}) {
   visited.length = 0;
   const ctx = loadScripts([
     'workspace/vault/ui/static/vault/ui/js/vault_format.js',
+    'workspace/vault/ui/static/vault/ui/js/vault_menu.js',
     'workspace/vault/ui/static/vault/ui/js/vault_unlock.js',
     'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
     'workspace/vault/ui/static/vault/ui/js/vault_create.js',
@@ -1237,4 +1238,42 @@ test('a bulk verb the selection was not offered is refused', async () => {
   component.toggleSelection('v-2');
   await component.runBulkVaultAction({ id: 'delete' });
   assert.deepStrictEqual(Array.from(deleted), []);
+});
+
+test('a vault just created carries the actions the endpoint answers for it', async () => {
+  // The map is keyed by uuid and was filled before this vault existed, so
+  // without a second ask the new row offers nothing at all.
+  const asked = [];
+  const component = app({ isUnlocked: () => true }, {
+    listVaults: async () => [],
+    createVault: async (body) => ({ ...body }),
+    fetchVaultActions: async (uuids) => {
+      asked.push(uuids);
+      return { 'vault-uuid': [{ id: 'rename', label: 'Rename', icon: 'pen', category: 'edit' }] };
+    },
+  });
+  await component.unlock();
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
+  await component.createVault();
+  assert.deepEqual(Array.from(asked[asked.length - 1]), ['vault-uuid']);
+  assert.deepEqual(
+    component.actionsFor(component.vaults[0]).map((a) => a.id),
+    ['rename']
+  );
+});
+
+test('reset puts the listing back to the default this account saved', async () => {
+  const component = app({ isUnlocked: () => true });
+  await component.unlock();
+  component.prefs.defaultSort = 'name';
+  component.search = 'work';
+  component.filter = 'favorites';
+  component.sortField = 'entries';
+  component.sortDir = 'desc';
+  component.resetAll();
+  assert.equal(component.search, '');
+  assert.equal(component.filter, 'all');
+  assert.equal(component.sortField, 'name');
+  assert.equal(component.sortDir, 'asc');
 });

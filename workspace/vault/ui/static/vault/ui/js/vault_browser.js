@@ -355,6 +355,7 @@ window.vaultBrowser = (function () {
           x: (event && event.clientX) || 0,
           y: (event && event.clientY) || 0,
         };
+        window.vaultMenu.fit(this, 'entry-context-menu', 'menu');
         let answer;
         try {
           answer = await window.vaultApi.fetchEntryActions([entry.uuid]);

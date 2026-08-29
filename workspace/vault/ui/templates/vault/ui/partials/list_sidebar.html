@@ -10,7 +10,7 @@
     class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
     :class="collapsed ? 'w-16' : 'w-72'"
   >
-    <div class="border-b border-base-300 py-3 px-3">
+    <div class="border-b border-base-300 py-3 px-3 relative">
       <div
         class="flex items-center"
         :class="collapsed ? 'justify-center' : 'justify-between'"
@@ -28,7 +28,7 @@
           </span>
           <span x-show="!collapsed" x-transition>Vault</span>
         </h2>
-        {% include "vault/ui/partials/list_preferences.html" %}
+        {% include "ui/partials/preferences_popover.html" with content="vault/ui/partials/_preferences_content.html" accent="text-error" button_class="mr-1 hover:text-error" show_expr="!collapsed" %}
       </div>
     </div>
 

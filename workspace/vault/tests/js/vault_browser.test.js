@@ -69,6 +69,7 @@ function browser(options = {}) {
   const ctx = loadScripts(
     [
       'workspace/vault/ui/static/vault/ui/js/vault_format.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_menu.js',
       'workspace/vault/ui/static/vault/ui/js/vault_unlock.js',
       'workspace/vault/ui/static/vault/ui/js/vault_store.js',
       'workspace/vault/ui/static/vault/ui/js/vault_reader.js',

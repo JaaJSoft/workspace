@@ -9,6 +9,11 @@ wrapper, since some menus hold several (one per node type).
 
 Rows should be built with `ui/partials/context_menu_item.html`.
 
+The `:style` binding is the object form, and must stay one: Alpine writes a
+string `:style` as the whole style attribute, erasing the `display: none`
+`x-show` had just set. The menu then stays on screen at its last coordinates -
+only sometimes, depending on which of the two effects flushes last.
+
 Params (Alpine expression fragments evaluated in the caller's scope, except
 `items`, `width` and `id` which are Django values):
   - items:  template path holding the menu's rows
@@ -25,7 +30,7 @@ Params (Alpine expression fragments evaluated in the caller's scope, except
   @click.outside="{{ close }}"
   @keydown.escape.window="{{ close }}"
   class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg {{ width|default:'w-56' }} p-1"
-  :style="'top:' + ({{ y }}) + 'px; left:' + ({{ x }}) + 'px'"
+  :style="{ top: ({{ y }}) + 'px', left: ({{ x }}) + 'px' }"
   {% if id %}id="{{ id }}"{% endif %}
 >
   {% include items %}

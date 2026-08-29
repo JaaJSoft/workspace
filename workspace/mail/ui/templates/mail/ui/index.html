@@ -33,9 +33,18 @@
     >
       <!-- Account actions -->
       <div
-        class="px-3 pt-2 pb-1 flex items-center gap-1"
+        class="px-3 py-2 border-b border-base-300 flex items-center gap-2"
         :class="collapsed ? 'flex-col' : ''"
       >
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square hover:text-warning"
+          @click="showAddAccount()"
+          title="Add account"
+          aria-label="Add account"
+        >
+          <i data-lucide="mail-plus" class="w-4 h-4"></i>
+        </button>
         <button
           type="button"
           class="btn btn-ghost btn-sm gap-1.5 hover:text-warning"
@@ -49,26 +58,13 @@
         </button>
         <button
           type="button"
-          class="btn btn-ghost btn-sm gap-1.5 hover:text-warning"
-          :class="collapsed ? 'btn-square' : 'flex-1'"
-          @click="showAddAccount()"
-          title="Add account"
-          aria-label="Add account"
-        >
-          <i data-lucide="mail-plus" class="w-4 h-4"></i>
-          <span x-show="!collapsed">Add account</span>
-        </button>
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm gap-1.5 hover:text-warning"
-          :class="collapsed ? 'btn-square' : 'flex-1'"
+          class="btn btn-ghost btn-sm btn-square hover:text-warning"
           x-show="accounts.length > 0"
           @click="showEditAccount(accounts.find(a => a.uuid === selectedFolder?.account) || accounts[0])"
           title="Manage account"
           aria-label="Manage account"
         >
           <i data-lucide="settings" class="w-4 h-4"></i>
-          <span x-show="!collapsed">Manage</span>
         </button>
       </div>
 

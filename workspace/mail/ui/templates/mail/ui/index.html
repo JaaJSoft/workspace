@@ -31,11 +31,45 @@
       class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14"
       :class="collapsed ? 'w-16' : 'w-72'"
     >
-      <!-- Primary action -->
-      <div class="px-3 pt-2 pb-1">
-        <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="plus" label="Compose" color="warning" onclick="showCompose()" title_binding="'Compose (C)'" aria_label="Compose" %}
-        </ul>
+      <!-- Account actions -->
+      <div
+        class="px-3 pt-2 pb-1 flex items-center gap-1"
+        :class="collapsed ? 'flex-col' : ''"
+      >
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm gap-1.5 hover:text-warning"
+          :class="collapsed ? 'btn-square' : 'flex-1'"
+          @click="showCompose()"
+          title="Compose (C)"
+          aria-label="Compose"
+        >
+          <i data-lucide="square-pen" class="w-4 h-4"></i>
+          <span x-show="!collapsed">Compose</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm gap-1.5 hover:text-warning"
+          :class="collapsed ? 'btn-square' : 'flex-1'"
+          @click="showAddAccount()"
+          title="Add account"
+          aria-label="Add account"
+        >
+          <i data-lucide="mail-plus" class="w-4 h-4"></i>
+          <span x-show="!collapsed">Add account</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm gap-1.5 hover:text-warning"
+          :class="collapsed ? 'btn-square' : 'flex-1'"
+          x-show="accounts.length > 0"
+          @click="showEditAccount(accounts.find(a => a.uuid === selectedFolder?.account) || accounts[0])"
+          title="Manage account"
+          aria-label="Manage account"
+        >
+          <i data-lucide="settings" class="w-4 h-4"></i>
+          <span x-show="!collapsed">Manage</span>
+        </button>
       </div>
 
       <!-- Folder list -->

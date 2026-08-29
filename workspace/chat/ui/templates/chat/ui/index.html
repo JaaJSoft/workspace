@@ -84,16 +84,6 @@ be defined before the parser reaches the markup using it, or server-rendered
            'transition-all duration-300': sidebarMounted,
          }"
     >
-      <!-- Primary actions -->
-      <div class="px-3 pt-2 pb-2">
-        <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="plus" label="New conversation" color="info" onclick="showNewConversationDialog()" title_binding="'New conversation (Alt+N)'" aria_label="New conversation" %}
-          {% if ai_enabled %}
-            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="New AI chat" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI chat" %}
-          {% endif %}
-        </ul>
-      </div>
-
       <!-- Search + conversation list (shared convSearch scope) -->
       <div
         class="flex-1 min-h-0 flex flex-col"
@@ -106,8 +96,15 @@ be defined before the parser reaches the markup using it, or server-rendered
            },
          }"
       >
-        <div class="px-3 pt-3" x-show="!collapsed" x-cloak>
-          <label class="input input-sm input-bordered w-full flex items-center gap-2">
+        <div
+          class="px-3 pt-2 flex items-center gap-1"
+          :class="collapsed ? 'flex-col' : ''"
+        >
+          <label
+            class="input input-sm input-bordered flex items-center gap-2 grow"
+            x-show="!collapsed"
+            x-cloak
+          >
             <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
             <input
               type="search"
@@ -128,6 +125,26 @@ be defined before the parser reaches the markup using it, or server-rendered
               <i data-lucide="x" class="w-3 h-3"></i>
             </button>
           </label>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square hover:text-info"
+            @click="showNewConversationDialog()"
+            title="New conversation (Alt+N)"
+            aria-label="New conversation"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+          {% if ai_enabled %}
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-square hover:text-secondary"
+              @click="botFilter = ''; showBotPicker = true"
+              title="New AI chat"
+              aria-label="New AI chat"
+            >
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+            </button>
+          {% endif %}
         </div>
         {% comment %}The cloak wrapper stays outside the #conversation-list swap
       target so alpine-ajax refreshes never re-hide the list; "invisible" keeps

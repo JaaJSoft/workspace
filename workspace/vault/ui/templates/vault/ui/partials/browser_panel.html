@@ -106,6 +106,7 @@
           type="button"
           class="btn btn-sm btn-ghost gap-2"
           x-show="panelHasAction('restore')"
+          @click="runAction({ id: 'restore' }, panelEntry)"
         >
           <i data-lucide="undo-2" class="w-4 h-4"></i>
           Restore
@@ -115,6 +116,7 @@
           class="btn btn-sm btn-ghost text-error btn-square"
           x-show="panelHasAction('trash')"
           aria-label="Move to trash"
+          @click="runAction({ id: 'trash' }, panelEntry)"
         >
           <i data-lucide="trash-2" class="w-4 h-4"></i>
         </button>
@@ -122,6 +124,7 @@
           type="button"
           class="btn btn-sm btn-ghost text-error gap-2"
           x-show="panelHasAction('delete_forever')"
+          @click="runAction({ id: 'delete_forever' }, panelEntry)"
         >
           <i data-lucide="trash-2" class="w-4 h-4"></i>
           Delete for good

@@ -16,6 +16,17 @@ window.vaultBrowser = (function () {
   const COLLAPSED_KEY = 'vault.sidebar.collapsed';
   const VIEW_MODE_KEY = 'vault.browser.viewMode';
 
+  // Which actions stop and ask. The trash is not among them: it is reversible
+  // and asking about a reversible thing is what teaches people to click
+  // through the question that matters. Destroying is the one no restore
+  // reaches, so it is the one that asks.
+  const CONFIRMS = {
+    delete_forever: (count) =>
+      count === 1
+        ? 'Destroy this entry? It is not in the trash afterwards - it is gone.'
+        : 'Destroy these ' + count + ' entries? They are not in the trash afterwards - they are gone.',
+  };
+
   function readJson(elementId) {
     const element = document.getElementById(elementId);
     if (!element) return null;
@@ -451,6 +462,68 @@ window.vaultBrowser = (function () {
         }[action.id];
         if (copies) return this.copyField(entry, copies[0], copies[1], copies[2]);
         if (action.id === 'open_uri') return this.openUri(entry);
+        if (CONFIRMS[action.id]) {
+          const confirmed = await this.confirm(CONFIRMS[action.id](1));
+          if (!confirmed) return;
+        }
+        await this.applyTo(action.id, [entry]);
+      },
+
+      // The selection bar. The offer was already narrowed to what every
+      // selected row supports, and the question is asked once for the batch -
+      // one confirmation per row would train the user to click through them.
+      runBulkAction: async function (action) {
+        const rows = this.selectedEntries();
+        if (!rows.length) return;
+        const offered = this.bulkActions().some(function (candidate) {
+          return candidate.id === action.id;
+        });
+        if (!offered) return;
+        if (CONFIRMS[action.id]) {
+          const confirmed = await this.confirm(CONFIRMS[action.id](rows.length));
+          if (!confirmed) return;
+        }
+        await this.applyTo(action.id, rows);
+      },
+
+      // One row or many, the same path. It stops at the first refusal rather
+      // than pressing on: a batch that half-happened and said nothing is
+      // worse than one that stopped and said where.
+      applyTo: async function (actionId, rows) {
+        const call = {
+          trash: function (uuid) { return window.vaultApi.trashEntry(uuid); },
+          restore: function (uuid) { return window.vaultApi.restoreEntry(uuid); },
+          delete_forever: function (uuid) { return window.vaultApi.purgeEntry(uuid); },
+        }[actionId];
+        if (!call) return;
+        this.busy = true;
+        let failure = null;
+        try {
+          for (const row of rows) {
+            await call(row.uuid);
+          }
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          failure = err;
+        } finally {
+          this.busy = false;
+        }
+        // The reload comes first and the message after it: reloading is what
+        // makes the listing describe what actually happened, and it clears
+        // the error line on its way in.
+        await this.load();
+        if (failure) {
+          this.error =
+            'That change could not be applied to every entry. The listing above is current.';
+        }
+      },
+
+      // Overridable so a test can answer without a dialog, and so the page
+      // uses the application's own confirm rather than the browser's.
+      confirm: function (message) {
+        return window.AppDialog
+          ? window.AppDialog.confirm(message)
+          : Promise.resolve(true);
       },
 
       // The one moment a secret is decrypted. It is opened, handed to the

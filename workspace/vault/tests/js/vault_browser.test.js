@@ -898,3 +898,169 @@ test('a lock takes the secret back off the clipboard', async () => {
   // The last write wins, and it is the empty one.
   assert.equal(copied[copied.length - 1], '');
 });
+
+// --- the trash -------------------------------------------------------------
+
+const TRASH_ACTIONS = {
+  restore: { id: 'restore', label: 'Restore', icon: 'undo-2', bulk: true, css_class: '' },
+  delete_forever: {
+    id: 'delete_forever', label: 'Delete for good', icon: 'trash-2',
+    bulk: true, css_class: 'text-error',
+  },
+};
+
+function trashed(uuid) {
+  return Object.assign(entryRow(uuid), { deleted_at: '2026-08-28T09:00:00Z' });
+}
+
+test('the trash lists only the rows the server marked deleted', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [trashed('e-2')] : [entryWith('e-1')],
+    },
+  });
+  component.init();
+  await component.load();
+  component.setView('trash');
+  assert.deepStrictEqual(
+    Array.from(component.visibleEntries(), (entry) => entry.uuid),
+    ['e-2'],
+  );
+  // A folder is never in the trash: deleting one is immediate and composite.
+  assert.deepStrictEqual(Array.from(component.visibleFolders()), []);
+});
+
+test('restoring sends no signature and asks for nothing', async () => {
+  // deleted_at is outside the signed payload, so there is nothing to re-sign
+  // and nothing to verify - which is also what makes it idempotent.
+  const calls = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
+      fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.restore] }),
+      restoreEntry: async (uuid) => { calls.push(uuid); return {}; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.setView('trash');
+  await component.runAction(TRASH_ACTIONS.restore, component.entries[0]);
+  assert.deepStrictEqual(Array.from(calls), ['e-1']);
+});
+
+test('destroying an entry asks first, and a refusal writes nothing', async () => {
+  const calls = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
+      fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.delete_forever] }),
+      purgeEntry: async (uuid) => { calls.push(uuid); return {}; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.setView('trash');
+
+  component.confirm = async () => false;
+  await component.runAction(TRASH_ACTIONS.delete_forever, component.entries[0]);
+  assert.deepStrictEqual(Array.from(calls), []);
+
+  component.confirm = async () => true;
+  await component.runAction(TRASH_ACTIONS.delete_forever, component.entries[0]);
+  assert.deepStrictEqual(Array.from(calls), ['e-1']);
+});
+
+test('trashing an entry is a delete, not a rewrite', async () => {
+  const calls = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.trash] }),
+      trashEntry: async (uuid) => { calls.push(uuid); return null; },
+      updateEntry: async () => { throw new Error('the trash must not re-sign'); },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.runAction(ACTION.trash, component.entries[0]);
+  assert.deepStrictEqual(Array.from(calls), ['e-1']);
+});
+
+test('a bulk action runs over every selected row', async () => {
+  const calls = [];
+  let asked = 0;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1'), entryWith('e-2')],
+      fetchEntryActions: async () => ({
+        'e-1': [ACTION.trash],
+        'e-2': [ACTION.trash],
+      }),
+      trashEntry: async (uuid) => { calls.push(uuid); return null; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.confirm = async () => { asked += 1; return true; };
+  component.toggleSelection('e-1');
+  component.toggleSelection('e-2');
+  await component.runBulkAction(ACTION.trash);
+  assert.deepStrictEqual(Array.from(calls).sort(), ['e-1', 'e-2']);
+  // The trash is reversible, so it does not stop and ask. Asking about a
+  // reversible thing is what teaches people to click through the question
+  // that matters.
+  assert.equal(asked, 0);
+});
+
+test('destroying a batch asks once, not once per row', async () => {
+  const calls = [];
+  let asked = 0;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [trashed('e-1'), trashed('e-2')] : [],
+      fetchEntryActions: async () => ({
+        'e-1': [TRASH_ACTIONS.delete_forever],
+        'e-2': [TRASH_ACTIONS.delete_forever],
+      }),
+      purgeEntry: async (uuid) => { calls.push(uuid); return {}; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.setView('trash');
+  component.confirm = async () => { asked += 1; return true; };
+  component.toggleSelection('e-1');
+  component.toggleSelection('e-2');
+  await component.runBulkAction(TRASH_ACTIONS.delete_forever);
+  assert.deepStrictEqual(Array.from(calls).sort(), ['e-1', 'e-2']);
+  assert.equal(asked, 1);
+});
+
+test('a bulk action stops at the first refusal rather than half-finishing quietly', async () => {
+  const calls = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1'), entryWith('e-2')],
+      fetchEntryActions: async () => ({
+        'e-1': [ACTION.trash],
+        'e-2': [ACTION.trash],
+      }),
+      trashEntry: async (uuid) => {
+        calls.push(uuid);
+        if (uuid === 'e-1') throw new Error('refused');
+        return null;
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  component.toggleSelection('e-1');
+  component.toggleSelection('e-2');
+  await component.runBulkAction(ACTION.trash);
+  assert.deepStrictEqual(Array.from(calls), ['e-1']);
+  assert.match(component.error, /could not/i);
+});

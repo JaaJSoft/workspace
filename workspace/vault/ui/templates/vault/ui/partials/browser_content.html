@@ -211,6 +211,8 @@
         type="button"
         class="btn btn-xs btn-ghost gap-1"
         :class="action.css_class"
+        :disabled="busy"
+        @click="runBulkAction(action)"
       >
         <i :data-lucide="action.icon" class="w-3.5 h-3.5"></i>
         <span x-text="action.label"></span>

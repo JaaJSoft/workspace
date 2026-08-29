@@ -1,0 +1,48 @@
+{% comment %}
+Sidebar footer shared by the module drawers: a Preferences row at every
+size and the Collapse row on desktop.
+
+Parameters:
+- color: daisyUI colour token for the rows (primary, info, warning, ...)
+- collapse_expr: Alpine expression for the effective collapse state
+                 (default "collapsed"; pass "sidebarCollapsed()" for modules
+                 that decouple the mobile overlay from the stored preference)
+- prefs_dialog_id: id of the module's preferences <dialog>
+- prefs_template: path of the module's preferences content partial
+- prefs_data: optional Alpine factory for the dropdown content; omit when the
+              content binds to the page component directly
+
+Expanded on desktop, the Preferences row is the trigger of an upward daisyUI
+dropdown (it opens on :focus-within, and the drawer_item button is focusable).
+Collapsed, and on mobile, the row opens the dialog instead: the 16rem panel
+cannot open inside the 4rem rail, whose drawer-side clips overflow.
+{% endcomment %}
+{% with ce=collapse_expr|default:"collapsed" %}
+  <div class="border-t border-base-300 py-4 px-3">
+    <div
+      class="dropdown dropdown-top w-full hidden lg:block"
+      x-show="!{{ ce }}"
+      {% if prefs_data %}x-data="{{ prefs_data }}"{% endif %}
+    >
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color=color collapse_expr=ce tooltip="Preferences" %}
+      </ul>
+      <div
+        tabindex="0"
+        class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mb-1"
+      >
+        <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+          <i data-lucide="sliders-horizontal" class="w-4 h-4 text-{{ color }}"></i>
+          Preferences
+        </h4>
+        {% include prefs_template %}
+      </div>
+    </div>
+    <ul class="menu p-0" :class="{{ ce }} ? '' : 'lg:hidden'">
+      {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color=color collapse_expr=ce onclick="document.getElementById('"|add:prefs_dialog_id|add:"').showModal()" tooltip="Preferences" %}
+    </ul>
+    <ul class="menu p-0 hidden lg:block">
+      {% include "ui/partials/drawer_item.html" with icon_expr=ce icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color=color collapse_expr=ce onclick="toggleCollapse()" title_binding=ce|add:" ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding=ce|add:" ? 'Expand sidebar' : 'Collapse sidebar'" %}
+    </ul>
+  </div>
+{% endwith %}

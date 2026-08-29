@@ -1,0 +1,73 @@
+{% comment %}
+  The slot files uses for its preferences. What sits in it here is not
+  cosmetic: the idle delay had no surface at all, and a recovery key
+  remembered on this device had no way back out - it was dropped only when it
+  failed to decode.
+{% endcomment %}
+<div class="dropdown dropdown-end" x-show="!collapsed" x-transition>
+  <button
+    type="button"
+    tabindex="0"
+    class="btn btn-ghost btn-sm btn-square mr-1 hover:text-error"
+    aria-label="Preferences"
+    title="Preferences"
+  >
+    <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+  </button>
+  <div
+    tabindex="0"
+    class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-72 mt-1"
+  >
+    <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+      <i data-lucide="sliders-horizontal" class="w-4 h-4 text-error"></i>
+      Preferences
+    </h4>
+    <div class="space-y-3">
+      <div>
+        <label class="text-sm text-base-content/60 block mb-1">Lock after</label>
+        <select
+          class="select select-bordered select-sm w-full"
+          :value="prefs.lockAfterMinutes"
+          @change="updatePref('lock_after_minutes', parseInt($event.target.value))"
+        >
+          <option value="1">1 minute</option>
+          <option value="5">5 minutes</option>
+          <option value="15">15 minutes</option>
+          <option value="60">1 hour</option>
+        </select>
+      </div>
+      <hr class="border-base-300" />
+      <div>
+        <label class="text-sm text-base-content/60 block mb-1">Default sort</label>
+        <select
+          class="select select-bordered select-sm w-full"
+          :value="prefs.defaultSort"
+          @change="updatePref('default_sort', $event.target.value)"
+        >
+          <option value="default">Default</option>
+          <option value="name">Name</option>
+          <option value="favorite">Favorite</option>
+          <option value="created">Created</option>
+        </select>
+      </div>
+      <template x-if="secretRemembered">
+        <div>
+          <hr class="border-base-300 mb-3" />
+          <label class="text-sm text-base-content/60 block mb-1">This device</label>
+          <p class="text-xs text-base-content/50 mb-2">
+            Your recovery key is remembered here. Anything that can run code on
+            this page can read it.
+          </p>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline btn-error w-full gap-2"
+            @click="forgetDevice()"
+          >
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            Forget the key on this device
+          </button>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>

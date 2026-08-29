@@ -23,7 +23,7 @@ function build(changes, overrides = {}) {
   const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_update.js', {
     TextEncoder: globalThis.TextEncoder,
     vaultCrypto: {
-      toBase64Url: () => 'sealed-name',
+      toBase64Url: () => 'sealed',
       seal: async (key, bytes) => {
         sealed.push(new TextDecoder().decode(bytes));
         return new Uint8Array(4);
@@ -44,15 +44,15 @@ function build(changes, overrides = {}) {
     ...overrides.session,
   };
   return ctx
-    .buildVaultUpdateRequest(session, VAULT, changes)
+    .buildVaultUpdateRequest(session, overrides.vault || VAULT, changes)
     .then((body) => ({ body, signed, sealed }));
 }
 
 test('a rename seals the new name and signs it', async () => {
   const { body, signed, sealed } = await build({ name: 'Travail' });
   assert.deepStrictEqual(Array.from(sealed), ['Travail']);
-  assert.equal(body.encrypted_name, 'sealed-name');
-  assert.equal(signed[0].encrypted_name, 'sealed-name');
+  assert.equal(body.encrypted_name, 'sealed');
+  assert.equal(signed[0].encrypted_name, 'sealed');
 });
 
 test('the signed payload describes the values the request carries', async () => {
@@ -110,4 +110,36 @@ test('changing nothing still produces a complete, signed request', async () => {
     'is_favorite',
     'metadata_sig',
   ]);
+});
+
+
+test('a description left alone travels through as the ciphertext it already was', async () => {
+  // Re-sealing an unchanged description would spend a key operation to store
+  // the same plaintext under a new nonce, and the signature covers the
+  // ciphertext either way.
+  const { body, sealed } = await build(
+    { name: 'Perso' },
+    { vault: Object.assign({}, VAULT, { encrypted_description: 'ct:kept' }) },
+  );
+  assert.equal(body.encrypted_description, 'ct:kept');
+  assert.deepStrictEqual(Array.from(sealed), ['Perso']);
+});
+
+test('a changed description is re-sealed under its own slot', async () => {
+  const { body, sealed, signed } = await build(
+    { name: 'Perso', description: 'Everyday logins' },
+    { vault: Object.assign({}, VAULT, { encrypted_description: 'ct:old' }) },
+  );
+  assert.ok(sealed.includes('Everyday logins'));
+  assert.equal(signed[0].encrypted_description, body.encrypted_description);
+  assert.notEqual(body.encrypted_description, 'ct:old');
+});
+
+test('a description cleared to nothing becomes an empty string, not a ciphertext', async () => {
+  const { body, sealed } = await build(
+    { name: 'Perso', description: '' },
+    { vault: Object.assign({}, VAULT, { encrypted_description: 'ct:old' }) },
+  );
+  assert.equal(body.encrypted_description, '');
+  assert.deepStrictEqual(Array.from(sealed), ['Perso']);
 });

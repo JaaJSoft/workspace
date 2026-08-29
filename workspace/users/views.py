@@ -505,6 +505,15 @@ def _validate_setting_value(module, key, value):
             or not 0 <= value <= 23
         ):
             return "reminder_hour must be an integer between 0 and 23."
+    if module == "vault" and key == "lock_after_minutes" and value is not None:
+        # A vault that never locks is the failure a bad value here causes, so
+        # it is refused rather than stored and quietly ignored by the page.
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or not 1 <= value <= 1440
+        ):
+            return "lock_after_minutes must be an integer between 1 and 1440."
     return None
 
 

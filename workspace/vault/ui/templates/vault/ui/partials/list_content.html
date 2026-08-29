@@ -1,0 +1,254 @@
+{% comment %}
+  The listing itself, in either shape. A vault that will not open is never
+  among the others - it has no name to sort or search on, and showing it as an
+  ordinary row would dress up a failure as a vault.
+{% endcomment %}
+<div
+  class="flex items-center gap-3 px-4 py-3 border-b border-base-300 flex-shrink-0"
+>
+  {% include "ui/partials/drawer_toggle.html" with drawer_id="vault-drawer" label="Open sidebar" %}
+
+  <div class="relative w-full max-w-xs flex-shrink">
+    <i
+      data-lucide="search"
+      class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40"
+    ></i>
+    <input
+      type="search"
+      x-model.debounce.200ms="search"
+      placeholder="Search vaults…"
+      class="input input-bordered input-sm w-full pl-9"
+      autocomplete="off"
+      spellcheck="false"
+    />
+  </div>
+
+  <div class="join hidden md:flex">
+    <select
+      class="select select-sm select-bordered join-item"
+      x-model="sortField"
+      aria-label="Sort by"
+    >
+      <option value="default">Sort: default</option>
+      <option value="name">Name</option>
+      <option value="favorite">Favorite</option>
+      <option value="created">Created</option>
+    </select>
+    <button
+      type="button"
+      class="btn btn-sm btn-outline join-item"
+      :disabled="sortField === 'default'"
+      @click="toggleSortDir()"
+      :aria-label="sortDir === 'asc' ? 'Sort ascending' : 'Sort descending'"
+    >
+      <i data-lucide="arrow-up" class="w-4 h-4" x-show="sortDir === 'asc'"></i>
+      <i
+        data-lucide="arrow-down"
+        class="w-4 h-4"
+        x-show="sortDir === 'desc'"
+        x-cloak
+      ></i>
+    </button>
+  </div>
+
+  <div class="join">
+    <button
+      type="button"
+      class="btn btn-sm btn-outline join-item"
+      :class="viewMode === 'list' ? 'bg-error/10 text-error' : ''"
+      @click="setViewMode('list')"
+      aria-label="List view"
+    >
+      <i data-lucide="list" class="w-4 h-4"></i>
+    </button>
+    <button
+      type="button"
+      class="btn btn-sm btn-outline join-item"
+      :class="viewMode === 'grid' ? 'bg-error/10 text-error' : ''"
+      @click="setViewMode('grid')"
+      aria-label="Grid view"
+    >
+      <i data-lucide="layout-grid" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  <span
+    class="badge badge-success badge-outline gap-1 hidden lg:inline-flex ml-auto"
+    title="Every field of every vault is encrypted before it leaves this page"
+  >
+    <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+    Everything encrypted
+  </span>
+  <button
+    type="button"
+    class="btn btn-primary btn-sm gap-2"
+    @click="openCreateDialog()"
+  >
+    <i data-lucide="plus" class="w-4 h-4"></i>
+    <span class="hidden sm:inline">New vault</span>
+  </button>
+</div>
+
+<inline-alert type="error" x-show="error" x-cloak class="mx-4 mt-4">
+<span x-text="error"></span>
+</inline-alert>
+
+<div class="flex-1 overflow-y-auto min-h-0">
+  <template x-if="vaults.length === 0">
+    <div
+      class="flex flex-col items-center justify-center h-full gap-4 text-base-content/40 py-16"
+    >
+      <i data-lucide="vault" class="w-16 h-16 opacity-20"></i>
+      <p class="text-lg font-medium">No vault yet</p>
+      <p class="text-sm">Create one to start keeping credentials in it.</p>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm gap-2 mt-2"
+        @click="openCreateDialog()"
+      >
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        New vault
+      </button>
+    </div>
+  </template>
+
+  {% comment %}
+    A second empty state: the vault list is not empty, the filter is. Offering
+    "create one" against a search would be the wrong advice.
+  {% endcomment %}
+  <template x-if="vaults.length > 0 && visibleVaults().length === 0">
+    <div
+      class="flex flex-col items-center justify-center h-full gap-2 text-base-content/40 py-16"
+    >
+      <i data-lucide="search-x" class="w-12 h-12 opacity-20"></i>
+      <p>No vault matches.</p>
+      <button type="button" class="btn btn-sm btn-ghost" @click="clearFilter()">Clear the filter</button>
+    </div>
+  </template>
+
+  {% comment %}
+    x-if, not x-show: the two views would otherwise both sit in the DOM, and
+    every vault name would exist twice - once visible, once hidden. That costs
+    a rebuild on each switch, which is nothing for a handful of rows.
+  {% endcomment %}
+  <template x-if="viewMode === 'list' && visibleVaults().length">
+    <div class="divide-y divide-base-300">
+      <template x-for="vault in visibleVaults()" :key="vault.uuid">
+        <div class="relative group">
+          <a
+            :href="'/vault/' + vault.uuid"
+            class="flex items-center gap-4 px-4 py-3 hover:bg-base-200 transition-colors"
+          >
+            <div
+              class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+              :class="'bg-' + (vault.color || 'primary') + '/10'"
+            >
+              <i
+                :data-lucide="vault.icon || 'lock'"
+                class="w-5 h-5"
+                :class="'text-' + (vault.color || 'primary')"
+              ></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="font-medium text-sm truncate" x-text="vault.name"></span>
+                <i
+                  data-lucide="star"
+                  class="w-3.5 h-3.5 fill-current text-warning flex-shrink-0"
+                  x-show="vault.is_favorite"
+                ></i>
+                <span
+                  class="badge badge-ghost badge-sm flex-shrink-0"
+                  x-show="isMember(vault)"
+                >member</span>
+              </div>
+              <div
+                class="text-xs text-base-content/40 truncate"
+                x-text="vault.description"
+              ></div>
+            </div>
+            <span class="w-8 flex-shrink-0"></span>
+          </a>
+
+          {% comment %}
+          Outside the <a>: the menu is not navigation, and a button nested in a
+          link makes every menu click follow the link first.
+          {% endcomment %}
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square absolute right-3 top-1/2 -translate-y-1/2"
+            x-show="actionsFor(vault).length"
+            :aria-label="'Actions for ' + vault.name"
+            @click="toggleMenu(vault.uuid)"
+          >
+            <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+          </button>
+          {% include "vault/ui/partials/list_menu.html" with menu_position="right-3 top-12" %}
+        </div>
+      </template>
+    </div>
+
+  </template>
+
+  <template x-if="viewMode === 'grid' && visibleVaults().length">
+    <div class="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <template x-for="vault in visibleVaults()" :key="vault.uuid">
+        <div class="relative group">
+          <a
+            :href="'/vault/' + vault.uuid"
+            class="card bg-base-100 border border-base-300 hover:border-error hover:shadow-md transition-all h-full"
+          >
+            <div class="card-body p-4 gap-2">
+              <div class="flex items-start gap-3">
+                <div
+                  class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                  :class="'bg-' + (vault.color || 'primary') + '/10'"
+                >
+                  <i
+                    :data-lucide="vault.icon || 'lock'"
+                    class="w-5 h-5"
+                    :class="'text-' + (vault.color || 'primary')"
+                  ></i>
+                </div>
+                <div class="min-w-0 flex-1 pr-6">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="font-medium text-sm truncate" x-text="vault.name"></span>
+                    <i
+                      data-lucide="star"
+                      class="w-3.5 h-3.5 fill-current text-warning flex-shrink-0"
+                      x-show="vault.is_favorite"
+                    ></i>
+                  </div>
+                  <div
+                    class="text-xs text-base-content/40 line-clamp-2"
+                    x-text="vault.description"
+                  ></div>
+                  <span class="badge badge-ghost badge-sm mt-1" x-show="isMember(vault)">member</span>
+                </div>
+              </div>
+            </div>
+          </a>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square absolute right-2 top-3"
+            x-show="actionsFor(vault).length"
+            :aria-label="'Actions for ' + vault.name"
+            @click="toggleMenu(vault.uuid)"
+          >
+            <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+          </button>
+          {% include "vault/ui/partials/list_menu.html" with menu_position="right-2 top-11" %}
+        </div>
+      </template>
+    </div>
+
+  </template>
+
+  {% include "vault/ui/partials/list_unavailable.html" %}
+</div>
+
+<div
+  class="flex-none border-t border-base-300 px-4 py-2 text-sm text-base-content/60"
+>
+  <span x-text="statusLine()"></span>
+</div>

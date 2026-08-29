@@ -81,9 +81,9 @@ class VaultBrowserTests(PlaywrightTestCase):
         """Onboard, open the one vault, and land on the browser screen."""
         self._onboard()
         self._unlock()
-        self.page.wait_for_selector('ul.grid a[href^="/vault/"]', timeout=30000)
+        self.page.wait_for_selector('a[href^="/vault/"]', timeout=30000)
         self.vault_uuid = self.page.get_attribute(
-            'ul.grid a[href^="/vault/"]', "href"
+            'a[href^="/vault/"]', "href"
         ).rsplit("/", 1)[1]
         self.page.goto(f"{self.live_server_url}/vault/{self.vault_uuid}")
         self._unlock()

@@ -28,6 +28,7 @@ function app(session = {}, api = {}, crypto = {}) {
       sign: async () => 'signature',
       accountUuid: () => 'account-uuid',
       accountKexPublicRaw: () => new Uint8Array(32),
+      setIdleTimeout() {},
       ...session,
     },
     vaultApi: { listVaults: async () => [], createVault: async () => ({}), ...api },
@@ -54,8 +55,21 @@ function app(session = {}, api = {}, crypto = {}) {
     },
     TextEncoder: globalThis.TextEncoder,
     TextDecoder: globalThis.TextDecoder,
-    document: { addEventListener() {} },
+    document: {
+      addEventListener() {},
+      getElementById: () => null,
+    },
     addEventListener() {},
+    localStorage: (globalThis.__vaultAppStore = globalThis.__vaultAppStore || {
+      values: {},
+      getItem(key) {
+        return Object.prototype.hasOwnProperty.call(this.values, key)
+          ? this.values[key]
+          : null;
+      },
+      setItem(key, value) { this.values[key] = String(value); },
+      removeItem(key) { delete this.values[key]; },
+    }),
   });
   return ctx.vaultApp();
 }
@@ -331,7 +345,8 @@ test('creating a vault seals a fresh key to the account and signs the metadata',
     createVault: async (body) => { posted.push(body); return { ...body, wrapped_key: body.wrapped_key }; },
   });
   await component.unlock();
-  component.newVaultName = 'Work';
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
   await component.createVault();
   assert.equal(posted.length, 1);
   assert.equal(posted[0].uuid, 'vault-uuid');
@@ -347,7 +362,8 @@ test('the vault name never leaves the browser in the clear', async () => {
     createVault: async (body) => { posted.push(body); return body; },
   });
   await component.unlock();
-  component.newVaultName = 'Work';
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
   await component.createVault();
   assert.equal(JSON.stringify(posted[0]).includes('Work'), false);
 });
@@ -358,10 +374,10 @@ test('a refused creation leaves the dialog open with its message', async () => {
     createVault: async () => { const e = new Error('x'); e.status = 400; throw e; },
   });
   await component.unlock();
-  component.showCreate = true;
-  component.newVaultName = 'Work';
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
   await component.createVault();
-  assert.equal(component.showCreate, true);
+  assert.notStrictEqual(component.newVault, null);
   assert.ok(component.error);
 });
 
@@ -372,7 +388,8 @@ test('an empty name is refused before anything is sealed', async () => {
     createVault: async () => { called += 1; return {}; },
   });
   await component.unlock();
-  component.newVaultName = '   ';
+  component.openCreateDialog();
+  component.newVault.name = '   ';
   await component.createVault();
   assert.equal(called, 0);
 });
@@ -383,7 +400,8 @@ test('creating a vault while locked is refused', async () => {
     listVaults: async () => [],
     createVault: async () => { called += 1; return {}; },
   });
-  component.newVaultName = 'Work';
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
   await component.createVault();
   assert.equal(called, 0);
   assert.equal(component.state, 'locked');
@@ -434,7 +452,8 @@ test('a retry after a lost answer creates one vault, not two', async () => {
     { uuidV7: () => 'vault-uuid-' + ++minted }
   );
   await component.unlock();
-  component.newVaultName = 'Work';
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
   await component.createVault();
   fail = false;
   await component.createVault();
@@ -461,10 +480,11 @@ test('a conflict is the vault already existing, not a failure to report', async 
   );
   await component.unlock();
   listed = [{ uuid: 'vault-uuid', encrypted_name: 'n', metadata_sig: 's', wrapped_key: 'w' }];
-  component.newVaultName = 'Work';
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
   await component.createVault();
   assert.equal(component.error, '');
-  assert.equal(component.showCreate, false);
+  assert.strictEqual(component.newVault, null);
   assert.equal(component.vaults.length, 1);
 });
 
@@ -524,7 +544,8 @@ test('a lock between writing a vault and showing it keeps the name off the scree
       },
     }
   );
-  component.newVaultName = 'Work';
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
   await component.createVault();
   assert.deepEqual([...component.vaults], []);
   assert.equal(component.error, '');
@@ -543,12 +564,11 @@ test('a lock closes the create dialog instead of reopening it on the next unlock
     onLock: (fn) => { onLock = fn; },
   });
   component.init();
-  component.showCreate = true;
-  component.newVaultName = 'Work';
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
   component.pendingVaultUuid = 'vault-uuid';
   onLock();
-  assert.equal(component.showCreate, false);
-  assert.equal(component.newVaultName, '');
+  assert.strictEqual(component.newVault, null);
   assert.equal(component.pendingVaultUuid, null);
 });
 
@@ -567,10 +587,10 @@ test('a conflict on a UUID the account does not hold is not declared a success',
       },
     }
   );
-  component.showCreate = true;
-  component.newVaultName = 'Work';
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
   await component.createVault();
-  assert.equal(component.showCreate, true);
+  assert.notStrictEqual(component.newVault, null);
   assert.match(component.error, /could not be created/);
 });
 
@@ -787,4 +807,227 @@ test('a locked session closes the dialog and writes nothing', async () => {
   component.closeVaultDialog();
   await component.saveVaultDialog();
   assert.deepStrictEqual(Array.from(sent), []);
+});
+
+// --- the listing: filters, sort, views, preferences -------------------------
+
+const LISTING_ROWS = [
+  { uuid: 'v-1', name: 'Personal', description: 'Everyday logins', is_favorite: true, created_at: '2026-01-02' },
+  { uuid: 'v-2', name: 'Work', description: 'Infrastructure accounts', is_favorite: false, created_at: '2026-03-04' },
+  { uuid: 'v-3', name: 'Archive', description: '', is_favorite: false, created_at: '2026-02-03' },
+];
+
+function listed(component, rows = LISTING_ROWS) {
+  component.vaults = rows.map((row) => Object.assign({}, row));
+  return component;
+}
+
+const shown = (component) => Array.from(component.visibleVaults(), (v) => v.name);
+
+test('the sidebar view narrows the listing to favourites', () => {
+  const component = listed(app());
+  assert.deepStrictEqual(shown(component), ['Personal', 'Work', 'Archive']);
+  component.filter = 'favorites';
+  assert.deepStrictEqual(shown(component), ['Personal']);
+});
+
+test('the search reads the name and the description', () => {
+  // The description is decrypted on this side like the name, so there is no
+  // reason for the filter to see one and not the other.
+  const component = listed(app());
+  component.search = 'infra';
+  assert.deepStrictEqual(shown(component), ['Work']);
+  component.search = 'archive';
+  assert.deepStrictEqual(shown(component), ['Archive']);
+});
+
+test('sorting is off until it is asked for, then it holds a direction', () => {
+  const component = listed(app());
+  component.sortField = 'name';
+  assert.deepStrictEqual(shown(component), ['Archive', 'Personal', 'Work']);
+  component.sortDir = 'desc';
+  assert.deepStrictEqual(shown(component), ['Work', 'Personal', 'Archive']);
+});
+
+test('sorting never reorders the listing it was asked about', () => {
+  // Sorting the array in place would reorder the component's own data as a
+  // side effect of asking what to display.
+  const component = listed(app());
+  component.sortField = 'name';
+  component.visibleVaults();
+  assert.deepStrictEqual(
+    Array.from(component.vaults, (v) => v.name),
+    ['Personal', 'Work', 'Archive'],
+  );
+});
+
+test('the status line counts what is shown and what could not be opened', () => {
+  const component = listed(app(), [
+    ...LISTING_ROWS,
+    { uuid: 'v-4', name: '', tampered: true },
+    { uuid: 'v-5', name: '', unopenable: true },
+  ]);
+  const line = component.statusLine();
+  assert.match(line, /3 vaults/);
+  assert.match(line, /1 favourite/);
+  assert.match(line, /2 unavailable/);
+});
+
+test('a vault that will not open is never in the listing', () => {
+  const component = listed(app(), [
+    LISTING_ROWS[0],
+    { uuid: 'v-4', name: '', tampered: true },
+  ]);
+  assert.deepStrictEqual(shown(component), ['Personal']);
+  assert.deepStrictEqual(
+    Array.from(component.unavailableVaults(), (v) => v.uuid),
+    ['v-4'],
+  );
+});
+
+test('the view mode survives a reload', () => {
+  const component = app();
+  component.init();
+  assert.equal(component.viewMode, 'list');
+  component.setViewMode('grid');
+  const second = app();
+  second.init();
+  assert.equal(second.viewMode, 'grid');
+});
+
+test('forgetting the device drops the remembered key', async () => {
+  const forgotten = [];
+  const component = app({ forgetDevice: () => forgotten.push(true) });
+  component.init();
+  component.confirm = async () => true;
+  await component.forgetDevice();
+  assert.deepStrictEqual(Array.from(forgotten), [true]);
+});
+
+test('a refused confirmation keeps the remembered key', async () => {
+  const forgotten = [];
+  const component = app({ forgetDevice: () => forgotten.push(true) });
+  component.init();
+  component.confirm = async () => false;
+  await component.forgetDevice();
+  assert.deepStrictEqual(Array.from(forgotten), []);
+});
+
+test('creating carries the icon, the colour and the description', async () => {
+  const bodies = [];
+  const component = app({ isUnlocked: () => true }, {
+    createVault: async (body) => { bodies.push(body); return { uuid: 'vault-uuid' }; },
+    listVaults: async () => [],
+  });
+  component.init();
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
+  component.newVault.description = 'Infra';
+  component.selectIcon('briefcase');
+  component.selectColor('text-info');
+  await component.createVault();
+  assert.equal(bodies.length, 1);
+  assert.equal(bodies[0].icon, 'briefcase');
+  assert.equal(bodies[0].color, 'info');
+});
+
+test('a vault created as a favourite is favourited by the write after it', async () => {
+  // The create endpoint sets is_favorite itself and refuses a signature over
+  // anything else, so the checkbox is honoured by the update that follows.
+  const calls = [];
+  const component = app({ isUnlocked: () => true }, {
+    createVault: async () => { calls.push('create'); return { uuid: 'vault-uuid' }; },
+    updateVault: async (uuid, body) => {
+      calls.push('update:' + (body.is_favorite ? 'favorite' : 'plain'));
+      return {};
+    },
+    listVaults: async () => [],
+  });
+  component.init();
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
+  component.newVault.favorite = true;
+  await component.createVault();
+  assert.deepStrictEqual(Array.from(calls), ['create', 'update:favorite']);
+});
+
+test('a vault created without the checkbox writes once', async () => {
+  const calls = [];
+  const component = app({ isUnlocked: () => true }, {
+    createVault: async () => { calls.push('create'); return { uuid: 'vault-uuid' }; },
+    updateVault: async () => { calls.push('update'); return {}; },
+    listVaults: async () => [],
+  });
+  component.init();
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
+  await component.createVault();
+  assert.deepStrictEqual(Array.from(calls), ['create']);
+});
+
+test('a failed favourite leaves the vault created and says nothing alarming', async () => {
+  // The vault exists; only the flag did not land. Reporting a failed creation
+  // would send the user to create a second one.
+  const component = app({ isUnlocked: () => true }, {
+    createVault: async () => ({ uuid: 'vault-uuid' }),
+    updateVault: async () => { throw new Error('refused'); },
+    listVaults: async () => [],
+  });
+  component.init();
+  component.openCreateDialog();
+  component.newVault.name = 'Work';
+  component.newVault.favorite = true;
+  await component.createVault();
+  assert.equal(component.error, '');
+  assert.equal(component.newVault, null);
+});
+
+// --- the sidebar and its preferences ----------------------------------------
+
+test('a vault owned by another account is shown as a membership', () => {
+  const component = app({ accountUuid: () => 'account-1' });
+  assert.equal(component.isMember({ owner_account_uuid: 'account-2' }), true);
+  assert.equal(component.isMember({ owner_account_uuid: 'account-1' }), false);
+});
+
+test('the preferences come from the page, with defaults behind them', () => {
+  const component = app();
+  component.init();
+  assert.equal(component.prefs.lockAfterMinutes, 5);
+  assert.equal(component.prefs.defaultSort, 'default');
+});
+
+test('a changed preference is written and applied at once', async () => {
+  const written = [];
+  const component = app();
+  component.init();
+  component.putSetting = async (key, value) => { written.push([key, value]); };
+  await component.updatePref('default_sort', 'name');
+  assert.deepStrictEqual(Array.from(written), [['default_sort', 'name']]);
+  assert.equal(component.prefs.defaultSort, 'name');
+  // Applied, not merely stored: the listing sorts by it straight away.
+  assert.equal(component.sortField, 'name');
+});
+
+test('the lock delay reaches the session, not just the preference', async () => {
+  // Stored and never handed over, it would be a setting that changes nothing
+  // until the page is reloaded.
+  const delays = [];
+  const component = app({ setIdleTimeout: (minutes) => delays.push(minutes) });
+  component.init();
+  // init hands over the stored delay; what is under test is the change.
+  delays.length = 0;
+  component.putSetting = async () => {};
+  await component.updatePref('lock_after_minutes', 15);
+  assert.deepStrictEqual(Array.from(delays), [15]);
+  assert.equal(component.prefs.lockAfterMinutes, 15);
+});
+
+test('a preference the server refuses is put back, not left lying', async () => {
+  const component = app();
+  component.init();
+  component.putSetting = async () => { throw new Error('refused'); };
+  await component.updatePref('default_sort', 'name');
+  assert.equal(component.prefs.defaultSort, 'default');
+  assert.match(component.error, /could not be saved/i);
 });

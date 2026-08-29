@@ -240,7 +240,7 @@ window.vaultOnboarding = function vaultOnboarding() {
           this.firstVaultUuid = window.vaultCrypto.uuidV7();
         }
         const body = await window.buildVaultCreateRequest(
-          this.vaultSession(), 'Personal', this.firstVaultUuid
+          this.vaultSession(), { name: 'Personal' }, this.firstVaultUuid
         );
         await window.vaultApi.createVault(body);
         this.rememberOnThisDevice();

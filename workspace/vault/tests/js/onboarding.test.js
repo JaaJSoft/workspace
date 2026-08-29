@@ -608,15 +608,19 @@ test('acknowledging the kit creates the first vault', async () => {
 });
 
 test('the first vault is called Personal', async () => {
-  let name = null;
+  // The draft, not a bare string: the builder takes everything the create
+  // form offers, and a stub that swallowed the shape would hide a caller
+  // left behind by the change.
+  let draft = null;
   const { app } = finishing({
-    buildVaultCreateRequest: async (session, vaultName) => { name = vaultName; return { uuid: 'v1' }; },
+    buildVaultCreateRequest: async (session, given) => { draft = given; return { uuid: 'v1' }; },
     vaultApi: { createVault: async (body) => body },
   });
   app.step = 3;
   app.acknowledged = true;
   await app.finish();
-  assert.equal(name, 'Personal');
+  assert.equal(typeof draft, 'object');
+  assert.equal(draft.name, 'Personal');
 });
 
 test('a failed first vault keeps the user on the kit screen', async () => {

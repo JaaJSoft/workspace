@@ -1,0 +1,29 @@
+{% comment %}
+  The per-vault menu, rendered from what POST /api/v1/vault/actions answered
+  for that vault. It appears twice - once per view - so it lives here rather
+  than being copied, and takes its offset from the caller.
+{% endcomment %}
+<div
+  x-show="openMenuFor === vault.uuid"
+  x-cloak
+  @click.outside="openMenuFor = null"
+  class="absolute z-50 {{ menu_position }}"
+>
+  <ul
+    class="menu bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 w-56 text-sm p-2"
+  >
+    <template x-for="action in actionsFor(vault)" :key="action.id">
+      <li>
+        <button
+          type="button"
+          class="gap-3"
+          :class="action.css_class"
+          @click="runVaultAction(action, vault)"
+        >
+          <i :data-lucide="action.icon" class="w-4 h-4"></i>
+          <span x-text="action.label"></span>
+        </button>
+      </li>
+    </template>
+  </ul>
+</div>

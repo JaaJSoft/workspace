@@ -72,7 +72,11 @@ window.vaultSession = (function () {
   // the top is a check about a session that may no longer be the one the call
   // finishes in.
   let generation = 0;
-  const IDLE_LOCK_MS = 5 * 60 * 1000;
+  // The default, and what a fresh page starts on. The account may carry a
+  // preference; setIdleTimeout is how it arrives, and it moves the deadline
+  // rather than waiting for the next unlock to take effect.
+  const DEFAULT_IDLE_LOCK_MS = 5 * 60 * 1000;
+  let idleLockMs = DEFAULT_IDLE_LOCK_MS;
   let expiresAt = 0;
   let ticker = null;
 
@@ -273,7 +277,7 @@ window.vaultSession = (function () {
       signer = newSigner;
       recipient = newRecipient;
       unlocked = true;
-      expiresAt = Date.now() + IDLE_LOCK_MS;
+      expiresAt = Date.now() + idleLockMs;
 
       // Failing to remember - or forget - the device does not mean failing
       // to unlock it - the session above is already live and must stay that
@@ -304,12 +308,24 @@ window.vaultSession = (function () {
       lockCallbacks.forEach(function (callback) { callback(); });
     },
 
+    // Minutes, because that is what the preference offers. Anything that is
+    // not a positive number is ignored rather than turned into an immediate
+    // lock or an endless session.
+    setIdleTimeout: function (minutes) {
+      const value = Number(minutes);
+      if (!Number.isFinite(value) || value <= 0) return;
+      idleLockMs = value * 60 * 1000;
+      // The deadline moves now: a preference that only takes effect at the
+      // next unlock is one the user cannot see working.
+      if (unlocked) expiresAt = Date.now() + idleLockMs;
+    },
+
     secondsUntilLock: function () {
       if (!unlocked) return 0;
       return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
     },
     noteActivity: function () {
-      if (unlocked) expiresAt = Date.now() + IDLE_LOCK_MS;
+      if (unlocked) expiresAt = Date.now() + idleLockMs;
     },
     tick: function () {
       if (unlocked && Date.now() >= expiresAt) this.lock();

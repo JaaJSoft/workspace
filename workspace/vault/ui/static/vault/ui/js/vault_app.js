@@ -17,14 +17,56 @@ window.VAULT_COLOR_SWATCHES = [
 ];
 
 window.vaultApp = (function () {
+  const VIEW_MODE_KEY = 'vault.list.viewMode';
+  const DEFAULT_PREFS = { lockAfterMinutes: 5, defaultSort: 'default' };
+
+  function readJson(elementId) {
+    const element = document.getElementById(elementId);
+    if (!element) return null;
+    try {
+      return JSON.parse(element.textContent);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function readPreference(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (err) {
+      // Private browsing and a blocked-storage setting both throw on read. A
+      // listing that forgets its view is a smaller loss than one that does
+      // not mount.
+      return null;
+    }
+  }
+
+  function writePreference(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (err) {
+      /* nothing to do: the preference does not survive the reload */
+    }
+  }
+
   return function vaultApp() {
     return {
       ...window.vaultUnlockMixin(),
       error: '',
       vaults: [],
       busy: false,
-      showCreate: false,
-      newVaultName: '',
+      // Which sidebar view is on. The toolbar deliberately carries no filter
+      // of its own: two places to narrow the same listing is two places to
+      // disagree about what it shows.
+      filter: 'all',
+      search: '',
+      sortField: 'default',
+      sortDir: 'asc',
+      viewMode: 'list',
+      prefs: Object.assign({}, DEFAULT_PREFS),
+      // The vault being created, or null. It carries everything the form
+      // offers, because all of it is inside the signed payload.
+      newVault: null,
       // Minted on the first attempt and kept until one succeeds: it is the
       // server's idempotency key, so every retry of the same vault has to
       // reuse it.
@@ -42,6 +84,12 @@ window.vaultApp = (function () {
       colors: [],
       selectedIcon: 'lock',
       selectedColor: 'text-primary',
+      // Optional context of ui/partials/icon_picker.html: it renders a saving
+      // indicator when a component offers one. Both vault dialogs save behind
+      // their own button, so the indicator stays off - but the names have to
+      // exist, or every render of the picker logs against them.
+      saving: false,
+      saved: false,
       // Two listings can be in flight at once - a refresh landing on a slow
       // one - and the slower answer must not describe rows that left the
       // screen. Only the newest generation is allowed to write.
@@ -51,7 +99,156 @@ window.vaultApp = (function () {
       init: function () {
         this.icons = window.ICON_PICKER_ICONS || [];
         this.colors = window.VAULT_COLOR_SWATCHES || [];
+        const viewMode = readPreference(VIEW_MODE_KEY);
+        if (viewMode) this.viewMode = viewMode;
+        this.loadPrefs();
         this.initUnlock();
+      },
+
+      // ---- the sidebar -----------------------------------------------------
+
+      isMember: function (vault) {
+        return Boolean(
+          vault && vault.owner_account_uuid !== window.vaultSession.accountUuid()
+        );
+      },
+
+      // ---- preferences -----------------------------------------------------
+
+      loadPrefs: function () {
+        const stored = readJson('vault-prefs') || {};
+        this.prefs = {
+          lockAfterMinutes: Number(stored.lock_after_minutes) || DEFAULT_PREFS.lockAfterMinutes,
+          defaultSort: stored.default_sort || DEFAULT_PREFS.defaultSort,
+        };
+        this.sortField = this.prefs.defaultSort;
+        window.vaultSession.setIdleTimeout(this.prefs.lockAfterMinutes);
+      },
+
+      // Overridable so a test can answer without a network. The endpoint is
+      // the application's own settings API, which owns the cache the value
+      // would otherwise go stale in.
+      putSetting: function (key, value) {
+        return fetch('/api/v1/settings/vault/' + key, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          body: JSON.stringify({ value: value }),
+        }).then(function (response) {
+          if (!response.ok) throw new Error('the setting was refused');
+        });
+      },
+
+      // Applied before it is stored, and put back if the store refuses: a
+      // preference that changes nothing until the next reload is not one.
+      updatePref: async function (key, value) {
+        const previous = Object.assign({}, this.prefs);
+        if (key === 'default_sort') {
+          this.prefs.defaultSort = value;
+          this.sortField = value;
+        }
+        if (key === 'lock_after_minutes') {
+          this.prefs.lockAfterMinutes = value;
+          window.vaultSession.setIdleTimeout(value);
+        }
+        try {
+          await this.putSetting(key, value);
+        } catch (err) {
+          this.prefs = previous;
+          this.sortField = previous.defaultSort;
+          window.vaultSession.setIdleTimeout(previous.lockAfterMinutes);
+          this.error = 'That preference could not be saved. Try again.';
+        }
+      },
+
+      // ---- what the listing shows -----------------------------------------
+
+      // A vault whose signature failed, or that this device holds no key for,
+      // never joins the listing: it has no name to sort or search on, and
+      // showing it among the others would dress it up as an ordinary vault.
+      unavailableVaults: function () {
+        return this.vaults.filter(function (vault) {
+          return vault.tampered || vault.unopenable || vault.unreadable;
+        });
+      },
+
+      openableVaults: function () {
+        return this.vaults.filter(function (vault) {
+          return !(vault.tampered || vault.unopenable || vault.unreadable);
+        });
+      },
+
+      visibleVaults: function () {
+        const needle = this.search.trim().toLowerCase();
+        let rows = this.openableVaults();
+        if (this.filter === 'favorites') {
+          rows = rows.filter(function (vault) { return vault.is_favorite; });
+        }
+        if (needle) {
+          rows = rows.filter(function (vault) {
+            return (
+              String(vault.name || '').toLowerCase().includes(needle) ||
+              String(vault.description || '').toLowerCase().includes(needle)
+            );
+          });
+        }
+        if (this.sortField === 'default') return rows;
+        const direction = this.sortDir === 'asc' ? 1 : -1;
+        const compare = {
+          name: (a, b) => a.name.localeCompare(b.name),
+          favorite: (a, b) => Number(b.is_favorite) - Number(a.is_favorite),
+          created: (a, b) => String(a.created_at).localeCompare(String(b.created_at)),
+        }[this.sortField];
+        if (!compare) return rows;
+        // A copy: sorting the array the caller handed us would reorder the
+        // component's own data as a side effect of asking what to display.
+        return [...rows].sort((a, b) => direction * compare(a, b));
+      },
+
+      statusLine: function () {
+        const shown = this.visibleVaults().length;
+        const favourites = this.visibleVaults().filter(function (vault) {
+          return vault.is_favorite;
+        }).length;
+        const unavailable = this.unavailableVaults().length;
+        const parts = [shown + (shown === 1 ? ' vault' : ' vaults')];
+        if (favourites) {
+          parts.push(favourites + ' favourite' + (favourites === 1 ? '' : 's'));
+        }
+        if (unavailable) parts.push(unavailable + ' unavailable');
+        return parts.join(' \u00b7 ');
+      },
+
+      setViewMode: function (mode) {
+        this.viewMode = mode;
+        writePreference(VIEW_MODE_KEY, mode);
+      },
+
+      clearFilter: function () {
+        this.search = '';
+        this.filter = 'all';
+      },
+
+      toggleSortDir: function () {
+        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+      },
+
+      // The only way back out of "remember my recovery key on this device".
+      // Until now the key was dropped solely when it failed to decode, which
+      // left anyone who ticked the box with no way to untick it.
+      forgetDevice: async function () {
+        const confirmed = await this.confirm(
+          'Forget the recovery key stored in this browser? You will need your '
+            + 'emergency kit the next time you unlock here.',
+          { title: 'Forget the key on this device', okLabel: 'Forget it', okClass: 'btn-error' }
+        );
+        if (!confirmed) return;
+        window.vaultSession.forgetDevice();
+        this.secretRequired = true;
+        this.secretRemembered = false;
+        this.secretText = '';
       },
 
       onLocked: function () {
@@ -59,9 +256,8 @@ window.vaultApp = (function () {
         this.vaultActions = {};
         this.openMenuFor = null;
         this.vaultDialog = null;
-        // showCreate has to go with the name: the dialog lives inside the
-        // unlocked subtree, so a lock hides it without closing it, and the
-        // next unlock reopens it on its own.
+        // The dialog lives inside the unlocked subtree, so a lock hides it
+        // without closing it, and the next unlock would reopen it on its own.
         this.closeCreateDialog();
       },
 
@@ -206,9 +402,20 @@ window.vaultApp = (function () {
         }
       },
 
+      openCreateDialog: function () {
+        this.newVault = { name: '', description: '', favorite: false };
+        // The picker is shared with the appearance dialog and owns the
+        // selection; the draft reads it back at submit. It works in CSS
+        // classes, the signed metadata in bare roles - hence the two
+        // conversions, at the edges.
+        this.selectedIcon = 'lock';
+        this.selectedColor = 'text-primary';
+      },
+
       createVault: async function () {
-        if (!window.vaultSession.isUnlocked()) return;
-        const name = this.newVaultName.trim();
+        if (!window.vaultSession.isUnlocked() || !this.newVault) return;
+        const draft = this.newVault;
+        const name = (draft.name || '').trim();
         if (!name) return;
         this.busy = true;
         this.error = '';
@@ -217,10 +424,17 @@ window.vaultApp = (function () {
         }
         try {
           const body = await window.buildVaultCreateRequest(
-            window.vaultSession, name, this.pendingVaultUuid
+            window.vaultSession,
+            Object.assign({}, draft, {
+              name: name,
+              icon: this.selectedIcon,
+              color: String(this.selectedColor).replace(/^text-/, ''),
+            }),
+            this.pendingVaultUuid
           );
           const row = await window.vaultApi.createVault(body);
           const created = await window.vaultReader.readVault(window.vaultSession, row);
+          if (draft.favorite) await this.favouriteAfterCreate(created);
           // Same race loadVaults guards against: three awaits sit between the
           // check at the top of this function and here, so a lock can have
           // emptied the list already. pendingVaultUuid survives on purpose -
@@ -311,9 +525,24 @@ window.vaultApp = (function () {
         }
       },
 
+      // The create endpoint sets is_favorite itself and refuses a signature
+      // over anything else, so the checkbox is honoured by a second write.
+      // Its failure is not the creation's: the vault exists, and saying it
+      // could not be created would send the user to make another one.
+      favouriteAfterCreate: async function (vault) {
+        try {
+          const body = await window.buildVaultUpdateRequest(
+            window.vaultSession, vault, { is_favorite: true }
+          );
+          await window.vaultApi.updateVault(vault.uuid, body);
+          vault.is_favorite = true;
+        } catch (err) {
+          /* the vault stands; only the flag did not land */
+        }
+      },
+
       closeCreateDialog: function () {
-        this.showCreate = false;
-        this.newVaultName = '';
+        this.newVault = null;
         this.pendingVaultUuid = null;
       },
 

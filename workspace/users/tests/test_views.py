@@ -524,6 +524,26 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         )
         self.assertIn(resp.status_code, (200, 201))
 
+    def test_put_rejects_a_lock_delay_that_is_not_a_delay(self):
+        """A vault that never locks is the failure this setting can cause, so
+        the value is checked here rather than trusted from the page."""
+        for value in [0, -1, "15", 7.5, True, 100000]:
+            resp = self.client.put(
+                self._url("vault", "lock_after_minutes"),
+                {"value": value},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 400, value)
+
+    def test_put_accepts_a_lock_delay(self):
+        for value in [1, 5, 60, 1440]:
+            resp = self.client.put(
+                self._url("vault", "lock_after_minutes"),
+                {"value": value},
+                format="json",
+            )
+            self.assertIn(resp.status_code, (200, 201), value)
+
     def test_put_creates_setting(self):
         resp = self.client.put(
             self._url("core", "theme"),

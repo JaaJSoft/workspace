@@ -44,6 +44,7 @@ HPKE_SUITE_V1 = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
 VAULTS = [
     {
         "name": "Personal",
+        "description": "Everyday logins, cards and subscriptions",
         "icon": "lock",
         "color": "primary",
         "favorite": True,
@@ -108,6 +109,7 @@ VAULTS = [
     },
     {
         "name": "Work",
+        "description": "Infrastructure and vendor accounts",
         "icon": "briefcase",
         "color": "info",
         "favorite": False,
@@ -274,11 +276,16 @@ def seed_vault_for(user):
         encrypted_name = signer.seal(
             meta_key, spec["name"].encode(), ad.vault_field_ad(str(vault_uuid), "name")
         )
+        encrypted_description = signer.seal(
+            meta_key,
+            spec["description"].encode(),
+            ad.vault_field_ad(str(vault_uuid), "description"),
+        )
         vault = Vault.objects.create(
             uuid=vault_uuid,
             owner=user,
             encrypted_name=encrypted_name,
-            encrypted_description="",
+            encrypted_description=encrypted_description,
             icon=spec["icon"],
             color=spec["color"],
             key_version=1,
@@ -288,7 +295,7 @@ def seed_vault_for(user):
                     vault_uuid=str(vault_uuid),
                     owner_account_uuid=account,
                     encrypted_name=encrypted_name,
-                    encrypted_description="",
+                    encrypted_description=encrypted_description,
                     icon=spec["icon"],
                     color=spec["color"],
                     key_version=1,

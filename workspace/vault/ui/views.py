@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from workspace.users.services.settings import get_module_settings
 from workspace.vault.queries import active_identity
 from workspace.vault.types import type_catalogue
 
@@ -20,7 +21,14 @@ def index(request, vault_uuid=None):
     return render(
         request,
         "vault/ui/index.html",
-        {"vault_uuid": vault_uuid, "entry_types": type_catalogue()},
+        {
+            "vault_uuid": vault_uuid,
+            "entry_types": type_catalogue(),
+            # Read here rather than fetched by the page: the lock delay is
+            # applied as the session opens, and a round trip for it would
+            # leave the first minutes of every visit on the default.
+            "vault_prefs": get_module_settings(request.user, "vault"),
+        },
     )
 
 

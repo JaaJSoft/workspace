@@ -15,6 +15,7 @@
 //    the value back without keeping a copy.
 window.vaultReader = (function () {
   const NAME_FIELD = 'name';
+  const DESCRIPTION_FIELD = 'description';
   // What the listing is allowed to open. Deliberately a list rather than a
   // "not secret" test: adding a field to a type must not silently widen what
   // a listing decrypts.
@@ -154,10 +155,10 @@ window.vaultReader = (function () {
       if (err && err.reason === 'locked') throw err;
       // Signed by nobody the account trusts: never shown with a name that
       // came along for the ride.
-      return Object.assign({}, row, { tampered: true, name: '' });
+      return Object.assign({}, row, { tampered: true, name: '', description: '' });
     }
     if (!row.wrapped_key) {
-      return Object.assign({}, row, { unopenable: true, name: '' });
+      return Object.assign({}, row, { unopenable: true, name: '', description: '' });
     }
     try {
       const metaKey = await session.openVaultKey(row.uuid, row.wrapped_key);
@@ -165,12 +166,20 @@ window.vaultReader = (function () {
         name: await openText(
           V, metaKey, row.encrypted_name, V.AD.vaultFieldAd(row.uuid, NAME_FIELD)
         ),
+        // Every vault written before the field was offered stores an empty
+        // string, and opening one would throw where nothing is wrong.
+        description: row.encrypted_description
+          ? await openText(
+              V, metaKey, row.encrypted_description,
+              V.AD.vaultFieldAd(row.uuid, DESCRIPTION_FIELD)
+            )
+          : '',
       });
     } catch (err) {
       if (err && err.reason === 'locked') throw err;
       // Localised the same way a bad signature is: one row loses its name and
       // the rest of the listing keeps going.
-      return Object.assign({}, row, { unreadable: true, name: '' });
+      return Object.assign({}, row, { unreadable: true, name: '', description: '' });
     }
   }
 

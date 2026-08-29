@@ -1,7 +1,9 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
+from workspace.users.services.settings import set_setting
 from workspace.vault.models import AccountIdentity, EntryType
 from workspace.vault.tests.factories import make_vault
 
@@ -59,6 +61,9 @@ class OnboardingRoutingTests(TestCase):
 
 
 class BrowserRoutingTests(TestCase):
+    # set_setting caches for five minutes in a process-global LocMemCache that
+    # is not reset between TestCase runs.
+
     """`/vault` and `/vault/<uuid>` are one view.
 
     A palette command is a plain link, so it can name no UUID: the two URLs
@@ -73,6 +78,9 @@ class BrowserRoutingTests(TestCase):
         AccountIdentity.objects.create(
             user=self.user, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE
         )
+
+    def tearDown(self):
+        cache.clear()
 
     def test_the_browser_route_renders_the_same_template(self):
         vault = make_vault(self.user)
@@ -113,6 +121,18 @@ class BrowserRoutingTests(TestCase):
             [EntryType.LOGIN],
         )
         self.assertContains(response, 'id="entry-types"')
+
+    def test_the_listing_carries_the_account_preferences(self):
+        """The lock delay has to reach the page: read only at unlock, a stored
+        preference would not take effect until the next reload."""
+        set_setting(self.user, "vault", "lock_after_minutes", 15)
+        response = self.client.get(reverse("vault_ui:index"))
+        self.assertEqual(response.context["vault_prefs"]["lock_after_minutes"], 15)
+        self.assertContains(response, 'id="vault-prefs"')
+
+    def test_an_account_with_no_preferences_gets_an_empty_map(self):
+        response = self.client.get(reverse("vault_ui:index"))
+        self.assertEqual(response.context["vault_prefs"], {})
 
     def test_an_unfinished_account_is_still_sent_to_onboarding(self):
         """The redirect guard belongs to the view, so it must hold on both

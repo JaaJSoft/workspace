@@ -24,6 +24,9 @@ window.buildVaultUpdateRequest = async function buildVaultUpdateRequest(
     },
     changes || {},
   );
+  const rewritesDescription = Object.prototype.hasOwnProperty.call(
+    changes || {}, 'description'
+  );
 
   // Re-sealed rather than carried over, because the name is what a rename
   // changes; sealing an unchanged name costs one AEAD call and keeps this
@@ -38,6 +41,24 @@ window.buildVaultUpdateRequest = async function buildVaultUpdateRequest(
     ),
   );
 
+  // Carried as the ciphertext it already is unless the caller changed it:
+  // re-sealing an unchanged description would spend a key operation to store
+  // the same plaintext under a new nonce, and the signature covers the
+  // ciphertext either way.
+  let encryptedDescription = vault.encrypted_description || '';
+  if (rewritesDescription) {
+    encryptedDescription = next.description
+      ? V.toBase64Url(
+          await V.seal(
+            metaKey,
+            new TextEncoder().encode(next.description),
+            V.AD.vaultFieldAd(vault.uuid, 'description'),
+            { keyVersion: vault.key_version || 1, kdfId: V.KDF_HKDF_SHA256 },
+          ),
+        )
+      : '';
+  }
+
   const payload = V.vaultMetadataPayload({
     vault_uuid: vault.uuid,
     // The vault payload names its owner, not whoever signs: a member may
@@ -45,7 +66,7 @@ window.buildVaultUpdateRequest = async function buildVaultUpdateRequest(
     // built on this request is owner-only server-side too.
     owner_account_uuid: session.accountUuid(),
     encrypted_name: encryptedName,
-    encrypted_description: vault.encrypted_description || '',
+    encrypted_description: encryptedDescription,
     icon: next.icon,
     color: next.color,
     key_version: vault.key_version || 1,
@@ -54,7 +75,7 @@ window.buildVaultUpdateRequest = async function buildVaultUpdateRequest(
 
   return {
     encrypted_name: encryptedName,
-    encrypted_description: vault.encrypted_description || '',
+    encrypted_description: encryptedDescription,
     icon: next.icon,
     color: next.color,
     is_favorite: next.is_favorite,

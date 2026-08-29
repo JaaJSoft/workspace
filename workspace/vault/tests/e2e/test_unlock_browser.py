@@ -156,7 +156,10 @@ class UnlockWalkTests(PlaywrightTestCase):
         self.page.reload()
         self._unlock()
         self._wait_for_vault_named("Personal", timeout=60000)
-        self.page.click("button:has-text('Lock now')")
+        # Lock lives in the sidebar now, beside the countdown it announces.
+        # Not exact: drawer_item renders the countdown as a badge inside the
+        # row, so the accessible name carries it too.
+        self.page.get_by_role("button", name="Lock").first.click()
         self.page.wait_for_selector("input[autocomplete='current-password']")
         # Not a raw substring check against the whole page: the shared
         # navbar's hidden onboarding tour markup carries the word
@@ -167,13 +170,14 @@ class UnlockWalkTests(PlaywrightTestCase):
 
     def test_the_countdown_advances_while_the_vault_stays_unlocked(self):
         # Alpine's reactivity is not observable from a stubbed session in a
-        # node:vm sandbox - only a real browser proves the "Locks in" text
-        # actually changes rather than being rendered once and left stale.
+        # node:vm sandbox - only a real browser proves the countdown actually
+        # changes rather than being rendered once and left stale.
         self._onboard()
         self.page.reload()
         self._unlock()
         self._wait_for_vault_named("Personal", timeout=60000)
-        countdown = self.page.locator("span", has_text="Locks in")
+        # The badge on the sidebar's Lock row: mm:ss, and nothing else.
+        countdown = self.page.locator("span.badge", has_text=":").first
         first = countdown.inner_text()
         self.page.wait_for_timeout(2500)
         second = countdown.inner_text()
@@ -184,9 +188,9 @@ class UnlockWalkTests(PlaywrightTestCase):
         self.page.reload()
         self._unlock()
         self._wait_for_vault_named("Personal", timeout=60000)
-        self.page.click("button:has-text('New vault')")
-        self.page.fill("input[placeholder='Vault name']", "Work")
-        self.page.click("button:has-text('Create')")
+        self.page.get_by_role("button", name="New vault").click()
+        self.page.fill("input[placeholder='Personal, Work…']", "Work")
+        self.page.get_by_role("button", name="Create", exact=True).click()
         self._wait_for_vault_named("Work")
         self.page.reload()
         self._unlock()

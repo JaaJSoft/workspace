@@ -180,3 +180,69 @@ test('folders and tags are verified and named the same way', async () => {
     ['folder-metadata', 'tag-metadata'],
   );
 });
+
+// --- a vault's own metadata ------------------------------------------------
+
+const VAULT_ROW = {
+  uuid: 'v-1',
+  owner_account_uuid: 'account-1',
+  encrypted_name: 'ct:name',
+  encrypted_description: 'ct:description',
+  icon: 'briefcase',
+  color: 'info',
+  key_version: 1,
+  is_favorite: true,
+  metadata_sig: 'sig',
+  wrapped_key: 'AQ',
+};
+
+function vaultReaderCtx(overrides = {}) {
+  const { ctx, session } = reader(overrides);
+  const crypto = ctx.vaultCrypto;
+  crypto.AD.vaultFieldAd = (uuid, field) => `vault:${uuid}|${field}`;
+  crypto.vaultMetadataPayload = (fields) => fields;
+  session.verifyVaultMetadata = overrides.verifyVaultMetadata || (async () => {});
+  return { ctx, session };
+}
+
+test('a vault is verified, then its name and description are opened', async () => {
+  const { ctx, session } = vaultReaderCtx();
+  const vault = await ctx.vaultReader.readVault(session, VAULT_ROW);
+  assert.equal(vault.name, 'open:vault:v-1|name');
+  assert.equal(vault.description, 'open:vault:v-1|description');
+  // Everything else is in the clear and travels through untouched.
+  assert.equal(vault.icon, 'briefcase');
+  assert.equal(vault.color, 'info');
+  assert.equal(vault.is_favorite, true);
+});
+
+test('a vault with no description gets an empty one, never a failed open', async () => {
+  // Every vault written before the field was offered stores an empty string,
+  // and opening one would throw where nothing is wrong.
+  const { ctx, session } = vaultReaderCtx();
+  const vault = await ctx.vaultReader.readVault(
+    session, Object.assign({}, VAULT_ROW, { encrypted_description: '' })
+  );
+  assert.equal(vault.description, '');
+  assert.equal(vault.name, 'open:vault:v-1|name');
+});
+
+test('a vault whose signature fails keeps neither name nor description', async () => {
+  const { ctx, session } = vaultReaderCtx({
+    verifyVaultMetadata: async () => { throw new Error('forged'); },
+  });
+  const vault = await ctx.vaultReader.readVault(session, VAULT_ROW);
+  assert.equal(vault.tampered, true);
+  assert.equal(vault.name, '');
+  assert.equal(vault.description, '');
+});
+
+test('a vault with no key wrap is unopenable and says nothing about itself', async () => {
+  const { ctx, session } = vaultReaderCtx();
+  const vault = await ctx.vaultReader.readVault(
+    session, Object.assign({}, VAULT_ROW, { wrapped_key: null })
+  );
+  assert.equal(vault.unopenable, true);
+  assert.equal(vault.name, '');
+  assert.equal(vault.description, '');
+});

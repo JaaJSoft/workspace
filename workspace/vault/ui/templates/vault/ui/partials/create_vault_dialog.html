@@ -1,0 +1,83 @@
+{% comment %}
+  Everything this form offers is inside the signed payload, so a vault gets
+  its icon, its colour and its description at the moment it is created rather
+  than in a second trip through the appearance dialog.
+
+  is_favorite is the exception: the server sets it at creation and refuses a
+  signature over anything else, so the checkbox is honoured by the write that
+  follows - see favouriteAfterCreate.
+{% endcomment %}
+<template x-if="newVault">
+  <div class="modal modal-open">
+    <div class="modal-box max-w-md">
+      <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+        <span :class="selectedColor">
+          <i :data-lucide="selectedIcon" class="w-5 h-5"></i>
+        </span>
+        New vault
+      </h3>
+
+      <inline-alert type="error" x-show="error" x-cloak class="mb-4">
+      <span x-text="error"></span>
+      </inline-alert>
+
+      <form @submit.prevent="createVault()">
+        <label class="form-control mb-3">
+          <span class="label-text font-medium">Name</span>
+          <input
+            type="text"
+            class="input input-bordered w-full"
+            placeholder="Personal, Work…"
+            autocomplete="off"
+            spellcheck="false"
+            x-model="newVault.name"
+          />
+        </label>
+
+        <label class="form-control mb-3">
+          <span class="label-text font-medium">
+            Description <span class="text-base-content/40">(optional)</span>
+          </span>
+          <input
+            type="text"
+            class="input input-bordered w-full"
+            placeholder="A short description…"
+            autocomplete="off"
+            spellcheck="false"
+            x-model="newVault.description"
+          />
+        </label>
+
+        {% comment %}
+          The shared picker's markup, driven by selectIcon / selectColor. Its
+          own iconPicker() component cannot be used: it PATCHes an endpoint
+          directly, and a vault needs a re-signed body.
+        {% endcomment %}
+        <div class="mb-3">
+          <span class="label-text font-medium block mb-2">Icon and colour</span>
+          {% include "ui/partials/icon_picker.html" %}
+        </div>
+
+        <label class="label cursor-pointer justify-start gap-3">
+          <input
+            type="checkbox"
+            class="checkbox checkbox-sm"
+            x-model="newVault.favorite"
+          />
+          <span class="label-text">Add to favourites</span>
+        </label>
+
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost" @click="closeCreateDialog()">Cancel</button>
+          <button
+            type="submit"
+            class="btn btn-primary"
+            :disabled="busy || !newVault.name.trim()"
+          >
+            Create
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>

@@ -17,44 +17,6 @@ window.VAULT_COLOR_SWATCHES = [
 ];
 
 window.vaultApp = (function () {
-  // The metadata key is opened fresh per vault and is non-extractable: no
-  // copy of its bytes exists on this side to be zeroed.
-  async function decryptVault(row) {
-    const V = window.vaultCrypto;
-    const payload = V.vaultMetadataPayload(
-      Object.assign({}, row, { vault_uuid: row.uuid })
-    );
-    try {
-      await window.vaultSession.verifyVaultMetadata(payload, row.metadata_sig);
-    } catch (err) {
-      // A lock landing mid-listing fails this the same way a forged signature
-      // does, and the tamper alert is the one message the user is told to act
-      // on rather than retry - so it must never stand in for an idle timeout.
-      if (err && err.reason === 'locked') throw err;
-      // Signed by nobody the account trusts: never shown with a name that
-      // came along for the ride.
-      return Object.assign({}, row, { tampered: true, name: '' });
-    }
-    if (!row.wrapped_key) {
-      return Object.assign({}, row, { unopenable: true, name: '' });
-    }
-    try {
-      const metaKey = await window.vaultSession.openVaultKey(row.uuid, row.wrapped_key);
-      const plaintext = await V.open(
-        metaKey,
-        V.fromBase64Url(row.encrypted_name),
-        V.AD.vaultFieldAd(row.uuid, 'name')
-      );
-      return Object.assign({}, row, { name: new TextDecoder().decode(plaintext) });
-    } catch (err) {
-      if (err && err.reason === 'locked') throw err;
-      // Localised the same way a bad signature is: one row loses its name,
-      // the rest of the list - and the Promise.all it resolves inside -
-      // keeps going.
-      return Object.assign({}, row, { unreadable: true, name: '' });
-    }
-  }
-
   return function vaultApp() {
     return {
       ...window.vaultUnlockMixin(),
@@ -118,7 +80,9 @@ window.vaultApp = (function () {
         const rows = await window.vaultApi.listVaults();
         let decrypted;
         try {
-          decrypted = await Promise.all(rows.map(decryptVault));
+          decrypted = await Promise.all(
+            rows.map((row) => window.vaultReader.readVault(window.vaultSession, row))
+          );
         } catch (err) {
           // A lock caught the rows mid-flight. There is nothing to report:
           // the user is looking at the password form, and the caller's
@@ -256,7 +220,7 @@ window.vaultApp = (function () {
             window.vaultSession, name, this.pendingVaultUuid
           );
           const row = await window.vaultApi.createVault(body);
-          const created = await decryptVault(row);
+          const created = await window.vaultReader.readVault(window.vaultSession, row);
           // Same race loadVaults guards against: three awaits sit between the
           // check at the top of this function and here, so a lock can have
           // emptied the list already. pendingVaultUuid survives on purpose -

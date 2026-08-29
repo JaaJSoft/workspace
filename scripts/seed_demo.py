@@ -1138,15 +1138,23 @@ def main():
     vault_summary = None
     if not args.no_vault:
         print("\nGenerating the demo vault ...")
-        from seed_vault import MASTER_PASSWORD, seed_vault_for
-
-        demo_user = next(u for u in users if u.username == DEMO_USERNAME)
-        vault_summary = seed_vault_for(demo_user)
-        vault_summary["password"] = MASTER_PASSWORD
-        print(
-            f"  {vault_summary['vaults']} vaults, {vault_summary['entries']} entries",
-            flush=True,
-        )
+        try:
+            from seed_vault import MASTER_PASSWORD, seed_vault_for
+        except ImportError:
+            # seed_vault drives the crypto reference implementation, which
+            # lives under workspace/vault/tests/ - and .dockerignore keeps
+            # every tests/ directory out of the image. The rest of the seed
+            # still runs there.
+            print("  skipped: the vault seed needs the test tree, absent here")
+        else:
+            demo_user = next(u for u in users if u.username == DEMO_USERNAME)
+            vault_summary = seed_vault_for(demo_user)
+            vault_summary["password"] = MASTER_PASSWORD
+            print(
+                f"  {vault_summary['vaults']} vaults, "
+                f"{vault_summary['entries']} entries",
+                flush=True,
+            )
 
     print("\n--- Done ---")
     print(f"  users:         {len(users)}")

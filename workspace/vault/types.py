@@ -78,6 +78,8 @@ class TypedEntry(VaultEntry):
                     "reserved field identifier"
                 )
         if cls.ENTRY_TYPE is not None:
+            if not cls.LABEL:
+                raise ValueError(f"{cls.__name__} declares no LABEL")
             _REGISTRY[cls.ENTRY_TYPE] = cls
 
 

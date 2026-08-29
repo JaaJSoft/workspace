@@ -47,10 +47,9 @@
 
     {% comment %}
       Not ui/partials/refresh_button.html: that one swaps a server-rendered
-      partial through alpine-ajax, and there is no such partial here - the
-      rows come back as ciphertext and are opened on this side. The span
-      wrapper is the reason it copies: Lucide replaces the <i> with a fresh
-      <svg> at mount, which would orphan a binding put on the <i> itself.
+      partial, and there is none here - the rows arrive as ciphertext. The
+      span wrapper is why the markup copies: Lucide replaces the <i> with a
+      fresh <svg>, orphaning any binding put on the <i>.
     {% endcomment %}
     <button
       type="button"

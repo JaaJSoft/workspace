@@ -1249,3 +1249,59 @@ test('a lock in the middle of a listing is not reported as tampering', async () 
   assert.equal(component.tamperedCount, 0);
   assert.equal(component.error, '');
 });
+
+test('a new folder is positioned among its siblings, not among all folders', async () => {
+  // position orders siblings. Counting the whole tree would put every new
+  // folder last in its own level and grow without meaning.
+  const { component } = browser({
+    api: {
+      listFolders: async () => [
+        { uuid: 'f-1', vault: VAULT_UUID, parent: null, position: 0,
+          encrypted_name: 'ct', metadata_sig: 'sig' },
+        { uuid: 'f-2', vault: VAULT_UUID, parent: 'f-1', position: 0,
+          encrypted_name: 'ct', metadata_sig: 'sig' },
+        { uuid: 'f-3', vault: VAULT_UUID, parent: 'f-1', position: 1,
+          encrypted_name: 'ct', metadata_sig: 'sig' },
+      ],
+    },
+  });
+  component.init();
+  await component.load();
+  component.openFolder('f-1');
+  component.newFolder();
+  assert.equal(component.folderDraft.parent, 'f-1');
+  assert.equal(component.folderDraft.position, 2);
+});
+
+test('a refresh shuts a menu that was still open', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openMenu({ clientX: 0, clientY: 0 }, component.entries[0]);
+  assert.equal(component.menu.open, true);
+  await component.refresh();
+  assert.equal(component.menu.open, false);
+});
+
+test('a field that will not open leaves the form shut and says so', async () => {
+  // An unhandled rejection out of a click handler would leave no dialog and
+  // no message - the user would press Edit and watch nothing happen.
+  const { component } = typed({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+    },
+    crypto: { open: async () => { throw new Error('cannot open'); } },
+  });
+  component.init();
+  await component.load();
+  await component.editEntry({
+    uuid: 'e-1', type: 'login', fieldIds: ['username'], tags: [],
+  });
+  assert.strictEqual(component.draft, null);
+  assert.match(component.error, /could not be opened/i);
+});

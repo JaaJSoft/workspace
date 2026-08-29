@@ -136,7 +136,46 @@ window.vaultReader = (function () {
     return { rows: results, tamperedCount: tamperedCount };
   }
 
+  // A vault's own metadata: verified, then its name opened. Both screens
+  // read a vault this way, and the three degraded outcomes below are the
+  // reason it is one function - a second copy would drift on which of them
+  // still shows a name.
+  async function readVault(session, row) {
+    const V = window.vaultCrypto;
+    const payload = V.vaultMetadataPayload(
+      Object.assign({}, row, { vault_uuid: row.uuid })
+    );
+    try {
+      await session.verifyVaultMetadata(payload, row.metadata_sig);
+    } catch (err) {
+      // A lock landing mid-listing fails this the same way a forged signature
+      // does, and the tamper alert is the one message the user is told to act
+      // on rather than retry - so it must never stand in for an idle timeout.
+      if (err && err.reason === 'locked') throw err;
+      // Signed by nobody the account trusts: never shown with a name that
+      // came along for the ride.
+      return Object.assign({}, row, { tampered: true, name: '' });
+    }
+    if (!row.wrapped_key) {
+      return Object.assign({}, row, { unopenable: true, name: '' });
+    }
+    try {
+      const metaKey = await session.openVaultKey(row.uuid, row.wrapped_key);
+      return Object.assign({}, row, {
+        name: await openText(
+          V, metaKey, row.encrypted_name, V.AD.vaultFieldAd(row.uuid, NAME_FIELD)
+        ),
+      });
+    } catch (err) {
+      if (err && err.reason === 'locked') throw err;
+      // Localised the same way a bad signature is: one row loses its name and
+      // the rest of the listing keeps going.
+      return Object.assign({}, row, { unreadable: true, name: '' });
+    }
+  }
+
   return {
+    readVault: readVault,
     readEntries: function (session, vault, rows) {
       return readAll(rows, function (row) { return readEntry(session, vault, row); });
     },

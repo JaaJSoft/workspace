@@ -1,20 +1,16 @@
 // Putting a secret on the clipboard, and taking it back.
 //
-// The clipboard is shared with every other application on the machine, which
-// makes both halves delicate:
+// Copying is the one moment a secret is decrypted, and nothing here keeps it:
+// the value goes to the platform and the reference is dropped.
 //
-//   - Copying is the one moment a secret is decrypted. Nothing here keeps it:
-//     the value is handed to the platform and the reference is dropped.
-//   - Clearing is only correct while the clipboard still holds what we put
-//     there. The user may have copied something else in the meantime, and
-//     wiping then destroys their work to protect a secret that has already
-//     gone. So the value is read back and compared before anything is
-//     written.
-//
-// A browser is allowed to refuse that read - Firefox refuses `readText`
-// outright - and a refusal is not permission to clear anyway. It leaves the
-// clipboard alone and says so, because "your password is still on the
-// clipboard" is something the user has to be able to act on.
+// Clearing is the delicate half. The clipboard belongs to the whole machine,
+// so wiping it is only correct while it still holds what we wrote - the user
+// may have copied something else since, and wiping then destroys their work
+// to protect a secret that has already gone. So the value is read back and
+// compared first. A browser may refuse that read (Firefox refuses readText),
+// and a refusal is not permission to clear anyway: it leaves the clipboard
+// alone and says so, because "your password is still on the clipboard" is
+// something the user has to be able to act on.
 window.vaultClipboard = (function () {
   const CLEAR_AFTER_SECONDS = 30;
 
@@ -38,8 +34,7 @@ window.vaultClipboard = (function () {
     written = null;
   }
 
-  // Returns what happened, so the caller can tell "cleared" from "left
-  // alone" - the second is the one worth telling the user about.
+  // Returns what happened: "left alone" is the outcome worth reporting.
   async function clearIfOurs() {
     if (written === null) return 'nothing';
     const ours = written;
@@ -70,9 +65,8 @@ window.vaultClipboard = (function () {
   return {
     copy: async function (label, value, options) {
       const settings = options || {};
-      // Whatever countdown was running belonged to another value; letting it
-      // survive would have it clear this one early, or compare against a
-      // secret that is no longer on the clipboard.
+      // A countdown still running belongs to another value: left alive it
+      // would clear this one early.
       stop();
       await navigator.clipboard.writeText(value);
       if (!settings.transient) {

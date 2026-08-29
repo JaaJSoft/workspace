@@ -11,23 +11,24 @@
 // The vault is in the URL and the folder is not: the server assigns a vault's
 // UUID and it leaks nothing, whereas a folder is named by a ciphertext the
 // server has never read. So switching vault is a navigation, and walking the
-// tree is not.
+// tree is not - and because the keys live in vaultSession's closure, that
+// navigation drops them. Every page load starts locked, which is why the
+// vault is loaded by afterUnlock and never by init.
 window.vaultBrowser = (function () {
   const COLLAPSED_KEY = 'vault.sidebar.collapsed';
   const VIEW_MODE_KEY = 'vault.browser.viewMode';
 
-  // Which actions stop and ask. The trash is not among them: it is reversible
-  // and asking about a reversible thing is what teaches people to click
-  // through the question that matters. Destroying is the one no restore
-  // reaches, so it is the one that asks.
-  // What an irreversible question looks like: its own title and a red button,
-  // so it does not read like the reversible ones.
+  // Its own title and a red button, so an irreversible question does not read
+  // like a reversible one.
   const DESTRUCTIVE = {
     title: 'This cannot be undone',
     okLabel: 'Delete for good',
     okClass: 'btn-error',
   };
 
+  // Which actions stop and ask. The trash is not among them: asking about a
+  // thing a restore undoes is what teaches people to click through the
+  // question that matters.
   const CONFIRMS = {
     delete_forever: (count) =>
       count === 1
@@ -74,12 +75,6 @@ window.vaultBrowser = (function () {
       ...window.vaultUnlockMixin(),
       ...store,
 
-      // The keys live in vaultSession's closure, so every page load starts
-      // locked and the vault is loaded by afterUnlock rather than by init.
-      // That is also what a vault switch costs: the URL names the vault, so
-      // moving to another one is a navigation, and a navigation drops the
-      // keys.
-      //
       // The vault this page was routed to. Null on /vault, where the listing
       // renders instead.
       vaultUuid: null,
@@ -122,19 +117,15 @@ window.vaultBrowser = (function () {
       // is never computed here: a rule copied into the client is a rule that
       // drifts from the endpoint enforcing it.
       entryActions: {},
-      // Two listings can be in flight at once - a refresh landing on a slow
-      // one - and the slower answer must not describe rows that left the
-      // screen. Only the newest generation is allowed to write.
+      // A refresh landing on a slow listing must not let the slower answer
+      // describe rows that have left the screen.
       actionsGeneration: 0,
       // The row whose properties are on screen. Distinct from the selection:
       // the checkbox owns that, the row body opens this.
       panelEntry: null,
       // The context menu: which row it belongs to and where it was raised.
       menu: { open: false, entry: null, x: 0, y: 0 },
-      // A menu asks the endpoint again as it opens, because the batch behind
-      // the listing may be minutes old by then. Only the newest opening is
-      // allowed to write, or a slow answer would re-describe a row the user
-      // has already moved off.
+      // Only the newest opening may write its answer; see openMenu.
       menuGeneration: 0,
 
       init: function () {
@@ -190,9 +181,19 @@ window.vaultBrowser = (function () {
         if (!this.vaultUuid) return;
         this.loading = true;
         this.error = '';
+        // Every row is about to be rebuilt, and a menu left open would go on
+        // describing an object that has left the listing.
+        this.closeMenu();
         try {
           await this.loadVault();
           if (this.openVault) await this.loadContents();
+          // The palette command reaches the page before there is a vault to
+          // write into, so it waits here for one.
+          if (this.openVault && this.pendingNewEntry) {
+            this.pendingNewEntry = false;
+            const first = this.entryTypes[0];
+            if (first) this.newEntry(first.id);
+          }
         } catch (err) {
           // A lock caught the rows mid-flight. There is nothing to report:
           // the user is looking at the password form, and a message here
@@ -208,44 +209,13 @@ window.vaultBrowser = (function () {
         const rows = await window.vaultApi.listVaults();
         const vaults = [];
         for (const row of rows) {
-          vaults.push(await this.readVault(row));
+          vaults.push(await window.vaultReader.readVault(window.vaultSession, row));
         }
         if (!window.vaultSession.isUnlocked()) return;
         this.vaults = vaults;
         const uuid = String(this.vaultUuid);
         this.openVault = vaults.find((vault) => String(vault.uuid) === uuid) || null;
         this.missing = this.openVault === null;
-      },
-
-      // Same two steps as the listing's cards: verify, then open the name.
-      // A vault whose signature does not check keeps no name at all - showing
-      // one "just to identify it" would render unverified data.
-      readVault: async function (row) {
-        const V = window.vaultCrypto;
-        const payload = V.vaultMetadataPayload(
-          Object.assign({}, row, { vault_uuid: row.uuid })
-        );
-        try {
-          await window.vaultSession.verifyVaultMetadata(payload, row.metadata_sig);
-        } catch (err) {
-          if (err && err.reason === 'locked') throw err;
-          return Object.assign({}, row, { tampered: true, name: '' });
-        }
-        if (!row.wrapped_key) {
-          return Object.assign({}, row, { unopenable: true, name: '' });
-        }
-        try {
-          const metaKey = await window.vaultSession.openVaultKey(row.uuid, row.wrapped_key);
-          const plaintext = await V.open(
-            metaKey,
-            V.fromBase64Url(row.encrypted_name),
-            V.AD.vaultFieldAd(row.uuid, 'name')
-          );
-          return Object.assign({}, row, { name: new TextDecoder().decode(plaintext) });
-        } catch (err) {
-          if (err && err.reason === 'locked') throw err;
-          return Object.assign({}, row, { unreadable: true, name: '' });
-        }
       },
 
       rowFor: function (uuid) {
@@ -287,13 +257,6 @@ window.vaultBrowser = (function () {
         });
         this.panelEntry = null;
         await this.loadEntryActions();
-        // The palette command reaches the page before there is a vault to
-        // write into, so it waits here for one.
-        if (this.pendingNewEntry) {
-          this.pendingNewEntry = false;
-          const first = this.entryTypes[0];
-          if (first) this.newEntry(first.id);
-        }
       },
 
       loadEntryActions: async function () {
@@ -629,12 +592,18 @@ window.vaultBrowser = (function () {
         if (!row || !this.openVault) return;
         const values = {};
         const type = this.typeFor(entry.type);
-        for (const field of type ? type.fields : []) {
-          if (field.kind === 'totp') continue;
-          if (!(entry.fieldIds || []).includes(field.field_id)) continue;
-          values[field.field_id] = await window.vaultReader.openField(
-            window.vaultSession, this.openVault, row, field.field_id
-          );
+        try {
+          for (const field of type ? type.fields : []) {
+            if (field.kind === 'totp') continue;
+            if (!(entry.fieldIds || []).includes(field.field_id)) continue;
+            values[field.field_id] = await window.vaultReader.openField(
+              window.vaultSession, this.openVault, row, field.field_id
+            );
+          }
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That entry could not be opened for editing.';
+          return;
         }
         if (!window.vaultSession.isUnlocked()) return;
         this.draft = {
@@ -747,11 +716,15 @@ window.vaultBrowser = (function () {
 
       newFolder: function () {
         this.closeMenu();
+        const parent = this.view === 'all' && !this.tagFilter ? this.folderUuid : null;
         this.folderDraft = {
           uuid: window.vaultCrypto.uuidV7(),
-          parent: this.view === 'all' && !this.tagFilter ? this.folderUuid : null,
+          parent: parent,
           name: '',
-          position: this.folders.length,
+          // position orders siblings, so it counts siblings: the whole-tree
+          // count would put every new folder last in its own level and grow
+          // without meaning.
+          position: this.folders.filter((row) => row.parent === parent).length,
         };
       },
 
@@ -823,9 +796,8 @@ window.vaultBrowser = (function () {
         return type ? type.icon : 'file-question';
       },
 
-      // The server sends ISO timestamps; the table has a 32-unit column. The
-      // locale is the browser's, deliberately: nothing about a vault is
-      // server-rendered, this included.
+      // Formatted here rather than by the server, like everything else on
+      // this page: the locale is the browser's.
       shortDate: function (value) {
         if (!value) return '-';
         const date = new Date(value);

@@ -8,6 +8,7 @@ const { loadScripts } = require('../../../common/tests/js/loader');
 function app(session = {}, api = {}, crypto = {}) {
   const ctx = loadScripts([
     'workspace/vault/ui/static/vault/ui/js/vault_unlock.js',
+    'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
     'workspace/vault/ui/static/vault/ui/js/vault_create.js',
     'workspace/vault/ui/static/vault/ui/js/vault_update.js',
     'workspace/vault/ui/static/vault/ui/js/vault_app.js',

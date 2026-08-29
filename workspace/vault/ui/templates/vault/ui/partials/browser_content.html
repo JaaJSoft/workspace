@@ -36,12 +36,10 @@
   </template>
 
   {% comment %}
-    A floor under the table rather than a free-shrinking one: the pane loses
-    320px to the properties panel, and table-fixed answers by crushing the
-    name column - the one cell the whole row is about - into an ellipsis,
-    because the other columns' widths are fixed and it is the only flexible
-    one. The container scrolls instead. The media queries cannot help: they
-    follow the viewport, and it is the pane that narrows.
+    A floor, so the container scrolls instead of crushing the name column -
+    the only flexible one - when the properties panel takes 320px off the
+    pane. Media queries cannot help: they follow the viewport, and it is the
+    pane that narrows.
   {% endcomment %}
   <table
     class="table table-fixed min-w-[46rem] [&_td]:align-middle [&_th]:align-middle"
@@ -81,9 +79,8 @@
           </td>
           <td class="font-medium truncate" x-text="folder.name"></td>
           {% comment %}
-            VaultFolder carries a name, a parent and a position - no icon, no
-            colour, no favourite - so these cells stay empty rather than
-            inventing a value the model cannot hold.
+            A folder carries no icon, colour or favourite, so these cells stay
+            empty rather than inventing a value the model cannot hold.
           {% endcomment %}
           <td></td>
           <td class="hidden lg:table-cell"></td>

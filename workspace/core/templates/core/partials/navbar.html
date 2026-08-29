@@ -11,9 +11,10 @@
           <div
             id="module-switcher"
             class="dropdown leading-[0]"
-            x-data
+            x-data="moduleSwitcher()"
             @keydown.escape.prevent="document.activeElement.blur()"
-            @keydown.window="if ($event.altKey && $event.key.toLowerCase() === 'm') { $event.preventDefault(); $el.querySelector('label').focus(); }"
+            @keydown.window="if (isShortcut($event)) { $event.preventDefault(); open(); }"
+            @keydown="onKeydown($event)"
           >
             {% if module %}
               <label
@@ -48,10 +49,17 @@
               tabindex="0"
               class="dropdown-content mt-3 z-[100] p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-[16.5rem]"
             >
-              <div
-                class="px-2 pt-1 pb-2 text-xs font-semibold uppercase tracking-wider text-base-content/50"
-              >
-                Apps
+              <div class="px-2 pt-1 pb-2 flex items-center justify-between">
+                <span
+                  class="text-xs font-semibold uppercase tracking-wider text-base-content/50"
+                >Apps</span>
+                <span
+                  class="flex items-center gap-0.5"
+                  title="Open the switcher with Alt+M"
+                >
+                  <kbd class="kbd kbd-xs">Alt</kbd>
+                  <kbd class="kbd kbd-xs">M</kbd>
+                </span>
               </div>
               <section
                 id="module-switcher-grid"

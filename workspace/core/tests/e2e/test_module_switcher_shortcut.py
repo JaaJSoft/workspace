@@ -39,3 +39,17 @@ class ModuleSwitcherShortcutTests(PlaywrightTestCase):
         self.page.keyboard.press("Alt+m")
 
         expect(self.page.locator(PANEL)).to_be_visible()
+
+    def test_arrows_and_letters_move_across_the_tiles(self):
+        self.page.keyboard.press("Alt+m")
+        expect(self.page.locator(PANEL)).to_be_visible()
+
+        self.page.keyboard.press("ArrowDown")
+        expect(self.page.locator(f"{PANEL} a").first).to_be_focused()
+
+        self.page.keyboard.press("ArrowRight")
+        expect(self.page.locator(f"{PANEL} a").nth(1)).to_be_focused()
+
+        self.page.keyboard.press("c")
+        focused = self.page.evaluate("document.activeElement.textContent.trim()")
+        self.assertTrue(focused.startswith("C"), focused)

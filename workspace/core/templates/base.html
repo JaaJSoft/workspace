@@ -118,6 +118,7 @@
       {{ workspace_active_modules|json_script:"workspace-modules-data" }}
       <script src="{% static 'core/js/sse.js' %}"></script>
       <script src="{% static 'core/js/stores.js' %}"></script>
+      <script src="{% static 'core/js/module_switcher.js' %}"></script>
     {% endif %}
 
     {% block extra_scripts %}{% endblock %}

@@ -34,7 +34,11 @@
   {{ entry_types|json_script:"entry-types" }}
 
   {% if vault_uuid %}
-    <div x-data="vaultBrowser()" class="h-full flex min-h-0">
+    <div
+      x-data="vaultBrowser()"
+      class="h-full flex min-h-0"
+      @keydown.escape.window="closeMenu()"
+    >
       <template x-if="state !== 'unlocked'">
         <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
       </template>
@@ -55,6 +59,9 @@
             {% include "vault/ui/partials/browser_content.html" %}
 
           </main>
+
+          {% include "vault/ui/partials/browser_panel.html" %}
+          {% include "vault/ui/partials/browser_menu.html" %}
         </div>
       </template>
     </div>

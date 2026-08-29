@@ -99,6 +99,13 @@ window.vaultBrowser = (function () {
       // The row whose properties are on screen. Distinct from the selection:
       // the checkbox owns that, the row body opens this.
       panelEntry: null,
+      // The context menu: which row it belongs to and where it was raised.
+      menu: { open: false, entry: null, x: 0, y: 0 },
+      // A menu asks the endpoint again as it opens, because the batch behind
+      // the listing may be minutes old by then. Only the newest opening is
+      // allowed to write, or a slow answer would re-describe a row the user
+      // has already moved off.
+      menuGeneration: 0,
 
       init: function () {
         this.vaultUuid = readJson('vault-uuid');
@@ -133,6 +140,7 @@ window.vaultBrowser = (function () {
         this.error = '';
         this.entryActions = {};
         this.panelEntry = null;
+        this.closeMenu();
         this.pendingNewEntry = false;
         this.pendingNewFolder = false;
         this.draftType = null;
@@ -316,6 +324,59 @@ window.vaultBrowser = (function () {
         });
       },
 
+      // ---- the menu --------------------------------------------------------
+
+      // Opened on the row it names, and refilled from the endpoint as it
+      // opens: what the listing fetched may be minutes old, and a menu is the
+      // moment a stale answer turns into a request the server refuses.
+      openMenu: async function (event, entry) {
+        if (event && event.preventDefault) event.preventDefault();
+        this.menuGeneration += 1;
+        const generation = this.menuGeneration;
+        this.menu = {
+          open: true,
+          entry: entry,
+          x: (event && event.clientX) || 0,
+          y: (event && event.clientY) || 0,
+        };
+        let answer;
+        try {
+          answer = await window.vaultApi.fetchEntryActions([entry.uuid]);
+        } catch (err) {
+          // The cached list is what the menu already shows; leaving it beats
+          // blanking a menu the user just opened.
+          return;
+        }
+        if (generation !== this.menuGeneration) return;
+        if (!window.vaultSession.isUnlocked()) return;
+        this.entryActions = Object.assign({}, this.entryActions, answer);
+      },
+
+      menuActions: function () {
+        return this.actionsFor(this.menu.entry);
+      },
+
+      closeMenu: function () {
+        // The generation moves too: a request in flight for the menu just
+        // closed must not reopen anything when it lands.
+        this.menuGeneration += 1;
+        this.menu = { open: false, entry: null, x: 0, y: 0 };
+      },
+
+      // ---- the panel -------------------------------------------------------
+
+      panelHasAction: function (actionId) {
+        return this.hasAction(this.panelEntry, actionId);
+      },
+
+      // Which fields the row carries, learnt from the listing without opening
+      // one: it is what tells a login with an authenticator key from one
+      // without, and it is the whole reason the reader collects field ids.
+      panelCarries: function (fieldId) {
+        const entry = this.panelEntry;
+        return Boolean(entry && (entry.fieldIds || []).includes(fieldId));
+      },
+
       // ---- gestures --------------------------------------------------------
 
       // The gesture of the file browser: the checkbox selects, the row body
@@ -339,6 +400,7 @@ window.vaultBrowser = (function () {
       apply: function (state) {
         store.apply.call(this, state);
         this.panelEntry = null;
+        this.closeMenu();
       },
 
       newEntry: function (typeId) {

@@ -1,0 +1,37 @@
+{% comment %}
+  The context menu, rendered from whatever POST /api/v1/vault/actions
+  answered for the row it names - in the order the server returned. Nothing
+  here decides availability, and there is no fallback list: an entry the
+  caller cannot reach comes back with an empty list, and an empty menu is the
+  honest rendering of that.
+
+  Positioned with Alpine's :style, which is written through the CSSOM and is
+  not what style-src-attr sees; a coordinate cannot be a utility class.
+{% endcomment %}
+<div
+  x-show="menu.open"
+  x-cloak
+  class="fixed z-50"
+  :style="'left:' + menu.x + 'px; top:' + menu.y + 'px'"
+  @click.outside="closeMenu()"
+>
+  <ul
+    class="menu bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 w-60 text-sm p-2"
+  >
+    <li
+      class="menu-title text-xs truncate"
+      x-text="menu.entry ? menu.entry.name : ''"
+    ></li>
+    <template x-for="action in menuActions()" :key="action.id">
+      <li>
+        <button type="button" class="gap-3" :class="action.css_class">
+          <i :data-lucide="action.icon" class="w-4 h-4"></i>
+          <span x-text="action.label"></span>
+        </button>
+      </li>
+    </template>
+    <li x-show="menuActions().length === 0">
+      <span class="opacity-50">Nothing can be done with this entry</span>
+    </li>
+  </ul>
+</div>

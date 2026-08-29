@@ -35,8 +35,16 @@
     </div>
   </template>
 
+  {% comment %}
+    A floor under the table rather than a free-shrinking one: the pane loses
+    320px to the properties panel, and table-fixed answers by crushing the
+    name column - the one cell the whole row is about - into an ellipsis,
+    because the other columns' widths are fixed and it is the only flexible
+    one. The container scrolls instead. The media queries cannot help: they
+    follow the viewport, and it is the pane that narrows.
+  {% endcomment %}
   <table
-    class="table table-fixed [&_td]:align-middle [&_th]:align-middle"
+    class="table table-fixed min-w-[46rem] [&_td]:align-middle [&_th]:align-middle"
     x-show="viewMode === 'list' && !isEmpty()"
     x-cloak
   >
@@ -55,8 +63,8 @@
         <th class="w-12"><span class="sr-only">Type</span></th>
         <th>Name</th>
         <th class="w-10 text-center">Fav</th>
-        <th class="hidden lg:table-cell w-44">Tags</th>
-        <th class="hidden sm:table-cell w-28">Type</th>
+        <th class="hidden lg:table-cell w-36">Tags</th>
+        <th class="hidden sm:table-cell w-24">Type</th>
         <th
           class="hidden md:table-cell w-32"
           x-text="view === 'trash' ? 'Deleted' : 'Modified'"
@@ -90,6 +98,7 @@
           class="hover cursor-pointer"
           :class="[isSelected(entry.uuid) ? 'bg-primary/5' : '', panelEntry === entry ? 'bg-primary/10' : '']"
           @click="openEntryFromRow(entry)"
+          @contextmenu="openMenu($event, entry)"
         >
           <td @click.stop>
             <input
@@ -133,8 +142,8 @@
             <button
               type="button"
               class="btn btn-ghost btn-xs btn-square"
-              x-show="actionsFor(entry).length"
               :aria-label="'Actions for ' + entry.name"
+              @click="openMenu($event, entry)"
             >
               <i data-lucide="more-horizontal" class="w-4 h-4"></i>
             </button>
@@ -168,6 +177,7 @@
         class="card bg-base-100 border cursor-pointer"
         :class="panelEntry === entry ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-error'"
         @click="openEntryFromRow(entry)"
+        @contextmenu="openMenu($event, entry)"
       >
         <div class="card-body p-3 items-center gap-2">
           <i :data-lucide="typeIcon(entry.type)" class="w-8 h-8 text-error"></i>

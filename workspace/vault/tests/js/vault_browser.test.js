@@ -542,3 +542,134 @@ test('an unreadable timestamp shows a dash rather than "Invalid Date"', () => {
   assert.equal(component.shortDate('not a date'), '-');
   assert.ok(component.shortDate('2026-08-28T10:00:00Z').length > 3);
 });
+
+// --- the menu, built by the server and by nothing else ---------------------
+
+test('the menu renders the ids the server returned, in the order it returned them', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({
+        'e-1': [ACTION.copy_password, ACTION.edit, ACTION.trash],
+      }),
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openMenu({ clientX: 10, clientY: 20 }, component.entries[0]);
+  assert.deepStrictEqual(ids(component.menuActions()), ['copy_password', 'edit', 'trash']);
+  assert.equal(component.menu.open, true);
+});
+
+test('an empty answer renders an empty menu rather than a default one', async () => {
+  // An entry the caller cannot reach comes back with an empty list, never a
+  // missing key. Falling back to "the usual actions" would put a menu in
+  // front of a row the server is about to refuse every request for.
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [] }),
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openMenu({ clientX: 0, clientY: 0 }, component.entries[0]);
+  assert.deepStrictEqual(ids(component.menuActions()), []);
+});
+
+test('an answer that lands after the menu moved on is thrown away', async () => {
+  let resolveFirst;
+  let call = 0;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1'), entryWith('e-2')],
+      fetchEntryActions: (uuids) => {
+        call += 1;
+        // The listing's own batch, then one refresh per menu opening.
+        if (call === 1) return Promise.resolve({ 'e-1': [], 'e-2': [] });
+        if (call === 2) return new Promise((resolve) => { resolveFirst = resolve; });
+        return Promise.resolve({ 'e-2': [ACTION.edit] });
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  const stale = component.openMenu({ clientX: 0, clientY: 0 }, component.entries[0]);
+  await component.openMenu({ clientX: 0, clientY: 0 }, component.entries[1]);
+  resolveFirst({ 'e-1': [ACTION.trash, ACTION.move] });
+  await stale;
+  assert.equal(component.menu.entry.uuid, 'e-2');
+  assert.deepStrictEqual(ids(component.menuActions()), ['edit']);
+});
+
+test('the menu shuts when the listing under it changes', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+    },
+  });
+  component.init();
+  await component.load();
+
+  await component.openMenu({ clientX: 0, clientY: 0 }, component.entries[0]);
+  component.setView('trash');
+  assert.equal(component.menu.open, false);
+
+  await component.openMenu({ clientX: 0, clientY: 0 }, component.entries[0]);
+  component.closeMenu();
+  assert.equal(component.menu.open, false);
+});
+
+test('a lock shuts the menu on whatever it was describing', async () => {
+  const listeners = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+    },
+    session: { onLock: (callback) => listeners.push(callback) },
+  });
+  component.init();
+  await component.load();
+  await component.openMenu({ clientX: 0, clientY: 0 }, component.entries[0]);
+  listeners.forEach((callback) => callback());
+  assert.equal(component.menu.open, false);
+  assert.equal(component.menu.entry, null);
+});
+
+test('the panel answers what the registry allows for the row it shows', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1'), entryWith('e-2')],
+      fetchEntryActions: async () => ({
+        'e-1': [ACTION.edit, ACTION.copy_password],
+        'e-2': [],
+      }),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelHasAction('edit'), true);
+  assert.equal(component.panelHasAction('trash'), false);
+  component.openEntryFromRow(component.entries[1]);
+  assert.equal(component.panelHasAction('edit'), false);
+});
+
+test('the panel says which fields a row carries without opening one', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelCarries('password'), true);
+  assert.equal(component.panelCarries('totp'), false);
+  // Knowing a password is there is not holding it: nothing opened it.
+  assert.ok(!('password' in component.panelEntry));
+});

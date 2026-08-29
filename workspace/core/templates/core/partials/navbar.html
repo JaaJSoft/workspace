@@ -16,16 +16,18 @@
           >
             <label
               tabindex="0"
-              class="btn btn-ghost normal-case gap-2 px-2 cursor-pointer hover:bg-{{ module.color }}/10 transition-all"
+              class="btn btn-ghost normal-case flex-nowrap gap-2 px-2 cursor-pointer hover:bg-{{ module.color }}/10 transition-all"
               title="Switch module"
               aria-label="Switch module, currently {{ module.name }}"
             >
               <span
-                class="w-8 h-8 rounded-lg bg-{{ module.color }}/10 text-{{ module.color }} flex items-center justify-center"
+                class="w-8 h-8 shrink-0 rounded-lg bg-{{ module.color }}/10 text-{{ module.color }} flex items-center justify-center"
               >
                 <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
               </span>
-              <span class="hidden sm:inline text-base font-semibold text-base-content">{{ module.name }}</span>
+              <span
+                class="hidden lg:inline whitespace-nowrap text-base font-semibold text-base-content"
+              >{{ module.name }}</span>
               <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-base-content/60"></i>
             </label>
             <div

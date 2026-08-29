@@ -85,11 +85,7 @@ be defined before the parser reaches the markup using it, or server-rendered
          }"
     >
       <!-- Sidebar header -->
-      <div
-        class="border-b border-base-300 py-4 px-3 relative"
-        x-data="{ ...chatPreferences(), prefsOpen: false }"
-        @chat-run-diagnostic.window="prefsOpen = false"
-      >
+      <div class="border-b border-base-300 py-4 px-3 relative">
         <div
           class="flex items-center"
           :class="collapsed ? 'justify-center' : 'justify-between'"
@@ -102,15 +98,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             <span x-show="!collapsed" x-transition>Chat</span>
           </h2>
           <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm btn-square hover:text-info"
-              @click="prefsOpen = !prefsOpen"
-              aria-label="Preferences"
-              title="Preferences"
-            >
-              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-            </button>
+            {% include "ui/partials/preferences_popover.html" with component="chatPreferences()" content="chat/ui/partials/_preferences_content.html" accent="text-info" button_class="hover:text-info" close_on_event="chat-run-diagnostic" %}
             {% if ai_enabled %}
               <button
                 class="btn btn-ghost btn-sm btn-square hover:text-secondary"
@@ -128,20 +116,6 @@ be defined before the parser reaches the markup using it, or server-rendered
               <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
           </div>
-        </div>
-        <!-- Preferences popover -->
-        <div
-          x-show="prefsOpen"
-          x-cloak
-          x-transition
-          @click.outside="prefsOpen = false"
-          class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4"
-        >
-          <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-            <i data-lucide="sliders-horizontal" class="w-4 h-4 text-info"></i>
-            Preferences
-          </h4>
-          {% include "chat/ui/partials/_preferences_content.html" %}
         </div>
       </div>
 

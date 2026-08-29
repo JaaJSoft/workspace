@@ -35,7 +35,7 @@
       :class="collapsed ? 'w-16' : 'w-72'"
     >
       <!-- Sidebar header -->
-      <div class="border-b border-base-300 py-3 px-3">
+      <div class="border-b border-base-300 py-3 px-3 relative">
         <div
           class="flex items-center"
           :class="collapsed ? 'justify-center' : 'justify-between'"
@@ -51,32 +51,7 @@
             ></i>
             <span x-show="!collapsed" x-transition>Files</span>
           </h2>
-          <div
-            class="dropdown dropdown-end"
-            x-data="filePreferences()"
-            x-show="!collapsed"
-            x-transition
-          >
-            <button
-              type="button"
-              tabindex="0"
-              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-primary"
-              aria-label="Preferences"
-              title="Preferences"
-            >
-              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-            </button>
-            <div
-              tabindex="0"
-              class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1"
-            >
-              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-                <i data-lucide="sliders-horizontal" class="w-4 h-4 text-primary"></i>
-                Preferences
-              </h4>
-              {% include "files/ui/partials/_preferences_content.html" %}
-            </div>
-          </div>
+          {% include "ui/partials/preferences_popover.html" with component="filePreferences()" content="files/ui/partials/_preferences_content.html" accent="text-primary" button_class="mr-1 hover:text-primary" show_expr="!collapsed" %}
         </div>
       </div>
 

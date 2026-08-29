@@ -1,0 +1,73 @@
+{% comment %}
+Sidebar "Preferences" trigger plus the panel it toggles.
+
+The panel is positioned against the sidebar header, not against the button, so
+it spans the header's width whatever else sits in the button row. The include
+site must therefore be inside a header that carries `relative` and the usual
+`px-3` padding - every module sidebar already looks like that, but a header
+missing `relative` silently anchors the panel to the page instead.
+
+Escape closes the panel and hands focus back to the trigger; a click anywhere
+outside closes it too. Do not reach for daisyUI's `dropdown` here: it opens on
+`:focus-within` alone, which means it opens on Tab and never closes on a second
+click.
+
+Required context:
+- content: template path of the panel body, included as-is.
+- accent: full class of the heading icon's colour, e.g. "text-primary". Pass
+  the complete class name, never a bare colour suffix - Tailwind's scanner
+  keeps a class only when it appears as a literal string, and the include site
+  is where it must appear.
+
+Optional context:
+- component: Alpine factory expression spread into the popover's scope, e.g.
+  "filePreferences()". Omit it when the panel body reads state the surrounding
+  component already exposes.
+- button_class: extra classes on the trigger, e.g. "hover:text-primary mr-1".
+- show_expr: x-show expression on the whole popover, e.g. "!collapsed", for
+  sidebars that hide the trigger when collapsed.
+- close_on_event: name of a window event that also closes the panel, for a
+  module that opens something else over the same sidebar.
+- panel_id: id of the panel, only needed on a page that includes the popover
+  twice - the trigger points at it through aria-controls, so the two must not
+  collide.
+{% endcomment %}
+{% firstof panel_id "preferences-panel" as pid %}
+<div
+  x-data="{ {% if component %}...{{ component }}, {% endif %}prefsOpen: false }"
+  @keydown.escape.window="if (prefsOpen) { prefsOpen = false; $refs.prefsTrigger.focus(); }"
+  {% if close_on_event %}@{{ close_on_event }}.window="prefsOpen = false"{% endif %}
+  {% if show_expr %}x-show="{{ show_expr }}" x-transition{% endif %}
+>
+  <button
+    type="button"
+    x-ref="prefsTrigger"
+    class="btn btn-ghost btn-sm btn-square {{ button_class }}"
+    aria-label="Preferences"
+    :aria-expanded="prefsOpen"
+    aria-controls="{{ pid }}"
+    title="Preferences"
+    @click="prefsOpen = !prefsOpen"
+  >
+    <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+  </button>
+  <div
+    x-show="prefsOpen"
+    x-cloak
+    x-transition
+    @click.outside="prefsOpen = false"
+    id="{{ pid }}"
+    role="group"
+    aria-labelledby="{{ pid }}-title"
+    class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4"
+  >
+    <h4
+      id="{{ pid }}-title"
+      class="font-semibold text-sm mb-3 flex items-center gap-2"
+    >
+      <i data-lucide="sliders-horizontal" class="w-4 h-4 {{ accent }}"></i>
+      Preferences
+    </h4>
+    {% include content %}
+  </div>
+</div>

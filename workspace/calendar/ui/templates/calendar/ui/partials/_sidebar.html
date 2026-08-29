@@ -15,7 +15,7 @@
   >
 
     <!-- Header -->
-    <div class="lg:border-b border-base-300 py-4 px-3">
+    <div class="lg:border-b border-base-300 py-4 px-3 relative">
       <div
         class="flex items-center"
         :class="sidebarCollapsed() ? 'justify-center' : 'justify-between'"
@@ -39,26 +39,7 @@
           >
             Today
           </button>
-          <div class="dropdown dropdown-end">
-            <button
-              type="button"
-              tabindex="0"
-              class="btn btn-ghost btn-sm btn-square hover:text-accent"
-              title="Preferences"
-            >
-              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-            </button>
-            <div
-              tabindex="0"
-              class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1"
-            >
-              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-                <i data-lucide="sliders-horizontal" class="w-4 h-4 text-accent"></i>
-                Preferences
-              </h4>
-              {% include "calendar/ui/partials/_preferences_content.html" %}
-            </div>
-          </div>
+          {% include "ui/partials/preferences_popover.html" with content="calendar/ui/partials/_preferences_content.html" accent="text-accent" button_class="hover:text-accent" %}
         </div>
       </div>
     </div>

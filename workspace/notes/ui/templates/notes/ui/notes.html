@@ -41,7 +41,7 @@
       :class="collapsed ? 'w-16' : 'w-72'"
     >
       <!-- Sidebar header -->
-      <div class="lg:border-b border-base-300 py-4 px-3">
+      <div class="lg:border-b border-base-300 py-4 px-3 relative">
         <div
           class="flex items-center"
           :class="collapsed ? 'justify-center' : 'justify-between'"
@@ -54,27 +54,7 @@
             <span x-show="!collapsed" x-transition>Notes</span>
           </h2>
           <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
-            <div class="dropdown dropdown-end" x-data="notesPreferences()">
-              <button
-                type="button"
-                tabindex="0"
-                class="btn btn-ghost btn-sm btn-square hover:text-success"
-                aria-label="Preferences"
-                title="Preferences"
-              >
-                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-              </button>
-              <div
-                tabindex="0"
-                class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1"
-              >
-                <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-                  <i data-lucide="sliders-horizontal" class="w-4 h-4 text-success"></i>
-                  Preferences
-                </h4>
-                {% include "notes/ui/partials/_preferences_content.html" %}
-              </div>
-            </div>
+            {% include "ui/partials/preferences_popover.html" with component="notesPreferences()" content="notes/ui/partials/_preferences_content.html" accent="text-success" button_class="hover:text-success" %}
           </div>
         </div>
       </div>

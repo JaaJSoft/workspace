@@ -32,10 +32,7 @@
       :class="collapsed ? 'w-16' : 'w-72'"
     >
       <!-- Sidebar header -->
-      <div
-        class="lg:border-b border-base-300 py-4 px-3 relative"
-        x-data="{ ...mailPreferences(), prefsOpen: false }"
-      >
+      <div class="lg:border-b border-base-300 py-4 px-3 relative">
         <div
           class="flex items-center"
           :class="collapsed ? 'justify-center' : 'justify-between'"
@@ -48,15 +45,7 @@
             <span x-show="!collapsed" x-transition>Mail</span>
           </h2>
           <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm btn-square hover:text-warning"
-              aria-label="Preferences"
-              title="Preferences"
-              @click="prefsOpen = !prefsOpen"
-            >
-              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-            </button>
+            {% include "ui/partials/preferences_popover.html" with component="mailPreferences()" content="mail/ui/partials/_preferences_content.html" accent="text-warning" button_class="hover:text-warning" %}
             <button
               class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning"
               @click="showCompose()"
@@ -65,20 +54,6 @@
               <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
           </div>
-        </div>
-        <!-- Preferences popover -->
-        <div
-          x-show="prefsOpen"
-          x-cloak
-          x-transition
-          @click.outside="prefsOpen = false"
-          class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4"
-        >
-          <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-            <i data-lucide="sliders-horizontal" class="w-4 h-4 text-warning"></i>
-            Preferences
-          </h4>
-          {% include "mail/ui/partials/_preferences_content.html" %}
         </div>
       </div>
 

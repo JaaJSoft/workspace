@@ -449,12 +449,18 @@
 </div>
 
 <!-- Singleton emoji picker -->
+{% comment %}
+  Escape is handled here rather than by the composer's own keydown handler,
+  which never sees it while the caret sits in the picker's search field. The
+  event is composed, so it reaches this wrapper from the shadow DOM.
+{% endcomment %}
 <div
   x-show="emojiPickerVisible"
   x-cloak
   class="fixed z-[100]"
   :style="`left:${emojiPickerX}px; top:${emojiPickerY}px`"
   @click.outside="closeEmojiPicker()"
+  @keydown.escape.stop="closeEmojiPicker()"
 >
   <emoji-picker x-ref="emojiPicker"></emoji-picker>
 </div>

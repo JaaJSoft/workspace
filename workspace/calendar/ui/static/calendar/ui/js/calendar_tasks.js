@@ -4,7 +4,7 @@
 window.calendarTasksMixin = function calendarTasksMixin() {
   // Hardcoded SVG markup for the task indicator, kept module-level so the
   // hot path in decorateTaskEvent() doesn't re-allocate it per render.
-  const TASK_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-0.125em;margin-right:3px;opacity:0.7"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
+  const TASK_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
 
   return {
     async fetchTaskEvents(start, end) {
@@ -52,6 +52,7 @@ window.calendarTasksMixin = function calendarTasksMixin() {
         || info.el.querySelector('.fc-list-event-title');
       if (!titleEl) return;
       const icon = document.createElement('span');
+      icon.className = 'fc-event-icon fc-event-icon-leading';
       // SVG is a hardcoded constant (TASK_ICON_SVG above) - no user input.
       icon[`inner${'HTML'}`] = TASK_ICON_SVG;
       titleEl.prepend(icon);

@@ -6,7 +6,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
   // Hardcoded SVG markup for the recurring-event indicator. Kept as a
   // module-level constant so the hot path in eventDidMount() doesn't
   // re-allocate the string on every render.
-  const RECURRING_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-0.125em;margin-left:3px;opacity:0.6"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>';
+  const RECURRING_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>';
 
   return {
     // --- FullCalendar ---
@@ -122,6 +122,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
             const titleEl = info.el.querySelector('.fc-event-title') || info.el.querySelector('.fc-list-event-title');
             if (titleEl) {
               const icon = document.createElement('span');
+              icon.className = 'fc-event-icon fc-event-icon-trailing';
               // SVG is a hardcoded constant (RECURRING_ICON_SVG above) - no user input.
               icon[`inner${'HTML'}`] = RECURRING_ICON_SVG;
               titleEl.appendChild(icon);

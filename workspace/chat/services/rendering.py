@@ -36,10 +36,13 @@ class _ChatRenderer(mistune.HTMLRenderer):
         return f"({mistune.escape(alt)})" if alt else ""
 
 
-# Markdown renderer configured for chat with syntax highlighting
+# Markdown renderer configured for chat with syntax highlighting. hard_wrap is
+# what makes a Shift+Enter survive: markdown's soft break would collapse it into
+# a space, which nobody expects from a chat composer.
 _markdown = mistune.create_markdown(
     renderer=_ChatRenderer(escape=True),
     plugins=["strikethrough", "url", "table", "task_lists"],
+    hard_wrap=True,
 )
 
 

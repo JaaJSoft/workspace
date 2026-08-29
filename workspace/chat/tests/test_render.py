@@ -50,6 +50,24 @@ class RenderMessageBodyTest(TestCase):
         html = render_message_body("- [x] done\n- [ ] todo")
         self.assertIn('type="checkbox"', html)
 
+    def test_single_newline_becomes_a_line_break(self):
+        html = render_message_body("line one\nline two")
+        self.assertIn("<br />", html)
+        self.assertNotIn("line one\nline two", html)
+
+    def test_blank_line_still_starts_a_new_paragraph(self):
+        html = render_message_body("para one\n\npara two")
+        self.assertIn("<p>para one</p>", html)
+        self.assertIn("<p>para two</p>", html)
+        self.assertNotIn("<br />", html)
+
+    def test_trailing_backslash_stays_visible(self):
+        # Markdown's backslash hard-break would swallow the character. In a
+        # chat that loses a line of a pasted shell command, so the newline
+        # alone carries the break and the backslash renders as typed.
+        html = render_message_body("docker run -it \\\n  ubuntu bash")
+        self.assertIn("docker run -it \\<br />", html)
+
     def test_blockquote(self):
         html = render_message_body("> quote")
         self.assertIn("<blockquote>", html)

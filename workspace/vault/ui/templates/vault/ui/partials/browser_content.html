@@ -89,7 +89,17 @@
           <td class="hidden lg:table-cell"></td>
           <td class="hidden sm:table-cell opacity-60 text-sm">Folder</td>
           <td class="hidden md:table-cell opacity-60 text-sm">-</td>
-          <td></td>
+          <td @click.stop>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square text-error"
+              :disabled="busy"
+              @click="deleteFolder(folder)"
+              :aria-label="'Delete the folder ' + folder.name"
+            >
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </td>
         </tr>
       </template>
 

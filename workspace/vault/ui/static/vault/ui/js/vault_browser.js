@@ -20,6 +20,14 @@ window.vaultBrowser = (function () {
   // and asking about a reversible thing is what teaches people to click
   // through the question that matters. Destroying is the one no restore
   // reaches, so it is the one that asks.
+  // What an irreversible question looks like: its own title and a red button,
+  // so it does not read like the reversible ones.
+  const DESTRUCTIVE = {
+    title: 'This cannot be undone',
+    okLabel: 'Delete for good',
+    okClass: 'btn-error',
+  };
+
   const CONFIRMS = {
     delete_forever: (count) =>
       count === 1
@@ -463,7 +471,7 @@ window.vaultBrowser = (function () {
         if (copies) return this.copyField(entry, copies[0], copies[1], copies[2]);
         if (action.id === 'open_uri') return this.openUri(entry);
         if (CONFIRMS[action.id]) {
-          const confirmed = await this.confirm(CONFIRMS[action.id](1));
+          const confirmed = await this.confirm(CONFIRMS[action.id](1), DESTRUCTIVE);
           if (!confirmed) return;
         }
         await this.applyTo(action.id, [entry]);
@@ -480,7 +488,9 @@ window.vaultBrowser = (function () {
         });
         if (!offered) return;
         if (CONFIRMS[action.id]) {
-          const confirmed = await this.confirm(CONFIRMS[action.id](rows.length));
+          const confirmed = await this.confirm(
+            CONFIRMS[action.id](rows.length), DESTRUCTIVE
+          );
           if (!confirmed) return;
         }
         await this.applyTo(action.id, rows);
@@ -518,12 +528,18 @@ window.vaultBrowser = (function () {
         }
       },
 
-      // Overridable so a test can answer without a dialog, and so the page
-      // uses the application's own confirm rather than the browser's.
-      confirm: function (message) {
-        return window.AppDialog
-          ? window.AppDialog.confirm(message)
-          : Promise.resolve(true);
+      // The bare global, not window.AppDialog: dialogs.js declares it with a
+      // top-level `const`, which lives in the global lexical scope and never
+      // becomes a property of window. Reading it through window returns
+      // undefined, and this function would then answer yes to every question
+      // without asking one. Every other module calls it bare; so does this.
+      //
+      // AppDialog.confirm takes an options object rather than a string, and
+      // handing it one leaves every field on its default - the user is then
+      // asked "Are you sure?" about an entry they are about to destroy.
+      confirm: function (message, options) {
+        if (typeof AppDialog === 'undefined') return Promise.resolve(true);
+        return AppDialog.confirm(Object.assign({ message: message }, options || {}));
       },
 
       // The one moment a secret is decrypted. It is opened, handed to the
@@ -672,6 +688,60 @@ window.vaultBrowser = (function () {
           this.error = 'That entry could not be saved. Try again.';
         } finally {
           this.busy = false;
+        }
+      },
+
+      // Dropping a tag or a folder rewrites entries the user did not name, so
+      // both go through vaultResign - which re-signs first and removes after.
+      // The server cannot do the repair: producing one of those signatures
+      // means forging the account's.
+      deleteTag: async function (tag) {
+        const confirmed = await this.confirm(
+          'Remove the tag "' + tag.name + '" from every entry that carries it?',
+          { title: 'Delete tag', okLabel: 'Delete', okClass: 'btn-error' }
+        );
+        if (!confirmed) return;
+        this.busy = true;
+        let failed = false;
+        try {
+          await window.vaultResign.deleteTagSafely(
+            this.openVault, tag.uuid, this.entryRows
+          );
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          failed = true;
+        } finally {
+          this.busy = false;
+        }
+        await this.load();
+        if (failed) {
+          this.error =
+            'The tag was not removed. Every entry it touched is unchanged - nothing was left half-written.';
+        }
+      },
+
+      deleteFolder: async function (folder) {
+        const confirmed = await this.confirm(
+          'Delete the folder "' + folder.name + '"? Its entries move to the vault root.',
+          { title: 'Delete folder', okLabel: 'Delete', okClass: 'btn-error' }
+        );
+        if (!confirmed) return;
+        this.busy = true;
+        let failed = false;
+        try {
+          await window.vaultResign.deleteFolderSafely(
+            this.openVault, folder.uuid, this.folders, this.entryRows
+          );
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          failed = true;
+        } finally {
+          this.busy = false;
+        }
+        await this.load();
+        if (failed) {
+          this.error =
+            'The folder was not deleted. Each of its levels is written whole or not at all, so nothing is half-moved.';
         }
       },
 

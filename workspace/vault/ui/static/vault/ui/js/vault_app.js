@@ -175,12 +175,18 @@ window.vaultApp = (function () {
         this.openMenuFor = this.openMenuFor === uuid ? null : uuid;
       },
 
-      // Overridable so a test can answer without a dialog, and so the page
-      // can swap in the application's own confirm rather than the browser's.
-      confirm: function (message) {
-        return window.AppDialog
-          ? window.AppDialog.confirm(message)
-          : Promise.resolve(true);
+      // The bare global, not window.AppDialog: dialogs.js declares it with a
+      // top-level `const`, which lives in the global lexical scope and never
+      // becomes a property of window. Reading it through window returns
+      // undefined, and this function would then answer yes to every question
+      // without asking one. Every other module calls it bare; so does this.
+      //
+      // AppDialog.confirm takes an options object rather than a string, and
+      // handing it one leaves every field on its default - the user is then
+      // asked "Are you sure?" about an entry they are about to destroy.
+      confirm: function (message, options) {
+        if (typeof AppDialog === 'undefined') return Promise.resolve(true);
+        return AppDialog.confirm(Object.assign({ message: message }, options || {}));
       },
 
       runVaultAction: async function (action, vault) {
@@ -195,7 +201,12 @@ window.vaultApp = (function () {
 
         if (action.id === 'delete') {
           const confirmed = await this.confirm(
-            'Delete this vault and everything in it? This cannot be undone.'
+            'Delete this vault and everything in it?',
+            {
+              title: 'This cannot be undone',
+              okLabel: 'Delete the vault',
+              okClass: 'btn-error',
+            }
           );
           if (!confirmed) return;
           try {

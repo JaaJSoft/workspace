@@ -74,6 +74,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/entry_write.js',
       'workspace/vault/ui/static/vault/ui/js/folder_write.js',
       'workspace/vault/ui/static/vault/ui/js/clipboard.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -1063,4 +1064,113 @@ test('a bulk action stops at the first refusal rather than half-finishing quietl
   await component.runBulkAction(ACTION.trash);
   assert.deepStrictEqual(Array.from(calls), ['e-1']);
   assert.match(component.error, /could not/i);
+});
+
+// --- dropping a tag or a folder from the browser ---------------------------
+
+test('deleting a tag re-signs the entries carrying it, then removes it', async () => {
+  const calls = [];
+  const { component } = browser({
+    api: {
+      listTags: async () => [
+        { uuid: 't-1', vault: VAULT_UUID, encrypted_name: 'ct', color: '#3b82f6', metadata_sig: 'sig' },
+      ],
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { tags: ['t-1'] })],
+      updateEntry: async (uuid) => { calls.push('put:' + uuid); return {}; },
+      deleteTag: async (uuid) => { calls.push('delete:' + uuid); return null; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.confirm = async () => true;
+  await component.deleteTag(component.tags[0]);
+  assert.deepStrictEqual(Array.from(calls), ['put:e-1', 'delete:t-1']);
+});
+
+test('a refused confirmation deletes nothing and re-signs nothing', async () => {
+  const calls = [];
+  const { component } = browser({
+    api: {
+      listTags: async () => [
+        { uuid: 't-1', vault: VAULT_UUID, encrypted_name: 'ct', color: '#3b82f6', metadata_sig: 'sig' },
+      ],
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { tags: ['t-1'] })],
+      updateEntry: async (uuid) => { calls.push('put:' + uuid); return {}; },
+      deleteTag: async (uuid) => { calls.push('delete:' + uuid); return null; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.confirm = async () => false;
+  await component.deleteTag(component.tags[0]);
+  assert.deepStrictEqual(Array.from(calls), []);
+});
+
+test('a folder deletion carries its entries, trashed ones included', async () => {
+  const bodies = [];
+  const { component } = browser({
+    api: {
+      listFolders: async () => [
+        { uuid: 'f-1', vault: VAULT_UUID, parent: null, position: 0,
+          encrypted_name: 'ct', metadata_sig: 'sig' },
+      ],
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? [entryWith('e-2', { folder: 'f-1', deleted_at: '2026-08-01' })]
+          : [entryWith('e-1', { folder: 'f-1' })],
+      deleteFolder: async (uuid, entries) => { bodies.push([uuid, entries]); return null; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.confirm = async () => true;
+  await component.deleteFolder(component.folders[0]);
+  assert.equal(bodies[0][0], 'f-1');
+  assert.deepStrictEqual(Array.from(bodies[0][1], (item) => item.uuid).sort(), [
+    'e-1',
+    'e-2',
+  ]);
+});
+
+test('a confirmation carries its own question rather than the default one', async () => {
+  // AppDialog.confirm destructures its argument. Handed a string it leaves
+  // every field on its default, and the user is asked "Are you sure?" about
+  // an entry they are about to destroy.
+  const asked = [];
+  const { component, ctx } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
+      fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.delete_forever] }),
+      purgeEntry: async () => ({}),
+    },
+  });
+  ctx.AppDialog = {
+    confirm: async (options) => { asked.push(options); return true; },
+  };
+  component.init();
+  await component.load();
+  component.setView('trash');
+  await component.runAction(TRASH_ACTIONS.delete_forever, component.entries[0]);
+  assert.equal(asked.length, 1);
+  assert.match(asked[0].message, /destroy this entry/i);
+  assert.equal(asked[0].okClass, 'btn-error');
+});
+
+test('a dialog that says no stops the action', async () => {
+  const purged = [];
+  const { component, ctx } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
+      fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.delete_forever] }),
+      purgeEntry: async (uuid) => { purged.push(uuid); return {}; },
+    },
+  });
+  ctx.AppDialog = { confirm: async () => false };
+  component.init();
+  await component.load();
+  component.setView('trash');
+  await component.runAction(TRASH_ACTIONS.delete_forever, component.entries[0]);
+  assert.deepStrictEqual(Array.from(purged), []);
 });

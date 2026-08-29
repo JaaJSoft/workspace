@@ -178,15 +178,24 @@
     </div>
     <ul class="space-y-1" x-show="!collapsed">
       <template x-for="tag in tags" :key="tag.uuid">
-        <li>
+        <li class="flex items-center gap-1 group">
           <button
             type="button"
-            class="w-full flex items-center gap-2 p-2 rounded-lg text-left"
+            class="flex-1 flex items-center gap-2 p-2 rounded-lg text-left min-w-0"
             :class="tagFilter === tag.uuid ? 'bg-base-300/60 font-medium' : 'hover:bg-base-300/40'"
             @click="setTagFilter(tag.uuid)"
           >
             <tag-chip :name="tag.name" :color="tag.color" size="sm"></tag-chip>
             <span class="opacity-40 text-sm ml-auto" x-text="tagCount(tag.uuid)"></span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
+            :disabled="busy"
+            @click="deleteTag(tag)"
+            :aria-label="'Delete the tag ' + tag.name"
+          >
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
           </button>
         </li>
       </template>

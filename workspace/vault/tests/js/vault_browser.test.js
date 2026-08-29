@@ -1174,3 +1174,78 @@ test('a dialog that says no stops the action', async () => {
   await component.runAction(TRASH_ACTIONS.delete_forever, component.entries[0]);
   assert.deepStrictEqual(Array.from(purged), []);
 });
+
+// --- a row that does not verify -------------------------------------------
+
+test('an entry whose signature fails is counted and never rendered', async () => {
+  const opens = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1'), entryWith('e-2')],
+    },
+    session: {
+      verifyRecord: async (payload, sig) => {
+        if (payload.entry_uuid === 'e-1') throw new Error('forged');
+      },
+    },
+    crypto: {
+      open: async (key, ciphertext, ad) => {
+        opens.push(ad);
+        return new TextEncoder().encode('open:' + ad);
+      },
+    },
+  });
+  component.init();
+  await component.load();
+
+  assert.deepStrictEqual(
+    Array.from(component.visibleEntries(), (entry) => entry.uuid),
+    ['e-2'],
+  );
+  assert.equal(component.tamperedCount, 1);
+  // Not one field of the failed row was opened - not even its name, and
+  // certainly not under a second associated-data string to see if that one
+  // checks out.
+  assert.ok(!opens.some((ad) => String(ad).startsWith('e-1|')));
+});
+
+test('a failed row is invisible to every listing, not just the current one', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? [Object.assign(entryWith('e-2'), { deleted_at: '2026-08-01' })]
+          : [entryWith('e-1')],
+    },
+    session: { verifyRecord: async () => { throw new Error('forged'); } },
+  });
+  component.init();
+  await component.load();
+  for (const view of ['all', 'favorites', 'trash']) {
+    component.setView(view);
+    assert.deepStrictEqual(Array.from(component.visibleEntries()), [], view);
+  }
+  assert.equal(component.tamperedCount, 2);
+});
+
+test('a lock in the middle of a listing is not reported as tampering', async () => {
+  // The two fail the same way, and the tamper message is the one the user is
+  // told to act on rather than retry. An idle timeout must never wear it.
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
+    },
+    session: {
+      verifyRecord: async () => {
+        const error = new Error('locked');
+        error.reason = 'locked';
+        throw error;
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.tamperedCount, 0);
+  assert.equal(component.error, '');
+});

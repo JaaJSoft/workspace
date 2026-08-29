@@ -56,6 +56,33 @@
             <span x-text="error"></span>
             </inline-alert>
 
+            {% comment %}
+              An entry whose signature does not verify never reaches the
+              listing: what survives it is this count. The banner is the whole
+              of what the user is told about it, which is why it says what was
+              NOT done - no field opened, no second attempt under another
+              context - rather than inviting a retry.
+
+              Instantiated by x-if rather than shown with x-show: inline-alert
+              reads its attributes once, when it connects, so an alert that
+              only exists sometimes has to be built when it does.
+            {% endcomment %}
+            <template x-if="tamperedCount > 0">
+              <inline-alert type="error" icon="shield-alert" class="mx-5 mt-4">
+              <span class="text-sm">
+                <b>
+                  <span x-text="tamperedCount"></span>
+                  <span x-text="tamperedCount === 1 ? 'entry was' : 'entries were'"></span>
+                  removed from the list.
+                </b>
+                The signature does not match what your account signed. No field
+                was decrypted, and nothing was tried a second time under another
+                context. Nobody can repair this from here: the entry has to be
+                written again by whoever holds the key.
+              </span>
+              </inline-alert>
+            </template>
+
             {% include "vault/ui/partials/browser_content.html" %}
 
           </main>

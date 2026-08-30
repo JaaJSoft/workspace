@@ -73,6 +73,14 @@ window.vaultBrowser = (function () {
     }
   }
 
+  function removePreference(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (err) {
+      /* the same blocked storage that refused the write */
+    }
+  }
+
   // Its own title and a red button, so an irreversible question does not read
   // like a reversible one.
   const DESTRUCTIVE = {
@@ -235,7 +243,17 @@ window.vaultBrowser = (function () {
         this.closeMenu();
         try {
           await this.loadVault();
-          if (this.openVault) await this.loadContents();
+          if (this.openVault) {
+            await this.loadContents();
+          } else {
+            // Nothing to browse, so nothing the sidebar may go on showing: its
+            // tags and its trash count belong to a vault that is out of reach
+            // or gone, and leaving them there offers a way into neither.
+            this.setData({});
+            this.entryRows = [];
+            this.entryActions = {};
+            this.panelEntry = null;
+          }
           await this.loadVaultActions();
           // The palette command reaches the page before there is a vault to
           // write into, so it waits here for one.
@@ -273,7 +291,11 @@ window.vaultBrowser = (function () {
           this.openVault = this.resolveLandingVault(vaults);
           this.missing = false;
         }
-        if (this.openVault) this.rememberVault(this.openVault.uuid);
+        if (this.openVault) {
+          this.rememberVault(this.openVault.uuid);
+        } else if (!this.vaultUuid) {
+          this.forgetVault();
+        }
       },
 
       // The first moment the choice can be made: before the unlock every name
@@ -290,6 +312,16 @@ window.vaultBrowser = (function () {
           openable.find((vault) => vault.is_favorite) ||
           openable[0]
         );
+      },
+
+      // The account has nothing left to open. Naming a deleted vault in the
+      // address bar would hand out a link that opens a banner, and a device
+      // pointing at one costs the next visit a fallback it need not make.
+      forgetVault: function () {
+        removePreference(LAST_VAULT_KEY);
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, '', '/vault');
+        }
       },
 
       rememberVault: function (uuid) {

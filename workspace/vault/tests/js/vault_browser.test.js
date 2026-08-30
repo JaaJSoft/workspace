@@ -185,7 +185,7 @@ function browser(options = {}) {
       },
     },
   );
-  return { component: ctx.vaultBrowser(), opened, entryKeys, locks, copied, visited, ctx };
+  return { component: ctx.vaultBrowser(), opened, entryKeys, locks, copied, visited, ctx, options };
 }
 
 test('the browser reads the vault it was routed to from the page', () => {
@@ -1710,4 +1710,45 @@ test('a vault that opens is never mistaken for an empty account', async () => {
   component.init();
   await component.load();
   assert.equal(component.hasNoVault(), false);
+});
+
+test('losing the last vault empties the sidebar with the listing', async () => {
+  // Caught by looking at the screen, not by a test: the empty state hid the
+  // table while the sidebar went on offering the tags and the trash count of
+  // the vault that had just been deleted.
+  const { component, options } = browser({
+    api: {
+      listTags: async () => [
+        { uuid: 't-1', vault: VAULT_UUID, name: 'ct:Infra', color: '#ef4444',
+          metadata_sig: 'sig' },
+      ],
+    },
+  });
+  component.init();
+  await component.load();
+  assert.ok(component.tags.length > 0, 'the vault opened with a tag on screen');
+
+  // The vault is deleted elsewhere, and the reload finds nothing left.
+  options.vaults = [];
+  component.vaultUuid = null;
+  await component.load();
+  assert.equal(component.hasNoVault(), true);
+  assert.deepStrictEqual(Array.from(component.tags), []);
+  assert.deepStrictEqual(Array.from(component.folders), []);
+  assert.deepStrictEqual(Array.from(component.entries), []);
+  assert.deepStrictEqual(Array.from(component.entryRows), []);
+});
+
+test('losing the last vault takes its name out of the address bar', async () => {
+  const { component, ctx, options } = browser({ data: { 'vault-uuid': null } });
+  component.init();
+  await component.load();
+  assert.deepStrictEqual(Array.from(ctx.history.replaced), ['/vault/' + VAULT_UUID]);
+
+  options.vaults = [];
+  component.vaultUuid = null;
+  await component.load();
+  assert.equal(ctx.history.replaced[ctx.history.replaced.length - 1], '/vault');
+  // And the device stops pointing at a vault nobody can open.
+  assert.equal(ctx.localStorage.getItem('vault.lastVault'), null);
 });

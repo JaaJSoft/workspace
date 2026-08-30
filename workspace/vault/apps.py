@@ -15,6 +15,7 @@ class VaultConfig(AppConfig):
         from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
         from workspace.vault import types  # noqa: F401
         from workspace.vault.actions import entry as entry_actions  # noqa: F401
+        from workspace.vault.actions import vault as vault_actions  # noqa: F401
 
         registry.register(
             ModuleInfo(
@@ -40,6 +41,26 @@ class VaultConfig(AppConfig):
                     kind="navigate",
                     module_slug="vault",
                     order=40,
+                ),
+                CommandInfo(
+                    name="Lock vault",
+                    keywords=["lock", "vault", "secrets"],
+                    icon="lock",
+                    color="error",
+                    url="/vault?action=lock",
+                    kind="navigate",
+                    module_slug="vault",
+                    order=41,
+                ),
+                CommandInfo(
+                    name="New entry",
+                    keywords=["new", "entry", "password", "vault"],
+                    icon="plus",
+                    color="error",
+                    url="/vault?action=new",
+                    kind="navigate",
+                    module_slug="vault",
+                    order=42,
                 ),
             ]
         )

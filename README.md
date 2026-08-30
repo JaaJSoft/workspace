@@ -45,6 +45,16 @@ Configurable chat bots with system prompts, vision, function calling, extended t
 
 ![AI Assistants](docs/images/ai_1.png)
 
+### [Vault](docs/vault/CRYPTO.md) (preview)
+An end-to-end encrypted password manager. Names, logins, passwords and notes are
+sealed in the browser and the server never sees a key: it stores ciphertext,
+serves it back, and can neither read an entry nor forge one, because every
+record carries a signature made by your account. Unlocking derives the keys from
+your master password and a recovery key with Argon2id, and they leave memory
+again after the idle delay you choose, five minutes by default. Browse by folder or tag, copy a password behind a
+countdown that takes it back off the clipboard, and see immediately when a
+record no longer matches what you signed.
+
 ### And more
 - **[Notifications](docs/notifications/)** - In-app + Web Push (VAPID), priority levels, read tracking
 - **Dashboard** - Storage stats, recent files, conversation and event insights
@@ -195,7 +205,6 @@ See [IDEAS.md](IDEAS.md) for the full roadmap. Planned modules include:
 
 - **Contacts & CRM** - Contact management with interaction history
 - **Bookmarks** - Save and organize links with automatic previews
-- **Password Manager** - Encrypted vault with TOTP support
 
 ## Contributing
 

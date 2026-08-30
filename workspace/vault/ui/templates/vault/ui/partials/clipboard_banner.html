@@ -1,0 +1,36 @@
+{% comment %}
+  What is on the clipboard, and how long it stays there. It is a banner rather
+  than a toast because it is not a notification: while it is up, a secret is
+  readable by every application on the machine, and the user needs a way to
+  take it back that does not depend on noticing it in three seconds.
+{% endcomment %}
+<div
+  class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50"
+  x-show="clipboard.active"
+  x-cloak
+>
+  <div
+    class="alert bg-base-100 border border-base-300 shadow-lg py-2 flex-row items-center gap-3"
+  >
+    <i data-lucide="clipboard-check" class="w-4 h-4 text-success"></i>
+    <span class="text-sm">
+      <span x-text="clipboard.label"></span> copied - clears in
+      <span class="font-medium" x-text="clipboard.secondsLeft"></span>s
+    </span>
+    <button type="button" class="btn btn-xs btn-ghost" @click="cancelCopy()">Clear now</button>
+  </div>
+</div>
+
+{% comment %}
+  Written out rather than bound: inline-alert reads its attributes once, when
+  it connects, so a level that follows the data has to be its own element.
+{% endcomment %}
+<div
+  class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50"
+  x-show="clipboard.note"
+  x-cloak
+>
+  <inline-alert type="warning" dismissible>
+  <span class="text-sm" x-text="clipboard.note"></span>
+  </inline-alert>
+</div>

@@ -85,12 +85,31 @@ Env vars do not persist across shell tool calls: chain migrate/seed/runserver in
 | `--seed 42` | Reproducible run |
 | `--users N` | N faker users (the `demo` user is always added on top) |
 | `--purge --yes` | Wipe all `@demo.local` users + their data/blobs first |
-| `--no-files` / `--no-chat` / `--no-calendar` / `--no-projects` | Skip a generator |
+| `--no-files` / `--no-chat` / `--no-calendar` / `--no-projects` / `--no-vault` | Skip a generator |
 | `--min-tasks N` / `--max-tasks N` | Tasks per shared project (defaults 6 / 30) |
 | `--no-avatars` | Faster, skips Pillow avatar generation |
 | `--keep-intro-modals` | Leave the onboarding tour + changelog popup pending (they are pre-dismissed by default) |
 | `--history-days N` | Spread activity over the last N days (default 180) |
 | `--password X` | Change the shared password (default `demo1234`) |
+
+## The vault
+
+The `demo` user gets two encrypted vaults (`Personal` and `Work`) with folders,
+coloured tags, favourites and a trashed entry. Every row is really sealed and
+really signed - through `scripts/seed_vault.py`, which drives the same reference
+implementation the crypto vectors come from - so the browser opens them instead
+of showing the tamper banner.
+
+**Opening one needs both halves, and the seeder output is the only copy:**
+
+```text
+  Vault master password: demo-vault-1234
+  Vault recovery key:    <printed at the end of the run>
+```
+
+The master password is fixed; the recovery key is random per run. Keep the
+output, or reseed - there is no way to recover it, which is the point. On the
+unlock screen, fill the recovery key first: it is what enables the button.
 
 ## Gotchas
 

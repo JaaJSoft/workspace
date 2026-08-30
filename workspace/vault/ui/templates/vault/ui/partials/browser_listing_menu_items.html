@@ -1,0 +1,34 @@
+{% comment %}
+  Rows of the listing menu. The panel around them is
+  ui/partials/context_menu_panel.html, included from browser_listing_menu.html.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  <template x-if="view !== 'trash'">
+    <template x-for="type in entryTypes" :key="type.id">
+      <li>
+        <button
+          type="button"
+          class="gap-3 rounded"
+          @click="closeBackgroundMenu(); newEntry(type.id)"
+        >
+          <i :data-lucide="type.icon" class="w-4 h-4"></i>
+          <span x-text="'New ' + type.label.toLowerCase()"></span>
+        </button>
+      </li>
+    </template>
+  </template>
+
+  <template x-if="view !== 'trash'">
+    <li class="mt-0.5 pt-0.5 border-t border-base-300">
+      {% include "ui/partials/context_menu_item.html" with bare=1 icon="folder-plus" label="New folder" click="closeBackgroundMenu(); newFolder()" only %}
+    </li>
+  </template>
+
+  <li
+    x-show="visibleEntries().length"
+    :class="view !== 'trash' ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
+  >
+    {% include "ui/partials/context_menu_item.html" with bare=1 icon="check-check" label="Select all" click="closeBackgroundMenu(); selectAll()" only %}
+  </li>
+  {% include "ui/partials/context_menu_item.html" with show="selected.length" icon="x" label="Deselect" click="closeBackgroundMenu(); clearSelection()" only %}
+</ul>

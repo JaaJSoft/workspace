@@ -1,0 +1,208 @@
+{% comment %}
+  The listing, in either shape, plus the two empty states and the bars below.
+
+  Columns follow files/ui/partials/folder_content.html, with Tags added. The
+  gesture follows it too: the checkbox selects, the row body opens - a folder
+  by entering it, an entry by opening the panel. A row that did both would
+  make every attempt to pick a second row navigate away from the first.
+{% endcomment %}
+{% comment %}
+  The right-click lands here when it misses a row: the rows stop the event
+  themselves, so reaching this handler means the click was on empty space.
+{% endcomment %}
+<div
+  id="entry-list-pane"
+  class="flex-1 overflow-auto px-2 pt-2 min-h-0"
+  @contextmenu="openBackgroundMenu($event)"
+>
+  <template x-if="isEmpty() && !filtering()">
+    <div
+      class="flex flex-col items-center justify-center h-full gap-3 text-base-content/40 py-16"
+    >
+      <i data-lucide="folder-open" class="w-14 h-14 opacity-20"></i>
+      <p
+        class="text-lg font-medium"
+        x-text="view === 'trash' ? 'The trash is empty' : view === 'favorites' ? 'No favourites yet' : 'This folder is empty'"
+      ></p>
+      <p class="text-sm" x-show="view === 'all'">Use <b>New</b> to add a folder or an entry.</p>
+    </div>
+  </template>
+
+  {% comment %}
+    A second empty state, because the two mean opposite things: one says the
+    vault holds nothing here, the other says the filter hides everything.
+    Offering "add an entry" against a filter would be the wrong advice.
+  {% endcomment %}
+  <template x-if="isEmpty() && filtering()">
+    <div
+      class="flex flex-col items-center justify-center h-full gap-2 text-base-content/40 py-16"
+    >
+      <i data-lucide="search-x" class="w-12 h-12 opacity-20"></i>
+      <p>Nothing here matches the filter.</p>
+      <button type="button" class="btn btn-sm btn-ghost" @click="resetAll()">Clear it</button>
+    </div>
+  </template>
+
+  {% comment %}
+    A floor, so the container scrolls instead of crushing the name column -
+    the only flexible one - when the properties panel takes 320px off the
+    pane. Media queries cannot help: they follow the viewport, and it is the
+    pane that narrows.
+  {% endcomment %}
+  <table
+    class="table table-fixed min-w-[46rem] [&_td]:align-middle [&_th]:align-middle"
+    x-show="viewMode === 'list' && !isEmpty()"
+    x-cloak
+  >
+    <thead class="sticky top-0 z-10">
+      <tr class="bg-base-200">
+        <th class="w-10">
+          <input
+            type="checkbox"
+            class="checkbox checkbox-sm align-middle"
+            aria-label="Select every entry shown"
+            :checked="selectAllState() === 'all'"
+            x-effect="$el.indeterminate = selectAllState() === 'partial'"
+            @click="toggleSelectAll()"
+          />
+        </th>
+        <th class="w-12"><span class="sr-only">Type</span></th>
+        <th>Name</th>
+        <th class="w-10 text-center">Fav</th>
+        <th class="hidden lg:table-cell w-36">Tags</th>
+        <th class="hidden sm:table-cell w-24">Type</th>
+        <th
+          class="hidden md:table-cell w-32"
+          x-text="view === 'trash' ? 'Deleted' : 'Modified'"
+        ></th>
+        <th class="w-14"><span class="sr-only">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <template x-for="folder in visibleFolders()" :key="folder.uuid">
+        <tr
+          class="hover cursor-pointer"
+          @click="openFolderFromRow(folder)"
+          @contextmenu.stop="openFolderMenu($event, folder)"
+        >
+          <td></td>
+          <td>
+            <i data-lucide="folder" class="w-5 h-5 text-warning"></i>
+          </td>
+          <td class="font-medium truncate" x-text="folder.name"></td>
+          {% comment %}
+            A folder carries no icon, colour or favourite, so these cells stay
+            empty rather than inventing a value the model cannot hold.
+          {% endcomment %}
+          <td></td>
+          <td class="hidden lg:table-cell"></td>
+          <td class="hidden sm:table-cell opacity-60 text-sm">Folder</td>
+          <td class="hidden md:table-cell opacity-60 text-sm">-</td>
+          <td @click.stop>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              :aria-label="'Actions for ' + folder.name"
+              @click="openFolderMenu($event, folder)"
+            >
+              <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+            </button>
+          </td>
+        </tr>
+      </template>
+
+      <template x-for="entry in visibleEntries()" :key="entry.uuid">
+        <tr
+          class="hover cursor-pointer"
+          :class="[isSelected(entry.uuid) ? 'bg-primary/5' : '', panelEntry === entry ? 'bg-primary/10' : '']"
+          @click="openEntryFromRow(entry)"
+          @contextmenu.stop="openMenu($event, entry)"
+        >
+          <td @click.stop>
+            <input
+              type="checkbox"
+              class="checkbox checkbox-sm align-middle"
+              :aria-label="'Select ' + entry.name"
+              :checked="isSelected(entry.uuid)"
+              @click="toggleSelection(entry.uuid)"
+            />
+          </td>
+          <td>
+            <i :data-lucide="typeIcon(entry.type)" class="w-5 h-5 text-error"></i>
+          </td>
+          <td class="truncate">
+            <span class="font-medium" x-text="entry.name"></span>
+            <span class="opacity-50 text-sm ml-2" x-text="entry.username"></span>
+          </td>
+          <td class="text-center">
+            <i
+              data-lucide="star"
+              class="w-4 h-4 inline"
+              :class="entry.favorite ? 'fill-current text-warning' : 'opacity-25'"
+            ></i>
+          </td>
+          <td class="hidden lg:table-cell truncate">
+            <template x-for="tagUuid in entry.tags" :key="tagUuid">
+              <template x-if="tagById(tagUuid)">
+                <tag-chip size="sm" :name="tagById(tagUuid).name" :color="tagById(tagUuid).color"></tag-chip>
+              </template>
+            </template>
+          </td>
+          <td
+            class="hidden sm:table-cell opacity-60 text-sm"
+            x-text="typeLabel(entry.type)"
+          ></td>
+          <td
+            class="hidden md:table-cell opacity-60 text-sm"
+            x-text="shortDate(entry.modified)"
+          ></td>
+          <td @click.stop>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              :aria-label="'Actions for ' + entry.name"
+              @click="openMenu($event, entry)"
+            >
+              <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+            </button>
+          </td>
+        </tr>
+      </template>
+    </tbody>
+  </table>
+
+  {% include "vault/ui/partials/browser_mosaic.html" %}
+</div>
+
+{% comment %}
+  Every button here is one the action endpoint returned for every selected
+  row; nothing is added because it "obviously" applies to a batch.
+{% endcomment %}
+<div
+  class="flex-none border-t border-base-300 bg-base-200/60 px-5 py-2 flex items-center gap-2 text-sm"
+  x-show="selected.length > 0"
+  x-cloak
+>
+  <span class="opacity-70"><span x-text="selected.length"></span> selected</span>
+  <div class="ml-auto flex gap-1 flex-wrap">
+    <template x-for="action in bulkActions()" :key="action.id">
+      <button
+        type="button"
+        class="btn btn-xs btn-ghost gap-1"
+        :class="action.css_class"
+        :disabled="busy"
+        @click="runBulkAction(action)"
+      >
+        <i :data-lucide="action.icon" class="w-3.5 h-3.5"></i>
+        <span x-text="action.label"></span>
+      </button>
+    </template>
+    <button type="button" class="btn btn-xs btn-ghost" @click="clearSelection()">Deselect</button>
+  </div>
+</div>
+
+<div
+  class="flex-none border-t border-base-300 px-5 py-2 text-sm opacity-60"
+>
+  <span x-text="statusLine()"></span>
+</div>

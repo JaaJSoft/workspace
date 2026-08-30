@@ -58,6 +58,12 @@ class TypedEntry(VaultEntry):
     """Base of every entry proxy. Not registered itself."""
 
     ENTRY_TYPE = None
+    # What the browser calls this type and draws it with. Presentation, but it
+    # belongs here for the same reason ``label`` belongs on a Field: adding a
+    # type has to stay one class, so nothing on the page may hold a second
+    # list of types to keep in step with this one.
+    LABEL = ""
+    ICON = "key-round"
     FIELD_SCHEMA = ()
 
     class Meta:
@@ -72,6 +78,8 @@ class TypedEntry(VaultEntry):
                     "reserved field identifier"
                 )
         if cls.ENTRY_TYPE is not None:
+            if not cls.LABEL:
+                raise ValueError(f"{cls.__name__} declares no LABEL")
             _REGISTRY[cls.ENTRY_TYPE] = cls
 
 
@@ -81,6 +89,9 @@ class LoginEntry(TypedEntry):
 
     class Meta:
         proxy = True
+
+    LABEL = "Login"
+    ICON = "key-round"
 
     FIELD_SCHEMA = (
         Field("username", label="Username"),
@@ -112,6 +123,32 @@ def schema_for(entry_type: str, *, default=_RAISE):
         if default is _RAISE:
             raise
         return default
+
+
+def type_catalogue() -> list[dict]:
+    """Every registered type, as the plain data a page can be handed.
+
+    Rendered into the browser with ``|json_script``, which serializes with
+    Django's own encoder - so nothing here may be a dataclass or a class.
+    """
+    return [
+        {
+            "id": entry_type,
+            "label": proxy.LABEL,
+            "icon": proxy.ICON,
+            "fields": [
+                {
+                    "field_id": field.field_id,
+                    "label": field.label,
+                    "secret": field.secret,
+                    "generator": field.generator,
+                    "kind": field.kind,
+                }
+                for field in proxy.FIELD_SCHEMA
+            ],
+        }
+        for entry_type, proxy in _REGISTRY.items()
+    ]
 
 
 def as_typed(entry: VaultEntry) -> VaultEntry:

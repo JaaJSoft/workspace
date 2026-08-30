@@ -1,0 +1,135 @@
+{% comment %}
+  What a row is, without opening what it keeps.
+
+  The login is already in the clear - the listing opened it - so it is shown.
+  The password is not, and the row of dots is not a mask over a value held
+  here: nothing on this page has decrypted it. That is why the field is drawn
+  from `panelCarries`, which reads the field ids the listing collected, rather
+  than from a value.
+
+  Every button is gated on `panelHasAction`, which is the endpoint's answer
+  for this row and not a rule written here.
+{% endcomment %}
+<aside
+  class="w-80 flex-none border-l border-base-300 bg-base-100 flex-col hidden lg:flex"
+  x-show="panelEntry"
+  x-cloak
+>
+  <template x-if="panelEntry">
+    <div class="flex flex-col h-full">
+      <div class="border-b border-base-300 px-4 py-3 flex items-center gap-2">
+        <i :data-lucide="typeIcon(panelEntry.type)" class="w-5 h-5 text-error"></i>
+        <span class="font-semibold flex-1 truncate" x-text="panelEntry.name"></span>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square"
+          @click="closePanel()"
+          aria-label="Close the panel"
+        >
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="p-4 space-y-4 text-sm overflow-y-auto">
+        <div x-show="panelEntry.username">
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Username</div>
+          <div class="flex items-center gap-2">
+            <span class="flex-1 truncate" x-text="panelEntry.username"></span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="panelHasAction('copy_username')"
+              @click="copyField(panelEntry, 'Username', 'username', false)"
+              aria-label="Copy the username"
+            >
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <div x-show="panelCarries('password')">
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Password</div>
+          <div class="flex items-center gap-2">
+            <span class="flex-1 font-mono">••••••••••</span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="panelHasAction('copy_password')"
+              @click="copyField(panelEntry, 'Password', 'password', true)"
+              aria-label="Copy the password"
+            >
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <div x-show="panelCarries('totp')">
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Authenticator code</div>
+          <div class="flex items-center gap-2 opacity-40">
+            <span class="flex-1 font-mono">••• •••</span>
+          </div>
+        </div>
+
+        <div x-show="panelCarries('uri')">
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Website</div>
+          <span class="opacity-60">Opened from the menu, never rendered as a link here.</span>
+        </div>
+
+        <div x-show="panelEntry.tags.length">
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Tags</div>
+          <div class="flex flex-wrap gap-1">
+            <template x-for="tagUuid in panelEntry.tags" :key="tagUuid">
+              <template x-if="tagById(tagUuid)">
+                <tag-chip size="sm" :name="tagById(tagUuid).name" :color="tagById(tagUuid).color"></tag-chip>
+              </template>
+            </template>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-base-300 text-xs opacity-60 space-y-1">
+          <div>Created <span x-text="shortDate(panelEntry.created)"></span></div>
+          <div>Modified <span x-text="shortDate(panelEntry.modified)"></span></div>
+        </div>
+      </div>
+
+      <div class="mt-auto border-t border-base-300 p-3 flex gap-2 flex-wrap">
+        <button
+          type="button"
+          class="btn btn-sm btn-ghost flex-1 gap-2"
+          x-show="panelHasAction('edit')"
+          @click="editEntry(panelEntry)"
+        >
+          <i data-lucide="pencil" class="w-4 h-4"></i>
+          Edit
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-ghost gap-2"
+          x-show="panelHasAction('restore')"
+          @click="runAction({ id: 'restore' }, panelEntry)"
+        >
+          <i data-lucide="undo-2" class="w-4 h-4"></i>
+          Restore
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-ghost text-error btn-square"
+          x-show="panelHasAction('trash')"
+          aria-label="Move to trash"
+          @click="runAction({ id: 'trash' }, panelEntry)"
+        >
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-ghost text-error gap-2"
+          x-show="panelHasAction('delete_forever')"
+          @click="runAction({ id: 'delete_forever' }, panelEntry)"
+        >
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+          Delete for good
+        </button>
+      </div>
+    </div>
+  </template>
+</aside>

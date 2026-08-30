@@ -1,0 +1,8 @@
+{% comment %}
+  The folder menu. Its rows are written here rather than fetched, and that is
+  the one place in this module where that is true: the action endpoint answers
+  for rows that carry per-row rules - an entry in the trash, a field its type
+  does not have, a role floor. A folder carries none. Whoever can open the
+  vault may write every folder in it, so there is nothing to ask the server.
+{% endcomment %}
+{% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/browser_folder_menu_items.html" open="folderMenu.open" close="closeFolderMenu()" x="folderMenu.x" y="folderMenu.y" id="folder-context-menu" width="w-52" %}

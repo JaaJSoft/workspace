@@ -42,9 +42,18 @@ class RegistryMachineryTests(SimpleTestCase):
             type("SampleAction", (BaseVaultAction,), namespace)
         )
 
-    def _available(self, *, role=VaultRole.OWNER, trashed=False):
+    def _available(self, *, role=VaultRole.OWNER, trashed=False, present_fields=None):
         return self.registry.get_available_actions(
-            None, _Entry(), role=role, trashed=trashed, schema=self.schema
+            None,
+            _Entry(),
+            role=role,
+            trashed=trashed,
+            schema=self.schema,
+            present_fields=(
+                frozenset({"username", "password", "totp", "uri"})
+                if present_fields is None
+                else present_fields
+            ),
         )
 
     def test_a_subclass_registers_into_its_own_list(self):
@@ -112,7 +121,13 @@ class RegistryMachineryTests(SimpleTestCase):
 
         def ask(role):
             return self.registry.is_action_available(
-                "sample", None, _Entry(), role=role, trashed=False, schema=self.schema
+                "sample",
+                None,
+                _Entry(),
+                role=role,
+                trashed=False,
+                schema=self.schema,
+                present_fields=frozenset({"username", "password", "totp", "uri"}),
             )
 
         self.assertTrue(ask(VaultRole.OWNER))
@@ -127,6 +142,7 @@ class RegistryMachineryTests(SimpleTestCase):
                 role=VaultRole.OWNER,
                 trashed=False,
                 schema=self.schema,
+                present_fields=frozenset(),
             )
         )
 

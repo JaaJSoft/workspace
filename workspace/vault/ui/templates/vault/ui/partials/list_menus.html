@@ -1,0 +1,13 @@
+{% comment %}
+  Two menus, and the difference between them is what they address.
+
+  The vault menu is whatever POST /api/v1/vault/actions answered for that
+  vault - never a list written here. The listing menu is not a menu of
+  actions at all: creating a vault is not something done to an existing one,
+  so the endpoint has nothing to say about it.
+
+  Both ride the shell every other module's context menu uses, so a row here
+  gains a keyboard shortcut the moment the registry starts serving one.
+{% endcomment %}
+{% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/list_menu_vault.html" open="menu.open" close="closeVaultMenu()" x="menu.x" y="menu.y" id="vault-context-menu" %}
+{% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/list_menu_listing.html" open="backgroundMenu.open" close="closeBackgroundMenu()" x="backgroundMenu.x" y="backgroundMenu.y" id="vault-listing-menu" width="w-48" %}

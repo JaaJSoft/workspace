@@ -1,9 +1,12 @@
+import uuid
+
 from django.test import SimpleTestCase
 from rest_framework import serializers
 
 from workspace.vault.serializers import (
     AccountFinalizeSerializer,
     AccountRotateSerializer,
+    VaultTagWriteSerializer,
     VaultUpdateSerializer,
     validate_base64url,
 )
@@ -158,5 +161,55 @@ class VaultUpdateSerializerTests(SimpleTestCase):
 
     def test_refuses_a_newline_inside_the_colour(self):
         serializer = VaultUpdateSerializer(data=self._payload(color="pri\nmary"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("color", serializer.errors)
+
+
+class TagColourTests(SimpleTestCase):
+    """A tag's colour vocabulary, which is not the vault's.
+
+    Both are plaintext columns covered by ``metadata_sig``, so the alphabet
+    each accepts is frozen the day a row is signed: widening it later would
+    mean every client re-signing every tag, and the server may not re-sign on
+    their behalf.
+    """
+
+    def _payload(self, colour):
+        return {
+            "uuid": str(uuid.uuid4()),
+            "vault": str(uuid.uuid4()),
+            "encrypted_name": OPAQUE,
+            "color": colour,
+            "metadata_sig": OPAQUE,
+        }
+
+    def test_a_tag_takes_a_colour_from_the_shared_hex_palette(self):
+        serializer = VaultTagWriteSerializer(data=self._payload("#22c55e"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_a_tag_still_takes_a_role_name(self):
+        """The vault's own vocabulary stays valid on a tag: rejecting it
+        would turn a widening into a breaking change for no gain."""
+        serializer = VaultTagWriteSerializer(data=self._payload("neutral"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_a_tag_refuses_anything_that_is_neither(self):
+        for colour in ("#22C55E", "#22c55", "red; drop table", "rgb(1,2,3)", ""):
+            with self.subTest(colour=colour):
+                serializer = VaultTagWriteSerializer(data=self._payload(colour))
+                self.assertFalse(serializer.is_valid())
+
+    def test_a_vault_does_not_take_a_hex_colour(self):
+        """The icon picker the vault shares with the rest of the application
+        works in CSS classes, so a hex there would render as nothing."""
+        serializer = VaultUpdateSerializer(
+            data={
+                "encrypted_name": OPAQUE,
+                "encrypted_description": OPAQUE,
+                "icon": "lock",
+                "color": "#22c55e",
+                "metadata_sig": OPAQUE,
+            }
+        )
         self.assertFalse(serializer.is_valid())
         self.assertIn("color", serializer.errors)

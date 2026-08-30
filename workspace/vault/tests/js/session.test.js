@@ -744,3 +744,31 @@ test('an operation still resolves when no lock interrupts it', async () => {
   h.release();
   assert.equal(await opening, h.imported);
 });
+
+test('the idle delay can be changed, and the change moves the deadline', async () => {
+  // Hard-coded at five minutes until now. Stored and never handed over, the
+  // preference would change nothing until the page was reloaded.
+  const h = clockHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  assert.equal(h.session.secondsUntilLock(), 300);
+  h.session.setIdleTimeout(15);
+  assert.equal(h.session.secondsUntilLock(), 900);
+});
+
+test('a delay that is not a positive number leaves the deadline alone', async () => {
+  const h = clockHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  for (const bad of [0, -1, 'soon', null, undefined, NaN]) {
+    h.session.setIdleTimeout(bad);
+  }
+  assert.equal(h.session.secondsUntilLock(), 300);
+});
+
+test('setting the delay on a locked session does not open one', async () => {
+  const h = clockHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  h.session.lock();
+  h.session.setIdleTimeout(15);
+  assert.equal(h.session.isUnlocked(), false);
+  assert.equal(h.session.secondsUntilLock(), 0);
+});

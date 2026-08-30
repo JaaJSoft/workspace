@@ -106,6 +106,27 @@ test('the action lookup posts the batch as a body, and carries the token', () =>
   api.fetchEntryActions([ENTRY, ENTRY]);
   assert.equal(calls[0].options.method, 'POST');
   assert.ok(calls[0].url.endsWith('/api/v1/vault/actions'));
-  assert.deepStrictEqual(JSON.parse(calls[0].options.body), { uuids: [ENTRY, ENTRY] });
+  assert.deepStrictEqual(JSON.parse(calls[0].options.body), {
+    uuids: [ENTRY, ENTRY],
+    target: 'entry',
+  });
   assert.equal(calls[0].options.headers['X-CSRFToken'], 'token');
+});
+
+test('the same endpoint answers about vaults when asked for that target', () => {
+  const { api, calls } = withFetch();
+  api.fetchVaultActions([ENTRY]);
+  assert.ok(calls[0].url.endsWith('/api/v1/vault/actions'));
+  assert.deepStrictEqual(JSON.parse(calls[0].options.body), {
+    uuids: [ENTRY],
+    target: 'vault',
+  });
+});
+
+test('the target is always sent, never left to the server default', () => {
+  const { api, calls } = withFetch();
+  api.fetchEntryActions([ENTRY]);
+  api.fetchVaultActions([ENTRY]);
+  const targets = calls.map((call) => JSON.parse(call.options.body).target);
+  assert.deepStrictEqual(Array.from(targets), ['entry', 'vault']);
 });

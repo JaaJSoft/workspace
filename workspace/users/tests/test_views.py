@@ -524,6 +524,46 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         )
         self.assertIn(resp.status_code, (200, 201))
 
+    def test_put_rejects_a_lock_delay_that_is_not_a_delay(self):
+        """A vault that never locks is the failure this setting can cause, so
+        the value is checked here rather than trusted from the page."""
+        for value in [0, -1, "15", 7.5, True, 100000]:
+            resp = self.client.put(
+                self._url("vault", "lock_after_minutes"),
+                {"value": value},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 400, value)
+
+    def test_put_accepts_a_lock_delay(self):
+        for value in [1, 5, 60, 1440]:
+            resp = self.client.put(
+                self._url("vault", "lock_after_minutes"),
+                {"value": value},
+                format="json",
+            )
+            self.assertIn(resp.status_code, (200, 201), value)
+
+    def test_put_rejects_an_unknown_default_sort(self):
+        """Stored unchecked, it reaches the listing as a sort nothing
+        implements and leaves the sort control on a value no option carries."""
+        for value in ["size", "", 3, "NAME"]:
+            resp = self.client.put(
+                self._url("vault", "default_sort"),
+                {"value": value},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 400, value)
+
+    def test_put_accepts_the_sorts_the_panel_offers(self):
+        for value in ["default", "name", "favorite", "created"]:
+            resp = self.client.put(
+                self._url("vault", "default_sort"),
+                {"value": value},
+                format="json",
+            )
+            self.assertIn(resp.status_code, (200, 201), value)
+
     def test_put_creates_setting(self):
         resp = self.client.put(
             self._url("core", "theme"),

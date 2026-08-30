@@ -108,7 +108,18 @@ window.vaultApi = (function () {
     // comes back as an empty list, never as a missing key, so a caller reads
     // the answer without checking whether the key is there.
     fetchEntryActions: function (uuids) {
-      return request('/api/v1/vault/actions', { method: 'POST', body: { uuids: uuids } });
+      return request('/api/v1/vault/actions', {
+        method: 'POST',
+        body: { uuids: uuids, target: 'entry' },
+      });
+    },
+    // Same endpoint, other kind of row. A vault carries no trash state and no
+    // fields, so its answer is decided by the caller's role alone.
+    fetchVaultActions: function (uuids) {
+      return request('/api/v1/vault/actions', {
+        method: 'POST',
+        body: { uuids: uuids, target: 'vault' },
+      });
     },
   };
 })();

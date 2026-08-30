@@ -1,0 +1,120 @@
+{% comment %}
+  Creating and editing share one dialog, because they write the same record:
+  a signed entry carries every field on every write, so an edit is a create
+  over an existing uuid.
+
+  The inputs come from the type's own schema, rendered by the server from the
+  Python registry - adding a type stays one class, with no form to write.
+  autocomplete and spellcheck are off on every content field: a password
+  manager whose fields end up in the browser's own form history, or sent to a
+  spell-checking service, has given away what it exists to keep.
+{% endcomment %}
+<template x-if="draft">
+  <div class="modal modal-open">
+    <div class="modal-box max-w-lg">
+      <h2
+        class="font-semibold text-lg"
+        x-text="draft.isNew ? 'New ' + typeLabel(draft.type).toLowerCase() : 'Edit entry'"
+      ></h2>
+
+      <form @submit.prevent="saveEntry()" class="mt-4 space-y-3">
+        <label class="form-control">
+          <span class="label-text">Name</span>
+          <input
+            type="text"
+            class="input input-bordered w-full"
+            autocomplete="off"
+            spellcheck="false"
+            x-model="draft.name"
+          />
+        </label>
+
+        <template x-for="field in formFields()" :key="field.field_id">
+          <label class="form-control">
+            <span class="label-text" x-text="field.label"></span>
+            <input
+              :type="field.secret ? 'password' : 'text'"
+              class="input input-bordered w-full"
+              :class="field.secret ? 'font-mono' : ''"
+              autocomplete="off"
+              spellcheck="false"
+              x-model="draft.values[field.field_id]"
+            />
+          </label>
+        </template>
+
+        <label class="form-control">
+          <span class="label-text">Folder</span>
+          <select class="select select-bordered w-full" x-model="draft.folder">
+            <option :value="null">No folder</option>
+            <template x-for="folder in folders" :key="folder.uuid">
+              <option :value="folder.uuid" x-text="folder.name"></option>
+            </template>
+          </select>
+        </label>
+
+        <div x-show="tags.length">
+          <span class="label-text">Tags</span>
+          <div class="flex flex-wrap gap-2 mt-1">
+            <template x-for="tag in tags" :key="tag.uuid">
+              <button
+                type="button"
+                class="btn btn-xs"
+                :class="draft.tags.includes(tag.uuid) ? 'btn-primary' : 'btn-ghost'"
+                @click="toggleDraftTag(tag.uuid)"
+              >
+                <tag-chip size="sm" :name="tag.name" :color="tag.color"></tag-chip>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <label class="label cursor-pointer justify-start gap-3">
+          <input type="checkbox" class="checkbox checkbox-sm" x-model="draft.favorite" />
+          <span class="label-text">Favourite</span>
+        </label>
+
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost" @click="closeEntryDialog()">Cancel</button>
+          <button
+            type="submit"
+            class="btn btn-primary"
+            :disabled="busy || !draft.name.trim()"
+          >
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>
+
+<template x-if="folderDraft">
+  <div class="modal modal-open">
+    <div class="modal-box max-w-sm">
+      <h2
+        class="font-semibold text-lg"
+        x-text="folderDraft.existing ? 'Rename folder' : 'New folder'"
+      ></h2>
+      <form @submit.prevent="saveFolder()">
+        <input
+          type="text"
+          class="input input-bordered w-full mt-4"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Folder name"
+          x-model="folderDraft.name"
+        />
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost" @click="closeFolderDialog()">Cancel</button>
+          <button
+            type="submit"
+            class="btn btn-primary"
+            :disabled="busy || !folderDraft.name.trim()"
+            x-text="folderDraft.existing ? 'Rename' : 'Create'"
+          ></button>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>

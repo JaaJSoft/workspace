@@ -1,0 +1,61 @@
+{% comment %}
+  The gate in front of both vault screens. It renders against any component
+  spreading vaultUnlockMixin(), which is what keeps the wording of a failed
+  unlock - a mistyped password reads nothing like a substituted signing key -
+  written once.
+{% endcomment %}
+<div
+  class="card bg-base-100 border border-base-300 shadow-sm max-w-lg mx-auto"
+>
+  <div class="card-body">
+    <h1 class="text-xl font-semibold">Unlock your vaults</h1>
+    <inline-alert type="error" x-show="error" x-cloak>
+    <span x-text="error"></span>
+    </inline-alert>
+    <form @submit.prevent="unlock()">
+      <label class="form-control">
+        <span class="label-text">Master password</span>
+        <input
+          type="password"
+          class="input input-bordered"
+          autocomplete="current-password"
+          x-model="password"
+          :disabled="state === 'deriving'"
+        />
+      </label>
+      <template x-if="secretRequired">
+        <label class="form-control mt-4">
+          <span class="label-text">Recovery key</span>
+          <input
+            type="text"
+            class="input input-bordered font-mono"
+            autocomplete="off"
+            spellcheck="false"
+            x-model="secretText"
+            :disabled="state === 'deriving'"
+          />
+          <span class="label-text-alt">From your emergency kit. Dashes and case are ignored.</span>
+        </label>
+      </template>
+      <label class="label cursor-pointer justify-start gap-3 mt-4">
+        <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
+        <span class="label-text">
+          Remember my recovery key on this device. Anything that can run
+          code on this page can then read it, so leave it off on a shared
+          computer.
+        </span>
+      </label>
+      <button
+        type="submit"
+        class="btn btn-primary mt-4"
+        :disabled="state === 'deriving' || !password || secretMissing()"
+      >
+        <span x-show="state !== 'deriving'">Unlock</span>
+        <span x-show="state === 'deriving'" x-cloak>
+          <span class="loading loading-spinner loading-xs"></span>
+          Unlocking - the wait is deliberate
+        </span>
+      </button>
+    </form>
+  </div>
+</div>

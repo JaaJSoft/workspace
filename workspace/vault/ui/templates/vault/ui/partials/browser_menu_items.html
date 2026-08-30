@@ -1,0 +1,20 @@
+{% comment %}
+  Rows of the entry menu. The panel around them is
+  ui/partials/context_menu_panel.html, included from browser_menu.html.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  <li
+    class="menu-title text-xs truncate px-3 py-1"
+    x-text="menu.entry ? menu.entry.name : ''"
+  ></li>
+  <template x-for="(action, idx) in menuActions()" :key="action.id">
+    <li
+      :class="idx > 0 && action.category !== menuActions()[idx - 1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
+    >
+      {% include "ui/partials/context_menu_item.html" with bare=1 icon_expr="action.icon" label_expr="action.label" class_expr="action.css_class" shortcut_expr="action.shortcut" click="runAction(action, menu.entry)" only %}
+    </li>
+  </template>
+  <li x-show="menuActions().length === 0">
+    <span class="opacity-50">Nothing can be done with this entry</span>
+  </li>
+</ul>

@@ -1,5 +1,8 @@
+from urllib.parse import urlparse
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.urls import resolve
 
 from workspace.core.module_registry import registry
 from workspace.core.services.module_visibility import (
@@ -33,12 +36,35 @@ class VaultCommandTests(TestCase):
             cmd for cmd in registry.get_active_commands() if cmd.module_slug == "vault"
         ]
 
-    def test_only_the_navigation_command_is_registered(self):
+    def test_the_three_navigation_commands_are_registered(self):
+        """Held back by the scaffold until a page existed to honour them.
+
+        All three are plain links, which is the whole constraint: a command
+        cannot name a vault, so each URL has to reach a page that works out
+        which vault it means. `?action=` is how the two verbs travel."""
         commands = self._vault_commands()
-        self.assertEqual(len(commands), 1)
-        self.assertEqual(commands[0].name, "Vault")
-        self.assertEqual(commands[0].kind, "navigate")
-        self.assertEqual(commands[0].url, "/vault")
+        self.assertEqual(
+            [(cmd.name, cmd.url) for cmd in commands],
+            [
+                ("Vault", "/vault"),
+                ("Lock vault", "/vault?action=lock"),
+                ("New entry", "/vault?action=new"),
+            ],
+        )
+
+    def test_every_vault_command_is_a_link(self):
+        """Not decoration: a command of another kind would be free to carry a
+        payload, and the reason these are on /vault rather than on a vault is
+        precisely that they cannot."""
+        self.assertEqual({cmd.kind for cmd in self._vault_commands()}, {"navigate"})
+
+    def test_every_command_url_resolves_to_the_vault_page(self):
+        """A palette entry pointing at a 404 is worse than an absent one."""
+        for command in self._vault_commands():
+            with self.subTest(command=command.name):
+                self.assertEqual(
+                    resolve(urlparse(command.url).path).view_name, "vault_ui:index"
+                )
 
     @override_settings(PREVIEW_VISIBILITY="staff")
     def test_commands_are_hidden_from_regular_users(self):

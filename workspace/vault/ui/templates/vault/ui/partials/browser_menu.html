@@ -1,0 +1,7 @@
+{% comment %}
+  Rendered from whatever POST /api/v1/vault/actions answered for the row it
+  names, in the order the server returned. No fallback list: an entry the
+  caller cannot reach comes back empty, and an empty menu is the honest
+  rendering of that.
+{% endcomment %}
+{% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/browser_menu_items.html" open="menu.open" close="closeMenu()" x="menu.x" y="menu.y" id="entry-context-menu" width="w-60" %}

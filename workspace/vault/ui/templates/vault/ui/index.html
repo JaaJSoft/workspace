@@ -14,145 +14,156 @@
   {% include 'core/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
 
-{% block body_class %}bg-base-100 min-h-screen flex flex-col{% endblock %}
-{% block drawer_wrapper_class %}{% endblock %}
-{% block drawer_content_class %}{% endblock %}
-{% block main_layout_class %}{% endblock %}
+{% comment %}
+  One template, two screens, because one view serves two URLs: /vault lists
+  the vaults, /vault/<uuid> browses one. A palette command is a plain link and
+  can name no UUID, which is what forces them to share a view - and sharing a
+  view is what makes the unlock gate below common to both.
+
+  The two differ in how they use the viewport: the listing scrolls with the
+  page, the browser is a fixed shell with its own scrolling pane.
+{% endcomment %}
+{% comment %}
+  drawer-open, not lg:drawer-open. Below lg the latter turns the drawer into
+  an overlay that slides over the page and needs a hamburger to summon it;
+  files keeps it open at every width and narrows it to the icon rail instead.
+{% endcomment %}
+{% block drawer_class %}drawer-open{% endblock %}
+{% block drawer_id %}vault-drawer{% endblock %}
+{% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
+
+{% comment %}
+  The drawer is instantiated on the wrapper rather than inside it, because the
+  sidebar and the content are one component: the sidebar's views narrow the
+  listing the content renders, and its Lock button empties it.
+{% endcomment %}
+{% block drawer_attrs %}
+  x-data="{% if vault_uuid %}vaultBrowser(){% else %}vaultApp(){% endif %}"
+{% endblock %}
+
+{% comment %}
+  The sidebar exists only once something is unlocked. Locked, the page has no
+  vault to navigate and no filter to apply, so the screen is the gate and the
+  header - the shape onboarding already has.
+{% endcomment %}
+{% block drawer_sidebar %}
+  <template x-if="state === 'unlocked'">
+    {% if vault_uuid %}
+      {% include "vault/ui/partials/browser_sidebar.html" %}
+    {% else %}
+      {% include "vault/ui/partials/list_sidebar.html" %}
+    {% endif %}
+  </template>
+{% endblock %}
 
 {% block content %}
-  <div class="mx-auto max-w-4xl w-full py-8" x-data="vaultApp()">
-    <template x-if="state !== 'unlocked'">
-      <div
-        class="card bg-base-100 border border-base-300 shadow-sm max-w-lg mx-auto"
-      >
-        <div class="card-body">
-          <h1 class="text-xl font-semibold">Unlock your vaults</h1>
-          <inline-alert type="error" x-show="error" x-cloak>
-          <span x-text="error"></span>
-          </inline-alert>
-          <form @submit.prevent="unlock()">
-            <label class="form-control">
-              <span class="label-text">Master password</span>
-              <input
-                type="password"
-                class="input input-bordered"
-                autocomplete="current-password"
-                x-model="password"
-                :disabled="state === 'deriving'"
-              />
-            </label>
-            <template x-if="secretRequired">
-              <label class="form-control mt-4">
-                <span class="label-text">Recovery key</span>
-                <input
-                  type="text"
-                  class="input input-bordered font-mono"
-                  autocomplete="off"
-                  spellcheck="false"
-                  x-model="secretText"
-                  :disabled="state === 'deriving'"
-                />
-                <span class="label-text-alt">From your emergency kit. Dashes and case are ignored.</span>
-              </label>
-            </template>
-            <label class="label cursor-pointer justify-start gap-3 mt-4">
-              <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
-              <span class="label-text">
-                Remember my recovery key on this device. Anything that can run
-                code on this page can then read it, so leave it off on a shared
-                computer.
-              </span>
-            </label>
-            <button
-              type="submit"
-              class="btn btn-primary mt-4"
-              :disabled="state === 'deriving' || !password || secretMissing()"
-            >
-              <span x-show="state !== 'deriving'">Unlock</span>
-              <span x-show="state === 'deriving'" x-cloak>
-                <span class="loading loading-spinner loading-xs"></span>
-                Unlocking - the wait is deliberate
-              </span>
-            </button>
-          </form>
-        </div>
-      </div>
-    </template>
+  {{ vault_uuid|json_script:"vault-uuid" }}
+  {{ entry_types|json_script:"entry-types" }}
+  {{ vault_prefs|json_script:"vault-prefs" }}
 
-    <template x-if="state === 'unlocked'">
-      <div>
-        <div class="flex items-center justify-between mb-6">
-          <h1 class="text-2xl font-semibold">Your vaults</h1>
-          <div class="flex items-center gap-3">
-            <span class="text-sm text-base-content/60">
-              Locks in <span x-text="countdown()"></span>
-            </span>
-            <button class="btn btn-sm btn-ghost" @click="lockNow()">Lock now</button>
-          </div>
-        </div>
-        <inline-alert type="error" x-show="error" x-cloak class="mb-4">
-        <span x-text="error"></span>
-        </inline-alert>
-        <template x-if="vaults.length === 0">
-          <p class="text-base-content/60">No vault yet.</p>
-        </template>
-        <ul class="grid gap-3 sm:grid-cols-2">
-          <template x-for="vault in vaults" :key="vault.uuid">
-            <li class="card bg-base-100 border border-base-300">
-              <div class="card-body p-4">
-                <div class="flex items-center gap-3">
-                  {# Static, not bound: Lucide replaces this element with an svg and copies #}
-                  {# its attributes across once, so a binding here freezes at first render. #}
-                  <i data-lucide="lock" class="w-4 h-4"></i>
-                  <span class="font-medium" x-text="vault.name"></span>
-                </div>
-                <template x-if="vault.tampered">
-                  <inline-alert type="error" title="Signature does not verify" message="This vault's metadata was not signed by your account. Its name is not shown."></inline-alert>
-                </template>
-                <template x-if="vault.unopenable">
-                  <inline-alert type="warning" title="No key for this device" message="This vault holds no key wrap for your account, so it cannot be opened here."></inline-alert>
-                </template>
-                <template x-if="vault.unreadable">
-                  <inline-alert type="error" title="Could not be decrypted" message="This vault's data could not be read. It may be corrupted."></inline-alert>
-                </template>
-              </div>
-            </li>
-          </template>
-        </ul>
-        <button class="btn btn-primary mt-6" @click="showCreate = true">New vault</button>
-        <template x-if="showCreate">
-          <div class="modal modal-open">
-            <div class="modal-box">
-              <h2 class="font-semibold text-lg">New vault</h2>
-              <inline-alert type="error" x-show="error" x-cloak class="mt-4">
-              <span x-text="error"></span>
+  {% if vault_uuid %}
+    {# The component is on the drawer wrapper: the sidebar shares it. #}
+    <div
+      class="h-full flex flex-col min-h-0"
+      @keydown.escape.window="closeMenu()"
+    >
+      <template x-if="state !== 'unlocked'">
+        <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
+      </template>
+
+      {% comment %}
+        A row, not a column: the properties panel sits beside the listing, and
+        the drawer already took the sidebar out of this branch.
+      {% endcomment %}
+      <template x-if="state === 'unlocked'">
+        <div class="h-full flex min-h-0 w-full">
+          <main class="flex-1 flex flex-col min-w-0 min-h-0">
+            {% include "vault/ui/partials/browser_header.html" %}
+
+            <inline-alert type="warning" title="This vault is out of reach" message="Nothing here holds a key for your account, or the vault does not exist." class="mx-5 mt-4" x-show="missing" x-cloak></inline-alert>
+
+            <inline-alert type="error" x-show="error" x-cloak class="mx-5 mt-4">
+            <span x-text="error"></span>
+            </inline-alert>
+
+            {% comment %}
+              A count is all that survives a row whose signature fails, so
+              this banner is the whole of what the user is told - hence it
+              says what was not done rather than inviting a retry.
+
+              x-if, not x-show: inline-alert reads its attributes once, when
+              it connects.
+            {% endcomment %}
+            <template x-if="tamperedCount > 0">
+              <inline-alert type="error" icon="shield-alert" class="mx-5 mt-4">
+              <span class="text-sm">
+                <b>
+                  <span x-text="tamperedCount"></span>
+                  <span x-text="tamperedCount === 1 ? 'entry was' : 'entries were'"></span>
+                  removed from the list.
+                </b>
+                The signature does not match what your account signed. No field
+                was decrypted, and nothing was tried a second time under another
+                context. Nobody can repair this from here: the entry has to be
+                written again by whoever holds the key.
+              </span>
               </inline-alert>
-              <form @submit.prevent="createVault()">
-                <input
-                  type="text"
-                  class="input input-bordered w-full mt-4"
-                  autocomplete="off"
-                  spellcheck="false"
-                  x-model="newVaultName"
-                  placeholder="Vault name"
-                />
-                <div class="modal-action">
-                  <button type="button" class="btn btn-ghost" @click="closeCreateDialog()">Cancel</button>
-                  <button type="submit" class="btn btn-primary" :disabled="busy">Create</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </template>
-      </div>
-    </template>
-  </div>
+            </template>
+
+            {% include "vault/ui/partials/browser_content.html" %}
+
+          </main>
+
+          {% include "vault/ui/partials/browser_panel.html" %}
+          {% include "vault/ui/partials/browser_menu.html" %}
+          {% include "vault/ui/partials/browser_folder_menu.html" %}
+          {% include "vault/ui/partials/browser_listing_menu.html" %}
+          {% include "vault/ui/partials/entry_dialog.html" %}
+          {% include "vault/ui/partials/tag_dialog.html" %}
+          {% include "vault/ui/partials/help_dialog.html" %}
+          {% include "vault/ui/partials/clipboard_banner.html" %}
+        </div>
+      </template>
+    </div>
+  {% else %}
+    {# The component is on the drawer wrapper: the sidebar shares it. #}
+    <div class="h-full flex flex-col min-h-0">
+      <template x-if="state !== 'unlocked'">
+        <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
+      </template>
+
+      <template x-if="state === 'unlocked'">
+        <div class="h-full flex flex-col min-h-0">
+          {% include "vault/ui/partials/list_content.html" %}
+          {% include "vault/ui/partials/help_dialog.html" %}
+          {% include "vault/ui/partials/create_vault_dialog.html" %}
+          {% include "vault/ui/partials/vault_dialog.html" %}
+        </div>
+      </template>
+    </div>
+  {% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
   <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
   <script src="{% static 'vault/ui/js/api.js' %}"></script>
   <script src="{% static 'vault/ui/js/session.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_unlock.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_create.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_update.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_store.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_reader.js' %}"></script>
+  <script src="{% static 'vault/ui/js/entry_write.js' %}"></script>
+  <script src="{% static 'vault/ui/js/folder_write.js' %}"></script>
+  <script src="{% static 'vault/ui/js/tag_write.js' %}"></script>
+  <script src="{% static 'vault/ui/js/clipboard.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_resign.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_format.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_menu.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_tiles.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_prefs.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_view_prefs.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_sidebar.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_app.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>
 {% endblock %}

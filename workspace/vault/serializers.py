@@ -143,7 +143,15 @@ HPKE_SUITE_V1 = {"kem_id": 0x0020, "kdf_id": 0x0001, "aead_id": 0x0002, "mode": 
 # and RegexField validates with search(), so an icon ending in one would
 # pass a pattern that looks closed.
 _ICON = re.compile(r"^[a-z0-9-]{1,64}\Z")
+# A vault's colour is a daisyUI role name, because the icon picker it shares
+# with the rest of the application works in CSS classes.
 _COLOR = re.compile(r"^[a-z0-9-]{1,32}\Z")
+# A tag's is the shared hex palette every other tag in the application
+# already uses, so <tag-chip> and its colour picker are reusable as they
+# are. Kept apart from the vault's rather than widened into it: one alphabet
+# per vocabulary, and both are covered by metadata_sig - the day a row is
+# signed, changing either means every client re-signing.
+_TAG_COLOR = re.compile(r"^(#[0-9a-f]{6}|[a-z0-9-]{1,32})\Z")
 
 
 def validate_hpke_suite(value):
@@ -163,6 +171,10 @@ class VaultSerializer(serializers.ModelSerializer):
     owner_account_uuid = serializers.SerializerMethodField()
     wrapped_key = serializers.SerializerMethodField()
     hpke_suite = serializers.SerializerMethodField()
+    # Annotated by the listing. The default keeps a serializer used from a
+    # shell or a single-vault read from raising on a queryset that did not
+    # annotate.
+    entry_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Vault
@@ -178,6 +190,7 @@ class VaultSerializer(serializers.ModelSerializer):
             "metadata_sig",
             "wrapped_key",
             "hpke_suite",
+            "entry_count",
             "created_at",
             "updated_at",
         ]
@@ -285,7 +298,7 @@ class VaultTagWriteSerializer(serializers.Serializer):
     uuid = serializers.UUIDField()
     vault = serializers.UUIDField()
     encrypted_name = _OpaqueField()
-    color = serializers.RegexField(_COLOR)
+    color = serializers.RegexField(_TAG_COLOR)
     metadata_sig = _OpaqueField()
 
 

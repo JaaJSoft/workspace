@@ -72,6 +72,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_menu.js',
       'workspace/vault/ui/static/vault/ui/js/vault_tiles.js',
       'workspace/vault/ui/static/vault/ui/js/vault_prefs.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_view_prefs.js',
       'workspace/vault/ui/static/vault/ui/js/vault_unlock.js',
       'workspace/vault/ui/static/vault/ui/js/vault_store.js',
       'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
@@ -313,6 +314,19 @@ test('the tile size survives a reload, and belongs to this screen alone', () => 
   second.init();
   assert.equal(second.tileSize, 5);
   assert.equal(ctx.localStorage.getItem('vault.list.tileSize'), null);
+});
+
+test('the view mode survives a reload and stays off the listing key', () => {
+  const { component, ctx } = browser();
+  component.init();
+  assert.equal(component.viewMode, 'list');
+  component.setViewMode('mosaic');
+  const second = ctx.vaultBrowser();
+  second.init();
+  assert.equal(second.viewMode, 'mosaic');
+  // The two screens store under their own key on purpose: a vault card and an
+  // entry card are not looked at the same way.
+  assert.equal(ctx.localStorage.getItem('vault.list.viewMode'), null);
 });
 
 test('a tile size off the scale is refused rather than drawn', () => {

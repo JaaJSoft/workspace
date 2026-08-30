@@ -14,6 +14,7 @@ function app(session = {}, api = {}, crypto = {}) {
     'workspace/vault/ui/static/vault/ui/js/vault_menu.js',
     'workspace/vault/ui/static/vault/ui/js/vault_tiles.js',
     'workspace/vault/ui/static/vault/ui/js/vault_prefs.js',
+    'workspace/vault/ui/static/vault/ui/js/vault_view_prefs.js',
     'workspace/vault/ui/static/vault/ui/js/vault_unlock.js',
     'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
     'workspace/vault/ui/static/vault/ui/js/vault_create.js',

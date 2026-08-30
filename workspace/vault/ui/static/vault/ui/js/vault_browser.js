@@ -35,9 +35,6 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
 ];
 
 window.vaultBrowser = (function () {
-  const TILE_SIZE_KEY = 'vault.browser.tileSize';
-  const VIEW_MODE_KEY = 'vault.browser.viewMode';
-
   // Its own title and a red button, so an irreversible question does not read
   // like a reversible one.
   const DESTRUCTIVE = {
@@ -66,25 +63,6 @@ window.vaultBrowser = (function () {
     }
   }
 
-  function readPreference(key) {
-    try {
-      return window.localStorage.getItem(key);
-    } catch (err) {
-      // Private browsing and a blocked-storage setting both throw on read.
-      // A sidebar that remembers nothing is a smaller loss than a page that
-      // does not mount.
-      return null;
-    }
-  }
-
-  function writePreference(key, value) {
-    try {
-      window.localStorage.setItem(key, value);
-    } catch (err) {
-      /* nothing to do: the preference simply does not survive the reload */
-    }
-  }
-
   return function vaultBrowser() {
     // Kept as well as spread: the component overrides `apply` and still needs
     // the store's own, and a spread copies the function rather than leaving a
@@ -94,6 +72,7 @@ window.vaultBrowser = (function () {
     return {
       ...window.vaultUnlockMixin(),
       ...window.vaultPrefsMixin(),
+      ...window.vaultViewPrefsMixin('vault.browser'),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the listing
@@ -160,10 +139,7 @@ window.vaultBrowser = (function () {
       init: function () {
         this.vaultUuid = readJson('vault-uuid');
         this.entryTypes = readJson('entry-types') || [];
-        const viewMode = readPreference(VIEW_MODE_KEY);
-        if (viewMode) this.viewMode = viewMode;
-        const tileSize = Number(readPreference(TILE_SIZE_KEY));
-        if (window.vaultTiles.isStep(tileSize)) this.tileSize = tileSize;
+        this.restoreViewPrefs();
         this.loadPrefs();
         this.initUnlock();
         this.readCommand();
@@ -905,34 +881,6 @@ window.vaultBrowser = (function () {
         } finally {
           this.busy = false;
         }
-      },
-
-      setViewMode: function (mode) {
-        this.viewMode = mode;
-        writePreference(VIEW_MODE_KEY, mode);
-      },
-
-      // ---- tiles -----------------------------------------------------------
-
-      setTileSize: function (size) {
-        const step = Number(size);
-        // Off the scale is a bug or a stale preference, and a tile of zero
-        // pixels is not a smaller tile.
-        if (!window.vaultTiles.isStep(step)) return;
-        this.tileSize = step;
-        writePreference(TILE_SIZE_KEY, String(step));
-      },
-
-      tileMinWidth: function () {
-        return window.vaultTiles.width(this.tileSize);
-      },
-
-      tileGap: function () {
-        return window.vaultTiles.gap(this.tileSize);
-      },
-
-      tileIconSize: function () {
-        return window.vaultTiles.icon(this.tileSize);
       },
 
       heading: function () {

@@ -17,32 +17,11 @@ window.VAULT_COLOR_SWATCHES = [
 ];
 
 window.vaultApp = (function () {
-  const VIEW_MODE_KEY = 'vault.list.viewMode';
-  const TILE_SIZE_KEY = 'vault.list.tileSize';
-
-  function readPreference(key) {
-    try {
-      return window.localStorage.getItem(key);
-    } catch (err) {
-      // Private browsing and a blocked-storage setting both throw on read. A
-      // listing that forgets its view is a smaller loss than one that does
-      // not mount.
-      return null;
-    }
-  }
-
-  function writePreference(key, value) {
-    try {
-      window.localStorage.setItem(key, value);
-    } catch (err) {
-      /* nothing to do: the preference does not survive the reload */
-    }
-  }
-
   return function vaultApp() {
     return {
       ...window.vaultUnlockMixin(),
       ...window.vaultPrefsMixin(),
+      ...window.vaultViewPrefsMixin('vault.list'),
       vaults: [],
       busy: false,
       // Which sidebar view is on. The toolbar deliberately carries no filter
@@ -95,10 +74,7 @@ window.vaultApp = (function () {
       init: function () {
         this.icons = window.ICON_PICKER_ICONS || [];
         this.colors = window.VAULT_COLOR_SWATCHES || [];
-        const viewMode = readPreference(VIEW_MODE_KEY);
-        if (viewMode) this.viewMode = viewMode;
-        const tileSize = Number(readPreference(TILE_SIZE_KEY));
-        if (window.vaultTiles.isStep(tileSize)) this.tileSize = tileSize;
+        this.restoreViewPrefs();
         this.loadPrefs();
         this.initUnlock();
       },
@@ -112,7 +88,6 @@ window.vaultApp = (function () {
       },
 
       // ---- preferences -----------------------------------------------------
-
 
       // Overridable so a test can answer without a network. The endpoint is
       // the application's own settings API, which owns the cache the value
@@ -339,29 +314,6 @@ window.vaultApp = (function () {
         }
       },
 
-      // ---- tiles -----------------------------------------------------------
-
-      setTileSize: function (size) {
-        const step = Number(size);
-        // Off the scale is a bug or a stale preference, and a tile of zero
-        // pixels is not a smaller tile.
-        if (!window.vaultTiles.isStep(step)) return;
-        this.tileSize = step;
-        writePreference(TILE_SIZE_KEY, String(step));
-      },
-
-      tileMinWidth: function () {
-        return window.vaultTiles.width(this.tileSize);
-      },
-
-      tileGap: function () {
-        return window.vaultTiles.gap(this.tileSize);
-      },
-
-      tileIconSize: function () {
-        return window.vaultTiles.icon(this.tileSize);
-      },
-
       // ---- menus -----------------------------------------------------------
 
       openVaultMenu: function (event, vault) {
@@ -400,11 +352,6 @@ window.vaultApp = (function () {
       closeMenus: function () {
         this.closeVaultMenu();
         this.closeBackgroundMenu();
-      },
-
-      setViewMode: function (mode) {
-        this.viewMode = mode;
-        writePreference(VIEW_MODE_KEY, mode);
       },
 
       // Back to the listing this account would get on a fresh load: the

@@ -343,6 +343,30 @@ class VaultBrowserTests(PlaywrightTestCase):
             self.page.locator("input[autocomplete='current-password']").count(), 0
         )
 
+    def test_a_vault_is_switched_to_from_the_keyboard(self):
+        """The switcher is the whole of vault management now, so a row that
+        only answers a pointer takes vault switching away from anyone not
+        using one."""
+        self._open_vault()
+
+        self.page.click("[data-testid='vault-switcher']")
+        self.page.click("text=New vault")
+        self.page.wait_for_selector(".modal-box input[type=text]")
+        self.page.fill(".modal-box input[type=text] >> nth=0", "Work")
+        self.page.click(".modal-box button:has-text('Create')")
+        self._wait_for_switcher_named("Work")
+
+        self.page.click("[data-testid='vault-switcher']")
+        self.page.wait_for_selector("[data-testid='vault-row'] >> nth=1", timeout=30000)
+        row = self.page.locator("[data-testid='vault-row']:not(.active)").first
+        row.focus()
+        self.assertTrue(
+            row.evaluate("el => el === document.activeElement"),
+            "the row never took focus, so no key could reach it",
+        )
+        row.press("Enter")
+        self._wait_for_switcher_named("Personal")
+
     def test_the_new_entry_command_opens_the_form(self):
         """Registered on /vault since the module shipped, and dead until now:
         the listing that answered there had no vault to write into."""

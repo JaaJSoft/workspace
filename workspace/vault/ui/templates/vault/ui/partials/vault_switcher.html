@@ -60,8 +60,13 @@
         <li>
           <a
             data-testid="vault-row"
+            role="option"
+            tabindex="0"
+            :aria-selected="candidate.uuid === vaultUuid"
             :class="candidate.uuid === vaultUuid ? 'active' : (vaultIsDegraded(candidate) ? 'opacity-70' : '')"
             @click="switchVault(candidate)"
+            @keydown.enter.prevent="switchVault(candidate)"
+            @keydown.space.prevent="switchVault(candidate)"
             @contextmenu="openVaultMenu($event, candidate)"
           >
             <i
@@ -119,10 +124,14 @@
     <div class="border-t border-base-300 mt-2 pt-2">
       <ul class="menu p-0 w-full">
         <li>
-          <a class="text-error font-medium" @click="openCreateDialog()">
+          <button
+            type="button"
+            class="text-error font-medium"
+            @click="openCreateDialog()"
+          >
             <i data-lucide="plus" class="w-4 h-4"></i>
             New vault
-          </a>
+          </button>
         </li>
       </ul>
     </div>

@@ -89,7 +89,7 @@ class ShareAction(BaseAction):
     label = "Share"
     icon = "share-2"
     category = ActionCategory.ORGANIZE
-    node_types = ("file",)
+    node_types = ("file", "folder")
 
     def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:

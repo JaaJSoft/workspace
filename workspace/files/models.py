@@ -654,7 +654,12 @@ def _generate_share_link_token():
 
 
 class FileShareLink(models.Model):
-    """A public share link for a file, allowing unauthenticated access."""
+    """A public share link for a file or folder, allowing unauthenticated access."""
+
+    class Mode(models.TextChoices):
+        READ = "read", "Read only"
+        DROP = "drop", "Upload only"
+        BOTH = "both", "Read and upload"
 
     uuid = models.UUIDField(
         primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
@@ -666,6 +671,16 @@ class FileShareLink(models.Model):
     )
     password = models.CharField(max_length=128, blank=True, default="")
     expires_at = models.DateTimeField(null=True, blank=True)
+    mode = models.CharField(max_length=8, choices=Mode.choices, default=Mode.READ)
+    # Owner-set caps on the anonymous write path. Null defers to the global
+    # ceilings, which are the real bound: no configuration leaves an
+    # unauthenticated upload unlimited.
+    max_file_bytes = models.PositiveBigIntegerField(null=True, blank=True)
+    max_file_count = models.PositiveIntegerField(null=True, blank=True)
+    # Reserved before each upload and released on failure, so the count cap
+    # holds under concurrent anonymous requests.
+    upload_count = models.PositiveIntegerField(default=0)
+    notified_upload_count = models.PositiveIntegerField(default=0)
     view_count = models.PositiveIntegerField(default=0)
     last_accessed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -687,6 +702,14 @@ class FileShareLink(models.Model):
     @property
     def has_password(self):
         return bool(self.password)
+
+    @property
+    def allows_read(self):
+        return self.mode in (self.Mode.READ, self.Mode.BOTH)
+
+    @property
+    def allows_upload(self):
+        return self.mode in (self.Mode.DROP, self.Mode.BOTH)
 
 
 class Tag(models.Model):
@@ -747,6 +770,7 @@ class FileEvent(models.Model):
         UNSHARED = "unshared", "Unshared"
         LINK_CREATED = "link_created", "Link created"
         LINK_REVOKED = "link_revoked", "Link revoked"
+        LINK_UPLOAD = "link_upload", "Uploaded via link"
 
     # Single source of truth for the per-action presentation metadata
     # (Lucide icon + category used for grouping in the filter dropdown).
@@ -762,6 +786,7 @@ class FileEvent(models.Model):
         Action.UNSHARED: ("user-minus", "Sharing"),
         Action.LINK_CREATED: ("link", "Sharing"),
         Action.LINK_REVOKED: ("unlink", "Sharing"),
+        Action.LINK_UPLOAD: ("upload-cloud", "Sharing"),
     }
 
     # Display order for the action-filter dropdown's optgroups.

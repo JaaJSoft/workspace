@@ -9,7 +9,7 @@ might want to skip notifications, a user request always sends them).
 
 from django.contrib.auth.hashers import make_password
 
-from ..models import FileEvent, FileShare, FileShareLink
+from ..models import File, FileEvent, FileShare, FileShareLink
 from .events import record_event
 
 
@@ -79,13 +79,38 @@ def unshare_file(file_obj, *, target_user, acting_user):
     return deleted
 
 
-def create_share_link(file_obj, *, acting_user, password="", expires_at=None):
-    """Create a public share link, optionally password-protected and time-limited."""
+def create_share_link(
+    file_obj,
+    *,
+    acting_user,
+    password="",
+    expires_at=None,
+    mode=FileShareLink.Mode.READ,
+    max_file_bytes=None,
+    max_file_count=None,
+):
+    """Create a public share link, optionally password-protected and time-limited.
+
+    A file target is read-only by construction: there is nowhere to upload to.
+    Only a folder can carry a mode that accepts anonymous writes.
+    """
+    mode = mode or FileShareLink.Mode.READ
+    if mode not in FileShareLink.Mode.values:
+        raise ValueError("Unknown share link mode.")
+    if mode != FileShareLink.Mode.READ and file_obj.node_type != File.NodeType.FOLDER:
+        raise ValueError("Only a folder can accept uploads through a share link.")
+    for cap in (max_file_bytes, max_file_count):
+        if cap is not None and cap < 1:
+            raise ValueError("A cap must be a positive number.")
+
     link = FileShareLink.objects.create(
         file=file_obj,
         created_by=acting_user,
         password=make_password(password) if password else "",
         expires_at=expires_at,
+        mode=mode,
+        max_file_bytes=max_file_bytes,
+        max_file_count=max_file_count,
     )
     record_event(
         file_obj,
@@ -93,6 +118,7 @@ def create_share_link(file_obj, *, acting_user, password="", expires_at=None):
         FileEvent.Action.LINK_CREATED,
         {
             "link_uuid": str(link.uuid),
+            "mode": link.mode,
             "has_password": link.has_password,
             "has_expiry": link.expires_at is not None,
         },

@@ -19,7 +19,7 @@ from workspace.notifications.services.notifications import notify_many
 
 from ..models import Calendar, Event, EventMember
 from ..models_external import ExternalCalendar
-from .recurrence_rule import apply_rule, to_simple, truncate_before
+from .recurrence_rule import apply_rule, truncate_before
 from .timezones import current_timezone_name, normalize_all_day
 
 User = get_user_model()
@@ -68,24 +68,6 @@ def assert_writable(event, user):
         )
 
 
-def _sync_legacy_recurrence(event):
-    """Mirror the rule into the pre-rule recurrence columns.
-
-    The query layer and the expansion engine still read these, and the
-    transitional save() shim in models.py falls back to
-    ``recurrence_frequency`` whenever ``recurrence_rule`` is blank. Keeping
-    all of it in step is what lets the rule become authoritative one layer at
-    a time. A rule the old columns cannot express (a BYDAY, a COUNT) blanks
-    them: the row is still recurring by ``is_recurring``, it is simply
-    invisible to the legacy readers until they are migrated. Deleted with the
-    columns and the shim in the final task.
-    """
-    simple = to_simple(event.recurrence_rule)
-    event.recurrence_frequency = simple["frequency"] if simple else None
-    event.recurrence_interval = simple["interval"] if simple else 1
-    event.recurrence_end = simple["until"] if simple else None
-
-
 def _truncate_series(master, cut):
     """Stop *master* before *cut*, rewriting the rule and its derived bound.
 
@@ -95,7 +77,6 @@ def _truncate_series(master, cut):
     apply_rule(
         master, truncate_before(master.recurrence_rule, cut - timedelta(seconds=1))
     )
-    _sync_legacy_recurrence(master)
     master.save(
         update_fields=[
             "recurrence_rule",
@@ -139,7 +120,6 @@ def _apply_fields(event, data, user):
     # rule AND from start/end/timezone, any of which the loop above may have
     # moved. The plain setattr in the loop is what this call then normalizes.
     apply_rule(event, event.recurrence_rule)
-    _sync_legacy_recurrence(event)
     event.save()
 
 
@@ -356,7 +336,6 @@ def _update_future_occurrences(master, data, user, original_start):
         timezone="" if all_day else master.timezone,
     )
     apply_rule(new_master, data.get("recurrence_rule", original_rule))
-    _sync_legacy_recurrence(new_master)
     new_master.save()
 
     if "calendar_id" in data:

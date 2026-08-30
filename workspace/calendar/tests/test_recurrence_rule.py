@@ -251,11 +251,10 @@ class ClientCorpusTests(SimpleTestCase):
 class _StubEvent:
     """Minimal duck-typed stand-in for Event.
 
-    ``apply_rule`` only reads/writes ``recurrence_rule``, ``is_recurring``,
-    ``recurrence_until``, ``start``, ``end`` and ``timezone``. A real ``Event``
-    can't be used yet: ``is_recurring`` is still a read-only model property
-    and ``recurrence_rule``/``recurrence_until`` aren't columns until a later
-    task in the recurrence-storage migration adds them.
+    ``apply_rule`` reads/writes ``recurrence_rule``, ``is_recurring``,
+    ``recurrence_until``, ``start``, ``end``, ``timezone`` and - to keep the
+    legacy query layer and expansion engine in step until they are migrated -
+    ``recurrence_frequency``, ``recurrence_interval`` and ``recurrence_end``.
     """
 
     def __init__(self, start, end=None, timezone=""):
@@ -265,6 +264,9 @@ class _StubEvent:
         self.recurrence_rule = ""
         self.is_recurring = False
         self.recurrence_until = None
+        self.recurrence_frequency = None
+        self.recurrence_interval = 1
+        self.recurrence_end = None
 
 
 class ApplyRuleTests(SimpleTestCase):
@@ -285,6 +287,35 @@ class ApplyRuleTests(SimpleTestCase):
         self.assertEqual(event.recurrence_rule, "")
         self.assertFalse(event.is_recurring)
         self.assertIsNone(event.recurrence_until)
+
+    def test_simple_rule_mirrors_into_legacy_columns(self):
+        # The query layer and the expansion engine still read these columns
+        # (they are not migrated to the rule yet), so every apply_rule call
+        # must keep them in step for a rule they can express.
+        event = _StubEvent(start=datetime(2026, 1, 6, 10, tzinfo=UTC))
+        rr.apply_rule(event, "RRULE:FREQ=WEEKLY;INTERVAL=2")
+        self.assertEqual(event.recurrence_frequency, "weekly")
+        self.assertEqual(event.recurrence_interval, 2)
+        self.assertIsNone(event.recurrence_end)
+
+    def test_complex_rule_stays_recurring_while_legacy_columns_go_none(self):
+        # BYDAY has no legacy equivalent: the row is recurring by
+        # is_recurring, it is just invisible to the legacy-gated readers
+        # until they are migrated - never resurrected as non-recurring.
+        event = _StubEvent(start=datetime(2026, 1, 6, 10, tzinfo=UTC))
+        rr.apply_rule(event, "RRULE:FREQ=MONTHLY;BYDAY=2TU")
+        self.assertTrue(event.is_recurring)
+        self.assertIsNone(event.recurrence_frequency)
+        self.assertEqual(event.recurrence_interval, 1)
+        self.assertIsNone(event.recurrence_end)
+
+    def test_clearing_the_rule_also_clears_legacy_columns(self):
+        event = _StubEvent(start=datetime(2026, 1, 6, 10, tzinfo=UTC))
+        rr.apply_rule(event, "RRULE:FREQ=WEEKLY")
+        rr.apply_rule(event, "")
+        self.assertIsNone(event.recurrence_frequency)
+        self.assertEqual(event.recurrence_interval, 1)
+        self.assertIsNone(event.recurrence_end)
 
 
 class DeriveIntoDefaultsTests(SimpleTestCase):
@@ -312,3 +343,19 @@ class DeriveIntoDefaultsTests(SimpleTestCase):
         self.assertEqual(
             defaults["recurrence_until"], datetime(2026, 3, 9, 15, tzinfo=UTC)
         )
+        self.assertEqual(defaults["recurrence_frequency"], event.recurrence_frequency)
+        self.assertEqual(defaults["recurrence_interval"], event.recurrence_interval)
+        self.assertEqual(defaults["recurrence_end"], event.recurrence_end)
+
+    def test_complex_rule_leaves_legacy_columns_none(self):
+        defaults = {
+            "recurrence_rule": "RRULE:FREQ=MONTHLY;BYDAY=2TU",
+            "start": datetime(2026, 1, 6, 10, tzinfo=UTC),
+            "end": None,
+            "timezone": "",
+        }
+        rr.derive_into_defaults(defaults)
+        self.assertTrue(defaults["is_recurring"])
+        self.assertIsNone(defaults["recurrence_frequency"])
+        self.assertEqual(defaults["recurrence_interval"], 1)
+        self.assertIsNone(defaults["recurrence_end"])

@@ -345,6 +345,32 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
         event = Event.objects.get(title="Weekly Standup")
         self.assertEqual(event.recurrence_rule, "RRULE:FREQ=WEEKLY")
 
+    def test_created_recurring_event_expands_to_a_later_occurrence(self):
+        # Asserting on is_recurring alone doesn't exercise the legacy-gated
+        # readers (views/events.py's list endpoint filters on
+        # recurrence_frequency, not is_recurring) - only a window landing on
+        # a LATER occurrence, not the row's own start, proves the event was
+        # actually filed into the recurring bucket and expanded from there.
+        self.client.force_authenticate(self.owner)
+        start = timezone.now() + timedelta(days=1)
+        resp = self.client.post(
+            self.url,
+            self._event_data(
+                start=start.isoformat(),
+                end=(start + timedelta(hours=1)).isoformat(),
+            ),
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        params = {
+            "start": (start + timedelta(weeks=2)).isoformat(),
+            "end": (start + timedelta(weeks=3)).isoformat(),
+        }
+        list_resp = self.client.get(self.url, params)
+        titles = [e["title"] for e in list_resp.data if e.get("is_recurring")]
+        self.assertIn("Weekly Standup", titles)
+
     def test_create_non_recurring_unchanged(self):
         self.client.force_authenticate(self.owner)
         data = {

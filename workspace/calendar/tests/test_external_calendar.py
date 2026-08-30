@@ -81,6 +81,20 @@ ICS_RECURRING = (
     "END:VCALENDAR\r\n"
 )
 
+ICS_RECURRING_SIMPLE = (
+    "BEGIN:VCALENDAR\r\n"
+    "VERSION:2.0\r\n"
+    "PRODID:-//Test//Test//EN\r\n"
+    "BEGIN:VEVENT\r\n"
+    "UID:ext-recurring-simple@example.com\r\n"
+    "DTSTART:20260401T090000Z\r\n"
+    "DTEND:20260401T100000Z\r\n"
+    "SUMMARY:Weekly Sync\r\n"
+    "RRULE:FREQ=WEEKLY\r\n"
+    "END:VEVENT\r\n"
+    "END:VCALENDAR\r\n"
+)
+
 ICS_WITH_ORGANIZER = (
     "BEGIN:VCALENDAR\r\n"
     "VERSION:2.0\r\n"
@@ -272,6 +286,22 @@ class SyncExternalCalendarTests(TestCase):
         self.assertIsNotNone(event.recurrence_until)
         self.assertEqual(event.recurrence_until.day, 10)
         self.assertEqual(event.recurrence_until.month, 4)
+
+    @patch("workspace.calendar.services.ics_sync.httpx2")
+    def test_sync_recurring_event_sets_legacy_columns(self, mock_httpx):
+        # A simple rule (expressible as FREQ/INTERVAL/UNTIL) must mirror into
+        # the legacy columns the query layer and expansion engine still read
+        # - derive_into_defaults sets only is_recurring/recurrence_until on
+        # its own, so a synced recurring VEVENT would otherwise render as a
+        # one-off that never repeats.
+        _mock_httpx(mock_httpx, _mock_response(ICS_RECURRING_SIMPLE))
+
+        sync_external_calendar(self.ext)
+
+        event = Event.objects.get(ical_uid="ext-recurring-simple@example.com")
+        self.assertTrue(event.is_recurring)
+        self.assertEqual(event.recurrence_frequency, "weekly")
+        self.assertEqual(event.recurrence_interval, 1)
 
     @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_parses_organizer_email(self, mock_httpx):

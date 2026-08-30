@@ -11,9 +11,8 @@ from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from workspace.core.sse_registry import notify_sse
-
-from .call_signaling import enqueue_event
+from .call_signaling import enqueue_event, notify_participant
+from .participant_keys import user_key
 
 DEFAULT_MEDIA_STATE = {"audio": True}
 
@@ -37,27 +36,27 @@ def _presence_key(session_id):
     return f"chat:call_presence:{session_id}"
 
 
-def touch_presence(session_id, user_id, media_state):
-    """Refresh *user_id*'s heartbeat. Returns True if media_state changed."""
+def touch_presence(session_id, participant_key, media_state):
+    """Refresh *participant_key*'s heartbeat. Returns True if media_state changed."""
     key = _presence_key(session_id)
     data = cache.get(key) or {}
-    prev = data.get(str(user_id))
+    prev = data.get(participant_key)
     changed = prev != media_state
-    data[str(user_id)] = media_state
+    data[participant_key] = media_state
     cache.set(key, data, presence_ttl())
     return changed
 
 
 def get_presence(session_id):
-    """Return `{user_id_str: media_state}` for users with a fresh heartbeat."""
+    """Return `{participant_key: media_state}` for participants with a fresh heartbeat."""
     return cache.get(_presence_key(session_id)) or {}
 
 
-def drop_presence(session_id, user_id):
+def drop_presence(session_id, participant_key):
     key = _presence_key(session_id)
     data = cache.get(key)
-    if data and str(user_id) in data:
-        del data[str(user_id)]
+    if data and participant_key in data:
+        del data[participant_key]
         cache.set(key, data, presence_ttl())
 
 
@@ -96,11 +95,9 @@ def _has_stale_participants(session):
     """Whether any active participant lacks a fresh heartbeat (no DB lock)."""
     from ..models import CallParticipant
 
-    fresh = set(get_presence(session.uuid).keys())
-    active_ids = CallParticipant.objects.filter(
-        session=session, left_at__isnull=True
-    ).values_list("user_id", flat=True)
-    return any(str(uid) not in fresh for uid in active_ids)
+    fresh = set(get_presence(session.uuid))
+    active = CallParticipant.objects.filter(session=session, left_at__isnull=True)
+    return any(p.participant_key not in fresh for p in active)
 
 
 def list_active_participants(session):
@@ -123,13 +120,14 @@ def _active_member_ids(conversation_id):
     )
 
 
-def _broadcast(conversation_id, event, data, exclude_user_id=None):
+def _broadcast(conversation_id, event, data, exclude_key=None):
     """Fan a call event out to every active conversation member, then wake them."""
     for uid in _active_member_ids(conversation_id):
-        if exclude_user_id is not None and uid == exclude_user_id:
+        key = user_key(uid)
+        if exclude_key is not None and key == exclude_key:
             continue
-        enqueue_event(uid, event, data)
-        notify_sse("chat", uid)
+        enqueue_event(key, event, data)
+        notify_participant(key)
 
 
 def _render_system_call_body(state, duration_label=None):
@@ -196,7 +194,8 @@ def _start_or_join_once(user, conversation_id):
         participant.left_at = None
         participant.save(update_fields=["left_at"])
 
-    touch_presence(session.uuid, user.id, DEFAULT_MEDIA_STATE)
+    key = user_key(user.id)
+    touch_presence(session.uuid, key, DEFAULT_MEDIA_STATE)
 
     display_name = user.get_full_name() or user.username
     if created_session:
@@ -216,6 +215,7 @@ def _start_or_join_once(user, conversation_id):
             "call_participant_joined",
             {
                 "session_id": str(session.uuid),
+                "participant_key": key,
                 "user_id": user.id,
                 "display_name": display_name,
                 "media_state": DEFAULT_MEDIA_STATE,
@@ -266,16 +266,17 @@ def leave_call(user, conversation_id):
     if session is None:
         return None
 
+    key = user_key(user.id)
     CallParticipant.objects.filter(
         session=session, user=user, left_at__isnull=True
     ).update(left_at=timezone.now())
-    drop_presence(session.uuid, user.id)
+    drop_presence(session.uuid, key)
 
     if CallParticipant.objects.filter(session=session, left_at__isnull=True).exists():
         _broadcast(
             conversation_id,
             "call_participant_left",
-            {"session_id": str(session.uuid), "user_id": user.id},
+            {"session_id": str(session.uuid), "participant_key": key},
         )
         return session
 
@@ -331,18 +332,21 @@ def cleanup_stale_participants(session):
     if session is None:
         return False
 
-    fresh = set(get_presence(session.uuid).keys())
-    stale = CallParticipant.objects.filter(
-        session=session, left_at__isnull=True
-    ).exclude(user_id__in=[int(uid) for uid in fresh])
-    left_ids = list(stale.values_list("user_id", flat=True))
-    if left_ids:
-        stale.update(left_at=timezone.now())
-        for uid in left_ids:
+    fresh = set(get_presence(session.uuid))
+    active = list(CallParticipant.objects.filter(session=session, left_at__isnull=True))
+    stale = [p for p in active if p.participant_key not in fresh]
+    if stale:
+        CallParticipant.objects.filter(pk__in=[p.pk for p in stale]).update(
+            left_at=timezone.now()
+        )
+        for p in stale:
             _broadcast(
                 session.conversation_id,
                 "call_participant_left",
-                {"session_id": str(session.uuid), "user_id": uid},
+                {
+                    "session_id": str(session.uuid),
+                    "participant_key": p.participant_key,
+                },
             )
 
     if not CallParticipant.objects.filter(

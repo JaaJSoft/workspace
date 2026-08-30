@@ -40,17 +40,31 @@ class PresenceTests(SimpleTestCase):
         cache.clear()
 
     def test_touch_then_get(self):
-        changed = calls.touch_presence(self.session_id, 1, {"audio": True})
+        changed = calls.touch_presence(self.session_id, "u:1", {"audio": True})
         self.assertTrue(changed)
-        self.assertEqual(calls.get_presence(self.session_id), {"1": {"audio": True}})
+        self.assertEqual(calls.get_presence(self.session_id), {"u:1": {"audio": True}})
 
     def test_touch_same_state_reports_unchanged(self):
-        calls.touch_presence(self.session_id, 1, {"audio": True})
-        self.assertFalse(calls.touch_presence(self.session_id, 1, {"audio": True}))
+        calls.touch_presence(self.session_id, "u:1", {"audio": True})
+        self.assertFalse(calls.touch_presence(self.session_id, "u:1", {"audio": True}))
 
     def test_touch_changed_state_reports_changed(self):
-        calls.touch_presence(self.session_id, 1, {"audio": True})
-        self.assertTrue(calls.touch_presence(self.session_id, 1, {"audio": False}))
+        calls.touch_presence(self.session_id, "u:1", {"audio": True})
+        self.assertTrue(calls.touch_presence(self.session_id, "u:1", {"audio": False}))
+
+    def test_member_and_guest_keys_do_not_collide(self):
+        calls.touch_presence(self.session_id, "u:1", {"audio": True})
+        calls.touch_presence(self.session_id, "g:1", {"audio": False})
+        self.assertEqual(
+            calls.get_presence(self.session_id),
+            {"u:1": {"audio": True}, "g:1": {"audio": False}},
+        )
+
+    def test_drop_presence_removes_only_that_key(self):
+        calls.touch_presence(self.session_id, "u:1", {"audio": True})
+        calls.touch_presence(self.session_id, "u:2", {"audio": True})
+        calls.drop_presence(self.session_id, "u:1")
+        self.assertEqual(list(calls.get_presence(self.session_id)), ["u:2"])
 
 
 class LifecycleTests(TestCase):
@@ -89,9 +103,9 @@ class LifecycleTests(TestCase):
 
     def test_join_broadcasts_participant_joined_to_members(self):
         calls.start_or_join_call(self.a, self.conv.uuid)
-        sig.drain_events(self.a.id)  # clear call_started
+        sig.drain_events(f"u:{self.a.id}")  # clear call_started
         calls.start_or_join_call(self.b, self.conv.uuid)
-        events = [e["event"] for e in sig.drain_events(self.a.id)]
+        events = [e["event"] for e in sig.drain_events(f"u:{self.a.id}")]
         self.assertIn("call_participant_joined", events)
 
     def test_rejoin_reactivates_left_participant(self):
@@ -122,6 +136,38 @@ class LifecycleTests(TestCase):
             calls.start_or_join_call(self.a, self.conv.uuid)
             with self.assertRaises(calls.CallFull):
                 calls.start_or_join_call(self.b, self.conv.uuid)
+
+
+class StaleReconciliationTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.a = User.objects.create_user(username="sa", password="x")
+        self.b = User.objects.create_user(username="sb", password="x")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.a
+        )
+        for u in (self.a, self.b):
+            ConversationMember.objects.create(conversation=self.conv, user=u)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_participant_without_a_heartbeat_is_reaped(self):
+        calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(self.b, self.conv.uuid)
+        # Only a keeps a live heartbeat; b's expired.
+        calls.drop_presence(session.uuid, f"u:{self.b.id}")
+        calls.cleanup_stale_participants(session)
+        remaining = {p.participant_key for p in calls.list_active_participants(session)}
+        self.assertEqual(remaining, {f"u:{self.a.id}"})
+
+    def test_call_ends_when_every_heartbeat_is_gone(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.drop_presence(session.uuid, f"u:{self.a.id}")
+        self.assertTrue(calls.cleanup_stale_participants(session))
+        session.refresh_from_db()
+        self.assertEqual(session.state, CallSession.State.ENDED)
 
 
 class FirstJoinRaceTests(TestCase):
@@ -288,7 +334,7 @@ class CleanupTests(TestCase):
         session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
         calls.touch_presence(
             session.uuid,
-            self.a.id,
+            f"u:{self.a.id}",
             {"audio": True, "video": True, "screen": False},
         )
 

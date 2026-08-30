@@ -78,16 +78,20 @@ class VaultBrowserTests(PlaywrightTestCase):
         )
 
     def _open_vault(self):
-        """Onboard, open the one vault, and land on the browser screen."""
+        """Onboard, then land in the vault it created.
+
+        One unlock, not two. Choosing a vault from a listing used to sit
+        between them, and crossing to it was a navigation - which took the
+        closure holding the keys with it and asked for the master password
+        again.
+        """
         self._onboard()
         self._unlock()
-        self.page.wait_for_selector('a[href^="/vault/"]', timeout=30000)
-        self.vault_uuid = self.page.get_attribute('a[href^="/vault/"]', "href").rsplit(
-            "/", 1
-        )[1]
-        self.page.goto(f"{self.live_server_url}/vault/{self.vault_uuid}")
-        self._unlock()
         self.page.wait_for_selector("text=All entries", timeout=30000)
+        # Put there by replaceState once the session opened, so the vault is
+        # named in the URL without the page having been loaded twice.
+        self.page.wait_for_url("**/vault/*", timeout=30000)
+        self.vault_uuid = self.page.url.rstrip("/").rsplit("/", 1)[1]
 
     def _create_entry(self, name, username, password):
         # get_by_role with exact=True: the navbar carries a "What's new"
@@ -280,3 +284,58 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.wait_for_selector(
             "tbody tr:has-text('GitHub') tag-chip", timeout=30000
         )
+
+    def test_vault_lands_in_a_vault_without_choosing_one(self):
+        """The whole point of removing the listing.
+
+        Reaching a password used to cost two Argon2id derivations: one to see
+        the vaults, one to open the one picked from the list. The second bought
+        nothing but the screen it replaced.
+        """
+        self._open_vault()
+        self.page.goto(f"{self.live_server_url}/vault")
+        self._unlock()
+        self.page.wait_for_selector("text=All entries", timeout=30000)
+        # The vault is named in the address bar although the page was loaded
+        # at /vault: replaceState put it there, which is not a navigation.
+        self.assertRegex(self.page.url, r"/vault/[0-9a-f-]{36}$")
+        self.assertEqual(
+            self.page.locator("input[autocomplete='current-password']").count(), 0
+        )
+
+    def test_a_second_vault_is_created_and_switched_to_without_unlocking_again(self):
+        """Switching is the gesture the listing used to own, and the one that
+        had to stop being a navigation."""
+        self._open_vault()
+        first = self.page.url
+
+        self.page.click("[data-testid='vault-switcher']")
+        self.page.click("text=New vault")
+        self.page.wait_for_selector(".modal-box input[type=text]")
+        self.page.fill(".modal-box input[type=text] >> nth=0", "Work")
+        self.page.click(".modal-box button:has-text('Create')")
+        self.page.wait_for_function(f"() => location.href !== {first!r}", timeout=30000)
+        self.page.wait_for_selector("text=All entries", timeout=30000)
+
+        self.page.click("[data-testid='vault-switcher']")
+        self.assertEqual(self.page.locator("[data-testid='vault-row']").count(), 2)
+        # Read before the click: taken after it, the URL to compare against is
+        # the one already arrived at, and the wait can never come true.
+        second = self.page.url
+        self.page.locator("[data-testid='vault-row']:not(.active)").first.click()
+        self.page.wait_for_function(
+            f"() => location.href !== {second!r}", timeout=30000
+        )
+        # No gate came back between the two vaults: the closure holding the
+        # keys survived, because nothing navigated.
+        self.assertEqual(
+            self.page.locator("input[autocomplete='current-password']").count(), 0
+        )
+
+    def test_the_new_entry_command_opens_the_form(self):
+        """Registered on /vault since the module shipped, and dead until now:
+        the listing that answered there had no vault to write into."""
+        self._open_vault()
+        self.page.goto(f"{self.live_server_url}/vault?action=new")
+        self._unlock()
+        self.page.wait_for_selector(".modal.modal-open", timeout=30000)

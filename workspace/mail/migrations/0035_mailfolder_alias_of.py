@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('mail', '0031_seed_notify_on_apply'),
+        ('mail', '0034_seed_label_descriptions'),
     ]
 
     operations = [

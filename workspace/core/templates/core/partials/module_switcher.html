@@ -1,0 +1,112 @@
+{% comment %}
+Module switcher: the sidebar header title (module tile, name, chevron) is the
+trigger of a dropdown listing every app the user can reach, with the current
+one marked. Alt+K focuses the trigger (which opens the daisyUI dropdown),
+arrows and letters move across the tiles, Escape closes.
+
+Params:
+- module: the current module dict (workspace_current_module)
+- collapse_expr: Alpine expression for the sidebar's collapsed state
+                 (default "collapsed"); collapsed, only the tile shows and
+                 the panel opens from it over the page, which needs the
+                 drawer-side to leave overflow visible (the asides scroll
+                 their own lists)
+{% endcomment %}
+{% with ce=collapse_expr|default:"collapsed" %}
+  <div
+    id="module-switcher"
+    class="dropdown leading-[0]"
+    x-data="moduleSwitcher()"
+    @keydown.escape.prevent="document.activeElement.blur()"
+    @keydown.window="if (isShortcut($event)) { $event.preventDefault(); open(); }"
+    @keydown="onKeydown($event)"
+  >
+    <label
+      tabindex="0"
+      class="btn btn-ghost btn-sm normal-case flex-nowrap gap-2 px-1 cursor-pointer hover:bg-{{ module.color }}/10 transition-all"
+      title="Switch module (Alt+K)"
+      aria-label="Switch module, currently {{ module.name }}"
+    >
+      <span
+        class="w-8 h-8 shrink-0 rounded-lg bg-{{ module.color }}/10 text-{{ module.color }} flex items-center justify-center"
+      >
+        <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
+      </span>
+      <span
+        x-show="!{{ ce }}"
+        x-transition
+        class="whitespace-nowrap text-xl font-semibold text-base-content"
+      >{{ module.name }}</span>
+      <i
+        data-lucide="chevron-down"
+        class="w-3.5 h-3.5 text-base-content/60"
+        x-show="!{{ ce }}"
+      ></i>
+    </label>
+    <div
+      tabindex="0"
+      class="dropdown-content mt-2 z-[100] p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-[16.5rem]"
+    >
+      <div
+        class="pb-1 mb-1 border-b border-base-300 flex items-center justify-between"
+      >
+        <span
+          class="pl-2 text-xs font-semibold uppercase tracking-wider text-base-content/50"
+        >Apps</span>
+        <span class="flex items-center gap-1.5">
+          <span
+            class="flex items-center gap-0.5"
+            title="Open the switcher with Alt+K"
+          >
+            <kbd class="kbd kbd-xs">Alt</kbd>
+            <kbd class="kbd kbd-xs">K</kbd>
+          </span>
+          <a
+            href="{% url 'users_ui:settings' %}"
+            class="btn btn-ghost btn-xs btn-square text-base-content/60 hover:text-base-content"
+            title="Settings"
+            aria-label="Settings"
+          >
+            <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+          </a>
+        </span>
+      </div>
+      <section
+        id="module-switcher-grid"
+        class="grid grid-cols-4 gap-1"
+        aria-label="Modules"
+      >
+        <a
+          href="/"
+          class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-base-200 transition-colors"
+        >
+          <span
+            class="w-9 h-9 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center"
+          >
+            <i data-lucide="home" class="w-5 h-5"></i>
+          </span>
+          <span class="text-[11px] font-medium leading-tight">Home</span>
+        </a>
+        {% for m in workspace_switcher_modules %}
+          <a
+            href="{{ m.url }}"
+            class="flex flex-col items-center gap-1 p-2 rounded-lg transition-colors {% if m.slug == module.slug %}bg-base-200{% else %}hover:bg-base-200{% endif %}"
+            {% if m.slug == module.slug %}aria-current="page"{% endif %}
+          >
+            <span
+              class="relative w-9 h-9 rounded-lg bg-{{ m.color }}/10 text-{{ m.color }} flex items-center justify-center"
+            >
+              <i data-lucide="{{ m.icon }}" class="w-5 h-5"></i>
+              {% if m.notification_count %}
+                <span
+                  class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-{{ m.color }} text-{{ m.color }}-content text-[10px] font-bold flex items-center justify-center"
+                >{{ m.notification_count }}</span>
+              {% endif %}
+            </span>
+            <span class="text-[11px] font-medium leading-tight text-center">{{ m.name }}</span>
+          </a>
+        {% endfor %}
+      </section>
+    </div>
+  </div>
+{% endwith %}

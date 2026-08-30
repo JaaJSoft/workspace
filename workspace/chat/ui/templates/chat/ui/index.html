@@ -63,7 +63,7 @@ be defined before the parser reaches the markup using it, or server-rendered
 
 {% block drawer_sidebar %}
   <div
-    class="drawer-side z-40 h-full"
+    class="drawer-side z-40 h-full !overflow-visible"
     :style="(activeConversation || pendingInitialConvUuid) && isMobile() ? 'display:none!important' : ''"
   >
     <label for="chat-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
@@ -90,13 +90,7 @@ be defined before the parser reaches the markup using it, or server-rendered
           class="flex items-center"
           :class="collapsed ? 'justify-center' : 'justify-between'"
         >
-          <h2
-            class="text-xl font-semibold flex items-center gap-2"
-            :class="collapsed ? '' : 'pl-2'"
-          >
-            <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
-            <span x-show="!collapsed" x-transition>Chat</span>
-          </h2>
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" %}
           <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
             {% include "ui/partials/preferences_popover.html" with component="chatPreferences()" content="chat/ui/partials/_preferences_content.html" accent="text-info" button_class="hover:text-info" close_on_event="chat-run-diagnostic" %}
             {% if ai_enabled %}

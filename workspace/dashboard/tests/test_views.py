@@ -9,6 +9,7 @@ from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
 from workspace.core.module_registry import ModuleInfo, registry
+from workspace.dashboard.services.modules import dashboard_modules, switcher_modules_for
 from workspace.dashboard.views import (
     ACTIVITY_LIMIT,
     _build_dashboard_context,
@@ -48,8 +49,8 @@ class BuildDashboardContextTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_context_includes_notification_counts_on_modules(
         self, mock_visible, mock_badges
     ):
@@ -68,8 +69,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertEqual(chat_mod["notification_count"], 5)
         self.assertEqual(cal_mod["notification_count"], 2)
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_context_defaults_notification_count_to_zero(
         self, mock_visible, mock_badges
     ):
@@ -81,8 +82,8 @@ class BuildDashboardContextTests(TestCase):
         files_mod = context["modules"][0]
         self.assertEqual(files_mod["notification_count"], 0)
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_tile_links_to_pending_action_target(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat")]
         mock_badges.return_value = {
@@ -93,8 +94,8 @@ class BuildDashboardContextTests(TestCase):
 
         self.assertEqual(context["modules"][0]["url"], "/chat/abc")
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_tile_links_to_module_home_without_target(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat")]
         mock_badges.return_value = {
@@ -105,8 +106,8 @@ class BuildDashboardContextTests(TestCase):
 
         self.assertEqual(context["modules"][0]["url"], "/chat")
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_excludes_dashboard_from_modules(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("dashboard"), _mod("mail")]
         mock_badges.return_value = {}
@@ -116,8 +117,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertNotIn("dashboard", slugs)
         self.assertIn("mail", slugs)
 
-    @patch("workspace.dashboard.views.visible_modules")
-    @patch("workspace.dashboard.views.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
     def test_context_does_not_include_upcoming_events(self, mock_badges, mock_visible):
         """Upcoming events load async via /dashboard/upcoming - not via the
         main context."""
@@ -127,8 +128,8 @@ class BuildDashboardContextTests(TestCase):
         context = _build_dashboard_context(self.user)
         self.assertNotIn("upcoming_events", context)
 
-    @patch("workspace.dashboard.views.visible_modules")
-    @patch("workspace.dashboard.views.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
     def test_context_includes_usage_stats(self, mock_badges, mock_visible):
         mock_visible.return_value = []
         mock_badges.return_value = {}
@@ -136,8 +137,8 @@ class BuildDashboardContextTests(TestCase):
         context = _build_dashboard_context(self.user)
         self.assertIn("usage_stats", context)
 
-    @patch("workspace.dashboard.views.visible_modules")
-    @patch("workspace.dashboard.views.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
     def test_context_includes_storage_quota(self, mock_badges, mock_visible):
         mock_visible.return_value = []
         mock_badges.return_value = {}
@@ -146,8 +147,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertIn("storage_quota", context)
 
     @patch("workspace.dashboard.views._get_activity_context")
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_includes_activity_when_requested(
         self, mock_visible, mock_badges, mock_activity
     ):
@@ -160,8 +161,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertIn("activity_events", context)
 
     @patch("workspace.dashboard.views._get_activity_context")
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_excludes_activity_when_not_requested(
         self, mock_visible, mock_badges, mock_activity
     ):
@@ -173,8 +174,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertNotIn("activity_events", context)
 
     @patch("workspace.dashboard.views._get_activity_context")
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_forwards_activity_source(self, mock_visible, mock_badges, mock_activity):
         mock_visible.return_value = []
         mock_badges.return_value = {}
@@ -183,8 +184,8 @@ class BuildDashboardContextTests(TestCase):
         _build_dashboard_context(self.user, activity_source="chat")
         mock_activity.assert_called_once_with(self.user, source="chat")
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_grid_uses_visible_modules_only(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("files")]
         mock_badges.return_value = {}
@@ -192,8 +193,8 @@ class BuildDashboardContextTests(TestCase):
         context = _build_dashboard_context(self.user)
         self.assertEqual([m["slug"] for m in context["modules"]], ["files"])
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_preview_flag_carried_into_module_context(self, mock_visible, mock_badges):
         # The home grid template renders the Preview badge off this flag, so the
         # view must carry preview through to each module dict.
@@ -204,8 +205,8 @@ class BuildDashboardContextTests(TestCase):
         files_mod = context["modules"][0]
         self.assertTrue(files_mod["preview"])
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_module_kept_off_the_dashboard_has_no_tile_and_no_hide_toggle(
         self, mock_visible, mock_badges
     ):
@@ -220,8 +221,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertEqual([m["slug"] for m in context["modules"]], ["files"])
         self.assertEqual([a["slug"] for a in context["dashboard_apps"]], ["files"])
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_hidden_modules_excluded_from_grid(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat"), _mod("mail"), _mod("files")]
         mock_badges.return_value = {}
@@ -234,8 +235,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertIn("chat", slugs)
         self.assertIn("files", slugs)
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_empty_hidden_modules_shows_all(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat"), _mod("mail")]
         mock_badges.return_value = {}
@@ -245,8 +246,8 @@ class BuildDashboardContextTests(TestCase):
         slugs = [m["slug"] for m in context["modules"]]
         self.assertEqual(set(slugs), {"chat", "mail"})
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_unknown_hidden_slug_is_ignored(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat")]
         mock_badges.return_value = {}
@@ -257,8 +258,8 @@ class BuildDashboardContextTests(TestCase):
         slugs = [m["slug"] for m in context["modules"]]
         self.assertEqual(slugs, ["chat"])
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_context_includes_dashboard_apps_with_hidden_flag(
         self, mock_visible, mock_badges
     ):
@@ -275,8 +276,8 @@ class BuildDashboardContextTests(TestCase):
         # hidden app still appears in the popover list (unlike the grid)
         self.assertIn("mail", apps)
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_context_includes_upcoming_toggles(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat")]
         mock_badges.return_value = {}
@@ -287,8 +288,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertTrue(context["show_upcoming_empty"])  # default
 
     @patch("workspace.dashboard.views.is_module_slug_visible", return_value=True)
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_context_includes_show_my_tasks_default_true(
         self, mock_visible, mock_badges, mock_module_visible
     ):
@@ -301,8 +302,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertTrue(context["my_tasks_available"])
 
     @patch("workspace.dashboard.views.is_module_slug_visible", return_value=True)
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_context_show_my_tasks_false_when_disabled(
         self, mock_visible, mock_badges, mock_module_visible
     ):
@@ -315,8 +316,8 @@ class BuildDashboardContextTests(TestCase):
         self.assertFalse(context["show_my_tasks"])
 
     @patch("workspace.dashboard.views.is_module_slug_visible", return_value=False)
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_context_show_my_tasks_false_when_projects_module_hidden(
         self, mock_visible, mock_badges, mock_module_visible
     ):
@@ -330,6 +331,94 @@ class BuildDashboardContextTests(TestCase):
         self.assertFalse(context["show_my_tasks"])
         self.assertFalse(context["my_tasks_available"])
         mock_module_visible.assert_called_once_with(self.user, "projects")
+
+
+# ── switcher_modules_for ────────────────────────────────────────
+
+
+class SwitcherModulesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="switcheruser",
+            email="switcher@test.com",
+            password="pass123",
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_current_module_off_the_dashboard_is_appended(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [
+            _mod("files"),
+            _mod("imports", show_on_dashboard=False),
+        ]
+        mock_badges.return_value = {}
+
+        switcher = switcher_modules_for(
+            self.user, _mod("imports", show_on_dashboard=False)
+        )
+
+        imports_tile = next(m for m in switcher if m["slug"] == "imports")
+        self.assertEqual(imports_tile["notification_count"], 0)
+        self.assertEqual(imports_tile["url"], "/imports")
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_current_module_hidden_by_preference_is_appended(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_badges.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+
+        switcher = switcher_modules_for(self.user, _mod("mail"))
+
+        self.assertIn("mail", [m["slug"] for m in switcher])
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_appended_current_module_keeps_its_unread_count(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_badges.return_value = {"mail": {"count": 3, "url": "/mail/one"}}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+
+        switcher = switcher_modules_for(self.user, _mod("mail"))
+
+        mail = next(m for m in switcher if m["slug"] == "mail")
+        self.assertEqual(mail["notification_count"], 3)
+        self.assertEqual(mail["url"], "/mail")
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_switcher_tile_links_to_the_module_home_not_a_single_unread_item(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [_mod("chat")]
+        mock_badges.return_value = {"chat": {"count": 1, "url": "/chat/abc"}}
+
+        dashboard_grid, _ = dashboard_modules(self.user)
+        self.assertEqual(dashboard_grid[0]["url"], "/chat/abc")
+
+        switcher = switcher_modules_for(self.user, _mod("chat"))
+        self.assertEqual(switcher[0]["url"], "/chat")
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_current_module_already_in_the_grid_is_not_duplicated(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [_mod("files")]
+        mock_badges.return_value = {}
+
+        switcher = switcher_modules_for(self.user, _mod("files"))
+
+        self.assertEqual(len(switcher), 1)
 
 
 # ── _get_activity_context ───────────────────────────────────────
@@ -716,8 +805,8 @@ class ModulesFragmentTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("login", resp.url)
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_excludes_hidden_modules(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat"), _mod("mail")]
         mock_badges.return_value = {}
@@ -731,8 +820,8 @@ class ModulesFragmentTests(TestCase):
         self.assertIn("chat", slugs)
         self.assertNotIn("mail", slugs)
 
-    @patch("workspace.dashboard.views.get_unread_badges")
-    @patch("workspace.dashboard.views.visible_modules")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_renders_swap_target_id(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat")]
         mock_badges.return_value = {}

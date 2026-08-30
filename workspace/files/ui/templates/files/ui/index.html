@@ -26,7 +26,10 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full" x-data="sidebarCollapse()">
+  <div
+    class="drawer-side z-40 h-full !overflow-visible"
+    x-data="sidebarCollapse()"
+  >
     <label for="files-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     <!-- Sidebar -->
@@ -40,17 +43,7 @@
           class="flex items-center"
           :class="collapsed ? 'justify-center' : 'justify-between'"
         >
-          <h2
-            class="text-xl font-semibold flex items-center"
-            :class="collapsed ? 'justify-center' : 'gap-2 pl-2'"
-          >
-            <i
-              data-lucide="hard-drive"
-              class="w-6 h-6 text-primary"
-              :title="collapsed ? 'Files' : ''"
-            ></i>
-            <span x-show="!collapsed" x-transition>Files</span>
-          </h2>
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" %}
           {% include "ui/partials/preferences_popover.html" with component="filePreferences()" content="files/ui/partials/_preferences_content.html" accent="text-primary" button_class="mr-1 hover:text-primary" show_expr="!collapsed" %}
         </div>
       </div>

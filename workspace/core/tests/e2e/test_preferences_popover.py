@@ -62,7 +62,7 @@ class PreferencesPopoverTests(PlaywrightTestCase):
 
     def test_a_click_outside_closes_the_panel(self):
         _trigger, panel = self._open_on("/files")
-        self.page.locator("h2:has-text('Files')").click()
+        self.page.locator("h1:has-text('My Files')").click()
         expect(panel).to_be_hidden()
 
     def test_focusing_the_trigger_does_not_open_the_panel(self):

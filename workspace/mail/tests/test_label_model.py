@@ -430,6 +430,20 @@ class LabelDescriptionBackfillTests(TestCase):
             "Only what my boss sends",
         )
 
+    def test_backfill_ignores_a_user_created_case_variant(self):
+        """Both seeders write "Urgent" verbatim, so a lowercase "urgent" is
+        a label the user made and named themselves.
+        """
+        variant = MailLabel.objects.create(account=self.account, name="urgent")
+
+        self.module.seed_label_descriptions(apps, self._Editor)
+
+        variant.refresh_from_db()
+        self.assertEqual(variant.description, "")
+        self.assertTrue(
+            MailLabel.objects.get(account=self.account, name="Urgent").description
+        )
+
     def test_backfill_ignores_labels_the_user_created(self):
         custom = MailLabel.objects.create(account=self.account, name="Suivi")
 

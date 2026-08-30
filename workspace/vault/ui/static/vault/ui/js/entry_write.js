@@ -36,7 +36,15 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   // Notes travel under the entry's own key like any other field, and an empty
   // one stays an empty string: unlike a field it is a column, so there is no
   // "absent" for it to be.
-  const encryptedNotes = draft.notes ? await seal(draft.notes, 'notes') : '';
+  //
+  // A draft that carries no plaintext notes is not a draft that empties them:
+  // no form here edits notes, so an edit hands back the ciphertext it was
+  // given and the record keeps what it held. Re-sealing would need the
+  // plaintext, and opening notes to write them back is the one thing this
+  // page refuses to do.
+  const encryptedNotes = draft.notes
+    ? await seal(draft.notes, 'notes')
+    : draft.encryptedNotes || '';
   const tagUuids = [...(draft.tags || [])];
 
   const payload = V.entryMetadataPayload({
@@ -103,7 +111,7 @@ window.buildEntryResignRequest = async function buildEntryResignRequest(
   const payload = V.entryMetadataPayload({
     entry_uuid: row.uuid,
     vault_uuid: vault.uuid,
-    signer_account_uuid: window.vaultSession.accountUuid(),
+    signer_account_uuid: session.accountUuid(),
     entry_type: row.type,
     folder_uuid: next.folder || null,
     encrypted_name: row.encrypted_name,
@@ -125,6 +133,6 @@ window.buildEntryResignRequest = async function buildEntryResignRequest(
     encrypted_name: row.encrypted_name,
     encrypted_notes: row.encrypted_notes || '',
     fields: fields,
-    metadata_sig: await window.vaultSession.sign(payload),
+    metadata_sig: await session.sign(payload),
   };
 };

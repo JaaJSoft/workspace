@@ -109,3 +109,34 @@ test('notes stay an empty string rather than becoming absent', async () => {
   const body = await ctx.buildEntryWriteRequest(session, VAULT, DRAFT);
   assert.equal(body.encrypted_notes, '');
 });
+
+// --- notes, which no form here edits -----------------------------------------
+
+test('a draft with no notes plaintext keeps the ciphertext it was handed', async () => {
+  // The write is a full signed replacement over PUT, so a draft that dropped
+  // the notes column would erase stored notes the first time the user renamed
+  // an entry - silently, and with no way back.
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    notes: '',
+    encryptedNotes: 'ct:notes-as-stored',
+  });
+  assert.equal(body.encrypted_notes, 'ct:notes-as-stored');
+});
+
+test('typed notes are sealed and replace the carried ciphertext', async () => {
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    notes: 'a recovery hint',
+    encryptedNotes: 'ct:notes-as-stored',
+  });
+  assert.equal(body.encrypted_notes, 'b64:a recovery hint@e-1|notes@kv3');
+});
+
+test('an entry that never had notes writes an empty column', async () => {
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, { ...DRAFT, notes: '' });
+  assert.equal(body.encrypted_notes, '');
+});

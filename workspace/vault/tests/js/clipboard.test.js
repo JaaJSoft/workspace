@@ -126,3 +126,34 @@ test('a refused write reports rather than pretending it copied', async () => {
   );
   assert.equal(ctx.vaultClipboard.state().active, false);
 });
+
+// --- Clear now, which is a request and not a licence ------------------------
+
+test('clearing early wipes the secret while the clipboard still holds it', async () => {
+  const { ctx, clip } = clipboard();
+  await ctx.vaultClipboard.copy('Password', 's3cret', { transient: true });
+  await ctx.vaultClipboard.cancel();
+  assert.equal(clip.value, '');
+  assert.equal(ctx.vaultClipboard.state().active, false);
+});
+
+test('clearing early leaves a value copied since the countdown started', async () => {
+  // The banner outlives a copy made in another application: the user pressing
+  // Clear now is asking for their password back, not for whatever they cut
+  // from a document thirty seconds later to be destroyed.
+  const { ctx, clip } = clipboard();
+  await ctx.vaultClipboard.copy('Password', 's3cret', { transient: true });
+  clip.value = 'a paragraph the user was moving';
+  await ctx.vaultClipboard.cancel();
+  assert.equal(clip.value, 'a paragraph the user was moving');
+  assert.equal(ctx.vaultClipboard.state().active, false);
+});
+
+test('clearing early still wipes when the browser refuses the read back', async () => {
+  // Firefox refuses readText, so the comparison has no answer there. Refusing
+  // to clear on that browser would mean Clear now never clears at all.
+  const { ctx, clip } = clipboard({ denied: true });
+  await ctx.vaultClipboard.copy('Password', 's3cret', { transient: true });
+  await ctx.vaultClipboard.cancel();
+  assert.equal(clip.value, '');
+});

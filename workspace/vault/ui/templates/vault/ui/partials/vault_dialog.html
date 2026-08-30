@@ -32,7 +32,7 @@
         <button
           type="button"
           class="btn btn-primary"
-          :disabled="busy"
+          :disabled="busy || !vaultDialog.name.trim()"
           @click="saveVaultDialog()"
         >
           Save

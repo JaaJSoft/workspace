@@ -20,17 +20,6 @@ window.vaultApp = (function () {
   const VIEW_MODE_KEY = 'vault.list.viewMode';
   const TILE_SIZE_KEY = 'vault.list.tileSize';
 
-
-  function readJson(elementId) {
-    const element = document.getElementById(elementId);
-    if (!element) return null;
-    try {
-      return JSON.parse(element.textContent);
-    } catch (err) {
-      return null;
-    }
-  }
-
   function readPreference(key) {
     try {
       return window.localStorage.getItem(key);

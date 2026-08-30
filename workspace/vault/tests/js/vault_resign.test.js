@@ -71,7 +71,7 @@ function resign(overrides = {}) {
       },
     },
   );
-  return { ctx, calls, opened, signed };
+  return { ctx, calls, opened, signed, session: ctx.vaultSession };
 }
 
 // --- re-signing without opening anything -----------------------------------
@@ -80,9 +80,9 @@ test('a re-signature keeps every ciphertext and opens none of them', async () =>
   // The signed payload covers the ciphertexts, not the plaintexts, so moving
   // a row between folders needs no key beyond the signing one. Opening a
   // password to change a tag would put a secret on screen for no reason.
-  const { ctx, opened } = resign();
+  const { ctx, opened, session } = resign();
   const body = await ctx.buildEntryResignRequest(
-    window => window, VAULT, row('e-1', { tags: ['t-1', 't-2'] }), { tags: ['t-2'] },
+    session, VAULT, row('e-1', { tags: ['t-1', 't-2'] }), { tags: ['t-2'] },
   );
   assert.deepStrictEqual(Array.from(opened), []);
   assert.equal(body.encrypted_name, 'ct:name');
@@ -92,9 +92,9 @@ test('a re-signature keeps every ciphertext and opens none of them', async () =>
 });
 
 test('a re-signature leaves untouched fields exactly as they were', async () => {
-  const { ctx } = resign();
+  const { ctx, session } = resign();
   const original = row('e-1', { folder: 'f-1', is_favorite: true, tags: ['t-1'] });
-  const body = await ctx.buildEntryResignRequest(null, VAULT, original, {});
+  const body = await ctx.buildEntryResignRequest(session, VAULT, original, {});
   assert.equal(body.folder, 'f-1');
   assert.equal(body.is_favorite, true);
   assert.deepStrictEqual(Array.from(body.tags), ['t-1']);
@@ -104,9 +104,9 @@ test('the re-signed payload covers everything the row stores', async () => {
   // A payload that skipped the ciphertexts would verify on the server and
   // leave the row signed over less than it holds - a hole that only shows up
   // the next time somebody swaps a field.
-  const { ctx, signed } = resign();
+  const { ctx, signed, session } = resign();
   const original = row('e-1', { folder: 'f-1', tags: ['t-1', 't-2'] });
-  const body = await ctx.buildEntryResignRequest(null, VAULT, original, {
+  const body = await ctx.buildEntryResignRequest(session, VAULT, original, {
     folder: null,
   });
   const payload = signed[0];
@@ -248,4 +248,20 @@ test('a refused deletion partway up stops the walk', async () => {
     ),
   );
   assert.ok(!calls.includes('delete-folder:f-1:0'));
+});
+
+test('a re-signature signs with the session it was handed, not the global one', async () => {
+  // Onboarding builds a session of its own before window.vaultSession exists.
+  // A builder that reached for the global would sign as nobody there, and the
+  // row would come back tampered to the account that wrote it.
+  const { ctx } = resign();
+  const seen = [];
+  const other = {
+    accountUuid: () => 'account-2',
+    sign: async (payload) => { seen.push(payload); return 'other-signature'; },
+  };
+  const body = await ctx.buildEntryResignRequest(other, VAULT, row('e-1'), {});
+  assert.equal(body.metadata_sig, 'other-signature');
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].signer_account_uuid, 'account-2');
 });

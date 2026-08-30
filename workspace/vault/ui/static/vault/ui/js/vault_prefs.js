@@ -20,11 +20,6 @@ window.vaultPrefsMixin = function vaultPrefsMixin() {
     }
   }
 
-  function getCSRFToken() {
-    const match = document.cookie.match(/csrftoken=([^;]+)/);
-    return match ? match[1] : '';
-  }
-
   return {
     prefs: Object.assign({}, DEFAULTS),
 

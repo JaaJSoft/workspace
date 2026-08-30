@@ -77,7 +77,10 @@ class VaultActionsView(CacheControlMixin, APIView):
         # key is a 500 where the batch parser below already answers 400.
         data = request.data if isinstance(request.data, dict) else {}
         target = data.get("target", "entry")
-        if target not in TARGETS:
+        # isinstance before membership: a JSON array or object as `target` is
+        # unhashable, and asking a frozenset about it raises TypeError - a 500
+        # where the same malformed body deserves the 400 below.
+        if not isinstance(target, str) or target not in TARGETS:
             return _refused(
                 "target must be one of: " + ", ".join(sorted(TARGETS)) + "."
             )

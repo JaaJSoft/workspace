@@ -102,7 +102,7 @@ of showing the tamper banner.
 
 **Opening one needs both halves, and the seeder output is the only copy:**
 
-```
+```text
   Vault master password: demo-vault-1234
   Vault recovery key:    <printed at the end of the run>
 ```

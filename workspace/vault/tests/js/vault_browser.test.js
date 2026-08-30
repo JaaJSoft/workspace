@@ -349,6 +349,21 @@ test('a lock empties everything the browser had opened', async () => {
   assert.equal(component.state, 'locked');
 });
 
+test('a lock drops every draft holding typed-in plaintext', async () => {
+  // A tag name is plaintext the user typed, so it goes with the keys. Left
+  // behind it also leaves the dialog on screen over a locked vault, with a
+  // Create button that returns early and does nothing.
+  const listeners = [];
+  const { component } = browser({ session: { onLock: (callback) => listeners.push(callback) } });
+  component.init();
+  component.newTag();
+  assert.notEqual(component.tagDraft, null);
+  listeners.forEach((callback) => callback());
+  assert.equal(component.tagDraft, null);
+  assert.equal(component.draft, null);
+  assert.equal(component.folderDraft, null);
+});
+
 test('the heading names the folder being looked at', async () => {
   const { component } = browser({
     api: {
@@ -392,6 +407,13 @@ const ACTION = {
 
 function ids(actions) {
   return Array.from(actions, (action) => action.id);
+}
+
+// A lock notifies its listeners synchronously, and one of them takes the
+// secret back off the clipboard - which reads it back before wiping it, so
+// the wipe lands a few microtasks later than the callback returns.
+async function settle(turns = 4) {
+  for (let i = 0; i < turns; i += 1) await Promise.resolve();
 }
 
 test('the bulk bar offers only what every selected row offers', async () => {
@@ -756,7 +778,6 @@ test('a new entry starts empty, with a fresh uuid and the current folder', async
 });
 
 test('editing loads the row and opens only the fields the form shows', async () => {
-  const opened = [];
   const { component } = typed({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
@@ -777,6 +798,29 @@ test('editing loads the row and opens only the fields the form shows', async () 
     'password',
     'username',
   ]);
+});
+
+test('editing carries the notes ciphertext without opening it', async () => {
+  // No form here edits notes, and the write is a full signed replacement: a
+  // draft that dropped the column would erase stored notes on the first
+  // rename. Carrying the ciphertext keeps them without decrypting anything.
+  const { component, opened } = typed({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { encrypted_notes: 'ct:notes' })],
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+    },
+    session: { openEntryKey: async () => new Uint8Array(32) },
+  });
+  component.init();
+  await component.load();
+  await component.editEntry(component.entries[0]);
+  assert.equal(component.draft.encryptedNotes, 'ct:notes');
+  assert.equal(component.draft.notes, '');
+  assert.ok(
+    !Array.from(opened).some((entry) => String(entry).includes('notes')),
+    'the notes were never opened',
+  );
 });
 
 test('saving a new entry posts, saving an edit puts', async () => {
@@ -922,6 +966,7 @@ test('a lock takes the secret back off the clipboard', async () => {
   await component.load();
   await component.runAction(ACTION.copy_password, component.entries[0]);
   listeners.forEach((callback) => callback());
+  await settle();
   // The last write wins, and it is the empty one.
   assert.equal(copied[copied.length - 1], '');
 });

@@ -277,4 +277,6 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.click(f"{PANEL} button:has-text('Edit')")
         self.page.locator(".modal-box").get_by_text("Banking").click()
         self.page.click(".modal-box button:has-text('Save')")
-        self.page.wait_for_selector("tbody tr:has-text('GitHub') tag-chip", timeout=30000)
+        self.page.wait_for_selector(
+            "tbody tr:has-text('GitHub') tag-chip", timeout=30000
+        )

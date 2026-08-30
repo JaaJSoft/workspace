@@ -264,6 +264,15 @@ class VaultTargetActionApiTests(TestCase):
         response = self._post([str(self.vault.uuid)], target="folder")
         self.assertEqual(response.status_code, 400)
 
+    def test_a_target_that_is_not_a_string_is_refused_rather_than_crashing(self):
+        """A JSON array or object is unhashable, so a set membership test on
+        it raises rather than answering - and a malformed body deserves the
+        same 400 as a misspelt one, not a 500."""
+        for target in ([], {}, 3, None):
+            with self.subTest(target=target):
+                response = self._post([str(self.vault.uuid)], target=target)
+                self.assertEqual(response.status_code, 400)
+
     def test_the_default_target_is_still_the_entry_registry(self):
         """Omitting the field must keep the shape every existing caller
         already sends, or the browser's entry menus break silently."""

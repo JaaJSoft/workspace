@@ -206,6 +206,7 @@ window.vaultBrowser = (function () {
         // The drafts hold typed-in plaintext, so they go with the keys.
         this.draft = null;
         this.folderDraft = null;
+        this.tagDraft = null;
       },
 
       load: async function () {
@@ -704,6 +705,10 @@ window.vaultBrowser = (function () {
           favorite: entry.favorite,
           name: entry.name,
           notes: '',
+          // The row's own ciphertext, carried rather than opened: the write is
+          // a full signed replacement, so a draft that dropped it would sign
+          // an entry whose notes are gone.
+          encryptedNotes: row.encrypted_notes || '',
           values: values,
           entryVersion: row.entry_version || 1,
           isNew: false,

@@ -98,13 +98,17 @@ window.vaultClipboard = (function () {
       }, 1000);
     },
 
-    // The user asking for it back before the countdown ends. No comparison:
-    // they are telling us to, and the value on the clipboard is the one they
-    // are looking at.
+    // The user asking for it back before the countdown ends. Asking is not
+    // permission to wipe whatever is there now: the banner outlives a copy
+    // made somewhere else, so the same comparison the countdown makes runs
+    // here, before stop() drops the value it compares against.
     cancel: async function () {
-      const had = written !== null;
+      const outcome = await clearIfOurs();
       stop();
-      if (had) {
+      if (outcome === 'refused') {
+        // The read-back was refused, so "is it still ours?" has no answer.
+        // The user asked, and on a browser that never allows the comparison
+        // this blind write is the only clearing that would ever happen.
         try {
           await navigator.clipboard.writeText('');
         } catch (err) {

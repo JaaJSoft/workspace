@@ -143,4 +143,5 @@ class FilesConfig(AppConfig):
 
         # Register file-event handlers (import for the @on_file_event side effect).
         from workspace.files.services import link_events, search_events  # noqa: F401
+        from workspace.files.services.scanning import scan_events  # noqa: F401
         from workspace.files.services.thumbnails import handlers  # noqa: F401

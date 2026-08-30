@@ -122,6 +122,9 @@
           {% include "vault/ui/partials/tag_dialog.html" %}
           {% include "vault/ui/partials/help_dialog.html" %}
           {% include "vault/ui/partials/clipboard_banner.html" %}
+          {% include "vault/ui/partials/create_vault_dialog.html" %}
+          {% include "vault/ui/partials/vault_dialog.html" %}
+          {% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/switcher_menu.html" open="vaultMenu.open" close="closeVaultMenu()" x="vaultMenu.x" y="vaultMenu.y" id="vault-switcher-menu" %}
         </div>
       </template>
     </div>

@@ -889,6 +889,55 @@ class ThumbnailFailure(models.Model):
         return f"{self.file}: {self.attempts} failed thumbnail attempt(s)"
 
 
+class FileScan(models.Model):
+    """The most recent malware-scan verdict for a file.
+
+    One row per scanned file. A file with no row has never been scanned:
+    scanning is off, the file predates the feature, or its scan is still
+    queued. There is deliberately no "pending" status - writing one would put
+    a query on the upload path, and a file whose scan is in flight stays
+    readable, so the absence of a row already carries that meaning.
+
+    A content replacement does NOT clear the row; the scan of the new bytes
+    overwrites it. That is the conservative direction: an infected file cannot
+    be un-quarantined by overwriting it and racing the scan.
+    """
+
+    class Status(models.TextChoices):
+        CLEAN = "clean", "Clean"
+        INFECTED = "infected", "Infected"
+        SKIPPED = "skipped", "Skipped"
+        ERROR = "error", "Scan failed"
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    # Must stay non-nullable: the blocked-ids subquery feeds a NOT IN, where a
+    # single NULL makes the predicate UNKNOWN for every row and would silently
+    # empty every search result page.
+    file = models.OneToOneField(
+        File,
+        on_delete=models.CASCADE,
+        related_name="scan",
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, db_index=True)
+    signature = models.CharField(max_length=200, blank=True, default="")
+    detail = models.CharField(max_length=500, blank=True, default="")
+    # Set explicitly by the task: rows are written through update_or_create and
+    # auto_now only fires inside Model.save().
+    scanned_at = models.DateTimeField()
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["status", "-scanned_at"], name="file_scan_status_time"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.file}: {self.status}"
+
+
 class UserStorageQuota(models.Model):
     """Storage limit for one user's personal files.
 

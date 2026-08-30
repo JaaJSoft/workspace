@@ -48,6 +48,9 @@ dependencies = [
     "authlib>=1.7.2",
     # file type detection
     "magika>=1.0.0",
+    # malware scanning (clamd protocol client; the daemon itself is optional
+    # and the feature is off by default)
+    "clamav-client>=0.7.2",
     # ai
     "openai>=3.3.1",
     "ollama>=0.6.2",

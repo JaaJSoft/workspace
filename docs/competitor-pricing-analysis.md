@@ -53,16 +53,44 @@ crédible du managé français va donc de 69 à 280 €/mois pour une PME.
 
 ## 3. Coût de revient de l'infrastructure
 
-| Poste | Prix constaté |
-|---|---|
-| VPS 4 vCPU / 8 Go | OVHcloud ≈ 6,46 $/mois · Hetzner CX32 ≈ 7,88 $ · Scaleway ≈ 14 € |
-| Stockage objet S3 | Hetzner ≈ **5,99 €/To/mois** (1 To de trafic inclus, puis 1,20 €/To) |
-| Stockage bloc / Storage Box | Hetzner BX11 ≈ **3,20 €/To/mois** |
+Gamme VPS OVHcloud 2027, tarifs « à partir de » HT relevés sur la page
+publique. Trafic illimité et sauvegarde automatisée à un jour incluses partout.
 
-À noter : **le coût de la RAM a augmenté d'environ 30 % depuis fin 2025** et OVH
-comme Scaleway ont répercuté. La RAM est le poste qui se tend, pas le stockage -
-raison de plus pour indexer le prix sur le couple vCPU/RAM et facturer le
-stockage à part.
+| Offre | vCores | RAM | Disque NVMe | Bande passante | Prix HT/mois | € par Go de RAM |
+|---|---|---|---|---|---|---|
+| VPS-1 | 2 | 4 Go | 40 Go | 500 Mbit/s | **3,81 €** | 0,95 € |
+| VPS-2 | 4 | 8 Go | 75 Go | 1 Gbit/s | **7,21 €** | 0,90 € |
+| VPS-3 | 6 | 12 Go | 100 Go | 2 Gbit/s | **10,40 €** | 0,87 € |
+| VPS-4 | 8 | 24 Go | 200 Go | 3 Gbit/s | **19,96 €** | 0,83 € |
+
+| Autre poste | Prix |
+|---|---|
+| Stockage objet S3 OVHcloud, classe Standard | ≈ **7 €/To/mois**, sortie gratuite |
+| Kubernetes managé OVHcloud | control plane **gratuit**, à partir de ~18 €/mois |
+
+Trois choses à lire dans ce tableau :
+
+- **Le prix du Go de RAM est plat** — 0,95 € sur le VPS-1, 0,83 € sur le VPS-4.
+  Il n'y a pas de remise de volume : consolider plusieurs tenants sur une grosse
+  machine ne fait pas gagner sur le prix unitaire, seulement sur le remplissage
+  de la marge inutilisée.
+- **Le disque du VPS est la ressource chère.** 40 Go pour 3,81 € revient à
+  environ 95 €/To/mois si on raisonne au stockage, contre 7 €/To en objet.
+  Facteur 13. C'est ce qui rend la sortie des blobs vers S3 économiquement
+  décisive et pas seulement architecturalement propre.
+- **Le trafic illimité supprime une ligne de coût variable.** Pour une suite dont
+  l'essentiel du trafic est de l'upload et du download de fichiers, c'est un
+  avantage plus important que les quelques euros d'écart sur la machine.
+
+À noter également : **le coût de la RAM a augmenté d'environ 30 % depuis fin
+2025**, et OVH a répercuté par une hausse allant jusqu'à 45 % au 1er avril 2026.
+La volatilité est démontrée, pas hypothétique — d'où la clause d'indexation
+recommandée au §8.
+
+Enfin, ces prix sont des tarifs « à partir de », donc très probablement à
+engagement annuel. La facturation mensuelle est plus chère chez OVH : **ne vous
+engagez à l'année sur un VPS que pour un client engagé à l'année chez vous**,
+sinon vous portez seul le risque de résiliation.
 
 ## 4. Modèle de dimensionnement
 
@@ -106,6 +134,39 @@ facturés séparément :
   par onglet actif. Peu coûteux en gevent, mais dimensionne le nombre de
   connexions PostgreSQL et la RAM.
 
+### SQLite ou PostgreSQL : la frontière tombe sur les paliers
+
+Sans `REDIS_URL`, `workspace/settings/celery.py` bascule le broker sur
+`memory://` avec `CELERY_TASK_ALWAYS_EAGER`, et `cache.py` retombe en mémoire.
+Un petit tenant est donc **un seul conteneur** - ni Redis, ni worker, ni beat, ni
+PostgreSQL - qui consomme de l'ordre de 300 à 400 Mo, et non les 2,3 Go de socle
+du manifeste Kubernetes, lequel décrit la stack complète.
+
+SQLite est configuré sérieusement dans `workspace/settings/db.py` : WAL,
+`synchronous=NORMAL`, `busy_timeout=60000`, `transaction_mode=IMMEDIATE`. Sur du
+NVMe local c'est excellent. Deux limites décident du palier :
+
+- **SQLite n'a qu'un écrivain à la fois.** Avec `IMMEDIATE` et un busy_timeout de
+  60 s, la contention se manifeste en latence, pas en erreurs - le bon réglage,
+  mais la dégradation est silencieuse. Chat, SSE, accusés de lecture et présence
+  génèrent beaucoup de petites écritures : confortable jusqu'à ~25 utilisateurs,
+  risqué au-delà.
+- **SQLite sur stockage réseau est à proscrire.** Sur du bloc répliqué (Longhorn,
+  Ceph RBD) chaque fsync part sur le réseau et le débit transactionnel s'effondre.
+  Sur du fichier partagé (NFS, CephFS) le verrouillage est cassé et le risque est
+  la corruption, pas la lenteur. C'est l'argument décisif en faveur du VPS à
+  disque local pour le bas de gamme.
+
+`workspace/core/management/commands/migrate_to_postgres.py` existe déjà : le
+passage n'est donc pas une urgence à gérer mais une étape de montée de gamme
+productisée.
+
+| Palier | Base | Placement |
+|---|---|---|
+| Perso, Équipe | SQLite WAL, un conteneur | VPS dédié, NVMe local |
+| Studio, Entreprise | PostgreSQL + Redis + Celery | VPS plus gros ou nœud dédié |
+| Sur mesure | PostgreSQL managé | Kubernetes managé |
+
 **Le produit expose déjà `/metrics` au format Prometheus.** C'est ce qui permet
 de transformer un nombre d'utilisateurs flou en engagement mesurable - voir §7.
 
@@ -114,38 +175,60 @@ de transformer un nombre d'utilisateurs flou en engagement mesurable - voir §7.
 Prix mensuels HT, engagement mensuel ; -15 % à l'année. Le nombre d'utilisateurs
 est indicatif et **n'est jamais bloqué** : c'est la ressource qui est vendue.
 
-| Offre | Ressources | Users indicatifs | Stockage inclus | Prix/mois | Coût infra estimé | €/user/mois |
-|---|---|---|---|---|---|---|
-| **Perso** | 1 vCPU / 2 Go | 1-10 | 100 Go | **12 €** | ≈ 4 € | 1,20 à 12 € |
-| **Équipe** | 2 vCPU / 4 Go | ~25 | 500 Go | **39 €** | ≈ 9 € | 1,56 € |
-| **Studio** | 4 vCPU / 8 Go | ~75 | 1 To | **89 €** | ≈ 16 € | 1,19 € |
-| **Entreprise** | 8 vCPU / 16 Go | ~200 | 2 To | **189 €** | ≈ 32 € | 0,95 € |
-| **Dédié** | 16 vCPU / 32 Go, instance isolée | ~500 | 4 To | **379 €** | ≈ 68 € | 0,76 € |
-| **Sur mesure** | Cluster, HA, PostgreSQL managé | 1 000+ | sur devis | **dès 900 €** | - | - |
+Un tenant = un VPS OVHcloud dédié, dans la géolocalisation la plus proche du
+client. Les blobs vont dans le stockage objet, pas sur le disque du VPS - c'est
+ce qui rend la colonne « stockage inclus » finançable.
+
+| Offre | VPS | Users indicatifs | Stockage inclus | Prix/mois | Coût VPS | Coût objet | Marge |
+|---|---|---|---|---|---|---|---|
+| **Perso** | VPS-1 · 2c / 4 Go | 1-10 | 100 Go | **12 €** | 3,81 € | 0,70 € | **62 %** |
+| **Équipe** | VPS-2 · 4c / 8 Go | ~25 | 500 Go | **39 €** | 7,21 € | 3,50 € | **73 %** |
+| **Studio** | VPS-3 · 6c / 12 Go | ~75 | 1 To | **89 €** | 10,40 € | 7,00 € | **80 %** |
+| **Entreprise** | VPS-4 · 8c / 24 Go | ~200 | 2 To | **189 €** | 19,96 € | 14,00 € | **82 %** |
+| **Dédié** | 2× VPS-4 ou Advance | ~500 | 4 To | **379 €** | ≈ 40 à 60 € | 28,00 € | **77 à 82 %** |
+| **Sur mesure** | Kubernetes managé, PostgreSQL managé | 1 000+ | sur devis | **dès 900 €** | - | - | - |
+
+Le prix par utilisateur décroît de 1,56 € à 0,76 €/mois, ce qui place l'offre
+sous Infomaniak kSuite Standard (1,90 €) et à un dixième de Google Workspace ou
+Microsoft 365 (14 $).
 
 Options, facturées à part parce que ce sont les vrais postes de coût :
 
-| Option | Prix |
-|---|---|
-| Stockage supplémentaire | **25 €/To/mois** (coût ≈ 3 à 6 €) |
-| Édition collaborative (Collabora) | **+29 €/mois**, jusqu'à 10 documents simultanés |
-| Sauvegarde externalisée quotidienne, rétention 30 j | **+15 %** du plan |
-| Instance dédiée (pas de mutualisation) | **+50 %** du plan |
-| Migration des données à l'entrée | dès **490 €** |
+| Option | Prix | Coût |
+|---|---|---|
+| Stockage supplémentaire | **25 €/To/mois** | ≈ 7 €/To en objet |
+| Édition collaborative (Collabora) | **+29 €/mois**, 10 documents simultanés | un palier de VPS |
+| Sauvegarde 30 jours vers l'objet | **+15 %** du plan | ≈ 0,10 à 0,70 €/tenant |
+| Instance dédiée sans mutualisation | **+50 %** du plan | perte de densité |
+| Migration des données à l'entrée | dès **490 €** | prestation ponctuelle |
 
 ### Pourquoi ces montants tiennent
 
-- **La marge brute est de 70 à 82 % et croît avec la taille du plan**, parce que
-  le coût par vCPU baisse quand le serveur grossit. La progression est saine :
-  les gros comptes financent le support des petits.
-- **Le prix par utilisateur décroît de 1,56 € à 0,76 €/mois**, ce qui place
-  l'offre sous Infomaniak kSuite Standard (1,90 €) et à un dixième de Google
-  Workspace ou Microsoft 365 (14 $).
+- **La marge va de 62 % à 82 % et croît avec la taille du plan.** Elle ne vient
+  pas d'une remise de volume - le prix du Go de RAM est plat chez OVH - mais du
+  fait que le socle applicatif est fixe : un tenant de 200 personnes ne coûte pas
+  vingt fois un tenant de 10.
+- **Le palier Perso est un produit d'appel, pas un produit rentable.** À 62 % de
+  marge, il rapporte environ 90 € brut par an. Une seule heure d'intervention
+  manuelle dans l'année, au TJM du §6, coûte davantage. Il n'est vendable que si
+  le cycle de vie d'un tenant est intégralement automatisé - voir §7.
 - **L'argument de vente est le prix affiché** : « Studio à 89 €/mois pour 75
   personnes » se compare à « six sièges Google Workspace ».
-- **Le palier Perso à 12 €** ne cherche pas à battre Hetzner à 5 € : il vend une
-  suite complète là où Hetzner vend du stockage, et il sert d'entrée de gamme
-  vers les paliers rentables.
+- **La sauvegarde OVH incluse ne suffit pas.** Un jour de rétention couvre le
+  fichier supprimé hier, pas une corruption découverte trois jours plus tard ni
+  la suppression d'un tenant repérée en fin de mois. La sauvegarde applicative
+  vers l'objet reste obligatoire, et c'est elle qu'on facture en option.
+
+### Densité : ce qu'on laisse sur la table en restant en 1:1
+
+Un tenant de 5 personnes consomme environ 400 Mo sur les 4 Go du VPS-1 - 10 % de
+la machine. Consolider huit tenants de ce profil sur un VPS-2 ramène le coût à
+0,90 € par tenant au lieu de 3,81 €, et la marge du palier Perso de 62 % à 92 %.
+
+**Rester en 1:1 quand même, au démarrage.** C'est plus simple à automatiser, ça
+se vend (« votre serveur, dans votre pays »), et l'écart représente environ 36 €
+par client et par an - réel, mais pas existentiel. La densité est une
+optimisation qui n'a de sens qu'avec le volume qui la justifie.
 
 ## 6. Grille d'expertise
 
@@ -197,6 +280,29 @@ mesuré** :
 C'est un différenciateur réel face aux forfaits par tranche d'utilisateurs
 (IONOS) comme face aux forfaits de stockage (Hetzner) : les deux facturent une
 métrique qui n'a aucun rapport avec la performance ressentie.
+
+### Le cycle de vie d'un tenant doit coûter zéro minute
+
+À 62 % de marge, le palier Perso rapporte environ 90 € brut par an. Au TJM du
+§6, **une heure d'intervention manuelle sur un client dans l'année coûte plus
+que ce que ce client rapporte.** Ce n'est pas la marge qui contraint le bas de
+gamme, c'est le temps humain.
+
+Cinq automatismes conditionnent donc l'ouverture du palier à 12 €, et ils sont à
+construire avant le premier client payant, pas après le vingtième :
+
+1. **Provisioning** par Terraform et cloud-init, sans jamais ouvrir une session SSH.
+2. **Mises à jour** par pull d'image sur minuterie, avec `unattended-upgrades` en
+   dessous. Le VPS est jetable, il ne se répare pas à la main.
+3. **Sauvegarde** nocturne par `VACUUM INTO` puis envoi vers le stockage objet,
+   rétention 30 jours.
+4. **Métriques** poussées vers un Prometheus central : le pull ne passera pas sur
+   deux cents adresses.
+5. **Restauration** complète depuis zéro, sous forme d'un script déjà exécuté au
+   moins une fois pour de vrai.
+
+Si les cinq ne sont pas vrais, ne vendez pas le palier à 12 € : commencez à 39 €,
+où une intervention manuelle reste payable.
 
 ## 8. Points de vigilance
 

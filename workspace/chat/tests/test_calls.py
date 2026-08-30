@@ -365,3 +365,35 @@ class EndStaleCallsTaskTests(TestCase):
         cache.clear()
         self.assertEqual(end_stale_calls(), 1)
         self.assertIsNone(calls.get_active_call(self.conv.uuid))
+
+
+class SerializeCallStateTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.a = User.objects.create_user(
+            username="ser", password="x", first_name="Ada", last_name="L"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.a
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.a)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_participant_carries_key_and_user_id(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        state = calls.serialize_call_state(session)
+        self.assertEqual(len(state["participants"]), 1)
+        p = state["participants"][0]
+        self.assertEqual(p["participant_key"], f"u:{self.a.id}")
+        self.assertEqual(p["user_id"], self.a.id)
+        self.assertEqual(p["display_name"], "Ada L")
+        self.assertEqual(p["media_state"], {"audio": True})
+
+    def test_media_state_is_read_by_participant_key(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.touch_presence(session.uuid, f"u:{self.a.id}", {"audio": False})
+        state = calls.serialize_call_state(session)
+        self.assertEqual(state["participants"][0]["media_state"], {"audio": False})

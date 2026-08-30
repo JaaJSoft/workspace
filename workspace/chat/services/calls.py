@@ -375,11 +375,15 @@ def serialize_call_state(session):
     presence = get_presence(session.uuid)
     participants = []
     for p in list_active_participants(session):
+        key = p.participant_key
         participants.append(
             {
+                "participant_key": key,
+                # Kept beside the key so the avatar element can resolve a face.
+                # None for a meeting guest, which has no user row.
                 "user_id": p.user_id,
                 "display_name": p.user.get_full_name() or p.user.username,
-                "media_state": presence.get(str(p.user_id), dict(DEFAULT_MEDIA_STATE)),
+                "media_state": presence.get(key, dict(DEFAULT_MEDIA_STATE)),
             }
         )
     return {

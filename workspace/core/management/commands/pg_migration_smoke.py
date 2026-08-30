@@ -5,9 +5,9 @@ exercise the cross-DB code paths fixed in the migration command:
 
 * a few ``auth.User`` rows + a ``UserPresence`` row (its pk is a FK to user;
   loaddata needs to keep that pk in sync after sequences reset)
-* a ``MailAccount`` (its ``post_save`` signal seeds five labels - the
-  signal must respect ``raw=True`` during loaddata, otherwise the labels
-  duplicate)
+* a ``MailAccount`` (its ``post_save`` signal seeds the default labels -
+  the signal must respect ``raw=True`` during loaddata, otherwise the
+  labels duplicate)
 * one custom ``MailLabel`` (verifies fixture-loaded rows survive)
 * a ``MailMessage`` with an accented subject (verifies the generated
   ``search_tsv`` column populates during loaddata and ``f_unaccent`` makes
@@ -164,6 +164,7 @@ class Command(BaseCommand):
         from workspace.calendar.models import Event
         from workspace.files.models import File
         from workspace.mail.models import MailAccount, MailLabel
+        from workspace.mail.signals import DEFAULT_LABELS
         from workspace.users.models import UserPresence
 
         User = get_user_model()
@@ -176,13 +177,15 @@ class Command(BaseCommand):
             raise CommandError("UserPresence row for alice missing")
 
         account = MailAccount.objects.get(email=SEED_MAIL_EMAIL)
-        # 5 seeded by signal + 1 custom = 6, exactly. Duplicates from signal
-        # firing on raw=True would land here as 11 (5 + 5 + 1).
+        # Defaults seeded by the signal + 1 custom, exactly. Duplicates from
+        # the signal firing on raw=True would land here at twice the defaults.
+        expected_labels = len(DEFAULT_LABELS) + 1
         label_count = account.labels.count()
-        if label_count != 6:
+        if label_count != expected_labels:
             names = list(account.labels.values_list("name", flat=True))
             raise CommandError(
-                f"Expected 6 labels on {SEED_MAIL_EMAIL}, got {label_count}: {names}"
+                f"Expected {expected_labels} labels on {SEED_MAIL_EMAIL}, "
+                f"got {label_count}: {names}"
             )
 
         if not MailLabel.objects.filter(

@@ -9,6 +9,7 @@ from workspace.mail.models import (
     MailMessage,
     MailMessageLabel,
 )
+from workspace.mail.signals import DEFAULT_LABELS
 
 User = get_user_model()
 
@@ -29,7 +30,7 @@ class MailLabelCRUDTests(TestCase):
     def test_list_labels(self):
         resp = self.client.get(f"/api/v1/mail/labels?account={self.account.uuid}")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(len(resp.data), 5)
+        self.assertEqual(len(resp.data), len(DEFAULT_LABELS))
         self.assertEqual(resp.data[0]["name"], "Urgent")
 
     def test_list_requires_account(self):

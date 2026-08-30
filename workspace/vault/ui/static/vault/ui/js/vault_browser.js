@@ -35,6 +35,30 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
 ];
 
 window.vaultBrowser = (function () {
+  // Which vault to come back to, per device. It never leaves the browser: the
+  // server resolves no vault, and a stored setting would tell it which one is
+  // in use.
+  const LAST_VAULT_KEY = 'vault.lastVault';
+
+  function readPreference(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (err) {
+      // Private browsing and a blocked-storage setting both throw on read. A
+      // page that forgets which vault was last open is a smaller loss than one
+      // that does not mount.
+      return null;
+    }
+  }
+
+  function writePreference(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (err) {
+      /* nothing to do: the choice does not survive the reload */
+    }
+  }
+
   // Its own title and a red button, so an irreversible question does not read
   // like a reversible one.
   const DESTRUCTIVE = {
@@ -186,7 +210,6 @@ window.vaultBrowser = (function () {
       },
 
       load: async function () {
-        if (!this.vaultUuid) return;
         this.loading = true;
         this.error = '';
         // Every row is about to be rebuilt, and a menu left open would go on
@@ -221,9 +244,43 @@ window.vaultBrowser = (function () {
         }
         if (!window.vaultSession.isUnlocked()) return;
         this.vaults = vaults;
-        const uuid = String(this.vaultUuid);
-        this.openVault = vaults.find((vault) => String(vault.uuid) === uuid) || null;
-        this.missing = this.openVault === null;
+        if (this.vaultUuid) {
+          const uuid = String(this.vaultUuid);
+          this.openVault = vaults.find((vault) => String(vault.uuid) === uuid) || null;
+          // Asked for by UUID and not found: that vault is out of reach, which
+          // is worth saying. Arriving with no UUID at all is not.
+          this.missing = this.openVault === null;
+        } else {
+          this.openVault = this.resolveLandingVault(vaults);
+          this.missing = false;
+        }
+        if (this.openVault) this.rememberVault(this.openVault.uuid);
+      },
+
+      // The first moment the choice can be made: before the unlock every name
+      // is a ciphertext and no key exists, so neither the server nor the page
+      // could have made it earlier.
+      resolveLandingVault: function (vaults) {
+        const openable = vaults.filter(function (vault) {
+          return !(vault.tampered || vault.unopenable || vault.unreadable);
+        });
+        if (!openable.length) return null;
+        const remembered = String(readPreference(LAST_VAULT_KEY) || '');
+        return (
+          openable.find((vault) => String(vault.uuid) === remembered) ||
+          openable.find((vault) => vault.is_favorite) ||
+          openable[0]
+        );
+      },
+
+      rememberVault: function (uuid) {
+        this.vaultUuid = uuid;
+        writePreference(LAST_VAULT_KEY, String(uuid));
+        // replaceState, never a navigation: the keys live in a closure that a
+        // page load would take with it, and the master password with them.
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, '', '/vault/' + uuid);
+        }
       },
 
       rowFor: function (uuid) {

@@ -24,6 +24,12 @@ function vaultRow(uuid, name) {
   };
 }
 
+// A vault whose signature the account refuses: readVault strips its name and
+// flags it, which is what makes it unfit to land on.
+function forgedVaultRow(uuid) {
+  return Object.assign(vaultRow(uuid, 'Forged'), { metadata_sig: 'forged' });
+}
+
 function entryRow(uuid) {
   return {
     uuid: uuid,
@@ -104,6 +110,10 @@ function browser(options = {}) {
         removeItem(key) { delete this.values[key]; },
       },
       addEventListener() {},
+      history: {
+        replaced: [],
+        replaceState(state, title, url) { this.replaced.push(url); },
+      },
       TAG_CHIP_COLORS: [
         { name: 'None', value: '' },
         { name: 'Red', value: '#ef4444' },
@@ -141,7 +151,8 @@ function browser(options = {}) {
       },
       vaultApi: {
         createTag: async () => ({}),
-        listVaults: async () => [vaultRow(VAULT_UUID, 'Personal')],
+        listVaults: async () =>
+          options.vaults || [vaultRow(VAULT_UUID, 'Personal')],
         listFolders: async () => [],
         listTags: async () => [],
         listEntries: async () => [],
@@ -1566,4 +1577,112 @@ test('a nameless tag is never written', async () => {
   await component.saveTag();
   assert.equal(posted.length, 0);
   assert.notEqual(component.tagDraft, null, 'the dialog stays open to be corrected');
+});
+
+// --- landing on /vault, with no uuid in the page ----------------------------
+//
+// The listing used to answer here. Without it the controller has to choose,
+// and it can only choose after the unlock: before that every name is a
+// ciphertext and no key exists.
+
+const FAV_UUID = '01a051b9-0000-7000-8000-0000000000fa';
+
+function favouriteRow() {
+  return Object.assign(vaultRow(FAV_UUID, 'Work'), { is_favorite: true });
+}
+
+test('with no uuid the browser opens the vault last seen on this device', async () => {
+  const { component, ctx } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [favouriteRow(), vaultRow(VAULT_UUID, 'Personal')],
+  });
+  ctx.localStorage.setItem('vault.lastVault', VAULT_UUID);
+  component.init();
+  await component.load();
+  assert.equal(component.openVault && component.openVault.uuid, VAULT_UUID);
+  assert.equal(component.missing, false);
+});
+
+test('a remembered vault that no longer exists falls back to the favourite', async () => {
+  const { component, ctx } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), favouriteRow()],
+  });
+  ctx.localStorage.setItem('vault.lastVault', 'a-vault-deleted-elsewhere');
+  component.init();
+  await component.load();
+  // Nothing is out of reach - the pointer was stale, which is not a failure
+  // worth a banner.
+  assert.equal(component.openVault && component.openVault.uuid, FAV_UUID);
+  assert.equal(component.missing, false);
+});
+
+test('with nothing remembered and no favourite it opens the first vault', async () => {
+  const { component } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [vaultRow('v-9', 'Only'), vaultRow('v-10', 'Second')],
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault && component.openVault.uuid, 'v-9');
+});
+
+test('an account with no vault lands on the empty state, not on an error', async () => {
+  const { component } = browser({ data: { 'vault-uuid': null }, vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault, null);
+  assert.equal(component.missing, false, 'no vault is not the same as one out of reach');
+  assert.equal(component.error, '');
+});
+
+test('a uuid in the page still wins over what the device remembers', async () => {
+  const { component, ctx } = browser({
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), favouriteRow()],
+  });
+  ctx.localStorage.setItem('vault.lastVault', FAV_UUID);
+  component.init();
+  await component.load();
+  assert.equal(component.openVault.uuid, VAULT_UUID);
+});
+
+test('opening a vault records it as the one to come back to', async () => {
+  const { component, ctx } = browser();
+  component.init();
+  await component.load();
+  assert.equal(ctx.localStorage.getItem('vault.lastVault'), VAULT_UUID);
+});
+
+test('the uuid reaches the address bar without a navigation', async () => {
+  // replaceState, never a redirect: a page load would take the closure that
+  // holds the keys with it, and the master password would be asked again.
+  const { component, ctx } = browser({ data: { 'vault-uuid': null } });
+  component.init();
+  await component.load();
+  assert.deepStrictEqual(Array.from(ctx.history.replaced), ['/vault/' + VAULT_UUID]);
+});
+
+test('a vault whose signature is refused is never the one landed on', async () => {
+  const { component } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [forgedVaultRow('v-bad'), vaultRow('v-ok', 'Readable')],
+    session: {
+      verifyVaultMetadata: async (payload, sig) => {
+        if (sig === 'forged') throw new Error('bad signature');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault && component.openVault.uuid, 'v-ok');
+});
+
+test('a uuid that names no reachable vault still reports it as missing', async () => {
+  // The distinction the landing path must not blur: asked for by name and not
+  // found is worth saying; arriving with no name at all is not.
+  const { component } = browser({ vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault, null);
+  assert.equal(component.missing, true);
 });

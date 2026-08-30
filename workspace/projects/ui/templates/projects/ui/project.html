@@ -27,7 +27,7 @@
 {% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full">
+  <div class="drawer-side z-40 h-full !overflow-visible">
     <label
       for="projects-drawer"
       aria-label="close sidebar"
@@ -38,8 +38,19 @@
       class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14"
       :class="sidebarCollapsed() ? 'w-16' : 'w-72'"
     >
+      <!-- Sidebar header -->
+      <div class="lg:border-b border-base-300 py-4 px-3 relative">
+        <div
+          class="flex items-center"
+          :class="sidebarCollapsed() ? 'justify-center' : 'justify-between'"
+        >
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" %}
+          {% include "ui/partials/preferences_popover.html" with component="projectsPreferences()" content="projects/ui/partials/_preferences_content.html" accent="text-accent" button_class="mr-1 hover:text-accent" show_expr="!sidebarCollapsed()" %}
+        </div>
+      </div>
+
       <!-- Project switcher -->
-      <div class="px-3 pt-2" x-show="!sidebarCollapsed()" x-transition>
+      <div class="px-3 pt-3" x-show="!sidebarCollapsed()" x-transition>
         <div class="dropdown w-full">
           <button
             type="button"
@@ -92,7 +103,7 @@
         </div>
       </div>
       <!-- Collapsed switcher stub: expand to switch projects -->
-      <div class="px-3 pt-2 flex justify-center" x-show="sidebarCollapsed()">
+      <div class="px-3 pt-3 flex justify-center" x-show="sidebarCollapsed()">
         <button
           type="button"
           class="btn btn-ghost btn-sm btn-square"
@@ -133,7 +144,12 @@
         </ul>
       </div>
 
-      {% include "ui/partials/sidebar_footer.html" with color="accent" collapse_expr="sidebarCollapsed()" prefs_dialog_id="projects-prefs-dialog" prefs_template="projects/ui/partials/_preferences_content.html" prefs_data="projectsPreferences()" %}
+      <!-- Collapse toggle (desktop only) -->
+      <div class="border-t border-base-300 py-4 px-3">
+        <ul class="menu p-0 hidden lg:block">
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" collapse_expr="sidebarCollapsed()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+        </ul>
+      </div>
     </aside>
   </div>
 {% endblock %}
@@ -141,29 +157,6 @@
 {% block content %}
   {{ statuses_data|json_script:"statuses-data" }}
   {{ members_data|json_script:"members-data" }}
-
-  <!-- Mobile preferences dialog -->
-  <dialog
-    id="projects-prefs-dialog"
-    class="modal"
-    x-data="projectsPreferences()"
-  >
-    <div class="modal-box">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-accent"></i>
-        Preferences
-      </h3>
-      <div class="mt-4">{% include "projects/ui/partials/_preferences_content.html" %}</div>
-      <div class="modal-action">
-        <form method="dialog">
-          <button class="btn btn-sm">Close</button>
-        </form>
-      </div>
-    </div>
-    <form method="dialog" class="modal-backdrop">
-      <button>close</button>
-    </form>
-  </dialog>
   {{ labels_data|json_script:"labels-data" }}
   {{ epics_data|json_script:"epics-data" }}
   {{ projects_prefs|json_script:"projects-prefs-data" }}

@@ -30,10 +30,12 @@ class DialogEscapeTests(PlaywrightTestCase):
         self.login_as(user)
         self.page.goto(f"{self.live_server_url}/chat")
 
-        # The "New conversation" trigger is the first row of the chat sidebar.
-        self.page.locator("aside").first.get_by_role(
-            "button", name="New conversation", exact=True
-        ).click()
+        # The "New conversation" trigger is a square icon button in the
+        # sidebar header — no visible label, only a ``title`` attribute.
+        # ``get_by_title`` matches the full string including the shortcut
+        # hint, which is the most stable selector (the lucide icon name
+        # could be swapped without changing UX).
+        self.page.get_by_title("New conversation (Alt+N)").click()
 
         # The dialog is opened via ``showModal()``, which sets the
         # native ``[open]`` attribute. We target it by its unique

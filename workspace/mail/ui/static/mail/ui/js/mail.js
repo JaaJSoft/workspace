@@ -66,7 +66,6 @@ function mailApp() {
 
     // Account context menu
     accountCtx: { open: false, x: 0, y: 0, account: null },
-    accountsMenu: { open: false, x: 0, y: 0 },
 
     // Folder context menu
     folderCtx: { open: false, x: 0, y: 0, folder: null },

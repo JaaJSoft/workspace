@@ -44,12 +44,12 @@ window.moduleSwitcherNav = {
 window.moduleSwitcher = function moduleSwitcher() {
   return {
     tiles() {
-      return Array.from(this.$el.querySelectorAll('#module-switcher-grid a'));
+      return Array.from(this.$root.querySelectorAll('#module-switcher-grid a'));
     },
 
     // The switcher is a focus-driven dropdown: focusing the trigger opens it.
     open() {
-      this.$el.querySelector('label').focus();
+      this.$root.querySelector('label').focus();
     },
 
     isShortcut(event) {
@@ -61,7 +61,7 @@ window.moduleSwitcher = function moduleSwitcher() {
       if (event.altKey || event.ctrlKey || event.metaKey) return;
       const tiles = this.tiles();
       const index = tiles.indexOf(document.activeElement);
-      const onTrigger = document.activeElement === this.$el.querySelector('label');
+      const onTrigger = document.activeElement === this.$root.querySelector('label');
       if (index < 0 && !onTrigger) return;
 
       let target = window.moduleSwitcherNav.nextIndex(index, event.key, tiles.length, MODULE_SWITCHER_COLUMNS);

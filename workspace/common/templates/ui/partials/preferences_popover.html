@@ -29,11 +29,6 @@ Optional context:
 - panel_id: id of the panel, only needed on a page that includes the popover
   twice - the trigger points at it through aria-controls, so the two must not
   collide.
-- placement: "above" opens the panel upward from the include site's container
-  (a sidebar footer); by default it opens below a header.
-- trigger_class, trigger_label: replace the square icon button with a full
-  class list of your own (a sidebar row, for instance) and a text label after
-  the icon.
 {% endcomment %}
 {% firstof panel_id "preferences-panel" as pid %}
 <div
@@ -45,18 +40,14 @@ Optional context:
   <button
     type="button"
     x-ref="prefsTrigger"
-    class="{% if trigger_class %}{{ trigger_class }}{% else %}btn btn-ghost btn-sm btn-square {{ button_class }}{% endif %}"
+    class="btn btn-ghost btn-sm btn-square {{ button_class }}"
     aria-label="Preferences"
     :aria-expanded="prefsOpen"
     aria-controls="{{ pid }}"
     title="Preferences"
     @click="prefsOpen = !prefsOpen"
   >
-    <i
-      data-lucide="sliders-horizontal"
-      class="{% if trigger_label %}w-5 h-5 flex-shrink-0{% else %}w-4 h-4{% endif %}"
-    ></i>
-    {% if trigger_label %}<span>{{ trigger_label }}</span>{% endif %}
+    <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
   </button>
   <div
     x-show="prefsOpen"
@@ -66,7 +57,7 @@ Optional context:
     id="{{ pid }}"
     role="group"
     aria-labelledby="{{ pid }}-title"
-    class="absolute left-3 right-3 {% if placement == "above" %}bottom-full mb-2{% else %}top-full -mt-2{% endif %} z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 max-h-[70vh] overflow-y-auto"
+    class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4"
   >
     <h4
       id="{{ pid }}-title"

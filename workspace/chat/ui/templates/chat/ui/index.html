@@ -63,7 +63,7 @@ be defined before the parser reaches the markup using it, or server-rendered
 
 {% block drawer_sidebar %}
   <div
-    class="drawer-side z-40 h-full"
+    class="drawer-side z-40 h-full !overflow-visible"
     :style="(activeConversation || pendingInitialConvUuid) && isMobile() ? 'display:none!important' : ''"
   >
     <label for="chat-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
@@ -84,6 +84,35 @@ be defined before the parser reaches the markup using it, or server-rendered
            'transition-all duration-300': sidebarMounted,
          }"
     >
+      <!-- Sidebar header -->
+      <div class="border-b border-base-300 py-4 px-3 relative">
+        <div
+          class="flex items-center"
+          :class="collapsed ? 'justify-center' : 'justify-between'"
+        >
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" %}
+          <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
+            {% include "ui/partials/preferences_popover.html" with component="chatPreferences()" content="chat/ui/partials/_preferences_content.html" accent="text-info" button_class="hover:text-info" close_on_event="chat-run-diagnostic" %}
+            {% if ai_enabled %}
+              <button
+                class="btn btn-ghost btn-sm btn-square hover:text-secondary"
+                @click="botFilter = ''; showBotPicker = true"
+                title="New AI Chat"
+              >
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+              </button>
+            {% endif %}
+            <button
+              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-info"
+              @click="showNewConversationDialog()"
+              title="New conversation (Alt+N)"
+            >
+              <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Search + conversation list (shared convSearch scope) -->
       <div
         class="flex-1 min-h-0 flex flex-col"
@@ -96,15 +125,8 @@ be defined before the parser reaches the markup using it, or server-rendered
            },
          }"
       >
-        <div
-          class="px-3 py-2 border-b border-base-300 flex items-center gap-2"
-          :class="collapsed ? 'flex-col' : ''"
-        >
-          <label
-            class="input input-sm input-bordered flex items-center gap-2 grow"
-            x-show="!collapsed"
-            x-cloak
-          >
+        <div class="px-3 pt-3" x-show="!collapsed" x-cloak>
+          <label class="input input-sm input-bordered w-full flex items-center gap-2">
             <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
             <input
               type="search"
@@ -125,33 +147,23 @@ be defined before the parser reaches the markup using it, or server-rendered
               <i data-lucide="x" class="w-3 h-3"></i>
             </button>
           </label>
-          <button
-            type="button"
-            class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-info"
-            @click="showNewConversationDialog()"
-            title="New conversation (Alt+N)"
-            aria-label="New conversation"
-          >
-            <i data-lucide="plus" class="w-4 h-4"></i>
-          </button>
-          {% if ai_enabled %}
-            <button
-              type="button"
-              class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-secondary"
-              @click="botFilter = ''; showBotPicker = true"
-              title="New AI chat"
-              aria-label="New AI chat"
-            >
-              <i data-lucide="sparkles" class="w-4 h-4"></i>
-            </button>
-          {% endif %}
         </div>
         {% comment %}The cloak wrapper stays outside the #conversation-list swap
       target so alpine-ajax refreshes never re-hide the list; "invisible" keeps
         its space reserved while Alpine boots.{% endcomment %}
-        <div class="flex-1 overflow-y-auto pt-2 pb-4 px-3" x-cloak="invisible">
+        <div class="flex-1 overflow-y-auto py-4 px-3" x-cloak="invisible">
           {% include "chat/ui/partials/conversation_list.html" %}
         </div>
+      </div>
+
+      <!-- New chat buttons (visible when collapsed) -->
+      <div class="px-3 pb-2" x-show="collapsed" x-cloak>
+        <ul class="menu p-0">
+          {% if ai_enabled %}
+            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" %}
+          {% endif %}
+          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="info" onclick="showNewConversationDialog()" tooltip="New chat" %}
+        </ul>
       </div>
 
       <!-- Passive call banner. The call itself lives in the dedicated room tab;
@@ -208,7 +220,15 @@ be defined before the parser reaches the markup using it, or server-rendered
         </ul>
       </div>
 
-      {% include "ui/partials/sidebar_footer.html" with color="info" prefs_dialog_id="chat-prefs-dialog" prefs_template="chat/ui/partials/_preferences_content.html" prefs_data="chatPreferences()" close_on_event="chat-run-diagnostic" %}
+      <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
+      <div class="border-t border-base-300 py-4 px-3">
+        <ul class="menu p-0 hidden lg:block">
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+        </ul>
+        <ul class="menu p-0 lg:hidden">
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
+        </ul>
+      </div>
     </aside>
   </div>
 

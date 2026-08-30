@@ -23,7 +23,7 @@
 {% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full">
+  <div class="drawer-side z-40 h-full !overflow-visible">
     <label for="mail-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     <!-- Sidebar -->
@@ -31,37 +31,35 @@
       class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14"
       :class="collapsed ? 'w-16' : 'w-72'"
     >
-      <!-- Accounts menu and compose -->
-      <div
-        class="px-3 py-2 border-b border-base-300 flex items-center gap-2"
-        :class="collapsed ? 'flex-col' : ''"
-      >
-        <button
-          type="button"
-          class="btn btn-ghost border border-base-300 bg-base-100 btn-sm btn-square hover:text-warning"
-          @click.stop="openAccountsMenu($event)"
-          :aria-expanded="accountsMenu.open"
-          aria-controls="accounts-menu"
-          title="Accounts"
-          aria-label="Accounts"
+      <!-- Sidebar header -->
+      <div class="lg:border-b border-base-300 py-4 px-3 relative">
+        <div
+          class="flex items-center"
+          :class="collapsed ? 'justify-center' : 'justify-between'"
         >
-          <i data-lucide="at-sign" class="w-4 h-4"></i>
-        </button>
-        <button
-          type="button"
-          class="btn btn-ghost border border-base-300 bg-base-100 btn-sm gap-1.5 hover:text-warning"
-          :class="collapsed ? 'btn-square' : 'flex-1'"
-          @click="showCompose()"
-          title="Compose (C)"
-          aria-label="Compose"
-        >
-          <i data-lucide="square-pen" class="w-4 h-4"></i>
-          <span x-show="!collapsed">Compose</span>
-        </button>
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" %}
+          <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
+            {% include "ui/partials/preferences_popover.html" with component="mailPreferences()" content="mail/ui/partials/_preferences_content.html" accent="text-warning" button_class="hover:text-warning" %}
+            <button
+              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning"
+              @click="showCompose()"
+              title="Compose (C)"
+            >
+              <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Folder list -->
       <div class="flex-1 overflow-y-auto py-2 px-3">{% include "mail/ui/partials/folder_list.html" %}</div>
+
+      <!-- Compose button (collapsed) -->
+      <div class="px-3 pb-2" x-show="collapsed" x-cloak>
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="warning" onclick="showCompose()" tooltip="Compose" %}
+        </ul>
+      </div>
 
       <!-- Help button -->
       <div class="px-3 pb-2">
@@ -70,7 +68,15 @@
         </ul>
       </div>
 
-      {% include "ui/partials/sidebar_footer.html" with color="warning" prefs_dialog_id="mail-prefs-dialog" prefs_template="mail/ui/partials/_preferences_content.html" prefs_data="mailPreferences()" %}
+      <!-- Bottom action: settings on mobile, collapse on desktop -->
+      <div class="border-t border-base-300 py-4 px-3">
+        <ul class="menu p-0 hidden lg:block">
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="warning" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+        </ul>
+        <ul class="menu p-0 lg:hidden">
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="warning" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" %}
+        </ul>
+      </div>
     </aside>
   </div>
 {% endblock %}
@@ -132,9 +138,6 @@
 
   <!-- Move-messages-to-a-folder dialog (right-click / bulk toolbar) -->
   {% include "mail/ui/partials/move_dialog.html" %}
-
-  <!-- Sidebar accounts menu -->
-  {% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/accounts_menu.html" open="accountsMenu.open" close="accountsMenu.open = false" x="accountsMenu.x" y="accountsMenu.y" width="w-56" id="accounts-menu" %}
 
   <!-- Account context menu -->
   {% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/account_context_menu.html" open="accountCtx.open" close="accountCtx.open = false" x="accountCtx.x" y="accountCtx.y" width="w-44" id="account-context-menu" %}

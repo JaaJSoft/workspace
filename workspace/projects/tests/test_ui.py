@@ -91,11 +91,6 @@ class OverviewViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
             str(self.project.uuid),
         )
 
-    def test_renders_preferences_dialog(self):
-        self.client.force_login(self.member)
-        response = self.client.get(f"/projects/{self.project.uuid}")
-        self.assertContains(response, 'id="projects-prefs-dialog"')
-
     def test_partial_returns_content_wrapper(self):
         self.client.force_login(self.member)
         response = self.client.get(

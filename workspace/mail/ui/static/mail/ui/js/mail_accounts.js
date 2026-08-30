@@ -255,37 +255,6 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       }
     },
 
-    // ----- Sidebar accounts menu -----
-    // Opens below its button, on the same panel as the right-click menus. A
-    // click on the button while open closes it (the button stops propagation,
-    // so the panel's click-outside never sees it).
-    openAccountsMenu(event) {
-      if (this.accountsMenu.open) {
-        this.accountsMenu.open = false;
-        return;
-      }
-      const menu = document.getElementById('accounts-menu');
-      if (!menu) return;
-      const anchor = event.currentTarget.getBoundingClientRect();
-      this.accountsMenu.open = true;
-      this.$nextTick(() => {
-        const rect = menu.getBoundingClientRect();
-        let x = anchor.left;
-        let y = anchor.bottom + 4;
-        if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
-        if (y + rect.height > window.innerHeight) y = anchor.top - rect.height - 4;
-        this.accountsMenu.x = x;
-        this.accountsMenu.y = y;
-        window.LucideUtils?.inElement(menu);
-      });
-    },
-
-    accountsMenuAction(action, account) {
-      this.accountsMenu.open = false;
-      if (action === 'add') this.showAddAccount();
-      else if (action === 'edit' && account) this.showEditAccount(account);
-    },
-
     // ----- Account context menu -----
     openAccountContextMenu(event, account) {
       event.preventDefault();

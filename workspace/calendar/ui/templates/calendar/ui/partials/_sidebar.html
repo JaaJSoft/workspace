@@ -1,8 +1,8 @@
-{# Calendar drawer sidebar: navigation controls, calendar lists (owned/external/subscribed), polls/help, shared footer. #}
+{# Calendar drawer sidebar: header, navigation controls, calendar lists (owned/external/subscribed), polls/help/collapse buttons. #}
 {# Included from index.html inside the {% block drawer_sidebar %} block. #}
 {{ calendars|json_script:"calendars-data" }}
 {{ prefs|json_script:"calendar-prefs-data" }}
-<div class="drawer-side z-40 h-full">
+<div class="drawer-side z-40 h-full !overflow-visible">
   <label
     for="calendar-drawer"
     aria-label="close sidebar"
@@ -14,10 +14,34 @@
     :class="sidebarCollapsed() ? 'w-16' : 'w-72'"
   >
 
+    <!-- Header -->
+    <div class="lg:border-b border-base-300 py-4 px-3 relative">
+      <div
+        class="flex items-center"
+        :class="sidebarCollapsed() ? 'justify-center' : 'justify-between'"
+      >
+        {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" %}
+        <div
+          x-show="!sidebarCollapsed()"
+          x-transition
+          class="flex items-center gap-0.5"
+        >
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm hover:text-accent"
+            @click="calendarToday()"
+          >
+            Today
+          </button>
+          {% include "ui/partials/preferences_popover.html" with content="calendar/ui/partials/_preferences_content.html" accent="text-accent" button_class="hover:text-accent" %}
+        </div>
+      </div>
+    </div>
+
     <!-- View controls (hidden when collapsed) -->
     <div
       class="border-b border-base-300 overflow-hidden transition-all duration-200"
-      :class="sidebarCollapsed() ? 'max-h-0 py-0 opacity-0 border-b-0' : 'max-h-40 opacity-100 pt-2 pb-3 px-3'"
+      :class="sidebarCollapsed() ? 'max-h-0 py-0 opacity-0 border-b-0' : 'max-h-40 opacity-100 py-3 px-3'"
     >
       <!-- Navigation: prev / period title / next -->
       <div class="flex items-center justify-between mb-2">
@@ -30,7 +54,7 @@
           <i data-lucide="chevron-left" class="w-4 h-4"></i>
         </button>
         <span
-          class="flex-1 text-center text-sm font-semibold text-base-content truncate"
+          class="text-sm font-semibold text-base-content truncate"
           x-text="currentTitle"
         ></span>
         <button
@@ -40,14 +64,6 @@
           title="Next"
         >
           <i data-lucide="chevron-right" class="w-4 h-4"></i>
-        </button>
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs ml-1"
-          @click="calendarToday()"
-          title="Go to today"
-        >
-          Today
         </button>
       </div>
       <!-- View mode -->
@@ -367,6 +383,14 @@
       </ul>
     </div>
 
-    {% include "ui/partials/sidebar_footer.html" with color="accent" collapse_expr="sidebarCollapsed()" prefs_dialog_id="calendar-prefs-dialog" prefs_template="calendar/ui/partials/_preferences_content.html" %}
+    <!-- Bottom action: settings on mobile, collapse on desktop -->
+    <div class="border-t border-base-300 py-4 px-3">
+      <ul class="menu p-0 hidden lg:block">
+        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" %}
+      </ul>
+      <ul class="menu p-0 lg:hidden">
+        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="accent" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" %}
+      </ul>
+    </div>
   </aside>
 </div>

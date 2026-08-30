@@ -5,8 +5,8 @@ const { loadScript } = require('../../../common/tests/js/loader');
 const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/call.js');
 
 test('shouldOffer is true only for a different peer', () => {
-  assert.equal(ctx.chatCallShouldOffer(1, 2), true);
-  assert.equal(ctx.chatCallShouldOffer(2, 2), false);
+  assert.equal(ctx.chatCallShouldOffer('u:1', 'u:2'), true);
+  assert.equal(ctx.chatCallShouldOffer('u:2', 'u:2'), false);
 });
 
 test('mergeMediaState overlays patch onto current', () => {
@@ -16,12 +16,12 @@ test('mergeMediaState overlays patch onto current', () => {
   assert.deepStrictEqual({ ...added }, { audio: true, screen: true });
 });
 
-test('otherParticipantIds excludes self', () => {
+test('otherParticipantIds excludes self and returns keys', () => {
   const ids = ctx.chatCallOtherParticipantIds(
-    [{ user_id: 1 }, { user_id: 2 }, { user_id: 3 }],
-    2,
+    [{ participant_key: 'u:1' }, { participant_key: 'u:2' }, { participant_key: 'g:abc' }],
+    'u:2',
   );
-  assert.deepStrictEqual(Array.from(ids), [1, 3]);
+  assert.deepStrictEqual(Array.from(ids), ['u:1', 'g:abc']);
 });
 
 test('chatCallEventForCurrentSession returns true for matching session_id', () => {
@@ -67,12 +67,30 @@ test('chatCallMediaState maps mic/camera/screen flags', () => {
   assert.deepEqual(ctx.chatCallMediaState(false, false, true), { audio: true, video: false, screen: true });
 });
 
-test('shouldDriveIceRestart picks the lower-id peer as the single driver', () => {
+test('shouldDriveIceRestart picks the lower-key peer as the single driver', () => {
   // Deterministic glare avoidance for mid-call restarts: both peers are
-  // existing participants, so the lower user_id drives. Exactly one side does.
-  assert.equal(ctx.chatCallShouldDriveIceRestart(1, 2), true);
-  assert.equal(ctx.chatCallShouldDriveIceRestart(2, 1), false);
-  assert.equal(ctx.chatCallShouldDriveIceRestart(2, 2), false);
+  // existing participants, so the lower participant key drives. Exactly one side does.
+  assert.equal(ctx.chatCallShouldDriveIceRestart('u:1', 'u:2'), true);
+  assert.equal(ctx.chatCallShouldDriveIceRestart('u:2', 'u:1'), false);
+  assert.equal(ctx.chatCallShouldDriveIceRestart('u:2', 'u:2'), false);
+});
+
+test('exactly one side drives an ICE restart for any key pair', () => {
+  const pairs = [
+    ['u:1', 'u:2'],
+    ['u:10', 'u:3'],
+    ['u:7', 'g:abc'],
+    ['g:abc', 'g:abd'],
+  ];
+  for (const [a, b] of pairs) {
+    const aDrives = ctx.chatCallShouldDriveIceRestart(a, b);
+    const bDrives = ctx.chatCallShouldDriveIceRestart(b, a);
+    assert.equal(aDrives !== bDrives, true, `exactly one of ${a}/${b} must drive`);
+  }
+});
+
+test('a peer never drives an ICE restart against itself', () => {
+  assert.equal(ctx.chatCallShouldDriveIceRestart('u:5', 'u:5'), false);
 });
 
 test('iceRestartDelay applies grace on disconnected and backoff by attempt', () => {
@@ -98,24 +116,24 @@ function scheduleHarness() {
     clearTimeout: (id) => { cleared.push(id); },
   });
   const m = callCtx.chatCallMixin();
-  m.currentUserId = 1;             // peer 2 -> currentUserId < peerId -> we drive
+  m.currentParticipantKey = 'u:1'; // peer 'u:2' -> currentParticipantKey < peerKey -> we drive
   m._performIceRestart = () => {}; // isolate scheduling from the restart itself
-  m._peers = { 2: { pc: { iceConnectionState: 'disconnected' }, iceRestartAttempts: 0, iceRestartTimer: null } };
+  m._peers = { 'u:2': { pc: { iceConnectionState: 'disconnected' }, iceRestartAttempts: 0, iceRestartTimer: null } };
   return { m, timers, cleared };
 }
 
 test('scheduleIceRestart: failed cancels a pending disconnected grace timer and restarts immediately', () => {
   const { m, timers, cleared } = scheduleHarness();
   // disconnected -> a 3s grace timer is armed.
-  m._scheduleIceRestart(2);
+  m._scheduleIceRestart('u:2');
   assert.equal(timers.length, 1);
   assert.equal(timers[0].delay, 3000);
-  const graceId = m._peers[2].iceRestartTimer;
+  const graceId = m._peers['u:2'].iceRestartTimer;
 
   // The connection then fails: the grace timer must be cancelled and an
   // immediate (0ms) restart scheduled instead of waiting out the grace.
-  m._peers[2].pc.iceConnectionState = 'failed';
-  m._scheduleIceRestart(2);
+  m._peers['u:2'].pc.iceConnectionState = 'failed';
+  m._scheduleIceRestart('u:2');
   assert.deepStrictEqual(cleared, [graceId]);
   assert.equal(timers.length, 2);
   assert.equal(timers[1].delay, 0);
@@ -123,11 +141,11 @@ test('scheduleIceRestart: failed cancels a pending disconnected grace timer and 
 
 test('scheduleIceRestart: a repeated disconnected keeps the existing timer (debounce)', () => {
   const { m, timers, cleared } = scheduleHarness();
-  m._scheduleIceRestart(2);
-  const firstId = m._peers[2].iceRestartTimer;
+  m._scheduleIceRestart('u:2');
+  const firstId = m._peers['u:2'].iceRestartTimer;
   // Still disconnected: do not stack a second timer.
-  m._scheduleIceRestart(2);
+  m._scheduleIceRestart('u:2');
   assert.equal(timers.length, 1);
   assert.deepStrictEqual(cleared, []);
-  assert.equal(m._peers[2].iceRestartTimer, firstId);
+  assert.equal(m._peers['u:2'].iceRestartTimer, firstId);
 });

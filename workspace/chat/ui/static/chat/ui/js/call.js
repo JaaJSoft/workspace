@@ -23,10 +23,10 @@ function chatCallMediaState(isMuted, cameraOn, sharing) {
   return { audio: !isMuted, video: !!cameraOn, screen: !!sharing };
 }
 
-function chatCallOtherParticipantIds(participants, selfId) {
+function chatCallOtherParticipantIds(participants, selfKey) {
   return (participants || [])
-    .map((p) => p.user_id)
-    .filter((id) => id !== selfId);
+    .map((p) => p.participant_key)
+    .filter((key) => key !== selfKey);
 }
 
 function chatCallEventForCurrentSession(detail, callSession) {
@@ -36,13 +36,13 @@ function chatCallEventForCurrentSession(detail, callSession) {
   return !!callSession && !!detail && detail.session_id === callSession.session_id;
 }
 
-function chatCallShouldDriveIceRestart(selfId, peerId) {
+function chatCallShouldDriveIceRestart(selfKey, peerKey) {
   // Glare avoidance for a mid-call ICE restart. At join time the existing
   // participant offers to the newcomer (chatCallShouldOffer), but on failure
   // both peers are existing participants, so that rule can't pick a side. The
-  // lower user_id drives the restart offer; the other side only answers. Exactly
-  // one side ever initiates, so the two never offer at once.
-  return selfId < peerId;
+  // lower participant key drives the restart offer; the other side only
+  // answers. Keys are totally ordered, so exactly one side ever initiates.
+  return selfKey < peerKey;
 }
 
 function chatCallIceRestartDelay(state, attempts) {
@@ -72,16 +72,17 @@ window.chatCallMixin = function chatCallMixin() {
   return {
     // -- Call state ------------------------------------------
     callSession: null,           // serialized state of the active call, or null
-    callParticipants: [],        // [{user_id, display_name, media_state}]
+    currentParticipantKey: null, // set by the host component alongside currentUserId
+    callParticipants: [],        // [{participant_key, user_id, display_name, media_state}]
     inCall: false,               // am I currently joined?
     isMuted: false,
     joiningCall: false,
     callRole: 'owner',          // 'owner' (room tab) | 'observer' (main tab)
-    _peers: {},                  // user_id -> { pc, audioEl, remoteStream, videoSender }
+    _peers: {},                  // participant_key -> { pc, audioEl, remoteStream, videoSender }
     _localStream: null,
     cameraOn: false,
     sharing: false,
-    remoteStreams: {},           // user_id -> MediaStream (audio+video)
+    remoteStreams: {},           // participant_key -> MediaStream (audio+video)
     localVideoStream: null,      // MediaStream wrapping the current outgoing video track
     _localVideoTrack: null,      // the live camera or screen track, or null
     _videoRequestToken: 0,       // bumped per capture request and on teardown to cancel stale awaits
@@ -175,7 +176,7 @@ window.chatCallMixin = function chatCallMixin() {
 
       // As the newcomer, wait for existing participants to offer; just create
       // peer slots for everyone already here.
-      for (const id of window.chatCallOtherParticipantIds(this.callParticipants, this.currentUserId)) {
+      for (const id of window.chatCallOtherParticipantIds(this.callParticipants, this.currentParticipantKey)) {
         this._ensurePeer(id, /* initiateOffer */ false);
       }
       this._startHeartbeat();
@@ -200,7 +201,7 @@ window.chatCallMixin = function chatCallMixin() {
       const convId = this.callSession && this.callSession.conversation_id;
       this._playCallCue('leave');
       this._stopHeartbeat();
-      for (const id of Object.keys(this._peers)) this._closePeer(Number(id));
+      for (const id of Object.keys(this._peers)) this._closePeer(id);
       this._teardownLocal();
       this.inCall = false;
       this.isMuted = false;
@@ -472,9 +473,9 @@ window.chatCallMixin = function chatCallMixin() {
     _scheduleIceRestart(peerId) {
       const peer = this._peers[peerId];
       if (!peer) return;
-      // Only the lower-id side initiates; the other side waits for the incoming
+      // Only the lower-key side initiates; the other side waits for the incoming
       // restart offer and answers it through the existing onCallSignal path.
-      if (!window.chatCallShouldDriveIceRestart(this.currentUserId, peerId)) return;
+      if (!window.chatCallShouldDriveIceRestart(this.currentParticipantKey, peerId)) return;
       if (peer.iceRestartAttempts >= MAX_ICE_RESTARTS) return; // gave up; server reap takes over
       const state = peer.pc.iceConnectionState;
       if (peer.iceRestartTimer) {
@@ -521,13 +522,13 @@ window.chatCallMixin = function chatCallMixin() {
       delete this._peers[peerId];
     },
 
-    async _sendSignal(toUserId, signal) {
+    async _sendSignal(toKey, signal) {
       if (!this.activeConversation) return;
       try {
         await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call/signal`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
-          body: JSON.stringify({ to_user_id: toUserId, signal }),
+          body: JSON.stringify({ to_participant: toKey, signal }),
         });
       } catch (e) { /* transient */ }
     },
@@ -553,43 +554,48 @@ window.chatCallMixin = function chatCallMixin() {
     onCallParticipantJoined(detail) {
       if (!this.inCall) { this._refreshCallState(); return; }
       if (!window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      const id = detail.user_id;
-      if (id === this.currentUserId) return;
+      const key = detail.participant_key;
+      if (key === this.currentParticipantKey) return;
       this._playCallCue('peer-join');
-      if (!this.callParticipants.find((p) => p.user_id === id)) {
-        this.callParticipants.push({ user_id: id, display_name: detail.display_name, media_state: detail.media_state });
+      if (!this.callParticipants.find((p) => p.participant_key === key)) {
+        this.callParticipants.push({
+          participant_key: key,
+          user_id: detail.user_id,
+          display_name: detail.display_name,
+          media_state: detail.media_state,
+        });
       }
       // Existing participant (me) offers to the newcomer.
-      if (window.chatCallShouldOffer(this.currentUserId, id)) {
-        this._ensurePeer(id, /* initiateOffer */ true);
+      if (window.chatCallShouldOffer(this.currentParticipantKey, key)) {
+        this._ensurePeer(key, /* initiateOffer */ true);
       }
     },
     onCallParticipantLeft(detail) {
       if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      if (this.inCall && detail.user_id !== this.currentUserId) {
+      if (this.inCall && detail.participant_key !== this.currentParticipantKey) {
         this._playCallCue('peer-leave');
       }
-      this.callParticipants = this.callParticipants.filter((p) => p.user_id !== detail.user_id);
-      this._closePeer(detail.user_id);
+      this.callParticipants = this.callParticipants.filter((p) => p.participant_key !== detail.participant_key);
+      this._closePeer(detail.participant_key);
       if (!this.inCall) this._refreshCallState();
     },
     onCallParticipantUpdated(detail) {
       if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      const p = this.callParticipants.find((x) => x.user_id === detail.user_id);
+      const p = this.callParticipants.find((x) => x.participant_key === detail.participant_key);
       if (p) p.media_state = detail.media_state;
     },
     async onCallSignal(detail) {
       if (!this.inCall) return;
-      const fromId = detail.from_user_id;
+      const fromKey = detail.from_participant;
       const signal = detail.signal || {};
-      const peer = this._ensurePeer(fromId, /* initiateOffer */ false);
+      const peer = this._ensurePeer(fromKey, /* initiateOffer */ false);
       const pc = peer.pc;
       try {
         if (signal.type === 'offer') {
           await pc.setRemoteDescription(signal.sdp);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          this._sendSignal(fromId, { type: 'answer', sdp: pc.localDescription });
+          this._sendSignal(fromKey, { type: 'answer', sdp: pc.localDescription });
         } else if (signal.type === 'answer') {
           await pc.setRemoteDescription(signal.sdp);
         } else if (signal.type === 'ice' && signal.candidate) {

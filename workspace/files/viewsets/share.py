@@ -221,8 +221,8 @@ class ShareMixin:
                 return None
             try:
                 return int(raw)
-            except ValueError, TypeError:
-                raise ValidationError({field: "Must be a whole number."})
+            except (ValueError, TypeError) as exc:
+                raise ValidationError({field: "Must be a whole number."}) from exc
 
         try:
             link = service_create_share_link(

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
@@ -132,6 +134,62 @@ class BuildClassifyMessagesTests(TestCase):
         ]
         result = build_classify_messages(emails, ["Urgent"])
         self.assertIn("untrusted-content", result[1]["content"])
+
+    def test_metadata_fields_render_on_the_email_line(self):
+        emails = [
+            {
+                "subject": "Invoice 42",
+                "from_name": "Billing",
+                "from_email": "billing@acme.com",
+                "snippet": "Please find attached",
+                "reply_to": "no-reply@lists.acme.com",
+                "recipient_role": "cc",
+                "recipient_count": 12,
+                "date": datetime(2026, 8, 30, 9, 12, tzinfo=UTC),
+                "folder": "Inbox",
+                "has_attachments": True,
+                "has_calendar_event": True,
+                "is_reply": True,
+            },
+        ]
+        line = build_classify_messages(emails, ["Urgent"])[1]["content"]
+        self.assertIn("Reply-To: no-reply@lists.acme.com", line)
+        self.assertIn("Recipients: cc (12)", line)
+        self.assertIn("Date: 2026-08-30T09:12+00:00", line)
+        self.assertIn("Folder: Inbox", line)
+        self.assertIn("Flags: attachment, calendar invite, reply in a thread", line)
+
+    def test_optional_metadata_is_omitted_when_absent(self):
+        emails = [
+            {
+                "subject": "Test",
+                "from_name": "Alice",
+                "from_email": "a@b.com",
+                "snippet": "Hello",
+            },
+        ]
+        line = build_classify_messages(emails, ["Urgent"])[1]["content"]
+        self.assertIn(
+            "[1] From: Alice <a@b.com> | Subject: Test | Preview: Hello", line
+        )
+
+    def test_reply_to_is_dropped_when_it_points_at_the_sender(self):
+        emails = [
+            {
+                "subject": "Test",
+                "from_name": "Alice",
+                "from_email": "a@b.com",
+                "snippet": "",
+                "reply_to": "Alice <A@B.com>",
+            },
+        ]
+        line = build_classify_messages(emails, ["Urgent"])[1]["content"]
+        self.assertNotIn("Reply-To", line)
+
+    def test_system_prompt_explains_the_recipient_roles(self):
+        system = build_classify_messages([], ["Urgent"])[0]["content"]
+        for role in ("direct", "cc", "bulk"):
+            self.assertIn(role, system)
 
     def test_empty_labels_list(self):
         emails = [

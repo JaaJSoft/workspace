@@ -194,20 +194,59 @@ def _classify_message_queryset(owner, message_uuids):
             # which does not load deleted_at.
             deleted_at__isnull=True,
         )
-        .select_related("folder")
+        .select_related("folder", "account")
         .only(
             "uuid",
             "subject",
             "from_name",
             "from_email",
             "snippet",
+            "reply_to",
+            "to_addresses",
+            "cc_addresses",
+            "date",
+            "in_reply_to",
+            "has_attachments",
+            "has_calendar_event",
             "is_read",
             "account_id",
+            "account__email",
             "folder_id",
+            "folder__name",
+            "folder__display_name",
             "folder__folder_type",
             "folder__is_hidden",
         )
     )
+
+
+def _classify_payload(message, account_email, user_tz):
+    """The message fields handed to the classifier prompt.
+
+    Beyond sender and subject, the classifier gets the metadata that separates a
+    personal message from a broadcast - how the owner was addressed, a Reply-To
+    pointing elsewhere, the folder the server filed it in, attachments and
+    whether it continues a thread.
+    """
+    from workspace.mail.services.addresses import recipient_summary
+
+    role, recipient_count = recipient_summary(
+        account_email, message.to_addresses, message.cc_addresses
+    )
+    return {
+        "subject": message.subject or "",
+        "from_name": message.from_name,
+        "from_email": message.from_email,
+        "snippet": message.snippet or "",
+        "reply_to": message.reply_to,
+        "recipient_role": role,
+        "recipient_count": recipient_count,
+        "date": message.date.astimezone(user_tz) if message.date else None,
+        "folder": message.folder.display_name or message.folder.name,
+        "has_attachments": message.has_attachments,
+        "has_calendar_event": message.has_calendar_event,
+        "is_reply": bool(message.in_reply_to),
+    }
 
 
 @shared_task(name="ai.classify_mail", bind=True, max_retries=0)
@@ -222,6 +261,7 @@ def classify_mail_messages(self, task_id: str):
     from workspace.ai.models import AITask
     from workspace.ai.prompts.mail import build_classify_messages
     from workspace.mail.models import MailLabel, MailMessageLabel
+    from workspace.users.services.settings import get_user_timezone
 
     try:
         with ai_task_lifecycle(task_id, log_label="Classify") as ai_task:
@@ -252,7 +292,10 @@ def classify_mail_messages(self, task_id: str):
             # not leave half the messages partially labelled.
             all_links = []
 
+            user_tz = get_user_timezone(ai_task.owner)
+
             for account_id, account_msgs in msgs_by_account.items():
+                account_email = account_msgs[0].account.email
                 account_labels = list(MailLabel.objects.filter(account_id=account_id))
                 label_names = [lbl.name for lbl in account_labels]
                 label_by_lower = {lbl.name.lower(): lbl for lbl in account_labels}
@@ -260,16 +303,9 @@ def classify_mail_messages(self, task_id: str):
                 for batch in batched(account_msgs, CLASSIFY_BATCH_SIZE, strict=False):
                     uuid_index = {i + 1: m for i, m in enumerate(batch)}
 
-                    emails = []
-                    for m in batch:
-                        emails.append(
-                            {
-                                "subject": m.subject or "",
-                                "from_name": m.from_name,
-                                "from_email": m.from_email,
-                                "snippet": m.snippet or "",
-                            }
-                        )
+                    emails = [
+                        _classify_payload(m, account_email, user_tz) for m in batch
+                    ]
 
                     messages = build_classify_messages(emails, label_names)
                     parsed, result = call_llm_structured(

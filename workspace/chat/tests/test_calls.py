@@ -14,6 +14,7 @@ from workspace.chat.models import (
 )
 from workspace.chat.services import call_signaling as sig
 from workspace.chat.services import calls
+from workspace.chat.services.participant_keys import user_key
 
 
 class DurationFormatTests(SimpleTestCase):
@@ -103,10 +104,41 @@ class LifecycleTests(TestCase):
 
     def test_join_broadcasts_participant_joined_to_members(self):
         calls.start_or_join_call(self.a, self.conv.uuid)
-        sig.drain_events(f"u:{self.a.id}")  # clear call_started
+        sig.drain_events(user_key(self.a.id))  # clear call_started
         calls.start_or_join_call(self.b, self.conv.uuid)
-        events = [e["event"] for e in sig.drain_events(f"u:{self.a.id}")]
+        envelopes = sig.drain_events(user_key(self.a.id))
+        events = [e["event"] for e in envelopes]
         self.assertIn("call_participant_joined", events)
+        joined = next(e for e in envelopes if e["event"] == "call_participant_joined")
+        self.assertEqual(joined["data"]["participant_key"], user_key(self.b.id))
+        self.assertEqual(joined["data"]["user_id"], self.b.id)
+        self.assertEqual(joined["data"]["display_name"], self.b.username)
+
+    def test_leave_broadcasts_participant_left_with_key(self):
+        calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.start_or_join_call(self.b, self.conv.uuid)
+        sig.drain_events(
+            user_key(self.a.id)
+        )  # clear call_started/call_participant_joined
+        calls.leave_call(self.b, self.conv.uuid)
+        envelopes = sig.drain_events(user_key(self.a.id))
+        left = next(e for e in envelopes if e["event"] == "call_participant_left")
+        self.assertEqual(left["data"]["participant_key"], user_key(self.b.id))
+
+    def test_broadcast_exclude_key_skips_only_that_participant(self):
+        calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.start_or_join_call(self.b, self.conv.uuid)
+        sig.drain_events(user_key(self.a.id))
+        sig.drain_events(user_key(self.b.id))
+        calls._broadcast(
+            self.conv.uuid,
+            "call_participant_left",
+            {"probe": True},
+            exclude_key=user_key(self.a.id),
+        )
+        self.assertEqual(sig.drain_events(user_key(self.a.id)), [])
+        events = [e["event"] for e in sig.drain_events(user_key(self.b.id))]
+        self.assertIn("call_participant_left", events)
 
     def test_rejoin_reactivates_left_participant(self):
         session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)

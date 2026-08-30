@@ -25,6 +25,10 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
     vaultMenu: { open: false, vault: null, x: 0, y: 0 },
     vaultDialog: null,
     newVault: null,
+    // The uuid a create attempt minted, kept so a retry of that same attempt
+    // reuses it and a 409 can prove the lost answer had landed. It belongs to
+    // the draft that produced it and never outlives it: handed to a later
+    // draft, the 409 would open the earlier vault under a name just typed.
     pendingVaultUuid: null,
     icons: [],
     colors: [],
@@ -287,9 +291,9 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
         const created = await window.vaultReader.readVault(window.vaultSession, row);
         if (draft.favorite) await this.favouriteAfterCreate(created);
         // Three awaits sit between the check at the top of this function and
-        // here, so a lock can have emptied the list already. pendingVaultUuid
-        // survives on purpose - the vault was written, and a retry after
-        // re-unlocking must reuse it.
+        // here, so a lock can have emptied the list already. Nothing carries
+        // over it: the lock drops the draft with the keys, and the vault was
+        // written, so the reload after the next unlock is what shows it.
         if (!window.vaultSession.isUnlocked()) return;
         this.closeCreateDialog();
         // Straight into it: a vault created and then not opened would leave
@@ -298,8 +302,8 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
         await this.load();
       } catch (err) {
         // The vault is written; only the local half was cut short. Saying it
-        // could not be created would be false, and the retry after the next
-        // unlock reuses pendingVaultUuid to find it.
+        // could not be created would be false, and the reload that follows the
+        // next unlock is where it turns up.
         if (err && err.reason === 'locked') return;
         if (err.status === 409) {
           // The 409 says the UUID is taken, not that it is taken by us: it

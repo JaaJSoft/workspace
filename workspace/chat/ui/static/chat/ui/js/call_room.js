@@ -12,13 +12,13 @@ function chatCallRoomTabName(conversationId) {
   return `chat-room-${conversationId}`;
 }
 
-function chatCallBannerAction(callActive, participants, currentUserId) {
+function chatCallBannerAction(callActive, participants, selfKey) {
   // What the main (observer) tab should offer for an ongoing call:
   //   null     -> no active call, hide the banner
   //   'return' -> I am a participant, reactivate my room tab
   //   'join'   -> a call is running but I am not in it
   if (!callActive) return null;
-  const inIt = (participants || []).some((p) => p.user_id === currentUserId);
+  const inIt = (participants || []).some((p) => p.participant_key === selfKey);
   return inIt ? 'return' : 'join';
 }
 
@@ -40,18 +40,18 @@ function chatCallAutoPinTarget(participants, pinnedManually) {
   const sharer = (participants || []).find(
     (p) => p && p.media_state && p.media_state.screen === true,
   );
-  return sharer ? sharer.user_id : null;
+  return sharer ? sharer.participant_key : null;
 }
 
-function chatCallSpotlightTarget(participants, pinnedUserId, pinnedManually) {
+function chatCallSpotlightTarget(participants, pinnedKey, pinnedManually) {
   // Which participant to show large. A manual pin wins while that participant is
   // still in the call; otherwise the spotlight is derived from live state - the
   // active screen sharer, or the equal grid (null). Deriving instead of latching
   // a one-off event means a sharer is spotlighted even for someone who joined
   // after the share began, and the spotlight clears the moment sharing stops.
   const list = participants || [];
-  if (pinnedManually && pinnedUserId != null) {
-    return list.some((p) => p.user_id === pinnedUserId) ? pinnedUserId : null;
+  if (pinnedManually && pinnedKey != null) {
+    return list.some((p) => p.participant_key === pinnedKey) ? pinnedKey : null;
   }
   return chatCallAutoPinTarget(list, pinnedManually);
 }

@@ -250,7 +250,7 @@ window.chatCallMixin = function chatCallMixin() {
       return window.chatCallBannerAction(
         !!this.callSession,
         this.callParticipants,
-        this.currentUserId,
+        this.currentParticipantKey,
       );
     },
 

@@ -178,13 +178,18 @@ class Event(models.Model):
         return self.title
 
     def save(self, *args, **kwargs):
-        # `recurrence_frequency` is still the authoritative source while
-        # `recurrence_rule` is blank, so every existing read of `is_recurring`
-        # (a property until this column replaced it) keeps seeing the answer
-        # it always did. A caller that populates `recurrence_rule` (Task 5's
-        # `apply_rule`) takes over `is_recurring` and this stops touching it.
+        # Mirrors `is_recurring` from the legacy `recurrence_frequency` column
+        # for every row that has no rule text yet, so existing reads of
+        # `is_recurring` (a property until this column replaced it) keep
+        # seeing the answer they always did. Scheduled for deletion in the
+        # task that drops the legacy columns.
         if not self.recurrence_rule:
-            self.is_recurring = self.recurrence_frequency is not None
+            mirrored = self.recurrence_frequency is not None
+            if mirrored != self.is_recurring:
+                self.is_recurring = mirrored
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    kwargs["update_fields"] = {*update_fields, "is_recurring"}
         super().save(*args, **kwargs)
 
     @property

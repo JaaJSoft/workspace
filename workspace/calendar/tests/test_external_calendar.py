@@ -265,12 +265,13 @@ class SyncExternalCalendarTests(TestCase):
         sync_external_calendar(self.ext)
 
         event = Event.objects.get(ical_uid="ext-recurring@example.com")
-        self.assertEqual(event.recurrence_frequency, "daily")
-        self.assertEqual(event.recurrence_interval, 1)
-        # COUNT=10 daily from April 1 → last occurrence April 10
-        self.assertIsNotNone(event.recurrence_end)
-        self.assertEqual(event.recurrence_end.day, 10)
-        self.assertEqual(event.recurrence_end.month, 4)
+        self.assertTrue(event.is_recurring)
+        self.assertIn("FREQ=DAILY", event.recurrence_rule)
+        self.assertIn("COUNT=10", event.recurrence_rule)
+        # COUNT=10 daily from April 1 → last occurrence ends April 10
+        self.assertIsNotNone(event.recurrence_until)
+        self.assertEqual(event.recurrence_until.day, 10)
+        self.assertEqual(event.recurrence_until.month, 4)
 
     @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_parses_organizer_email(self, mock_httpx):

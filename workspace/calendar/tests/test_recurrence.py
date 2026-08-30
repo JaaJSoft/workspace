@@ -337,12 +337,15 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
         data.update(overrides)
         return data
 
-    def test_create_recurring_event(self):
+    def test_create_ignores_legacy_recurrence_field(self):
+        # EventCreateSerializer does not expose recurrence_rule yet, so a
+        # posted recurrence_frequency has no effect: the writer only
+        # recognizes recurrence_rule (event_scope.py / apply_rule).
         self.client.force_authenticate(self.owner)
         resp = self.client.post(self.url, self._event_data(), format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(resp.data["recurrence_frequency"], "weekly")
-        self.assertTrue(resp.data["is_recurring"])
+        self.assertIsNone(resp.data["recurrence_frequency"])
+        self.assertFalse(resp.data["is_recurring"])
 
     def test_create_non_recurring_unchanged(self):
         self.client.force_authenticate(self.owner)
@@ -447,8 +450,12 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
     """Tests for scope-aware edit and delete of recurring events."""
 
     def _create_weekly(self):
+        # Backfilled shape (Task 2): both the legacy columns the query layer
+        # still reads and the rule text the writer now maintains.
+        from workspace.calendar.services.recurrence_rule import apply_rule
+
         start = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        return Event.objects.create(
+        event = Event(
             calendar=self.calendar,
             title="Weekly",
             start=start,
@@ -457,6 +464,9 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
             recurrence_frequency="weekly",
             recurrence_interval=1,
         )
+        apply_rule(event, "RRULE:FREQ=WEEKLY;INTERVAL=1")
+        event.save()
+        return event
 
     def url(self, event_id):
         return f"/api/v1/events/{event_id}"
@@ -481,7 +491,7 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         master.refresh_from_db()
-        self.assertIsNotNone(master.recurrence_end)
+        self.assertIn("UNTIL=", master.recurrence_rule)
 
     def test_delete_all_deletes_everything(self):
         master = self._create_weekly()
@@ -526,9 +536,9 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         master.refresh_from_db()
-        self.assertIsNotNone(master.recurrence_end)
+        self.assertIn("UNTIL=", master.recurrence_rule)
         self.assertEqual(resp.data["title"], "Future Series")
-        self.assertEqual(resp.data["recurrence_frequency"], "weekly")
+        self.assertTrue(resp.data["is_recurring"])
 
     def test_edit_all_updates_master(self):
         master = self._create_weekly()

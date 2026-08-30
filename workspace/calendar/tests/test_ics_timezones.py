@@ -11,6 +11,7 @@ from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services.ics_builder import build_reply
 from workspace.calendar.services.ics_common import parse_dt_prop
 from workspace.calendar.services.ics_sync import _vevent_to_defaults
+from workspace.calendar.services.recurrence_rule import derive_into_defaults
 
 User = get_user_model()
 
@@ -84,8 +85,9 @@ class VeventDefaultsTimezoneTests(TestCase):
             "DTSTART;TZID=Europe/Paris:20260327T090000\r\nRRULE:FREQ=DAILY;COUNT=5"
         )
         defaults = _vevent_to_defaults(vevent, self.owner, PARIS)
+        derive_into_defaults(defaults)
         self.assertEqual(
-            defaults["recurrence_end"], datetime(2026, 3, 31, 7, 0, tzinfo=UTC)
+            defaults["recurrence_until"], datetime(2026, 3, 31, 7, 0, tzinfo=UTC)
         )
 
     def test_monthly_count_skips_short_months_like_the_engine(self):
@@ -93,8 +95,9 @@ class VeventDefaultsTimezoneTests(TestCase):
         # so the last one is May 31 (relativedelta arithmetic said Mar 31).
         vevent = _vevent("DTSTART:20260131T100000Z\r\nRRULE:FREQ=MONTHLY;COUNT=3")
         defaults = _vevent_to_defaults(vevent, self.owner, None)
+        derive_into_defaults(defaults)
         self.assertEqual(
-            defaults["recurrence_end"], datetime(2026, 5, 31, 10, 0, tzinfo=UTC)
+            defaults["recurrence_until"], datetime(2026, 5, 31, 10, 0, tzinfo=UTC)
         )
 
 

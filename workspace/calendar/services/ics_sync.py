@@ -1,7 +1,6 @@
 """Fetch and sync external ICS calendar feeds."""
 
 import logging
-from datetime import UTC, datetime
 
 import httpx2
 import icalendar
@@ -14,18 +13,11 @@ from workspace.calendar.services.ics_common import (
     is_all_day,
     parse_dt_prop,
 )
+from workspace.calendar.services.recurrence_rule import derive_into_defaults
 from workspace.calendar.services.timezones import normalize_all_day
 from workspace.users.services.settings import get_user_timezone
 
 logger = logging.getLogger(__name__)
-
-# Map ICS FREQ values to our RecurrenceFrequency choices
-_FREQ_MAP = {
-    "DAILY": "daily",
-    "WEEKLY": "weekly",
-    "MONTHLY": "monthly",
-    "YEARLY": "yearly",
-}
 
 
 @transaction.atomic
@@ -76,6 +68,7 @@ def sync_external_calendar(external_calendar):
         seen_uids.add(uid)
 
         defaults = _vevent_to_defaults(component, owner, owner_tz)
+        derive_into_defaults(defaults)
         existing = existing_by_uid.get(uid)
         if existing is not None and _matches_defaults(existing, defaults):
             continue
@@ -161,77 +154,28 @@ def _vevent_to_defaults(vevent, owner, owner_tz=None):
         "ical_sequence": int(vevent.get("SEQUENCE", 0)),
         "owner": owner,
         "external_organizer": extract_email(vevent.get("ORGANIZER")),
-        **_parse_rrule(vevent, start, tzid),
+        "recurrence_rule": _recurrence_lines(vevent),
     }
 
 
-def _parse_rrule(vevent, start, tzid):
-    """Extract recurrence fields from a VEVENT's RRULE property."""
-    rrule = vevent.get("RRULE")
-    if not rrule:
-        return {
-            "recurrence_frequency": None,
-            "recurrence_interval": 1,
-            "recurrence_end": None,
-        }
+def _recurrence_lines(vevent):
+    """Return the VEVENT's recurrence lines as the feed wrote them.
 
-    freq_list = rrule.get("FREQ", [])
-    freq_str = freq_list[0] if freq_list else ""
-    frequency = _FREQ_MAP.get(freq_str.upper())
+    Storing the rule rather than a summary of it is the point: flattening
+    COUNT into a date and dropping BY parts is what turned an imported
+    "second Tuesday of the month" into a plain "monthly".
 
-    interval_list = rrule.get("INTERVAL", [1])
-    interval = int(interval_list[0]) if interval_list else 1
-
-    # UNTIL takes priority, then COUNT is converted to a concrete end date
-    until_list = rrule.get("UNTIL", [])
-    recurrence_end = None
-    if until_list:
-        until = until_list[0]
-        if hasattr(until, "hour"):
-            recurrence_end = until if until.tzinfo else until.replace(tzinfo=UTC)
-        else:
-            recurrence_end = datetime(until.year, until.month, until.day, tzinfo=UTC)
-    elif rrule.get("COUNT") and frequency:
-        recurrence_end = _count_to_end(
-            start, frequency, interval, int(rrule["COUNT"][0]), tzid
-        )
-
-    return {
-        "recurrence_frequency": frequency,
-        "recurrence_interval": interval,
-        "recurrence_end": recurrence_end,
-    }
-
-
-def _count_to_end(start, frequency, interval, count, tzid=""):
-    """Convert a COUNT-based RRULE to the exact last-occurrence instant.
-
-    Computed with the same dateutil rrule the expansion engine uses (in
-    the event's zone when it has one), so the final occurrence survives
-    DST transitions and calendar-dependent monthly/yearly stepping.
+    icalendar returns a bare value for a property that appears once and a
+    list when it repeats, so both shapes have to be handled.
     """
-    if not start or count <= 0:
-        return None
-
-    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
-    from dateutil.rrule import rrule as du_rrule
-
-    from workspace.calendar.recurrence import FREQ_MAP as _ENGINE_FREQ_MAP
-
-    freq = _ENGINE_FREQ_MAP.get(frequency)
-    if freq is None:
-        return None
-    dtstart = start
-    if tzid:
-        try:
-            dtstart = start.astimezone(ZoneInfo(tzid))
-        except ZoneInfoNotFoundError, KeyError, ValueError:
-            # Unknown TZID in the feed: count in UTC, matching how the
-            # expansion engine treats an unresolvable event timezone.
-            pass
-    rule = du_rrule(freq, interval=interval, dtstart=dtstart, count=count)
-    return rule[count - 1].astimezone(UTC)
+    lines = []
+    for name in ("RRULE", "RDATE"):
+        value = vevent.get(name)
+        if value is None:
+            continue
+        for item in value if isinstance(value, list) else [value]:
+            lines.append(f"{name}:{item.to_ical().decode()}")
+    return "\n".join(lines)
 
 
 def external_calendars_with_errors():

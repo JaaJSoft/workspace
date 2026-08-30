@@ -19,6 +19,7 @@ from workspace.notifications.services.notifications import notify_many
 
 from ..models import Calendar, Event, EventMember
 from ..models_external import ExternalCalendar
+from .recurrence_rule import apply_rule, truncate_before
 from .timezones import current_timezone_name, normalize_all_day
 
 User = get_user_model()
@@ -31,9 +32,7 @@ EDITABLE_FIELDS = (
     "end",
     "all_day",
     "location",
-    "recurrence_frequency",
-    "recurrence_interval",
-    "recurrence_end",
+    "recurrence_rule",
 )
 
 
@@ -69,6 +68,42 @@ def assert_writable(event, user):
         )
 
 
+def _retire_legacy_recurrence(event):
+    """Blank the pre-rule recurrence columns on a row a writer has touched.
+
+    The transitional save() shim in models.py falls back to
+    ``recurrence_frequency`` whenever ``recurrence_rule`` is blank. Without
+    this, clearing recurrence on a backfilled row lets that stale column
+    resurrect ``is_recurring``, leaving a series with no rule that expands to
+    nothing. Deleted along with the shim and the columns in the final task.
+    """
+    event.recurrence_frequency = None
+    event.recurrence_interval = 1
+    event.recurrence_end = None
+
+
+def _truncate_series(master, cut):
+    """Stop *master* before *cut*, rewriting the rule and its derived bound.
+
+    The rule text is authoritative, so a split has to edit it: moving only the
+    derived bound would leave clients importing a series that never ends.
+    """
+    apply_rule(
+        master, truncate_before(master.recurrence_rule, cut - timedelta(seconds=1))
+    )
+    _retire_legacy_recurrence(master)
+    master.save(
+        update_fields=[
+            "recurrence_rule",
+            "is_recurring",
+            "recurrence_until",
+            "recurrence_frequency",
+            "recurrence_interval",
+            "recurrence_end",
+        ]
+    )
+
+
 def _apply_fields(event, data, user):
     """Apply common field updates to an event."""
     if "calendar_id" in data:
@@ -77,7 +112,7 @@ def _apply_fields(event, data, user):
         except Calendar.DoesNotExist:
             raise EventScopeError("Calendar not found.") from None
 
-    had_recurrence = event.recurrence_frequency is not None
+    had_recurrence = event.is_recurring
     for field in EDITABLE_FIELDS:
         if field in data:
             setattr(event, field, data[field])
@@ -87,12 +122,20 @@ def _apply_fields(event, data, user):
         event.start = normalize_all_day(event.start)
         event.end = normalize_all_day(event.end)
         event.timezone = ""
-    elif event.recurrence_frequency and not had_recurrence and not event.timezone:
-        # Only a series GAINING recurrence anchors its wall clock in the
-        # editing zone. Legacy recurring series (blank timezone) must keep
-        # UTC expansion: stamping them on an unrelated edit would shift
-        # future occurrences and orphan their exceptions.
+    elif event.recurrence_rule and not had_recurrence and not event.timezone:
+        # Checked against the raw field, not is_recurring: apply_rule (which
+        # recomputes is_recurring) runs after this block, so is_recurring
+        # still reflects the pre-edit state here. Only a series GAINING
+        # recurrence anchors its wall clock in the editing zone. Legacy
+        # recurring series (blank timezone) must keep UTC expansion:
+        # stamping them on an unrelated edit would shift future occurrences
+        # and orphan their exceptions.
         event.timezone = current_timezone_name()
+    # One call, after every field has settled: the bound is derived from the
+    # rule AND from start/end/timezone, any of which the loop above may have
+    # moved. The plain setattr in the loop is what this call then normalizes.
+    apply_rule(event, event.recurrence_rule)
+    _retire_legacy_recurrence(event)
     event.save()
 
 
@@ -282,15 +325,19 @@ def _update_future_occurrences(master, data, user, original_start):
     """Split the series: truncate the old master, start a new one at *original_start*."""
     _require_original_start(original_start, "future")
 
-    master.recurrence_end = original_start - timedelta(seconds=1)
-    master.save(update_fields=["recurrence_end"])
+    # Captured before truncation: the new master continues the series past
+    # the split, so it must inherit the rule as it stood before the OLD
+    # master got its UNTIL rewritten, not the now-truncated text.
+    original_rule = master.recurrence_rule
+
+    _truncate_series(master, original_start)
 
     Event.objects.filter(
         recurrence_parent=master, original_start__gte=original_start
     ).delete()
 
     start, end, all_day = _derived_times(master, data, original_start)
-    new_master = Event.objects.create(
+    new_master = Event(
         calendar=master.calendar,
         title=data.get("title", master.title),
         description=data.get("description", master.description),
@@ -303,12 +350,10 @@ def _update_future_occurrences(master, data, user, original_start):
         # fixed-step UTC expansion, shifting every later occurrence by an
         # hour across a DST boundary.
         timezone="" if all_day else master.timezone,
-        recurrence_frequency=data.get(
-            "recurrence_frequency", master.recurrence_frequency
-        ),
-        recurrence_interval=data.get("recurrence_interval", master.recurrence_interval),
-        recurrence_end=data.get("recurrence_end", master.recurrence_end),
     )
+    apply_rule(new_master, data.get("recurrence_rule", original_rule))
+    _retire_legacy_recurrence(new_master)
+    new_master.save()
 
     if "calendar_id" in data:
         try:
@@ -373,8 +418,7 @@ def cancel_event(event, user, *, scope, original_start=None):
             )
         return
 
-    event.recurrence_end = original_start - timedelta(seconds=1)
-    event.save(update_fields=["recurrence_end"])
+    _truncate_series(event, original_start)
     Event.objects.filter(
         recurrence_parent=event, original_start__gte=original_start
     ).delete()

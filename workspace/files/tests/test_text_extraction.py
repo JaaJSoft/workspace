@@ -1,9 +1,25 @@
+import io
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
+from pypdf import PdfWriter
 
+from workspace.common.documents import office
+from workspace.common.tests.office_fixtures import (
+    make_docx,
+    make_odf,
+    make_pptx,
+    make_xlsx,
+)
+from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File
-from workspace.files.services.text_extraction import BODY_CAP, extract_text
+from workspace.files.services.text_extraction import (
+    _MAX_DOCUMENT_BYTES,
+    BODY_CAP,
+    extract_text,
+)
 
 User = get_user_model()
 
@@ -100,13 +116,9 @@ class ExtractTextTests(TestCase):
             with self.subTest(mime=mime):
                 self.assertIn("lisbon", extract_text(self._file(name, mime, payload)))
 
-    def test_binary_application_types_yield_nothing(self):
-        for name, mime, payload in (
-            ("doc.pdf", "application/pdf", b"%PDF-1.4 lisbon"),
-            ("arch.zip", "application/zip", b"PK lisbon"),
-        ):
-            with self.subTest(mime=mime):
-                self.assertIsNone(extract_text(self._file(name, mime, payload)))
+    def test_a_binary_type_with_no_extractor_yields_nothing(self):
+        f = self._file("arch.zip", "application/zip", b"PK lisbon")
+        self.assertIsNone(extract_text(f))
 
     def test_binary_content_yields_nothing(self):
         f = self._file("a.png", "image/png", b"\x89PNG\r\n\x1a\n\xff\xfe")
@@ -152,3 +164,106 @@ class ExtractTextTests(TestCase):
         body = extract_text(f)
         self.assertTrue(body.startswith("é"))
         self.assertLessEqual(len(body), BODY_CAP)
+
+
+class DocumentExtractionTests(TestCase):
+    """PDFs and office documents: formats read from a stream, not a prefix."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="bob", password="pw")
+
+    def _file(self, name, mime, payload):
+        return File.objects.create(
+            name=name,
+            node_type=File.NodeType.FILE,
+            mime_type=mime,
+            owner=self.user,
+            size=len(payload),
+            content=ContentFile(payload, name=name),
+        )
+
+    def test_pdf_body_is_extracted(self):
+        f = self._file("report.pdf", "application/pdf", make_pdf(["quarterly budget"]))
+        self.assertIn("quarterly budget", extract_text(f))
+
+    def test_office_bodies_are_extracted(self):
+        for name, mime, payload in (
+            ("a.docx", office.DOCX, make_docx(["The kraken sleeps."])),
+            ("a.xlsx", office.XLSX, make_xlsx(shared_strings=["The kraken sleeps."])),
+            ("a.pptx", office.PPTX, make_pptx([["The kraken sleeps."]])),
+            ("a.odt", office.ODT, make_odf(office.ODT, ["The kraken sleeps."])),
+            ("a.ods", office.ODS, make_odf(office.ODS, ["The kraken sleeps."])),
+            ("a.odp", office.ODP, make_odf(office.ODP, ["The kraken sleeps."])),
+        ):
+            with self.subTest(mime=mime):
+                self.assertIn("kraken", extract_text(self._file(name, mime, payload)))
+
+    def test_a_scan_indexes_its_name_and_nothing_else(self):
+        # A scanned page renders its words as pixels: there is no text layer
+        # to read, and the file stays findable by its name alone.
+        f = self._file("scan.pdf", "application/pdf", make_pdf([""]))
+        self.assertIsNone(extract_text(f))
+
+    def test_an_encrypted_pdf_yields_nothing(self):
+        writer = PdfWriter(clone_from=io.BytesIO(make_pdf(["secret"])))
+        writer.encrypt("hunter2")
+        buffer = io.BytesIO()
+        writer.write(buffer)
+
+        f = self._file("locked.pdf", "application/pdf", buffer.getvalue())
+        self.assertIsNone(extract_text(f))
+
+    def test_corrupt_documents_yield_nothing(self):
+        for name, mime, payload in (
+            ("broken.pdf", "application/pdf", b"%PDF-1.4 and then nothing usable"),
+            ("broken.docx", office.DOCX, b"not an archive at all"),
+            ("broken.xlsx", office.XLSX, b"PK\x03\x04 truncated right here"),
+            ("broken.odt", office.ODT, b""),
+        ):
+            with self.subTest(mime=mime):
+                self.assertIsNone(extract_text(self._file(name, mime, payload)))
+
+    def test_an_unreadable_document_is_logged_rather_than_raised(self):
+        f = self._file("broken.docx", office.DOCX, b"not an archive at all")
+        with self.assertLogs("workspace.files.services.text_extraction", "INFO"):
+            self.assertIsNone(extract_text(f))
+
+    def test_an_office_body_is_capped(self):
+        payload = make_docx(["the kraken sleeps beneath the waves"] * 20_000)
+        body = extract_text(self._file("big.docx", office.DOCX, payload))
+        self.assertLessEqual(len(body), BODY_CAP)
+
+    def test_a_pdf_body_is_capped(self):
+        payload = make_pdf(["a" * 200] * 800)
+        body = extract_text(self._file("big.pdf", "application/pdf", payload))
+        self.assertLessEqual(len(body), BODY_CAP)
+
+    def test_a_document_past_the_size_ceiling_is_not_read(self):
+        f = self._file("huge.docx", office.DOCX, make_docx(["kraken"]))
+        File.objects.filter(pk=f.pk).update(size=_MAX_DOCUMENT_BYTES + 1)
+        self.assertIsNone(extract_text(File.objects.get(pk=f.pk)))
+
+    def test_a_missing_blob_yields_nothing(self):
+        f = self._file("gone.pdf", "application/pdf", make_pdf(["body"]))
+        f.content.storage.delete(f.content.name)
+        self.assertIsNone(extract_text(f))
+
+    def test_a_stream_that_cannot_seek_is_buffered(self):
+        # A storage backend that only streams would otherwise fail deep inside
+        # zipfile, on a document local storage reads without trouble.
+        f = self._file("a.docx", office.DOCX, make_docx(["kraken"]))
+        raw = f.content.storage.open(f.content.name, "rb").read()
+
+        class _ForwardOnly(io.RawIOBase):
+            def __init__(self, data):
+                self._data = io.BytesIO(data)
+
+            def seekable(self):
+                return False
+
+            def read(self, size=-1):
+                return self._data.read(size)
+
+        with mock.patch.object(File.content.field.storage, "open") as opener:
+            opener.return_value = _ForwardOnly(raw)
+            self.assertIn("kraken", extract_text(f))

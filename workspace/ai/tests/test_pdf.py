@@ -2,11 +2,9 @@ import io
 
 from django.test import TestCase
 from pypdf import PdfWriter
-from pypdf.errors import PdfReadError
 
-from workspace.ai.services.pdf import _page_text, extract_pdf
-
-from .pdf_fixtures import make_pdf
+from workspace.ai.services.pdf import extract_pdf
+from workspace.common.tests.pdf_fixtures import make_pdf
 
 
 def _rewritten(source: bytes, **writer_calls) -> bytes:
@@ -68,13 +66,3 @@ class ExtractPdfTests(TestCase):
         with self.assertRaises(ValueError) as ctx:
             extract_pdf(b"%PDF-1.4 and then nothing usable")
         self.assertIn("Could not read PDF", str(ctx.exception))
-
-
-class PageFailureTests(TestCase):
-    def test_an_unreadable_page_costs_only_itself(self):
-        class _BrokenPage:
-            def extract_text(self):
-                raise PdfReadError("unsupported font")
-
-        with self.assertLogs("workspace.ai.services.pdf", level="WARNING"):
-            self.assertEqual(_page_text(_BrokenPage(), 3), "")

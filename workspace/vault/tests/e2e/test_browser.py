@@ -93,6 +93,17 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.wait_for_url("**/vault/*", timeout=30000)
         self.vault_uuid = self.page.url.rstrip("/").rsplit("/", 1)[1]
 
+    def _wait_for_switcher_named(self, name):
+        """Wait for the switcher to name the open vault.
+
+        The postcondition worth waiting on: the URL changes first, because
+        replaceState runs before the load it precedes, and "All entries" is on
+        screen throughout since the previous vault had it too.
+        """
+        self.page.get_by_test_id("vault-switcher").get_by_text(
+            name, exact=True
+        ).wait_for(timeout=30000)
+
     def _create_entry(self, name, username, password):
         # get_by_role with exact=True: the navbar carries a "What's new"
         # control, and a substring match reaches it first.
@@ -295,7 +306,9 @@ class VaultBrowserTests(PlaywrightTestCase):
         self._open_vault()
         self.page.goto(f"{self.live_server_url}/vault")
         self._unlock()
-        self.page.wait_for_selector("text=All entries", timeout=30000)
+        # Not "All entries", which the sidebar shows as soon as the account
+        # opens - before the vault behind it has been resolved.
+        self._wait_for_switcher_named("Personal")
         # The vault is named in the address bar although the page was loaded
         # at /vault: replaceState put it there, which is not a navigation.
         self.assertRegex(self.page.url, r"/vault/[0-9a-f-]{36}$")
@@ -307,25 +320,23 @@ class VaultBrowserTests(PlaywrightTestCase):
         """Switching is the gesture the listing used to own, and the one that
         had to stop being a navigation."""
         self._open_vault()
-        first = self.page.url
 
         self.page.click("[data-testid='vault-switcher']")
         self.page.click("text=New vault")
         self.page.wait_for_selector(".modal-box input[type=text]")
         self.page.fill(".modal-box input[type=text] >> nth=0", "Work")
         self.page.click(".modal-box button:has-text('Create')")
-        self.page.wait_for_function(f"() => location.href !== {first!r}", timeout=30000)
-        self.page.wait_for_selector("text=All entries", timeout=30000)
+        # Named on the switcher, not merely named in the URL: replaceState runs
+        # before the reload it precedes, so the address bar changes while the
+        # contents are still in flight.
+        self._wait_for_switcher_named("Work")
 
         self.page.click("[data-testid='vault-switcher']")
+        self.page.wait_for_selector("[data-testid='vault-row'] >> nth=1", timeout=30000)
         self.assertEqual(self.page.locator("[data-testid='vault-row']").count(), 2)
-        # Read before the click: taken after it, the URL to compare against is
-        # the one already arrived at, and the wait can never come true.
-        second = self.page.url
+
         self.page.locator("[data-testid='vault-row']:not(.active)").first.click()
-        self.page.wait_for_function(
-            f"() => location.href !== {second!r}", timeout=30000
-        )
+        self._wait_for_switcher_named("Personal")
         # No gate came back between the two vaults: the closure holding the
         # keys survived, because nothing navigated.
         self.assertEqual(

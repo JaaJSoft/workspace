@@ -1,4 +1,5 @@
 {% extends 'base_with_navbar.html' %}
+{% load static %}
 
 {% block title %}Settings · Workspace{% endblock %}
 
@@ -11,9 +12,7 @@
 {% block extra_head %}
   <link
     rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css"
-    integrity="sha384-6LFfkTKLRlzFtgx8xsWyBdKGpcMMQTkv+dB7rAbugeJAu1Ym2q1Aji1cjHBG12Xh"
-    crossorigin="anonymous"
+    href="{% static 'users/ui/css/vendor/cropper/cropper.css' %}"
   />
 {% endblock %}
 
@@ -106,11 +105,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-  <script
-    src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"
-    integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir"
-    crossorigin="anonymous"
-  ></script>
+  <script src="{% static 'users/ui/js/vendor/cropper/cropper.js' %}"></script>
   <script>
     function settingsPage() {
       const validTabs = ['profile', 'appearance', 'timezone', 'security', 'tokens', 'usage'];

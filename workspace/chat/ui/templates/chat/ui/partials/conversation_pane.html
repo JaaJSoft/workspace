@@ -1,3 +1,4 @@
+{% load static %}
 <div
   class="h-full flex flex-col min-w-0 bg-base-100"
   :style="!activeConversation && !pendingInitialConvUuid && isMobile() ? 'display:none!important' : ''"
@@ -466,7 +467,8 @@
   @click.outside="closeEmojiPicker()"
   @keydown.escape.stop="closeEmojiPicker()"
 >
-  <emoji-picker x-ref="emojiPicker"></emoji-picker>
+  {# The element's built-in default for data-source is a CDN URL. #}
+  <emoji-picker x-ref="emojiPicker" data-source="{% static 'chat/ui/js/vendor/emoji-picker/data.json' %}"></emoji-picker>
 </div>
 
 <!-- Context menu -->

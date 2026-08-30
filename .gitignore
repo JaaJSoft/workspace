@@ -142,7 +142,3 @@ test_db.sqlite3*
 # theme - are committed so a fresh clone works immediately, no `npm install`
 # required for devs who only touch Python)
 /scripts/frontend/node_modules/
-
-# Screenshot capture asset cache (scripts/screenshots.py downloads the CDN
-# scripts here so captures are deterministic and work offline)
-/scripts/.screenshot-assets/

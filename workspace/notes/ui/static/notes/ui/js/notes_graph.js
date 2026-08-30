@@ -1,7 +1,8 @@
 // Notes graph view: force-graph integration + pure helpers.
 // Classic script (no top-level import) so it loads via <script src> and the
-// node:vm test loader. force-graph is imported dynamically at runtime inside
-// open() (network), so loading this file is side-effect-free.
+// node:vm test loader. The vendored force-graph module is imported dynamically
+// inside open(), from the URL the mount element carries in
+// data-force-graph-url, so loading this file is side-effect-free.
 
 // Base node radius unit; the actual radius scales with the node's degree (see
 // _nodeRadius), matching force-graph's own sqrt(val) * nodeRelSize sizing so the
@@ -314,9 +315,9 @@ async function open(container, opts) {
   _setLoading(true);
   let mod;
   try {
-    mod = await import('https://esm.sh/force-graph@1');
+    mod = await import(container.dataset.forceGraphUrl);
   } catch (e) {
-    // CDN/network failure loading force-graph. Clear the spinner (unless a newer
+    // Network failure loading force-graph. Clear the spinner (unless a newer
     // open/destroy already moved on) and bail, instead of leaving it stuck and
     // raising an unhandled rejection in the non-awaiting caller (notes.js).
     if (gen === _openGen) _setLoading(false);
@@ -324,15 +325,9 @@ async function open(container, opts) {
   }
   if (gen !== _openGen) return; // view was left / re-opened during the import
 
-  // force-graph >= 1.44 is a class (new ForceGraph(el)); older releases use the
-  // curried factory ForceGraph()(el). Support both so a CDN version bump can't
-  // silently break rendering.
-  const FG = mod.default;
-  const construct = (el) =>
-    FG.prototype && FG.prototype.graphData ? new FG(el) : FG()(el);
-
+  const ForceGraph = mod.default;
   if (!_fg) {
-    _fg = construct(container)
+    _fg = new ForceGraph(container)
       .nodeId('uuid')
       // nodeLabel renders as HTML in the hover tooltip and names are user-
       // controlled (other users' files in scope=all), so escape via the shared

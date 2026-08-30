@@ -305,12 +305,8 @@
       <button>close</button>
     </form>
   </dialog>
-  {# Attachment preview needs the files viewer stack: Monaco loader (same #}
-  {# CDN pin as files/ui/index.html), locking (the text viewer calls it even #}
-  {# read-only), then the panel host mixin. #}
-  <script
-    src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"
-  ></script>
+  {# Attachment preview needs the files viewer stack: locking (the text #}
+  {# viewer calls it even read-only), then the panel host mixin. #}
   <script src="{% static 'files/ui/js/file_lock.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
   <script src="{% static 'ui/js/attachment_input.js' %}"></script>

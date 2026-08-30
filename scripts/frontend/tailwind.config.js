@@ -10,9 +10,9 @@ module.exports = {
     // serves it directly, and its classes are purged without this line.
     '../../workspace/**/static/**/*.html',
     '../../workspace/**/static/**/*.js',
-    // Minified vendored crypto: it carries no utility class, but the extractor
-    // finds class-shaped substrings in it and emits dead rules for them.
-    '!../../workspace/vault/ui/static/vault/ui/js/vendor/**',
+    // Minified vendored bundles carry no utility class, but the extractor
+    // finds class-shaped substrings in them and emits dead rules for each.
+    '!../../workspace/**/static/**/vendor/**',
   ],
   // DaisyUI semantic colors that the codebase interpolates at runtime
   // (audit identified 14 dynamic patterns: module.color, calendar.color,

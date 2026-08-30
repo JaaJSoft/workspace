@@ -11,7 +11,7 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from workspace.common.documents import office
+from workspace.common.documents import extraction
 from workspace.common.search import apply_fulltext, fts5_available
 from workspace.common.tests.office_fixtures import make_docx
 from workspace.common.tests.pdf_fixtures import make_pdf
@@ -508,7 +508,7 @@ class DocumentBackfillTests(_FtsTestCase):
 
     def test_backfill_indexes_office_documents(self):
         minutes = self._document(
-            "minutes.docx", office.DOCX, make_docx(["the treasurer resigned"])
+            "minutes.docx", extraction.DOCX, make_docx(["the treasurer resigned"])
         )
         call_command("reindex_files_search", stdout=StringIO())
         self.assertEqual(self._matches('"treasurer"'), {self._rowid(minutes)})
@@ -516,7 +516,7 @@ class DocumentBackfillTests(_FtsTestCase):
     def test_an_unreadable_document_does_not_stop_the_backfill(self):
         self._document("broken.pdf", "application/pdf", b"%PDF-1.4 truncated")
         readable = self._document(
-            "good.docx", office.DOCX, make_docx(["the treasurer resigned"])
+            "good.docx", extraction.DOCX, make_docx(["the treasurer resigned"])
         )
         call_command("reindex_files_search", stdout=StringIO())
         self.assertEqual(self._matches('"treasurer"'), {self._rowid(readable)})
@@ -529,7 +529,7 @@ class WopiSaveReindexTests(_FtsTestCase):
             owner=self.user,
             name="report.docx",
             content=SimpleUploadedFile(
-                "report.docx", make_docx(["first draft"]), content_type=office.DOCX
+                "report.docx", make_docx(["first draft"]), content_type=extraction.DOCX
             ),
             acting_user=self.user,
         )

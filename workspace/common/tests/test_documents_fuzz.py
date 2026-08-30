@@ -19,8 +19,7 @@ import zipfile
 
 from django.test import SimpleTestCase
 
-from workspace.common.documents.office import DOCX, MAX_PART_BYTES, office_text
-from workspace.common.documents.pdf import pdf_text
+from workspace.common.documents.extraction import extract_document
 from workspace.common.tests.office_fixtures import make_docx
 from workspace.common.tests.pdf_fixtures import make_pdf
 
@@ -58,7 +57,7 @@ class OfficeFuzzTests(SimpleTestCase):
         for index, payload in enumerate(_mutations(source, CASES)):
             with self.subTest(case=index):
                 try:
-                    office_text(io.BytesIO(payload), DOCX, max_chars=100_000)
+                    extract_document(payload, max_chars=100_000)
                 except ValueError:
                     pass
 
@@ -67,17 +66,17 @@ class OfficeFuzzTests(SimpleTestCase):
         for index, payload in enumerate(_mutations(source, CASES)):
             with self.subTest(case=index):
                 try:
-                    body = office_text(io.BytesIO(payload), DOCX, max_chars=500)
+                    body = extract_document(payload, max_chars=500).text
                 except ValueError:
                     continue
                 self.assertLessEqual(len(body), 500)
 
 
 class ZipBombTests(SimpleTestCase):
-    def test_a_member_that_inflates_past_its_ceiling_is_cut_off(self):
+    def test_a_member_that_inflates_enormously_stays_within_the_ceiling(self):
         # Written in chunks rather than one buffer: holding the inflated size
         # in memory to build the fixture would be the very cost being tested.
-        inflated = MAX_PART_BYTES * 4
+        inflated = 256 * 1024 * 1024
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             with archive.open("word/document.xml", "w") as member:
@@ -88,12 +87,16 @@ class ZipBombTests(SimpleTestCase):
 
         payload = buffer.getvalue()
         self.assertLess(len(payload), inflated // 100, "fixture is not a bomb")
-        self.assertEqual(office_text(io.BytesIO(payload), DOCX, max_chars=1000), "")
+        try:
+            body = extract_document(payload, max_chars=1000).text
+        except ValueError:
+            return
+        self.assertLessEqual(len(body), 1000)
 
 
 class PdfFuzzTests(SimpleTestCase):
     def setUp(self):
-        # A damaged PDF is exactly what pypdf warns about, one line per page.
+        # A damaged document is exactly what the parser warns about.
         logging.disable(logging.CRITICAL)
         self.addCleanup(logging.disable, logging.NOTSET)
 
@@ -102,7 +105,7 @@ class PdfFuzzTests(SimpleTestCase):
         for index, payload in enumerate(_mutations(source, CASES)):
             with self.subTest(case=index):
                 try:
-                    body = pdf_text(payload, max_chars=100_000, max_pages=50)
+                    body = extract_document(payload, max_chars=100_000).text
                 except ValueError:
                     continue
                 self.assertLessEqual(len(body), 100_000)

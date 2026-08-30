@@ -1,4 +1,5 @@
 import io
+import os
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -6,7 +7,10 @@ from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, TestCase
 from pypdf import PdfWriter
 
-from workspace.common.documents import office
+from workspace.common.documents import extraction
+from workspace.common.tests.office_fixtures import ODP as F_ODP
+from workspace.common.tests.office_fixtures import ODS as F_ODS
+from workspace.common.tests.office_fixtures import ODT as F_ODT
 from workspace.common.tests.office_fixtures import (
     make_docx,
     make_odf,
@@ -190,12 +194,16 @@ class DocumentExtractionTests(TestCase):
 
     def test_office_bodies_are_extracted(self):
         for name, mime, payload in (
-            ("a.docx", office.DOCX, make_docx(["The kraken sleeps."])),
-            ("a.xlsx", office.XLSX, make_xlsx(sheets={"S": [["The kraken sleeps."]]})),
-            ("a.pptx", office.PPTX, make_pptx([["The kraken sleeps."]])),
-            ("a.odt", office.ODT, make_odf(office.ODT, ["The kraken sleeps."])),
-            ("a.ods", office.ODS, make_odf(office.ODS, ["The kraken sleeps."])),
-            ("a.odp", office.ODP, make_odf(office.ODP, ["The kraken sleeps."])),
+            ("a.docx", extraction.DOCX, make_docx(["The kraken sleeps."])),
+            (
+                "a.xlsx",
+                extraction.XLSX,
+                make_xlsx(sheets={"S": [["The kraken sleeps."]]}),
+            ),
+            ("a.pptx", extraction.PPTX, make_pptx([["The kraken sleeps."]])),
+            ("a.odt", extraction.ODT, make_odf(F_ODT, ["The kraken sleeps."])),
+            ("a.ods", extraction.ODS, make_odf(F_ODS, ["The kraken sleeps."])),
+            ("a.odp", extraction.ODP, make_odf(F_ODP, ["The kraken sleeps."])),
         ):
             with self.subTest(mime=mime):
                 self.assertIn("kraken", extract_text(self._file(name, mime, payload)))
@@ -218,21 +226,29 @@ class DocumentExtractionTests(TestCase):
     def test_corrupt_documents_yield_nothing(self):
         for name, mime, payload in (
             ("broken.pdf", "application/pdf", b"%PDF-1.4 and then nothing usable"),
-            ("broken.docx", office.DOCX, b"not an archive at all"),
-            ("broken.xlsx", office.XLSX, b"PK\x03\x04 truncated right here"),
-            ("broken.odt", office.ODT, b""),
+            ("broken.docx", extraction.DOCX, make_docx(["body"])[:400]),
+            ("broken.xlsx", extraction.XLSX, b"PK truncated right here"),
+            ("noise.odt", extraction.ODT, os.urandom(300)),
+            ("empty.odt", extraction.ODT, b""),
         ):
             with self.subTest(mime=mime):
                 self.assertIsNone(extract_text(self._file(name, mime, payload)))
 
+    def test_a_mislabelled_document_is_read_for_what_it_is(self):
+        # Type detection reads the container, not the extension, so a file
+        # saved under the wrong name is still indexed by its contents.
+        payload = make_pdf(["quarterly budget"])
+        f = self._file("mislabelled.docx", extraction.DOCX, payload)
+        self.assertIn("quarterly budget", extract_text(f))
+
     def test_an_unreadable_document_is_logged_rather_than_raised(self):
-        f = self._file("broken.docx", office.DOCX, b"not an archive at all")
+        f = self._file("broken.docx", extraction.DOCX, make_docx(["body"])[:400])
         with self.assertLogs("workspace.files.services.text_extraction", "INFO"):
             self.assertIsNone(extract_text(f))
 
     def test_an_office_body_is_capped(self):
         payload = make_docx(["the kraken sleeps beneath the waves"] * 20_000)
-        body = extract_text(self._file("big.docx", office.DOCX, payload))
+        body = extract_text(self._file("big.docx", extraction.DOCX, payload))
         self.assertLessEqual(len(body), BODY_CAP)
 
     def test_a_pdf_body_is_capped(self):
@@ -241,7 +257,7 @@ class DocumentExtractionTests(TestCase):
         self.assertLessEqual(len(body), BODY_CAP)
 
     def test_a_document_past_the_size_ceiling_is_not_read(self):
-        f = self._file("huge.docx", office.DOCX, make_docx(["kraken"]))
+        f = self._file("huge.docx", extraction.DOCX, make_docx(["kraken"]))
         File.objects.filter(pk=f.pk).update(size=_MAX_DOCUMENT_BYTES + 1)
         self.assertIsNone(extract_text(File.objects.get(pk=f.pk)))
 
@@ -253,7 +269,7 @@ class DocumentExtractionTests(TestCase):
     def test_a_stream_that_cannot_seek_is_buffered(self):
         # A storage backend that only streams would otherwise fail deep inside
         # zipfile, on a document local storage reads without trouble.
-        f = self._file("a.docx", office.DOCX, make_docx(["kraken"]))
+        f = self._file("a.docx", extraction.DOCX, make_docx(["kraken"]))
         raw = f.content.storage.open(f.content.name, "rb").read()
 
         class _ForwardOnly(io.RawIOBase):
@@ -283,24 +299,18 @@ class ExtractorCoverageTests(SimpleTestCase):
     # Why each of these carries no indexable text. Spelled out, because an
     # empty reason is how a format ends up excluded by accident.
     NOT_INDEXED = {
-        # Pre-2007 Office: OLE compound files, not zip containers. They need a
-        # different reader and have their own issue.
-        "application/msword",
-        "application/vnd.ms-excel",
-        "application/vnd.ms-powerpoint",
-        # Zip-and-XML, but neither OOXML nor OpenDocument: their own part
-        # layouts, worth their own issue rather than a guess here.
-        "application/epub+zip",
-        "application/vnd.ms-visio.drawing.main+xml",
-        # Proprietary binary containers with no free parser in the stack.
-        "application/x-hwp",
-        "application/msonenote",
-        # A page description language, not a document format: the text is
-        # drawing operators, and rendering it is what OCR would be.
-        "application/postscript",
         # Magika files these under "document" but reports them as opaque
         # bytes, so there is no format here to key an extractor on.
         "application/octet-stream",
+        # A page description language rather than a document format: the text
+        # is drawing operators, and recovering it is what OCR would be.
+        "application/postscript",
+        # Tika has parsers for these three, but nothing in this repository can
+        # author one to test against, so they stay unclaimed until a real
+        # sample proves the extraction rather than the registration.
+        "application/x-hwp",
+        "application/msonenote",
+        "application/vnd.ms-visio.drawing.main+xml",
     }
 
     def _document_mime_types(self):
@@ -334,6 +344,6 @@ class ExtractorCoverageTests(SimpleTestCase):
     def test_every_office_type_the_extractor_supports_is_registered(self):
         # The registration loops over the extractor's own list; this fails if
         # the two ever drift apart.
-        for mime in office.SUPPORTED_MIME_TYPES:
+        for mime in extraction.DOCUMENT_MIME_TYPES:
             with self.subTest(mime=mime):
                 self.assertTrue(has_extractor(mime))

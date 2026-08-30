@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from xml.sax.saxutils import escape
 
 from docx import Document
 from odf.draw import Frame, Page, TextBox
@@ -34,6 +35,8 @@ from pptx.util import Inches
 ODT = "application/vnd.oasis.opendocument.text"
 ODS = "application/vnd.oasis.opendocument.spreadsheet"
 ODP = "application/vnd.oasis.opendocument.presentation"
+
+_DECLARATION = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
 
 # The layout with no placeholders on it, so a slide holds the text the test put
 # there and nothing the template came with.
@@ -196,4 +199,40 @@ def make_xlsx_shared_strings(strings: list[str], *, numbers: list[str] = ()) -> 
                 f'<row r="1">{"".join(cells)}</row></sheetData></worksheet>'
             ),
         }
+    )
+
+
+def make_rtf(paragraphs: list[str]) -> bytes:
+    """Rich Text Format: a text format, so it is written out directly."""
+    body = r"\par ".join(paragraphs)
+    return (r"{\rtf1\ansi\deff0 {\fonttbl{\f0 Times;}}\f0\fs24 " + body + "}").encode()
+
+
+def make_epub(title: str, paragraphs: list[str]) -> bytes:
+    """A minimal but complete EPUB 2 container."""
+    chapter = "".join(f"<p>{escape(text)}</p>" for text in paragraphs)
+    return make_zip(
+        {
+            "mimetype": "application/epub+zip",
+            "META-INF/container.xml": (
+                f'{_DECLARATION}<container version="1.0" xmlns="urn:oasis:names:tc'
+                ':opendocument:xmlns:container"><rootfiles><rootfile full-path='
+                '"content.opf" media-type="application/oebps-package+xml"/>'
+                "</rootfiles></container>"
+            ),
+            "content.opf": (
+                f'{_DECLARATION}<package xmlns="http://www.idpf.org/2007/opf"'
+                ' version="2.0" unique-identifier="bookid"><metadata xmlns:dc='
+                f'"http://purl.org/dc/elements/1.1/"><dc:title>{escape(title)}'
+                '</dc:title><dc:identifier id="bookid">urn:uuid:1</dc:identifier>'
+                "<dc:language>en</dc:language></metadata><manifest><item id="
+                '"c1" href="c1.xhtml" media-type="application/xhtml+xml"/>'
+                '</manifest><spine><itemref idref="c1"/></spine></package>'
+            ),
+            "c1.xhtml": (
+                f'{_DECLARATION}<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                f"{chapter}</body></html>"
+            ),
+        },
+        first="mimetype",
     )

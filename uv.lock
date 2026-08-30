@@ -1299,6 +1299,18 @@ wheels = [
 ]
 
 [[package]]
+name = "iscc-tika"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4d/29/0b1df68addba9b0a3d3739842a47117004c93c099304bfc2077b99766267/iscc_tika-0.6.0.tar.gz", hash = "sha256:9880aa1fd5acad76c2164e289acb73bf528e5e9d286b5d5fdb13863bd54bb236", size = 216616, upload-time = "2026-07-23T20:20:44.213Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/8c/6178481104a6afb67260b84188f4839070c69ffdb44ea292cd30d67a0272/iscc_tika-0.6.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:6bd2a65f85b8fe4250c232b26b6f0c7f2340b938711b0e39d365d4b5ee8b7400", size = 48874641, upload-time = "2026-07-23T20:20:32.281Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/2b/1f397de45c8a746622d04308f125cbf11b4c9e83555cc791ca53a24f0b29/iscc_tika-0.6.0-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:a0a23f46269aeabe137d2730b15a29b0a170ebaef32235debadb6983e3f937e8", size = 41522435, upload-time = "2026-07-23T20:20:35.413Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/60/a083135e1014505b1a7d79747ee126cfebe625d41717f71921075108e09a/iscc_tika-0.6.0-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:942aeec48ae989745eb89587b871c3841b4de4ce0ce94b31fd023f0b34ee9ac6", size = 42022786, upload-time = "2026-07-23T20:20:38.542Z" },
+    { url = "https://files.pythonhosted.org/packages/33/29/79d2190f75703c88d11c48cb5209a0d16eb15212c4c81964f28625db4338/iscc_tika-0.6.0-cp310-abi3-win_amd64.whl", hash = "sha256:df04c9b0803a71605ac4b8c326ec9f0dc0cf4c6590bfdd915285c3c8d30d5974", size = 40763119, upload-time = "2026-07-23T20:20:41.791Z" },
+]
+
+[[package]]
 name = "isodate"
 version = "0.7.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2757,6 +2769,7 @@ dependencies = [
     { name = "hiredis" },
     { name = "httpx2" },
     { name = "icalendar" },
+    { name = "iscc-tika" },
     { name = "lxml" },
     { name = "magika" },
     { name = "mistune" },
@@ -2768,7 +2781,6 @@ dependencies = [
     { name = "pillow" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pygments" },
-    { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "pywebpush" },
     { name = "redis" },
@@ -2789,6 +2801,7 @@ dev = [
     { name = "openpyxl" },
     { name = "playwright" },
     { name = "pyhpke" },
+    { name = "pypdf" },
     { name = "python-docx" },
     { name = "python-pptx" },
     { name = "ruff" },
@@ -2819,6 +2832,7 @@ requires-dist = [
     { name = "hiredis", specifier = ">=3.4.1" },
     { name = "httpx2", specifier = ">=2.12.0" },
     { name = "icalendar", specifier = ">=7.3.0" },
+    { name = "iscc-tika", specifier = ">=0.6.0" },
     { name = "lxml", specifier = ">=6.1.2" },
     { name = "magika", specifier = ">=1.0.0" },
     { name = "mistune", specifier = ">=3.3.4" },
@@ -2830,7 +2844,6 @@ requires-dist = [
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.4" },
     { name = "pygments", specifier = ">=2.21.0" },
-    { name = "pypdf", specifier = ">=6.16.2" },
     { name = "python-dotenv", specifier = ">=1.2.3" },
     { name = "pywebpush", specifier = ">=2.4.0" },
     { name = "redis", specifier = ">=8.1.0" },
@@ -2851,6 +2864,7 @@ dev = [
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "playwright", specifier = ">=1.62.0" },
     { name = "pyhpke", specifier = ">=0.6.0" },
+    { name = "pypdf", specifier = ">=6.16.2" },
     { name = "python-docx", specifier = ">=1.2.0" },
     { name = "python-pptx", specifier = ">=1.0.2" },
     { name = "ruff", specifier = "==0.16.4" },

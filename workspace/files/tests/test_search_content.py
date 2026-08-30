@@ -6,8 +6,11 @@ from django.db import connection
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
-from workspace.common.documents import office
+from workspace.common.documents import extraction
 from workspace.common.search import fts5_available
+from workspace.common.tests.office_fixtures import ODP as F_ODP
+from workspace.common.tests.office_fixtures import ODS as F_ODS
+from workspace.common.tests.office_fixtures import ODT as F_ODT
 from workspace.common.tests.office_fixtures import (
     make_docx,
     make_odf,
@@ -247,12 +250,16 @@ class DocumentContentSearchTests(ContentSearchTestCase):
 
     def test_a_word_only_inside_an_office_document_finds_the_file(self):
         documents = (
-            ("minutes.docx", office.DOCX, make_docx(["the treasurer resigned"])),
-            ("sales.xlsx", office.XLSX, make_xlsx(sheets={"Sales": [["treasurer"]]})),
-            ("deck.pptx", office.PPTX, make_pptx([["the treasurer resigned"]])),
-            ("notes.odt", office.ODT, make_odf(office.ODT, ["treasurer"])),
-            ("budget.ods", office.ODS, make_odf(office.ODS, ["treasurer"])),
-            ("slides.odp", office.ODP, make_odf(office.ODP, ["treasurer"])),
+            ("minutes.docx", extraction.DOCX, make_docx(["the treasurer resigned"])),
+            (
+                "sales.xlsx",
+                extraction.XLSX,
+                make_xlsx(sheets={"Sales": [["treasurer"]]}),
+            ),
+            ("deck.pptx", extraction.PPTX, make_pptx([["the treasurer resigned"]])),
+            ("notes.odt", extraction.ODT, make_odf(F_ODT, ["treasurer"])),
+            ("budget.ods", extraction.ODS, make_odf(F_ODS, ["treasurer"])),
+            ("slides.odp", extraction.ODP, make_odf(F_ODP, ["treasurer"])),
         )
         for name, mime, payload in documents:
             self._file(self.user, name, payload, mime=mime)
@@ -277,6 +284,6 @@ class DocumentContentSearchTests(ContentSearchTestCase):
             self.other,
             "private.docx",
             make_docx(["treasurer"]),
-            mime=office.DOCX,
+            mime=extraction.DOCX,
         )
         self.assertEqual(search_files("treasurer", self.user, limit=10), [])

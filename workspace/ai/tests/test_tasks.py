@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from workspace.ai.models import AITask, BotProfile
 from workspace.ai.tools import EditImageParams, GenerateImageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
-from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.models import MailAccount, MailFolder, MailLabel, MailMessage
 
 User = get_user_model()
 
@@ -1082,6 +1082,43 @@ class ClassifyMailMessagesTests(TestCase):
         self.assertTrue(payload["has_attachments"])
         self.assertTrue(payload["has_calendar_event"])
         self.assertTrue(payload["is_reply"])
+
+    @patch("workspace.ai.client.get_ai_client")
+    def test_classify_prompt_receives_label_descriptions(self, mock_client):
+        """The label block carries what the user said belongs in each label."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"results": []})
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = "gpt-4o-mini"
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        MailLabel.objects.create(
+            account=self.account,
+            name="Suivi",
+            description="Client follow-ups I still owe an answer",
+        )
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={"message_uuids": [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.prompts.mail import build_classify_messages
+        from workspace.ai.tasks.mail import classify_mail_messages
+
+        with patch(
+            "workspace.ai.prompts.mail.build_classify_messages",
+            wraps=build_classify_messages,
+        ) as mock_build:
+            classify_mail_messages(str(ai_task.uuid))
+
+        labels = mock_build.call_args[0][1]
+        self.assertIn(
+            {"name": "Suivi", "description": "Client follow-ups I still owe an answer"},
+            labels,
+        )
 
     @patch("workspace.ai.client.get_ai_client")
     def test_classifies_across_multiple_batches(self, mock_client):

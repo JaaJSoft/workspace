@@ -33,6 +33,7 @@ window.mailLabelsMixin = function mailLabelsMixin() {
         accountId: label ? label.account_id : accountId,
         uuid: label?.uuid || null,
         name: label?.name || '',
+        description: label?.description || '',
         color: label?.color || 'ghost',
         icon: label?.icon || '',
         notifyOnApply: label?.notify_on_apply || false,
@@ -67,8 +68,8 @@ window.mailLabelsMixin = function mailLabelsMixin() {
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
           body: JSON.stringify(isEdit
-            ? { name: m.name.trim(), color: m.color, icon: m.icon, notify_on_apply: m.notifyOnApply }
-            : { account_id: m.accountId, name: m.name.trim(), color: m.color, icon: m.icon, notify_on_apply: m.notifyOnApply }
+            ? { name: m.name.trim(), description: m.description.trim(), color: m.color, icon: m.icon, notify_on_apply: m.notifyOnApply }
+            : { account_id: m.accountId, name: m.name.trim(), description: m.description.trim(), color: m.color, icon: m.icon, notify_on_apply: m.notifyOnApply }
           ),
         });
         if (resp.ok) {
@@ -76,7 +77,7 @@ window.mailLabelsMixin = function mailLabelsMixin() {
           this.closeLabelModal();
         } else {
           const data = await resp.json().catch(() => ({}));
-          m.error = data.name?.[0] || data.detail || 'Failed to save label.';
+          m.error = data.name?.[0] || data.description?.[0] || data.detail || 'Failed to save label.';
         }
       } catch (e) {
         m.error = 'Network error.';

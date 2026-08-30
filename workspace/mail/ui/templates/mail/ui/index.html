@@ -177,6 +177,25 @@
             @keydown.escape="closeLabelModal()"
           />
         </label>
+        <label class="form-control w-full mb-3">
+          <div class="label">
+            <span class="label-text">What belongs here</span>
+            <span class="label-text-alt text-base-content/50">Optional</span>
+          </div>
+          <textarea
+            class="textarea textarea-bordered w-full textarea-sm leading-snug"
+            rows="2"
+            maxlength="200"
+            x-model="labelModal.description"
+            placeholder="e.g. Client follow-ups I still owe an answer"
+            @keydown.escape="closeLabelModal()"
+          ></textarea>
+          <div class="label">
+            <span class="label-text-alt text-base-content/50">
+              The AI classifier reads this to decide what lands in this label.
+            </span>
+          </div>
+        </label>
         <!-- Icon & color picker (shared component) -->
         <div
           x-data="{

@@ -148,6 +148,64 @@ class MailLabelCRUDTests(TestCase):
         self.assertIn("notify_on_apply", resp.json()[0])
         self.assertFalse(resp.json()[0]["notify_on_apply"])
 
+    def test_create_label_with_description_persists_it(self):
+        resp = self.client.post(
+            "/api/v1/mail/labels",
+            {
+                "account_id": str(self.account.uuid),
+                "name": "Suivi",
+                "description": "Client follow-ups I still owe an answer",
+            },
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(
+            resp.data["description"], "Client follow-ups I still owe an answer"
+        )
+        self.assertEqual(
+            MailLabel.objects.get(account=self.account, name="Suivi").description,
+            "Client follow-ups I still owe an answer",
+        )
+
+    def test_patch_sets_description(self):
+        label = MailLabel.objects.create(account=self.account, name="Perso")
+        resp = self.client.patch(
+            f"/api/v1/mail/labels/{label.uuid}",
+            {"description": "Anything from friends and family"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        label.refresh_from_db()
+        self.assertEqual(label.description, "Anything from friends and family")
+
+    def test_patch_can_clear_the_description(self):
+        label = MailLabel.objects.create(
+            account=self.account, name="Perso", description="Friends and family"
+        )
+        resp = self.client.patch(
+            f"/api/v1/mail/labels/{label.uuid}",
+            {"description": ""},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        label.refresh_from_db()
+        self.assertEqual(label.description, "")
+
+    def test_description_longer_than_the_field_is_rejected(self):
+        resp = self.client.post(
+            "/api/v1/mail/labels",
+            {
+                "account_id": str(self.account.uuid),
+                "name": "TooLong",
+                "description": "x" * 201,
+            },
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_list_exposes_description(self):
+        resp = self.client.get(f"/api/v1/mail/labels?account={self.account.uuid}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("description", resp.json()[0])
+
 
 class MessageLabelFilterTests(TestCase):
     def setUp(self):

@@ -88,6 +88,7 @@ class MailLabelSerializer(serializers.ModelSerializer):
             "uuid",
             "account_id",
             "name",
+            "description",
             "color",
             "icon",
             "position",
@@ -100,6 +101,9 @@ class MailLabelSerializer(serializers.ModelSerializer):
 class MailLabelCreateSerializer(serializers.Serializer):
     account_id = serializers.UUIDField()
     name = serializers.CharField(max_length=100)
+    description = serializers.CharField(
+        max_length=200, required=False, allow_blank=True, default=""
+    )
     color = serializers.CharField(max_length=30, required=False, default="")
     icon = serializers.CharField(max_length=50, required=False, default="")
     notify_on_apply = serializers.BooleanField(required=False, default=False)
@@ -107,6 +111,9 @@ class MailLabelCreateSerializer(serializers.Serializer):
 
 class MailLabelUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100, required=False)
+    description = serializers.CharField(
+        max_length=200, required=False, allow_blank=True
+    )
     color = serializers.CharField(max_length=30, required=False)
     icon = serializers.CharField(max_length=50, required=False)
     position = serializers.IntegerField(min_value=0, required=False)

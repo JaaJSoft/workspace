@@ -71,6 +71,7 @@ class MailLabelListView(APIView):
         label = MailLabel.objects.create(
             account=account,
             name=ser.validated_data["name"],
+            description=ser.validated_data.get("description", ""),
             color=ser.validated_data.get("color", ""),
             icon=ser.validated_data.get("icon", ""),
             notify_on_apply=ser.validated_data.get("notify_on_apply", False),
@@ -111,7 +112,14 @@ class MailLabelDetailView(APIView):
                 )
 
         update_fields = ["updated_at"]
-        for field in ("name", "color", "icon", "position", "notify_on_apply"):
+        for field in (
+            "name",
+            "description",
+            "color",
+            "icon",
+            "position",
+            "notify_on_apply",
+        ):
             if field in ser.validated_data:
                 setattr(label, field, ser.validated_data[field])
                 update_fields.append(field)

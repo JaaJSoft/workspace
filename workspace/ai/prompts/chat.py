@@ -1,6 +1,6 @@
 from django.conf import settings
 
-from .base import build_context_block
+from .base import build_context_block, sanitize_prompt_line
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a friendly, engaging companion in a chat application. "
@@ -25,8 +25,7 @@ def _sanitize_identity(value: str, max_len: int = 100) -> str:
     forge a new section in the system prompt - readable as an
     instruction by the model.
     """
-    cleaned = "".join(c for c in value if c.isprintable())
-    return cleaned[:max_len]
+    return sanitize_prompt_line(value, max_len)
 
 
 def _build_memory_block(user, bot) -> str:

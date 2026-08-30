@@ -368,3 +368,90 @@ class SuspiciousLabelBackfillTests(TestCase):
     def test_reverse_is_a_noop(self):
         reverse = self.module.Migration.operations[0].reverse_code
         self.assertIs(reverse, migrations.RunPython.noop)
+
+
+class LabelDescriptionTests(TestCase):
+    def setUp(self):
+        self.account = MailAccount.objects.create(
+            owner=User.objects.create_user(username="lbldesc", password="pass"),
+            email="desc@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="desc@example.test",
+        )
+
+    def test_description_defaults_to_blank(self):
+        label = MailLabel.objects.create(account=self.account, name="Perso")
+        self.assertEqual(label.description, "")
+
+    def test_seeded_defaults_ship_with_a_description(self):
+        for label in self.account.labels.all():
+            self.assertTrue(
+                label.description,
+                f"seeded label {label.name} has no description",
+            )
+
+
+class LabelDescriptionBackfillTests(TestCase):
+    """The data migration describes the default labels of pre-existing accounts."""
+
+    def setUp(self):
+        self.account = MailAccount.objects.create(
+            owner=User.objects.create_user(username="descbackfill", password="pass"),
+            email="descbf@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="descbf@example.test",
+        )
+        self.account.labels.update(description="")
+        self.module = importlib.import_module(
+            "workspace.mail.migrations.0034_seed_label_descriptions"
+        )
+
+    class _Editor:
+        class connection:
+            alias = "default"
+
+    def test_backfill_describes_the_default_labels(self):
+        self.module.seed_label_descriptions(apps, self._Editor)
+
+        urgent = MailLabel.objects.get(account=self.account, name="Urgent")
+        self.assertTrue(urgent.description)
+
+    def test_backfill_leaves_a_user_written_description_alone(self):
+        MailLabel.objects.filter(account=self.account, name="Urgent").update(
+            description="Only what my boss sends"
+        )
+
+        self.module.seed_label_descriptions(apps, self._Editor)
+
+        self.assertEqual(
+            MailLabel.objects.get(account=self.account, name="Urgent").description,
+            "Only what my boss sends",
+        )
+
+    def test_backfill_ignores_a_user_created_case_variant(self):
+        """Both seeders write "Urgent" verbatim, so a lowercase "urgent" is
+        a label the user made and named themselves.
+        """
+        variant = MailLabel.objects.create(account=self.account, name="urgent")
+
+        self.module.seed_label_descriptions(apps, self._Editor)
+
+        variant.refresh_from_db()
+        self.assertEqual(variant.description, "")
+        self.assertTrue(
+            MailLabel.objects.get(account=self.account, name="Urgent").description
+        )
+
+    def test_backfill_ignores_labels_the_user_created(self):
+        custom = MailLabel.objects.create(account=self.account, name="Suivi")
+
+        self.module.seed_label_descriptions(apps, self._Editor)
+
+        custom.refresh_from_db()
+        self.assertEqual(custom.description, "")
+
+    def test_reverse_is_a_noop(self):
+        reverse = self.module.Migration.operations[0].reverse_code
+        self.assertIs(reverse, migrations.RunPython.noop)

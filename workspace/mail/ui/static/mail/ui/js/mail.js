@@ -95,7 +95,7 @@ function mailApp() {
     labels: {},
     selectedLabel: null,
     unifiedInbox: false,
-    labelModal: { accountId: null, uuid: null, name: '', color: 'ghost', icon: '', saving: false, error: '' },
+    labelModal: { accountId: null, uuid: null, name: '', description: '', color: 'ghost', icon: '', saving: false, error: '' },
     labelCtx: { open: false, x: 0, y: 0, label: null },
     dragOverLabel: null,
 

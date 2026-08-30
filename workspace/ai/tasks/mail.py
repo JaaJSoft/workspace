@@ -297,7 +297,10 @@ def classify_mail_messages(self, task_id: str):
             for account_id, account_msgs in msgs_by_account.items():
                 account_email = account_msgs[0].account.email
                 account_labels = list(MailLabel.objects.filter(account_id=account_id))
-                label_names = [lbl.name for lbl in account_labels]
+                label_specs = [
+                    {"name": lbl.name, "description": lbl.description}
+                    for lbl in account_labels
+                ]
                 label_by_lower = {lbl.name.lower(): lbl for lbl in account_labels}
 
                 for batch in batched(account_msgs, CLASSIFY_BATCH_SIZE, strict=False):
@@ -307,7 +310,7 @@ def classify_mail_messages(self, task_id: str):
                         _classify_payload(m, account_email, user_tz) for m in batch
                     ]
 
-                    messages = build_classify_messages(emails, label_names)
+                    messages = build_classify_messages(emails, label_specs)
                     parsed, result = call_llm_structured(
                         messages, ClassifiedEmails, model=settings.AI_SMALL_MODEL
                     )

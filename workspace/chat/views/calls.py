@@ -113,7 +113,9 @@ class CallSignalView(APIView):
                 {"detail": "No active call."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        send_signal(session.uuid, to_participant, user_key(request.user.id), signal)
+        send_signal(
+            session.uuid, user_key(target_user_id), user_key(request.user.id), signal
+        )
         return Response({"status": "ok"})
 
 

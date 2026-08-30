@@ -37,7 +37,9 @@ class CallSseDeliveryTests(TestCase):
 
     def test_call_events_emitted_even_when_not_dirty(self):
         # Signaling latency matters: deliver on the None (timeout) poll too.
-        sig.enqueue_event(f"u:{self.user.id}", "call_signal", {"from_user_id": 2})
+        sig.enqueue_event(
+            f"u:{self.user.id}", "call_signal", {"from_participant": "u:2"}
+        )
         provider = ChatSSEProvider(self.user, None)
         events = provider.poll(None)
         names = [e[0] for e in events]

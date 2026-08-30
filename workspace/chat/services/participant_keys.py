@@ -10,8 +10,17 @@ The format is deliberately sortable: the WebRTC glare rules elect exactly one
 offerer by comparing two keys, and any total order satisfies that.
 """
 
+import re
+
 USER_PREFIX = "u"
 GUEST_PREFIX = "g"
+
+# Canonical decimal payload only: no sign, no underscore digit-group
+# separators, no surrounding whitespace, no non-ASCII digits, no leading
+# zeros beyond a lone "0". int() accepts all of those spellings, but the only
+# producer of a user key is user_key(), so a payload that would not round-trip
+# through it is not a key this service issued.
+_USER_ID_PAYLOAD_RE = re.compile(r"0|[1-9][0-9]*")
 
 
 def user_key(user_id):
@@ -44,7 +53,7 @@ def user_id_from_key(key):
     """
     if not is_user_key(key):
         return None
-    try:
-        return int(key.split(":", 1)[1])
-    except ValueError:
+    payload = key.split(":", 1)[1]
+    if not _USER_ID_PAYLOAD_RE.fullmatch(payload):
         return None
+    return int(payload)

@@ -170,6 +170,31 @@ class CallViewTests(TestCase):
         )
         self.assertEqual(resp.status_code, 400)
 
+    def test_signal_rejects_non_canonical_spellings_of_a_valid_target(self):
+        # Each of these int()-parses to self.b.id, but none is the exact
+        # spelling user_key() produces, so none may reach self.b's mailbox.
+        self.client.force_authenticate(self.a)
+        self.client.post(self._url("/join"))
+        self.client.force_authenticate(self.b)
+        self.client.post(self._url("/join"))
+        sig.drain_events(f"u:{self.b.id}")  # clear lifecycle noise
+        self.client.force_authenticate(self.a)
+        for spelling in (
+            f"u:0{self.b.id}",
+            f"u: {self.b.id}",
+            f"u:{self.b.id} ",
+            f"u:+{self.b.id}",
+            f"u:{self.b.id}\n",
+            f"u:   {self.b.id}",
+        ):
+            resp = self.client.post(
+                self._url("/signal"),
+                {"to_participant": spelling, "signal": {"type": "offer"}},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 400, spelling)
+        self.assertEqual(sig.drain_events(f"u:{self.b.id}"), [])
+
     def test_signal_rejects_a_non_member_target(self):
         self.client.force_authenticate(self.a)
         self.client.post(self._url("/join"))

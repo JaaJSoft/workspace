@@ -43,6 +43,24 @@ class MalformedKeyTests(SimpleTestCase):
         self.assertIsNone(keys.user_id_from_key("u:abc"))
         self.assertIsNone(keys.user_id_from_key("u:1:2"))
 
+    def test_user_id_from_key_rejects_non_canonical_spellings(self):
+        # int() happily parses all of these to 7 (or, for "u:7_0", to 70), but
+        # user_key() never produces them, so a payload that does not round-trip
+        # through user_key() is not a key this service issued.
+        self.assertIsNone(keys.user_id_from_key("u:007"))
+        self.assertIsNone(keys.user_id_from_key("u: 7"))
+        self.assertIsNone(keys.user_id_from_key("u:7 "))
+        self.assertIsNone(keys.user_id_from_key("u:+7"))
+        self.assertIsNone(keys.user_id_from_key("u:-7"))
+        self.assertIsNone(keys.user_id_from_key("u:7_0"))
+        self.assertIsNone(keys.user_id_from_key("u:\u0667"))  # Arabic-Indic 7
+        self.assertIsNone(keys.user_id_from_key("u:7\n"))
+        self.assertIsNone(keys.user_id_from_key("u:   7"))
+
+    def test_user_id_from_key_still_accepts_the_canonical_spelling(self):
+        self.assertEqual(keys.user_id_from_key("u:7"), 7)
+        self.assertEqual(keys.user_id_from_key("u:0"), 0)
+
     def test_keys_are_totally_ordered(self):
         # chatCallShouldDriveIceRestart elects a single offerer by comparing two
         # keys. Any total order works; this pins that mixed kinds compare.

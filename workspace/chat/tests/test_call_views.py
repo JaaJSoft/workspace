@@ -61,19 +61,22 @@ class CallViewTests(TestCase):
         self.client.post(self._url("/join"))
         self.client.force_authenticate(self.b)
         self.client.post(self._url("/join"))
-        sig.drain_events(self.b.id)  # clear lifecycle noise
+        sig.drain_events(f"u:{self.b.id}")  # clear lifecycle noise
         self.client.force_authenticate(self.a)
         resp = self.client.post(
             self._url("/signal"),
-            {"to_user_id": self.b.id, "signal": {"type": "offer", "sdp": "x"}},
+            {
+                "to_participant": f"u:{self.b.id}",
+                "signal": {"type": "offer", "sdp": "x"},
+            },
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
         delivered = [
-            e for e in sig.drain_events(self.b.id) if e["event"] == "call_signal"
+            e for e in sig.drain_events(f"u:{self.b.id}") if e["event"] == "call_signal"
         ]
         self.assertEqual(len(delivered), 1)
-        self.assertEqual(delivered[0]["data"]["from_user_id"], self.a.id)
+        self.assertEqual(delivered[0]["data"]["from_participant"], f"u:{self.a.id}")
         # The envelope must carry the active call SESSION id (not the
         # conversation id), so clients can scope signals to the right call.
         session = calls.get_active_call(self.conv.uuid)
@@ -84,7 +87,7 @@ class CallViewTests(TestCase):
         self.client.post(self._url("/join"))
         resp = self.client.post(
             self._url("/signal"),
-            {"to_user_id": self.outsider.id, "signal": {"type": "offer"}},
+            {"to_participant": f"u:{self.outsider.id}", "signal": {"type": "offer"}},
             format="json",
         )
         self.assertEqual(resp.status_code, 400)
@@ -100,15 +103,15 @@ class CallViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         session = calls.get_active_call(self.conv.uuid)
         self.assertEqual(
-            calls.get_presence(session.uuid)[str(self.a.id)], {"audio": False}
+            calls.get_presence(session.uuid)[f"u:{self.a.id}"], {"audio": False}
         )
 
-    def test_signal_with_boolean_user_id_rejected(self):
+    def test_signal_rejects_a_boolean_participant(self):
         self.client.force_authenticate(self.a)
         self.client.post(self._url("/join"))
         resp = self.client.post(
             self._url("/signal"),
-            {"to_user_id": True, "signal": {"type": "offer"}},
+            {"to_participant": True, "signal": {"type": "offer"}},
             format="json",
         )
         self.assertEqual(resp.status_code, 400)
@@ -135,3 +138,80 @@ class CallViewTests(TestCase):
         resp = self.client.post(f"/api/v1/chat/conversations/{bot_conv.uuid}/call/join")
         self.assertEqual(resp.status_code, 400)
         self.assertIsNone(calls.get_active_call(bot_conv.uuid))
+
+    def test_signal_relays_to_a_participant_key(self):
+        self.client.force_authenticate(self.a)
+        self.client.post(self._url("/join"))
+        resp = self.client.post(
+            self._url("/signal"),
+            {"to_participant": f"u:{self.b.id}", "signal": {"type": "offer"}},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        out = sig.drain_events(f"u:{self.b.id}")
+        self.assertEqual(out[-1]["event"], "call_signal")
+        self.assertEqual(out[-1]["data"]["from_participant"], f"u:{self.a.id}")
+
+    def test_signal_rejects_a_missing_participant(self):
+        self.client.force_authenticate(self.a)
+        self.client.post(self._url("/join"))
+        resp = self.client.post(
+            self._url("/signal"), {"signal": {"type": "offer"}}, format="json"
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_signal_rejects_a_malformed_key(self):
+        self.client.force_authenticate(self.a)
+        self.client.post(self._url("/join"))
+        resp = self.client.post(
+            self._url("/signal"),
+            {"to_participant": "garbage", "signal": {"type": "offer"}},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_signal_rejects_a_non_member_target(self):
+        self.client.force_authenticate(self.a)
+        self.client.post(self._url("/join"))
+        resp = self.client.post(
+            self._url("/signal"),
+            {
+                "to_participant": f"u:{self.outsider.id}",
+                "signal": {"type": "offer"},
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_heartbeat_broadcasts_the_participant_key_on_change(self):
+        self.client.force_authenticate(self.a)
+        self.client.post(self._url("/join"))
+        self.client.force_authenticate(self.b)
+        self.client.post(self._url("/join"))
+        sig.drain_events(f"u:{self.a.id}")
+        self.client.post(
+            self._url("/heartbeat"),
+            {"media_state": {"audio": False}},
+            format="json",
+        )
+        out = sig.drain_events(f"u:{self.a.id}")
+        updates = [e for e in out if e["event"] == "call_participant_updated"]
+        self.assertEqual(updates[-1]["data"]["participant_key"], f"u:{self.b.id}")
+
+    def test_heartbeat_with_unchanged_media_state_uses_the_participant_key(self):
+        # Repeats what join already recorded, so changed is False and the
+        # broadcast branch - the only thing that would surface a wrong key - is
+        # skipped.
+        self.client.force_authenticate(self.a)
+        self.client.post(self._url("/join"))
+        session = calls.get_active_call(self.conv.uuid)
+        resp = self.client.post(
+            self._url("/heartbeat"),
+            {"media_state": dict(calls.DEFAULT_MEDIA_STATE)},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        presence = calls.get_presence(session.uuid)
+        self.assertIn(f"u:{self.a.id}", presence)
+        self.assertNotIn(self.a.id, presence)
+        self.assertNotIn(str(self.a.id), presence)

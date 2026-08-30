@@ -18,6 +18,7 @@ from ..services.conversations import (
     is_active_member,
     is_bot_conversation,
 )
+from ..services.participant_keys import user_id_from_key, user_key
 
 logger = logging.getLogger(__name__)
 
@@ -85,19 +86,20 @@ class CallSignalView(APIView):
         if not get_active_membership(request.user, conversation_id):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        to_user_id = request.data.get("to_user_id")
+        to_participant = request.data.get("to_participant")
         signal = request.data.get("signal")
-        if (
-            isinstance(to_user_id, bool)
-            or not isinstance(to_user_id, int)
-            or not isinstance(signal, dict)
-        ):
+        if not isinstance(to_participant, str) or not isinstance(signal, dict):
             return Response(
-                {"detail": "to_user_id (int) and signal (object) are required."},
+                {"detail": "to_participant (string) and signal (object) are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # The target must be an active member of this same conversation.
-        if not is_active_member(to_user_id, conversation_id):
+        # Members are the only participants until meetings land, so the target
+        # must resolve to a user id and that user must be an active member of
+        # this same conversation.
+        target_user_id = user_id_from_key(to_participant)
+        if target_user_id is None or not is_active_member(
+            target_user_id, conversation_id
+        ):
             return Response(
                 {"detail": "Target is not a member."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -111,7 +113,7 @@ class CallSignalView(APIView):
                 {"detail": "No active call."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        send_signal(session.uuid, to_user_id, request.user.id, signal)
+        send_signal(session.uuid, to_participant, user_key(request.user.id), signal)
         return Response({"status": "ok"})
 
 
@@ -131,17 +133,18 @@ class CallHeartbeatView(APIView):
         if not isinstance(media_state, dict):
             media_state = dict(calls.DEFAULT_MEDIA_STATE)
 
-        changed = calls.touch_presence(session.uuid, request.user.id, media_state)
+        key = user_key(request.user.id)
+        changed = calls.touch_presence(session.uuid, key, media_state)
         if changed:
             calls._broadcast(
                 conversation_id,
                 "call_participant_updated",
                 {
                     "session_id": str(session.uuid),
-                    "user_id": request.user.id,
+                    "participant_key": key,
                     "media_state": media_state,
                 },
-                exclude_user_id=request.user.id,
+                exclude_key=key,
             )
         return Response({"status": "ok"})
 

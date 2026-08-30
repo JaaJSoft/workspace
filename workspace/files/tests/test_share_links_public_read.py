@@ -1,9 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileShareLink
+from workspace.files.services.thumbnails.generation import get_thumbnail_path
 
 User = get_user_model()
 
@@ -112,6 +114,20 @@ class SharedFolderReadTests(APITestCase):
         self.assertEqual(len(resp.data["entries"]), 2)
         self.assertEqual(resp["X-Has-More"], "true")
 
+    def test_entries_defaults_to_a_bounded_page(self):
+        """No ``limit`` given must not dump the whole folder in one request."""
+        for index in range(201):
+            File.objects.create(
+                owner=self.owner,
+                name=f"f{index:03}.txt",
+                node_type=File.NodeType.FILE,
+                parent=self.root,
+            )
+        resp = self.client.get(f"/api/v1/files/shared/{self.read_link.token}/entries")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data["entries"]), 200)
+        self.assertEqual(resp["X-Has-More"], "true")
+
     def test_download_reaches_a_descendant(self):
         resp = self.client.get(
             f"/api/v1/files/shared/{self.read_link.token}/download",
@@ -138,3 +154,48 @@ class SharedFolderReadTests(APITestCase):
         """A folder has no content: the content endpoint must not 500 on it."""
         resp = self.client.get(f"/api/v1/files/shared/{self.read_link.token}/content")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_download_outside_the_subtree_does_not_record_a_view(self):
+        self.read_link.refresh_from_db()
+        self.assertEqual(self.read_link.view_count, 0)
+        resp = self.client.get(
+            f"/api/v1/files/shared/{self.read_link.token}/download",
+            {"file": str(self.outside.uuid)},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.read_link.refresh_from_db()
+        self.assertEqual(self.read_link.view_count, 0)
+
+    def test_download_of_a_real_descendant_records_a_view(self):
+        self.client.get(
+            f"/api/v1/files/shared/{self.read_link.token}/download",
+            {"file": str(self.doc.uuid)},
+        )
+        self.read_link.refresh_from_db()
+        self.assertEqual(self.read_link.view_count, 1)
+
+    def test_thumbnail_is_refused_on_a_drop_link(self):
+        resp = self.client.get(f"/api/v1/files/shared/{self.drop_link.token}/thumbnail")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_thumbnail_refuses_a_file_outside_the_subtree(self):
+        resp = self.client.get(
+            f"/api/v1/files/shared/{self.read_link.token}/thumbnail",
+            {"file": str(self.outside.uuid)},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_thumbnail_serves_the_blob_and_records_a_view(self):
+        self.doc.has_thumbnail = True
+        self.doc.save(update_fields=["has_thumbnail"])
+        default_storage.save(
+            get_thumbnail_path(self.doc.uuid), ContentFile(b"webp-bytes")
+        )
+        resp = self.client.get(
+            f"/api/v1/files/shared/{self.read_link.token}/thumbnail",
+            {"file": str(self.doc.uuid)},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp["Content-Type"], "image/webp")
+        self.read_link.refresh_from_db()
+        self.assertEqual(self.read_link.view_count, 1)

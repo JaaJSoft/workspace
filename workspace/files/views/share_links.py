@@ -34,6 +34,13 @@ class ShareLinkVerifyThrottle(AnonRateThrottle):
         }
 
 
+class SharedEntriesPagination(OptInLimitOffsetPagination):
+    """Always paginates: this endpoint is anonymous, so an unbounded folder
+    listing would be a denial-of-service primitive costing one request."""
+
+    default_limit = 200
+
+
 def _lookup_link(token):
     """The share link for *token*, or None. No policy, no status mapping."""
     return (
@@ -242,13 +249,14 @@ class SharedFileContentView(APIView):
         if pwd_err:
             return pwd_err
 
-        _record_access(link)
-
         f, err = _target_node(link, request, "file")
         if err:
             return err
         if f.node_type != File.NodeType.FILE:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+        _record_access(link)
+
         if not f.content:
             return Response(
                 {"detail": "File has no content."},
@@ -300,13 +308,14 @@ class SharedFileDownloadView(APIView):
         if pwd_err:
             return pwd_err
 
-        _record_access(link)
-
         f, err = _target_node(link, request, "file")
         if err:
             return err
         if f.node_type != File.NodeType.FILE:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+        _record_access(link)
+
         if not f.content:
             return Response(
                 {"detail": "File has no content."},
@@ -333,7 +342,7 @@ class SharedFolderEntriesView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
-    pagination_class = OptInLimitOffsetPagination
+    pagination_class = SharedEntriesPagination
 
     def get(self, request, token):
         link, err = _resolve_link(token)
@@ -360,13 +369,10 @@ class SharedFolderEntriesView(APIView):
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(children, request, view=self)
-        rows = children if page is None else page
         body = {
             "breadcrumbs": _breadcrumbs(link.file, folder),
-            "entries": [_entry_payload(node) for node in rows],
+            "entries": [_entry_payload(node) for node in page],
         }
-        if page is None:
-            return Response(body)
         return paginator.get_paginated_response(body)
 
 

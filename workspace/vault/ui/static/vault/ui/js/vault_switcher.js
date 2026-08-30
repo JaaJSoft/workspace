@@ -316,6 +316,11 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
               return;
             }
             this.closeCreateDialog();
+            // Opened like one created cleanly. Confirming a vault exists and
+            // then leaving the user where they were is the same puzzle by
+            // another route.
+            this.rememberVault(pending);
+            await this.load();
           } catch (reloadErr) {
             this.error = 'Your vault was created, but it could not be opened.';
           }
@@ -328,16 +333,16 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
     },
 
     // The create endpoint sets is_favorite itself and refuses a signature over
-    // anything else, so the checkbox is honoured by a second write. Its
-    // failure is not the creation's: the vault exists, and saying it could not
-    // be created would send the user to make another one.
+    // anything else, so the checkbox is honoured by a second write. Its failure
+    // is not the creation's: the vault exists, and saying it could not be
+    // created would send the user to make another one - so this swallows, and
+    // the reload that follows reads back whichever way the flag landed.
     favouriteAfterCreate: async function (vault) {
       try {
         const body = await window.buildVaultUpdateRequest(
           window.vaultSession, vault, { is_favorite: true }
         );
         await window.vaultApi.updateVault(vault.uuid, body);
-        vault.is_favorite = true;
       } catch (err) {
         /* the vault stands; only the flag did not land */
       }

@@ -15,10 +15,10 @@
 {% endblock %}
 
 {% comment %}
-  One template, two screens, because one view serves two URLs: /vault lists
-  the vaults, /vault/<uuid> browses one. A palette command is a plain link and
-  can name no UUID, which is what forces them to share a view - and sharing a
-  view is what makes the unlock gate below common to both.
+  One view for two URLs: /vault opens whichever vault this device was last
+  in, /vault/<uuid> opens the one it names. A palette command is a plain link
+  and can name no UUID, which is what forces the pair - and what makes the
+  bare route worth having at all.
 
   The two differ in how they use the viewport: the listing scrolls with the
   page, the browser is a fixed shell with its own scrolling pane.

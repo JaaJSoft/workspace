@@ -276,3 +276,56 @@ test('a lock closes the switcher and drops what it held', () => {
   assert.deepStrictEqual({ ...component.vaultActions }, {});
   assert.equal(component.vaultMenu.open, false);
 });
+
+// --- creation, including the race the endpoint answers 409 to ---------------
+
+test('a created vault is the one you end up in', async () => {
+  const { component } = switcher();
+  component.openCreateDialog();
+  component.newVault.name = 'Cards';
+  await component.createVault();
+  assert.equal(component.vaultUuid, 'v-new');
+  assert.equal(component.newVault, null, 'the dialog closes behind it');
+});
+
+test('a vault recovered from a 409 is opened like any other', async () => {
+  // The answer was lost, not the write: the vault exists. Confirming that and
+  // then leaving the user where they were is the thing the happy path calls
+  // wondering where it went.
+  let attempts = 0;
+  const { component } = switcher({
+    api: {
+      createVault: async () => {
+        attempts += 1;
+        const err = new Error('taken');
+        err.status = 409;
+        throw err;
+      },
+    },
+  });
+  component.vaults = [VAULT, OTHER, { uuid: 'v-new', name: 'Cards' }];
+  component.openCreateDialog();
+  component.newVault.name = 'Cards';
+  await component.createVault();
+  assert.equal(attempts, 1);
+  assert.equal(component.newVault, null, 'the dialog closes: the vault is there');
+  assert.equal(component.vaultUuid, 'v-new');
+  assert.equal(component.error, '');
+});
+
+test('a 409 for a uuid that is nobody else here reports the failure', async () => {
+  const { component } = switcher({
+    api: {
+      createVault: async () => {
+        const err = new Error('taken');
+        err.status = 409;
+        throw err;
+      },
+    },
+  });
+  component.openCreateDialog();
+  component.newVault.name = 'Cards';
+  await component.createVault();
+  assert.match(component.error, /could not be created/);
+  assert.equal(component.vaultUuid, 'v-1', 'and leaves the open vault alone');
+});

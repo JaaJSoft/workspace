@@ -122,8 +122,8 @@ window.vaultBrowser = (function () {
       ...window.vaultSwitcherMixin(),
       ...store,
 
-      // The vault this page was routed to. Null on /vault, where the listing
-      // renders instead.
+      // The vault this page was routed to. Null on /vault, where the vault to
+      // open is resolved once the account is unlocked.
       vaultUuid: null,
       // Every vault the account can open, for the switcher.
       vaults: [],

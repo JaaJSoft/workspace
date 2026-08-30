@@ -1,3 +1,6 @@
+import importlib
+
+from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, migrations
 from django.test import TestCase
@@ -153,7 +156,8 @@ class DefaultLabelSeedTests(TestCase):
             account.labels.order_by("position").values_list("name", flat=True)
         )
         self.assertEqual(
-            labels, ["Urgent", "Action", "FYI", "Newsletter", "Notification"]
+            labels,
+            ["Urgent", "Action", "FYI", "Newsletter", "Notification", "Suspicious"],
         )
 
     def test_save_existing_account_does_not_duplicate(self):
@@ -167,7 +171,7 @@ class DefaultLabelSeedTests(TestCase):
         )
         account.display_name = "Updated"
         account.save()
-        self.assertEqual(account.labels.count(), 5)
+        self.assertEqual(account.labels.count(), 6)
 
     def test_signal_skips_seeding_when_raw(self):
         """Regression: loaddata fires post_save with raw=True; the handler must
@@ -314,3 +318,53 @@ class NotifyOnApplyBackfillTests(TestCase):
         self.assertTrue(
             MailLabel.objects.get(account=self.account, name="Action").notify_on_apply
         )
+
+
+class SuspiciousLabelBackfillTests(TestCase):
+    """The data migration gives pre-existing accounts the Suspicious label."""
+
+    def setUp(self):
+        self.account = MailAccount.objects.create(
+            owner=User.objects.create_user(username="suspbackfill", password="pass"),
+            email="susp@example.test",
+            imap_host="imap.example.test",
+            smtp_host="smtp.example.test",
+            username="susp@example.test",
+        )
+        self.module = importlib.import_module(
+            "workspace.mail.migrations.0032_seed_suspicious_label"
+        )
+
+    class _Editor:
+        class connection:
+            alias = "default"
+
+    def test_backfill_creates_the_label_on_an_account_without_it(self):
+        # The post_save signal already seeded it; drop it so this test
+        # exercises the migration rather than the signal.
+        MailLabel.objects.filter(account=self.account, name="Suspicious").delete()
+
+        self.module.seed_suspicious_label(apps, self._Editor)
+
+        label = MailLabel.objects.get(account=self.account, name="Suspicious")
+        self.assertEqual(label.color, "error")
+        self.assertEqual(label.icon, "shield")
+        self.assertEqual(label.position, 5)
+        self.assertFalse(label.notify_on_apply)
+
+    def test_backfill_is_idempotent_and_case_insensitive(self):
+        MailLabel.objects.filter(account=self.account, name="Suspicious").update(
+            name="suspicious", color="warning"
+        )
+
+        self.module.seed_suspicious_label(apps, self._Editor)
+
+        matches = MailLabel.objects.filter(
+            account=self.account, name__iexact="suspicious"
+        )
+        self.assertEqual(matches.count(), 1)
+        self.assertEqual(matches.get().color, "warning")
+
+    def test_reverse_is_a_noop(self):
+        reverse = self.module.Migration.operations[0].reverse_code
+        self.assertIs(reverse, migrations.RunPython.noop)

@@ -13,6 +13,7 @@ DEFAULT_LABELS = [
     {"name": "FYI", "color": "info", "icon": "info", "position": 2},
     {"name": "Newsletter", "color": "secondary", "icon": "newspaper", "position": 3},
     {"name": "Notification", "color": "ghost", "icon": "bell", "position": 4},
+    {"name": "Suspicious", "color": "error", "icon": "shield", "position": 5},
 ]
 
 

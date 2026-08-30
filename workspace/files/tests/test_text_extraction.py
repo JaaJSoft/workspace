@@ -189,7 +189,7 @@ class DocumentExtractionTests(TestCase):
     def test_office_bodies_are_extracted(self):
         for name, mime, payload in (
             ("a.docx", office.DOCX, make_docx(["The kraken sleeps."])),
-            ("a.xlsx", office.XLSX, make_xlsx(shared_strings=["The kraken sleeps."])),
+            ("a.xlsx", office.XLSX, make_xlsx(sheets={"S": [["The kraken sleeps."]]})),
             ("a.pptx", office.PPTX, make_pptx([["The kraken sleeps."]])),
             ("a.odt", office.ODT, make_odf(office.ODT, ["The kraken sleeps."])),
             ("a.ods", office.ODS, make_odf(office.ODS, ["The kraken sleeps."])),

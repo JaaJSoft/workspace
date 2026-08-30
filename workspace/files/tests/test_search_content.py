@@ -248,7 +248,7 @@ class DocumentContentSearchTests(ContentSearchTestCase):
     def test_a_word_only_inside_an_office_document_finds_the_file(self):
         documents = (
             ("minutes.docx", office.DOCX, make_docx(["the treasurer resigned"])),
-            ("sales.xlsx", office.XLSX, make_xlsx(shared_strings=["treasurer"])),
+            ("sales.xlsx", office.XLSX, make_xlsx(sheets={"Sales": [["treasurer"]]})),
             ("deck.pptx", office.PPTX, make_pptx([["the treasurer resigned"]])),
             ("notes.odt", office.ODT, make_odf(office.ODT, ["treasurer"])),
             ("budget.ods", office.ODS, make_odf(office.ODS, ["treasurer"])),

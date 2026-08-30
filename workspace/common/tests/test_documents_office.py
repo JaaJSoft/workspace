@@ -1,3 +1,11 @@
+"""Reading text out of OOXML and OpenDocument containers.
+
+Most fixtures are written by the real authoring libraries, so what is asserted
+here is what a word processor actually lays out. The hand-built ones are
+labelled with what they prove that no library will emit: a rival dialect of the
+same format, a container that is malformed on purpose, a part that lies.
+"""
+
 import io
 from unittest import mock
 
@@ -17,6 +25,7 @@ from workspace.common.tests.office_fixtures import (
     make_odf,
     make_pptx,
     make_xlsx,
+    make_xlsx_shared_strings,
     make_zip,
 )
 
@@ -46,44 +55,47 @@ class DocxTests(SimpleTestCase):
         words = _text(make_docx(["alpha", "beta"]), DOCX).split()
         self.assertEqual(words, ["alpha", "beta"])
 
+    def test_a_heading_is_read(self):
+        self.assertIn("Quarterly", _text(make_docx([], heading="Quarterly"), DOCX))
+
+    def test_runs_split_mid_word_are_joined_without_a_gap(self):
+        # Word splits a sentence into runs on every formatting or spellcheck
+        # boundary, mid-word included. Extracting run by run and joining with a
+        # separator would turn "kraken" into two tokens that match nothing.
+        payload = make_docx([], runs=["The kra", "ken sleeps ", "beneath."])
+        self.assertEqual(_text(payload, DOCX), "The kraken sleeps beneath.")
+
+    def test_table_cells_are_read(self):
+        payload = make_docx([], table=[["alpha", "beta"]])
+        self.assertEqual(_text(payload, DOCX).split(), ["alpha", "beta"])
+
     def test_headers_footers_and_notes_are_read(self):
+        # python-docx writes the header and footer parts; it has no API for
+        # footnotes, so that one part is appended by hand.
         payload = make_docx(
             ["body"],
+            header="headerword",
+            footer="footerword",
             extra={
-                "word/header1.xml": _W_DOCUMENT.format(
-                    "<w:p><w:t>headerword</w:t></w:p>"
-                ),
                 "word/footnotes.xml": _W_DOCUMENT.format(
                     "<w:p><w:t>footnoteword</w:t></w:p>"
-                ),
+                )
             },
         )
         body = _text(payload, DOCX)
-        self.assertIn("headerword", body)
-        self.assertIn("footnoteword", body)
+        for word in ("body", "headerword", "footerword", "footnoteword"):
+            self.assertIn(word, body)
 
     def test_unrelated_parts_are_not_read(self):
         payload = make_docx(
             ["body"],
             extra={
-                "word/settings.xml": _W_DOCUMENT.format(
-                    "<w:p><w:t>settingsword</w:t></w:p>"
+                "word/comments.xml": _W_DOCUMENT.format(
+                    "<w:p><w:t>commentword</w:t></w:p>"
                 )
             },
         )
-        self.assertNotIn("settingsword", _text(payload, DOCX))
-
-    def test_a_paragraph_nested_in_another_is_counted_once(self):
-        # A text box puts a drawingml paragraph inside a wordprocessingml one,
-        # and both match the prose tag.
-        payload = make_zip(
-            {
-                "word/document.xml": _W_DOCUMENT.format(
-                    "<w:body><w:p><w:p>boxed</w:p></w:p></w:body>"
-                )
-            }
-        )
-        self.assertEqual(_text(payload, DOCX).split().count("boxed"), 1)
+        self.assertNotIn("commentword", _text(payload, DOCX))
 
 
 class PptxTests(SimpleTestCase):
@@ -92,22 +104,63 @@ class PptxTests(SimpleTestCase):
         self.assertIn("first slide", body)
         self.assertIn("second slide", body)
 
+    def test_every_paragraph_of_a_slide_is_read(self):
+        body = _text(make_pptx([["title line", "body line"]]), PPTX)
+        self.assertIn("title line", body)
+        self.assertIn("body line", body)
+
+    def test_slides_are_read_in_presentation_order(self):
+        # Sorted as text, slide10 comes before slide2, so a deck long enough to
+        # fill the budget would keep the wrong end of itself.
+        payload = make_pptx([[f"slide number {n}"] for n in range(1, 12)])
+        body = _text(payload, PPTX, max_chars=32)
+        self.assertIn("slide number 1", body)
+        self.assertIn("slide number 2", body)
+        self.assertNotIn("slide number 10", body)
+
 
 class XlsxTests(SimpleTestCase):
-    def test_shared_strings_are_extracted(self):
-        self.assertIn("lisbon", _text(make_xlsx(shared_strings=["lisbon"]), XLSX))
+    """Both ways a cell can hold a string, because both turn up in practice."""
 
     def test_inline_strings_are_extracted(self):
-        self.assertIn("inlined", _text(make_xlsx(inline_strings=["inlined"]), XLSX))
+        # openpyxl's dialect, and what a spreadsheet exported by a Python tool
+        # looks like.
+        payload = make_xlsx(sheets={"Budget": [["lisbon"]]})
+        self.assertIn("lisbon", _text(payload, XLSX))
+
+    def test_shared_strings_are_extracted(self):
+        # Excel's dialect. openpyxl never emits it, so this fixture is built by
+        # hand or the path is never covered.
+        self.assertIn("lisbon", _text(make_xlsx_shared_strings(["lisbon"]), XLSX))
 
     def test_numbers_are_extracted(self):
-        self.assertIn("4712", _text(make_xlsx(numbers=["4712"]), XLSX))
+        self.assertIn("4712", _text(make_xlsx(sheets={"S": [[4712]]}), XLSX))
+
+    def test_every_sheet_is_read(self):
+        payload = make_xlsx(sheets={"One": [["alpha"]], "Two": [["beta"]]})
+        body = _text(payload, XLSX)
+        self.assertIn("alpha", body)
+        self.assertIn("beta", body)
 
     def test_a_shared_string_index_is_not_indexed_as_a_number(self):
         # A cell of type "s" holds a row number into sharedStrings; indexing it
         # would put the integer 0 in the document instead of the word it names.
-        body = _text(make_xlsx(shared_strings=["alpha", "beta"]), XLSX)
+        body = _text(make_xlsx_shared_strings(["alpha", "beta"]), XLSX)
         self.assertEqual(body.split(), ["alpha", "beta"])
+
+    def test_rich_text_runs_in_a_shared_string_are_joined(self):
+        # Excel splits a styled cell into runs the same way Word splits a
+        # paragraph.
+        payload = make_zip(
+            {
+                "xl/sharedStrings.xml": (
+                    '<sst xmlns="http://schemas.openxmlformats.org/'
+                    'spreadsheetml/2006/main"><si><r><t>quar</t></r>'
+                    "<r><t>terly</t></r></si></sst>"
+                )
+            }
+        )
+        self.assertEqual(_text(payload, XLSX), "quarterly")
 
 
 class OpenDocumentTests(SimpleTestCase):
@@ -118,14 +171,14 @@ class OpenDocumentTests(SimpleTestCase):
                 self.assertIn("quarterly budget", _text(payload, mime_type))
 
     def test_headings_are_read(self):
-        payload = make_zip(
-            {"content.xml": _ODF_CONTENT.format("<text:h>Chapter one</text:h>")}
-        )
+        payload = make_odf(ODT, [], heading="Chapter one")
         self.assertIn("Chapter one", _text(payload, ODT))
 
     def test_text_around_a_span_survives(self):
         # The span ends first and is released before its paragraph does; a
-        # release that dropped the tail would lose the word after it.
+        # release that dropped the tail would lose the word after it. odfpy
+        # writes a span as a child element with no tail, so this shape has to
+        # be built by hand.
         payload = make_zip(
             {
                 "content.xml": _ODF_CONTENT.format(
@@ -168,41 +221,8 @@ class FailureTests(SimpleTestCase):
         self.assertIn("survivor", _text(payload, DOCX))
 
 
-class HardeningTests(SimpleTestCase):
-    def test_entities_are_never_expanded(self):
-        # Billion laughs: nine nested entities, each ten copies of the one
-        # below, is a few hundred bytes that expands to a gigabyte.
-        levels = "".join(
-            f'<!ENTITY e{level} "{f"&e{level - 1};" * 10}">' for level in range(1, 10)
-        )
-        doctype = f'<!DOCTYPE w:document [<!ENTITY e0 "boom">{levels}]>'
-        payload = make_zip(
-            {
-                "word/document.xml": doctype
-                + _W_DOCUMENT.format("<w:p><w:t>&e9;</w:t></w:p>")
-            }
-        )
-        self.assertNotIn("boom", _text(payload, DOCX))
-
-    def test_a_part_is_read_no_further_than_its_ceiling(self):
-        # The zip header's uncompressed size is written by whoever built the
-        # file, so the bound has to hold on the read itself.
-        filler = "<w:p><w:t>pad</w:t></w:p>" * 2000
-        payload = make_zip(
-            {
-                "word/document.xml": _W_DOCUMENT.format(
-                    f"<w:body>{filler}<w:p><w:t>trailer</w:t></w:p></w:body>"
-                )
-            }
-        )
-        with mock.patch("workspace.common.documents.office.MAX_PART_BYTES", 500):
-            body = _text(payload, DOCX)
-        self.assertIn("pad", body)
-        self.assertNotIn("trailer", body)
-
-
-class RealWorldShapeTests(SimpleTestCase):
-    """Shapes a real word processor emits that a hand-built fixture would not."""
+class RivalDialectTests(SimpleTestCase):
+    """Shapes that are valid but that no authoring library here will write."""
 
     def test_the_strict_ooxml_namespace_is_read_too(self):
         # OOXML exists in a transitional and a strict flavour under different
@@ -219,54 +239,71 @@ class RealWorldShapeTests(SimpleTestCase):
         )
         self.assertIn("kraken", _text(payload, DOCX))
 
-    def test_runs_split_mid_word_are_joined_without_a_gap(self):
-        # Word splits a sentence into runs on every formatting or spellcheck
-        # boundary, mid-word included. Extracting run by run and joining with
-        # a separator would turn "kraken" into two tokens that match nothing.
+    def test_an_undeclared_namespace_prefix_costs_only_its_tag(self):
+        # recover=True leaves a tag whose prefix was never declared in the
+        # tree, and resolving one through QName raises. A document a producer
+        # got slightly wrong must not come back empty.
         payload = make_zip(
             {
                 "word/document.xml": _W_DOCUMENT.format(
-                    "<w:body><w:p>"
-                    '<w:pPr><w:pStyle w:val="Normal"/></w:pPr>'
-                    "<w:r><w:t>The kra</w:t></w:r>"
-                    '<w:r><w:t xml:space="preserve">ken sleeps </w:t></w:r>'
-                    "<w:r><w:t>beneath.</w:t></w:r>"
-                    "</w:p></w:body>"
+                    "<w:body><undeclared:mark/><w:p><w:t>kraken</w:t></w:p></w:body>"
                 )
             }
         )
-        self.assertEqual(_text(payload, DOCX), "The kraken sleeps beneath.")
+        self.assertIn("kraken", _text(payload, DOCX))
 
-    def test_table_cells_are_read(self):
+    def test_a_paragraph_nested_in_another_is_counted_once(self):
+        # A text box puts a drawingml paragraph inside a wordprocessingml one,
+        # and both match the prose tag.
         payload = make_zip(
             {
                 "word/document.xml": _W_DOCUMENT.format(
-                    "<w:body><w:tbl><w:tr>"
-                    "<w:tc><w:p><w:r><w:t>alpha</w:t></w:r></w:p></w:tc>"
-                    "<w:tc><w:p><w:r><w:t>beta</w:t></w:r></w:p></w:tc>"
-                    "</w:tr></w:tbl></w:body>"
+                    "<w:body><w:p><w:p>boxed</w:p></w:p></w:body>"
                 )
             }
         )
-        self.assertEqual(_text(payload, DOCX).split(), ["alpha", "beta"])
+        self.assertEqual(_text(payload, DOCX).split().count("boxed"), 1)
 
-    def test_rich_text_runs_in_a_shared_string_are_joined(self):
+
+class HardeningTests(SimpleTestCase):
+    def test_entities_are_never_expanded(self):
+        # Billion laughs: nine nested entities, each ten copies of the one
+        # below, is a few hundred bytes that expands to a gigabyte.
+        levels = "".join(
+            f'<!ENTITY e{level} "{f"&e{level - 1};" * 10}">' for level in range(1, 10)
+        )
+        doctype = f'<!DOCTYPE w:document [<!ENTITY e0 "boom">{levels}]>'
         payload = make_zip(
             {
-                "xl/sharedStrings.xml": (
-                    '<sst xmlns="http://schemas.openxmlformats.org/'
-                    'spreadsheetml/2006/main"><si><r><t>quar</t></r>'
-                    "<r><t>terly</t></r></si></sst>"
+                "word/document.xml": doctype
+                + _W_DOCUMENT.format("<w:p><w:t>&e9;</w:t></w:p>")
+            }
+        )
+        self.assertNotIn("boom", _text(payload, DOCX))
+
+    def test_an_external_entity_is_never_fetched(self):
+        payload = make_zip(
+            {
+                "word/document.xml": (
+                    '<!DOCTYPE w:document [<!ENTITY xxe SYSTEM "file:///etc/'
+                    'passwd">]>' + _W_DOCUMENT.format("<w:p><w:t>&xxe;</w:t></w:p>")
                 )
             }
         )
-        self.assertEqual(_text(payload, XLSX), "quarterly")
+        self.assertNotIn("root:", _text(payload, DOCX))
 
-    def test_slides_are_read_in_presentation_order(self):
-        # Sorted as text, slide10 comes before slide2, so a deck long enough to
-        # fill the budget would keep the wrong end of itself.
-        payload = make_pptx([[f"slide number {n}"] for n in range(1, 12)])
-        body = _text(payload, PPTX, max_chars=32)
-        self.assertIn("slide number 1", body)
-        self.assertIn("slide number 2", body)
-        self.assertNotIn("slide number 10", body)
+    def test_a_part_is_read_no_further_than_its_ceiling(self):
+        # The zip header's uncompressed size is written by whoever built the
+        # file, so the bound has to hold on the read itself.
+        filler = "<w:p><w:t>pad</w:t></w:p>" * 2000
+        payload = make_zip(
+            {
+                "word/document.xml": _W_DOCUMENT.format(
+                    f"<w:body>{filler}<w:p><w:t>trailer</w:t></w:p></w:body>"
+                )
+            }
+        )
+        with mock.patch("workspace.common.documents.office.MAX_PART_BYTES", 500):
+            body = _text(payload, DOCX)
+        self.assertIn("pad", body)
+        self.assertNotIn("trailer", body)

@@ -356,17 +356,41 @@ La difficulté n'est pas mécanique, elle est conceptuelle : **le stockage objet
 n'a pas de répertoires.** Renommer un dossier ne peut pas rester une opération
 de système de fichiers.
 
-La bonne réponse simplifie le code au lieu de le compliquer : **cesser de
-refléter l'arborescence logique dans les clés de stockage.** L'arborescence vit
-déjà en base ; une clé de la forme `files/<uuid>` suffit. Renommer ou déplacer un
-dossier devient alors une écriture en base, sans aucune opération de stockage -
-là où aujourd'hui c'est un parcours récursif. Les migrations `0022_migrate_storage_paths`
-et `0029_fix_group_storage_paths` témoignent que le couplage clé / chemin a déjà
-coûté cher deux fois.
+**Décision : la clé de stockage reste le chemin logique.** Le bucket et le
+disque reflètent exactement l'arborescence du workspace, comme le fait Nextcloud.
+Un `rclone` du bucket rend un workspace lisible, la donnée survit à la perte de
+la base, et le support peut regarder le stockage et comprendre. Un bucket en
+UUID n'offre aucune de ces trois garanties. Le coût de ce choix est assumé et
+gérable :
 
-Effet de bord bienvenu : les pods deviennent replaçables, la sauvegarde passe au
-niveau objet avec versionnage, et le disque du VPS ne porte plus que l'OS, la
-base et le cache de vignettes.
+- **OVHcloud ne facture ni les requêtes API, ni l'entrée, ni la sortie** sur
+  l'Object Storage. Un déplacement de dossier en O(n) copies est donc un problème
+  de latence, pas de facture.
+- **Les dossiers vides ont besoin d'un objet marqueur** à clé terminée par `/` -
+  la convention que tous les navigateurs S3 comprennent.
+- **L'ordre des opérations doit s'inverser** par rapport au code actuel : copier
+  toutes les clés, puis basculer les lignes en base dans une transaction, puis
+  supprimer les sources. Aujourd'hui la base est réécrite en premier, ce qui est
+  correct devant un `os.rename` atomique et faux devant dix mille copies S3.
+- **Au-delà d'un millier d'objets, le déplacement part en tâche de fond.** La
+  bascule en base reste synchrone, le miroir converge derrière.
+- **Une commande d'audit** vérifie que `content.name` vaut bien le chemin attendu
+  pour chaque ligne, et répare les écarts. C'est elle qui fait du miroir une
+  garantie vérifiable plutôt qu'une intention - rien ne contrôle cet invariant
+  aujourd'hui, même sur le système de fichiers.
+
+Effet de bord bienvenu, et il est important : **disque local et objet partagent
+la même disposition**, donc la donnée d'un client se déplace de l'un à l'autre
+par simple synchronisation, sans transformation. Le choix du stockage devient un
+drapeau de déploiement, et la montée d'un palier d'hébergement à l'autre cesse
+d'être une migration.
+
+Un piège à traiter en même temps : `_relocate_on_storage` retombe sur
+`_relocate_without_paths` quand le backend n'a pas de `path()`, or ce fallback ne
+sait traiter qu'un objet unique. Sur un dossier il renvoie False sans rien faire,
+**après** que la base a déjà été repointée sur le nouveau préfixe. Inoffensif
+aujourd'hui puisque le backend est toujours un système de fichiers ; activé le
+jour de la bascule.
 
 ## 8. Points de vigilance
 

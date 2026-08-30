@@ -63,10 +63,30 @@ publique. Trafic illimité et sauvegarde automatisée à un jour incluses partou
 | VPS-3 | 6 | 12 Go | 100 Go | 2 Gbit/s | **10,40 €** | 0,87 € |
 | VPS-4 | 8 | 24 Go | 200 Go | 3 Gbit/s | **19,96 €** | 0,83 € |
 
-| Autre poste | Prix |
-|---|---|
-| Stockage objet S3 OVHcloud, classe Standard | ≈ **7 €/To/mois**, sortie gratuite |
-| Kubernetes managé OVHcloud | control plane **gratuit**, à partir de ~18 €/mois |
+Disques additionnels pour VPS, et comparaison avec l'objet :
+
+| Poste | Prix HT/mois | Ramené au To |
+|---|---|---|
+| Disque additionnel 50 Go | 5,50 € | **110 €/To** |
+| Disque additionnel 100 Go | 11,00 € | **110 €/To** |
+| Disque additionnel 200 Go | 16,50 € | **82,50 €/To** |
+| Disque additionnel 500 Go | 33,00 € | **66 €/To** |
+| Stockage objet S3, classe Standard | ≈ 7 €/To | **7 €/To**, sortie gratuite |
+| Kubernetes managé | control plane **gratuit** | dès ~18 €/mois |
+
+**Le bloc coûte 9 à 16 fois l'objet.** C'est le chiffre qui commande toute la
+grille - voir §5.
+
+**Ne jamais acheter un disque additionnel : monter d'un cran de VPS.** Pour
+chaque taille d'add-on, le VPS supérieur coûte autant ou moins et apporte le CPU
+et la RAM en plus.
+
+| Besoin | Via disque additionnel | Via VPS supérieur |
+|---|---|---|
+| ~90 Go | VPS-1 + 50 Go = 9,31 € (2c / 4 Go) | VPS-3 = 10,40 € (6c / 12 Go, 100 Go) |
+| ~240 Go | VPS-1 + 200 Go = 20,31 € (2c / 4 Go) | **VPS-4 = 19,96 €** (8c / 24 Go, 200 Go) |
+
+Au-delà de 200 Go, aucun des deux ne tient : c'est l'objet, ou rien.
 
 Trois choses à lire dans ce tableau :
 
@@ -176,8 +196,22 @@ Prix mensuels HT, engagement mensuel ; -15 % à l'année. Le nombre d'utilisateu
 est indicatif et **n'est jamais bloqué** : c'est la ressource qui est vendue.
 
 Un tenant = un VPS OVHcloud dédié, dans la géolocalisation la plus proche du
-client. Les blobs vont dans le stockage objet, pas sur le disque du VPS - c'est
-ce qui rend la colonne « stockage inclus » finançable.
+client. **Les blobs vont dans le stockage objet, jamais sur un disque de VPS.**
+Ce n'est pas une préférence d'architecture, c'est ce qui sépare une entreprise
+rentable d'une entreprise déficitaire :
+
+| Palier | Prix | Stockage promis | Servi en disque VPS | Marge | Servi en objet | Marge |
+|---|---|---|---|---|---|---|
+| Perso | 12 € | 100 Go | 14,81 € | **−23 %** | 4,51 € | **62 %** |
+| Équipe | 39 € | 500 Go | 40,21 € | **−3 %** | 10,71 € | **73 %** |
+| Studio | 89 € | 1 To | 76,40 € | 14 % | 17,40 € | **80 %** |
+| Entreprise | 189 € | 2 To | 151,96 € | 20 % | 33,96 € | **82 %** |
+| Dédié | 379 € | 4 To | ≈ 314 € | 17 % | ≈ 78 € | **79 %** |
+
+Servis depuis des disques additionnels, les deux paliers d'entrée sont vendus à
+perte et les autres tombent sous 20 % de marge. **Tant que les blobs ne sont pas
+sortis vers l'objet, cette grille tarifaire ne peut pas être publiée** - voir §7
+pour le chantier correspondant.
 
 | Offre | VPS | Users indicatifs | Stockage inclus | Prix/mois | Coût VPS | Coût objet | Marge |
 |---|---|---|---|---|---|---|---|
@@ -303,6 +337,36 @@ construire avant le premier client payant, pas après le vingtième :
 
 Si les cinq ne sont pas vrais, ne vendez pas le palier à 12 € : commencez à 39 €,
 où une intervention manuelle reste payable.
+
+### Le chantier bloquant : sortir les blobs vers l'objet
+
+C'est le chemin critique de tout ce document. `STORAGES["default"]` est un
+`FileSystemStorage` et le code appelle `default_storage.path()`, qui lève
+`NotImplementedError` sur tout backend objet. Le périmètre réel est cependant
+contenu - hors tests et hors migrations déjà appliquées :
+
+| Fichier | Ce qui accroche |
+|---|---|
+| `files/services/_storage_ops.py` | 11 appels à `.path()` - l'essentiel du travail |
+| `files/webdav/resources.py` | 1 appel, dans la copie de ressource |
+| `files/sync.py` | `os.scandir` pour la réconciliation disque / base |
+| `chat/management/commands/purge_orphan_attachments.py` | `os.scandir` sur l'arborescence des pièces jointes |
+
+La difficulté n'est pas mécanique, elle est conceptuelle : **le stockage objet
+n'a pas de répertoires.** Renommer un dossier ne peut pas rester une opération
+de système de fichiers.
+
+La bonne réponse simplifie le code au lieu de le compliquer : **cesser de
+refléter l'arborescence logique dans les clés de stockage.** L'arborescence vit
+déjà en base ; une clé de la forme `files/<uuid>` suffit. Renommer ou déplacer un
+dossier devient alors une écriture en base, sans aucune opération de stockage -
+là où aujourd'hui c'est un parcours récursif. Les migrations `0022_migrate_storage_paths`
+et `0029_fix_group_storage_paths` témoignent que le couplage clé / chemin a déjà
+coûté cher deux fois.
+
+Effet de bord bienvenu : les pods deviennent replaçables, la sauvegarde passe au
+niveau objet avec versionnage, et le disque du VPS ne porte plus que l'OS, la
+base et le cache de vignettes.
 
 ## 8. Points de vigilance
 

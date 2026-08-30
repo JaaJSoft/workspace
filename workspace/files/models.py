@@ -319,6 +319,16 @@ class File(models.Model):
         )
         return is_viewable(label, self.name or "")
 
+    def is_quarantined(self):
+        """True when the malware policy currently denies access to this file.
+
+        Reads ``self.scan``; listing querysets apply ``policy.with_scan`` so
+        the template loop does not issue one query per row.
+        """
+        from workspace.files.services.scanning.policy import is_blocked
+
+        return is_blocked(self)
+
     def is_deleted(self):
         return self.deleted_at is not None
 

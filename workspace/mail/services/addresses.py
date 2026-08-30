@@ -43,3 +43,35 @@ def derive_recipients_text(to_addresses, cc_addresses):
         if isinstance(field, list):
             parts.extend(filter(None, (_flatten_entry(entry) for entry in field)))
     return ", ".join(parts)
+
+
+def _entry_emails(field):
+    """Lowercased, non-empty addresses of a to/cc JSON list."""
+    if not isinstance(field, list):
+        return []
+    addresses = (
+        (entry.get("email") or "").strip().lower()
+        for entry in field
+        if isinstance(entry, dict)
+    )
+    return [address for address in addresses if address]
+
+
+def recipient_summary(account_email, to_addresses, cc_addresses):
+    """Where the mailbox owner sits in the recipient headers, and how many there are.
+
+    Returns ``(role, count)``. The role is ``"direct"`` when the owner is a To
+    recipient, ``"cc"`` when they only appear in Cc, and ``"bulk"`` when they
+    appear in neither - the shape of a mailing list, a blind copy or an
+    undisclosed-recipients blast.
+    """
+    to = _entry_emails(to_addresses)
+    cc = _entry_emails(cc_addresses)
+    owner = (account_email or "").strip().lower()
+    if owner and owner in to:
+        role = "direct"
+    elif owner and owner in cc:
+        role = "cc"
+    else:
+        role = "bulk"
+    return role, len(to) + len(cc)

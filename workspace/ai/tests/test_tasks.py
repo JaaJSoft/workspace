@@ -1030,6 +1030,60 @@ class ClassifyMailMessagesTests(TestCase):
         )
 
     @patch("workspace.ai.client.get_ai_client")
+    def test_classify_prompt_receives_message_metadata(self, mock_client):
+        """Addressing, folder, date and content flags reach the prompt payload."""
+        from datetime import UTC, datetime
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"results": []})
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = "gpt-4o-mini"
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        msg = MailMessage.objects.create(
+            account=self.account,
+            folder=self.folder,
+            imap_uid=3,
+            subject="Invoice",
+            snippet="Attached",
+            from_name="Billing",
+            from_email="billing@acme.com",
+            reply_to="no-reply@acme.com",
+            to_addresses=[{"name": "", "email": "team@acme.com"}],
+            cc_addresses=[{"name": "", "email": "cls@test.com"}],
+            date=datetime(2026, 8, 30, 9, 12, tzinfo=UTC),
+            in_reply_to="<parent@acme.com>",
+            has_attachments=True,
+            has_calendar_event=True,
+        )
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={"message_uuids": [str(msg.uuid)]},
+        )
+        from workspace.ai.prompts.mail import build_classify_messages
+        from workspace.ai.tasks.mail import classify_mail_messages
+
+        with patch(
+            "workspace.ai.prompts.mail.build_classify_messages",
+            wraps=build_classify_messages,
+        ) as mock_build:
+            classify_mail_messages(str(ai_task.uuid))
+
+        payload = mock_build.call_args[0][0][0]
+        self.assertEqual(payload["recipient_role"], "cc")
+        self.assertEqual(payload["recipient_count"], 2)
+        self.assertEqual(payload["reply_to"], "no-reply@acme.com")
+        self.assertEqual(payload["folder"], "Inbox")
+        self.assertEqual(payload["date"], msg.date)
+        self.assertTrue(payload["has_attachments"])
+        self.assertTrue(payload["has_calendar_event"])
+        self.assertTrue(payload["is_reply"])
+
+    @patch("workspace.ai.client.get_ai_client")
     def test_classifies_across_multiple_batches(self, mock_client):
         """Messages beyond CLASSIFY_BATCH_SIZE must still be classified.
 

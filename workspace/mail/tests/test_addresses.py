@@ -19,7 +19,11 @@ from workspace.mail.serializers import (
     MailMessageDetailSerializer,
     MailMessageListSerializer,
 )
-from workspace.mail.services.addresses import derive_recipients_text, sender_columns
+from workspace.mail.services.addresses import (
+    derive_recipients_text,
+    recipient_summary,
+    sender_columns,
+)
 
 User = get_user_model()
 
@@ -59,6 +63,43 @@ class DeriveRecipientsTextTests(TestCase):
     def test_entries_without_email_keep_the_name(self):
         text = derive_recipients_text([{"name": "Undisclosed", "email": ""}], [])
         self.assertEqual(text, "Undisclosed")
+
+
+class RecipientSummaryTests(TestCase):
+    """How the mailbox owner was addressed, as fed to the mail classifier."""
+
+    def to(self, *emails):
+        return [{"name": "", "email": e} for e in emails]
+
+    def test_owner_in_to_is_direct(self):
+        role, count = recipient_summary(
+            "me@example.com", self.to("me@example.com", "bob@example.com"), []
+        )
+        self.assertEqual((role, count), ("direct", 2))
+
+    def test_owner_only_in_cc(self):
+        role, count = recipient_summary(
+            "me@example.com", self.to("bob@example.com"), self.to("me@example.com")
+        )
+        self.assertEqual((role, count), ("cc", 2))
+
+    def test_owner_in_neither_header_is_bulk(self):
+        role, count = recipient_summary(
+            "me@example.com", self.to("list@example.com"), []
+        )
+        self.assertEqual((role, count), ("bulk", 1))
+
+    def test_matching_is_case_insensitive_and_whitespace_tolerant(self):
+        role, _ = recipient_summary(" Me@Example.com ", self.to("me@example.com"), [])
+        self.assertEqual(role, "direct")
+
+    def test_malformed_headers_do_not_raise(self):
+        self.assertEqual(
+            recipient_summary("me@example.com", None, "garbage"), ("bulk", 0)
+        )
+        self.assertEqual(
+            recipient_summary("me@example.com", ["not-a-dict", {}], []), ("bulk", 0)
+        )
 
 
 class MailFixtureMixin:

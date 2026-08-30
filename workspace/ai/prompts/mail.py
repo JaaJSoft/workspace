@@ -119,27 +119,77 @@ def _build_classify_system(labels: list[str]) -> str:
         "You are an email classification assistant. Assign 1-3 labels to each email "
         "from the list below.\n\n"
         f"Available labels:\n{label_list}\n\n"
+        "Each email is one line: its index, then metadata fields, then the subject "
+        "and a preview of the body. Recipients tells you how the mailbox owner was "
+        "addressed - direct (a To recipient), cc (only in copy) or bulk (in neither "
+        "header, so a mailing list or a blind copy) - followed by the total number "
+        "of recipients.\n\n"
         "Return a JSON object only, no other text.\n"
         'Response format: {"results":[{"i":1,"labels":["Label1","Label2"]},...]}'
     )
 
 
+def _format_classify_date(value) -> str:
+    if not value:
+        return ""
+    if hasattr(value, "isoformat"):
+        return value.isoformat(timespec="minutes")
+    return str(value)
+
+
+def _build_classify_line(idx: int, e: dict) -> str:
+    """Render one email as an indexed metadata line for the classifier.
+
+    Optional fields are dropped when they carry no signal, so a bare message
+    stays as short as it used to be.
+    """
+    name = e.get("from_name") or ""
+    email = e.get("from_email") or ""
+    sender = f"{name} <{email}>" if name else email
+    fields = [f"From: {sender}"]
+
+    reply_to = (e.get("reply_to") or "").strip()
+    if reply_to and (not email or email.lower() not in reply_to.lower()):
+        fields.append(f"Reply-To: {reply_to}")
+
+    if e.get("recipient_role"):
+        fields.append(
+            f"Recipients: {e['recipient_role']} ({e.get('recipient_count', 0)})"
+        )
+
+    date = _format_classify_date(e.get("date"))
+    if date:
+        fields.append(f"Date: {date}")
+    if e.get("folder"):
+        fields.append(f"Folder: {e['folder']}")
+
+    flags = []
+    if e.get("has_attachments"):
+        flags.append("attachment")
+    if e.get("has_calendar_event"):
+        flags.append("calendar invite")
+    if e.get("is_reply"):
+        flags.append("reply in a thread")
+    if flags:
+        fields.append(f"Flags: {', '.join(flags)}")
+
+    fields.append(f"Subject: {e.get('subject', '')}")
+    fields.append(f"Preview: {e.get('snippet', '')}")
+    return f"[{idx}] " + " | ".join(fields)
+
+
 def build_classify_messages(emails: list[dict], labels: list[str]) -> list[dict]:
     """Build messages for batch email classification.
 
-    Each email dict must have: subject, from_name, from_email, snippet.
+    Each email dict must have: subject, from_name, from_email, snippet. It may
+    also carry the metadata the classifier uses to tell a personal message from
+    a broadcast: reply_to, recipient_role, recipient_count, date, folder,
+    has_attachments, has_calendar_event, is_reply.
     labels: list of label names available for this account.
     """
-    lines = []
-    for idx, e in enumerate(emails, 1):
-        name = e.get("from_name") or ""
-        email = e.get("from_email") or ""
-        sender = f"{name} <{email}>" if name else email
-        lines.append(
-            f"[{idx}] From: {sender} | Subject: {e.get('subject', '')} "
-            f"| Preview: {e.get('snippet', '')}"
-        )
-    email_block = "\n".join(lines)
+    email_block = "\n".join(
+        _build_classify_line(idx, e) for idx, e in enumerate(emails, 1)
+    )
 
     return [
         {"role": "system", "content": _build_classify_system(labels)},

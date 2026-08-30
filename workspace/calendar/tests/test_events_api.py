@@ -487,14 +487,17 @@ class AllDayApiContractTests(CalendarTestMixin, APITestCase):
         self.assertEqual(event.start, datetime(2026, 8, 6, tzinfo=UTC))
 
     def test_recurring_all_day_occurrences_are_date_only(self):
-        Event.objects.create(
+        from workspace.calendar.services.recurrence_rule import apply_rule
+
+        event = Event(
             calendar=self.calendar,
             title="Daily standdown",
             start=datetime(2026, 8, 3, tzinfo=UTC),
             all_day=True,
             owner=self.owner,
-            recurrence_frequency="daily",
         )
+        apply_rule(event, "RRULE:FREQ=DAILY")
+        event.save()
         self.client.force_authenticate(self.owner)
         resp = self.client.get(
             self.url,

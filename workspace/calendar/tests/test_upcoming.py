@@ -15,6 +15,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event
+from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.calendar.upcoming import get_upcoming_for_user
 
 User = get_user_model()
@@ -139,13 +140,15 @@ class GetUpcomingForUserTests(TestCase):
         """Daily event whose today's occurrence is in progress."""
         master_start = self.now.replace(hour=13, minute=30) - timedelta(days=7)
         master_end = master_start + timedelta(hours=1)  # 13:30→14:30 daily
-        self._make(
-            "Daily standup",
+        master = Event(
+            calendar=self.calendar,
+            owner=self.user,
+            title="Daily standup",
             start=master_start,
             end=master_end,
-            recurrence_frequency=Event.RecurrenceFrequency.DAILY,
-            recurrence_interval=1,
         )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
         result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].title, "Daily standup")

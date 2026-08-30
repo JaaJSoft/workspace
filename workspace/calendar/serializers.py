@@ -194,9 +194,7 @@ class OccurrenceSerializer(serializers.Serializer):
     is_exception = serializers.BooleanField()
     master_event_id = serializers.CharField()
     original_start = serializers.CharField(allow_null=True)
-    recurrence_frequency = serializers.CharField(allow_null=True)
-    recurrence_interval = serializers.IntegerField()
-    recurrence_end = serializers.CharField(allow_null=True)
+    recurrence_rule = serializers.CharField(allow_blank=True)
 
 
 class EventRespondSerializer(serializers.Serializer):

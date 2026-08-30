@@ -1,16 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-from dateutil.rrule import DAILY, MONTHLY, WEEKLY, YEARLY, rrule
-
+from .services.recurrence_rule import is_simple_stepping, parse, to_simple
 from .services.timezones import event_timezone
-
-FREQ_MAP = {
-    "daily": DAILY,
-    "weekly": WEEKLY,
-    "monthly": MONTHLY,
-    "yearly": YEARLY,
-}
-
 
 _FIXED_STEP = {
     "daily": timedelta(days=1),
@@ -27,31 +18,34 @@ def _anchored_dtstart(master, floor, tz=None):
     """Return the series dtstart advanced to the last in-phase occurrence
     at or before *floor*.
 
-    Iterating an rrule walks the series occurrence by occurrence from
-    dtstart, so a years-old daily master costs hundreds of discarded
-    iterations per expansion. Re-anchoring dtstart keeps the exact same
-    occurrence stream while skipping the pre-window walk.
+    Iterating an rrule walks the series occurrence by occurrence from dtstart,
+    so a years-old daily master costs hundreds of discarded iterations per
+    expansion. Re-anchoring dtstart keeps the exact same occurrence stream
+    while skipping the pre-window walk.
 
-    Without *tz* (legacy UTC series) the phase is plain timedelta
-    arithmetic. With *tz* the series is anchored to a local wall clock, so
-    the anchor steps whole local calendar days and reattaches the original
-    local time - a fixed timedelta would drift across DST transitions.
-    Monthly/yearly steps are calendar-dependent (day-31 or Feb-29 masters
-    skip periods), so those keep the true start - they are bounded to at
-    most 12 iterations per year of series age.
+    Without *tz* (legacy UTC series) the phase is plain timedelta arithmetic.
+    With *tz* the series is anchored to a local wall clock, so the anchor steps
+    whole local calendar days and reattaches the original local time - a fixed
+    timedelta would drift across DST transitions. Callers must gate this on
+    ``is_simple_stepping``; monthly, yearly and BY-qualified rules step by the
+    calendar and have no constant phase to solve for.
     """
+    simple = to_simple(master.recurrence_rule) or {}
+    frequency = simple.get("frequency")
+    interval = simple.get("interval", 1)
+
     if tz is None:
         dtstart = master.start
-        fixed_step = _FIXED_STEP.get(master.recurrence_frequency)
+        fixed_step = _FIXED_STEP.get(frequency)
         if fixed_step and dtstart < floor:
-            step = fixed_step * master.recurrence_interval
+            step = fixed_step * interval
             dtstart += ((floor - dtstart) // step) * step
         return dtstart
 
     dtstart = master.start.astimezone(tz)
-    step_days = _FIXED_STEP_DAYS.get(master.recurrence_frequency)
+    step_days = _FIXED_STEP_DAYS.get(frequency)
     if step_days and dtstart < floor:
-        step = step_days * master.recurrence_interval
+        step = step_days * interval
         days = (floor.astimezone(tz).date() - dtstart.date()).days
         if days > 0:
             anchored_date = dtstart.date() + timedelta(days=(days // step) * step)
@@ -59,78 +53,48 @@ def _anchored_dtstart(master, floor, tz=None):
     return dtstart
 
 
-def _series_rrule(master, dtstart, until):
-    return rrule(
-        FREQ_MAP[master.recurrence_frequency],
-        interval=master.recurrence_interval,
-        dtstart=dtstart,
-        until=until,
-    )
+def _anchor(master, floor, tz):
+    """Series dtstart, advanced to just before *floor* when that is safe.
 
-
-def _build_rrule(master, range_start, range_end):
-    """Yield occurrence start datetimes (aware UTC) for a recurring master.
-
-    Series with an ``Event.timezone`` iterate in that zone, preserving the
-    local wall clock across DST transitions; legacy series iterate in UTC
-    with fixed steps. Either way the yielded instants are UTC, so exception
-    keys and serialized values stay zone-independent.
+    Walking an rrule from a years-old dtstart costs hundreds of discarded
+    iterations per expansion, so re-anchoring is worth keeping. The algebra
+    assumes a fixed timedelta step, which only holds for DAILY and WEEKLY rules
+    with no BY parts - everything else keeps the true start and is bounded by
+    calendar stepping anyway.
     """
-    if FREQ_MAP.get(master.recurrence_frequency) is None:
-        return
+    if not is_simple_stepping(master.recurrence_rule):
+        return master.start
+    return _anchored_dtstart(master, floor, tz)
 
-    until = range_end
-    if master.recurrence_end and master.recurrence_end < until:
-        until = master.recurrence_end
 
+def occurrences_in_range(master, range_start, range_end):
+    """Yield occurrence start datetimes (aware UTC) overlapping the window."""
     duration = (master.end - master.start) if master.end else None
-
-    # First occurrence start that could still overlap the window: with a
-    # duration, an occurrence starting before range_start can spill into
-    # the window, so back the threshold up by the duration.
+    # An occurrence starting before the window can still spill into it.
     window_floor = (range_start - duration) if duration else range_start
 
     tz = event_timezone(master)
-    rule = _series_rrule(master, _anchored_dtstart(master, window_floor, tz), until)
+    rule = parse(master.recurrence_rule, _anchor(master, window_floor, tz), tz)
+    if rule is None:
+        return
 
     for dt in rule:
         if dt >= range_end:
             break
         occ = dt.astimezone(UTC) if tz else dt
-        # Only yield if the occurrence overlaps the query range (strict:
-        # an occurrence ending exactly at range_start does not overlap).
         if duration:
             if occ + duration > range_start:
                 yield occ
-        else:
-            if occ >= range_start:
-                yield occ
+        elif occ >= range_start:
+            yield occ
 
 
 def next_occurrences_after(master, after, limit=None):
-    """Yield occurrence start datetimes (aware UTC) for a recurring master,
-    all with start >= after.
-
-    Unlike `_build_rrule`, this is count-bounded (not range-bounded). A master
-    whose own `start` is in the past is still iterated — only the occurrences
-    before `after` are skipped. Stops early at `master.recurrence_end`.
-
-    If `limit` is None, yields all remaining occurrences (bounded only by
-    `master.recurrence_end`). This allows callers that need to filter the
-    stream (e.g. skipping exceptions) to take as many occurrences as they
-    need rather than being capped.
-    """
-    if FREQ_MAP.get(master.recurrence_frequency) is None:
-        return
-
+    """Yield occurrence starts (aware UTC) at or after *after*, count-bounded."""
     tz = event_timezone(master)
-    rule = _series_rrule(
-        master,
-        # xafter still walks the series from dtstart before yielding, so
-        # jump the anchor to just before `after` (see _anchored_dtstart).
-        _anchored_dtstart(master, after, tz),
-        master.recurrence_end,  # None → unbounded
-    )
+    rule = parse(master.recurrence_rule, _anchor(master, after, tz), tz)
+    if rule is None:
+        return
     for dt in rule.xafter(after, count=limit, inc=True):
         yield dt.astimezone(UTC) if tz else dt
 
@@ -185,11 +149,7 @@ def make_virtual_occurrence(master, occ_start):
         "is_exception": False,
         "master_event_id": str(master.uuid),
         "original_start": occ_start.isoformat(),
-        "recurrence_frequency": master.recurrence_frequency,
-        "recurrence_interval": master.recurrence_interval,
-        "recurrence_end": master.recurrence_end.isoformat()
-        if master.recurrence_end
-        else None,
+        "recurrence_rule": master.recurrence_rule,
     }
 
 
@@ -214,15 +174,9 @@ def make_exception_dict(exc):
         "original_start": exc.original_start.isoformat()
         if exc.original_start
         else None,
-        "recurrence_frequency": exc.recurrence_parent.recurrence_frequency
+        "recurrence_rule": exc.recurrence_parent.recurrence_rule
         if exc.recurrence_parent
-        else None,
-        "recurrence_interval": exc.recurrence_parent.recurrence_interval
-        if exc.recurrence_parent
-        else 1,
-        "recurrence_end": exc.recurrence_parent.recurrence_end.isoformat()
-        if exc.recurrence_parent and exc.recurrence_parent.recurrence_end
-        else None,
+        else "",
     }
 
 
@@ -262,7 +216,7 @@ def expand_recurring_events(masters_qs, range_start, range_end):
     for master in masters_qs:
         # Pre-compute members list once per master (reused across all virtual occurrences)
         master._cached_member_dicts = [_member_dict(m) for m in master.members.all()]
-        for occ_start in _build_rrule(master, range_start, range_end):
+        for occ_start in occurrences_in_range(master, range_start, range_end):
             key = (master.uuid, occ_start)
             exc = exc_index.get(key)
             if exc:

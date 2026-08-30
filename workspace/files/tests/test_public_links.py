@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 
 from workspace.files.models import File, FileShareLink
@@ -74,6 +75,25 @@ class ResolveWithinTests(TestCase):
         self.assertTrue(their_file.path.startswith(f"{self.root.path}/"))
         self.assertIsNone(resolve_within(self.link, str(their_file.uuid)))
 
+    def test_a_group_folder_with_a_colliding_path_does_not_resolve(self):
+        """Group and personal folders share the same owner but different groups."""
+        group = Group.objects.create(name="engineering")
+        group_root = File.objects.create(
+            owner=self.owner,
+            name="Shared",
+            node_type=File.NodeType.FOLDER,
+            group=group,
+        )
+        group_file = File.objects.create(
+            owner=self.owner,
+            name="secret.txt",
+            node_type=File.NodeType.FILE,
+            parent=group_root,
+            group=group,
+        )
+        self.assertTrue(group_file.path.startswith(f"{self.root.path}/"))
+        self.assertIsNone(resolve_within(self.link, str(group_file.uuid)))
+
 
 class SanitizeUploadNameTests(TestCase):
     def test_traversal_is_reduced_to_a_basename(self):
@@ -84,6 +104,9 @@ class SanitizeUploadNameTests(TestCase):
 
     def test_control_characters_are_stripped(self):
         self.assertEqual(sanitize_upload_name("re\x00po\x1frt.pdf"), "report.pdf")
+
+    def test_c1_control_characters_are_stripped(self):
+        self.assertEqual(sanitize_upload_name("re\x9bport.pdf"), "report.pdf")
 
     def test_a_long_name_is_clamped_keeping_the_extension(self):
         result = sanitize_upload_name("a" * 300 + ".pdf")

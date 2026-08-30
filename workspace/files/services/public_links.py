@@ -14,7 +14,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from ..models import File
 
 # Anything the filesystem or a log line would rather not carry.
-_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 MAX_NAME_LENGTH = 255
 FALLBACK_NAME = "upload"
 # Longer than this and the tail is not an extension worth preserving.

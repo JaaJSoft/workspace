@@ -2,7 +2,7 @@
 
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScript, loadScripts } = require('../../../common/tests/js/loader');
 
 // Stub the mixins and helpers the factory spreads, injected via extraGlobals
 // so they are resolvable when chatRoomApp() is called inside the vm context.
@@ -23,6 +23,39 @@ const stubs = {
 };
 
 const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/room.js', stubs);
+
+// Integration test against the REAL chatCallMixin (not the double above): the
+// stubbed suite cannot catch currentParticipantKey being clobbered by a mixin
+// spread, since the double never declares that key. loadScripts runs the real
+// call.js, call_room.js and room.js in one shared context, mirroring the load
+// order base.html uses in the browser.
+const nonCallStubs = {
+  chatUiHelpersMixin: () => ({}),
+  chatConversationsMixin: () => ({ _conversations: true }),
+  chatMessagesMixin: () => ({ _msg: true, loadMessages: async () => {} }),
+  chatInputMixin: () => ({ _input: true }),
+  chatSseMixin: () => ({ _sse: true }),
+  chatMembersMixin: () => ({ _members: true }),
+  chatPanelsMixin: () => ({ _panels: true }),
+  chatThreadsMixin: () => ({ _threads: true }),
+  chatBotMixin: () => ({ _bot: true }),
+  chatCallDiagnosticMixin: () => ({ _diag: true }),
+  chatRecorderMixin: () => ({ initRecorder: () => {} }),
+};
+
+const integrationCtx = loadScripts(
+  [
+    'workspace/chat/ui/static/chat/ui/js/call.js',
+    'workspace/chat/ui/static/chat/ui/js/call_room.js',
+    'workspace/chat/ui/static/chat/ui/js/room.js',
+  ],
+  nonCallStubs,
+);
+
+test('chatRoomApp composed with the real chatCallMixin keeps its derived participant key', () => {
+  const app = integrationCtx.chatRoomApp(7, 'conv-1');
+  assert.equal(app.currentParticipantKey, 'u:7');
+});
 
 test('chatRoomApp exposes factory on window', () => {
   assert.equal(typeof ctx.chatRoomApp, 'function');

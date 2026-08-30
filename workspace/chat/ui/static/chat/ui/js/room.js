@@ -24,7 +24,6 @@ window.chatRoomFormatDuration = chatRoomFormatDuration;
 function chatRoomApp(currentUserId, conversationId) {
   return {
     currentUserId: currentUserId,
-    currentParticipantKey: `u:${currentUserId}`,
     roomConversationId: conversationId,
     callRole: 'owner',
     speakingIds: {},
@@ -49,6 +48,10 @@ function chatRoomApp(currentUserId, conversationId) {
     ...chatCallMixin(),
     ...chatCallDiagnosticMixin(),
     ...chatRecorderMixin(),
+
+    // Placed after the mixin spreads: chatCallMixin() declares its own
+    // currentParticipantKey: null default, which would otherwise win.
+    currentParticipantKey: `u:${currentUserId}`,
 
     async init() {
       this._initCallSounds?.();

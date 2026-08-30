@@ -93,6 +93,36 @@ class ListFoldersMergeTests(TestCase):
     def tearDown(self):
         cache.clear()
 
+    def test_alias_uuid_resolves_to_its_canonical(self):
+        """A uuid the model captured before a merge must still name a folder.
+
+        list_folders stops offering the alias, but nothing invalidates a uuid
+        the model is already holding from an earlier call.
+        """
+        from workspace.mail.ai_tools import _resolve_folder
+
+        folder, error = _resolve_folder(self.account, str(self.corbeille.uuid))
+
+        self.assertIsNone(error)
+        self.assertEqual(folder, self.trash)
+
+    def test_alias_name_is_not_a_target(self):
+        """Its name was never offered, so it must not resolve either."""
+        from workspace.mail.ai_tools import _resolve_folder
+
+        folder, error = _resolve_folder(self.account, "Corbeille")
+
+        self.assertIsNone(folder)
+        self.assertIn("No folder named", error)
+
+    def test_canonical_name_still_resolves(self):
+        from workspace.mail.ai_tools import _resolve_folder
+
+        folder, error = _resolve_folder(self.account, "Trash")
+
+        self.assertIsNone(error)
+        self.assertEqual(folder, self.trash)
+
     def test_listing_skips_aliases_and_sums_the_group(self):
         raw = MailToolProvider().list_folders(
             ListMailAccountScopedParams(account="user@example.com"),

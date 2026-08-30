@@ -595,12 +595,16 @@ window.mailFoldersMixin = function mailFoldersMixin() {
     },
 
     async _showMergedFolders(account) {
+      // Claim the dialog before the request, then drop a response that a
+      // later open has superseded: unmergeFolder files against whichever
+      // account is stored here, so a stale list would act on the wrong one.
+      this.mergedGroupsAccount = account.uuid;
       const res = await this._fetch(
         `/api/v1/mail/folders?account=${account.uuid}&include_aliases=true&show_hidden=true`,
       );
       if (!res.ok) return;
       const all = await res.json();
-      this.mergedGroupsAccount = account.uuid;
+      if (this.mergedGroupsAccount !== account.uuid) return;
       this.mergedGroups = all
         .filter(f => !f.alias_of && (f.aliases || []).length > 0)
         .map(f => ({ canonical: f, aliases: f.aliases }));

@@ -81,3 +81,62 @@ test('_resolveFolderUuid is scoped to the given account', () => {
   assert.equal(app._resolveFolderUuid('acc2', 'corbeille-uuid'), null);
   assert.equal(app._resolveFolderUuid('acc1', 'corbeille-uuid').uuid, 'trash-uuid');
 });
+
+// Opening the "Merged folders" dialog for one account and then quickly for
+// another leaves two requests in flight. Whichever returns last used to win,
+// so the dialog could show account A's groups while mergedGroupsAccount named
+// B - and unmergeFolder reloads whichever account is stored there.
+function makeDialogApp(responses) {
+  const ctx = loadScripts(
+    [
+      'workspace/common/static/ui/js/attachment_input.js',
+      'workspace/mail/ui/static/mail/ui/js/mail_accounts.js',
+      'workspace/mail/ui/static/mail/ui/js/mail_folders.js',
+      'workspace/mail/ui/static/mail/ui/js/mail_messages.js',
+      'workspace/mail/ui/static/mail/ui/js/mail_compose.js',
+      'workspace/mail/ui/static/mail/ui/js/mail_labels.js',
+      'workspace/mail/ui/static/mail/ui/js/mail_ai.js',
+      'workspace/mail/ui/static/mail/ui/js/mail_rules.js',
+      'workspace/mail/ui/static/mail/ui/js/mail_rules_form.js',
+      'workspace/mail/ui/static/mail/ui/js/mail.js',
+    ],
+    { document: { getElementById: () => ({ showModal() {}, close() {} }) } },
+  );
+  const app = ctx.mailApp();
+  // Each account's response resolves only when its recorded release() runs,
+  // so the test decides the completion order.
+  app._fetch = (url) => {
+    const account = url.match(/account=([^&]+)/)[1];
+    return new Promise((resolve) => {
+      responses[account] = () =>
+        resolve({ ok: true, json: async () => responses.payloads[account] });
+    });
+  };
+  return app;
+}
+
+const groupPayload = (name) => [
+  {
+    uuid: `${name}-canonical`,
+    alias_of: null,
+    display_name: name,
+    aliases: [{ uuid: `${name}-alias`, display_name: `${name} alias` }],
+  },
+];
+
+test('a superseded merged-folders response does not overwrite the current one', async () => {
+  const responses = { payloads: { acc1: groupPayload('acc1'), acc2: groupPayload('acc2') } };
+  const app = makeDialogApp(responses);
+
+  const first = app._showMergedFolders({ uuid: 'acc1' });
+  const second = app._showMergedFolders({ uuid: 'acc2' });
+
+  // The second open wins, then the first request finally lands.
+  responses.acc2();
+  await second;
+  responses.acc1();
+  await first;
+
+  assert.equal(app.mergedGroupsAccount, 'acc2');
+  assert.equal(app.mergedGroups[0].canonical.uuid, 'acc2-canonical');
+});

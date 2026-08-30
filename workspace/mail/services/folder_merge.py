@@ -32,18 +32,38 @@ class MergeError(ValueError):
         self.code = code
 
 
+def _lock_folders(*folders):
+    """Take row locks in primary-key order, then refresh the callers' copies.
+
+    Ordering by primary key is what keeps two merges racing on an overlapping
+    pair from deadlocking each other. Refreshing in place rather than handing
+    back new rows keeps the instances the caller passed in usable afterwards.
+    No-op on SQLite, which has no row locks.
+    """
+    pks = sorted({folder.pk for folder in folders})
+    list(MailFolder.objects.select_for_update().filter(pk__in=pks).order_by("pk"))
+    for folder in folders:
+        folder.refresh_from_db()
+
+
 def merge_folder(folder, into):
     """Make `folder` an alias of `into`. Returns the canonical folder."""
     if folder.pk == into.pk:
         raise MergeError("self")
     if folder.account_id != into.account_id:
         raise MergeError("cross_account")
-    if into.alias_of_id:
-        raise MergeError("target_is_alias")
-    if MailFolder.objects.filter(alias_of=folder).exists():
-        raise MergeError("has_aliases")
 
     with transaction.atomic():
+        # Validate under the lock, not before it. Two merges on an
+        # overlapping pair would otherwise both read a clean state and both
+        # commit, leaving a chain - and a folder two levels down is one no
+        # read path resolves, so its mail shows up nowhere.
+        _lock_folders(folder, into)
+        if into.alias_of_id:
+            raise MergeError("target_is_alias")
+        if MailFolder.objects.filter(alias_of=folder).exists():
+            raise MergeError("has_aliases")
+
         # A canonical typed `other` takes the alias's special type: merging
         # `Sent` into a user-created `Envoyes` has to leave the account with a
         # sent folder, or nothing can file the sent copy any more.
@@ -107,20 +127,24 @@ def promote_alias(folder, exclude_ids=()):
     `exclude_ids` keeps discovery from crowning an heir that is disappearing
     in the same pass.
     """
-    heir = (
-        MailFolder.objects.filter(alias_of=folder)
-        .exclude(pk__in=exclude_ids)
-        .order_by("created_at")
-        .first()
-    )
-    if heir is None:
-        return None
+    excluded = set(exclude_ids)
     with transaction.atomic():
+        # The whole group is locked before an heir is picked: a merge landing
+        # a new alias between the choice and the repoint would leave that
+        # alias pointing at a canonical that is about to disappear.
+        members = list(
+            MailFolder.objects.select_for_update()
+            .filter(alias_of=folder)
+            .order_by("created_at")
+        )
+        heir = next((f for f in members if f.pk not in excluded), None)
+        if heir is None:
+            return None
         heir.alias_of = None
         heir.save(update_fields=["alias_of", "updated_at"])
-        MailFolder.objects.filter(alias_of=folder).exclude(pk=heir.pk).update(
-            alias_of=heir
-        )
+        siblings = [f.pk for f in members if f.pk != heir.pk]
+        if siblings:
+            MailFolder.objects.filter(pk__in=siblings).update(alias_of=heir)
     logger.info(
         "Canonical folder %s is gone for %s; promoted %s",
         scrub(folder.name),

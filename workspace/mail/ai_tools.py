@@ -94,21 +94,27 @@ def _resolve_folder(account, hint):
     from workspace.mail.queries import canonical_folder
 
     hint = (hint or "").strip()
-    # Aliases are absent from list_folders, so the model never sees one as a
-    # move target - only canonicals are candidates here too.
-    folders = list(
-        MailFolder.objects.filter(account=account, alias_of__isnull=True).order_by(
-            "display_name"
-        )
-    )
     if not hint:
         return None, "A folder is required."
+
+    folders = list(
+        MailFolder.objects.filter(account=account)
+        .select_related("alias_of")
+        .order_by("display_name")
+    )
+    # A UUID may predate a merge - the model can be holding one from an
+    # earlier list_folders call - so aliases are matched here and resolved
+    # to the folder that now owns their mail.
     for folder in folders:
         if str(folder.uuid) == hint:
             return canonical_folder(folder), None
+    # Names are not: an alias is absent from list_folders, so its name is not
+    # something the model was ever offered as a target.
     for folder in folders:
+        if folder.alias_of_id:
+            continue
         if hint.casefold() in (folder.display_name.casefold(), folder.name.casefold()):
-            return canonical_folder(folder), None
+            return folder, None
     return None, (
         f'No folder named "{hint}" on {account.email}. '
         f"Call list_folders to see what exists."

@@ -74,3 +74,14 @@ class CallSignalingTests(SimpleTestCase):
         with patch("workspace.chat.services.call_signaling.notify_sse") as mock_notify:
             sig.notify_participant("garbage")
         mock_notify.assert_not_called()
+
+    def test_send_diagnostic_signal_lands_in_the_sender_member_mailbox(self):
+        with patch("workspace.chat.services.call_signaling.notify_sse") as mock_notify:
+            sig.send_diagnostic_signal(5, "to_callee", {"type": "offer"}, "run-1")
+        mock_notify.assert_called_once_with("chat", 5)
+        out = sig.drain_events("u:5")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["event"], "call_diagnostic_signal")
+        self.assertEqual(out[0]["data"]["lane"], "to_callee")
+        self.assertEqual(out[0]["data"]["signal"], {"type": "offer"})
+        self.assertEqual(out[0]["data"]["run_id"], "run-1")

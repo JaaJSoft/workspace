@@ -1687,3 +1687,29 @@ test('a uuid that names no reachable vault still reports it as missing', async (
   assert.equal(component.openVault, null);
   assert.equal(component.missing, true);
 });
+
+// --- an account with nothing in it ------------------------------------------
+
+test('with no vault the page offers to create one rather than reporting a failure', async () => {
+  const { component } = browser({ data: { 'vault-uuid': null }, vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoVault(), true);
+});
+
+test('a vault out of reach is not the same as having none', async () => {
+  // Told apart because the sentences differ: one says somebody else holds it,
+  // the other says there is nothing here yet.
+  const { component } = browser({ vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoVault(), false);
+  assert.equal(component.missing, true);
+});
+
+test('a vault that opens is never mistaken for an empty account', async () => {
+  const { component } = browser();
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoVault(), false);
+});

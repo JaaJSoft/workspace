@@ -302,6 +302,12 @@ window.vaultBrowser = (function () {
         }
       },
 
+      // Told apart from `missing` on purpose: one is an account with nothing in
+      // it, the other is a vault that exists for somebody else.
+      hasNoVault: function () {
+        return !this.loading && !this.openVault && !this.missing && this.vaults.length === 0;
+      },
+
       rowFor: function (uuid) {
         return this.entryRows.find(function (row) { return row.uuid === uuid; }) || null;
       },

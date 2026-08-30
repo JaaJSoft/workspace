@@ -77,7 +77,11 @@
       {% endcomment %}
       <template x-if="state === 'unlocked'">
         <div class="h-full flex min-h-0 w-full">
-          <main class="flex-1 flex flex-col min-w-0 min-h-0">
+          <template x-if="hasNoVault()">
+            {% include "vault/ui/partials/no_vault.html" %}
+          </template>
+
+          <main class="flex-1 flex flex-col min-w-0 min-h-0" x-show="!hasNoVault()">
             {% include "vault/ui/partials/browser_header.html" %}
 
             <inline-alert type="warning" title="This vault is out of reach" message="Nothing here holds a key for your account, or the vault does not exist." class="mx-5 mt-4" x-show="missing" x-cloak></inline-alert>

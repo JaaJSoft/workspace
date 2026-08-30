@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
@@ -14,6 +15,26 @@ class ParseTests(SimpleTestCase):
         self.assertIsNone(
             rr.parse("RRULE:FREQ=NONSENSE", datetime(2026, 1, 6, 10, tzinfo=UTC))
         )
+
+    def test_unparseable_rule_error_message_is_scrubbed_before_logging(self):
+        # The parser's own exception can echo back attacker-controlled
+        # substrings from the rule text; logging it unscrubbed is a log
+        # injection vector (CWE-117) even though rule_text itself is scrubbed.
+        hostile = ValueError("bad token\r\nFAKE-LOG-LINE: admin logged in")
+        with patch(
+            "workspace.calendar.services.recurrence_rule.rrulestr",
+            side_effect=hostile,
+        ):
+            with self.assertLogs(
+                "workspace.calendar.services.recurrence_rule", level="WARNING"
+            ) as cm:
+                self.assertIsNone(
+                    rr.parse("RRULE:FREQ=DAILY", datetime(2026, 1, 6, 10, tzinfo=UTC))
+                )
+        self.assertEqual(len(cm.output), 1)
+        self.assertNotIn("\r", cm.output[0])
+        self.assertNotIn("\n", cm.output[0])
+        self.assertIn("FAKE-LOG-LINE", cm.output[0])
 
     def test_full_grammar_is_honoured(self):
         rule = (
@@ -63,6 +84,18 @@ class LastOccurrenceEndTests(SimpleTestCase):
         end = rr.last_occurrence_end(rule, self.dtstart)
         # Not the exact last occurrence, but never earlier than it.
         self.assertEqual(end, datetime(2099, 1, 1, tzinfo=UTC))
+
+    def test_mixed_count_and_until_rrules_never_underestimate(self):
+        # The COUNT-only line's true last occurrence lands around
+        # 2026-05-02 - far past 2026-02-01, the largest literal UNTIL in the
+        # rule. Reporting that literal would be an under-estimate; None
+        # (unbounded) is the only answer that is never earlier than the
+        # truth.
+        rule = (
+            "RRULE:FREQ=SECONDLY;COUNT=10000000\n"
+            "RRULE:FREQ=YEARLY;UNTIL=20260201T000000Z"
+        )
+        self.assertIsNone(rr.last_occurrence_end(rule, self.dtstart))
 
 
 class SimpleRoundTripTests(SimpleTestCase):
@@ -128,6 +161,27 @@ class TruncateBeforeTests(SimpleTestCase):
         self.assertIn("RDATE:20260401T090000Z", result)
         self.assertNotIn("20260601T090000Z", result)
 
+    def test_rdate_with_tzid_param_is_still_recognised_and_kept(self):
+        # RFC 5545 3.8.5.2 allows a TZID parameter on RDATE. The property
+        # name in the raw line is "RDATE;TZID=America/New_York", not
+        # "RDATE" - matching on the full string used to miss this branch
+        # entirely and pass the line through unmodified.
+        result = rr.truncate_before(
+            "RRULE:FREQ=WEEKLY\nRDATE;TZID=America/New_York:20260401T090000",
+            datetime(2026, 4, 1, 18, tzinfo=UTC),
+        )
+        self.assertIn("RDATE;TZID=America/New_York:20260401T090000", result)
+
+    def test_rdate_with_tzid_is_compared_in_local_time_not_utc(self):
+        # 09:00 America/New_York on 2026-04-01 is 13:00 UTC (EDT, UTC-4). A
+        # comparison that read the literal digits as UTC would consider it
+        # before a 12:30 UTC cutoff on the same date; it is actually after.
+        result = rr.truncate_before(
+            "RRULE:FREQ=WEEKLY\nRDATE;TZID=America/New_York:20260401T090000",
+            datetime(2026, 4, 1, 12, 30, tzinfo=UTC),
+        )
+        self.assertNotIn("RDATE", result)
+
 
 class DescribeTests(SimpleTestCase):
     def test_common_patterns_read_as_english(self):
@@ -192,3 +246,69 @@ class ClientCorpusTests(SimpleTestCase):
         for rule in self.CORPUS:
             with self.subTest(rule=rule):
                 rr.last_occurrence_end(rule, dtstart, timedelta(hours=1))
+
+
+class _StubEvent:
+    """Minimal duck-typed stand-in for Event.
+
+    ``apply_rule`` only reads/writes ``recurrence_rule``, ``is_recurring``,
+    ``recurrence_until``, ``start``, ``end`` and ``timezone``. A real ``Event``
+    can't be used yet: ``is_recurring`` is still a read-only model property
+    and ``recurrence_rule``/``recurrence_until`` aren't columns until a later
+    task in the recurrence-storage migration adds them.
+    """
+
+    def __init__(self, start, end=None, timezone=""):
+        self.start = start
+        self.end = end
+        self.timezone = timezone
+        self.recurrence_rule = ""
+        self.is_recurring = False
+        self.recurrence_until = None
+
+
+class ApplyRuleTests(SimpleTestCase):
+    def test_sets_all_three_fields_coherently(self):
+        event = _StubEvent(
+            start=datetime(2026, 1, 6, 10, tzinfo=UTC),
+            end=datetime(2026, 1, 6, 11, tzinfo=UTC),
+        )
+        rr.apply_rule(event, "RRULE:FREQ=DAILY;COUNT=3")
+        self.assertEqual(event.recurrence_rule, "RRULE:FREQ=DAILY;COUNT=3")
+        self.assertTrue(event.is_recurring)
+        self.assertEqual(event.recurrence_until, datetime(2026, 1, 8, 11, tzinfo=UTC))
+
+    def test_clearing_the_rule_clears_the_bound(self):
+        event = _StubEvent(start=datetime(2026, 1, 6, 10, tzinfo=UTC))
+        rr.apply_rule(event, "RRULE:FREQ=DAILY;COUNT=3")
+        rr.apply_rule(event, "")
+        self.assertEqual(event.recurrence_rule, "")
+        self.assertFalse(event.is_recurring)
+        self.assertIsNone(event.recurrence_until)
+
+
+class DeriveIntoDefaultsTests(SimpleTestCase):
+    def test_matches_apply_rule_for_an_equivalent_zoned_series(self):
+        # Spans the 2026 US spring-forward (Mar 8): a computation that
+        # ignored the zone would disagree with a zone-aware one by exactly
+        # one hour, which is what pins the two functions to the same answer.
+        start = datetime(2026, 3, 7, 15, tzinfo=UTC)
+        end = datetime(2026, 3, 7, 16, tzinfo=UTC)
+        rule = "RRULE:FREQ=DAILY;COUNT=3"
+
+        event = _StubEvent(start=start, end=end, timezone="America/New_York")
+        rr.apply_rule(event, rule)
+
+        defaults = {
+            "recurrence_rule": rule,
+            "start": start,
+            "end": end,
+            "timezone": "America/New_York",
+        }
+        rr.derive_into_defaults(defaults)
+
+        self.assertEqual(defaults["is_recurring"], event.is_recurring)
+        self.assertEqual(defaults["recurrence_until"], event.recurrence_until)
+        self.assertEqual(
+            defaults["recurrence_until"], datetime(2026, 3, 9, 15, tzinfo=UTC)
+        )

@@ -13,6 +13,7 @@ assignment to them elsewhere.
 import logging
 import re
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil.rrule import rrulestr
 
@@ -21,7 +22,7 @@ from workspace.common.logging import scrub
 logger = logging.getLogger(__name__)
 
 # Occurrences to walk before abandoning an exact last-occurrence search. A
-# daily series fires ~260 times a year, so this clears any real calendar while
+# daily series fires ~365 times a year, so this clears any real calendar while
 # bounding a hostile FREQ=SECONDLY rule to a few milliseconds.
 MAX_ITERATIONS = 10_000
 
@@ -51,11 +52,18 @@ def _ical_utc(value):
     return value.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
-def _parse_ical_utc(text):
-    """Parse an RFC 5545 DATE or DATE-TIME into an aware UTC datetime."""
-    text = text.rstrip("Z")
+def _parse_ical_utc(text, zone=UTC):
+    """Parse an RFC 5545 DATE or DATE-TIME into an aware datetime.
+
+    A trailing ``Z`` always means UTC, regardless of *zone*. Without one the
+    value is a local wall-clock time in *zone* - an RDATE/EXDATE under a TZID
+    parameter, per RFC 5545 3.8.5.2/3.8.5.3.
+    """
+    if text.endswith("Z"):
+        text = text[:-1]
+        zone = UTC
     fmt = "%Y%m%dT%H%M%S" if "T" in text else "%Y%m%d"
-    return datetime.strptime(text, fmt).replace(tzinfo=UTC)
+    return datetime.strptime(text, fmt).replace(tzinfo=zone)
 
 
 def _rule_lines(rule_text):
@@ -72,6 +80,47 @@ def _properties(line):
     return name.upper(), parts
 
 
+def _name_and_params(name):
+    """Split a property's name segment into its base name and parameters.
+
+    ``RDATE;TZID=America/New_York`` -> (``"RDATE"``, {"TZID": "America/New_York"}).
+    Property parameters live before the colon, so this is distinct from
+    ``_properties``, which parses the value pairs after it.
+    """
+    base, *param_tokens = name.split(";")
+    params = {}
+    for token in param_tokens:
+        key, _, value = token.partition("=")
+        params[key.upper()] = value
+    return base.upper(), params
+
+
+def _zone_or_utc(tzid):
+    """Resolve a TZID parameter to a zone, or UTC when missing/unrecognised."""
+    if not tzid:
+        return UTC
+    try:
+        return ZoneInfo(tzid)
+    except ZoneInfoNotFoundError, ValueError:
+        return UTC
+
+
+def _zone_from_name(name):
+    """Resolve an IANA zone name to a ZoneInfo, or None for the legacy UTC path.
+
+    Mirrors ``timezones.event_timezone``'s contract but takes a bare name, so
+    both ``apply_rule`` (which holds an ``Event``) and ``derive_into_defaults``
+    (which holds only an ``update_or_create`` payload dict) resolve the same
+    way instead of each growing their own copy of this.
+    """
+    if not name or name == "UTC":
+        return None
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError, ValueError:
+        return None
+
+
 def parse(rule_text, dtstart, tz=None):
     """Return a dateutil rruleset for *rule_text* anchored at *dtstart*.
 
@@ -84,7 +133,9 @@ def parse(rule_text, dtstart, tz=None):
     try:
         return rrulestr(rule_text, dtstart=anchor, forceset=True)
     except (ValueError, TypeError, KeyError) as exc:
-        logger.warning("Unparseable recurrence rule %s: %s", scrub(rule_text), exc)
+        logger.warning(
+            "Unparseable recurrence rule %s: %s", scrub(rule_text), scrub(str(exc))
+        )
         return None
 
 
@@ -104,10 +155,17 @@ def _is_bounded(rule_text):
 def _loose_bound(rule_text, duration):
     """Loosest safe bound when exact iteration was abandoned.
 
-    Falls back to the largest UNTIL in the rule. A rule bounded only by a COUNT
-    too large to walk is reported as infinite, which costs prune tightness and
-    never correctness.
+    Only safe when every RRULE line carries a literal UNTIL: a COUNT-only
+    line's true last occurrence can fall well past the other lines' UNTIL
+    values, and that can't be known without walking it - which is exactly
+    what this function exists to avoid. So a mix of UNTIL and COUNT-only
+    lines is reported as infinite (unbounded), not the max of the UNTIL
+    literals present. That costs prune tightness, never correctness: it can
+    only make the bound looser than the truth, never tighter.
     """
+    rules = [ln for ln in _rule_lines(rule_text) if ln.upper().startswith("RRULE")]
+    if not all("UNTIL=" in ln.upper() for ln in rules):
+        return None
     untils = _UNTIL_RE.findall(rule_text.upper())
     if not untils:
         return None
@@ -208,8 +266,8 @@ def truncate_before(rule_text, instant):
     out = []
     for line in _rule_lines(rule_text):
         name, _, body = line.partition(":")
-        upper = name.upper()
-        if upper == "RRULE":
+        prop, params = _name_and_params(name)
+        if prop == "RRULE":
             kept = [
                 token
                 for token in body.split(";")
@@ -217,11 +275,15 @@ def truncate_before(rule_text, instant):
             ]
             kept.append(until_token)
             out.append(f"{name}:" + ";".join(kept))
-        elif upper in ("RDATE", "EXDATE"):
+        elif prop in ("RDATE", "EXDATE"):
+            # A TZID parameter means the values are local wall-clock times
+            # with no trailing Z; resolve them in that zone before comparing
+            # to *instant*, which is a UTC-anchored cutoff.
+            zone = _zone_or_utc(params.get("TZID"))
             surviving = [
                 value
                 for value in body.split(",")
-                if _parse_ical_utc(value.split(";")[-1]) < instant
+                if _parse_ical_utc(value.split(";")[-1], zone) < instant
             ]
             if surviving:
                 out.append(f"{name}:" + ",".join(surviving))
@@ -253,8 +315,6 @@ def apply_rule(event, rule_text):
     path calls it; the structural test fails the build on any other assignment.
     Does not save - the caller owns the transaction.
     """
-    from .timezones import event_timezone
-
     event.recurrence_rule = rule_text or ""
     event.is_recurring = bool(event.recurrence_rule)
     if not event.is_recurring:
@@ -262,7 +322,7 @@ def apply_rule(event, rule_text):
         return
     duration = (event.end - event.start) if event.end else None
     event.recurrence_until = last_occurrence_end(
-        event.recurrence_rule, event.start, duration, event_timezone(event)
+        event.recurrence_rule, event.start, duration, _zone_from_name(event.timezone)
     )
 
 
@@ -278,6 +338,7 @@ def derive_into_defaults(defaults):
     defaults["is_recurring"] = bool(rule)
     start, end = defaults.get("start"), defaults.get("end")
     duration = (end - start) if start and end else None
+    zone = _zone_from_name(defaults.get("timezone"))
     defaults["recurrence_until"] = (
-        last_occurrence_end(rule, start, duration) if rule and start else None
+        last_occurrence_end(rule, start, duration, zone) if rule and start else None
     )

@@ -27,6 +27,7 @@ from .budget import TextBudget
 logger = logging.getLogger(__name__)
 
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+DOTX = "application/vnd.openxmlformats-officedocument.wordprocessingml.template"
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 ODT = "application/vnd.oasis.opendocument.text"
@@ -99,15 +100,18 @@ _SHEET_PARTS = (
 
 _CONTENT_XML = (_Part(re.compile(r"^content\.xml$"), _PROSE_TAGS),)
 
-_RULES = {
-    DOCX: (
-        _Part(
-            re.compile(
-                r"^word/(document|footnotes|endnotes|header\d*|footer\d*)\.xml$"
-            ),
-            _PROSE_TAGS,
-        ),
+# A template is the same package as the document it seeds, down to the part
+# that holds the body, so the two share a rule rather than a copy of one.
+_WORD_PARTS = (
+    _Part(
+        re.compile(r"^word/(document|footnotes|endnotes|header\d*|footer\d*)\.xml$"),
+        _PROSE_TAGS,
     ),
+)
+
+_RULES = {
+    DOCX: _WORD_PARTS,
+    DOTX: _WORD_PARTS,
     PPTX: (_Part(re.compile(r"^ppt/(slides|notesSlides)/[^/]+\.xml$"), _PROSE_TAGS),),
     XLSX: _SHEET_PARTS,
     ODT: _CONTENT_XML,
@@ -139,7 +143,12 @@ def office_text(stream, mime_type: str, *, max_chars: int) -> str:
                         return budget.text()
                     if part.members.match(name):
                         _read_part(archive, name, part, budget)
-    except (zipfile.BadZipFile, OSError, EOFError, ValueError) as exc:
+    except Exception as exc:
+        # Everything, not a list of the failures seen so far. A corrupt archive
+        # surfaces from zipfile and zlib as BadZipFile, OSError, EOFError,
+        # zlib.error, NotImplementedError or struct.error depending on which
+        # byte was damaged, and enumerating them is the game this boundary
+        # exists to stop playing: the caller is promised a ValueError.
         raise ValueError(f"Could not read office document: {exc}") from exc
     return budget.text()
 
@@ -166,13 +175,11 @@ def _read_part(archive, name, part, budget):
     try:
         with archive.open(name) as member:
             payload = member.read(MAX_PART_BYTES)
-    except (zipfile.BadZipFile, OSError, EOFError, RuntimeError) as exc:
-        logger.debug("Office part %s unreadable: %s", scrub(name), scrub(exc))
-        return
-    try:
         _parse_part(payload, part, budget)
-    except etree.XMLSyntaxError as exc:
-        logger.debug("Office part %s is not valid XML: %s", scrub(name), scrub(exc))
+    except Exception as exc:
+        # Same reasoning as office_text, one level down: a member can be
+        # damaged, compressed in a way zipfile declines, or not be XML at all.
+        logger.debug("Office part %s unreadable: %s", scrub(name), scrub(exc))
 
 
 def _parse_part(payload, part, budget):

@@ -89,6 +89,16 @@ def extract_text(file_obj):
     return _extract_from_prefix(file_obj, mime) or None
 
 
+def has_extractor(mime_type):
+    """Whether *mime_type* has an extractor at all.
+
+    Exists so the app's own catalogue of known types can be checked against
+    this registry: a format nobody registered is a format nobody notices.
+    """
+    mime = _base_mime(mime_type)
+    return mime in _STREAM_EXTRACTORS or _extractor_for(mime) is not None
+
+
 def _base_mime(mime_type):
     return (mime_type or "").split(";")[0].strip().lower()
 

@@ -14,7 +14,6 @@ import logging
 from collections.abc import Iterator
 
 from pypdf import PasswordType, PdfReader
-from pypdf.errors import PdfReadError
 
 from workspace.common.logging import scrub
 
@@ -22,9 +21,11 @@ from .budget import TextBudget
 
 logger = logging.getLogger(__name__)
 
-# What pypdf raises for a document it cannot navigate at all, as opposed to the
-# per-page failures a single unsupported font causes.
-_STRUCTURAL_ERRORS = (PdfReadError, OSError, RecursionError, ValueError)
+# Every structural failure becomes a ValueError, and the catch that gets it
+# there is deliberately Exception rather than a list. A damaged cross-reference
+# table surfaces from pypdf as PdfReadError, OSError, RecursionError,
+# AttributeError, KeyError or TypeError depending on which byte was damaged;
+# the caller is promised one of them, not the union of the ones seen so far.
 
 
 def open_pdf(source) -> PdfReader:
@@ -36,10 +37,11 @@ def open_pdf(source) -> PdfReader:
     stream = io.BytesIO(source) if isinstance(source, bytes | bytearray) else source
     try:
         reader = PdfReader(stream)
-    except _STRUCTURAL_ERRORS as exc:
+        encrypted = reader.is_encrypted
+    except Exception as exc:
         raise ValueError(f"Could not read PDF: {exc}") from exc
 
-    if not reader.is_encrypted:
+    if not encrypted:
         return reader
     # An empty user password is the "printing restricted" case, which every
     # reader opens; a real one leaves the pages encrypted.
@@ -57,7 +59,7 @@ def page_count(reader: PdfReader) -> int:
     """How many pages *reader* holds. Raises ValueError on a broken page tree."""
     try:
         return len(reader.pages)
-    except _STRUCTURAL_ERRORS as exc:
+    except Exception as exc:
         raise ValueError(f"Could not read PDF: {exc}") from exc
 
 
@@ -66,7 +68,7 @@ def iter_page_texts(reader: PdfReader, *, max_pages: int) -> Iterator[str]:
     for index in range(min(page_count(reader), max_pages)):
         try:
             page = reader.pages[index]
-        except _STRUCTURAL_ERRORS as exc:
+        except Exception as exc:
             raise ValueError(f"Could not read PDF: {exc}") from exc
         yield page_text(page, index)
 

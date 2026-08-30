@@ -13,6 +13,7 @@ from django.test import SimpleTestCase
 
 from workspace.common.documents.office import (
     DOCX,
+    DOTX,
     ODP,
     ODS,
     ODT,
@@ -85,6 +86,11 @@ class DocxTests(SimpleTestCase):
         body = _text(payload, DOCX)
         for word in ("body", "headerword", "footerword", "footnoteword"):
             self.assertIn(word, body)
+
+    def test_a_word_template_is_read_like_a_document(self):
+        # A .dotx is the same package as the document it seeds, so it shares
+        # the rule rather than a copy of it.
+        self.assertIn("template body", _text(make_docx(["template body"]), DOTX))
 
     def test_unrelated_parts_are_not_read(self):
         payload = make_docx(

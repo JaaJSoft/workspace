@@ -3,7 +3,7 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from pypdf import PdfWriter
 
 from workspace.common.documents import office
@@ -15,10 +15,12 @@ from workspace.common.tests.office_fixtures import (
 )
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File
+from workspace.files.services.detection import get_all_labels
 from workspace.files.services.text_extraction import (
     _MAX_DOCUMENT_BYTES,
     BODY_CAP,
     extract_text,
+    has_extractor,
 )
 
 User = get_user_model()
@@ -267,3 +269,71 @@ class DocumentExtractionTests(TestCase):
         with mock.patch.object(File.content.field.storage, "open") as opener:
             opener.return_value = _ForwardOnly(raw)
             self.assertIn("kraken", extract_text(f))
+
+
+class ExtractorCoverageTests(SimpleTestCase):
+    """A document format the app can recognise but nobody indexes is a decision.
+
+    Detection classifies content into Magika's groups, and "document" is
+    precisely the set where a user expects the words inside the file to be
+    findable. Checking the registry against that group is what turns "we
+    forgot a format" from something noticed by a user into a failing test.
+    """
+
+    # Why each of these carries no indexable text. Spelled out, because an
+    # empty reason is how a format ends up excluded by accident.
+    NOT_INDEXED = {
+        # Pre-2007 Office: OLE compound files, not zip containers. They need a
+        # different reader and have their own issue.
+        "application/msword",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        # Zip-and-XML, but neither OOXML nor OpenDocument: their own part
+        # layouts, worth their own issue rather than a guess here.
+        "application/epub+zip",
+        "application/vnd.ms-visio.drawing.main+xml",
+        # Proprietary binary containers with no free parser in the stack.
+        "application/x-hwp",
+        "application/msonenote",
+        # A page description language, not a document format: the text is
+        # drawing operators, and rendering it is what OCR would be.
+        "application/postscript",
+        # Magika files these under "document" but reports them as opaque
+        # bytes, so there is no format here to key an extractor on.
+        "application/octet-stream",
+    }
+
+    def _document_mime_types(self):
+        return {
+            (info.get("mime_type") or "")
+            for info in get_all_labels().values()
+            if (info.get("group") or "") == "document"
+        } - {""}
+
+    def test_every_document_format_is_either_indexed_or_excluded_on_purpose(self):
+        declared = self._document_mime_types()
+        self.assertTrue(declared, "the detection catalogue reports no documents")
+        unclassified = {
+            mime
+            for mime in declared
+            if not has_extractor(mime) and mime not in self.NOT_INDEXED
+        }
+        self.assertEqual(
+            unclassified,
+            set(),
+            "Detection can recognise these as documents but nothing indexes "
+            "them. Register an extractor, or add them to NOT_INDEXED with the "
+            "reason they carry no text.",
+        )
+
+    def test_the_exclusion_list_does_not_outlive_its_reason(self):
+        # An entry that has since gained an extractor has to leave the list, or
+        # the list stops being evidence of anything.
+        self.assertEqual({m for m in self.NOT_INDEXED if has_extractor(m)}, set())
+
+    def test_every_office_type_the_extractor_supports_is_registered(self):
+        # The registration loops over the extractor's own list; this fails if
+        # the two ever drift apart.
+        for mime in office.SUPPORTED_MIME_TYPES:
+            with self.subTest(mime=mime):
+                self.assertTrue(has_extractor(mime))

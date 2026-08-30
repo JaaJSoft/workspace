@@ -27,7 +27,7 @@ Projects grows up: work in sprints, group tasks under epics, break them into che
 ### Files
 
 - Edit office documents in the browser. Word, Excel and PowerPoint files - and their OpenDocument equivalents - now open and save directly in the file viewer when your instance is set up with an editor. Without one, office files keep their download-only behavior.
-- Search inside your documents. A word that appears only in a PDF, a Word, Excel or PowerPoint file, or their OpenDocument equivalents, now finds it. Documents already in your workspace are picked up too. A scan with no text in it keeps matching on its name, as it did before.
+- Search inside your documents. A word that appears only in a PDF, a Word, Excel or PowerPoint file finds it now, and so do OpenDocument files, the older .doc, .xls and .ppt formats, rich text and ebooks. Documents already in your workspace are picked up too. A scan with no text in it keeps matching on its name, as it did before.
 
 ### AI Assistants
 

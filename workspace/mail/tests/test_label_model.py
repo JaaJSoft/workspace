@@ -347,14 +347,14 @@ class SuspiciousLabelBackfillTests(TestCase):
         self.module.seed_suspicious_label(apps, self._Editor)
 
         label = MailLabel.objects.get(account=self.account, name="Suspicious")
-        self.assertEqual(label.color, "accent")
+        self.assertEqual(label.color, "error")
         self.assertEqual(label.icon, "shield")
         self.assertEqual(label.position, 5)
         self.assertFalse(label.notify_on_apply)
 
     def test_backfill_is_idempotent_and_case_insensitive(self):
         MailLabel.objects.filter(account=self.account, name="Suspicious").update(
-            name="suspicious", color="error"
+            name="suspicious", color="warning"
         )
 
         self.module.seed_suspicious_label(apps, self._Editor)
@@ -363,7 +363,7 @@ class SuspiciousLabelBackfillTests(TestCase):
             account=self.account, name__iexact="suspicious"
         )
         self.assertEqual(matches.count(), 1)
-        self.assertEqual(matches.get().color, "error")
+        self.assertEqual(matches.get().color, "warning")
 
     def test_reverse_is_a_noop(self):
         reverse = self.module.Migration.operations[0].reverse_code

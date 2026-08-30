@@ -1,6 +1,6 @@
 from django.db import migrations
 
-LABEL = {"name": "Suspicious", "color": "accent", "icon": "shield", "position": 5}
+LABEL = {"name": "Suspicious", "color": "error", "icon": "shield", "position": 5}
 
 
 def seed_suspicious_label(apps, schema_editor):

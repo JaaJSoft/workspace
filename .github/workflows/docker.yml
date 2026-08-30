@@ -45,8 +45,24 @@ env:
   SHOULD_PUSH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
 
 jobs:
+  # One leg per architecture, each on a runner of that architecture: the image
+  # is smoke-tested by being run, which emulation would make either impossible
+  # or meaningless. arm64 runners are free for public repositories.
   build:
-    runs-on: ubuntu-latest
+    name: Build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # Both legs report independently - a broken arm64 build shouldn't hide
+      # whether amd64 still passes.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
     services:
       # Postgres is only used by the migration smoke step further down,
       # but services on a job spin up unconditionally - that is fine here
@@ -68,6 +84,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      # The owner is spelled `JaaJSoft` and a Docker reference may not contain
+      # uppercase. metadata-action lowercases what it emits, but the digest push
+      # below needs the bare image name, so it gets lowercased here too.
+      - name: Compute the image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -81,7 +104,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ steps.image.outputs.name }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -92,16 +115,24 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: ${{ matrix.platform }}
           push: false
           load: true
           tags: workspace:ci
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APT_REFRESH=${{ steps.apt_refresh.outputs.date }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Scoped per architecture: the two legs share nothing but the
+          # Dockerfile, and an unscoped GHA cache has them overwrite each
+          # other's export on every run.
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
 
+      # amd64 only. Both images install the same Debian packages at the same
+      # versions, so a second scan reports the same CVEs - and two SARIF uploads
+      # sharing a category overwrite one another anyway.
       - name: Scan image for vulnerabilities (Trivy)
+        if: matrix.arch == 'amd64'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: workspace:ci
@@ -118,7 +149,7 @@ jobs:
 
       - name: Upload Trivy SARIF to GitHub code scanning
         # always() so results upload even if an earlier step (e.g. smoke) fails.
-        if: always()
+        if: always() && matrix.arch == 'amd64'
         uses: github/codeql-action/upload-sarif@v4.37.8
         with:
           sarif_file: trivy-results.sarif
@@ -135,6 +166,10 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      # The PostgreSQL chain runs in both legs rather than in a job of its own:
+      # the container smoke test below needs a migrated, seeded database to talk
+      # to, and a service container lives and dies with its job. The legs run in
+      # parallel, so duplicating it costs no wall-clock time.
       - name: Initialise SQLite source and seed test data
         run: |
           uv run python manage.py migrate
@@ -193,14 +228,97 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The smoke-tested image is already loaded in the daemon (with the meta
-      # labels baked in), so pushing is a retag of `workspace:ci` - no second
-      # buildx build re-importing the GHA cache just to export the same layers.
-      - name: Push image
+      # Untagged, digest-only: a per-architecture tag would sit in the registry
+      # forever, and only the manifest list the publish job assembles should
+      # carry a name. Every layer is already in the builder's local cache from
+      # the smoke-tested build above, so nothing is rebuilt here - the step
+      # exports those same layers to the registry, which is all a push is.
+      - name: Push image by digest
+        id: push
+        if: env.SHOULD_PUSH == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APT_REFRESH=${{ steps.apt_refresh.outputs.date }}
+          # A provenance attestation is pushed as an extra manifest alongside the
+          # image, and `imagetools create` folds it into the list as an entry with
+          # no platform. Disabled so the manifest list holds exactly two images.
+          provenance: false
+          outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+
+      # The digest is carried as a filename, so the publish job needs no other
+      # state to reference the image this leg just pushed.
+      - name: Export digest
         if: env.SHOULD_PUSH == 'true'
         run: |
-          while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            docker tag workspace:ci "$tag"
-            docker push "$tag"
-          done <<< "${{ steps.meta.outputs.tags }}"
+          mkdir -p /tmp/digests
+          digest="${{ steps.push.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: env.SHOULD_PUSH == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Assembles the per-architecture digests into one manifest list, so that
+  # `docker pull ghcr.io/jaajsoft/workspace:main` resolves to the right image on
+  # a Raspberry Pi and on an x86 Kubernetes node alike.
+  publish:
+    name: Publish manifest
+    runs-on: ubuntu-latest
+    needs: [build]
+    # `env` is not one of the contexts a job-level `if` can read, so the
+    # SHOULD_PUSH condition is spelled out again here rather than reused.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    steps:
+      - name: Compute the image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+
+      - name: Create and push the manifest list
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ steps.image.outputs.name }}@sha256:%s ' *)
+
+      - name: Inspect the published image
+        run: |
+          docker buildx imagetools inspect \
+            ${{ steps.image.outputs.name }}:${{ steps.meta.outputs.version }}

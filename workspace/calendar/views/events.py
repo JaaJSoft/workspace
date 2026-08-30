@@ -223,7 +223,7 @@ class EventListView(CacheControlMixin, APIView):
         # Non-recurring events (exclude exceptions)
         non_recurring = Event.objects.filter(
             cal_or_member,
-            recurrence_frequency__isnull=True,
+            is_recurring=False,
             recurrence_parent__isnull=True,
             is_cancelled=False,
             start__lt=range_end,
@@ -237,11 +237,11 @@ class EventListView(CacheControlMixin, APIView):
         # Recurring masters overlapping the range
         masters = Event.objects.filter(
             cal_or_member,
-            recurrence_frequency__isnull=False,
+            is_recurring=True,
             recurrence_parent__isnull=True,
             start__lt=range_end,
         ).filter(
-            Q(recurrence_end__isnull=True) | Q(recurrence_end__gt=range_start),
+            Q(recurrence_until__isnull=True) | Q(recurrence_until__gt=range_start),
         )
         masters = _prefetch_event(masters)
 

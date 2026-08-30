@@ -51,9 +51,23 @@ class ClamAVScanner(Scanner):
             timeout=effective,
         )
 
+    @staticmethod
+    def _force_close(client):
+        # clamav_client assigns clamd_socket before connect() and only closes
+        # it on paths that reach its own try/finally - a connect failure in
+        # _basic_command() (ping/version) skips that finally entirely, so the
+        # socket is left open until GC finalizes it. Closing twice is a no-op.
+        sock = getattr(client, "clamd_socket", None)
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
+
     def scan(self, stream, *, name=""):
+        client = self._client()
         try:
-            result = self._client().instream(stream)
+            result = client.instream(stream)
         except BufferTooLongError:
             # The daemon's own StreamMaxLength, not ours. Same meaning as our
             # cap: we cannot vouch for these bytes, and saying so is honest.
@@ -68,6 +82,8 @@ class ClamAVScanner(Scanner):
             return ScanVerdict(
                 status=FileScan.Status.ERROR, detail=str(exc)[:_DETAIL_MAX]
             )
+        finally:
+            self._force_close(client)
 
         if not result:
             return ScanVerdict(
@@ -87,10 +103,12 @@ class ClamAVScanner(Scanner):
         )
 
     def health(self):
+        client = self._client(timeout=HEALTH_TIMEOUT)
         try:
-            client = self._client(timeout=HEALTH_TIMEOUT)
             client.ping()
             version = client.version()
         except (ClamdError, OSError) as exc:
             return ScannerHealth(reachable=False, error=str(exc)[:_DETAIL_MAX])
+        finally:
+            self._force_close(client)
         return ScannerHealth(reachable=True, version=version[:_DETAIL_MAX])

@@ -1,4 +1,5 @@
 import io
+from unittest.mock import patch
 
 from django.test import SimpleTestCase, override_settings
 
@@ -84,3 +85,51 @@ class ClamAVScannerTests(SimpleTestCase):
             health = ClamAVScanner().health()
         self.assertFalse(health.reachable)
         self.assertTrue(health.error)
+
+    def _spy_on_client(self):
+        """Capture every clamd client the scanner builds, real construction kept.
+
+        A ResourceWarning raised while a socket's finalizer runs during
+        garbage collection is swallowed by the interpreter ("Exception
+        ignored while finalizing...") rather than propagated - it can never
+        fail a test, even when the leak is real. Asserting the socket's
+        ``fileno()`` is -1 (closed) after the call is the only reliable way
+        to pin this down.
+        """
+        clients = []
+        real_client = ClamAVScanner._client
+
+        def spy(scanner, timeout=None):
+            client = real_client(scanner, timeout=timeout)
+            clients.append(client)
+            return client
+
+        self.enterContext(patch.object(ClamAVScanner, "_client", spy))
+        return clients
+
+    def test_unreachable_daemon_does_not_leak_a_socket(self):
+        # clamav_client's _init_socket() assigns the socket before connect();
+        # a connect failure can leave it open until GC finalizes it, one fd
+        # per scan attempted while a Celery worker's daemon is down.
+        port = free_port()
+        clients = self._spy_on_client()
+        with override_settings(
+            FILES_CLAMAV_SOCKET="",
+            FILES_CLAMAV_HOST="127.0.0.1",
+            FILES_CLAMAV_PORT=port,
+            FILES_CLAMAV_TIMEOUT=2.0,
+        ):
+            ClamAVScanner().scan(io.BytesIO(b"x"), name="a.bin")
+        self.assertEqual(clients[0].clamd_socket.fileno(), -1)
+
+    def test_health_check_does_not_leak_a_socket_when_unreachable(self):
+        port = free_port()
+        clients = self._spy_on_client()
+        with override_settings(
+            FILES_CLAMAV_SOCKET="",
+            FILES_CLAMAV_HOST="127.0.0.1",
+            FILES_CLAMAV_PORT=port,
+            FILES_CLAMAV_TIMEOUT=2.0,
+        ):
+            ClamAVScanner().health()
+        self.assertEqual(clients[0].clamd_socket.fileno(), -1)

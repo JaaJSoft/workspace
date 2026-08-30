@@ -97,7 +97,15 @@ class Event(models.Model):
         related_name="calendar_events",
     )
 
-    # Recurrence fields
+    # Recurrence. `recurrence_rule` is authoritative: it holds the client's
+    # RFC 5545 lines verbatim, because a CalDAV client compares what it PUT
+    # against what it GETs. The two fields below are derived from it by
+    # services.recurrence_rule.apply_rule and exist only to keep the range
+    # queries indexable - never read them as a source of truth.
+    recurrence_rule = models.TextField(blank=True, default="")
+    is_recurring = models.BooleanField(default=False)
+    recurrence_until = models.DateTimeField(null=True, blank=True, default=None)
+
     recurrence_frequency = models.CharField(
         max_length=7,
         choices=RecurrenceFrequency.choices,
@@ -169,9 +177,15 @@ class Event(models.Model):
     def __str__(self):
         return self.title
 
-    @property
-    def is_recurring(self):
-        return self.recurrence_frequency is not None
+    def save(self, *args, **kwargs):
+        # `recurrence_frequency` is still the authoritative source while
+        # `recurrence_rule` is blank, so every existing read of `is_recurring`
+        # (a property until this column replaced it) keeps seeing the answer
+        # it always did. A caller that populates `recurrence_rule` (Task 5's
+        # `apply_rule`) takes over `is_recurring` and this stops touching it.
+        if not self.recurrence_rule:
+            self.is_recurring = self.recurrence_frequency is not None
+        super().save(*args, **kwargs)
 
     @property
     def is_exception(self):

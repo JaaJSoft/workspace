@@ -74,16 +74,16 @@ be defined before the parser reaches the markup using it, or server-rendered
               class="absolute inset-0 grid gap-4"
               :style="`grid-template-columns: repeat(${gridColumns()}, minmax(0, 1fr)); grid-auto-rows: 1fr;`"
             >
-              <template x-for="p in remoteParticipants()" :key="p.user_id">
+              <template x-for="p in remoteParticipants()" :key="p.participant_key">
                 <div
                   class="relative rounded-xl bg-base-100 border-2 flex flex-col items-center justify-center gap-2 transition-colors overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
+                  :class="isSpeaking(p.participant_key) ? 'border-success' : 'border-base-300'"
                   role="button"
                   tabindex="0"
                   :aria-label="'Spotlight ' + p.display_name"
-                  @click="pinTile(p.user_id)"
-                  @keydown.enter.prevent="pinTile(p.user_id)"
-                  @keydown.space.prevent="pinTile(p.user_id)"
+                  @click="pinTile(p.participant_key)"
+                  @keydown.enter.prevent="pinTile(p.participant_key)"
+                  @keydown.space.prevent="pinTile(p.participant_key)"
                 >
                   <video
                     x-show="hasVideo(p)"
@@ -91,7 +91,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                     playsinline
                     muted
                     class="absolute inset-0 w-full h-full object-cover bg-black"
-                    x-effect="$el.srcObject = streamFor(p.user_id)"
+                    x-effect="$el.srcObject = streamFor(p.participant_key)"
                   >
                   </video>
                   <template x-if="!hasVideo(p)">
@@ -128,7 +128,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                     playsinline
                     muted
                     class="absolute inset-0 w-full h-full object-contain bg-black"
-                    x-effect="$el.srcObject = streamFor(spotlightUserId())"
+                    x-effect="$el.srcObject = streamFor(spotlightKey())"
                   >
                   </video>
                 </template>
@@ -151,16 +151,16 @@ be defined before the parser reaches the markup using it, or server-rendered
                 class="flex gap-2 shrink-0 overflow-x-auto"
                 x-show="stripParticipants().length > 0"
               >
-                <template x-for="p in stripParticipants()" :key="p.user_id">
+                <template x-for="p in stripParticipants()" :key="p.participant_key">
                   <div
                     class="relative w-28 h-20 shrink-0 rounded-lg bg-base-100 border-2 overflow-hidden flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
+                    :class="isSpeaking(p.participant_key) ? 'border-success' : 'border-base-300'"
                     role="button"
                     tabindex="0"
                     :aria-label="'Spotlight ' + p.display_name"
-                    @click="pinTile(p.user_id)"
-                    @keydown.enter.prevent="pinTile(p.user_id)"
-                    @keydown.space.prevent="pinTile(p.user_id)"
+                    @click="pinTile(p.participant_key)"
+                    @keydown.enter.prevent="pinTile(p.participant_key)"
+                    @keydown.space.prevent="pinTile(p.participant_key)"
                   >
                     <video
                       x-show="hasVideo(p)"
@@ -168,7 +168,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                       playsinline
                       muted
                       class="absolute inset-0 w-full h-full object-cover bg-black"
-                      x-effect="$el.srcObject = streamFor(p.user_id)"
+                      x-effect="$el.srcObject = streamFor(p.participant_key)"
                     >
                     </video>
                     <template x-if="!hasVideo(p)">
@@ -189,7 +189,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             <div
               data-testid="self-tile"
               class="absolute bottom-3 right-3 w-40 aspect-video rounded-lg bg-base-100 border-2 flex flex-col items-center justify-center gap-1 px-2 transition-colors overflow-hidden z-10"
-              :class="isSpeaking(currentUserId) ? 'border-success' : 'border-base-300'"
+              :class="isSpeaking(currentParticipantKey) ? 'border-success' : 'border-base-300'"
             >
               <video
                 x-show="hasVideo(selfParticipant())"
@@ -197,7 +197,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                 playsinline
                 muted
                 class="absolute inset-0 w-full h-full object-cover bg-black"
-                x-effect="$el.srcObject = streamFor(currentUserId)"
+                x-effect="$el.srcObject = streamFor(currentParticipantKey)"
               >
               </video>
               <template x-if="!hasVideo(selfParticipant())">

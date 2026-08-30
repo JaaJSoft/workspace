@@ -41,3 +41,33 @@ test('chatRoomApp sets currentUserId and roomConversationId', () => {
   assert.equal(app.roomConversationId, 'conv-2');
   assert.equal(app.callRole, 'owner');
 });
+
+test('chatRoomApp derives its own participant key from the user id', () => {
+  const app = ctx.chatRoomApp(7, 'conv-1');
+  assert.equal(app.currentParticipantKey, 'u:7');
+});
+
+test('remoteParticipants excludes self by participant key', () => {
+  const app = ctx.chatRoomApp(7, 'conv-1');
+  app.callParticipants = [
+    { participant_key: 'u:7', user_id: 7, display_name: 'me' },
+    { participant_key: 'u:8', user_id: 8, display_name: 'you' },
+    { participant_key: 'g:abc', user_id: null, display_name: 'guest' },
+  ];
+  const keys = app.remoteParticipants().map((p) => p.participant_key);
+  assert.deepStrictEqual(Array.from(keys), ['u:8', 'g:abc']);
+});
+
+test('selfParticipant finds the row matching the participant key', () => {
+  const app = ctx.chatRoomApp(7, 'conv-1');
+  app.callParticipants = [{ participant_key: 'u:7', user_id: 7, display_name: 'me' }];
+  assert.equal(app.selfParticipant().display_name, 'me');
+});
+
+test('pinTile toggles on a participant key', () => {
+  const app = ctx.chatRoomApp(7, 'conv-1');
+  app.pinTile('g:abc');
+  assert.equal(app.pinnedKey, 'g:abc');
+  app.pinTile('g:abc');
+  assert.equal(app.pinnedKey, null);
+});

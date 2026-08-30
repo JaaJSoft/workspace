@@ -2,6 +2,8 @@ from datetime import UTC, datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services import event_scope
@@ -87,3 +89,90 @@ class WriterInvariantTests(TestCase):
         )
         self.assertIn("COUNT=10", new_master.recurrence_rule)
         self.assertNotIn("UNTIL=", new_master.recurrence_rule)
+
+
+class LegacyRecurrenceSyncTests(APITestCase):
+    """``_sync_legacy_recurrence`` keeps recurrence_frequency/interval/end in
+    step with the rule, because the query layer and the expansion engine
+    still read those columns (they are not migrated until a later task).
+    Blanking them on every write - the previous behaviour - made an edited
+    backfilled recurring event invisible as a series."""
+
+    url = "/api/v1/events"
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="carol", password="pass")
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+        self.start = datetime(2026, 1, 6, 10, tzinfo=UTC)
+        self.client.force_authenticate(self.user)
+
+    def _backfilled_weekly(self):
+        # Task 2's backfill shape: both the legacy columns the readers use
+        # and the rule text the writer now maintains.
+        from workspace.calendar.services.recurrence_rule import apply_rule
+
+        event = Event(
+            calendar=self.cal,
+            owner=self.user,
+            title="Standup",
+            start=self.start,
+            end=self.start + timedelta(hours=1),
+            recurrence_frequency="weekly",
+            recurrence_interval=1,
+        )
+        apply_rule(event, "RRULE:FREQ=WEEKLY;INTERVAL=1")
+        event.save()
+        return event
+
+    def test_editing_title_keeps_the_series_visible_to_legacy_readers(self):
+        event = self._backfilled_weekly()
+        resp = self.client.put(
+            f"{self.url}/{event.uuid}",
+            {"scope": "all", "title": "Standup (renamed)"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        event.refresh_from_db()
+        self.assertTrue(event.is_recurring)
+        self.assertEqual(event.recurrence_frequency, "weekly")
+
+        params = {
+            "start": self.start.isoformat(),
+            "end": (self.start + timedelta(weeks=4)).isoformat(),
+        }
+        list_resp = self.client.get(self.url, params)
+        recurring = [e for e in list_resp.data if e.get("is_recurring")]
+        self.assertGreaterEqual(len(recurring), 3)
+
+    def test_changing_cadence_takes_effect_in_the_list_endpoint(self):
+        event = self._backfilled_weekly()
+        resp = self.client.put(
+            f"{self.url}/{event.uuid}",
+            {"scope": "all", "recurrence_rule": "RRULE:FREQ=DAILY"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        event.refresh_from_db()
+        self.assertEqual(event.recurrence_frequency, "daily")
+
+        params = {
+            "start": self.start.isoformat(),
+            "end": (self.start + timedelta(days=5)).isoformat(),
+        }
+        list_resp = self.client.get(self.url, params)
+        recurring = [e for e in list_resp.data if e.get("is_recurring")]
+        # Daily over 5 days must beat what the stale weekly cadence would
+        # have produced (at most one occurrence in that window).
+        self.assertGreater(len(recurring), 1)
+
+    def test_complex_rule_stays_recurring_while_legacy_columns_go_none(self):
+        event = self._backfilled_weekly()
+        event_scope.update_event(
+            event,
+            {"recurrence_rule": "RRULE:FREQ=MONTHLY;BYDAY=2TU"},
+            self.user,
+            scope="all",
+        )
+        event.refresh_from_db()
+        self.assertTrue(event.is_recurring)
+        self.assertIsNone(event.recurrence_frequency)

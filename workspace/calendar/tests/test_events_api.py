@@ -621,24 +621,19 @@ class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
         self.assertEqual(event.timezone, "")
 
     def test_gaining_recurrence_stamps_active_timezone(self):
-        # recurrence_rule isn't yet exposed on EventUpdateSerializer, so this
-        # exercises the writer (event_scope.update_event) directly rather
-        # than through the HTTP endpoint.
-        from ..services import event_scope
-
         event = Event.objects.create(
             calendar=self.calendar,
             title="One-off",
             start=datetime(2026, 8, 5, 9, 0, tzinfo=UTC),
             owner=self.owner,
         )
-        dj_timezone.activate("Europe/Paris")
-        event_scope.update_event(
-            event,
+        self._login_paris()
+        resp = self.client.put(
+            f"{self.url}/{event.uuid}",
             {"recurrence_rule": "RRULE:FREQ=DAILY"},
-            self.owner,
-            scope="all",
+            content_type="application/json",
         )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()
         self.assertTrue(event.is_recurring)
         self.assertEqual(event.timezone, "Europe/Paris")

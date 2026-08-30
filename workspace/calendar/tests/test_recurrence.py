@@ -332,20 +332,18 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
             "title": "Weekly Standup",
             "start": (timezone.now() + timedelta(days=1)).isoformat(),
             "end": (timezone.now() + timedelta(days=1, hours=1)).isoformat(),
-            "recurrence_frequency": "weekly",
+            "recurrence_rule": "RRULE:FREQ=WEEKLY",
         }
         data.update(overrides)
         return data
 
-    def test_create_ignores_legacy_recurrence_field(self):
-        # EventCreateSerializer does not expose recurrence_rule yet, so a
-        # posted recurrence_frequency has no effect: the writer only
-        # recognizes recurrence_rule (event_scope.py / apply_rule).
+    def test_create_recurring_event(self):
         self.client.force_authenticate(self.owner)
         resp = self.client.post(self.url, self._event_data(), format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertIsNone(resp.data["recurrence_frequency"])
-        self.assertFalse(resp.data["is_recurring"])
+        self.assertTrue(resp.data["is_recurring"])
+        event = Event.objects.get(title="Weekly Standup")
+        self.assertEqual(event.recurrence_rule, "RRULE:FREQ=WEEKLY")
 
     def test_create_non_recurring_unchanged(self):
         self.client.force_authenticate(self.owner)

@@ -147,21 +147,8 @@ class EventCreateSerializer(AllDayNormalizingMixin, serializers.Serializer):
         required=False,
         default=list,
     )
-    recurrence_frequency = serializers.ChoiceField(
-        choices=Event.RecurrenceFrequency.choices,
-        required=False,
-        allow_null=True,
-        default=None,
-    )
-    recurrence_interval = serializers.IntegerField(
-        required=False,
-        default=1,
-        min_value=1,
-    )
-    recurrence_end = serializers.DateTimeField(
-        required=False,
-        allow_null=True,
-        default=None,
+    recurrence_rule = serializers.CharField(
+        required=False, allow_blank=True, default="", trim_whitespace=False
     )
 
 
@@ -177,18 +164,8 @@ class EventUpdateSerializer(AllDayNormalizingMixin, serializers.Serializer):
         child=serializers.IntegerField(),
         required=False,
     )
-    recurrence_frequency = serializers.ChoiceField(
-        choices=Event.RecurrenceFrequency.choices,
-        required=False,
-        allow_null=True,
-    )
-    recurrence_interval = serializers.IntegerField(
-        required=False,
-        min_value=1,
-    )
-    recurrence_end = serializers.DateTimeField(
-        required=False,
-        allow_null=True,
+    recurrence_rule = serializers.CharField(
+        required=False, allow_blank=True, trim_whitespace=False
     )
     scope = serializers.ChoiceField(
         choices=["this", "future", "all"],

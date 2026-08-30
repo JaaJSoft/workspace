@@ -1,0 +1,62 @@
+{% comment %}
+Review and undo folder merges for one account. State lives on mailApp:
+mergedGroups (one entry per canonical folder that has aliases) and
+mergedGroupsAccount, both filled by _showMergedFolders.
+{% endcomment %}
+<dialog id="mail-merged-folders-dialog" class="modal">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+      <span
+        class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center flex-shrink-0"
+      >
+        <i data-lucide="git-merge" class="w-4 h-4"></i>
+      </span>
+      Merged folders
+    </h3>
+
+    <template x-if="mergedGroups.length === 0">
+      <p class="text-base-content/60 text-sm py-4 text-center">No merged folders for this account.</p>
+    </template>
+
+    <template x-if="mergedGroups.length > 0">
+      <div class="space-y-4 max-h-72 overflow-y-auto">
+        <template x-for="group in mergedGroups" :key="group.canonical.uuid">
+          <div>
+            <p class="flex items-center gap-2 text-sm font-medium mb-1">
+              <i
+                :data-lucide="group.canonical.icon || folderIcon(group.canonical.folder_type)"
+                class="w-4 h-4 flex-shrink-0 text-base-content/50"
+              ></i>
+              <span class="truncate" x-text="group.canonical.display_name"></span>
+            </p>
+            <ul class="space-y-1 pl-6">
+              <template x-for="alias in group.aliases" :key="alias.uuid">
+                <li
+                  class="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-base-content/5"
+                >
+                  <span class="text-sm truncate" x-text="alias.display_name"></span>
+                  <button
+                    class="btn btn-ghost btn-xs"
+                    @click="unmergeFolder(alias.uuid)"
+                    title="Unmerge"
+                  >
+                    <i data-lucide="split" class="w-4 h-4"></i>
+                  </button>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

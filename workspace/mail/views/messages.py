@@ -16,7 +16,12 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import mark_sources_read
 
 from ..models import MailFolder, MailLabel, MailMessage, MailMessageLabel
-from ..queries import user_account_ids
+from ..queries import (
+    canonical_folder,
+    canonical_folder_id,
+    folder_group_ids,
+    user_account_ids,
+)
 from ..serializers import (
     BatchActionSerializer,
     MailMessageDetailSerializer,
@@ -104,7 +109,9 @@ class MailMessageListView(CacheControlMixin, APIView):
                 deleted_at__isnull=True,
             )
         elif folder:
-            qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
+            qs = MailMessage.objects.filter(
+                folder_id__in=folder_group_ids(folder), deleted_at__isnull=True
+            )
         else:
             # label-only: cross-folder for the label's account
             qs = MailMessage.objects.filter(
@@ -295,6 +302,8 @@ class MailBatchActionView(APIView):
                 )
             if target_folder.account.owner != request.user:
                 return Response(status=status.HTTP_404_NOT_FOUND)
+            # A UUID captured before a merge still addresses the group.
+            target_folder = canonical_folder(target_folder)
 
         # Same table the single-message path uses, keyed by this endpoint's
         # own action names.
@@ -326,6 +335,11 @@ class MailBatchActionView(APIView):
                         )
                 elif action == "move" and target_folder:
                     if target_folder.account_id != msg.account_id:
+                        continue
+                    # Already in this logical folder: an IMAP COPY + EXPUNGE
+                    # here would be a real server round trip for a move the
+                    # user sees as "it is already there".
+                    if canonical_folder_id(msg.folder) == target_folder.pk:
                         continue
                     try:
                         # refresh=False: the counters are recomputed once for

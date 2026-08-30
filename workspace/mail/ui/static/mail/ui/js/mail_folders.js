@@ -13,6 +13,16 @@ window.mailFoldersMixin = function mailFoldersMixin() {
 
     },
 
+    // Resolve a folder UUID that may predate a merge to the folder actually
+    // in the sidebar: the canonical that owns it. Aliases are absent from
+    // the folder payload, so a bare uuid match misses them.
+    _resolveFolderUuid(accountUuid, folderUuid) {
+      const flds = this.folders[accountUuid] || [];
+      return flds.find(f => f.uuid === folderUuid)
+        || flds.find(f => (f.aliases || []).some(a => a.uuid === folderUuid))
+        || null;
+    },
+
     getFolders(accountUuid) {
       const flds = this.folders[accountUuid] || [];
       // Sort: inbox first, then by type, then alpha
@@ -280,6 +290,12 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         case 'hide':
           await this._hideFolder(folder);
           break;
+        case 'merge':
+          await this._mergeFolder(folder);
+          break;
+        case 'merged_folders':
+          await this._showMergedFolders({ uuid: folder.account_id });
+          break;
         case 'delete':
           await this._deleteFolder(folder);
           break;
@@ -530,6 +546,87 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to hide folder' });
+      }
+    },
+
+    // ----- Merge folders -----
+    async _mergeFolder(folder) {
+      const accountUuid = folder.account_id;
+      const options = this.flatFolderOptions(accountUuid)
+        .filter(f => f.uuid !== folder.uuid)
+        .map(f => ({
+          label: '  '.repeat(f._depth || 0) + f.display_name,
+          value: f.uuid,
+        }));
+      if (options.length === 0) {
+        await AppDialog.error({ message: 'This account has no other folder to merge into.' });
+        return;
+      }
+
+      const target = await AppDialog.select({
+        title: 'Merge folder',
+        message: `Mail in "${folder.display_name}" will show up in the folder you pick, and new mail will be filed there. Nothing moves on the server.`,
+        options,
+        okLabel: 'Merge',
+        okClass: 'btn-warning',
+        icon: 'git-merge',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+      if (!target) return;
+
+      const res = await this._fetch(`/api/v1/mail/folders/${folder.uuid}/merge`, {
+        method: 'POST',
+        body: { into: target },
+      });
+
+      if (res.ok) {
+        await this.loadFolders(accountUuid);
+        // The merged folder is gone from the sidebar: follow the user to the
+        // folder their mail is now under rather than leaving a dead selection.
+        if (this.selectedFolder?.uuid === folder.uuid) {
+          const flds = this.folders[accountUuid] || [];
+          this.selectedFolder = flds.find(f => f.uuid === target) || null;
+          await this.loadMessages();
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.error({ message: data.detail || 'Failed to merge folder' });
+      }
+    },
+
+    async _showMergedFolders(account) {
+      // Claim the dialog before the request, then drop a response that a
+      // later open has superseded: unmergeFolder files against whichever
+      // account is stored here, so a stale list would act on the wrong one.
+      this.mergedGroupsAccount = account.uuid;
+      const res = await this._fetch(
+        `/api/v1/mail/folders?account=${account.uuid}&include_aliases=true&show_hidden=true`,
+      );
+      if (!res.ok) return;
+      const all = await res.json();
+      if (this.mergedGroupsAccount !== account.uuid) return;
+      this.mergedGroups = all
+        .filter(f => !f.alias_of && (f.aliases || []).length > 0)
+        .map(f => ({ canonical: f, aliases: f.aliases }));
+      document.getElementById('mail-merged-folders-dialog').showModal();
+    },
+
+    async unmergeFolder(aliasUuid) {
+      const accountUuid = this.mergedGroupsAccount;
+      const res = await this._fetch(`/api/v1/mail/folders/${aliasUuid}/merge`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        this.mergedGroups = this.mergedGroups
+          .map(g => ({ ...g, aliases: g.aliases.filter(a => a.uuid !== aliasUuid) }))
+          .filter(g => g.aliases.length > 0);
+        if (accountUuid) await this.loadFolders(accountUuid);
+        if (this.mergedGroups.length === 0) {
+          document.getElementById('mail-merged-folders-dialog').close();
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.error({ message: data.detail || 'Failed to unmerge folder' });
       }
     },
 

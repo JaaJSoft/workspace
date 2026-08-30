@@ -8,7 +8,7 @@ from workspace.common.search.schema import Col, FulltextIndex
 from workspace.core.module_registry import SearchResult, SearchTag
 
 from .models import MailMessage
-from .queries import user_account_ids
+from .queries import canonical_folder, user_account_ids
 
 # Column order is frozen into the applied bm25 config
 # bm25(10.0, 2.0, 4.0, 4.0, 1.0): subject A, snippet C, from_email B,
@@ -38,7 +38,7 @@ def search_mail(query, user, limit):
     account_ids = user_account_ids(user)
 
     base = (
-        MailMessage.objects.select_related("folder")
+        MailMessage.objects.select_related("folder__alias_of")
         .filter(account_id__in=account_ids, deleted_at__isnull=True)
         .exclude(folder__is_hidden=True)
     )
@@ -55,7 +55,11 @@ def search_mail(query, user, limit):
             module_slug="mail",
             module_color="warning",
             date=_format_date(m.date),
-            tags=(SearchTag(m.folder.display_name, "warning"),) if m.folder else (),
+            tags=(
+                (SearchTag(canonical_folder(m.folder).display_name, "warning"),)
+                if m.folder
+                else ()
+            ),
         )
         for m in messages
     ]

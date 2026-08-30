@@ -121,6 +121,14 @@ class MailLabelUpdateSerializer(serializers.Serializer):
 
 
 class MailFolderSerializer(serializers.ModelSerializer):
+    alias_of = serializers.PrimaryKeyRelatedField(read_only=True)
+    aliases = serializers.SerializerMethodField()
+    # Counters are stored per physical folder; the API speaks in logical
+    # folders, so the group total is summed here rather than denormalized
+    # onto the canonical row. Callers must prefetch_related("aliases").
+    message_count = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+
     class Meta:
         model = MailFolder
         fields = [
@@ -133,9 +141,23 @@ class MailFolderSerializer(serializers.ModelSerializer):
             "color",
             "is_hidden",
             "ai_classify_disabled",
+            "alias_of",
+            "aliases",
             "message_count",
             "unread_count",
         ]
+
+    def get_aliases(self, obj):
+        return [
+            {"uuid": str(alias.uuid), "display_name": alias.display_name}
+            for alias in obj.aliases.all()
+        ]
+
+    def get_message_count(self, obj):
+        return obj.message_count + sum(a.message_count for a in obj.aliases.all())
+
+    def get_unread_count(self, obj):
+        return obj.unread_count + sum(a.unread_count for a in obj.aliases.all())
 
 
 class MailFolderCreateSerializer(serializers.Serializer):
@@ -159,6 +181,10 @@ class MailFolderUpdateSerializer(serializers.Serializer):
     )
     is_hidden = serializers.BooleanField(required=False)
     ai_classify_disabled = serializers.BooleanField(required=False)
+
+
+class MailFolderMergeSerializer(serializers.Serializer):
+    into = serializers.UUIDField()
 
 
 class MailAttachmentSerializer(serializers.ModelSerializer):

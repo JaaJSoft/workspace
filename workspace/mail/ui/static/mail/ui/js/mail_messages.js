@@ -160,8 +160,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
         const folderId = this.messageDetail.folder_id;
         const accountId = this.messageDetail.account_id;
         await this.loadFolders(accountId);
-        const flds = this.folders[accountId] || [];
-        const folder = flds.find(f => f.uuid === folderId);
+        const folder = this._resolveFolderUuid(accountId, folderId);
         if (folder) {
           this.selectedFolder = folder;
           await this.loadMessages();

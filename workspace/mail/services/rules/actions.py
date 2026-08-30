@@ -112,7 +112,11 @@ def _move_to_folder(action: MoveToFolderAction, message: MailMessage) -> dict:
         )
     except MailFolder.DoesNotExist:
         return _err("move_to_folder", "folder_not_in_account")
-    if target.pk == message.folder_id:
+
+    from ...queries import canonical_folder, canonical_folder_id
+
+    target = canonical_folder(target)
+    if canonical_folder_id(message.folder) == target.pk:
         return _ok("move_to_folder", folder_id=str(target.uuid), noop=True)
     # IMAP first: if COPY fails, leave the local row alone so the next
     # reconciliation does not soft-delete a message that is still in the

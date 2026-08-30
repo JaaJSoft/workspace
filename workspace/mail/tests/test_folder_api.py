@@ -670,6 +670,52 @@ class MailFolderHideTests(MailTestMixin, APITestCase):
         self.assertEqual(len(resp.data), 3)
 
 
+class MailFolderHideGroupTests(MailTestMixin, APITestCase):
+    """Hiding a canonical with aliases must hide the whole group.
+
+    Search and the notification filter key on the message's physical
+    folder, so a visible alias under a hidden canonical would keep
+    surfacing mail the user just hid.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.alias = MailFolder.objects.create(
+            account=self.account,
+            name="MyFolder2",
+            display_name="MyFolder2",
+            folder_type="other",
+            alias_of=self.custom,
+        )
+
+    def _url(self, folder):
+        return f"/api/v1/mail/folders/{folder.uuid}"
+
+    def test_hiding_the_canonical_hides_the_alias(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._url(self.custom), {"is_hidden": True}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.alias.refresh_from_db()
+        self.assertTrue(self.alias.is_hidden)
+
+    def test_hiding_the_canonical_removes_alias_mail_from_search(self):
+        from workspace.mail.search import search_mail
+
+        MailMessage.objects.create(
+            account=self.account,
+            folder=self.alias,
+            imap_uid=1,
+            subject="quarterly invoice",
+        )
+        self.client.force_authenticate(self.user)
+        self.client.patch(self._url(self.custom), {"is_hidden": True}, format="json")
+
+        results = search_mail("invoice", self.user, 10)
+        self.assertEqual(results, [])
+
+
 # ---------- Mark All Read ----------
 
 
@@ -794,3 +840,179 @@ class MailFolderAiClassifyTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.sent.refresh_from_db()
         self.assertTrue(self.sent.ai_classify_disabled)
+
+
+class MailFolderListMergeTests(MailTestMixin, APITestCase):
+    """GET /api/v1/mail/folders with merged folders in the account."""
+
+    url = "/api/v1/mail/folders"
+
+    def setUp(self):
+        super().setUp()
+        self.alias = MailFolder.objects.create(
+            account=self.account,
+            name="Envoyes",
+            display_name="Envoyes",
+            folder_type="sent",
+            alias_of=self.sent,
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_aliases_are_excluded_by_default(self):
+        resp = self.client.get(self.url, {"account": self.account.uuid})
+        names = {f["name"] for f in resp.data}
+        self.assertNotIn("Envoyes", names)
+        self.assertIn("Sent", names)
+
+    def test_include_aliases_returns_them(self):
+        resp = self.client.get(
+            self.url, {"account": self.account.uuid, "include_aliases": "true"}
+        )
+        names = {f["name"] for f in resp.data}
+        self.assertIn("Envoyes", names)
+
+    def test_canonical_carries_its_aliases(self):
+        resp = self.client.get(self.url, {"account": self.account.uuid})
+        sent = next(f for f in resp.data if f["name"] == "Sent")
+        self.assertEqual(
+            sent["aliases"], [{"uuid": str(self.alias.uuid), "display_name": "Envoyes"}]
+        )
+
+    def test_alias_reports_its_canonical(self):
+        resp = self.client.get(
+            self.url, {"account": self.account.uuid, "include_aliases": "true"}
+        )
+        alias = next(f for f in resp.data if f["name"] == "Envoyes")
+        self.assertEqual(str(alias["alias_of"]), str(self.sent.uuid))
+
+    def test_counts_are_summed_over_the_group(self):
+        MailFolder.objects.filter(pk=self.sent.pk).update(
+            message_count=3, unread_count=1
+        )
+        MailFolder.objects.filter(pk=self.alias.pk).update(
+            message_count=4, unread_count=2
+        )
+
+        resp = self.client.get(self.url, {"account": self.account.uuid})
+        sent = next(f for f in resp.data if f["name"] == "Sent")
+        self.assertEqual(sent["message_count"], 7)
+        self.assertEqual(sent["unread_count"], 3)
+
+
+class MailFolderMergeApiTests(MailTestMixin, APITestCase):
+    """POST/DELETE /api/v1/mail/folders/<uuid>/merge"""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.user)
+
+    def url(self, folder):
+        return f"/api/v1/mail/folders/{folder.uuid}/merge"
+
+    def test_merge_returns_the_canonical(self):
+        resp = self.client.post(
+            self.url(self.custom), {"into": str(self.sent.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["uuid"], str(self.sent.uuid))
+        self.assertEqual(
+            resp.data["aliases"],
+            [{"uuid": str(self.custom.uuid), "display_name": "MyFolder"}],
+        )
+        self.custom.refresh_from_db()
+        self.assertEqual(self.custom.alias_of_id, self.sent.pk)
+
+    def test_cross_account_merge_returns_404(self):
+        resp = self.client.post(
+            self.url(self.custom), {"into": str(self.other_folder.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_self_merge_returns_400(self):
+        resp = self.client.post(
+            self.url(self.custom), {"into": str(self.custom.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["detail"], "A folder cannot be merged into itself")
+
+    def test_chained_merge_returns_400(self):
+        self.client.post(
+            self.url(self.custom), {"into": str(self.sent.uuid)}, format="json"
+        )
+        extra = MailFolder.objects.create(
+            account=self.account,
+            name="Extra",
+            display_name="Extra",
+            folder_type="other",
+        )
+        resp = self.client.post(
+            self.url(extra), {"into": str(self.custom.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            resp.data["detail"], "The target folder is already merged into another one"
+        )
+
+    def test_rejected_merges_carry_distinct_details(self):
+        """Each invariant names itself, so a client can tell them apart."""
+        self_merge = self.client.post(
+            self.url(self.custom), {"into": str(self.custom.uuid)}, format="json"
+        )
+        self.client.post(
+            self.url(self.custom), {"into": str(self.sent.uuid)}, format="json"
+        )
+        extra = MailFolder.objects.create(
+            account=self.account,
+            name="Extra2",
+            display_name="Extra2",
+            folder_type="other",
+        )
+        chained = self.client.post(
+            self.url(extra), {"into": str(self.custom.uuid)}, format="json"
+        )
+        self.assertNotEqual(self_merge.data["detail"], chained.data["detail"])
+
+    def test_missing_into_returns_400(self):
+        resp = self.client.post(self.url(self.custom), {}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unmerge_detaches(self):
+        self.client.post(
+            self.url(self.custom), {"into": str(self.sent.uuid)}, format="json"
+        )
+
+        resp = self.client.delete(self.url(self.custom))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsNone(resp.data["alias_of"])
+        self.custom.refresh_from_db()
+        self.assertIsNone(self.custom.alias_of_id)
+
+    def test_other_users_folder_returns_404(self):
+        resp = self.client.post(
+            self.url(self.other_folder), {"into": str(self.sent.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class MailFolderDeletePromotesAliasTests(MailTestMixin, APITestCase):
+    """DELETE /api/v1/mail/folders/<uuid> on a canonical promotes an heir."""
+
+    def setUp(self):
+        super().setUp()
+        self.alias = MailFolder.objects.create(
+            account=self.account,
+            name="MyFolder2",
+            display_name="MyFolder2",
+            folder_type="other",
+            alias_of=self.custom,
+        )
+        self.client.force_authenticate(self.user)
+
+    @patch("workspace.mail.services.imap_folders.delete_folder")
+    def test_alias_survives_as_a_standalone_folder(self, delete_folder):
+        resp = self.client.delete(f"/api/v1/mail/folders/{self.custom.uuid}")
+
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.alias.refresh_from_db()
+        self.assertIsNone(self.alias.alias_of_id)

@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from rest_framework.test import APIClient
+from rest_framework import status
+from rest_framework.test import APIClient, APITestCase
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
@@ -95,3 +96,81 @@ class BatchMoveIMAPFailureTests(TestCase):
         self.assertEqual(resp.data.get("processed", 0), 1)
         self.msg.refresh_from_db()
         self.assertEqual(self.msg.folder_id, self.archive.pk)
+
+
+class BatchMoveMergeTests(APITestCase):
+    """POST /api/v1/mail/messages/batch-action with a merged target."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="batchmerge", email="batchmerge@test.com", password="pass123"
+        )
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email="user@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="user@example.com",
+        )
+        self.inbox = MailFolder.objects.create(
+            account=self.account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
+        )
+        self.trash = MailFolder.objects.create(
+            account=self.account,
+            name="Trash",
+            display_name="Trash",
+            folder_type="trash",
+        )
+        self.corbeille = MailFolder.objects.create(
+            account=self.account,
+            name="Corbeille",
+            display_name="Corbeille",
+            folder_type="trash",
+            alias_of=self.trash,
+        )
+        self.client.force_authenticate(self.user)
+
+    def _message(self, folder, uid):
+        return MailMessage.objects.create(
+            account=self.account, folder=folder, imap_uid=uid, subject="m"
+        )
+
+    @patch("workspace.mail.services.imap_messages.move_message")
+    def test_alias_target_files_into_the_canonical(self, move):
+        msg = self._message(self.inbox, 1)
+
+        resp = self.client.post(
+            "/api/v1/mail/messages/batch-action",
+            {
+                "message_ids": [str(msg.uuid)],
+                "action": "move",
+                "target_folder_id": str(self.corbeille.uuid),
+            },
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        msg.refresh_from_db()
+        self.assertEqual(msg.folder_id, self.trash.pk)
+
+    @patch("workspace.mail.services.imap_messages.move_message")
+    def test_move_within_the_group_does_nothing(self, move):
+        """The message is already in the logical folder; no IMAP round trip."""
+        msg = self._message(self.corbeille, 2)
+
+        self.client.post(
+            "/api/v1/mail/messages/batch-action",
+            {
+                "message_ids": [str(msg.uuid)],
+                "action": "move",
+                "target_folder_id": str(self.trash.uuid),
+            },
+            format="json",
+        )
+
+        move.assert_not_called()
+        msg.refresh_from_db()
+        self.assertEqual(msg.folder_id, self.corbeille.pk)

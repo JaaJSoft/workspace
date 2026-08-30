@@ -1,6 +1,7 @@
 import logging
 
 from django.db import transaction
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -12,8 +13,10 @@ from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import MailAccount, MailFolder, MailMessage
+from ..queries import folder_group_ids
 from ..serializers import (
     MailFolderCreateSerializer,
+    MailFolderMergeSerializer,
     MailFolderSerializer,
     MailFolderUpdateSerializer,
 )
@@ -27,7 +30,11 @@ class MailFolderListView(APIView):
 
     @extend_schema(
         summary="List folders for a mail account",
-        parameters=[OpenApiParameter("account", str, required=True)],
+        parameters=[
+            OpenApiParameter("account", str, required=True),
+            OpenApiParameter("show_hidden", bool, required=False),
+            OpenApiParameter("include_aliases", bool, required=False),
+        ],
     )
     def get(self, request):
         account_id = request.query_params.get("account")
@@ -51,7 +58,9 @@ class MailFolderListView(APIView):
         except MailAccount.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        folders = MailFolder.objects.filter(account=account)
+        folders = MailFolder.objects.filter(account=account).prefetch_related("aliases")
+        if not is_truthy(request.query_params.get("include_aliases")):
+            folders = folders.filter(alias_of__isnull=True)
         if not is_truthy(request.query_params.get("show_hidden")):
             folders = folders.filter(is_hidden=False)
         return Response(MailFolderSerializer(folders, many=True).data)
@@ -97,7 +106,11 @@ class MailFolderUpdateView(APIView):
 
     def _get_folder(self, request, uuid):
         try:
-            folder = MailFolder.objects.select_related("account").get(uuid=uuid)
+            folder = (
+                MailFolder.objects.select_related("account")
+                .prefetch_related("aliases")
+                .get(uuid=uuid)
+            )
         except MailFolder.DoesNotExist:
             return None
         if folder.account.owner != request.user:
@@ -177,6 +190,13 @@ class MailFolderUpdateView(APIView):
                         status=status.HTTP_502_BAD_GATEWAY,
                     )
 
+        # is_hidden on a canonical with aliases must propagate to the whole
+        # group, so it is not part of the plain field loop below.
+        if "is_hidden" in ser.validated_data and folder.aliases.all():
+            from ..services.folder_merge import set_group_hidden
+
+            set_group_hidden(folder, ser.validated_data.pop("is_hidden"))
+
         # Update icon/color/is_hidden/ai_classify_disabled locally
         update_fields = ["updated_at"]
         for field in ("icon", "color", "is_hidden", "ai_classify_disabled"):
@@ -201,7 +221,15 @@ class MailFolderUpdateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from ..services.folder_merge import promote_alias
         from ..services.imap_folders import delete_folder
+
+        # Before, not after: delete_folder ends with folder.delete(), and the
+        # FK's SET_NULL would scatter the group into standalone folders with
+        # no heir to hold it together. If the IMAP call below then fails, the
+        # group has re-formed under the heir and this folder is standalone -
+        # every folder still visible, no mail lost, and the retry succeeds.
+        promote_alias(folder)
 
         try:
             delete_folder(folder.account, folder)
@@ -219,6 +247,78 @@ class MailFolderUpdateView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# Keyed by MergeError.code so the response body is built from literals here
+# rather than from anything carried on the exception.
+_MERGE_ERROR_DETAIL = {
+    "self": "A folder cannot be merged into itself",
+    "cross_account": "Only folders of the same account can be merged",
+    "target_is_alias": "The target folder is already merged into another one",
+    "has_aliases": "Unmerge this folder's own aliases before merging it",
+}
+
+
+@extend_schema(tags=["Mail - Folders & Labels"])
+class MailFolderMergeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_folder(self, request, uuid):
+        try:
+            folder = MailFolder.objects.select_related("account", "alias_of").get(
+                uuid=uuid
+            )
+        except MailFolder.DoesNotExist:
+            return None
+        if folder.account.owner != request.user:
+            return None
+        return folder
+
+    def _serialized(self, folder):
+        folder = MailFolder.objects.prefetch_related("aliases").get(pk=folder.pk)
+        return Response(MailFolderSerializer(folder).data)
+
+    @extend_schema(
+        summary="Merge a folder into another one",
+        request=MailFolderMergeSerializer,
+    )
+    def post(self, request, uuid):
+        folder = self._get_folder(request, uuid)
+        if not folder:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailFolderMergeSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        target = self._get_folder(request, ser.validated_data["into"])
+        if not target:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from ..services.folder_merge import MergeError, merge_folder
+
+        try:
+            canonical = merge_folder(folder, target)
+        except MergeError as e:
+            return Response(
+                {
+                    "detail": _MERGE_ERROR_DETAIL.get(
+                        e.code, "This merge is not allowed"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return self._serialized(canonical)
+
+    @extend_schema(summary="Detach a folder from its merge group")
+    def delete(self, request, uuid):
+        folder = self._get_folder(request, uuid)
+        if not folder:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from ..services.folder_merge import unmerge_folder
+
+        unmerge_folder(folder)
+        return self._serialized(folder)
+
+
 @extend_schema(tags=["Mail - Folders & Labels"])
 class MailFolderMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -234,8 +334,9 @@ class MailFolderMarkReadView(APIView):
         if folder.account.owner != request.user:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        group_ids = folder_group_ids(folder)
         qs = MailMessage.objects.filter(
-            folder=folder,
+            folder_id__in=group_ids,
             is_read=False,
             deleted_at__isnull=True,
         )
@@ -246,8 +347,9 @@ class MailFolderMarkReadView(APIView):
         affected_ids = list(qs.values_list("pk", flat=True))
         updated = qs.update(is_read=True)
 
-        folder.unread_count = 0
-        folder.save(update_fields=["unread_count", "updated_at"])
+        MailFolder.objects.filter(uuid__in=group_ids).update(
+            unread_count=0, updated_at=timezone.now()
+        )
 
         from ..services.label_counts import refresh_labels_for_messages
 

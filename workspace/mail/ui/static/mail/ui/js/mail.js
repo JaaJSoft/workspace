@@ -87,6 +87,10 @@ function mailApp() {
     hiddenFolders: [],
     hiddenFoldersSearch: '',
 
+    // Merged folders
+    mergedGroups: [],
+    mergedGroupsAccount: null,
+
     // Compose
     compose: _defaultCompose(),
     showCcBcc: false,
@@ -419,7 +423,7 @@ function mailApp() {
 
     _findFolderById(uuid) {
       for (const accId in this.folders) {
-        const found = (this.folders[accId] || []).find(f => f.uuid === uuid);
+        const found = this._resolveFolderUuid(accId, uuid);
         if (found) return found;
       }
       return null;

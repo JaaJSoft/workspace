@@ -316,6 +316,37 @@ class ClassifyViewTests(APITestCase):
         ai_task = AITask.objects.get(pk=resp.data["uuid"])
         self.assertEqual(ai_task.input_data["message_uuids"], [])
 
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    @patch("workspace.ai.tasks.mail.classify_mail_messages.delay")
+    def test_classify_folder_includes_alias_messages(self, mock_delay):
+        canonical = MailFolder.objects.create(
+            account=self.account,
+            name="Trash",
+            display_name="Trash",
+            folder_type="trash",
+        )
+        alias = MailFolder.objects.create(
+            account=self.account,
+            name="Corbeille",
+            display_name="Corbeille",
+            folder_type="trash",
+            alias_of=canonical,
+        )
+        alias_msg = MailMessage.objects.create(
+            account=self.account, folder=alias, imap_uid=99, subject="in alias"
+        )
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            "/api/v1/ai/tasks/mail/classify",
+            {"folder_id": str(canonical.uuid)},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        from workspace.ai.models import AITask
+
+        ai_task = AITask.objects.get(pk=resp.data["uuid"])
+        self.assertIn(str(alias_msg.uuid), ai_task.input_data["message_uuids"])
+
     def test_manual_classify_never_notifies_about_the_users_own_action(self):
         # CELERY_TASK_ALWAYS_EAGER defaults to True outside an override, so
         # dispatch() -> .delay() runs classify_mail_messages synchronously

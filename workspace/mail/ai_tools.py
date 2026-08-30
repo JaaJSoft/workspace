@@ -91,15 +91,28 @@ def _resolve_message(user, uuid):
 def _resolve_folder(account, hint):
     """Return ``(folder, error)`` for a folder named by UUID or by name."""
     from workspace.mail.models import MailFolder
+    from workspace.mail.queries import canonical_folder
 
     hint = (hint or "").strip()
-    folders = list(MailFolder.objects.filter(account=account).order_by("display_name"))
     if not hint:
         return None, "A folder is required."
+
+    folders = list(
+        MailFolder.objects.filter(account=account)
+        .select_related("alias_of")
+        .order_by("display_name")
+    )
+    # A UUID may predate a merge - the model can be holding one from an
+    # earlier list_folders call - so aliases are matched here and resolved
+    # to the folder that now owns their mail.
     for folder in folders:
         if str(folder.uuid) == hint:
-            return folder, None
+            return canonical_folder(folder), None
+    # Names are not: an alias is absent from list_folders, so its name is not
+    # something the model was ever offered as a target.
     for folder in folders:
+        if folder.alias_of_id:
+            continue
         if hint.casefold() in (folder.display_name.casefold(), folder.name.casefold()):
             return folder, None
     return None, (
@@ -277,7 +290,7 @@ class MailToolProvider(ToolProvider):
 Call this after finding an email via search_emails to get its complete content, \
 or when the user asks to read, open, or see the details of a specific email."""
         from workspace.mail.models import MailMessage
-        from workspace.mail.queries import user_account_ids
+        from workspace.mail.queries import canonical_folder, user_account_ids
 
         msg = (
             MailMessage.objects.filter(
@@ -285,7 +298,7 @@ or when the user asks to read, open, or see the details of a specific email."""
                 account_id__in=user_account_ids(user),
                 deleted_at__isnull=True,
             )
-            .select_related("folder", "account")
+            .select_related("folder__alias_of", "account")
             .first()
         )
         if not msg:
@@ -310,7 +323,7 @@ or when the user asks to read, open, or see the details of a specific email."""
 
             local_date = msg.date.astimezone(get_user_timezone(user))
             parts.append(f"Date: {local_date.strftime('%Y-%m-%d %H:%M')}")
-        parts.append(f"Folder: {msg.folder.display_name}")
+        parts.append(f"Folder: {canonical_folder(msg.folder).display_name}")
         if msg.has_attachments:
             parts.append("Attachments: yes")
         parts.append("")
@@ -336,7 +349,7 @@ Use read_email with the returned UUID to get the full content."""
             return "Error: query is required"
 
         from workspace.mail.models import MailMessage
-        from workspace.mail.queries import user_account_ids
+        from workspace.mail.queries import canonical_folder, user_account_ids
         from workspace.mail.search import fts_messages
 
         account_ids = user_account_ids(user)
@@ -345,7 +358,7 @@ Use read_email with the returned UUID to get the full content."""
                 account_id__in=account_ids, deleted_at__isnull=True
             )
             .exclude(folder__is_hidden=True)
-            .select_related("folder")
+            .select_related("folder__alias_of")
         )
         if args.unread_only:
             base = base.filter(is_read=False)
@@ -371,7 +384,9 @@ Use read_email with the returned UUID to get the full content."""
                     "date": msg.date.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
                     if msg.date
                     else "",
-                    "folder": msg.folder.display_name if msg.folder else "",
+                    "folder": canonical_folder(msg.folder).display_name
+                    if msg.folder
+                    else "",
                     "is_read": msg.is_read,
                     "has_attachments": msg.has_attachments,
                 }
@@ -383,11 +398,10 @@ Use read_email with the returned UUID to get the full content."""
     def _save_draft(self, account, **fields):
         """Park a composed message in Drafts and describe what landed there."""
         from workspace.mail.models import MailFolder
+        from workspace.mail.queries import special_folder
         from workspace.mail.services.drafts import save_composed_draft
 
-        if not MailFolder.objects.filter(
-            account=account, folder_type=MailFolder.FolderType.DRAFTS
-        ).exists():
+        if special_folder(account, MailFolder.FolderType.DRAFTS) is None:
             return (
                 f"{account.email} has no Drafts folder, so there is nowhere to "
                 "put this message. Nothing was saved."
@@ -650,7 +664,11 @@ between providers, so a folder name you guessed is a call that fails."""
         if error:
             return error
 
-        folders = MailFolder.objects.filter(account=account).order_by("display_name")
+        folders = (
+            MailFolder.objects.filter(account=account, alias_of__isnull=True)
+            .prefetch_related("aliases")
+            .order_by("display_name")
+        )
         if not folders:
             return f"{account.email} has no folders synced yet."
         return json.dumps(
@@ -658,8 +676,10 @@ between providers, so a folder name you guessed is a call that fails."""
                 {
                     "name": folder.display_name,
                     "type": folder.folder_type,
-                    "messages": folder.message_count,
-                    "unread": folder.unread_count,
+                    "messages": folder.message_count
+                    + sum(a.message_count for a in folder.aliases.all()),
+                    "unread": folder.unread_count
+                    + sum(a.unread_count for a in folder.aliases.all()),
                 }
                 for folder in folders
             ],
@@ -749,14 +769,13 @@ To throw a message away, use delete_email instead."""
 so the user can undo it from their mail app. Use this rather than move_email when \
 the user wants a message gone."""
         from workspace.mail.models import MailFolder
+        from workspace.mail.queries import special_folder
 
         message = _resolve_message(user, args.uuid)
         if not message:
             return "Email not found or access denied."
 
-        trash = MailFolder.objects.filter(
-            account=message.account, folder_type=MailFolder.FolderType.TRASH
-        ).first()
+        trash = special_folder(message.account, MailFolder.FolderType.TRASH)
         if not trash:
             # Never fall back to an IMAP delete: that expunges the message for
             # good, and nothing in this loop is worth an irreversible one.
@@ -768,10 +787,11 @@ the user wants a message gone."""
 
     def _move(self, message, target):
         """Move `message` to `target` and describe the outcome."""
+        from workspace.mail.queries import canonical_folder_id
         from workspace.mail.services.triage import move_to_folder
 
         subject = message.subject or "(no subject)"
-        if message.folder_id == target.pk:
+        if canonical_folder_id(message.folder) == target.pk:
             return f'"{subject}" is already in {target.display_name}.'
 
         _, error = _run_remote("move", move_to_folder, message, target)

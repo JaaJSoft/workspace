@@ -110,7 +110,7 @@ window.vaultBrowser = (function () {
     return {
       ...window.vaultUnlockMixin(),
       ...window.vaultPrefsMixin(),
-      ...window.vaultViewPrefsMixin('vault.browser'),
+      ...window.vaultViewPrefsMixin(),
       ...window.vaultSwitcherMixin(),
       ...store,
 

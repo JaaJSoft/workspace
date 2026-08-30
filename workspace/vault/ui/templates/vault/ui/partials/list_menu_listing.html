@@ -1,8 +1,0 @@
-{% comment %}
-  Rows of the menu the empty space carries. These address the listing, so
-  they are written here: the action endpoint answers for vaults that exist.
-{% endcomment %}
-<ul class="menu menu-sm p-0">
-  {% include "ui/partials/context_menu_item.html" with icon="plus" label="New vault" click="closeBackgroundMenu(); openCreateDialog()" only %}
-  {% include "ui/partials/context_menu_item.html" with show="visibleVaults().length" icon="check-check" label="Select all" click="closeBackgroundMenu(); selectAll()" only %}
-</ul>

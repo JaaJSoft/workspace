@@ -38,7 +38,7 @@
   listing the content renders, and its Lock button empties it.
 {% endcomment %}
 {% block drawer_attrs %}
-  x-data="{% if vault_uuid %}vaultBrowser(){% else %}vaultApp(){% endif %}"
+  x-data="vaultBrowser()"
 {% endblock %}
 
 {% comment %}
@@ -48,11 +48,7 @@
 {% endcomment %}
 {% block drawer_sidebar %}
   <template x-if="state === 'unlocked'">
-    {% if vault_uuid %}
-      {% include "vault/ui/partials/browser_sidebar.html" %}
-    {% else %}
-      {% include "vault/ui/partials/list_sidebar.html" %}
-    {% endif %}
+    {% include "vault/ui/partials/browser_sidebar.html" %}
   </template>
 {% endblock %}
 
@@ -61,94 +57,76 @@
   {{ entry_types|json_script:"entry-types" }}
   {{ vault_prefs|json_script:"vault-prefs" }}
 
-  {% if vault_uuid %}
-    {# The component is on the drawer wrapper: the sidebar shares it. #}
-    <div
-      class="h-full flex flex-col min-h-0"
-      @keydown.escape.window="closeMenu()"
-    >
-      <template x-if="state !== 'unlocked'">
-        <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
-      </template>
+  {# The component is on the drawer wrapper: the sidebar shares it. #}
+  <div
+    class="h-full flex flex-col min-h-0"
+    @keydown.escape.window="closeMenu()"
+  >
+    <template x-if="state !== 'unlocked'">
+      <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
+    </template>
 
-      {% comment %}
+    {% comment %}
         A row, not a column: the properties panel sits beside the listing, and
         the drawer already took the sidebar out of this branch.
-      {% endcomment %}
-      <template x-if="state === 'unlocked'">
-        <div class="h-full flex min-h-0 w-full">
-          <template x-if="hasNoVault()">
-            {% include "vault/ui/partials/no_vault.html" %}
-          </template>
+    {% endcomment %}
+    <template x-if="state === 'unlocked'">
+      <div class="h-full flex min-h-0 w-full">
+        <template x-if="hasNoVault()">
+          {% include "vault/ui/partials/no_vault.html" %}
+        </template>
 
-          <main class="flex-1 flex flex-col min-w-0 min-h-0" x-show="!hasNoVault()">
-            {% include "vault/ui/partials/browser_header.html" %}
+        <main class="flex-1 flex flex-col min-w-0 min-h-0" x-show="!hasNoVault()">
+          {% include "vault/ui/partials/browser_header.html" %}
 
-            <inline-alert type="warning" title="This vault is out of reach" message="Nothing here holds a key for your account, or the vault does not exist." class="mx-5 mt-4" x-show="missing" x-cloak></inline-alert>
+          <inline-alert type="warning" title="This vault is out of reach" message="Nothing here holds a key for your account, or the vault does not exist." class="mx-5 mt-4" x-show="missing" x-cloak></inline-alert>
 
-            <inline-alert type="error" x-show="error" x-cloak class="mx-5 mt-4">
-            <span x-text="error"></span>
-            </inline-alert>
+          <inline-alert type="error" x-show="error" x-cloak class="mx-5 mt-4">
+          <span x-text="error"></span>
+          </inline-alert>
 
-            {% comment %}
+          {% comment %}
               A count is all that survives a row whose signature fails, so
               this banner is the whole of what the user is told - hence it
               says what was not done rather than inviting a retry.
 
               x-if, not x-show: inline-alert reads its attributes once, when
               it connects.
-            {% endcomment %}
-            <template x-if="tamperedCount > 0">
-              <inline-alert type="error" icon="shield-alert" class="mx-5 mt-4">
-              <span class="text-sm">
-                <b>
-                  <span x-text="tamperedCount"></span>
-                  <span x-text="tamperedCount === 1 ? 'entry was' : 'entries were'"></span>
-                  removed from the list.
-                </b>
-                The signature does not match what your account signed. No field
-                was decrypted, and nothing was tried a second time under another
-                context. Nobody can repair this from here: the entry has to be
-                written again by whoever holds the key.
-              </span>
-              </inline-alert>
-            </template>
+          {% endcomment %}
+          <template x-if="tamperedCount > 0">
+            <inline-alert type="error" icon="shield-alert" class="mx-5 mt-4">
+            <span class="text-sm">
+              <b>
+                <span x-text="tamperedCount"></span>
+                <span x-text="tamperedCount === 1 ? 'entry was' : 'entries were'"></span>
+                removed from the list.
+              </b>
+              The signature does not match what your account signed. No field
+              was decrypted, and nothing was tried a second time under another
+              context. Nobody can repair this from here: the entry has to be
+              written again by whoever holds the key.
+            </span>
+            </inline-alert>
+          </template>
 
-            {% include "vault/ui/partials/browser_content.html" %}
+          {% include "vault/ui/partials/browser_content.html" %}
 
-          </main>
+        </main>
 
-          {% include "vault/ui/partials/browser_panel.html" %}
-          {% include "vault/ui/partials/browser_menu.html" %}
-          {% include "vault/ui/partials/browser_folder_menu.html" %}
-          {% include "vault/ui/partials/browser_listing_menu.html" %}
-          {% include "vault/ui/partials/entry_dialog.html" %}
-          {% include "vault/ui/partials/tag_dialog.html" %}
-          {% include "vault/ui/partials/help_dialog.html" %}
-          {% include "vault/ui/partials/clipboard_banner.html" %}
-          {% include "vault/ui/partials/create_vault_dialog.html" %}
-          {% include "vault/ui/partials/vault_dialog.html" %}
-          {% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/switcher_menu.html" open="vaultMenu.open" close="closeVaultMenu()" x="vaultMenu.x" y="vaultMenu.y" id="vault-switcher-menu" %}
-        </div>
-      </template>
-    </div>
-  {% else %}
-    {# The component is on the drawer wrapper: the sidebar shares it. #}
-    <div class="h-full flex flex-col min-h-0">
-      <template x-if="state !== 'unlocked'">
-        <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
-      </template>
-
-      <template x-if="state === 'unlocked'">
-        <div class="h-full flex flex-col min-h-0">
-          {% include "vault/ui/partials/list_content.html" %}
-          {% include "vault/ui/partials/help_dialog.html" %}
-          {% include "vault/ui/partials/create_vault_dialog.html" %}
-          {% include "vault/ui/partials/vault_dialog.html" %}
-        </div>
-      </template>
-    </div>
-  {% endif %}
+        {% include "vault/ui/partials/browser_panel.html" %}
+        {% include "vault/ui/partials/browser_menu.html" %}
+        {% include "vault/ui/partials/browser_folder_menu.html" %}
+        {% include "vault/ui/partials/browser_listing_menu.html" %}
+        {% include "vault/ui/partials/entry_dialog.html" %}
+        {% include "vault/ui/partials/tag_dialog.html" %}
+        {% include "vault/ui/partials/help_dialog.html" %}
+        {% include "vault/ui/partials/clipboard_banner.html" %}
+        {% include "vault/ui/partials/create_vault_dialog.html" %}
+        {% include "vault/ui/partials/vault_dialog.html" %}
+        {% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/switcher_menu.html" open="vaultMenu.open" close="closeVaultMenu()" x="vaultMenu.x" y="vaultMenu.y" id="vault-switcher-menu" %}
+      </div>
+    </template>
+  </div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -172,6 +150,5 @@
   <script src="{% static 'vault/ui/js/vault_view_prefs.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_sidebar.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_switcher.js' %}"></script>
-  <script src="{% static 'vault/ui/js/vault_app.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>
 {% endblock %}

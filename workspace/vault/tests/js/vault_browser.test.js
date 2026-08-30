@@ -315,9 +315,9 @@ test('a lock drops a creation nobody has confirmed', () => {
 });
 
 test('the tile size survives a reload, and belongs to this screen alone', () => {
-  // The collapse is vaultSidebar's business now; what this screen still
-  // stores for itself is how big its tiles are - an entry card and a vault
-  // card are not looked at from the same distance.
+  // The collapse is vaultSidebar's business; what this screen stores for
+  // itself is how big its tiles are, on this device rather than on the
+  // account.
   const { component, ctx } = browser();
   component.init();
   assert.equal(component.tileSize, 3);
@@ -325,10 +325,10 @@ test('the tile size survives a reload, and belongs to this screen alone', () => 
   const second = ctx.vaultBrowser();
   second.init();
   assert.equal(second.tileSize, 5);
-  assert.equal(ctx.localStorage.getItem('vault.list.tileSize'), null);
+  assert.equal(ctx.localStorage.getItem('vault.browser.tileSize'), '5');
 });
 
-test('the view mode survives a reload and stays off the listing key', () => {
+test('the view mode survives a reload', () => {
   const { component, ctx } = browser();
   component.init();
   assert.equal(component.viewMode, 'list');
@@ -336,9 +336,7 @@ test('the view mode survives a reload and stays off the listing key', () => {
   const second = ctx.vaultBrowser();
   second.init();
   assert.equal(second.viewMode, 'mosaic');
-  // The two screens store under their own key on purpose: a vault card and an
-  // entry card are not looked at the same way.
-  assert.equal(ctx.localStorage.getItem('vault.list.viewMode'), null);
+  assert.equal(ctx.localStorage.getItem('vault.browser.viewMode'), 'mosaic');
 });
 
 test('a tile size off the scale is refused rather than drawn', () => {

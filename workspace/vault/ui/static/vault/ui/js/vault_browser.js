@@ -34,6 +34,20 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'delete_forever',
 ];
 
+// The swatches the vault offers. Not ICON_PICKER_COLORS: that list is written
+// in full CSS classes, two of which the vault's colour column refuses, and the
+// signed metadata holds a bare daisyUI role rather than a class.
+window.VAULT_COLOR_SWATCHES = [
+  { name: 'Primary', class: 'text-primary' },
+  { name: 'Secondary', class: 'text-secondary' },
+  { name: 'Accent', class: 'text-accent' },
+  { name: 'Info', class: 'text-info' },
+  { name: 'Success', class: 'text-success' },
+  { name: 'Warning', class: 'text-warning' },
+  { name: 'Error', class: 'text-error' },
+  { name: 'Neutral', class: 'text-neutral' },
+];
+
 window.vaultBrowser = (function () {
   // Which vault to come back to, per device. It never leaves the browser: the
   // server resolves no vault, and a stored setting would tell it which one is
@@ -97,6 +111,7 @@ window.vaultBrowser = (function () {
       ...window.vaultUnlockMixin(),
       ...window.vaultPrefsMixin(),
       ...window.vaultViewPrefsMixin('vault.browser'),
+      ...window.vaultSwitcherMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the listing
@@ -163,6 +178,8 @@ window.vaultBrowser = (function () {
       init: function () {
         this.vaultUuid = readJson('vault-uuid');
         this.entryTypes = readJson('entry-types') || [];
+        this.icons = window.ICON_PICKER_ICONS || [];
+        this.colors = window.VAULT_COLOR_SWATCHES || [];
         this.restoreViewPrefs();
         this.loadPrefs();
         this.initUnlock();
@@ -207,6 +224,7 @@ window.vaultBrowser = (function () {
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;
+        this.onSwitcherLocked();
       },
 
       load: async function () {
@@ -218,6 +236,7 @@ window.vaultBrowser = (function () {
         try {
           await this.loadVault();
           if (this.openVault) await this.loadContents();
+          await this.loadVaultActions();
           // The palette command reaches the page before there is a vault to
           // write into, so it waits here for one.
           if (this.openVault && this.pendingNewEntry) {

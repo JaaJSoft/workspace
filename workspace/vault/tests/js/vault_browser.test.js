@@ -87,6 +87,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/tag_write.js',
       'workspace/vault/ui/static/vault/ui/js/clipboard.js',
       'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_switcher.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {

@@ -340,6 +340,14 @@ window.vaultBrowser = (function () {
         return !this.loading && !this.openVault && !this.missing && this.vaults.length === 0;
       },
 
+      // The account holds vaults and not one of them opened: every signature
+      // was refused or no key here unwraps them. Nothing was routed to, so
+      // `missing` says nothing, and the listing is empty for a reason the
+      // empty state would get wrong - hence a state of its own.
+      hasNoOpenableVault: function () {
+        return !this.loading && !this.openVault && !this.missing && this.vaults.length > 0;
+      },
+
       rowFor: function (uuid) {
         return this.entryRows.find(function (row) { return row.uuid === uuid; }) || null;
       },

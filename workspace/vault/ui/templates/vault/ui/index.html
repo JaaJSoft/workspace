@@ -81,6 +81,8 @@
 
           <inline-alert type="warning" title="This vault is out of reach" message="Nothing here holds a key for your account, or the vault does not exist." class="mx-5 mt-4" x-show="missing" x-cloak></inline-alert>
 
+          <inline-alert type="warning" title="No vault could be opened" message="Every vault on this account either failed to verify or holds no key for it. The switcher still lists them." class="mx-5 mt-4" x-show="hasNoOpenableVault()" x-cloak></inline-alert>
+
           <inline-alert type="error" x-show="error" x-cloak class="mx-5 mt-4">
           <span x-text="error"></span>
           </inline-alert>

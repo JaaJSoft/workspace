@@ -96,7 +96,10 @@
       Everything encrypted
     </span>
     <div class="flex-1"></div>
-    <div class="dropdown dropdown-end flex-shrink-0" x-show="view !== 'trash'">
+    <div
+      class="dropdown dropdown-end flex-shrink-0"
+      x-show="view !== 'trash' && !!openVault"
+    >
       <button type="button" tabindex="0" class="btn btn-error btn-sm gap-2">
         <i data-lucide="plus" class="w-4 h-4"></i>
         <span class="hidden sm:inline">New</span>

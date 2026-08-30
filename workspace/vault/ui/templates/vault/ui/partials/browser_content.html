@@ -15,7 +15,12 @@
   class="flex-1 overflow-auto px-2 pt-2 min-h-0"
   @contextmenu="openBackgroundMenu($event)"
 >
-  <template x-if="isEmpty() && !filtering()">
+  {% comment %}
+    Gated on the open vault as well: with none, the banner above already says
+    why the listing is bare, and "use New to add an entry" would point at a
+    vault there is nothing to write into.
+  {% endcomment %}
+  <template x-if="openVault && isEmpty() && !filtering()">
     <div
       class="flex flex-col items-center justify-center h-full gap-3 text-base-content/40 py-16"
     >

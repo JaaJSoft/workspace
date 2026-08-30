@@ -1705,6 +1705,50 @@ test('a vault out of reach is not the same as having none', async () => {
   assert.equal(component.missing, true);
 });
 
+test('an account whose every vault is refused says so rather than showing nothing', async () => {
+  // Landing resolves to none of them, so nothing was routed to and `missing`
+  // stays quiet. Without a state of its own the pane would be blank with no
+  // sentence in it, which reads as a broken page rather than as broken vaults.
+  const { component } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [forgedVaultRow('v-bad'), forgedVaultRow('v-worse')],
+    session: {
+      verifyVaultMetadata: async (payload, sig) => {
+        if (sig === 'forged') throw new Error('bad signature');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault, null);
+  assert.equal(component.missing, false);
+  assert.equal(component.hasNoVault(), false);
+  assert.equal(component.hasNoOpenableVault(), true);
+});
+
+test('one readable vault among refused ones is opened, not reported unopenable', async () => {
+  const { component } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [forgedVaultRow('v-bad'), vaultRow('v-ok', 'Readable')],
+    session: {
+      verifyVaultMetadata: async (payload, sig) => {
+        if (sig === 'forged') throw new Error('bad signature');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoOpenableVault(), false);
+});
+
+test('an empty account is offered a vault, not told none opened', async () => {
+  const { component } = browser({ data: { 'vault-uuid': null }, vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoOpenableVault(), false);
+  assert.equal(component.hasNoVault(), true);
+});
+
 test('a vault that opens is never mistaken for an empty account', async () => {
   const { component } = browser();
   component.init();

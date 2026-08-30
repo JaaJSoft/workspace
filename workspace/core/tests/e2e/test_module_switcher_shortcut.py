@@ -50,6 +50,15 @@ class ModuleSwitcherShortcutTests(PlaywrightTestCase):
         self.page.get_by_role("button", name="Collapse sidebar").click()
         self.page.keyboard.press("Alt+k")
         expect(self.page.locator(PANEL)).to_be_visible()
+        # daisyUI animates the dropdown in; measure once it has settled.
+        self.page.locator(PANEL).evaluate(
+            "el => new Promise(done => {"
+            "  const tick = () => getComputedStyle(el).opacity === '1'"
+            "    && getComputedStyle(el).transform.startsWith('matrix(1, 0, 0, 1')"
+            "    ? done() : requestAnimationFrame(tick);"
+            "  tick();"
+            "})"
+        )
 
         # A tile past the 4rem rail must be hit-testable, i.e. not clipped by
         # the drawer.

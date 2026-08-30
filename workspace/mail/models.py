@@ -169,6 +169,9 @@ class MailLabel(models.Model):
         related_name="labels",
     )
     name = models.CharField(max_length=100)
+    # What belongs in this label, in the owner's words. Fed to the AI
+    # classifier, so the cap keeps the per-batch label block cheap.
+    description = models.CharField(max_length=200, blank=True, default="")
     color = models.CharField(max_length=30, blank=True, default="")
     icon = models.CharField(max_length=50, blank=True, default="")
     position = models.PositiveIntegerField(default=0)

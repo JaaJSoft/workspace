@@ -246,3 +246,15 @@ class CallModelTests(TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 CallParticipant.objects.create(session=session, user=self.user)
+
+
+class CallParticipantKeyTests(TestCase):
+    def test_participant_key_is_the_member_key(self):
+        User = get_user_model()
+        user = User.objects.create_user(username="pk", password="x")
+        conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=user
+        )
+        session = CallSession.objects.create(conversation=conv, started_by=user)
+        participant = CallParticipant.objects.create(session=session, user=user)
+        self.assertEqual(participant.participant_key, f"u:{user.id}")

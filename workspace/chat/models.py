@@ -520,3 +520,10 @@ class CallParticipant(models.Model):
 
     def __str__(self):
         return f"{self.user_id} in call {self.session_id}"
+
+    @property
+    def participant_key(self):
+        """Routing identity for signalling, presence and the peer table."""
+        from workspace.chat.services.participant_keys import user_key
+
+        return user_key(self.user_id)

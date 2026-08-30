@@ -5,7 +5,7 @@
 # committed CSS file can never ship to prod. The JS bundles from the same
 # project are committed as-is; only the purged stylesheet depends on the
 # templates.
-FROM node:26-bookworm-slim AS css-builder
+FROM --platform=$BUILDPLATFORM node:26-bookworm-slim AS css-builder
 
 WORKDIR /build
 

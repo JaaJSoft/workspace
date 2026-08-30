@@ -128,6 +128,8 @@ docker run -d -p 8000:8000 \
   ghcr.io/jaajsoft/workspace:main
 ```
 
+The image is published for `linux/amd64` and `linux/arm64`, so the same tag works on an x86 server, an Apple Silicon Mac and a Raspberry Pi 4/5. The Pi needs a 64-bit OS: there is no 32-bit (`linux/arm/v7`) build.
+
 Prefer building the image yourself? Run `docker build -t workspace .` and use the `workspace` tag above.
 
 Add AI by setting `AI_API_KEY` and `AI_MODEL`. Use a self-hosted LLM by pointing `AI_BASE_URL` to Ollama or LM Studio.

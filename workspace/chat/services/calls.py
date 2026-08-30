@@ -96,7 +96,9 @@ def _has_stale_participants(session):
     from ..models import CallParticipant
 
     fresh = set(get_presence(session.uuid))
-    active = CallParticipant.objects.filter(session=session, left_at__isnull=True)
+    active = CallParticipant.objects.filter(session=session, left_at__isnull=True).only(
+        "user_id"
+    )
     return any(p.participant_key not in fresh for p in active)
 
 
@@ -333,6 +335,8 @@ def cleanup_stale_participants(session):
         return False
 
     fresh = set(get_presence(session.uuid))
+    # Bounded by CHAT_CALL_MAX_PARTICIPANTS, and the session row lock above
+    # serializes this against concurrent joins - safe to materialize.
     active = list(CallParticipant.objects.filter(session=session, left_at__isnull=True))
     stale = [p for p in active if p.participant_key not in fresh]
     if stale:

@@ -230,6 +230,7 @@ class CallViewTests(TestCase):
         self.client.force_authenticate(self.a)
         self.client.post(self._url("/join"))
         session = calls.get_active_call(self.conv.uuid)
+        sig.drain_events(f"u:{self.b.id}")  # clear the join broadcast
         resp = self.client.post(
             self._url("/heartbeat"),
             {"media_state": dict(calls.DEFAULT_MEDIA_STATE)},
@@ -240,3 +241,12 @@ class CallViewTests(TestCase):
         self.assertIn(f"u:{self.a.id}", presence)
         self.assertNotIn(self.a.id, presence)
         self.assertNotIn(str(self.a.id), presence)
+        # Proves changed was False: self.a's own heartbeat is excluded from
+        # its own broadcast either way, so only a fellow member's mailbox can
+        # show whether the update branch actually ran.
+        updates = [
+            e
+            for e in sig.drain_events(f"u:{self.b.id}")
+            if e["event"] == "call_participant_updated"
+        ]
+        self.assertEqual(updates, [])

@@ -314,9 +314,16 @@ jobs:
       - name: Create and push the manifest list
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ steps.image.outputs.name }}@sha256:%s ' *)
+          # Collected into an array so each tag and digest stays exactly one
+          # argument, instead of leaning on word splitting to break them apart.
+          args=()
+          while IFS= read -r tag; do
+            args+=(-t "$tag")
+          done < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          for digest in *; do
+            args+=("${{ steps.image.outputs.name }}@sha256:${digest}")
+          done
+          docker buildx imagetools create "${args[@]}"
 
       - name: Inspect the published image
         run: |

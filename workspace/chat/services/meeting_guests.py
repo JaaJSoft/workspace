@@ -37,9 +37,17 @@ def resolve_guest(token, now=None):
     if not token or not isinstance(token, str):
         return None
 
+    try:
+        digest = hash_token(token)
+    except UnicodeEncodeError:
+        # A lone surrogate passes the str/truthy checks above but cannot be
+        # UTF-8 encoded - reachable from any JSON-bodied request, since
+        # json.loads accepts unpaired surrogates.
+        return None
+
     guest = (
         MeetingGuest.objects.select_related("meeting", "meeting__event")
-        .filter(token_hash=hash_token(token))
+        .filter(token_hash=digest)
         .first()
     )
     if guest is None or guest.state != MeetingGuest.State.ADMITTED:

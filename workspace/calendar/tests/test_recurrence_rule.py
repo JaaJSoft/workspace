@@ -207,6 +207,9 @@ class SimpleSteppingTests(SimpleTestCase):
             "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR",
             "RRULE:FREQ=MONTHLY",
             "RRULE:FREQ=DAILY\nRDATE:20260401T090000Z",
+            # COUNT is measured from dtstart: re-anchoring dtstart forward
+            # would fabricate occurrences past the series' real end.
+            "RRULE:FREQ=DAILY;COUNT=10",
         ):
             with self.subTest(rule=rule):
                 self.assertFalse(rr.is_simple_stepping(rule))

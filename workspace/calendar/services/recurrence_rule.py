@@ -297,13 +297,17 @@ def is_simple_stepping(rule_text):
 
     Gates the dtstart re-anchoring optimization in ``recurrence.py``, whose
     algebra assumes a constant step. BYDAY sets, calendar-dependent monthly and
-    yearly stepping, and extra RDATEs all break that assumption.
+    yearly stepping, extra RDATEs, and COUNT all break that assumption: moving
+    dtstart forward and keeping the same COUNT would fabricate occurrences past
+    the series' real end, since COUNT is measured from dtstart.
     """
     lines = _rule_lines(rule_text)
     if len(lines) != 1:
         return False
     name, parts = _properties(lines[0])
     if name != "RRULE" or parts.get("FREQ", "").upper() not in _FIXED_STEP_FREQ:
+        return False
+    if "COUNT" in parts:
         return False
     return not any(key.startswith("BY") for key in parts)
 

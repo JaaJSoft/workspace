@@ -1,7 +1,17 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
-from .services.recurrence_rule import is_simple_stepping, parse, to_simple
+from workspace.common.logging import scrub
+
+from .services.recurrence_rule import (
+    MAX_ITERATIONS,
+    is_simple_stepping,
+    parse,
+    to_simple,
+)
 from .services.timezones import event_timezone
+
+logger = logging.getLogger(__name__)
 
 _FIXED_STEP = {
     "daily": timedelta(days=1),
@@ -59,16 +69,32 @@ def _anchor(master, floor, tz):
     Walking an rrule from a years-old dtstart costs hundreds of discarded
     iterations per expansion, so re-anchoring is worth keeping. The algebra
     assumes a fixed timedelta step, which only holds for DAILY and WEEKLY rules
-    with no BY parts - everything else keeps the true start and is bounded by
-    calendar stepping anyway.
+    with no BY parts and no COUNT (COUNT is measured from dtstart, so moving it
+    forward would fabricate occurrences past the series' real end) -
+    everything else keeps the true start and is bounded by calendar stepping
+    anyway.
     """
     if not is_simple_stepping(master.recurrence_rule):
         return master.start
     return _anchored_dtstart(master, floor, tz)
 
 
+def _iteration_cap_warning(master):
+    logger.warning(
+        "Recurrence rule exceeded %d iterations, truncating: %s",
+        MAX_ITERATIONS,
+        scrub(master.recurrence_rule),
+    )
+
+
 def occurrences_in_range(master, range_start, range_end):
-    """Yield occurrence start datetimes (aware UTC) overlapping the window."""
+    """Yield occurrence start datetimes (aware UTC) overlapping the window.
+
+    Stops after MAX_ITERATIONS candidates even if the window is still open,
+    so a dense feed-supplied rule (FREQ=SECONDLY with no UNTIL/COUNT) that
+    slips past the query-layer prune degrades to a truncated series instead
+    of exhausting the request.
+    """
     duration = (master.end - master.start) if master.end else None
     # An occurrence starting before the window can still spill into it.
     window_floor = (range_start - duration) if duration else range_start
@@ -78,7 +104,10 @@ def occurrences_in_range(master, range_start, range_end):
     if rule is None:
         return
 
-    for dt in rule:
+    for index, dt in enumerate(rule):
+        if index >= MAX_ITERATIONS:
+            _iteration_cap_warning(master)
+            return
         if dt >= range_end:
             break
         occ = dt.astimezone(UTC) if tz else dt
@@ -90,12 +119,23 @@ def occurrences_in_range(master, range_start, range_end):
 
 
 def next_occurrences_after(master, after, limit=None):
-    """Yield occurrence starts (aware UTC) at or after *after*, count-bounded."""
+    """Yield occurrence starts (aware UTC) at or after *after*, count-bounded.
+
+    If `limit` is None, yields all remaining occurrences bounded only by the
+    series' own end (its UNTIL/COUNT, if any) - callers that need to filter
+    the stream (e.g. skipping exceptions) can take as many as they need
+    rather than being capped up front. Either way, stops after MAX_ITERATIONS
+    candidates: an unbounded feed-supplied rule with no caller-side limit
+    would otherwise be walked forever.
+    """
     tz = event_timezone(master)
     rule = parse(master.recurrence_rule, _anchor(master, after, tz), tz)
     if rule is None:
         return
-    for dt in rule.xafter(after, count=limit, inc=True):
+    for index, dt in enumerate(rule.xafter(after, count=limit, inc=True)):
+        if index >= MAX_ITERATIONS:
+            _iteration_cap_warning(master)
+            return
         yield dt.astimezone(UTC) if tz else dt
 
 

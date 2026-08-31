@@ -1,3 +1,4 @@
+import time
 from datetime import UTC, datetime, timedelta
 
 from django.contrib.auth import get_user_model
@@ -13,7 +14,7 @@ from workspace.calendar.recurrence import (
     next_occurrences_after,
     occurrences_in_range,
 )
-from workspace.calendar.services.recurrence_rule import apply_rule
+from workspace.calendar.services.recurrence_rule import MAX_ITERATIONS, apply_rule
 
 from .test_calendar import CalendarTestMixin
 
@@ -87,7 +88,8 @@ class OccurrencesInRangeTests(TestCase):
         now = timezone.now()
         master = self._make_master("RRULE:FREQ=DAILY", now)
         master.recurrence_rule = "bogus"
-        occs = list(occurrences_in_range(master, now, now + timedelta(days=5)))
+        with self.assertLogs("workspace.calendar.services.recurrence_rule", "WARNING"):
+            occs = list(occurrences_in_range(master, now, now + timedelta(days=5)))
         self.assertEqual(occs, [])
 
     def test_event_with_duration_overlaps(self):
@@ -171,6 +173,31 @@ class OccurrencesInRangeTests(TestCase):
         master = self._make_master("RRULE:FREQ=DAILY", start)
         occs = list(occurrences_in_range(master, now, now + timedelta(days=1)))
         self.assertEqual(occs, [now])
+
+    def test_dense_rule_is_capped_and_returns_promptly(self):
+        """A hostile FREQ=SECONDLY rule with no UNTIL/COUNT must not be
+        walked forever: MAX_ITERATIONS bounds the work regardless of how
+        wide the window is, so a feed-supplied dense rule degrades to a
+        truncated series instead of hanging the request."""
+        now = timezone.now().replace(microsecond=0)
+        master = self._make_master("RRULE:FREQ=SECONDLY", now)
+        started = time.monotonic()
+        with self.assertLogs("workspace.calendar.recurrence", "WARNING"):
+            occs = list(occurrences_in_range(master, now, now + timedelta(days=365)))
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual(len(occs), MAX_ITERATIONS)
+
+    def test_count_rule_is_not_reanchored_past_its_true_end(self):
+        """A DAILY;COUNT rule must never be re-anchored: the optimization
+        would walk COUNT occurrences from the moved dtstart, fabricating
+        occurrences past the series' real (much earlier) end."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        # Old enough that the anchor optimization would kick in if the
+        # COUNT rule were (wrongly) treated as simple stepping.
+        start = now - timedelta(days=1000)
+        master = self._make_master("RRULE:FREQ=DAILY;COUNT=5", start)
+        occs = list(occurrences_in_range(master, now, now + timedelta(days=3650)))
+        self.assertEqual(occs, [])
 
 
 class MakeVirtualOccurrenceTests(TestCase):
@@ -632,17 +659,15 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
 class RecurrenceServiceTests(CalendarTestMixin, TestCase):
     """Unit tests for the recurrence expansion service."""
 
-    def _create_weekly(self, **kwargs):
+    def _create_weekly(self):
         start = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        defaults = dict(
+        event = Event(
             calendar=self.calendar,
             title="Weekly",
             start=start,
             end=start + timedelta(hours=1),
             owner=self.owner,
         )
-        defaults.update(kwargs)
-        event = Event(**defaults)
         apply_rule(event, "RRULE:FREQ=WEEKLY")
         event.save()
         return event

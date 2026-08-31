@@ -40,3 +40,36 @@ class FinalOccurrenceOverlapTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         titles = [item["title"] for item in response.json()]
         self.assertIn("Long meeting", titles)
+
+
+class DurationlessFinalOccurrenceTests(APITestCase):
+    """The prune predicate and the expansion must agree on the window edge.
+
+    For a master with no end, recurrence_until is the last occurrence's START
+    and the expansion yields on ``occ >= range_start``. A strictly-greater
+    prune therefore drops the final occurrence of a series whose last
+    occurrence starts exactly at the edge of the requested window.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="edge", password="pass")
+        self.client.force_authenticate(self.user)
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+        event = Event(
+            calendar=self.cal,
+            owner=self.user,
+            title="Standup",
+            start=datetime(2026, 1, 5, 10, tzinfo=UTC),
+            end=None,
+        )
+        apply_rule(event, "RRULE:FREQ=DAILY;UNTIL=20260107T100000Z")
+        event.save()
+
+    def test_final_occurrence_starting_at_the_window_edge_survives(self):
+        response = self.client.get(
+            "/api/v1/events",
+            {"start": "2026-01-07T10:00:00Z", "end": "2026-01-07T23:00:00Z"},
+        )
+        self.assertEqual(response.status_code, 200)
+        titles = [item["title"] for item in response.json()]
+        self.assertIn("Standup", titles)

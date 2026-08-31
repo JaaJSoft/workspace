@@ -71,7 +71,12 @@ def backwards(apps, schema_editor):
 
     Deliberately not a true inverse: a rule the old columns cannot express is
     unrecoverable, so pretending otherwise would corrupt data on a rollback.
-    Rows keep whatever their legacy columns still hold.
+
+    Nothing is recovered either. Reaching this migration backwards means 0019
+    has already been reversed, and that re-creates the three legacy columns
+    from their field defaults (NULL / 1 / NULL) rather than from the values
+    they held before 0019 dropped them. A rollback past this point therefore
+    loses every event's recurrence outright: dump the table first.
     """
     Event = apps.get_model("calendar", "Event")
     Event.objects.update(recurrence_rule="", is_recurring=False, recurrence_until=None)

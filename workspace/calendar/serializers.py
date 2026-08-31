@@ -35,6 +35,26 @@ class AllDayNormalizingMixin:
         return attrs
 
 
+class RecurrenceRuleValidationMixin:
+    """Rejects recurrence text the expansion engine cannot read.
+
+    Stored text nothing can parse becomes a master with no bound, which no
+    window query prunes: it is loaded and logged on every calendar read, for
+    every window, for every user who can see it. Refusing it at the boundary
+    is cheaper than containing it afterwards.
+    """
+
+    # Parseability is a property of the text, not of when the series starts,
+    # so any aware instant does as the anchor - a fixed one keeps the check
+    # deterministic.
+    _VALIDATION_ANCHOR = datetime(2000, 1, 1, tzinfo=UTC)
+
+    def validate_recurrence_rule(self, value):
+        if value and recurrence_rule.parse(value, self._VALIDATION_ANCHOR) is None:
+            raise serializers.ValidationError("Unrecognized recurrence rule.")
+        return value
+
+
 class MemberUserSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     username = serializers.CharField()
@@ -146,7 +166,9 @@ class EventSerializer(serializers.ModelSerializer):
         return data
 
 
-class EventCreateSerializer(AllDayNormalizingMixin, serializers.Serializer):
+class EventCreateSerializer(
+    RecurrenceRuleValidationMixin, AllDayNormalizingMixin, serializers.Serializer
+):
     calendar_id = serializers.UUIDField()
     title = serializers.CharField(max_length=255)
     description = serializers.CharField(required=False, default="", allow_blank=True)
@@ -166,7 +188,9 @@ class EventCreateSerializer(AllDayNormalizingMixin, serializers.Serializer):
     )
 
 
-class EventUpdateSerializer(AllDayNormalizingMixin, serializers.Serializer):
+class EventUpdateSerializer(
+    RecurrenceRuleValidationMixin, AllDayNormalizingMixin, serializers.Serializer
+):
     calendar_id = serializers.UUIDField(required=False)
     title = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)

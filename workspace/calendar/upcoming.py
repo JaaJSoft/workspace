@@ -16,6 +16,7 @@ from workspace.calendar.recurrence import (
     next_occurrences_after,
     occurrences_in_range,
 )
+from workspace.calendar.services.recurrence_rule import describe, to_simple_json
 
 
 class VirtualOccurrence:
@@ -188,10 +189,14 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
 
     recurring_data = []
     for master in masters:
-        # Pre-build member dicts once per master, then `make_virtual_occurrence`
-        # reuses them via `getattr(master, '_cached_member_dicts', ...)`. Same
-        # pattern as `expand_recurring_events`.
+        # Pre-build the per-master values once, then `make_virtual_occurrence`
+        # reuses them via `getattr(master, '_cached_...', ...)`. Same pattern as
+        # `expand_recurring_events`: members, plus the two derived recurrence
+        # fields, which are pure functions of the rule text and would otherwise
+        # be recomputed for every occurrence on the page.
         master._cached_member_dicts = [_member_dict(m) for m in master.members.all()]
+        master._cached_recurrence_summary = describe(master.recurrence_rule)
+        master._cached_recurrence_simple = to_simple_json(master.recurrence_rule)
 
         # Iterate the rrule stream unbounded and collect up to `limit + 1`
         # NON-excepted occurrences. We can't just request `limit + 1` from

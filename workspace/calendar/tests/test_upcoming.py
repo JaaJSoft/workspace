@@ -9,14 +9,16 @@ finished. That covers three buckets:
 """
 
 from datetime import UTC, date, datetime, time, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.calendar import recurrence
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services.recurrence_rule import apply_rule
-from workspace.calendar.upcoming import get_upcoming_for_user
+from workspace.calendar.upcoming import get_upcoming_for_user, get_upcoming_page
 
 User = get_user_model()
 
@@ -187,3 +189,36 @@ class AllDayTimezoneWindowTests(TestCase):
         titles = [e.title for e in get_upcoming_for_user(self.user, now, end_of_today)]
         self.assertIn("today all-day", titles)
         self.assertNotIn("yesterday all-day", titles)
+
+
+class UpcomingPageRecurrenceCacheTests(TestCase):
+    """The agenda endpoint expands one master into many occurrences.
+
+    describe() and to_simple_json() are pure functions of the rule text, so
+    they belong on the per-master cache make_virtual_occurrence already reads
+    - otherwise every occurrence on the page re-parses the same rule.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="agenda", password="pass123")
+        self.calendar = Calendar.objects.create(name="Work", owner=self.user)
+        self.start = timezone.now().replace(
+            hour=9, minute=0, second=0, microsecond=0
+        ) + timedelta(days=1)
+        event = Event(
+            calendar=self.calendar,
+            owner=self.user,
+            title="Standup",
+            start=self.start,
+            end=self.start + timedelta(minutes=15),
+        )
+        apply_rule(event, "RRULE:FREQ=DAILY")
+        event.save()
+
+    def test_derived_fields_are_not_recomputed_per_occurrence(self):
+        with patch.object(
+            recurrence, "describe", wraps=recurrence.describe
+        ) as mock_describe:
+            page, _ = get_upcoming_page(self.user, after=timezone.now(), limit=10)
+        self.assertGreater(len([e for e in page if e["title"] == "Standup"]), 1)
+        self.assertEqual(mock_describe.call_count, 0)

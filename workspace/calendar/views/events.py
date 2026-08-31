@@ -241,7 +241,7 @@ class EventListView(CacheControlMixin, APIView):
             recurrence_parent__isnull=True,
             start__lt=range_end,
         ).filter(
-            Q(recurrence_until__isnull=True) | Q(recurrence_until__gt=range_start),
+            Q(recurrence_until__isnull=True) | Q(recurrence_until__gte=range_start),
         )
         masters = _prefetch_event(masters)
 

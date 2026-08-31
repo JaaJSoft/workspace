@@ -14,6 +14,7 @@ from .models import (
 )
 from .models_external import ExternalCalendar
 from .services.ics_sync import clear_sync_errors, queue_external_calendar_syncs
+from .services.recurrence_rule import apply_rule
 
 
 class ExternalCalendarInline(StackedInline):
@@ -59,6 +60,15 @@ class EventAdmin(ModelAdmin):
     list_select_related = ("calendar", "owner", "recurrence_parent")
     date_hierarchy = "start"
     inlines = [EventMemberInline]
+    # is_recurring and recurrence_until are derived from recurrence_rule; a
+    # form that let someone type them would be a second writer, and the
+    # structural test cannot see a form.
+    readonly_fields = ("is_recurring", "recurrence_until")
+
+    def save_model(self, request, obj, form, change):
+        """Re-derive the index columns from whatever rule the form holds."""
+        apply_rule(obj, obj.recurrence_rule)
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(EventMember)

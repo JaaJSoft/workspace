@@ -757,3 +757,56 @@ class RecurrenceRuleApiTests(APITestCase):
         occurrences = [e for e in resp.json() if e["title"] in ("E", "E (moved)")]
         self.assertEqual(len(occurrences), 2)
         self.assertEqual(mock_describe.call_count, 1)
+
+
+class RecurrenceRuleValidationTests(APITestCase):
+    """Unparseable rule text must be refused at the boundary.
+
+    Stored, it becomes a master with no bound: no window query prunes it, so
+    it is loaded, expanded and logged on every calendar read of every window.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="strict", password="pass")
+        self.client.force_authenticate(self.user)
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+
+    def _create(self, rule):
+        return self.client.post(
+            "/api/v1/events",
+            {
+                "calendar_id": str(self.cal.uuid),
+                "title": "E",
+                "start": "2026-01-06T10:00:00Z",
+                "end": "2026-01-06T11:00:00Z",
+                "recurrence_rule": rule,
+            },
+            format="json",
+        )
+
+    def test_create_rejects_an_unparseable_rule(self):
+        resp = self._create("total garbage")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("recurrence_rule", resp.json())
+        self.assertFalse(Event.objects.filter(title="E").exists())
+
+    def test_update_rejects_an_unparseable_rule(self):
+        created = self._create("RRULE:FREQ=DAILY;COUNT=3")
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        resp = self.client.put(
+            f"/api/v1/events/{created.json()['uuid']}",
+            {"recurrence_rule": "RRULE:FREQ=NONSENSE"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_blank_rule_still_clears_the_series(self):
+        created = self._create("RRULE:FREQ=DAILY;COUNT=3")
+        event_uuid = created.json()["uuid"]
+        resp = self.client.put(
+            f"/api/v1/events/{event_uuid}",
+            {"recurrence_rule": "", "scope": "all"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(Event.objects.get(uuid=event_uuid).is_recurring)

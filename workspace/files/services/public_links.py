@@ -70,3 +70,8 @@ def sanitize_upload_name(raw):
         else:
             name = name[:MAX_NAME_LENGTH]
     return name or FALLBACK_NAME
+
+
+def schedule_upload_notification(link):
+    """Coalesce an owner notification for *link*. Filled in by the task layer."""
+    return None

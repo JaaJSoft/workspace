@@ -3,10 +3,12 @@
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.core import signing
+from django.db.models import F
 from django.http import HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
@@ -14,8 +16,14 @@ from rest_framework.views import APIView
 
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.common.pagination import OptInLimitOffsetPagination
-from workspace.files.models import File, FileShareLink
-from workspace.files.services.public_links import resolve_within
+from workspace.files.models import File, FileEvent, FileShareLink
+from workspace.files.services.events import record_event
+from workspace.files.services.public_links import (
+    resolve_within,
+    sanitize_upload_name,
+    schedule_upload_notification,
+)
+from workspace.files.sse_provider import push_file_event
 
 SIGNER = signing.TimestampSigner(salt="file-share-link")
 ACCESS_TOKEN_MAX_AGE = 3600  # 1 hour
@@ -32,6 +40,30 @@ class ShareLinkVerifyThrottle(AnonRateThrottle):
             "scope": self.scope,
             "ident": token,
         }
+
+
+class ShareLinkUploadTokenThrottle(AnonRateThrottle):
+    """Bound how fast one link can be filled, whoever is filling it."""
+
+    scope = "share_link_upload_token"
+
+    def get_rate(self):
+        return settings.FILES_DROP_UPLOAD_RATE_TOKEN
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": view.kwargs.get("token", ""),
+        }
+
+
+class ShareLinkUploadIPThrottle(AnonRateThrottle):
+    """Bound how fast one client can fill links, however many it holds."""
+
+    scope = "share_link_upload_ip"
+
+    def get_rate(self):
+        return settings.FILES_DROP_UPLOAD_RATE_IP
 
 
 class SharedEntriesPagination(OptInLimitOffsetPagination):
@@ -418,3 +450,143 @@ class SharedFileThumbnailView(APIView):
         # only credential, and it is already in the URL a cache would key on.
         response["Cache-Control"] = "public, max-age=3600"
         return response
+
+
+@extend_schema(tags=["Files - Shared Links"])
+class SharedFolderUploadView(APIView):
+    """POST /api/v1/files/shared/{token}/upload - anonymous write-only drop."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    parser_classes = [MultiPartParser]
+    throttle_classes = [ShareLinkUploadTokenThrottle, ShareLinkUploadIPThrottle]
+
+    def post(self, request, token):
+        link = self._resolve_writable(token)
+        if link is None:
+            # One answer for "no such token", "expired" and "not a drop link":
+            # the write path must not confirm that a token exists.
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        pwd_err = self._check_password(link, request)
+        if pwd_err:
+            return pwd_err
+
+        parts = request.FILES.getlist("file")
+        if len(parts) != 1:
+            return Response(
+                {"detail": "Send exactly one file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        upload = parts[0]
+
+        ceiling = settings.FILES_DROP_MAX_FILE_BYTES
+        max_bytes = min(link.max_file_bytes or ceiling, ceiling)
+        if (upload.size or 0) > max_bytes:
+            return Response(
+                {"detail": "This file is too large for this link."},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        if not self._reserve_slot(link):
+            return Response(
+                {"detail": "This link is no longer accepting files."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            self._store(link, upload, request)
+        except Exception:
+            self._release_slot(link)
+            raise
+
+        schedule_upload_notification(link)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @staticmethod
+    def _resolve_writable(token):
+        """The link, or None for missing, expired and not-a-drop-link alike.
+
+        Reuses `_lookup_link` rather than repeating its query: the read path's
+        only difference is that it maps expiry to 410, and that mapping lives
+        in `_resolve_link`, not in the lookup.
+        """
+        link = _lookup_link(token)
+        if link is None or link.is_expired or not link.allows_upload:
+            return None
+        return link
+
+    @staticmethod
+    def _check_password(link, request):
+        if not link.has_password:
+            return None
+        # The capability travels in a header, not the query string: this is
+        # the one endpoint that writes, and a URL is copied into every access
+        # log line, which redaction does not reach.
+        access_token = request.headers.get("X-Share-Access", "")
+        if not access_token:
+            return Response(
+                {"detail": "Password required.", "has_password": True},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            if SIGNER.unsign(access_token, max_age=ACCESS_TOKEN_MAX_AGE) != link.token:
+                raise signing.BadSignature
+        except signing.BadSignature, signing.SignatureExpired:
+            return Response(
+                {"detail": "Invalid or expired access token."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
+    @staticmethod
+    def _reserve_slot(link):
+        """Claim one of the link's remaining slots. False when it is full.
+
+        One statement, so two concurrent anonymous uploads cannot both win.
+        The cap is resolved in Python because the effective limit is the lower
+        of the owner's value and the live setting, and only one of the two is
+        a column.
+        """
+        ceiling = settings.FILES_DROP_MAX_FILE_COUNT
+        effective_cap = min(link.max_file_count or ceiling, ceiling)
+        return bool(
+            FileShareLink.objects.filter(
+                pk=link.pk, upload_count__lt=effective_cap
+            ).update(upload_count=F("upload_count") + 1)
+        )
+
+    @staticmethod
+    def _release_slot(link):
+        FileShareLink.objects.filter(pk=link.pk, upload_count__gt=0).update(
+            upload_count=F("upload_count") - 1
+        )
+
+    @staticmethod
+    def _store(link, upload, request):
+        from workspace.files.services import _names as _name_helpers
+        from workspace.files.services.files import FileService
+
+        root = link.file
+        name = _name_helpers.available_file_name(
+            root.owner, root, sanitize_upload_name(upload.name)
+        )
+        # acting_user is the anonymous request user on purpose: record_event
+        # normalises it to NULL, so the audit trail never claims the owner
+        # uploaded what a stranger dropped.
+        node = FileService.create_file(
+            root.owner,
+            name,
+            parent=root,
+            content=upload,
+            group=root.group,
+            acting_user=request.user,
+        )
+        record_event(
+            node,
+            request.user,
+            FileEvent.Action.LINK_UPLOAD,
+            {"link_uuid": str(link.uuid)},
+        )
+        push_file_event(node, "file_created", None)
+        return node

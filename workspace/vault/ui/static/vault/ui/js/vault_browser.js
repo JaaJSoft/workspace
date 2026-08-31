@@ -10,10 +10,12 @@
 //
 // The vault is in the URL and the folder is not: the server assigns a vault's
 // UUID and it leaks nothing, whereas a folder is named by a ciphertext the
-// server has never read. So switching vault is a navigation, and walking the
-// tree is not - and because the keys live in vaultSession's closure, that
-// navigation drops them. Every page load starts locked, which is why the
-// vault is loaded by afterUnlock and never by init.
+// server has never read. Neither switching vault nor walking the tree is a
+// navigation: the keys live in vaultSession's closure and a page load would
+// take them with it, so the vault is swapped in place and the URL follows
+// through replaceState. What a navigation used to reset for free, loadVault
+// now resets on purpose - see resetNavigation. Every page load starts locked,
+// which is why the vault is loaded by afterUnlock and never by init.
 // Every id runAction can carry out. The registry answers what the caller may
 // do; an id it offers that lands on no branch here would be a menu row that
 // does nothing when clicked - worse than an absent one, and exactly the drift
@@ -274,6 +276,7 @@ window.vaultBrowser = (function () {
       },
 
       loadVault: async function () {
+        const leaving = this.openVault ? String(this.openVault.uuid) : null;
         const rows = await window.vaultApi.listVaults();
         const vaults = [];
         for (const row of rows) {
@@ -290,6 +293,14 @@ window.vaultBrowser = (function () {
         } else {
           this.openVault = this.resolveLandingVault(vaults);
           this.missing = false;
+        }
+        // A different vault than the one on screen: its folders and the trail
+        // through them belong to the vault being left, and every UUID in them
+        // is meaningless here. A plain refresh keeps them, which is the point
+        // of comparing rather than resetting on every load.
+        const arriving = this.openVault ? String(this.openVault.uuid) : null;
+        if (arriving !== leaving) {
+          this.resetNavigation();
         }
         if (this.openVault) {
           this.rememberVault(this.openVault.uuid);

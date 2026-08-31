@@ -87,6 +87,19 @@ window.vaultStore = function vaultStore() {
 
     // ---- navigation ------------------------------------------------------
 
+    // Every value here names something inside one vault - a folder UUID, the
+    // trail that reached it - so it means nothing in the next one. Switching
+    // used to be a page load, which cleared it for free; it is a fetch now,
+    // and a folder UUID left behind filters the opened vault down to nothing.
+    resetNavigation() {
+      this.view = 'all';
+      this.folderUuid = null;
+      this.tagFilter = null;
+      this.history = [{ view: 'all', folder: null, tag: null }];
+      this.historyIndex = 0;
+      this.selected = [];
+    },
+
     push(state) {
       // Anything ahead of the cursor is dropped: navigating after going back
       // starts a new future, exactly as a browser's own history does.

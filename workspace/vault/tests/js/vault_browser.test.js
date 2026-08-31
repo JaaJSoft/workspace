@@ -1796,3 +1796,55 @@ test('losing the last vault takes its name out of the address bar', async () => 
   // And the device stops pointing at a vault nobody can open.
   assert.equal(ctx.localStorage.getItem('vault.lastVault'), null);
 });
+
+test('switching vault leaves behind the folder the last one was walked into', async () => {
+  // Switching used to be a page navigation, which reset the tree for free.
+  // It is a load now, so a folder UUID belonging to the vault being left
+  // would go on filtering the vault being opened - and folder UUIDs are per
+  // vault, so nothing matches and a full vault reads as empty.
+  const FOLDER_IN_FIRST = 'folder-1111-7111-8111-111111111111';
+  const { component } = browser({
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), vaultRow(OTHER_UUID, 'Work')],
+    api: {
+      listEntries: async (uuid, options) => {
+        if (options && options.trashed) return [];
+        return uuid === OTHER_UUID
+          ? [Object.assign(entryRow('entry-in-second'), { vault: OTHER_UUID })]
+          : [];
+      },
+    },
+  });
+  component.init();
+  await component.load();
+
+  component.openFolder(FOLDER_IN_FIRST);
+  assert.equal(component.folderUuid, FOLDER_IN_FIRST);
+
+  await component.switchVault({ uuid: OTHER_UUID });
+
+  assert.equal(component.folderUuid, null, 'the folder went with the vault it belonged to');
+  assert.equal(component.view, 'all');
+  assert.equal(component.tagFilter, null);
+  assert.equal(component.canGoBack(), false, 'and so did the trail through it');
+  assert.equal(
+    component.visibleEntries().length,
+    1,
+    'the opened vault shows its root entry instead of reading as empty',
+  );
+});
+
+test('refreshing the vault you are standing in keeps the folder you walked to', async () => {
+  // The counterpart of the reset above: it keys off the vault changing, not
+  // off a load happening. Resetting on every load would send the refresh
+  // button back to the root of the tree.
+  const FOLDER = 'folder-1111-7111-8111-111111111111';
+  const { component } = browser();
+  component.init();
+  await component.load();
+
+  component.openFolder(FOLDER);
+  await component.load();
+
+  assert.equal(component.folderUuid, FOLDER);
+  assert.equal(component.canGoBack(), true);
+});

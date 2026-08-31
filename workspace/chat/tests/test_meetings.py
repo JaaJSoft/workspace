@@ -239,6 +239,21 @@ class MeetingLifecycleTests(TestCase):
         other.refresh_from_db()
         self.assertEqual(other.state, MeetingGuest.State.WAITING)
 
+    def test_end_meeting_is_atomic(self):
+        # A crash between the closed_occurrence_start save and the WAITING
+        # sweep must not leave the meeting closed with the sweep undone -
+        # that is precisely the state nothing else ever purges. Forcing the
+        # sweep's own query to raise proves the two writes commit together
+        # or not at all.
+        with mock.patch(
+            "workspace.chat.models.MeetingGuest.objects.filter",
+            side_effect=RuntimeError("boom"),
+        ):
+            with self.assertRaises(RuntimeError):
+                end_meeting(self.meeting)
+        self.meeting.refresh_from_db()
+        self.assertIsNone(self.meeting.closed_occurrence_start)
+
 
 class CreateMeetingRaceTests(TestCase):
     """Two hosts creating a meeting for the same event at once both pass the

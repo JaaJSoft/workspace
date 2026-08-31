@@ -117,6 +117,7 @@ def set_locked(meeting, locked):
     return True
 
 
+@transaction.atomic
 def end_meeting(meeting, now=None):
     """Close the occurrence that is reachable right now. False when none is."""
     from ..models import MeetingGuest

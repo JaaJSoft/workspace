@@ -2,7 +2,6 @@ import logging
 import unicodedata
 
 from django.conf import settings
-from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -11,6 +10,7 @@ from rest_framework.views import APIView
 
 from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
+from workspace.common.rate_limit import increment_counter
 from workspace.common.request_ip import client_ip
 from workspace.common.uuids import parse_uuid_or_none
 
@@ -158,14 +158,10 @@ class MeetingKnockView(APIView):
             return Response(status=status.HTTP_423_LOCKED)
 
         # Rate limit: max 10 knocks per IP per hour, mirroring
-        # SharedPollVoteView's counter shape. cache.add + cache.incr instead
-        # of get-then-set: two concurrent requests reading the same "9" and
-        # both writing "10" would let an 11th slip through under the naive
-        # version, since neither read ever saw the other's write.
+        # SharedPollVoteView's counter shape.
         ip = client_ip(request)
         rate_key = f"meeting_knock_rate:{meeting.uuid}:{ip}"
-        cache.add(rate_key, 0, 3600)
-        attempts = cache.incr(rate_key)
+        attempts = increment_counter(rate_key, 3600)
         if attempts > 10:
             return Response(
                 {"detail": "Too many attempts. Please try again later."},

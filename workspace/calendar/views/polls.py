@@ -2,7 +2,6 @@ import re
 import uuid
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
@@ -12,6 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.rate_limit import increment_counter
 from workspace.common.request_ip import client_ip
 from workspace.notifications.services.notifications import (
     mark_source_read,
@@ -501,13 +501,12 @@ class SharedPollVoteView(APIView):
         # Rate limit: max 10 vote submissions per IP per hour
         ip = client_ip(request)
         rate_key = f"poll_vote_rate:{token}:{ip}"
-        attempts = cache.get(rate_key, 0)
-        if attempts >= 10:
+        attempts = increment_counter(rate_key, 3600)
+        if attempts > 10:
             return Response(
                 {"detail": "Too many vote submissions. Please try again later."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
-        cache.set(rate_key, attempts + 1, 3600)
 
         ser = GuestVoteSubmitSerializer(data=request.data)
         ser.is_valid(raise_exception=True)

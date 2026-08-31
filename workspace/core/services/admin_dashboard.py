@@ -47,6 +47,27 @@ def thumbnail_failure_count(request):
     return parked_count()
 
 
+def quarantined_file_count(request):
+    from workspace.files.models import FileScan
+    from workspace.files.services.scanning.policy import blocked_statuses
+
+    blocked = blocked_statuses()
+    if not blocked:
+        return 0
+    return FileScan.objects.filter(status__in=blocked).count()
+
+
+def scanner_error_count(request):
+    from workspace.files.models import FileScan
+    from workspace.files.services.scanning.policy import scan_enabled
+
+    if not scan_enabled():
+        return 0
+    return FileScan.objects.filter(
+        status=FileScan.Status.ERROR, scanned_at__gte=_last_24h()
+    ).count()
+
+
 def failed_import_job_count(request):
     from workspace.imports.services.jobs import failed_job_count
 
@@ -73,8 +94,53 @@ def thumbnail_failure_badge(request):
     return thumbnail_failure_count(request) or None
 
 
+def quarantined_file_badge(request):
+    return quarantined_file_count(request) or None
+
+
 def failed_import_job_badge(request):
     return failed_import_job_count(request) or None
+
+
+# Probing the daemon is a network call, so it runs only on the admin index -
+# never from a badge, which renders on every admin page - and its result is
+# cached. A dead daemon therefore costs one short-timeout probe a minute
+# rather than a stall on every page load.
+_SCANNER_HEALTH_CACHE_KEY = "files:scanner:health"
+_SCANNER_HEALTH_TTL = 60
+
+
+def scanner_health_card(request):
+    """A health card for the malware scanner, or None when scanning is off."""
+    from django.core.cache import cache
+
+    from workspace.files.services.scanning.policy import scan_enabled
+    from workspace.files.services.scanning.registry import get_scanner
+
+    if not scan_enabled():
+        return None
+
+    cached = cache.get(_SCANNER_HEALTH_CACHE_KEY)
+    if cached is None:
+        scanner = get_scanner()
+        if scanner is None:
+            cached = {"reachable": False, "label": "not configured"}
+        else:
+            health = scanner.health()
+            cached = {
+                "reachable": health.reachable,
+                "label": health.version or health.error or "unreachable",
+            }
+        cache.set(_SCANNER_HEALTH_CACHE_KEY, cached, _SCANNER_HEALTH_TTL)
+
+    return {
+        "title": "Malware scanner",
+        "icon": "shield",
+        "description": "antivirus daemon reachability",
+        "value": cached["label"],
+        "url": reverse("admin:files_filescan_changelist"),
+        "tone": "success" if cached["reachable"] else "danger",
+    }
 
 
 def dashboard_callback(request, context):
@@ -110,6 +176,21 @@ def dashboard_callback(request, context):
             "url": reverse("admin:files_thumbnailfailure_changelist"),
         },
         {
+            "title": "Quarantined files",
+            "icon": "shield_lock",
+            "description": "files the malware policy currently blocks",
+            "value": quarantined_file_count(request),
+            "url": reverse("admin:files_filescan_changelist")
+            + "?status__exact=infected",
+        },
+        {
+            "title": "Scanner errors",
+            "icon": "gpp_maybe",
+            "description": "files that could not be scanned in the last 24 hours",
+            "value": scanner_error_count(request),
+            "url": reverse("admin:files_filescan_changelist") + "?status__exact=error",
+        },
+        {
             "title": "Failed imports",
             "icon": "cloud_download",
             "description": "jobs failed in the last 24 hours",
@@ -120,5 +201,8 @@ def dashboard_callback(request, context):
     ]
     for card in cards:
         card["tone"] = "danger" if card["value"] else "success"
+    health = scanner_health_card(request)
+    if health is not None:
+        cards.append(health)
     context["health_cards"] = cards
     return context

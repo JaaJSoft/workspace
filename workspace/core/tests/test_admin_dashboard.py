@@ -153,12 +153,16 @@ class DashboardCallbackTests(TestCase):
         context = dashboard_callback(request, {})
 
         cards = context["health_cards"]
-        self.assertEqual(len(cards), 5)
+        self.assertEqual(len(cards), 7)
         by_title = {card["title"]: card for card in cards}
         self.assertEqual(by_title["Mail sync errors"]["value"], 1)
         self.assertEqual(by_title["Mail sync errors"]["tone"], "danger")
         self.assertEqual(by_title["Parked thumbnails"]["value"], 0)
         self.assertEqual(by_title["Parked thumbnails"]["tone"], "success")
+        self.assertEqual(by_title["Quarantined files"]["value"], 0)
+        self.assertEqual(by_title["Quarantined files"]["tone"], "success")
+        self.assertEqual(by_title["Scanner errors"]["value"], 0)
+        self.assertEqual(by_title["Scanner errors"]["tone"], "success")
 
     def test_cards_link_to_the_error_filtered_change_lists(self):
         request = RequestFactory().get("/admin/")
@@ -174,6 +178,8 @@ class DashboardCallbackTests(TestCase):
         )
         self.assertIn("?status__exact=failed", by_title["Failed AI tasks"])
         self.assertIn("?status__exact=failed", by_title["Failed imports"])
+        self.assertIn("?status__exact=infected", by_title["Quarantined files"])
+        self.assertIn("?status__exact=error", by_title["Scanner errors"])
 
     def test_admin_index_renders_the_cards(self):
         self.client.force_login(self.admin)

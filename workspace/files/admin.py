@@ -7,6 +7,7 @@ from .models import (
     File,
     FileComment,
     FileFavorite,
+    FileScan,
     FileShare,
     GroupStorageQuota,
     PinnedFolder,
@@ -103,6 +104,33 @@ class ThumbnailFailureAdmin(ModelAdmin):
             f"Unparked {count} file(s); thumbnail generation queued.",
             messages.SUCCESS,
         )
+
+
+@admin.register(FileScan)
+class FileScanAdmin(ModelAdmin):
+    """Malware scan verdicts, one row per scanned file.
+
+    Every verdict is listed, ``clean`` included: being able to answer "was
+    this file ever scanned, and when?" is the point of an audit surface, and
+    the status filter narrows it to the interesting rows in one click.
+    """
+
+    list_display = ("file", "owner", "status", "signature", "scanned_at")
+    list_filter = ("status", "scanned_at")
+    list_select_related = ("file", "file__owner")
+    search_fields = ("file__name", "signature")
+    ordering = ("-scanned_at",)
+
+    # Rows are written by the scan worker; there is nothing to author by hand.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description="Owner", ordering="file__owner__username")
+    def owner(self, obj):
+        return obj.file.owner
 
 
 class _QuotaAdminMixin:

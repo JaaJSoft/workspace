@@ -134,11 +134,11 @@ class ScannerHealthCardTests(TestCase):
         calls = []
 
         class _Stub:
-            def health(self_inner):
+            def health(self):
                 calls.append(1)
                 return ScannerHealth(reachable=True, version="ClamAV 1.4.1")
 
-            def scan(self_inner, stream, *, name=""):
+            def scan(self, stream, *, name=""):
                 raise AssertionError("not used here")
 
         with patch(
@@ -171,3 +171,48 @@ class FileScanAdminTests(TestCase):
         resp = self.client.get("/admin/files/filescan/")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Unit.Test")
+
+
+class FileScanAdminDeletionTests(TestCase):
+    """A verdict cannot be deleted away; deleting one would un-quarantine."""
+
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            username="delroot", email="delroot@example.com", password="p"
+        )
+        self.client.force_login(self.admin_user)
+        owner = User.objects.create_user(username="delowner", password="p")
+        self.file = File.objects.create(
+            owner=owner, name="bad.txt", node_type=File.NodeType.FILE
+        )
+        self.scan = FileScan.objects.create(
+            file=self.file,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at=timezone.now(),
+        )
+
+    def test_a_superuser_cannot_delete_an_infected_verdict(self):
+        resp = self.client.post(
+            f"/admin/files/filescan/{self.scan.pk}/delete/", {"post": "yes"}
+        )
+        self.assertIn(resp.status_code, (403, 302))
+        self.assertTrue(FileScan.objects.filter(pk=self.scan.pk).exists())
+
+    def test_the_bulk_delete_action_is_not_offered(self):
+        resp = self.client.get("/admin/files/filescan/")
+        self.assertNotContains(resp, 'value="delete_selected"')
+
+    def test_the_rescan_action_queues_a_fresh_scan_and_keeps_the_row(self):
+        with patch("workspace.files.tasks.scan_file.delay") as delay:
+            resp = self.client.post(
+                "/admin/files/filescan/",
+                {
+                    "action": "rescan_files",
+                    "_selected_action": [str(self.scan.pk)],
+                },
+                follow=True,
+            )
+        self.assertEqual(resp.status_code, 200)
+        delay.assert_called_once_with(str(self.file.uuid))
+        self.assertTrue(FileScan.objects.filter(pk=self.scan.pk).exists())

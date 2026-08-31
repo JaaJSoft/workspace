@@ -121,12 +121,44 @@ class FileScanAdmin(ModelAdmin):
     search_fields = ("file__name", "signature")
     ordering = ("-scanned_at",)
 
+    actions = ("rescan_files",)
+
     # Rows are written by the scan worker; there is nothing to author by hand.
     def has_add_permission(self, request):
         return False
 
     def has_change_permission(self, request, obj=None):
         return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Deleting a verdict is not how you clear one.
+
+        A file with no scan row reads as never scanned, and never scanned is
+        readable - so removing an INFECTED row would silently un-quarantine
+        the file and let it be downloaded, attached and copied again. Use the
+        re-scan action, which leaves the row in place until a fresh verdict
+        replaces it.
+
+        This differs from ThumbnailFailure, where deleting the row IS the
+        documented way to unpark a file: there the row only withholds a
+        thumbnail, here it withholds the file itself.
+        """
+        return False
+
+    @admin.action(description="Re-scan the selected files", permissions=["view"])
+    def rescan_files(self, request, queryset):
+        from workspace.files.tasks import scan_file
+
+        count = 0
+        for file_uuid in queryset.values_list("file_id", flat=True):
+            scan_file.delay(str(file_uuid))
+            count += 1
+        self.message_user(
+            request,
+            f"Queued {count} file(s) for re-scanning. Verdicts update as the "
+            "scans complete.",
+            messages.SUCCESS,
+        )
 
     @admin.display(description="Owner", ordering="file__owner__username")
     def owner(self, obj):

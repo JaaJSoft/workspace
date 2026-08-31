@@ -62,6 +62,10 @@ class ClamAVScanner(Scanner):
             try:
                 sock.close()
             except OSError:
+                # Already closed, or closing a socket whose peer vanished. This
+                # runs in a finally on the failure path, where the verdict is
+                # already decided - raising here would replace a useful ERROR
+                # verdict with a crash in the Celery task.
                 pass
 
     def scan(self, stream, *, name=""):

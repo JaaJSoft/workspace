@@ -83,6 +83,23 @@ class UploadNotificationTests(TestCase):
         notify_share_link_uploads(uuid)
         self.assertFalse(Notification.objects.exists())
 
+    def test_an_upload_landing_mid_task_does_not_double_schedule(self):
+        # notify() re-entering the scheduler stands in for an upload landing
+        # while the task is still running. The guard from the original
+        # scheduling must still be held at that point, so the re-entrant call
+        # loses the cache.add election and nothing gets scheduled twice.
+        FileShareLink.objects.filter(pk=self.link.pk).update(upload_count=1)
+        cache.set(upload_notification_cache_key(self.link.uuid), 1, timeout=60)
+        with patch(
+            "workspace.files.tasks.notify_share_link_uploads.apply_async"
+        ) as scheduled:
+            with patch(
+                "workspace.notifications.services.notifications.notify",
+                side_effect=lambda **kwargs: schedule_upload_notification(self.link),
+            ):
+                notify_share_link_uploads(str(self.link.uuid))
+        scheduled.assert_not_called()
+
     def test_a_broker_failure_does_not_break_the_caller(self):
         """The bytes are stored already: a lost notification beats a lost file."""
         with patch(

@@ -324,7 +324,13 @@ class SearchExclusionTests(TestCase):
 
     @override_settings(**BLOCKING)
     def test_unscanned_files_are_still_returned(self):
-        """Guards the NOT IN / NULL trap at the endpoint level."""
+        """A file with no scan row is never excluded.
+
+        The NOT IN subquery cannot itself go wrong here: FileScan.file is a
+        non-nullable FK, so the trap that would empty every page - one NULL
+        making the predicate UNKNOWN for every row - is prevented by the
+        schema, not by this test.
+        """
         self._file("quarterly-budget.txt")
         names = {r.name for r in search_files("quarterly", self.user, 20)}
         self.assertIn("quarterly-budget.txt", names)

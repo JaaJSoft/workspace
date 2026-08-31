@@ -1,10 +1,10 @@
 """Damaged documents must fail one predictable way, never a surprising one.
 
-These parsers are pointed at whatever a user chose to upload, so the shape of
-the input is not ours to assume. Enumerating the exceptions a corrupt archive
-can raise is a game that cannot be won by reading the code - zipfile, zlib and
-pypdf each have their own idea of what a damaged byte means, and which one
-fires depends on which byte it was. Mutating a real document and asserting the
+The parser is pointed at whatever a user chose to upload, so the shape of the
+input is not ours to assume. Enumerating the exceptions a corrupt document can
+raise is a game that cannot be won by reading the code - the failure surfaces
+from whichever of Tika's parsers claimed the bytes, and which one that is
+depends on which byte was damaged. Mutating a real document and asserting the
 boundary holds is how that gets checked instead.
 
 The corpus is seeded, so a failure here reproduces exactly.
@@ -59,6 +59,9 @@ class OfficeFuzzTests(SimpleTestCase):
                 try:
                     extract_document(payload, max_chars=100_000)
                 except ValueError:
+                    # The documented failure, and the only one allowed. Any
+                    # other type escapes this handler and fails the subtest,
+                    # which is the whole assertion.
                     pass
 
     def test_the_body_stays_bounded_whatever_the_input(self):
@@ -68,7 +71,7 @@ class OfficeFuzzTests(SimpleTestCase):
                 try:
                     body = extract_document(payload, max_chars=500).text
                 except ValueError:
-                    continue
+                    continue  # refusing the document is a correct answer
                 self.assertLessEqual(len(body), 500)
 
 
@@ -107,5 +110,5 @@ class PdfFuzzTests(SimpleTestCase):
                 try:
                     body = extract_document(payload, max_chars=100_000).text
                 except ValueError:
-                    continue
+                    continue  # refusing the document is a correct answer
                 self.assertLessEqual(len(body), 100_000)

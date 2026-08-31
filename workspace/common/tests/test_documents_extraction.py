@@ -183,6 +183,27 @@ class BoundsTests(SimpleTestCase):
         document = extract_document(make_docx(["short"]), max_chars=CAP)
         self.assertFalse(document.truncated)
 
+    def test_a_document_exactly_as_long_as_the_ceiling_is_complete(self):
+        # The boundary case: asking the extractor for exactly max_chars cannot
+        # tell a document that ends there from one that was cut there, so a
+        # complete document would be reported truncated. The length is
+        # measured rather than hard-coded, since it is the extractor's to
+        # decide.
+        payload = make_docx(["the kraken sleeps beneath the waves"])
+        full = extract_document(payload, max_chars=1_000_000)
+        exact = extract_document(payload, max_chars=len(full.text))
+
+        self.assertFalse(exact.truncated)
+        self.assertEqual(exact.text, full.text)
+
+    def test_one_character_short_of_the_document_is_truncated(self):
+        payload = make_docx(["the kraken sleeps beneath the waves"])
+        full = extract_document(payload, max_chars=1_000_000)
+        cut = extract_document(payload, max_chars=len(full.text) - 1)
+
+        self.assertTrue(cut.truncated)
+        self.assertLess(len(cut.text), len(full.text))
+
 
 class FailureTests(SimpleTestCase):
     def test_an_empty_payload_is_not_a_document(self):

@@ -40,6 +40,11 @@ DOCUMENT_MIME_TYPES = frozenset(
     {PDF, DOCX, DOTX, XLSX, PPTX, ODT, ODS, ODP, DOC, XLS, PPT, RTF, EPUB}
 )
 
+# Tika pads its output with a little leading and trailing whitespace, so the
+# probe that detects "there was more" has to clear the padding as well. Sixty
+# four characters is far more than it ever emits and costs nothing to read.
+_PROBE_CHARS = 64
+
 _NPAGES = "xmpTPg:NPages"
 _TITLE = "dc:title"
 _CREATED = "dcterms:created"
@@ -64,19 +69,26 @@ def extract_document(data: bytes, *, max_chars: int) -> ExtractedDocument:
     Raises ValueError when the bytes are not a document any parser recognises.
     """
     try:
+        # Past the ceiling on purpose: a document whose text is exactly
+        # max_chars long is complete, and asking for exactly max_chars cannot
+        # tell it apart from one that was cut there. What comes back beyond
+        # the ceiling is the signal, and it is never returned.
         # extract_bytes_to_string will not take an immutable buffer.
-        text, metadata = _extractor(max_chars).extract_bytes_to_string(bytearray(data))
+        text, metadata = _extractor(max_chars + _PROBE_CHARS).extract_bytes_to_string(
+            bytearray(data)
+        )
     except Exception as exc:
         # Tika reports every parse failure as a TypeError carrying a Java
         # message. Catching the type it happens to use today would put us back
         # to guessing, so the boundary catches everything and promises one.
         raise ValueError(f"Could not read document: {exc}") from exc
 
-    # Measured before stripping: the extractor fills its budget with whatever
-    # the document holds, trailing whitespace included, and trimming that away
-    # afterwards would hide the fact that it stopped early.
-    truncated = len(text) >= max_chars
+    # Stripped before the comparison, not after: the padding is not content,
+    # and counting it would report a document that ends exactly at the ceiling
+    # as one that was cut short.
     text = text.strip()
+    truncated = len(text) > max_chars
+    text = text[:max_chars]
     return ExtractedDocument(
         text=text,
         title=_first(metadata, _TITLE),

@@ -65,6 +65,9 @@ class SearchProviderInfo:
     slug: str
     module_slug: str
     search_fn: Callable
+    # Provider slugs this one supersedes when both answer with the same entity:
+    # `notes` refines `files`, so a markdown note keeps its editor url.
+    refines: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -105,6 +108,14 @@ class ModuleRegistry:
                     f"Search provider '{provider.slug}' is already registered"
                 )
             self._search_providers[provider.slug] = provider
+
+    def refinements(self) -> dict[str, frozenset[str]]:
+        """Provider slug -> the provider slugs whose hits it supersedes."""
+        return {
+            provider.slug: frozenset(provider.refines)
+            for provider in self._search_providers.values()
+            if provider.refines
+        }
 
     def search(self, query: str, user, limit: int = 10) -> list[dict]:
         results = []

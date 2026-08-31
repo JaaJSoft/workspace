@@ -33,7 +33,7 @@
     "@zxcvbn-ts/core": "3.0.4",
     "@zxcvbn-ts/language-common": "3.0.4",
     "alpinejs": "3.16.3",
-    "cbor-x": "1.6.0",
+    "cbor-x": "1.6.6",
     "codemirror": "6.0.2",
     "cropperjs": "1.6.2",
     "emoji-picker-element": "1.27.0",

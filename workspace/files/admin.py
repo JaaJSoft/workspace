@@ -115,7 +115,7 @@ class FileScanAdmin(ModelAdmin):
     the status filter narrows it to the interesting rows in one click.
     """
 
-    list_display = ("file", "owner", "status", "signature", "scanned_at")
+    list_display = ("file", "owner", "status", "signature", "is_current", "scanned_at")
     list_filter = ("status", "scanned_at")
     list_select_related = ("file", "file__owner")
     search_fields = ("file__name", "signature")
@@ -163,6 +163,17 @@ class FileScanAdmin(ModelAdmin):
     @admin.display(description="Owner", ordering="file__owner__username")
     def owner(self, obj):
         return obj.file.owner
+
+    @admin.display(description="Up to date", boolean=True)
+    def is_current(self, obj):
+        """Whether the verdict describes the bytes the file holds now.
+
+        Costs no query: list_select_related already joins the file. A blank
+        hash on either side reads as out of date rather than as a match,
+        which two empty strings would otherwise compare as - it means the
+        bytes could not be vouched for, not that they were checked.
+        """
+        return bool(obj.content_hash) and obj.content_hash == obj.file.content_hash
 
 
 class _QuotaAdminMixin:

@@ -6,6 +6,7 @@ a maintenance operation, not something a user's upload should trigger.
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.db.models import F, Q
 
 from workspace.files.models import File
 
@@ -66,7 +67,25 @@ class Command(BaseCommand):
             .exclude(content__isnull=True)
         )
         if not options["rescan"]:
-            queryset = queryset.filter(scan__isnull=True)
+            # "Needs scanning" is not the same as "never scanned". A file whose
+            # content changed after its verdict was written still carries that
+            # verdict, so filtering on scan__isnull alone would strand it: the
+            # CONTENT_REPLACED event normally queues a fresh scan, but if that
+            # event was lost - a worker killed, a broker flushed - nothing else
+            # ever revisits the file, and only --rescan (which re-reads the
+            # whole library) would correct it.
+            #
+            # An empty hash on either side means the bytes cannot be vouched
+            # for: a verdict written before this field existed, or a file whose
+            # own hash could not be computed. Both count as needing a scan
+            # rather than as a match, which two empty strings would otherwise
+            # compare as.
+            queryset = queryset.filter(
+                Q(scan__isnull=True)
+                | Q(scan__content_hash="")
+                | Q(content_hash="")
+                | ~Q(scan__content_hash=F("content_hash"))
+            )
 
         limit = options["limit"]
         if options["dry_run"]:

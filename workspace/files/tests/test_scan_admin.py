@@ -216,3 +216,51 @@ class FileScanAdminDeletionTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         delay.assert_called_once_with(str(self.file.uuid))
         self.assertTrue(FileScan.objects.filter(pk=self.scan.pk).exists())
+
+
+class FileScanAdminCurrencyTests(TestCase):
+    """The changelist answers "does this verdict still describe this file?"."""
+
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            username="curroot", email="curroot@example.com", password="p"
+        )
+        self.client.force_login(self.admin_user)
+        self.owner = User.objects.create_user(username="curowner", password="p")
+
+    def _scanned(self, name, *, stale=False, no_hash=False):
+        from django.core.files.base import ContentFile
+
+        from workspace.files.services import FileService
+
+        f = FileService.create_file(
+            self.owner, name, content=ContentFile(b"body", name=name)
+        )
+        recorded = "" if no_hash else ("0" * 64 if stale else f.content_hash)
+        FileScan.objects.create(
+            file=f,
+            status=FileScan.Status.CLEAN,
+            content_hash=recorded,
+            scanned_at=timezone.now(),
+        )
+        return f
+
+    def _is_current(self, file_obj):
+        from workspace.files.admin import FileScanAdmin
+
+        return FileScanAdmin.is_current(None, file_obj.scan)
+
+    def test_a_verdict_matching_the_file_is_current(self):
+        self.assertTrue(self._is_current(self._scanned("fresh.txt")))
+
+    def test_a_verdict_about_other_bytes_is_not_current(self):
+        self.assertFalse(self._is_current(self._scanned("stale.txt", stale=True)))
+
+    def test_a_verdict_with_no_recorded_hash_is_not_current(self):
+        self.assertFalse(self._is_current(self._scanned("legacy.txt", no_hash=True)))
+
+    def test_the_changelist_renders_the_column(self):
+        self._scanned("shown.txt")
+        resp = self.client.get("/admin/files/filescan/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Up to date")

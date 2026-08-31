@@ -18,9 +18,13 @@ class ScanFilesCommandTests(TestCase):
         self.user = User.objects.create_user(username="cmd", password="p")
         self.unscanned = self._file("new.txt")
         self.scanned = self._file("old.txt")
+        # The verdict records the hash of the bytes the file holds, which is
+        # what makes it up to date. Omitting it would mean "cannot vouch for
+        # these bytes", and the command would rightly queue the file again.
         FileScan.objects.create(
             file=self.scanned,
             status=FileScan.Status.CLEAN,
+            content_hash=self.scanned.content_hash,
             scanned_at=timezone.now(),
         )
         self.folder = File.objects.create(
@@ -28,11 +32,12 @@ class ScanFilesCommandTests(TestCase):
         )
 
     def _file(self, name):
-        f = File(owner=self.user, name=name, node_type=File.NodeType.FILE)
-        f.content = ContentFile(b"body", name=name)
-        f.size = 4
-        f.save()
-        return f
+        """Created through FileService, which is what computes content_hash."""
+        from workspace.files.services import FileService
+
+        return FileService.create_file(
+            self.user, name, content=ContentFile(b"body", name=name)
+        )
 
     def _run(self, *args, **kwargs):
         out = StringIO()
@@ -132,3 +137,68 @@ class ScanFilesNullContentTests(TestCase):
             call_command("scan_files", "--limit", "1", stdout=out)
         self.assertEqual(delay.call_count, 1)
         self.assertEqual(delay.call_args_list[0].args[0], str(self.real.uuid))
+
+
+class ScanFilesStaleVerdictTests(TestCase):
+    """The backfill picks up a file whose content changed since its verdict.
+
+    Without this, a lost CONTENT_REPLACED event strands the file with a
+    verdict about bytes it no longer holds, and only --rescan (which re-reads
+    the whole library) would ever correct it.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="stale", password="p")
+
+    def _scanned_file(self, name, body, *, verdict_hash=None):
+        from workspace.files.services import FileService
+
+        f = FileService.create_file(
+            self.user, name, content=ContentFile(body, name=name)
+        )
+        FileScan.objects.create(
+            file=f,
+            status=FileScan.Status.CLEAN,
+            content_hash=f.content_hash if verdict_hash is None else verdict_hash,
+            scanned_at=timezone.now(),
+        )
+        return f
+
+    def _queued(self):
+        out = StringIO()
+        with (
+            override_settings(**ENABLED),
+            patch("workspace.files.tasks.scan_file.delay") as delay,
+        ):
+            call_command("scan_files", stdout=out)
+        return {c.args[0] for c in delay.call_args_list}
+
+    def test_a_file_whose_verdict_matches_its_bytes_is_skipped(self):
+        f = self._scanned_file("fresh.txt", b"body")
+        self.assertNotIn(str(f.uuid), self._queued())
+
+    def test_a_file_whose_content_changed_is_picked_up(self):
+        from workspace.files.services import FileService
+
+        f = self._scanned_file("changed.txt", b"body")
+        FileService.update_content(f, ContentFile(b"different", name="changed.txt"))
+        self.assertIn(str(f.uuid), self._queued())
+
+    def test_a_verdict_with_no_recorded_hash_is_picked_up(self):
+        """Rows written before the field existed must not look up to date."""
+        f = self._scanned_file("legacy.txt", b"body", verdict_hash="")
+        self.assertIn(str(f.uuid), self._queued())
+
+    def test_a_file_whose_own_hash_is_missing_is_picked_up(self):
+        """An empty File.content_hash means we cannot vouch for the bytes."""
+        f = self._scanned_file("nohash.txt", b"body")
+        File.objects.filter(pk=f.pk).update(content_hash="")
+        self.assertIn(str(f.uuid), self._queued())
+
+    def test_a_never_scanned_file_is_still_picked_up(self):
+        from workspace.files.services import FileService
+
+        f = FileService.create_file(
+            self.user, "new.txt", content=ContentFile(b"body", name="new.txt")
+        )
+        self.assertIn(str(f.uuid), self._queued())

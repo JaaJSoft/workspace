@@ -347,6 +347,10 @@ def scan_file(self, file_uuid):
             "status": verdict.status,
             "signature": verdict.signature,
             "detail": verdict.detail,
+            # The hash captured before the blob was opened, not a fresh read:
+            # it is the one the verdict actually describes, and the staleness
+            # check above has just confirmed the row still holds it.
+            "content_hash": scanned_hash,
             "scanned_at": timezone.now(),
         },
     )

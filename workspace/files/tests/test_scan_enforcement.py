@@ -1,10 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.test import override_settings
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileScan
+from workspace.files.search import search_files
+from workspace.files.services.search_index import index_file
 
 User = get_user_model()
 BLOCKING = {
@@ -280,3 +282,49 @@ class WopiEnforcementTests(APITestCase):
     def test_get_file_works_when_scanning_is_off(self):
         resp = self.client.get(self._contents_url())
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class SearchExclusionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="srch", password="p")
+        self.clean = self._file("quarterly-report.txt")
+        self.infected = self._file("quarterly-invoice.txt")
+        FileScan.objects.create(
+            file=self.infected,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+
+    def _file(self, name):
+        f = File(owner=self.user, name=name, node_type=File.NodeType.FILE)
+        f.content = ContentFile(b"body", name=name)
+        f.size = 4
+        f.save()
+        index_file(f)
+        return f
+
+    @override_settings(**BLOCKING)
+    def test_blocked_file_is_absent_from_search(self):
+        names = {r.name for r in search_files("quarterly", self.user, 20)}
+        self.assertIn("quarterly-report.txt", names)
+        self.assertNotIn("quarterly-invoice.txt", names)
+
+    @override_settings(**FLAGGING)
+    def test_flagged_file_stays_searchable(self):
+        """Flag mode annotates rather than disappears; hiding it would be a
+        different policy than the one the administrator chose."""
+        names = {r.name for r in search_files("quarterly", self.user, 20)}
+        self.assertIn("quarterly-invoice.txt", names)
+
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
+    def test_everything_is_searchable_when_scanning_is_off(self):
+        names = {r.name for r in search_files("quarterly", self.user, 20)}
+        self.assertEqual(len(names), 2)
+
+    @override_settings(**BLOCKING)
+    def test_unscanned_files_are_still_returned(self):
+        """Guards the NOT IN / NULL trap at the endpoint level."""
+        self._file("quarterly-budget.txt")
+        names = {r.name for r in search_files("quarterly", self.user, 20)}
+        self.assertIn("quarterly-budget.txt", names)

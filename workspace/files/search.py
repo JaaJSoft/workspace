@@ -2,12 +2,13 @@ from workspace.common.search import apply_fulltext
 from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.scanning.policy import exclude_blocked
 from workspace.files.services.search_index import FILES_FTS, match_type_for
 
 
 def search_files(query, user, limit):
     qs = apply_fulltext(
-        FileService.user_files_qs(user).select_related("parent"),
+        exclude_blocked(FileService.user_files_qs(user).select_related("parent")),
         query,
         index=FILES_FTS,
     ).order_by("-search_rank", "-updated_at")[:limit]

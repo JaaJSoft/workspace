@@ -16,22 +16,26 @@ from .notifications import notify_conversation_members, notify_new_message
 from .threads import ensure_participants, participant_user_ids
 
 
-def _thread_delivery(message, author, mentioned_user_ids):
+def _thread_delivery(message, mentioned_user_ids):
     """Counters for a reply: the thread's participants, and nobody else.
 
     Returns the participant ids so the notification fan-out targets the same
     set the badges moved for. A member of the conversation who is not in the
     thread sees only the reply count on the root message change.
 
+    A guest has no user row, so it can never be a ThreadParticipant - only
+    the ids matter here, never the identity, and a guest's author_id is
+    already None. ensure_participants filters None out on its own.
+
     The retraction mirror lives in threads.retract_thread_reply - a change to
     who gets counted here must change who gets un-counted there.
     """
     root = message.thread_root
-    ensure_participants(root, [root.author_id, author.id])
+    ensure_participants(root, [root.author_id, message.author_id])
     if mentioned_user_ids:
         ensure_participants(root, mentioned_user_ids)
 
-    recipient_ids = participant_user_ids(root) - {author.id}
+    recipient_ids = participant_user_ids(root) - {message.author_id}
 
     ThreadParticipant.objects.filter(
         root_message=root, user_id__in=recipient_ids
@@ -75,7 +79,7 @@ def deliver_message(
     author = message.author
 
     if message.thread_root_id:
-        recipient_ids = _thread_delivery(message, author, mentioned_user_ids or set())
+        recipient_ids = _thread_delivery(message, mentioned_user_ids or set())
     else:
         recipient_ids = None
         ConversationMember.objects.filter(
@@ -98,6 +102,7 @@ def deliver_message(
             conversation,
             author,
             message.body,
+            guest=message.guest,
             mentioned_user_ids=mentioned_user_ids,
             mention_everyone=mention_everyone,
             thread_recipient_ids=recipient_ids,

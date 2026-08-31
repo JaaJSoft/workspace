@@ -1,14 +1,19 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
+from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
+    Meeting,
+    MeetingGuest,
     Message,
     ThreadParticipant,
 )
+from workspace.chat.services.posting import deliver_message
 
 User = get_user_model()
 
@@ -324,4 +329,54 @@ class ThreadNotificationWiringTests(TestCase):
         self.assertEqual(
             notify_stream.call_args.kwargs["url"],
             f"/chat/{self.conversation.uuid}?thread={self.root.uuid}",
+        )
+
+
+class GuestThreadReplyDeliveryTests(TestCase):
+    """A guest has no user row and can never be a ThreadParticipant; the
+    reply fan-out must not dereference None to get there."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice2", password="x")
+        self.bob = User.objects.create_user(username="bob2", password="x")
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.alice
+        )
+        for user in (self.alice, self.bob):
+            ConversationMember.objects.create(conversation=self.conversation, user=user)
+        self.root = Message.objects.create(
+            conversation=self.conversation, author=self.alice, body="root"
+        )
+        cal = Calendar.objects.create(name="C", owner=self.alice)
+        event = Event.objects.create(
+            calendar=cal, owner=self.alice, title="E", start=timezone.now()
+        )
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.conversation, created_by=self.alice
+        )
+        self.guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=timezone.now(),
+            token_hash="f" * 64,
+        )
+
+    def test_guest_reply_delivers_without_crashing(self):
+        reply = Message.objects.create(
+            conversation=self.conversation,
+            guest=self.guest,
+            body="guest reply",
+            reply_to=self.root,
+            thread_root=self.root,
+        )
+
+        deliver_message(self.conversation, reply)
+
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.reply_count, 1)
+        # The guest's author_id is None, filtered out by ensure_participants:
+        # only alice (the root's author) becomes a thread participant.
+        participants = ThreadParticipant.objects.filter(root_message=self.root)
+        self.assertEqual(
+            list(participants.values_list("user_id", flat=True)), [self.alice.id]
         )

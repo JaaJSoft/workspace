@@ -1,4 +1,5 @@
 from datetime import timedelta
+from types import SimpleNamespace
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -26,6 +27,7 @@ from workspace.chat.services.conversations import (
     get_unread_counts,
     user_conversation_ids,
 )
+from workspace.chat.services.identities import display_name_for_identity
 from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
 from workspace.common.dates import time_ago
@@ -39,9 +41,9 @@ def _user_chat_groups(user):
     return [{"id": g.pk, "name": g.name} for g in user.groups.order_by("name")]
 
 
-def _display(user):
+def _display(msg):
     """The name a person is shown under in a message preview."""
-    return user.get_full_name() or user.username
+    return display_name_for_identity(msg.author, msg.guest)
 
 
 # Entrance animation styles offered in the preferences panel; the values are
@@ -102,7 +104,7 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
     last_msgs = {
         m.uuid: m
         for m in Message.objects.filter(uuid__in=last_msg_ids)
-        .select_related("author")
+        .select_related("author", "guest")
         .prefetch_related("attachments")
     }
 
@@ -142,12 +144,12 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
             if body:
                 if len(body) > 30:
                     body = body[:30] + "\u2026"
-                c.last_message_preview = f"{_display(c._last_message.author)}: {body}"
+                c.last_message_preview = f"{_display(c._last_message)}: {body}"
             elif att := list(c._last_message.attachments.all()):
                 label = "sent a file" if len(att) == 1 else f"sent {len(att)} files"
-                c.last_message_preview = f"{_display(c._last_message.author)}: {label}"
+                c.last_message_preview = f"{_display(c._last_message)}: {label}"
             else:
-                c.last_message_preview = f"{_display(c._last_message.author)}: "
+                c.last_message_preview = f"{_display(c._last_message)}: "
             c.time_ago = time_ago(c._last_message.created_at, now=now)
         else:
             c.last_message_preview = "No messages yet"
@@ -301,6 +303,25 @@ def conversation_items_view(request):
     )
 
 
+def _group_author(msg):
+    """The value the message-group template reads as `author`.
+
+    A real author is passed through unchanged. A guest has no user row, so
+    it gets a stand-in exposing exactly the surface the (out-of-scope this
+    round) templates already read off it - `.id`, `.username`,
+    `.get_full_name()` - computed through the same resolver as everywhere
+    else, rather than a second guest-formatting rule growing here.
+    """
+    if msg.author is not None:
+        return msg.author
+    display_name = display_name_for_identity(msg.author, msg.guest)
+    return SimpleNamespace(
+        id=None,
+        username=display_name,
+        get_full_name=lambda: display_name,
+    )
+
+
 def group_messages(messages, current_user):
     """Group consecutive messages by same author within 5 min, with date separators.
 
@@ -334,10 +355,13 @@ def group_messages(messages, current_user):
             groups.append({"type": "system", "message": msg})
             continue
 
-        # Check if this message continues the current group
+        # Check if this message continues the current group. A guest has no
+        # user row, so "same author" compares the (author_id, guest_id) pair
+        # rather than dereferencing a possibly-None author.
         can_group = (
             current_group
-            and current_group["author"].id == msg.author_id
+            and current_group["author_id"] == msg.author_id
+            and current_group["guest_id"] == msg.guest_id
             and not msg.deleted_at
             and not (current_group["messages"][-1].deleted_at)
             and (msg.created_at - current_group["messages"][-1].created_at)
@@ -351,7 +375,9 @@ def group_messages(messages, current_user):
                 groups.append(current_group)
             current_group = {
                 "type": "messages",
-                "author": msg.author,
+                "author_id": msg.author_id,
+                "guest_id": msg.guest_id,
+                "author": _group_author(msg),
                 "is_own": msg.author_id == current_user.id,
                 "is_bot": hasattr(msg.author, "bot_profile"),
                 "messages": [msg],
@@ -375,6 +401,7 @@ def conversation_messages_view(request, conversation_uuid):
         .select_related(
             "author",
             "author__bot_profile",
+            "guest",
             "reply_to",
             "reply_to__author",
             "conversation",
@@ -482,7 +509,7 @@ def thread_messages_view(request, root_uuid):
     """Partial: a thread's root message followed by its replies."""
     root = (
         Message.objects.filter(uuid=root_uuid, thread_root__isnull=True)
-        .select_related("author", "author__bot_profile", "conversation")
+        .select_related("author", "author__bot_profile", "guest", "conversation")
         .first()
     )
     if root is None:
@@ -497,6 +524,7 @@ def thread_messages_view(request, root_uuid):
         .select_related(
             "author",
             "author__bot_profile",
+            "guest",
             "reply_to",
             "reply_to__author",
             "conversation",

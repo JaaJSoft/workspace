@@ -12,9 +12,12 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
+    Meeting,
+    MeetingGuest,
     Message,
     PinnedConversation,
 )
@@ -313,3 +316,35 @@ class ConversationListRowVolumeTests(ChatTestMixin, TestCase):
                 f"after adding 50 members={after.count}"
             ),
         )
+
+
+class ConversationListGuestPreviewTests(ChatTestMixin, TestCase):
+    """A guest's message as the last one in a conversation must not crash
+    the sidebar for every other member, and should show the guest's name."""
+
+    def setUp(self):
+        super().setUp()
+        cal = Calendar.objects.create(name="C", owner=self.creator)
+        event = Event.objects.create(
+            calendar=cal, owner=self.creator, title="E", start=timezone.now()
+        )
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.group, created_by=self.creator
+        )
+        self.guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=timezone.now(),
+            token_hash="d" * 64,
+        )
+
+    def test_guest_last_message_survives_the_conversation_list(self):
+        Message.objects.create(
+            conversation=self.group, guest=self.guest, body="hello from a guest"
+        )
+
+        self.client.force_login(self.creator)
+        resp = self.client.get("/chat/conversations")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Visitor: hello from a guest")

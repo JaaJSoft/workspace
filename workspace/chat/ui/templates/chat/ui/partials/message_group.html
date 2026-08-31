@@ -153,7 +153,7 @@
             </button>
             <button
               class="btn btn-ghost btn-xs btn-square"
-              @click="startReply('{{ msg.uuid }}', '{{ msg.author.get_full_name|default:msg.author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"
+              @click="startReply('{{ msg.uuid }}', '{{ author.get_full_name|default:author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"
               title="Reply"
             >
               <i data-lucide="reply" class="w-3.5 h-3.5"></i>

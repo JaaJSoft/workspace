@@ -99,7 +99,7 @@ FILES_CLAMAV_PORT=3310
 
 | Setting | Values | Effect |
 |---|---|---|
-| `FILES_MALWARE_ON_DETECTION` | `block` (default), `flag` | `block` quarantines an infected file: it cannot be downloaded, previewed or found in search, and its owner sees it marked as quarantined. `flag` records the verdict and leaves the file usable. |
+| `FILES_MALWARE_ON_DETECTION` | `block` (default), `flag` | `block` quarantines an infected file: it cannot be downloaded, previewed or found in search, cannot be attached to a message, an email or a task, is not readable by the AI assistant, and its owner sees it marked as quarantined. `flag` records the verdict and leaves the file usable. |
 | `FILES_MALWARE_ON_ERROR` | `open` (default), `closed` | What happens to a file the scanner could not examine - a daemon that is down, a blob that vanished. `open` leaves it usable, `closed` quarantines it. |
 | `FILES_MALWARE_SCAN_MAX_BYTES` | bytes, default 100 MiB | Files larger than this are recorded as `skipped` and stay downloadable. |
 

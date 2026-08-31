@@ -674,18 +674,32 @@ def continue_after(rule_text, dtstart, instant, tz=None):
     restarts its tally from the new anchor instead, so splitting COUNT=10 after
     three occurrences would leave 3 + 10 rather than 10.
 
-    The recount walks the original series, which a COUNT bounds by definition.
+    The recount walks the original series, so it only runs once every RRULE is
+    bounded. A COUNT on one line does not bound the set: a rule pairing
+    ``FREQ=DAILY;COUNT=3`` with a bare ``FREQ=WEEKLY`` contains the text
+    ``COUNT=`` while recurring forever, and counting it would never return.
+    ``_is_bounded`` asks the question the substring cannot.
 
     A rule with nothing to recount comes back byte-identical: the early return
     is what keeps an UNTIL or unbounded rule out of the re-serializer, which
     would reorder its parts for no gain.
     """
-    if "COUNT=" not in rule_text.upper():
+    if "COUNT=" not in rule_text.upper() or not _is_bounded(rule_text):
         return rule_text
     rule = parse(rule_text, dtstart, tz)
     if rule is None:
         return rule_text
-    remaining = max(sum(1 for occ in rule if occ >= instant), 1)
+
+    remaining = 0
+    for index, occurrence in enumerate(rule):
+        # Second guard, in case a rule reads bounded but walks like it is not:
+        # leaving the COUNT alone costs a longer continuation, hanging the
+        # request costs the worker.
+        if index >= MAX_ITERATIONS:
+            return rule_text
+        if occurrence >= instant:
+            remaining += 1
+    remaining = max(remaining, 1)
 
     out = []
     for line in _rule_lines(rule_text):

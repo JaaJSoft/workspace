@@ -724,6 +724,18 @@ class ContinueAfterTests(SimpleTestCase):
         rest = list(rr.parse(rr.continue_after(rule, self.DTSTART, cut), cut))
         self.assertEqual(len(kept) + len(rest), 10)
 
+    def test_a_counted_rule_beside_an_unbounded_one_is_left_alone(self):
+        """A COUNT on one line does not bound the set.
+
+        The set recurs forever, so recounting it would never return. The
+        substring guard sees ``COUNT=`` and lets it through; ``_is_bounded``
+        is what stops it. Left unchanged rather than recounted: a longer
+        continuation beats a wedged request.
+        """
+        rule = "RRULE:FREQ=DAILY;COUNT=3\nRRULE:FREQ=WEEKLY"
+        cut = self.DTSTART + timedelta(days=1)
+        self.assertEqual(rr.continue_after(rule, self.DTSTART, cut), rule)
+
     def test_until_rules_are_left_alone(self):
         rule = "RRULE:FREQ=DAILY;UNTIL=20260110T090000Z"
         cut = self._cut(rule, 3)

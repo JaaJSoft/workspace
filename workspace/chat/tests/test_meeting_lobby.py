@@ -11,7 +11,7 @@ from workspace.chat.models import MeetingGuest
 from workspace.chat.services import calls
 from workspace.chat.services.meeting_guests import resolve_guest
 from workspace.chat.services.meeting_occurrences import current_occurrence
-from workspace.chat.services.meetings import admit_guest, create_meeting
+from workspace.chat.services.meetings import admit_guest, create_meeting, end_meeting
 
 User = get_user_model()
 
@@ -75,11 +75,14 @@ class MeetingHostViewTests(TestCase):
         self.assertEqual(resp.data["uuid"], str(self.meeting.uuid))
 
     def test_non_owner_cannot_create(self):
+        # 404, not 403: an event that exists but belongs to someone else
+        # must look the same as one that does not exist at all, matching
+        # every other route in this file.
         self.client.force_authenticate(self.outsider)
         resp = self.client.post(
             "/api/v1/chat/meetings", {"event_id": str(self.event.uuid)}, format="json"
         )
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 404)
 
     def test_unknown_event_id_is_404(self):
         import uuid
@@ -108,6 +111,25 @@ class MeetingHostViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         uuids = {g["uuid"] for g in resp.data}
         self.assertEqual(uuids, {str(waiting.uuid)})
+
+    def test_lobby_excludes_waiting_guests_from_a_past_occurrence(self):
+        # Same meeting, different occurrence_start: a leftover WAITING row
+        # from a prior week's standup must not show up as if it were
+        # actionable today - admitting it would produce a guest
+        # resolve_guest can never let in.
+        current = self._guest(token_hash="l" * 64)
+        MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Stale",
+            state=MeetingGuest.State.WAITING,
+            occurrence_start=self.occurrence_start - timedelta(days=7),
+            token_hash="m" * 64,
+        )
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(f"/api/v1/chat/meetings/{self.meeting.uuid}/lobby")
+        self.assertEqual(resp.status_code, 200)
+        uuids = {g["uuid"] for g in resp.data}
+        self.assertEqual(uuids, {str(current.uuid)})
 
     def test_lobby_404_for_non_member(self):
         self.client.force_authenticate(self.outsider)
@@ -324,6 +346,30 @@ class MeetingPublicViewTests(TestCase):
         resp = self.client.get("/api/v1/chat/meet/does-not-exist")
         self.assertEqual(resp.status_code, 404)
 
+    def test_summary_reports_the_current_occurrence_not_the_series_start(self):
+        # Weekly series that started three weeks ago; today's instance is
+        # live. The series master start (event.start) is a different value
+        # from what is actually reachable right now, which is the whole
+        # reason current_occurrence exists - this endpoint must resolve it
+        # the same way the knock endpoint does, not read event.start raw.
+        now = timezone.now()
+        recurring_event = Event.objects.create(
+            calendar=Calendar.objects.create(name="Weekly", owner=self.owner),
+            owner=self.owner,
+            title="Standup",
+            start=now - timedelta(weeks=3, minutes=5),
+            end=now - timedelta(weeks=3) + timedelta(minutes=25),
+            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
+            recurrence_interval=1,
+        )
+        recurring_meeting = create_meeting(recurring_event, self.owner)
+        expected_start = current_occurrence(recurring_meeting, now=now)[0]
+        self.assertNotEqual(expected_start, recurring_event.start)
+
+        resp = self.client.get(f"/api/v1/chat/meet/{recurring_meeting.slug}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["start"], expected_start)
+
     def test_summary_identical_for_authenticated_and_anonymous(self):
         anon = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
         self.client.force_authenticate(self.viewer)
@@ -346,6 +392,25 @@ class MeetingPublicViewTests(TestCase):
         guest = MeetingGuest.objects.get(meeting=self.meeting)
         self.assertEqual(guest.state, MeetingGuest.State.WAITING)
         self.assertEqual(guest.occurrence_start, self.occurrence_start)
+
+    def test_knock_strips_bidi_override_from_display_name(self):
+        # A raw display name is shown verbatim to a host in the admit
+        # prompt. An unstripped right-to-left override could visually
+        # rewrite it - the obvious impersonation angle for a field nobody
+        # authenticates before submitting. Built from chr() rather than a
+        # literal so the override character in this test file is a code
+        # point, not an invisible byte in the source.
+        rtl_override = chr(0x202E)
+        name = f"Alice{rtl_override}ecilA"
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": name},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertNotIn(rtl_override, resp.data["display_name"])
+        guest = MeetingGuest.objects.get(meeting=self.meeting)
+        self.assertNotIn(rtl_override, guest.display_name)
 
     def test_knock_token_does_not_resolve_until_admitted(self):
         resp = self.client.post(
@@ -422,6 +487,55 @@ class MeetingPublicViewTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 429)
+
+    def test_rate_limit_survives_a_forged_x_forwarded_for(self):
+        # NUM_PROXIES is unset in tests (the default), so the header must be
+        # ignored entirely and REMOTE_ADDR - which the test client keeps
+        # fixed - used instead. A distinct forged value per request proves
+        # the limit isn't handing out a fresh bucket for each one.
+        for i in range(10):
+            resp = self.client.post(
+                f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+                {"display_name": "Ada"},
+                format="json",
+                HTTP_X_FORWARDED_FOR=f"203.0.113.{i}",
+            )
+            self.assertEqual(resp.status_code, 201)
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+            HTTP_X_FORWARDED_FOR="203.0.113.99",
+        )
+        self.assertEqual(resp.status_code, 429)
+
+    def test_stale_waiting_guest_from_past_occurrence_does_not_hold_a_slot(self):
+        # A WAITING row left over from a past occurrence of the same series
+        # (same meeting, different occurrence_start) must not count against
+        # the current occurrence's cap - nothing ever purges these rows, so
+        # an unscoped count would eventually block every future occurrence.
+        with override_settings(MEETING_MAX_WAITING_GUESTS=1):
+            MeetingGuest.objects.create(
+                meeting=self.meeting,
+                display_name="Stale",
+                occurrence_start=self.occurrence_start - timedelta(days=7),
+                token_hash="s" * 64,
+            )
+            resp = self.client.post(
+                f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+                {"display_name": "Ada"},
+                format="json",
+            )
+        self.assertEqual(resp.status_code, 201)
+
+    def test_knock_after_end_meeting_is_refused(self):
+        end_meeting(self.meeting)
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
 
     @override_settings(MEETING_MAX_WAITING_GUESTS=2)
     def test_knock_429_once_lobby_is_full_even_from_different_ips(self):

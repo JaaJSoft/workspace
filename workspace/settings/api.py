@@ -45,6 +45,11 @@ REST_FRAMEWORK = {
         # an exfiltration spread across several stolen session cookies.
         "vault.account.envelope.ip": "200/hour",
         "vault.account.rotate.user": "5/hour",
+        # Meeting module's public surface (no auth of any kind). v1 starting
+        # value; retune on telemetry. Defence-in-depth on top of the knock
+        # endpoint's own per-meeting counter, and the only limit on the
+        # summary endpoint.
+        "chat.meeting.public.ip": "30/min",
     },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",

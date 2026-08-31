@@ -210,6 +210,35 @@ class MeetingLifecycleTests(TestCase):
         end_meeting(self.meeting)
         self.assertIsNone(resolve_guest(token))
 
+    def test_ending_refuses_waiting_guests_of_this_occurrence(self):
+        # A WAITING row for the occurrence being closed must not survive as
+        # WAITING forever: the slug is stable for the whole series and
+        # nothing else ever purges these rows, so an ignored knock would
+        # otherwise count against every future occurrence's lobby cap.
+        waiting = MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Carol",
+            state=MeetingGuest.State.WAITING,
+            occurrence_start=self.occurrence_start,
+            token_hash="f" * 64,
+        )
+        end_meeting(self.meeting)
+        waiting.refresh_from_db()
+        self.assertEqual(waiting.state, MeetingGuest.State.REFUSED)
+
+    def test_ending_leaves_other_occurrences_waiting_guests_alone(self):
+        other_occurrence_start = self.occurrence_start - timedelta(days=7)
+        other = MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Dave",
+            state=MeetingGuest.State.WAITING,
+            occurrence_start=other_occurrence_start,
+            token_hash="g" * 64,
+        )
+        end_meeting(self.meeting)
+        other.refresh_from_db()
+        self.assertEqual(other.state, MeetingGuest.State.WAITING)
+
 
 class CreateMeetingRaceTests(TestCase):
     """Two hosts creating a meeting for the same event at once both pass the

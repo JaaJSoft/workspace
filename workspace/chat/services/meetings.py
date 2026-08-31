@@ -119,6 +119,7 @@ def set_locked(meeting, locked):
 
 def end_meeting(meeting, now=None):
     """Close the occurrence that is reachable right now. False when none is."""
+    from ..models import MeetingGuest
     from .calls import _end_call, get_active_call
 
     occurrence = current_occurrence(meeting, now=now)
@@ -127,6 +128,15 @@ def end_meeting(meeting, now=None):
     start, _end = occurrence
     meeting.closed_occurrence_start = start
     meeting.save(update_fields=["closed_occurrence_start"])
+
+    # A swept row can never become admittable again - resolve_guest denies
+    # any occurrence_start matching closed_occurrence_start - so this also
+    # reclaims the lobby slot it was holding rather than leaving it WAITING
+    # forever (the slug is stable for the whole series, and nothing else
+    # ever purges these rows).
+    MeetingGuest.objects.filter(
+        meeting=meeting, occurrence_start=start, state=MeetingGuest.State.WAITING
+    ).update(state=MeetingGuest.State.REFUSED)
 
     session = get_active_call(meeting.conversation_id)
     if session is not None:

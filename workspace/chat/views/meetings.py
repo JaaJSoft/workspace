@@ -1,4 +1,5 @@
 import logging
+import unicodedata
 
 from django.conf import settings
 from django.core.cache import cache
@@ -10,6 +11,7 @@ from rest_framework.views import APIView
 
 from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
+from workspace.common.request_ip import client_ip
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..services import meetings as meeting_service
@@ -17,8 +19,32 @@ from ..services.calls import get_active_call
 from ..services.conversations import get_active_membership
 from ..services.meeting_guests import issue_token
 from ..services.meeting_occurrences import current_occurrence
+from ..throttling import MeetingPublicIpThrottle
 
 logger = logging.getLogger(__name__)
+
+# Bidi formatting characters that can visually rewrite a display name (e.g.
+# a right-to-left override making "ecilA" render as "Alice"). Stripped in
+# DisplayNameSerializer below alongside plain control characters, since the
+# name is shown verbatim to a host in the admit prompt. Listed as code points
+# (not string literals) so no editor or diff tool can silently normalize or
+# hide the very characters this exists to catch.
+_BIDI_CONTROL_CODEPOINTS = frozenset(
+    {
+        0x200E,
+        0x200F,
+        0x202A,
+        0x202B,
+        0x202C,
+        0x202D,
+        0x202E,
+        0x2066,
+        0x2067,
+        0x2068,
+        0x2069,
+        0x061C,
+    }
+)
 
 
 # ===========================================================================
@@ -38,11 +64,23 @@ logger = logging.getLogger(__name__)
 class DisplayNameSerializer(serializers.Serializer):
     display_name = serializers.CharField(max_length=80, allow_blank=False)
 
+    def validate_display_name(self, value):
+        cleaned = "".join(
+            ch
+            for ch in value
+            if ord(ch) not in _BIDI_CONTROL_CODEPOINTS
+            and unicodedata.category(ch) != "Cc"
+        ).strip()
+        if not cleaned:
+            raise serializers.ValidationError("This field may not be blank.")
+        return cleaned
+
 
 @extend_schema(tags=["Chat - Meetings"])
 class MeetingSummaryView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [MeetingPublicIpThrottle]
 
     @extend_schema(summary="Public summary of a meeting, by slug")
     def get(self, request, slug):
@@ -56,12 +94,23 @@ class MeetingSummaryView(APIView):
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        # The series master start is only correct for a non-recurring event;
+        # a recurring meeting's stable link must report the occurrence that
+        # is actually reachable right now, the same resolution the knock
+        # endpoint below already relies on. No occurrence being reachable
+        # (nothing upcoming, or the host has ended the series) falls back to
+        # the master start rather than hiding the meeting: this endpoint
+        # discloses a meeting's existence and timing unconditionally, so
+        # there is nothing left to hide by omitting the start too.
+        occurrence = current_occurrence(meeting)
+        start = occurrence[0] if occurrence is not None else meeting.event.start
+
         session = get_active_call(meeting.conversation_id)
         locked = session.locked if session is not None else False
         return Response(
             {
                 "title": meeting.event.title,
-                "start": meeting.event.start,
+                "start": start,
                 "locked": locked,
             }
         )
@@ -71,12 +120,7 @@ class MeetingSummaryView(APIView):
 class MeetingKnockView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-
-    def _get_client_ip(self, request):
-        xff = request.META.get("HTTP_X_FORWARDED_FOR")
-        if xff:
-            return xff.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR", "")
+    throttle_classes = [MeetingPublicIpThrottle]
 
     @extend_schema(
         summary="Knock to join a meeting's lobby", request=DisplayNameSerializer
@@ -92,31 +136,50 @@ class MeetingKnockView(APIView):
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        # A link outside its window looks like nothing, rather than leaking
-        # that a meeting exists at all.
+        # This 404 is a UX signal ("nothing to knock into right now"), not a
+        # security control: MeetingSummaryView above discloses this same
+        # meeting's existence and timing regardless of the window, so hiding
+        # it here would buy nothing. A client just cannot tell "too early"
+        # from "bad link" apart, and does not need to.
         occurrence = current_occurrence(meeting)
         if occurrence is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         occurrence_start, _occurrence_end = occurrence
+
+        # The host ending this occurrence must close the door on new knocks
+        # too, not just on tokens already issued (that's resolve_guest's
+        # job) - current_occurrence deliberately does not consult this, so
+        # it is checked here explicitly.
+        if meeting.closed_occurrence_start == occurrence_start:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
         session = get_active_call(meeting.conversation_id)
         if session is not None and session.locked:
             return Response(status=status.HTTP_423_LOCKED)
 
         # Rate limit: max 10 knocks per IP per hour, mirroring
-        # SharedPollVoteView's counter shape.
-        ip = self._get_client_ip(request)
+        # SharedPollVoteView's counter shape. cache.add + cache.incr instead
+        # of get-then-set: two concurrent requests reading the same "9" and
+        # both writing "10" would let an 11th slip through under the naive
+        # version, since neither read ever saw the other's write.
+        ip = client_ip(request)
         rate_key = f"meeting_knock_rate:{meeting.uuid}:{ip}"
-        attempts = cache.get(rate_key, 0)
-        if attempts >= 10:
+        cache.add(rate_key, 0, 3600)
+        attempts = cache.incr(rate_key)
+        if attempts > 10:
             return Response(
                 {"detail": "Too many attempts. Please try again later."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
-        cache.set(rate_key, attempts + 1, 3600)
 
+        # Scoped to this occurrence: the slug is stable for the whole
+        # series, so an unscoped count would let WAITING rows from past
+        # occurrences - which nothing ever purges - permanently eat the cap
+        # for every occurrence after them.
         waiting_count = MeetingGuest.objects.filter(
-            meeting=meeting, state=MeetingGuest.State.WAITING
+            meeting=meeting,
+            state=MeetingGuest.State.WAITING,
+            occurrence_start=occurrence_start,
         ).count()
         if waiting_count >= settings.MEETING_MAX_WAITING_GUESTS:
             return Response(
@@ -138,7 +201,9 @@ class MeetingKnockView(APIView):
             token_hash=token_hash,
         )
         logger.info(
-            "Guest knocked on meeting %s from %s", scrub(str(meeting.uuid)), scrub(ip)
+            "Guest knocked on meeting %s from %s",
+            scrub(str(meeting.uuid)),
+            scrub(ip)[:64],
         )
         return Response(
             {
@@ -202,11 +267,13 @@ class MeetingCreateView(APIView):
         if event_uuid is None:
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        event = Event.objects.filter(uuid=event_uuid).first()
+        # 404 either way (unknown event, or one that exists but belongs to
+        # someone else): every other route in this file refuses to
+        # distinguish "not yours" from "does not exist", and a lone
+        # exception here would be a trap for whoever edits this file next.
+        event = Event.objects.filter(uuid=event_uuid, owner=request.user).first()
         if event is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if event.owner_id != request.user.id:
-            return Response(status=status.HTTP_403_FORBIDDEN)
 
         meeting = meeting_service.create_meeting(event, request.user)
         return Response(
@@ -231,8 +298,19 @@ class MeetingLobbyView(APIView):
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        # Scoped to the current occurrence, same reasoning as the knock
+        # cap above: an unscoped list would keep surfacing WAITING rows from
+        # past occurrences that nothing ever purges, and admitting one
+        # produces a guest resolve_guest will always reject.
+        occurrence = current_occurrence(meeting)
+        if occurrence is None:
+            return Response([])
+        occurrence_start, _occurrence_end = occurrence
+
         guests = MeetingGuest.objects.filter(
-            meeting=meeting, state=MeetingGuest.State.WAITING
+            meeting=meeting,
+            state=MeetingGuest.State.WAITING,
+            occurrence_start=occurrence_start,
         ).order_by("created_at")
         return Response(
             [

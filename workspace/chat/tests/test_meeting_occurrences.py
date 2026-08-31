@@ -145,7 +145,10 @@ class OccurrenceTests(TestCase):
             recurrence_interval=1,
         )
         original_start = m.event.start.replace(microsecond=0) + timedelta(weeks=3)
-        new_start = now + timedelta(hours=2)
+        # Non-zero microseconds on purpose: a materialized exception's start
+        # comes straight from a DateTimeField, never touched by rrule, so
+        # current_occurrence must truncate it itself or this test fails.
+        new_start = (now + timedelta(hours=2)).replace(microsecond=123456)
         new_end = new_start + timedelta(minutes=30)
         Event.objects.create(
             calendar=self.cal,
@@ -159,4 +162,7 @@ class OccurrenceTests(TestCase):
         # The ghost slot at the original time is closed.
         self.assertIsNone(current_occurrence(m, now=now))
         # The real, rescheduled slot is open, at its new time.
-        self.assertEqual(current_occurrence(m, now=new_start), (new_start, new_end))
+        self.assertEqual(
+            current_occurrence(m, now=new_start),
+            (new_start.replace(microsecond=0), new_end.replace(microsecond=0)),
+        )

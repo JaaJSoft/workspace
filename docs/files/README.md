@@ -143,10 +143,21 @@ what happens and the scanner card says what is wrong.
 ### Backfilling an existing library
 
 ```bash
-python manage.py scan_files              # queue every file with no verdict
+python manage.py scan_files              # queue every file that needs a scan
 python manage.py scan_files --rescan     # re-scan everything
 python manage.py scan_files --dry-run    # count without queueing
 ```
+
+"Needs a scan" is wider than "never scanned". Each verdict records the hash of
+the bytes it describes, so the default run also picks up a file whose content
+changed after its verdict was written. That normally cannot happen - saving new
+content queues a scan - but the queued scan can be lost if a worker is killed
+or the broker is flushed, and without this the file would keep a verdict about
+bytes it no longer holds until somebody ran `--rescan` over the whole library.
+
+The **Up to date** column on **Files > Malware scans** shows the same
+comparison per row. A verdict written before the hash was recorded reads as out
+of date, so the first default run after upgrading re-scans the library once.
 
 ### Verifying a real engine
 

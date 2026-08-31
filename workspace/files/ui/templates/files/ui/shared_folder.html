@@ -24,7 +24,9 @@
           </div>
           <div class="flex-1 min-w-0">
             <h1 class="text-xl font-bold text-white truncate">{{ file.name }}</h1>
-            <p class="text-white/70 text-sm">Shared folder</p>
+            <p class="text-white/70 text-sm">
+              Shared folder from {{ link.created_by.get_full_name|default:link.created_by.username }}
+            </p>
           </div>
         </div>
       </div>

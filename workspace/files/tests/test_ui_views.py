@@ -131,6 +131,7 @@ class SharedLinkPageTests(TestCase):
         resp = self.client.get(f"/files/shared/{link.token}")
         self.assertEqual(resp.status_code, 200)
         self.assertTemplateUsed(resp, "files/ui/shared_folder.html")
+        self.assertContains(resp, self.owner.username)
 
     def test_a_both_mode_folder_link_renders_the_browse_page_with_a_dropzone(self):
         folder = File.objects.create(
@@ -143,6 +144,7 @@ class SharedLinkPageTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTemplateUsed(resp, "files/ui/shared_folder.html")
         self.assertTemplateUsed(resp, "files/ui/partials/shared_dropzone.html")
+        self.assertContains(resp, self.owner.username)
 
     def test_a_drop_mode_folder_link_renders_the_drop_page_with_no_listing(self):
         folder = File.objects.create(
@@ -158,3 +160,19 @@ class SharedLinkPageTests(TestCase):
         # The write-only guarantee expressed at the template layer: the
         # folder-browse template (breadcrumbs, entry list) never renders.
         self.assertTemplateNotUsed(resp, "files/ui/shared_folder.html")
+        # A visitor must know who they're sending files to.
+        self.assertContains(resp, self.owner.username)
+
+    def test_a_password_protected_drop_link_hides_the_owner_until_verified(self):
+        folder = File.objects.create(
+            owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        link = FileShareLink.objects.create(
+            file=folder,
+            created_by=self.owner,
+            mode=FileShareLink.Mode.DROP,
+            password=make_password("secret"),
+        )
+        resp = self.client.get(f"/files/shared/{link.token}")
+        self.assertContains(resp, "Enter the password")
+        self.assertNotContains(resp, self.owner.username)

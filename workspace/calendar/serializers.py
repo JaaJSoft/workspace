@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from rest_framework import serializers
 
 from .models import Calendar, Event, EventMember
+from .services import recurrence_rule
 from .services.timezones import normalize_all_day
 
 
@@ -87,6 +88,8 @@ class EventSerializer(serializers.ModelSerializer):
     poll_id = serializers.SerializerMethodField()
     ical_uid = serializers.CharField(read_only=True)
     external_organizer = serializers.EmailField(read_only=True)
+    recurrence_summary = serializers.SerializerMethodField()
+    recurrence_simple = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -102,9 +105,9 @@ class EventSerializer(serializers.ModelSerializer):
             "location",
             "owner",
             "members",
-            "recurrence_frequency",
-            "recurrence_interval",
-            "recurrence_end",
+            "recurrence_rule",
+            "recurrence_summary",
+            "recurrence_simple",
             "is_recurring",
             "is_exception",
             "poll_id",
@@ -117,6 +120,24 @@ class EventSerializer(serializers.ModelSerializer):
     def get_poll_id(self, obj):
         poll_id = getattr(obj, "_poll_id", None)
         return str(poll_id) if poll_id else None
+
+    def get_recurrence_summary(self, obj):
+        return recurrence_rule.describe(obj.recurrence_rule)
+
+    def get_recurrence_simple(self, obj):
+        """Picker-shaped view, or None when the rule is beyond the picker.
+
+        None is the signal the web modal uses to go read-only; deriving it
+        server-side keeps a second RRULE parser out of the frontend.
+        """
+        simple = recurrence_rule.to_simple(obj.recurrence_rule)
+        if simple is None:
+            return None
+        return {
+            "frequency": simple["frequency"],
+            "interval": simple["interval"],
+            "until": simple["until"].isoformat() if simple["until"] else None,
+        }
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -195,6 +216,8 @@ class OccurrenceSerializer(serializers.Serializer):
     master_event_id = serializers.CharField()
     original_start = serializers.CharField(allow_null=True)
     recurrence_rule = serializers.CharField(allow_blank=True)
+    recurrence_summary = serializers.CharField(allow_blank=True)
+    recurrence_simple = serializers.DictField(allow_null=True)
 
 
 class EventRespondSerializer(serializers.Serializer):

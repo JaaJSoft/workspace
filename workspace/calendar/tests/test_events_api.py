@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.utils import timezone
 from django.utils import timezone as dj_timezone
@@ -12,6 +13,8 @@ from workspace.calendar.search import search_events
 from workspace.users.services.settings import set_setting
 
 from .test_calendar import CalendarTestMixin
+
+User = get_user_model()
 
 # ---------- Event CRUD ----------
 
@@ -640,3 +643,60 @@ class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
         event.refresh_from_db()
         self.assertTrue(event.is_recurring)
         self.assertEqual(event.timezone, "Europe/Paris")
+
+
+class RecurrenceRuleApiTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pass")
+        self.client.force_authenticate(self.user)
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+
+    def _create(self, rule):
+        return self.client.post(
+            "/api/v1/events",
+            {
+                "calendar_id": str(self.cal.uuid),
+                "title": "E",
+                "start": "2026-01-06T10:00:00Z",
+                "end": "2026-01-06T11:00:00Z",
+                "recurrence_rule": rule,
+            },
+            format="json",
+        )
+
+    def test_complex_rule_survives_a_round_trip_byte_for_byte(self):
+        rule = "RRULE:FREQ=MONTHLY;BYDAY=2TU"
+        response = self._create(rule)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["recurrence_rule"], rule)
+
+    def test_complex_rule_reports_itself_as_not_simple(self):
+        # recurrence_simple is null, which is what puts the web picker into
+        # read-only mode instead of letting it overwrite the rule.
+        response = self._create("RRULE:FREQ=MONTHLY;BYDAY=2TU")
+        self.assertIsNone(response.json()["recurrence_simple"])
+
+    def test_simple_rule_exposes_picker_fields_and_a_summary(self):
+        response = self._create("RRULE:FREQ=DAILY;INTERVAL=3")
+        body = response.json()
+        self.assertEqual(body["recurrence_simple"]["frequency"], "daily")
+        self.assertEqual(body["recurrence_simple"]["interval"], 3)
+        self.assertEqual(body["recurrence_summary"], "Every 3 days")
+
+    def test_recurring_occurrence_from_range_endpoint_exposes_summary_and_simple(self):
+        # The event modal reads a recurring occurrence's recurrence state off
+        # an occurrence dict (make_virtual_occurrence), not an Event through
+        # EventSerializer - both shapes must carry the same derived fields.
+        self._create("RRULE:FREQ=DAILY;INTERVAL=2")
+        resp = self.client.get(
+            "/api/v1/events",
+            {"start": "2026-01-06T00:00:00Z", "end": "2026-01-10T00:00:00Z"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        occurrences = [e for e in resp.json() if e["title"] == "E"]
+        self.assertEqual(len(occurrences), 2)
+        for occ in occurrences:
+            self.assertTrue(occ["is_recurring"])
+            self.assertEqual(occ["recurrence_summary"], "Every 2 days")
+            self.assertEqual(occ["recurrence_simple"]["frequency"], "daily")
+            self.assertEqual(occ["recurrence_simple"]["interval"], 2)

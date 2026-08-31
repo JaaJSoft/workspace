@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 from workspace.common.logging import scrub
 
+from .services import recurrence_rule as recurrence_rule_service
 from .services.recurrence_rule import (
     MAX_ITERATIONS,
     is_simple_stepping,
@@ -12,6 +13,8 @@ from .services.recurrence_rule import (
 from .services.timezones import event_timezone
 
 logger = logging.getLogger(__name__)
+
+_UNCACHED = object()
 
 _FIXED_STEP = {
     "daily": timedelta(days=1),
@@ -218,10 +221,30 @@ def _event_dt_str(dt, all_day):
     return dt.isoformat()
 
 
+def _simple_payload(rule_text):
+    """`to_simple` shaped for JSON, or None when the picker cannot edit it."""
+    simple = recurrence_rule_service.to_simple(rule_text)
+    if simple is None:
+        return None
+    return {
+        "frequency": simple["frequency"],
+        "interval": simple["interval"],
+        "until": simple["until"].isoformat() if simple["until"] else None,
+    }
+
+
 def make_virtual_occurrence(master, occ_start):
     """Build a dict for a virtual (non-materialized) occurrence."""
     duration = (master.end - master.start) if master.end else None
     occ_end = (occ_start + duration) if duration else None
+    rule = master.recurrence_rule
+
+    summary = getattr(master, "_cached_recurrence_summary", _UNCACHED)
+    if summary is _UNCACHED:
+        summary = recurrence_rule_service.describe(rule)
+    simple = getattr(master, "_cached_recurrence_simple", _UNCACHED)
+    if simple is _UNCACHED:
+        simple = _simple_payload(rule)
 
     return {
         "uuid": f"{master.uuid}:{occ_start.isoformat()}",
@@ -241,12 +264,15 @@ def make_virtual_occurrence(master, occ_start):
         "is_exception": False,
         "master_event_id": str(master.uuid),
         "original_start": occ_start.isoformat(),
-        "recurrence_rule": master.recurrence_rule,
+        "recurrence_rule": rule,
+        "recurrence_summary": summary,
+        "recurrence_simple": simple,
     }
 
 
 def make_exception_dict(exc):
     """Convert a materialized exception Event to the occurrence dict format."""
+    rule = exc.recurrence_parent.recurrence_rule if exc.recurrence_parent else ""
     return {
         "uuid": str(exc.uuid),
         "calendar_id": str(exc.calendar_id),
@@ -266,9 +292,9 @@ def make_exception_dict(exc):
         "original_start": exc.original_start.isoformat()
         if exc.original_start
         else None,
-        "recurrence_rule": exc.recurrence_parent.recurrence_rule
-        if exc.recurrence_parent
-        else "",
+        "recurrence_rule": rule,
+        "recurrence_summary": recurrence_rule_service.describe(rule),
+        "recurrence_simple": _simple_payload(rule),
     }
 
 
@@ -308,6 +334,13 @@ def expand_recurring_events(masters_qs, range_start, range_end):
     for master in masters_qs:
         # Pre-compute members list once per master (reused across all virtual occurrences)
         master._cached_member_dicts = [_member_dict(m) for m in master.members.all()]
+        # Same idea for the derived recurrence fields: describe()/to_simple()
+        # are pure functions of the rule text, so run them once per master
+        # rather than once per occurrence.
+        master._cached_recurrence_summary = recurrence_rule_service.describe(
+            master.recurrence_rule
+        )
+        master._cached_recurrence_simple = _simple_payload(master.recurrence_rule)
         for occ_start in occurrences_in_range(master, range_start, range_end):
             key = (master.uuid, occ_start)
             exc = exc_index.get(key)

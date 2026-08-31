@@ -442,7 +442,7 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
         }
         resp = self.client.post(self.url, data, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertIsNone(resp.data["recurrence_frequency"])
+        self.assertEqual(resp.data["recurrence_rule"], "")
         self.assertFalse(resp.data["is_recurring"])
 
 

@@ -1,10 +1,22 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.calendar.models import Calendar, Event
+from workspace.calendar.models import Calendar, Event, EventMember
 from workspace.chat.models import Conversation, Meeting, MeetingGuest
+from workspace.chat.services.meeting_guests import issue_token, resolve_guest
+from workspace.chat.services.meeting_occurrences import current_occurrence
+from workspace.chat.services.meetings import (
+    admit_guest,
+    create_meeting,
+    end_meeting,
+    refuse_guest,
+    remove_guest,
+)
 
 
 def make_event(owner, start=None):
@@ -98,3 +110,100 @@ class MeetingGuestModelTests(TestCase):
                 occurrence_start=timezone.now(),
                 token_hash="b" * 64,
             )
+
+
+class CreateMeetingTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.owner = User.objects.create_user(username="own", password="x")
+        self.invitee = User.objects.create_user(username="inv", password="x")
+        self.event = make_event(self.owner)
+        EventMember.objects.create(event=self.event, user=self.invitee)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_creates_a_dedicated_conversation_titled_after_the_event(self):
+        meeting = create_meeting(self.event, self.owner)
+        self.assertEqual(meeting.conversation.title, self.event.title)
+        self.assertEqual(meeting.conversation.kind, Conversation.Kind.GROUP)
+
+    def test_seeds_the_owner_and_the_event_members(self):
+        meeting = create_meeting(self.event, self.owner)
+        member_ids = set(meeting.conversation.members.values_list("user_id", flat=True))
+        self.assertEqual(member_ids, {self.owner.id, self.invitee.id})
+
+    def test_is_idempotent_per_event(self):
+        first = create_meeting(self.event, self.owner)
+        second = create_meeting(self.event, self.owner)
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(Conversation.objects.filter(meeting__isnull=False).count(), 1)
+
+
+class MeetingLifecycleTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.owner = User.objects.create_user(username="lo", password="x")
+        now = timezone.now()
+        self.event = make_event(self.owner, start=now - timedelta(minutes=5))
+        self.event.end = now + timedelta(minutes=25)
+        self.event.save(update_fields=["end"])
+        self.meeting = create_meeting(self.event, self.owner)
+        # occurrence_start must be current_occurrence()'s own output, not
+        # event.start verbatim - the two differ by microseconds (see
+        # meeting_occurrences.py's module docstring).
+        self.occurrence_start = current_occurrence(self.meeting, now=now)[0]
+        self.guest = MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Ada",
+            occurrence_start=self.occurrence_start,
+            token_hash="e" * 64,
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_admit_marks_the_guest_and_records_who(self):
+        admit_guest(self.guest, self.owner)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.state, MeetingGuest.State.ADMITTED)
+        self.assertEqual(self.guest.admitted_by, self.owner)
+        self.assertIsNotNone(self.guest.admitted_at)
+
+    def test_refuse_marks_the_guest(self):
+        refuse_guest(self.guest)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.state, MeetingGuest.State.REFUSED)
+
+    def test_remove_marks_the_guest_and_stamps_removed_at(self):
+        admit_guest(self.guest, self.owner)
+        remove_guest(self.guest)
+        self.guest.refresh_from_db()
+        self.assertEqual(self.guest.state, MeetingGuest.State.REMOVED)
+        self.assertIsNotNone(self.guest.removed_at)
+
+    def test_end_records_the_current_occurrence(self):
+        self.assertTrue(end_meeting(self.meeting))
+        self.meeting.refresh_from_db()
+        self.assertEqual(self.meeting.closed_occurrence_start, self.occurrence_start)
+
+    def test_end_is_a_noop_with_no_reachable_occurrence(self):
+        self.event.start = timezone.now() + timedelta(days=30)
+        self.event.end = self.event.start + timedelta(hours=1)
+        self.event.save(update_fields=["start", "end"])
+        self.assertFalse(end_meeting(self.meeting))
+
+    def test_ending_revokes_an_admitted_guest(self):
+        token, digest = issue_token()
+        guest = MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Bob",
+            state=MeetingGuest.State.ADMITTED,
+            occurrence_start=self.occurrence_start,
+            token_hash=digest,
+        )
+        self.assertIsNotNone(resolve_guest(token))
+        end_meeting(self.meeting)
+        self.assertIsNone(resolve_guest(token))

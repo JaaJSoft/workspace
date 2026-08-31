@@ -95,11 +95,15 @@ def _resolve_link(token):
     return link, None
 
 
-def _check_password_access(link, request):
-    """Check password access for a link. Returns error Response or None if OK."""
+def _verify_access_token(link, access_token):
+    """Check *access_token* against *link*'s password. Error Response or None.
+
+    Shared by the read path (token in the query string) and the write path
+    (token in a header) - the token source is the one line that genuinely
+    differs between the two callers.
+    """
     if not link.has_password:
         return None
-    access_token = request.query_params.get("access_token", "")
     if not access_token:
         return Response(
             {"detail": "Password required.", "has_password": True},
@@ -115,6 +119,11 @@ def _check_password_access(link, request):
             status=status.HTTP_403_FORBIDDEN,
         )
     return None
+
+
+def _check_password_access(link, request):
+    """Check password access for a link. Returns error Response or None if OK."""
+    return _verify_access_token(link, request.query_params.get("access_token", ""))
 
 
 def _record_access(link):
@@ -518,26 +527,10 @@ class SharedFolderUploadView(APIView):
 
     @staticmethod
     def _check_password(link, request):
-        if not link.has_password:
-            return None
         # The capability travels in a header, not the query string: this is
         # the one endpoint that writes, and a URL is copied into every access
         # log line, which redaction does not reach.
-        access_token = request.headers.get("X-Share-Access", "")
-        if not access_token:
-            return Response(
-                {"detail": "Password required.", "has_password": True},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        try:
-            if SIGNER.unsign(access_token, max_age=ACCESS_TOKEN_MAX_AGE) != link.token:
-                raise signing.BadSignature
-        except signing.BadSignature, signing.SignatureExpired:
-            return Response(
-                {"detail": "Invalid or expired access token."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        return None
+        return _verify_access_token(link, request.headers.get("X-Share-Access", ""))
 
     @staticmethod
     def _reserve_slot(link):

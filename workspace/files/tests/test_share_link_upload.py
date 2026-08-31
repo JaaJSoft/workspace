@@ -63,6 +63,10 @@ class ShareLinkUploadTests(APITestCase):
         )
         self.assertIsNone(event.actor)
         self.assertEqual(event.metadata["link_uuid"], str(self.link.uuid))
+        created_event = FileEvent.objects.get(
+            file=uploaded, action=FileEvent.Action.CREATED
+        )
+        self.assertIsNone(created_event.actor)
 
     def test_the_counter_advances(self):
         self.post()
@@ -81,6 +85,13 @@ class ShareLinkUploadTests(APITestCase):
         )
         resp = self.post(url=f"/api/v1/files/shared/{read_link.token}/upload")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_both_mode_link_accepts_uploads(self):
+        both_link = FileShareLink.objects.create(
+            file=self.root, created_by=self.owner, mode=FileShareLink.Mode.BOTH
+        )
+        resp = self.post(url=f"/api/v1/files/shared/{both_link.token}/upload")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_missing_expired_and_wrong_mode_are_indistinguishable(self):
         expired = FileShareLink.objects.create(
@@ -132,6 +143,19 @@ class ShareLinkUploadTests(APITestCase):
     def test_a_traversing_name_is_sanitised(self):
         self.post(name="../../etc/passwd")
         self.assertTrue(File.objects.filter(parent=self.root, name="passwd").exists())
+
+    def test_a_maximum_length_name_uploaded_twice_still_fits_the_column(self):
+        long_name = "a" * 251 + ".pdf"  # 255 characters, File.name's max_length
+        first = self.post(name=long_name)
+        second = self.post(name=long_name)
+        self.assertEqual(first.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(second.status_code, status.HTTP_204_NO_CONTENT)
+        names = list(
+            File.objects.filter(parent=self.root).values_list("name", flat=True)
+        )
+        self.assertEqual(len(names), 2)
+        for name in names:
+            self.assertLessEqual(len(name), 255)
 
     def test_a_body_without_a_file_part_is_a_400(self):
         resp = self.client.post(self.url, {}, format="multipart")
@@ -198,6 +222,38 @@ class ShareLinkUploadTests(APITestCase):
             HTTP_X_SHARE_ACCESS=SIGNER.sign(self.link.token),
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_a_query_parameter_access_token_does_not_unlock_the_write_path(self):
+        from django.contrib.auth.hashers import make_password
+
+        from workspace.files.views.share_links import SIGNER
+
+        self.link.password = make_password("secret")
+        self.link.save(update_fields=["password"])
+        resp = self.client.post(
+            f"{self.url}?access_token={SIGNER.sign(self.link.token)}",
+            {"file": part()},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_a_cross_link_access_token_does_not_unlock_the_write_path(self):
+        from django.contrib.auth.hashers import make_password
+
+        from workspace.files.views.share_links import SIGNER
+
+        self.link.password = make_password("secret")
+        self.link.save(update_fields=["password"])
+        other_link = FileShareLink.objects.create(
+            file=self.root, created_by=self.owner, mode=FileShareLink.Mode.DROP
+        )
+        resp = self.client.post(
+            self.url,
+            {"file": part()},
+            format="multipart",
+            HTTP_X_SHARE_ACCESS=SIGNER.sign(other_link.token),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_a_full_quota_refuses_with_413_and_creates_nothing(self):
         with patch(

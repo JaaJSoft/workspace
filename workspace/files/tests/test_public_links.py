@@ -3,7 +3,11 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 
 from workspace.files.models import File, FileShareLink
-from workspace.files.services.public_links import resolve_within, sanitize_upload_name
+from workspace.files.services.public_links import (
+    MAX_UPLOAD_NAME_LENGTH,
+    resolve_within,
+    sanitize_upload_name,
+)
 
 User = get_user_model()
 
@@ -110,7 +114,7 @@ class SanitizeUploadNameTests(TestCase):
 
     def test_a_long_name_is_clamped_keeping_the_extension(self):
         result = sanitize_upload_name("a" * 300 + ".pdf")
-        self.assertEqual(len(result), 255)
+        self.assertEqual(len(result), MAX_UPLOAD_NAME_LENGTH)
         self.assertTrue(result.endswith(".pdf"))
 
     def test_dots_only_falls_back(self):

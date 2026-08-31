@@ -19,6 +19,10 @@ MAX_NAME_LENGTH = 255
 FALLBACK_NAME = "upload"
 # Longer than this and the tail is not an extension worth preserving.
 _MAX_EXTENSION_LENGTH = 10
+# The longest suffix unique_copy_name can append on a name clash. Reserved so
+# a maximum-length upload still fits File.name after being renamed.
+_RENAME_SUFFIX_HEADROOM = len(" (Copy 9999)")
+MAX_UPLOAD_NAME_LENGTH = MAX_NAME_LENGTH - _RENAME_SUFFIX_HEADROOM
 
 
 def resolve_within(link, node_uuid):
@@ -54,21 +58,21 @@ def resolve_within(link, node_uuid):
 def sanitize_upload_name(raw):
     """A safe ``File.name`` for an anonymously uploaded blob.
 
-    Never empty, never a path, never longer than the column. Django's storage
-    layer would also refuse a traversal, but as a SuspiciousFileOperation 500
-    rather than a clean rejection, and the row's own name must not hold a
-    separator either.
+    Never empty, never a path, never long enough to overflow the column once
+    a name clash renames it. Django's storage layer would also refuse a
+    traversal, but as a SuspiciousFileOperation 500 rather than a clean
+    rejection, and the row's own name must not hold a separator either.
     """
     name = _CONTROL_CHARS.sub("", str(raw or "")).replace("\\", "/")
     name = posixpath.basename(name).strip().strip(".").strip()
     if not name:
         return FALLBACK_NAME
-    if len(name) > MAX_NAME_LENGTH:
+    if len(name) > MAX_UPLOAD_NAME_LENGTH:
         stem, dot, extension = name.rpartition(".")
         if dot and 0 < len(extension) <= _MAX_EXTENSION_LENGTH:
-            name = f"{stem[: MAX_NAME_LENGTH - len(extension) - 1]}.{extension}"
+            name = f"{stem[: MAX_UPLOAD_NAME_LENGTH - len(extension) - 1]}.{extension}"
         else:
-            name = name[:MAX_NAME_LENGTH]
+            name = name[:MAX_UPLOAD_NAME_LENGTH]
     return name or FALLBACK_NAME
 
 

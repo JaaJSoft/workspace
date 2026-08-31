@@ -131,7 +131,9 @@ class TextViewer(BaseViewer):
         try:
             file_handle = self.file.content.open("rb")
             content = file_handle.read().decode("utf-8")
-        except UnicodeDecodeError, AttributeError:
+        # An empty field and a vanished blob both mean "nothing to show" -
+        # render an empty editor rather than failing the page.
+        except UnicodeDecodeError, AttributeError, ValueError, FileNotFoundError:
             content = ""
         finally:
             if file_handle:

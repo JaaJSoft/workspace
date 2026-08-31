@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.test import SimpleTestCase
 
@@ -388,6 +389,12 @@ class ClientCorpusTests(SimpleTestCase):
         "RRULE:FREQ=MONTHLY;BYSETPOS=-1;BYDAY=MO,TU,WE,TH,FR",
         "RRULE:FREQ=DAILY;UNTIL=20261231T235959Z",
         "RRULE:FREQ=DAILY;INTERVAL=2\nRDATE:20260401T090000Z",
+        # RFC 5545 3.3.10 requires a DATE UNTIL when DTSTART is a DATE, so
+        # this is what every client emits for a bounded all-day series.
+        "RRULE:FREQ=DAILY;UNTIL=20261231",
+        "RRULE:FREQ=WEEKLY;COUNT=4\nRDATE;TZID=America/New_York:20260501T090000",
+        "RRULE:FREQ=WEEKLY;COUNT=4\nRDATE;VALUE=DATE:20260601",
+        "RRULE:FREQ=WEEKLY;COUNT=4\nRDATE;VALUE=PERIOD:20260401T090000Z/PT1H",
     ]
 
     def test_every_corpus_rule_parses(self):
@@ -482,3 +489,183 @@ class DeriveIntoDefaultsTests(SimpleTestCase):
         }
         rr.derive_into_defaults(defaults)
         self.assertTrue(defaults["is_recurring"])
+
+
+class LazyFailureTests(SimpleTestCase):
+    """A rruleset that only breaks on iteration must break inside parse().
+
+    ``rrulestr`` assembles RDATEs and the RRULE stream without checking they
+    are comparable, so the TypeError lands on the first iteration - in
+    whatever view happened to expand the series, long after every guard.
+    """
+
+    DTSTART = datetime(2026, 1, 6, 10, tzinfo=UTC)
+
+    def _instants(self, rule, cap=40):
+        out = []
+        for occurrence in rule:
+            out.append(occurrence.astimezone(UTC))
+            if len(out) >= cap:
+                break
+        return out
+
+    def test_floating_rdate_against_an_aware_series_is_iterable(self):
+        rule = rr.parse("RRULE:FREQ=WEEKLY\nRDATE:20260501T090000", self.DTSTART)
+        self.assertIsNotNone(rule)
+        self.assertIn(datetime(2026, 5, 1, 9, tzinfo=UTC), self._instants(rule))
+
+    def test_floating_rdate_is_read_as_wall_clock_in_the_series_zone(self):
+        # 09:00 Paris on 1 May is 07:00Z (CEST), not 09:00Z.
+        rule = rr.parse(
+            "RRULE:FREQ=WEEKLY\nRDATE:20260501T090000",
+            self.DTSTART,
+            ZoneInfo("Europe/Paris"),
+        )
+        self.assertIn(datetime(2026, 5, 1, 7, tzinfo=UTC), self._instants(rule))
+
+    def test_tzid_rdate_lands_at_the_zone_instant(self):
+        # 09:00 America/New_York on 1 May is 13:00Z (EDT).
+        rule = rr.parse(
+            "RRULE:FREQ=WEEKLY\nRDATE;TZID=America/New_York:20260501T090000",
+            self.DTSTART,
+        )
+        self.assertIn(datetime(2026, 5, 1, 13, tzinfo=UTC), self._instants(rule))
+
+    def test_date_valued_rdate_lands_at_midnight(self):
+        rule = rr.parse("RRULE:FREQ=WEEKLY\nRDATE;VALUE=DATE:20260601", self.DTSTART)
+        self.assertIn(datetime(2026, 6, 1, 0, tzinfo=UTC), self._instants(rule, 60))
+
+    def test_period_rdate_recurs_at_its_start(self):
+        rule = rr.parse(
+            "RRULE:FREQ=WEEKLY\nRDATE;VALUE=PERIOD:20260401T090000Z/PT1H",
+            self.DTSTART,
+        )
+        self.assertIn(datetime(2026, 4, 1, 9, tzinfo=UTC), self._instants(rule))
+
+    def test_unreadable_date_value_degrades_to_no_series(self):
+        with self.assertLogs(
+            "workspace.calendar.services.recurrence_rule", "WARNING"
+        ) as logs:
+            self.assertIsNone(
+                rr.parse("RRULE:FREQ=WEEKLY\nRDATE:not-a-date", self.DTSTART)
+            )
+        self.assertIn("Unparseable recurrence rule", logs.output[0])
+
+
+class DateOnlyUntilTests(SimpleTestCase):
+    """dateutil rejects any UNTIL that is not a UTC instant under an aware
+    dtstart, which is exactly the form RFC 5545 mandates for an all-day
+    series. The rewrite happens on the parser's input only."""
+
+    DTSTART = datetime(2026, 1, 6, 10, tzinfo=UTC)
+
+    def test_date_only_until_parses(self):
+        rule = rr.parse("RRULE:FREQ=DAILY;UNTIL=20260110", self.DTSTART)
+        self.assertIsNotNone(rule)
+        self.assertEqual(list(rule)[-1], datetime(2026, 1, 10, 10, tzinfo=UTC))
+
+    def test_date_only_until_covers_the_whole_final_day(self):
+        # An occurrence later in the day than midnight still belongs to the
+        # series; a midnight reading would silently drop it.
+        rule = rr.parse(
+            "RRULE:FREQ=HOURLY;UNTIL=20260107",
+            datetime(2026, 1, 7, 10, tzinfo=UTC),
+        )
+        self.assertEqual(len(list(rule)), 14)
+
+    def test_naive_until_is_read_in_the_series_zone(self):
+        rule = rr.parse(
+            "RRULE:FREQ=DAILY;UNTIL=20260110T090000",
+            datetime(2026, 1, 6, 8, tzinfo=UTC),
+            ZoneInfo("Europe/Paris"),
+        )
+        last = list(rule)[-1].astimezone(UTC)
+        self.assertEqual(last, datetime(2026, 1, 10, 8, tzinfo=UTC))
+
+    def test_apply_rule_bounds_a_date_only_until_series(self):
+        event = _StubEvent(
+            start=datetime(2026, 1, 6, 10, tzinfo=UTC),
+            end=datetime(2026, 1, 6, 11, tzinfo=UTC),
+        )
+        rr.apply_rule(event, "RRULE:FREQ=DAILY;UNTIL=20260110")
+        self.assertTrue(event.is_recurring)
+        self.assertEqual(event.recurrence_until, datetime(2026, 1, 10, 11, tzinfo=UTC))
+        # The stored text keeps the client's bytes.
+        self.assertEqual(event.recurrence_rule, "RRULE:FREQ=DAILY;UNTIL=20260110")
+
+
+class LooseBoundTests(SimpleTestCase):
+    """When exact iteration is abandoned the fallback bound must never sit
+    before the series' true last occurrence - erring low prunes live events
+    out of a window silently."""
+
+    DTSTART = datetime(2026, 1, 6, 10, tzinfo=UTC)
+
+    def test_rdate_later_than_every_until_is_part_of_the_bound(self):
+        bound = rr.last_occurrence_end(
+            "RRULE:FREQ=SECONDLY;UNTIL=20260201T000000Z\nRDATE:20990101T090000Z",
+            self.DTSTART,
+        )
+        self.assertEqual(bound, datetime(2099, 1, 1, 9, tzinfo=UTC))
+
+    def test_date_only_until_bound_reaches_the_end_of_that_day(self):
+        bound = rr.last_occurrence_end(
+            "RRULE:FREQ=SECONDLY;UNTIL=20260201", self.DTSTART
+        )
+        self.assertEqual(bound, datetime(2026, 2, 1, 23, 59, 59, tzinfo=UTC))
+
+    def test_unreadable_rdate_makes_the_series_unbounded(self):
+        # None never prunes, so it is the safe answer when the bound cannot
+        # be established.
+        self.assertIsNone(
+            rr._loose_bound(
+                "RRULE:FREQ=SECONDLY;UNTIL=20260201T000000Z\nRDATE:nonsense", None
+            )
+        )
+
+
+class TruncateBeforePeriodTests(SimpleTestCase):
+    def test_period_rdate_is_compared_on_its_start(self):
+        result = rr.truncate_before(
+            "RRULE:FREQ=DAILY\n"
+            "RDATE;VALUE=PERIOD:20260401T090000Z/PT1H,20260501T090000Z/PT1H",
+            datetime(2026, 4, 15, tzinfo=UTC),
+        )
+        self.assertIn("20260401T090000Z/PT1H", result)
+        self.assertNotIn("20260501", result)
+
+    def test_unreadable_value_is_kept_rather_than_deleted(self):
+        result = rr.truncate_before(
+            "RRULE:FREQ=DAILY\nRDATE:nonsense",
+            datetime(2026, 4, 15, tzinfo=UTC),
+        )
+        self.assertIn("RDATE:nonsense", result)
+
+
+class UnparseableRuleWriteTests(SimpleTestCase):
+    """Text nothing can parse is not a series.
+
+    Marking it one leaves a master with recurrence_until=None, which no window
+    query can prune: it is loaded, expanded and logged on every calendar read
+    of every window, for every user who can see it.
+    """
+
+    def test_apply_rule_refuses_to_call_garbage_a_series(self):
+        event = _StubEvent(start=datetime(2026, 1, 6, 10, tzinfo=UTC))
+        with self.assertLogs("workspace.calendar.services.recurrence_rule", "WARNING"):
+            rr.apply_rule(event, "total garbage")
+        self.assertEqual(event.recurrence_rule, "total garbage")
+        self.assertFalse(event.is_recurring)
+        self.assertIsNone(event.recurrence_until)
+
+    def test_derive_into_defaults_refuses_the_same(self):
+        defaults = {
+            "recurrence_rule": "total garbage",
+            "start": datetime(2026, 1, 6, 10, tzinfo=UTC),
+            "end": None,
+            "timezone": "",
+        }
+        with self.assertLogs("workspace.calendar.services.recurrence_rule", "WARNING"):
+            rr.derive_into_defaults(defaults)
+        self.assertFalse(defaults["is_recurring"])
+        self.assertIsNone(defaults["recurrence_until"])

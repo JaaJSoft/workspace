@@ -12,7 +12,7 @@ assignment to them elsewhere.
 
 import logging
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil.rrule import rrulestr
@@ -155,22 +155,115 @@ def _zone_from_name(name):
         return None
 
 
+def _until_instant(value, zone):
+    """UTC instant for an ``UNTIL`` literal written in any RFC 5545 form.
+
+    A trailing ``Z`` is already an instant. A naive DATE-TIME is a wall-clock
+    time in *zone*. A bare DATE covers the whole day (RFC 5545 3.3.10 requires
+    that form when DTSTART is a DATE, which is what every client emits for a
+    bounded all-day series), so it resolves to the last second of that day -
+    the inclusive reading, and the only one that cannot place the bound before
+    the series' true final occurrence.
+    """
+    if value.endswith("Z"):
+        return _parse_ical_utc(value)
+    if "T" in value:
+        return _parse_ical_utc(value, zone).astimezone(UTC)
+    day = datetime.strptime(value, "%Y%m%d").date()
+    return datetime.combine(day, time(23, 59, 59), tzinfo=zone).astimezone(UTC)
+
+
+def _date_list_instants(body, params, zone):
+    """Aware instants for one RDATE/EXDATE property body.
+
+    Covers the three value forms clients emit: a UTC DATE-TIME, a wall-clock
+    DATE-TIME under a TZID parameter (or floating, resolved in *zone*), a bare
+    DATE under ``VALUE=DATE``, and a PERIOD, which is anchored on its start.
+    """
+    value_zone = _zone_or_utc(params["TZID"]) if "TZID" in params else zone
+    instants = []
+    for raw in body.split(","):
+        text = raw.strip().split(";")[-1]
+        if not text:
+            continue
+        # A PERIOD ("<start>/<end>" or "<start>/<duration>") recurs at its
+        # start; the length is the occurrence's, not the series'.
+        instants.append(_parse_ical_utc(text.split("/", 1)[0], value_zone))
+    return instants
+
+
+def _normalized_rrule_body(body, zone):
+    """An RRULE body with its UNTIL rewritten as a UTC DATE-TIME.
+
+    dateutil refuses any UNTIL that is not a UTC instant once dtstart is
+    aware, which would reject the bounded all-day rules Google and Thunderbird
+    emit. Only the parser's input is rewritten; the stored column keeps the
+    client's bytes.
+    """
+    tokens = []
+    for token in body.split(";"):
+        key, sep, value = token.partition("=")
+        if sep and key.upper() == "UNTIL":
+            token = f"{key}={_ical_utc(_until_instant(value, zone))}"
+        tokens.append(token)
+    return ";".join(tokens)
+
+
+def _normalize_for_parse(rule_text, zone):
+    """Rewrite *rule_text* into the narrow dialect dateutil actually accepts.
+
+    dateutil's ``rrulestr`` rejects every RDATE property parameter but
+    ``VALUE=DATE-TIME``, and parses the remaining values with no timezone at
+    all, so a floating RDATE comes back naive and blows up on the first
+    comparison with an aware RRULE stream. Resolving every date value to a UTC
+    instant here keeps the stored text verbatim while handing the engine
+    something it can iterate.
+
+    Raises ValueError on a value it cannot read, which ``parse`` turns into
+    "not a series" plus a scrubbed log line - a rule silently missing half its
+    dates would be worse than one that visibly does not recur.
+    """
+    out = []
+    for line in _rule_lines(rule_text):
+        name, _, body = line.partition(":")
+        prop, params = _name_and_params(name)
+        if prop in ("RRULE", "EXRULE"):
+            out.append(f"{prop}:{_normalized_rrule_body(body, zone)}")
+        elif prop in ("RDATE", "EXDATE"):
+            instants = _date_list_instants(body, params, zone)
+            if instants:
+                out.append(f"{prop}:" + ",".join(_ical_utc(dt) for dt in instants))
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
 def parse(rule_text, dtstart, tz=None):
     """Return a dateutil rruleset for *rule_text* anchored at *dtstart*.
 
     Returns None for a blank or unparseable rule. Callers treat None as "not a
     series": a malformed rule stored years ago must never 500 a calendar view.
+
+    ``rrulestr`` builds an rruleset without checking that its parts are
+    comparable, so a set that raises does so on the first iteration - far from
+    here, inside whatever view happened to expand it. One occurrence is pulled
+    under the guard to move that failure back to where it can still degrade.
     """
     if not rule_text:
         return None
     anchor = dtstart.astimezone(tz) if tz else dtstart
+    zone = anchor.tzinfo or UTC
     try:
-        return rrulestr(rule_text, dtstart=anchor, forceset=True)
-    except (ValueError, TypeError, KeyError) as exc:
+        rule = rrulestr(
+            _normalize_for_parse(rule_text, zone), dtstart=anchor, forceset=True
+        )
+        next(iter(rule), None)
+    except (ValueError, TypeError, KeyError, OverflowError) as exc:
         logger.warning(
             "Unparseable recurrence rule %s: %s", scrub(rule_text), scrub(str(exc))
         )
         return None
+    return rule
 
 
 def _is_bounded(rule_text):
@@ -186,7 +279,26 @@ def _is_bounded(rule_text):
     return all("UNTIL=" in ln.upper() or "COUNT=" in ln.upper() for ln in rules)
 
 
-def _loose_bound(rule_text, duration):
+def _rdate_instants(rule_text, zone):
+    """Every RDATE instant in *rule_text*, or None if any of them is unreadable.
+
+    An RDATE sits outside the RRULE stream, so it is free to fall after every
+    UNTIL in the text - which makes it part of the bound rather than noise.
+    """
+    instants = []
+    for line in _rule_lines(rule_text):
+        name, _, body = line.partition(":")
+        prop, params = _name_and_params(name)
+        if prop != "RDATE":
+            continue
+        try:
+            instants.extend(_date_list_instants(body, params, zone))
+        except ValueError:
+            return None
+    return instants
+
+
+def _loose_bound(rule_text, duration, zone=UTC):
     """Loosest safe bound when exact iteration was abandoned.
 
     Only safe when every RRULE line carries a literal UNTIL: a COUNT-only
@@ -196,14 +308,25 @@ def _loose_bound(rule_text, duration):
     lines is reported as infinite (unbounded), not the max of the UNTIL
     literals present. That costs prune tightness, never correctness: it can
     only make the bound looser than the truth, never tighter.
+
+    RDATEs are folded in the same way: one later than every UNTIL is the true
+    last occurrence, and a bound that ignored it would sit *before* the end of
+    the series - the one direction that silently deletes live events from a
+    calendar view.
     """
     rules = [ln for ln in _rule_lines(rule_text) if ln.upper().startswith("RRULE")]
     if not all("UNTIL=" in ln.upper() for ln in rules):
         return None
-    untils = _UNTIL_RE.findall(rule_text.upper())
-    if not untils:
+    candidates = [
+        _until_instant(value, zone) for value in _UNTIL_RE.findall(rule_text.upper())
+    ]
+    rdates = _rdate_instants(rule_text, zone)
+    if rdates is None:
         return None
-    latest = max(_parse_ical_utc(value) for value in untils)
+    candidates.extend(dt.astimezone(UTC) for dt in rdates)
+    if not candidates:
+        return None
+    latest = max(candidates)
     return latest + duration if duration else latest
 
 
@@ -219,11 +342,20 @@ def last_occurrence_end(rule_text, dtstart, duration=None, tz=None):
     rule = parse(rule_text, dtstart, tz)
     if rule is None:
         return None
+    anchor = dtstart.astimezone(tz) if tz else dtstart
+    zone = anchor.tzinfo or UTC
     last = None
-    for index, occurrence in enumerate(rule):
-        if index >= MAX_ITERATIONS:
-            return _loose_bound(rule_text, duration)
-        last = occurrence
+    try:
+        for index, occurrence in enumerate(rule):
+            if index >= MAX_ITERATIONS:
+                return _loose_bound(rule_text, duration, zone)
+            last = occurrence
+    except (ValueError, TypeError, OverflowError) as exc:
+        # No bound is the safe answer: recurrence_until=None never prunes.
+        logger.warning(
+            "Unwalkable recurrence rule %s: %s", scrub(rule_text), scrub(str(exc))
+        )
+        return None
     if last is None:
         return None
     if duration:
@@ -495,11 +627,21 @@ def truncate_before(rule_text, instant):
             # with no trailing Z; resolve them in that zone before comparing
             # to *instant*, which is a UTC-anchored cutoff.
             zone = _zone_or_utc(params.get("TZID"))
-            surviving = [
-                value
-                for value in body.split(",")
-                if _parse_ical_utc(value.split(";")[-1], zone) < instant
-            ]
+            surviving = []
+            for value in body.split(","):
+                text = value.strip().split(";")[-1]
+                try:
+                    # A PERIOD value ("<start>/<end>") is compared on its
+                    # start; anything else is a bare DATE or DATE-TIME.
+                    occurrence = _parse_ical_utc(text.split("/", 1)[0], zone)
+                except ValueError:
+                    # Unreadable here means unreadable to parse() too, so the
+                    # value fires nothing. Keep it rather than silently
+                    # deleting a date the user wrote.
+                    surviving.append(value)
+                    continue
+                if occurrence < instant:
+                    surviving.append(value)
             if surviving:
                 out.append(f"{name}:" + ",".join(surviving))
         else:
@@ -555,14 +697,17 @@ def apply_rule(event, rule_text):
     Does not save - the caller owns the transaction.
     """
     event.recurrence_rule = rule_text or ""
-    event.is_recurring = bool(event.recurrence_rule)
+    zone = _zone_from_name(event.timezone)
+    # Text nothing can parse is not a series: marking it one leaves a master
+    # with no bound, which no window query can ever prune, on every read.
+    event.is_recurring = parse(event.recurrence_rule, event.start, zone) is not None
     if event.is_recurring:
         duration = (event.end - event.start) if event.end else None
         event.recurrence_until = last_occurrence_end(
             event.recurrence_rule,
             event.start,
             duration,
-            _zone_from_name(event.timezone),
+            zone,
         )
     else:
         event.recurrence_until = None
@@ -577,10 +722,11 @@ def derive_into_defaults(defaults):
     assigned in this module.
     """
     rule = defaults.get("recurrence_rule", "")
-    defaults["is_recurring"] = bool(rule)
     start, end = defaults.get("start"), defaults.get("end")
     duration = (end - start) if start and end else None
     zone = _zone_from_name(defaults.get("timezone"))
+    recurring = bool(start) and parse(rule, start, zone) is not None
+    defaults["is_recurring"] = recurring
     defaults["recurrence_until"] = (
-        last_occurrence_end(rule, start, duration, zone) if rule and start else None
+        last_occurrence_end(rule, start, duration, zone) if recurring else None
     )

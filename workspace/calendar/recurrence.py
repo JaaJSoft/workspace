@@ -125,6 +125,25 @@ def _iteration_cap_warning(master, phase):
     )
 
 
+def _guarded(rule, master):
+    """Iterate *rule*, stopping instead of raising on an unwalkable set.
+
+    ``parse`` already pulls one occurrence so a set whose parts cannot be
+    compared fails where it can degrade, but the comparison that raises is
+    between whichever two candidates the merge happens to reach, so nothing
+    guarantees the first one hits it. This is the second net: a rule that
+    blows up half-way through truncates the series rather than the request.
+    """
+    try:
+        yield from rule
+    except (TypeError, ValueError, OverflowError) as exc:
+        logger.warning(
+            "Recurrence rule became unwalkable, truncating: %s (%s)",
+            scrub(master.recurrence_rule),
+            scrub(str(exc)),
+        )
+
+
 def occurrences_in_range(master, range_start, range_end):
     """Yield occurrence start datetimes (aware UTC) overlapping the window.
 
@@ -151,7 +170,7 @@ def occurrences_in_range(master, range_start, range_end):
 
     skipped = 0
     considered = 0
-    for dt in rule:
+    for dt in _guarded(rule, master):
         if dt < window_floor:
             skipped += 1
             if skipped > MAX_ITERATIONS:
@@ -178,18 +197,32 @@ def next_occurrences_after(master, after, limit=None):
     If `limit` is None, yields all remaining occurrences bounded only by the
     series' own end (its UNTIL/COUNT, if any) - callers that need to filter
     the stream (e.g. skipping exceptions) can take as many as they need
-    rather than being capped up front. Either way, stops after MAX_ITERATIONS
-    candidates: an unbounded feed-supplied rule with no caller-side limit
-    would otherwise be walked forever. Unlike ``occurrences_in_range``, one
-    budget is enough here - ``rule.xafter`` already does its own skipping to
-    *after* inside dateutil, before anything reaches this loop.
+    rather than being capped up front.
+
+    Two MAX_ITERATIONS budgets, for the same reason ``occurrences_in_range``
+    has two. Delegating the skip to ``rule.xafter`` looks cheaper and is the
+    trap: dateutil's own walk to *after* is unbounded, so a dense series the
+    anchor cannot reach (zoned SECONDLY, MINUTELY, HOURLY at INTERVAL > 1)
+    burns seconds per day of series age before the first yield - and a budget
+    counting yielded items never fires, because nothing is ever yielded.
     """
     tz = event_timezone(master)
     rule = parse(master.recurrence_rule, _anchor(master, after, tz), tz)
     if rule is None:
         return
-    for index, dt in enumerate(rule.xafter(after, count=limit, inc=True)):
-        if index >= MAX_ITERATIONS:
+    skipped = 0
+    yielded = 0
+    for dt in _guarded(rule, master):
+        if dt < after:
+            skipped += 1
+            if skipped > MAX_ITERATIONS:
+                _iteration_cap_warning(master, "skipping to the window")
+                return
+            continue
+        if limit is not None and yielded >= limit:
+            return
+        yielded += 1
+        if yielded > MAX_ITERATIONS:
             _iteration_cap_warning(master, "expanding the window")
             return
         yield dt.astimezone(UTC) if tz else dt

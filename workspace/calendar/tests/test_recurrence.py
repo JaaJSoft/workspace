@@ -1,5 +1,6 @@
 import time
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
@@ -867,8 +868,7 @@ class WallClockExpansionTests(TestCase):
         agree; that is ordinary modular arithmetic, not a bug). The only
         valid ground truth is the SAME master's own unmodified walk, so this
         compares occurrences_in_range's anchored result against a direct
-        parse() call seeded with the master's true (unmodified) start,
-        across a window straddling the spring-forward transition."""
+        parse() call seeded with the master's true (unmodified) start."""
         from workspace.calendar.services.recurrence_rule import parse
 
         old = self._master(
@@ -931,3 +931,122 @@ class WallClockExpansionTests(TestCase):
         self.assertEqual(len(occs), 1)
         self.assertTrue(occs[0]["is_exception"])
         self.assertEqual(occs[0]["title"], "Standup (moved)")
+
+
+class UnwalkableRuleTests(TestCase):
+    """Iteration is where a broken rruleset actually fails.
+
+    ``rrulestr`` builds a set out of parts it never checks are comparable, so
+    the TypeError lands on whichever pair the merge reaches first - which can
+    be well past the first occurrence ``parse`` pulls. Both expansion entry
+    points truncate the series rather than the request.
+    """
+
+    class _Exploding:
+        """An rruleset stand-in that yields once, then cannot compare."""
+
+        def __init__(self, first):
+            self.first = first
+
+        def __iter__(self):
+            yield self.first
+            raise TypeError("can't compare offset-naive and offset-aware datetimes")
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="boom", password="pass")
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+        self.now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        self.master = Event(
+            calendar=self.cal,
+            owner=self.user,
+            title="Recurring",
+            start=self.now,
+        )
+        apply_rule(self.master, "RRULE:FREQ=DAILY")
+        self.master.save()
+
+    def test_occurrences_in_range_truncates_instead_of_raising(self):
+        with patch(
+            "workspace.calendar.recurrence.parse",
+            return_value=self._Exploding(self.now),
+        ):
+            with self.assertLogs("workspace.calendar.recurrence", "WARNING") as logs:
+                occs = list(
+                    occurrences_in_range(
+                        self.master, self.now, self.now + timedelta(days=5)
+                    )
+                )
+        self.assertEqual(occs, [self.now])
+        self.assertIn("unwalkable", logs.output[0])
+
+    def test_next_occurrences_after_truncates_instead_of_raising(self):
+        with patch(
+            "workspace.calendar.recurrence.parse",
+            return_value=self._Exploding(self.now),
+        ):
+            with self.assertLogs("workspace.calendar.recurrence", "WARNING"):
+                occs = list(next_occurrences_after(self.master, self.now, limit=5))
+        self.assertEqual(occs, [self.now])
+
+    def test_floating_rdate_master_expands_instead_of_raising(self):
+        # An unbounded RRULE plus a naive RDATE: the write succeeds because
+        # the unbounded rule short-circuits the bound search, so the row
+        # reaches every window query in the app.
+        master = Event(
+            calendar=self.cal,
+            owner=self.user,
+            title="Floating",
+            start=datetime(2026, 1, 6, 10, tzinfo=UTC),
+        )
+        apply_rule(master, "RRULE:FREQ=WEEKLY\nRDATE:20260501T090000")
+        master.save()
+        self.assertTrue(master.is_recurring)
+        occs = list(
+            occurrences_in_range(
+                master,
+                datetime(2026, 4, 28, tzinfo=UTC),
+                datetime(2026, 5, 5, tzinfo=UTC),
+            )
+        )
+        self.assertIn(datetime(2026, 5, 1, 9, tzinfo=UTC), occs)
+
+
+class NextOccurrencesBudgetTests(TestCase):
+    """``next_occurrences_after`` needs a pre-window budget of its own.
+
+    Delegating the skip to ``rule.xafter`` hides an unbounded walk inside
+    dateutil: a budget that counts yielded items never fires, because a dense
+    old series yields nothing for as long as it takes to reach the window.
+    ``get_upcoming_page`` calls this once per master with no limit, so one
+    such row wedges an agenda request indefinitely.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="dense", password="pass")
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+
+    def test_dense_old_zoned_master_stops_at_the_budget(self):
+        master = Event(
+            calendar=self.cal,
+            owner=self.user,
+            title="Every second",
+            start=datetime(2024, 1, 1, 9, tzinfo=UTC),
+            timezone="Europe/Paris",
+        )
+        apply_rule(master, "RRULE:FREQ=SECONDLY")
+        master.save()
+
+        started = time.monotonic()
+        with self.assertLogs("workspace.calendar.recurrence", "WARNING") as logs:
+            occs = list(
+                next_occurrences_after(
+                    master, datetime(2026, 1, 1, tzinfo=UTC), limit=5
+                )
+            )
+        elapsed = time.monotonic() - started
+
+        # Structural: the walk stops at the pre-window budget rather than
+        # grinding through two years of seconds.
+        self.assertEqual(occs, [])
+        self.assertIn("skipping to the window", logs.output[0])
+        self.assertLess(elapsed, 30)

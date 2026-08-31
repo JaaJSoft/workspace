@@ -163,7 +163,15 @@ class SharedLinkPageTests(TestCase):
         # A visitor must know who they're sending files to.
         self.assertContains(resp, self.owner.username)
 
-    def test_a_password_protected_drop_link_hides_the_owner_until_verified(self):
+    def test_a_password_protected_drop_link_page_hides_the_owner_until_verified(self):
+        """The rendered page withholds the owner's name pre-verification.
+
+        This is a page-rendering guarantee only: the meta endpoint
+        (``GET /api/v1/files/shared/{token}``) deliberately still returns
+        ``created_by_name`` with no password check at all, by pre-existing
+        design. The owner's name is not a secret; it is just not painted on
+        the password screen.
+        """
         folder = File.objects.create(
             owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
         )

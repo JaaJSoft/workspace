@@ -44,10 +44,6 @@ Projects grows up: work in sprints, group tasks under epics, break them into che
 
 - The "AI is typing" bubble no longer stays stuck on screen after you leave the app and come back once the reply has landed.
 
-### Mail
-
-- Merge duplicate folders: when your provider and your mail client each created their own Trash, Sent or Junk, tell the app they are the same folder. The one you keep shows all the mail, carries all the counts, and receives everything the app files from then on. Undo it any time from the account menu.
-
 ### Sign-in
 
 - Groups from your identity provider can be mirrored into the workspace at login, so a team arrives with the right access to shared folders, conversations and projects on its first sign-in. Off by default, with an optional allowlist of which groups to mirror.

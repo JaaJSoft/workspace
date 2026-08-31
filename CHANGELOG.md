@@ -1,16 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Files
-
-- Share a whole folder with a public link, not just a single file. Recipients
-  can browse it and download what is inside.
-- New upload links: send someone a link and they can add files to a folder
-  without an account and without seeing what is already there. Set a password,
-  an expiry date, a maximum file size and a maximum number of files, and get a
-  notification when files arrive.
-
 ## 0.38.0 - Sprints, Office & Voice
 
 ### Highlights
@@ -38,6 +27,12 @@ Projects grows up: work in sprints, group tasks under epics, break them into che
 ### Files
 
 - Edit office documents in the browser. Word, Excel and PowerPoint files - and their OpenDocument equivalents - now open and save directly in the file viewer when your instance is set up with an editor. Without one, office files keep their download-only behavior.
+- Share a whole folder with a public link, not just a single file. Recipients
+  can browse it and download what is inside.
+- New upload links: send someone a link and they can add files to a folder
+  without an account and without seeing what is already there. Set a password,
+  an expiry date, a maximum file size and a maximum number of files, and get a
+  notification when files arrive.
 
 ### AI Assistants
 

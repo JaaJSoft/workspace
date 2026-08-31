@@ -1,8 +1,11 @@
 """E2E: a signed-out visitor drops a file into a folder and sees nothing else.
 
 Only a real browser exercises this. The upload answers 204 with no body, so
-there is nothing for the test client to assert on beyond a status code, and
-the guarantee that matters is what the page does NOT render.
+there is nothing for the test client to assert on beyond a status code. The
+two tests pin down different halves of the "sees nothing else" guarantee:
+the first checks the drop page's own markup never grows a listing, the
+second checks the listing endpoint itself refuses a drop-mode token - the
+page not rendering a leak is not proof the endpoint would refuse one.
 """
 
 from __future__ import annotations

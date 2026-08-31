@@ -225,6 +225,17 @@ urlpatterns = [
         bots.ConversationRegenerateTitleView.as_view(),
         name="chat-conversation-regenerate-title",
     ),
+    # Meetings - public surface, no authentication
+    path(
+        "api/v1/chat/meet/<str:slug>",
+        meetings.MeetingSummaryView.as_view(),
+        name="chat-meeting-summary",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/knock",
+        meetings.MeetingKnockView.as_view(),
+        name="chat-meeting-knock",
+    ),
     # Meetings - host endpoints
     path(
         "api/v1/chat/meetings",

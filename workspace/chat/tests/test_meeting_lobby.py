@@ -2,15 +2,16 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import MeetingGuest
 from workspace.chat.services import calls
+from workspace.chat.services.meeting_guests import resolve_guest
 from workspace.chat.services.meeting_occurrences import current_occurrence
-from workspace.chat.services.meetings import create_meeting
+from workspace.chat.services.meetings import admit_guest, create_meeting
 
 User = get_user_model()
 
@@ -273,3 +274,186 @@ class MeetingHostViewTests(TestCase):
                 else:
                     resp = getattr(self.client, method)(url)
                 self.assertEqual(resp.status_code, 403)
+
+
+class MeetingPublicViewTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.owner = User.objects.create_user(username="pub-host", password="x")
+        self.viewer = User.objects.create_user(username="pub-viewer", password="x")
+        now = timezone.now()
+        self.event = make_event(
+            self.owner,
+            start=now - timedelta(minutes=5),
+            end=now + timedelta(minutes=25),
+        )
+        self.meeting = create_meeting(self.event, self.owner)
+        self.occurrence_start = current_occurrence(self.meeting, now=now)[0]
+        self.client = APIClient()
+
+    def tearDown(self):
+        cache.clear()
+
+    # --- summary ---
+
+    def test_summary_returns_title_start_and_locked(self):
+        resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["title"], self.event.title)
+        self.assertIn("start", resp.data)
+        self.assertIn("locked", resp.data)
+        self.assertFalse(resp.data["locked"])
+
+    def test_summary_has_no_participants_conversation_or_guest_list(self):
+        resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
+        self.assertEqual(resp.status_code, 200)
+        keys = set(resp.data.keys())
+        for forbidden in ("participants", "conversation", "conversation_id", "guests"):
+            self.assertNotIn(forbidden, keys)
+
+    def test_summary_reflects_locked_call(self):
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        session.locked = True
+        session.save(update_fields=["locked"])
+        resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
+        self.assertTrue(resp.data["locked"])
+
+    def test_summary_404_for_unknown_slug(self):
+        resp = self.client.get("/api/v1/chat/meet/does-not-exist")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_summary_identical_for_authenticated_and_anonymous(self):
+        anon = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
+        self.client.force_authenticate(self.viewer)
+        authed = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
+        self.assertEqual(anon.status_code, authed.status_code)
+        self.assertEqual(anon.data, authed.data)
+
+    # --- knock ---
+
+    def test_knock_returns_token_and_creates_waiting_guest(self):
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(resp.data["token"])
+        self.assertEqual(resp.data["state"], "waiting")
+        self.assertEqual(resp.data["display_name"], "Ada")
+        guest = MeetingGuest.objects.get(meeting=self.meeting)
+        self.assertEqual(guest.state, MeetingGuest.State.WAITING)
+        self.assertEqual(guest.occurrence_start, self.occurrence_start)
+
+    def test_knock_token_does_not_resolve_until_admitted(self):
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        token = resp.data["token"]
+        self.assertIsNone(resolve_guest(token))
+        guest = MeetingGuest.objects.get(meeting=self.meeting)
+        admit_guest(guest, self.owner)
+        self.assertIsNotNone(resolve_guest(token))
+
+    def test_knock_outside_occurrence_window_is_404(self):
+        future_event = make_event(
+            self.owner,
+            start=timezone.now() + timedelta(days=10),
+            end=timezone.now() + timedelta(days=10, minutes=30),
+        )
+        future_meeting = create_meeting(future_event, self.owner)
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{future_meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_knock_returns_423_when_locked(self):
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        session.locked = True
+        session.save(update_fields=["locked"])
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 423)
+
+    def test_knock_blank_display_name_is_400(self):
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": ""},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_knock_missing_display_name_is_400(self):
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock", {}, format="json"
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_knock_display_name_too_long_is_400_not_500(self):
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "x" * 81},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_eleventh_knock_from_one_ip_is_rate_limited(self):
+        for _ in range(10):
+            resp = self.client.post(
+                f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+                {"display_name": "Ada"},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 201)
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 429)
+
+    @override_settings(MEETING_MAX_WAITING_GUESTS=2)
+    def test_knock_429_once_lobby_is_full_even_from_different_ips(self):
+        for i in range(2):
+            resp = self.client.post(
+                f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+                {"display_name": f"Guest{i}"},
+                format="json",
+                REMOTE_ADDR=f"10.0.0.{i}",
+            )
+            self.assertEqual(resp.status_code, 201)
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Guest2"},
+            format="json",
+            REMOTE_ADDR="10.0.0.99",
+        )
+        self.assertEqual(resp.status_code, 429)
+
+    def test_knock_identical_for_authenticated_and_anonymous(self):
+        anon = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+            REMOTE_ADDR="10.1.1.1",
+        )
+        self.client.force_authenticate(self.viewer)
+        authed = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Bob"},
+            format="json",
+            REMOTE_ADDR="10.1.1.2",
+        )
+        self.assertEqual(anon.status_code, authed.status_code)
+        self.assertEqual(set(anon.data.keys()), set(authed.data.keys()))

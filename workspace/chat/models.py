@@ -108,6 +108,10 @@ class Message(models.Model):
         on_delete=models.CASCADE,
         related_name="chat_messages",
     )
+    # Pairing with conversation (guest.meeting.conversation must equal this
+    # message's conversation) is a service-layer invariant, not a database one.
+    # Removing a guest is a state transition (State.REMOVED + removed_at), never
+    # a row delete: on_delete=CASCADE would take their messages with it.
     guest = models.ForeignKey(
         "MeetingGuest",
         null=True,

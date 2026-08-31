@@ -278,11 +278,11 @@ class GuestIdentityTests(TestCase):
         event = Event.objects.create(
             calendar=cal, owner=self.user, title="E", start=timezone.now()
         )
-        meeting_conv = Conversation.objects.create(
+        self.meeting_conv = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, created_by=self.user
         )
         self.meeting = Meeting.objects.create(
-            event=event, conversation=meeting_conv, created_by=self.user
+            event=event, conversation=self.meeting_conv, created_by=self.user
         )
         self.guest = MeetingGuest.objects.create(
             meeting=self.meeting,
@@ -318,7 +318,7 @@ class GuestIdentityTests(TestCase):
 
     def test_guest_message_is_allowed(self):
         msg = Message.objects.create(
-            conversation=self.conv, guest=self.guest, body="hello"
+            conversation=self.meeting_conv, guest=self.guest, body="hello"
         )
         self.assertIsNone(msg.author)
         self.assertEqual(msg.guest_id, self.guest.uuid)

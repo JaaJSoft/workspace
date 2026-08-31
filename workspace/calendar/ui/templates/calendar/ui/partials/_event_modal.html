@@ -125,10 +125,14 @@
             type="checkbox"
             class="toggle toggle-sm toggle-primary"
             :checked="form.recurrence_frequency !== null"
+            :disabled="isComplexRecurrence()"
             @change="toggleRecurrence()"
           />
         </label>
-        <div x-show="form.recurrence_frequency !== null" x-transition>
+        <div
+          x-show="form.recurrence_frequency !== null && !isComplexRecurrence()"
+          x-transition
+        >
           <div class="pt-1 space-y-3">
             <div class="flex items-center gap-2">
               <span class="text-sm text-base-content/70 w-10 flex-shrink-0">Every</span>
@@ -168,6 +172,10 @@
               />
             </div>
           </div>
+        </div>
+        <div x-show="isComplexRecurrence()" class="pt-1">
+          <div class="text-sm text-base-content/70" x-text="form.recurrence_summary"></div>
+          <div class="text-xs text-base-content/50 pt-1">This repeat rule was set in another app and cannot be edited here.</div>
         </div>
       </div>
 

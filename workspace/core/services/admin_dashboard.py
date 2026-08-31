@@ -144,6 +144,8 @@ def scanner_health_card(request):
 
 
 def dashboard_callback(request, context):
+    from workspace.files.services.scanning.policy import blocked_statuses
+
     cards = [
         {
             "title": "Mail sync errors",
@@ -180,8 +182,11 @@ def dashboard_callback(request, context):
             "icon": "shield_lock",
             "description": "files the malware policy currently blocks",
             "value": quarantined_file_count(request),
+            # The changelist has to list exactly what the count counted: under
+            # FILES_MALWARE_ON_ERROR=closed a hard-coded status__exact=infected
+            # hides the error rows the number includes.
             "url": reverse("admin:files_filescan_changelist")
-            + "?status__exact=infected",
+            + f"?status__in={','.join(sorted(blocked_statuses()))}",
         },
         {
             "title": "Scanner errors",

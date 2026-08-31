@@ -19,7 +19,7 @@ from workspace.core.services.admin_dashboard import (
     mail_sync_error_count,
     thumbnail_failure_count,
 )
-from workspace.files.models import File, ThumbnailFailure
+from workspace.files.models import File, FileScan, ThumbnailFailure
 from workspace.imports.models import ImportConnection, ImportJob
 from workspace.mail.models import MailAccount
 
@@ -178,8 +178,45 @@ class DashboardCallbackTests(TestCase):
         )
         self.assertIn("?status__exact=failed", by_title["Failed AI tasks"])
         self.assertIn("?status__exact=failed", by_title["Failed imports"])
-        self.assertIn("?status__exact=infected", by_title["Quarantined files"])
+        self.assertIn("?status__in=", by_title["Quarantined files"])
         self.assertIn("?status__exact=error", by_title["Scanner errors"])
+
+    @override_settings(
+        FILES_MALWARE_SCAN_ENABLED=True,
+        FILES_MALWARE_ON_DETECTION="block",
+        FILES_MALWARE_ON_ERROR="closed",
+    )
+    def test_the_quarantine_link_lists_exactly_what_the_count_counted(self):
+        """Fail-closed adds the error rows to the count, so the click-through
+        has to show them too."""
+        for name, scan_status in (
+            ("bad.txt", FileScan.Status.INFECTED),
+            ("unreadable.txt", FileScan.Status.ERROR),
+            ("fine.txt", FileScan.Status.CLEAN),
+        ):
+            f = File.objects.create(
+                owner=self.admin, name=name, node_type=File.NodeType.FILE
+            )
+            FileScan.objects.create(
+                file=f, status=scan_status, scanned_at=timezone.now()
+            )
+
+        request = RequestFactory().get("/admin/")
+        request.user = self.admin
+        card = next(
+            c
+            for c in dashboard_callback(request, {})["health_cards"]
+            if c["title"] == "Quarantined files"
+        )
+        self.assertEqual(card["value"], 2)
+        self.assertTrue(card["url"].endswith("?status__in=error,infected"), card["url"])
+
+        # status__in is a valid changelist lookup only because the admin splits
+        # the value on commas; a URL the admin rejects would 302 to ?e=1.
+        self.client.force_login(self.admin)
+        listing = self.client.get(card["url"])
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.context["cl"].result_count, card["value"])
 
     def test_admin_index_renders_the_cards(self):
         self.client.force_login(self.admin)

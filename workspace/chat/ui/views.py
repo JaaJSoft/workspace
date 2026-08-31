@@ -328,12 +328,26 @@ def group_messages(messages, current_user):
     Returns a list of dicts:
       {'type': 'date', 'date': date_obj}
       {'type': 'messages', 'author': user, 'is_own': bool, 'messages': [msg, ...]}
+
+    Also stamps a guest-safe `quote_author_name` onto every replied-to
+    message this batch touches (msg.reply_to), since this is the one place
+    that already walks every message headed for the template - the reply
+    quote otherwise has no other pass to piggyback on.
     """
     groups = []
     current_date = None
     current_group = None
 
     for msg in messages:
+        # The reply quote renders a single name, never id/username - a plain
+        # string sidesteps the template's {{ x|default:y }} filter-argument
+        # trap entirely (see _group_author), rather than making the quote
+        # walk a shim built for the group header's three-attribute needs.
+        if msg.reply_to_id and msg.reply_to is not None:
+            msg.reply_to.quote_author_name = display_name_for_identity(
+                msg.reply_to.author, msg.reply_to.guest
+            )
+
         msg_date = timezone.localdate(msg.created_at)
 
         # Insert date separator when the day changes
@@ -404,6 +418,7 @@ def conversation_messages_view(request, conversation_uuid):
             "guest",
             "reply_to",
             "reply_to__author",
+            "reply_to__guest",
             "conversation",
             "interaction",
             "interaction__interacted_by",
@@ -509,7 +524,15 @@ def thread_messages_view(request, root_uuid):
     """Partial: a thread's root message followed by its replies."""
     root = (
         Message.objects.filter(uuid=root_uuid, thread_root__isnull=True)
-        .select_related("author", "author__bot_profile", "guest", "conversation")
+        .select_related(
+            "author",
+            "author__bot_profile",
+            "guest",
+            "reply_to",
+            "reply_to__author",
+            "reply_to__guest",
+            "conversation",
+        )
         .first()
     )
     if root is None:
@@ -527,6 +550,7 @@ def thread_messages_view(request, root_uuid):
             "guest",
             "reply_to",
             "reply_to__author",
+            "reply_to__guest",
             "conversation",
             "interaction",
             "interaction__interacted_by",

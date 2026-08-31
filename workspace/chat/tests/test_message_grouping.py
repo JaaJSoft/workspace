@@ -90,3 +90,24 @@ class MessageGroupRenderGuestTests(TestCase):
         self.assertContains(resp, "first")
         self.assertContains(resp, "second")
         self.assertEqual(resp.content.count(b'author-name="Visitor"'), 1)
+
+    def test_a_reply_to_a_guest_message_names_the_guest_in_the_quote(self):
+        """A member replying to a guest's message must not 500 the whole
+        chat page - msg.reply_to.author is a real FK, None for a guest,
+        and the reply-quote's `default:` filter argument does not degrade
+        to an empty string the way a bare {{ var.attr }} would."""
+        guest_msg = Message.objects.create(
+            conversation=self.conv, guest=self.guest, body="hi from a guest"
+        )
+        Message.objects.create(
+            conversation=self.conv,
+            author=self.user,
+            body="replying to the guest",
+            reply_to=guest_msg,
+        )
+
+        self.client.force_login(self.user)
+        resp = self.client.get(f"/chat/{self.conv.uuid}/messages")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'data-reply-author="Visitor"')

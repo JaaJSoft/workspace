@@ -25,6 +25,28 @@ class _StubScanner:
         raise AssertionError("not used here")
 
 
+class _RacingScanner:
+    """Replaces the row's content while its own scan is still in flight.
+
+    Stands in for the real ordering: a slow scan of a large infected upload
+    returning after the user has already replaced the file and after the
+    second scan wrote its verdict.
+    """
+
+    def __init__(self, verdict, file_obj, new_hash):
+        self.verdict = verdict
+        self.file_obj = file_obj
+        self.new_hash = new_hash
+
+    def scan(self, stream, *, name=""):
+        stream.read()
+        File.objects.filter(pk=self.file_obj.pk).update(content_hash=self.new_hash)
+        return self.verdict
+
+    def health(self):
+        raise AssertionError("not used here")
+
+
 class ScanTaskTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="task", password="p")
@@ -155,3 +177,50 @@ class ScanTaskTests(TestCase):
         with patch("workspace.files.services.search_index.index_file") as index:
             self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
         index.assert_called_once()
+
+    def _run_racing(self, file_obj, verdict, new_hash):
+        scanner = _RacingScanner(verdict, file_obj, new_hash)
+        with (
+            override_settings(**ENABLED),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            return scan_file(str(file_obj.uuid))
+
+    def test_a_verdict_about_replaced_content_is_discarded(self):
+        f = self._file()
+        f.content_hash = "v1"
+        f.save(update_fields=["content_hash"])
+        result = self._run_racing(
+            f,
+            ScanVerdict(status=FileScan.Status.INFECTED, signature="Unit.Test"),
+            "v2",
+        )
+        self.assertEqual(result["status"], "stale")
+        self.assertFalse(FileScan.objects.filter(file=f).exists())
+
+    def test_a_late_verdict_does_not_overwrite_the_newer_one(self):
+        """The scan of v1 outlives the scan of v2 and returns last.
+
+        Without the hash guard it quarantines content it never read, and the
+        quarantine is permanent: max_retries=0, and scan_files skips a file
+        that already has a row unless it is run with --rescan.
+        """
+        f = self._file()
+        f.content_hash = "v1"
+        f.save(update_fields=["content_hash"])
+        FileScan.objects.create(
+            file=f,
+            status=FileScan.Status.CLEAN,
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+        self._run_racing(
+            f,
+            ScanVerdict(status=FileScan.Status.INFECTED, signature="Unit.Test"),
+            "v2",
+        )
+        f.refresh_from_db()
+        self.assertEqual(f.scan.status, FileScan.Status.CLEAN)
+        self.assertEqual(f.scan.signature, "")

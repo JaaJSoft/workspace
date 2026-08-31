@@ -275,6 +275,11 @@ def scan_file(self, file_uuid):
     if file_obj.node_type != File.NodeType.FILE or not file_obj.content:
         return {"status": "not_applicable"}
 
+    # Identifies the bytes this run is about to look at. Re-read just before
+    # the verdict is written, it is what tells a slow scan of the old content
+    # apart from a verdict about what the row holds now.
+    scanned_hash = file_obj.content_hash
+
     max_bytes = int(
         getattr(settings, "FILES_MALWARE_SCAN_MAX_BYTES", 100 * 1024 * 1024)
     )
@@ -307,6 +312,26 @@ def scan_file(self, file_uuid):
             finally:
                 handle.close()
             FILES_MALWARE_SCAN_DURATION.observe(time.monotonic() - started)
+
+    # The content may have been replaced while this scan was running: a large
+    # infected upload takes longer to scan than the clean file that replaced
+    # it, so the two verdicts can land out of order. Writing the older one
+    # would quarantine content it never read, and permanently - max_retries=0
+    # and scan_files without --rescan both leave an existing row alone.
+    current_hash = (
+        File.objects.filter(pk=file_obj.pk)
+        .values_list("content_hash", flat=True)
+        .first()
+    )
+    if current_hash is None:
+        # Hard-deleted mid-scan; the FK would fail anyway.
+        return {"status": "not_found"}
+    if current_hash != scanned_hash:
+        logger.info(
+            "Discarding a stale malware verdict for %s: its content changed mid-scan",
+            scrub(file_obj.name),
+        )
+        return {"status": "stale"}
 
     FileScan.objects.update_or_create(
         file=file_obj,

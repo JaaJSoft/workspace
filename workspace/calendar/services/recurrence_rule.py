@@ -35,7 +35,11 @@ _SIMPLE_FREQ = {
 _SIMPLE_FREQ_INVERSE = {value: key for key, value in _SIMPLE_FREQ.items()}
 
 # Steps the dtstart re-anchoring optimization can compute algebraically.
-_FIXED_STEP_FREQ = {"DAILY", "WEEKLY"}
+# Deliberately wider than _SIMPLE_FREQ (the web picker's set): HOURLY,
+# MINUTELY and SECONDLY are the frequencies a dense feed-supplied rule most
+# often uses and most need anchoring, even though the picker never offers
+# them.
+_FIXED_STEP_FREQ = {"DAILY", "WEEKLY", "HOURLY", "MINUTELY", "SECONDLY"}
 
 _UNTIL_RE = re.compile(r"UNTIL=(\d{8}(?:T\d{6}Z?)?)")
 
@@ -310,6 +314,26 @@ def is_simple_stepping(rule_text):
     if "COUNT" in parts:
         return False
     return not any(key.startswith("BY") for key in parts)
+
+
+def simple_stepping_frequency(rule_text):
+    """Return ``(frequency, interval)`` for a rule ``is_simple_stepping``
+    has already accepted, or ``None`` if INTERVAL isn't a valid integer.
+
+    Callers must check ``is_simple_stepping`` first. Deliberately decoupled
+    from ``to_simple``: the dtstart re-anchoring optimization in
+    ``recurrence.py`` needs HOURLY/MINUTELY/SECONDLY too, which the web
+    picker's ``to_simple`` never expresses and must keep never expressing -
+    the two functions answer different questions ("can this be anchored?"
+    vs. "can this be rendered in the three-field picker?") and only look
+    alike for the frequencies where the answer happens to agree.
+    """
+    _, parts = _properties(_rule_lines(rule_text)[0])
+    try:
+        interval = int(parts.get("INTERVAL", 1))
+    except ValueError:
+        return None
+    return parts["FREQ"].lower(), interval
 
 
 def apply_rule(event, rule_text):

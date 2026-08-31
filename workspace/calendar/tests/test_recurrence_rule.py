@@ -200,6 +200,14 @@ class SimpleSteppingTests(SimpleTestCase):
         self.assertTrue(rr.is_simple_stepping("RRULE:FREQ=DAILY;INTERVAL=2"))
         self.assertTrue(rr.is_simple_stepping("RRULE:FREQ=WEEKLY"))
 
+    def test_sub_day_rules_are_anchorable(self):
+        # A dense feed-supplied rule most often uses one of these, and most
+        # needs the anchor: without it, an old sub-day master spends its
+        # whole iteration budget walking its own history.
+        self.assertTrue(rr.is_simple_stepping("RRULE:FREQ=HOURLY"))
+        self.assertTrue(rr.is_simple_stepping("RRULE:FREQ=MINUTELY;INTERVAL=15"))
+        self.assertTrue(rr.is_simple_stepping("RRULE:FREQ=SECONDLY"))
+
     def test_by_parts_and_calendar_stepping_are_not(self):
         # The dtstart re-anchoring optimization assumes fixed timedelta
         # steps; these rules break that assumption.
@@ -213,6 +221,29 @@ class SimpleSteppingTests(SimpleTestCase):
         ):
             with self.subTest(rule=rule):
                 self.assertFalse(rr.is_simple_stepping(rule))
+
+
+class SimpleSteppingFrequencyTests(SimpleTestCase):
+    def test_extracts_frequency_and_interval(self):
+        self.assertEqual(
+            rr.simple_stepping_frequency("RRULE:FREQ=HOURLY;INTERVAL=3"),
+            ("hourly", 3),
+        )
+        self.assertEqual(
+            rr.simple_stepping_frequency("RRULE:FREQ=WEEKLY"), ("weekly", 1)
+        )
+
+    def test_recognizes_sub_day_frequencies_to_simple_does_not(self):
+        # This is the whole reason the function exists separately from
+        # to_simple: the web picker never offers HOURLY, but the anchor
+        # optimization still needs its frequency and interval.
+        self.assertIsNone(rr.to_simple("RRULE:FREQ=HOURLY"))
+        self.assertEqual(
+            rr.simple_stepping_frequency("RRULE:FREQ=HOURLY"), ("hourly", 1)
+        )
+
+    def test_invalid_interval_returns_none(self):
+        self.assertIsNone(rr.simple_stepping_frequency("RRULE:FREQ=DAILY;INTERVAL=abc"))
 
 
 class ClientCorpusTests(SimpleTestCase):

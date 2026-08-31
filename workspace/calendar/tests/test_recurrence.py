@@ -199,6 +199,33 @@ class OccurrencesInRangeTests(TestCase):
         occs = list(occurrences_in_range(master, now, now + timedelta(days=3650)))
         self.assertEqual(occs, [])
 
+    def test_old_hourly_master_reaches_the_window(self):
+        """Regression: before sub-day anchoring, an HOURLY master older
+        than MAX_ITERATIONS hours spent its whole skip budget walking its
+        own past and never reached the window at all, returning nothing -
+        permanently, since the gap only grows."""
+        now = timezone.now().replace(minute=0, second=0, microsecond=0)
+        start = now - timedelta(hours=MAX_ITERATIONS + 500)
+        master = self._make_master("RRULE:FREQ=HOURLY", start)
+        occs = list(occurrences_in_range(master, now, now + timedelta(hours=3)))
+        self.assertEqual(
+            occs, [now, now + timedelta(hours=1), now + timedelta(hours=2)]
+        )
+
+    def test_old_by_qualified_master_reaches_the_window(self):
+        """A BY-qualified rule cannot be anchored at all, so this exercises
+        the skip budget rather than the anchor: 20 years of MO/WE/FR
+        candidates (~3,100) fit comfortably inside MAX_ITERATIONS, so the
+        real occurrences in the window are still returned."""
+        now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+        start = now - timedelta(days=365 * 20)
+        master = self._make_master("RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR", start)
+        occs = list(occurrences_in_range(master, now, now + timedelta(days=7)))
+        self.assertGreater(len(occs), 0)
+        for occ in occs:
+            self.assertGreaterEqual(occ, now)
+            self.assertIn(occ.weekday(), (0, 2, 4))  # Mon, Wed, Fri
+
 
 class MakeVirtualOccurrenceTests(TestCase):
     def setUp(self):
@@ -819,6 +846,28 @@ class WallClockExpansionTests(TestCase):
             [o.astimezone(UTC).isoformat() for o in occs],
             ["2026-03-29T07:00:00+00:00", "2026-03-30T07:00:00+00:00"],
         )
+
+    def test_old_hourly_master_anchor_matches_unanchored_across_dst(self):
+        """HOURLY anchoring under a wall-clock zone must reproduce exactly
+        the same stream a fresh (unanchored) series on the same phase
+        produces, including across the spring-forward transition - proving
+        the sub-day anchoring optimization safe for HOURLY under a zone."""
+        window_start = datetime(2026, 3, 28, 12, 0, tzinfo=UTC)
+        window_end = datetime(2026, 3, 30, 12, 0, tzinfo=UTC)
+
+        # dtstart == window floor: _anchored_dtstart's `dtstart < floor`
+        # guard is false, so this master is never actually anchored - a
+        # genuine unanchored ground truth to compare against.
+        recent = self._master(freq="hourly", start=window_start - timedelta(hours=1))
+        # Old enough to trigger the anchor optimization for real.
+        old = self._master(freq="hourly", start=window_start - timedelta(days=2000))
+
+        recent_occs = self._expand(recent, window_start, window_end)
+        old_occs = self._expand(old, window_start, window_end)
+
+        # 49 hourly ticks over 2 days with one spring-forward hour skipped.
+        self.assertEqual(len(recent_occs), 49)
+        self.assertEqual(recent_occs, old_occs)
 
     def test_weekly_series_keeps_wall_clock_across_dst(self):
         master = self._master(freq="weekly")

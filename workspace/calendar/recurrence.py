@@ -7,7 +7,7 @@ from .services.recurrence_rule import (
     MAX_ITERATIONS,
     is_simple_stepping,
     parse,
-    to_simple,
+    simple_stepping_frequency,
 )
 from .services.timezones import event_timezone
 
@@ -16,15 +16,31 @@ logger = logging.getLogger(__name__)
 _FIXED_STEP = {
     "daily": timedelta(days=1),
     "weekly": timedelta(weeks=1),
+    "hourly": timedelta(hours=1),
+    "minutely": timedelta(minutes=1),
+    "secondly": timedelta(seconds=1),
 }
 
+# DAILY/WEEKLY under a zone step whole local calendar days (see
+# _anchored_dtstart) - the only frequencies where that math applies.
 _FIXED_STEP_DAYS = {
     "daily": 1,
     "weekly": 7,
 }
 
+# Sub-day frequencies proven safe to anchor by plain (absolute) timedelta
+# arithmetic even under a wall-clock zone: swept every hour across both a
+# spring-forward and a fall-back Europe/Paris transition, at several minute
+# offsets, and the anchored stream matched a fresh series on the same phase
+# in every case. MINUTELY and SECONDLY are deliberately excluded - the same
+# sweep produced mismatched instants right at a spring-forward gap (a local
+# minute that does not exist), so anchoring them under a zone is not proven
+# safe. They still anchor under UTC (tz is None), where there is no DST to
+# get wrong.
+_ABSOLUTE_STEP_UNDER_TZ = {"hourly"}
 
-def _anchored_dtstart(master, floor, tz=None):
+
+def _anchored_dtstart(master, floor, tz, frequency, interval):
     """Return the series dtstart advanced to the last in-phase occurrence
     at or before *floor*.
 
@@ -33,17 +49,15 @@ def _anchored_dtstart(master, floor, tz=None):
     expansion. Re-anchoring dtstart keeps the exact same occurrence stream
     while skipping the pre-window walk.
 
-    Without *tz* (legacy UTC series) the phase is plain timedelta arithmetic.
-    With *tz* the series is anchored to a local wall clock, so the anchor steps
-    whole local calendar days and reattaches the original local time - a fixed
-    timedelta would drift across DST transitions. Callers must gate this on
-    ``is_simple_stepping``; monthly, yearly and BY-qualified rules step by the
-    calendar and have no constant phase to solve for.
+    Without *tz* (legacy UTC series) every fixed-step frequency anchors by
+    plain timedelta arithmetic - there is no DST to get wrong. With *tz*,
+    DAILY/WEEKLY anchor by stepping whole local calendar days and
+    reattaching the original local time (a fixed timedelta would drift
+    across DST transitions); HOURLY anchors the same way as the untz-ed case
+    (proven equivalent, see ``_ABSOLUTE_STEP_UNDER_TZ``); MINUTELY, SECONDLY,
+    and everything ``is_simple_stepping`` rejects (monthly, yearly, BY- and
+    COUNT-qualified rules) keep the true start instead.
     """
-    simple = to_simple(master.recurrence_rule) or {}
-    frequency = simple.get("frequency")
-    interval = simple.get("interval", 1)
-
     if tz is None:
         dtstart = master.start
         fixed_step = _FIXED_STEP.get(frequency)
@@ -53,6 +67,7 @@ def _anchored_dtstart(master, floor, tz=None):
         return dtstart
 
     dtstart = master.start.astimezone(tz)
+
     step_days = _FIXED_STEP_DAYS.get(frequency)
     if step_days and dtstart < floor:
         step = step_days * interval
@@ -60,6 +75,11 @@ def _anchored_dtstart(master, floor, tz=None):
         if days > 0:
             anchored_date = dtstart.date() + timedelta(days=(days // step) * step)
             dtstart = datetime.combine(anchored_date, dtstart.time(), tzinfo=tz)
+        return dtstart
+
+    if frequency in _ABSOLUTE_STEP_UNDER_TZ and dtstart < floor:
+        step = _FIXED_STEP[frequency] * interval
+        dtstart += ((floor - dtstart) // step) * step
     return dtstart
 
 
@@ -68,21 +88,27 @@ def _anchor(master, floor, tz):
 
     Walking an rrule from a years-old dtstart costs hundreds of discarded
     iterations per expansion, so re-anchoring is worth keeping. The algebra
-    assumes a fixed timedelta step, which only holds for DAILY and WEEKLY rules
-    with no BY parts and no COUNT (COUNT is measured from dtstart, so moving it
-    forward would fabricate occurrences past the series' real end) -
-    everything else keeps the true start and is bounded by calendar stepping
-    anyway.
+    assumes a fixed timedelta step, which only holds for DAILY, WEEKLY,
+    HOURLY, MINUTELY and SECONDLY rules with no BY parts and no COUNT (COUNT
+    is measured from dtstart, so moving it forward would fabricate
+    occurrences past the real end of the series) - everything else keeps the
+    true start and is bounded by calendar stepping, or the skip budget in
+    ``occurrences_in_range``, anyway.
     """
     if not is_simple_stepping(master.recurrence_rule):
         return master.start
-    return _anchored_dtstart(master, floor, tz)
+    components = simple_stepping_frequency(master.recurrence_rule)
+    if components is None:
+        return master.start
+    frequency, interval = components
+    return _anchored_dtstart(master, floor, tz, frequency, interval)
 
 
-def _iteration_cap_warning(master):
+def _iteration_cap_warning(master, phase):
     logger.warning(
-        "Recurrence rule exceeded %d iterations, truncating: %s",
+        "Recurrence rule exceeded %d iterations while %s, truncating: %s",
         MAX_ITERATIONS,
+        phase,
         scrub(master.recurrence_rule),
     )
 
@@ -90,10 +116,17 @@ def _iteration_cap_warning(master):
 def occurrences_in_range(master, range_start, range_end):
     """Yield occurrence start datetimes (aware UTC) overlapping the window.
 
-    Stops after MAX_ITERATIONS candidates even if the window is still open,
-    so a dense feed-supplied rule (FREQ=SECONDLY with no UNTIL/COUNT) that
-    slips past the query-layer prune degrades to a truncated series instead
-    of exhausting the request.
+    Two independent MAX_ITERATIONS budgets guard the walk: one for
+    candidates before the window floor, one for candidates at or after it.
+    Splitting them matters - a series the anchor could not reach
+    (BY-qualified, monthly, yearly, or a fixed-step rule anchoring does not
+    cover) still pays for walking its own history, and that walk must not
+    steal budget from the in-window occurrences the caller actually wants.
+    Only a series genuinely too dense to reach the window even after
+    anchoring trips the first budget; only a series genuinely too dense
+    inside the window trips the second - a hostile feed-supplied
+    FREQ=SECONDLY with no UNTIL/COUNT is the case that really does trip the
+    second one.
     """
     duration = (master.end - master.start) if master.end else None
     # An occurrence starting before the window can still spill into it.
@@ -104,12 +137,21 @@ def occurrences_in_range(master, range_start, range_end):
     if rule is None:
         return
 
-    for index, dt in enumerate(rule):
-        if index >= MAX_ITERATIONS:
-            _iteration_cap_warning(master)
-            return
+    skipped = 0
+    considered = 0
+    for dt in rule:
+        if dt < window_floor:
+            skipped += 1
+            if skipped > MAX_ITERATIONS:
+                _iteration_cap_warning(master, "skipping to the window")
+                return
+            continue
         if dt >= range_end:
             break
+        considered += 1
+        if considered > MAX_ITERATIONS:
+            _iteration_cap_warning(master, "expanding the window")
+            return
         occ = dt.astimezone(UTC) if tz else dt
         if duration:
             if occ + duration > range_start:
@@ -126,7 +168,9 @@ def next_occurrences_after(master, after, limit=None):
     the stream (e.g. skipping exceptions) can take as many as they need
     rather than being capped up front. Either way, stops after MAX_ITERATIONS
     candidates: an unbounded feed-supplied rule with no caller-side limit
-    would otherwise be walked forever.
+    would otherwise be walked forever. Unlike ``occurrences_in_range``, one
+    budget is enough here - ``rule.xafter`` already does its own skipping to
+    *after* inside dateutil, before anything reaches this loop.
     """
     tz = event_timezone(master)
     rule = parse(master.recurrence_rule, _anchor(master, after, tz), tz)
@@ -134,7 +178,7 @@ def next_occurrences_after(master, after, limit=None):
         return
     for index, dt in enumerate(rule.xafter(after, count=limit, inc=True)):
         if index >= MAX_ITERATIONS:
-            _iteration_cap_warning(master)
+            _iteration_cap_warning(master, "expanding the window")
             return
         yield dt.astimezone(UTC) if tz else dt
 

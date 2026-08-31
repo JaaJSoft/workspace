@@ -155,6 +155,20 @@ class SharedFolderReadTests(APITestCase):
         resp = self.client.get(f"/api/v1/files/shared/{self.read_link.token}/content")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_content_is_refused_on_a_drop_link(self):
+        resp = self.client.get(
+            f"/api/v1/files/shared/{self.drop_link.token}/content",
+            {"file": str(self.doc.uuid)},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_content_refuses_a_file_outside_the_subtree(self):
+        resp = self.client.get(
+            f"/api/v1/files/shared/{self.read_link.token}/content",
+            {"file": str(self.outside.uuid)},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_download_outside_the_subtree_does_not_record_a_view(self):
         self.read_link.refresh_from_db()
         self.assertEqual(self.read_link.view_count, 0)

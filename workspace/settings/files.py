@@ -37,10 +37,12 @@ FILES_CLAMAV_HOST = os.getenv("FILES_CLAMAV_HOST", "127.0.0.1")
 FILES_CLAMAV_PORT = int(os.getenv("FILES_CLAMAV_PORT", "3310"))
 FILES_CLAMAV_TIMEOUT = float(os.getenv("FILES_CLAMAV_TIMEOUT", "60"))
 
-# Bytes streamed to the daemon at most. clamd enforces its own StreamMaxLength
-# (25 MB out of the box), so the effective ceiling is the lower of the two.
+# Bytes streamed to the daemon at most. Deliberately the same 25 MB as clamd's
+# own StreamMaxLength default: the effective ceiling is the lower of the two, so
+# a larger value here would be silently overruled by the daemon and only make
+# the configuration lie. Raising one means raising the other.
 FILES_MALWARE_SCAN_MAX_BYTES = int(
-    os.getenv("FILES_MALWARE_SCAN_MAX_BYTES", str(100 * 1024 * 1024))
+    os.getenv("FILES_MALWARE_SCAN_MAX_BYTES", str(25 * 1024 * 1024))
 )
 
 # What a detection does: "block" quarantines, "flag" records and leaves the

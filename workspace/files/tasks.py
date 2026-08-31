@@ -280,9 +280,7 @@ def scan_file(self, file_uuid):
     # apart from a verdict about what the row holds now.
     scanned_hash = file_obj.content_hash
 
-    max_bytes = int(
-        getattr(settings, "FILES_MALWARE_SCAN_MAX_BYTES", 100 * 1024 * 1024)
-    )
+    max_bytes = int(getattr(settings, "FILES_MALWARE_SCAN_MAX_BYTES", 25 * 1024 * 1024))
 
     if (file_obj.size or 0) > max_bytes:
         verdict = ScanVerdict(

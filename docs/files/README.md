@@ -101,16 +101,21 @@ FILES_CLAMAV_PORT=3310
 |---|---|---|
 | `FILES_MALWARE_ON_DETECTION` | `block` (default), `flag` | `block` quarantines an infected file: it cannot be downloaded, previewed or found in search, cannot be attached to a message, an email or a task, is not readable by the AI assistant, and its owner sees it marked as quarantined. `flag` records the verdict and leaves the file usable. |
 | `FILES_MALWARE_ON_ERROR` | `open` (default), `closed` | What happens to a file the scanner could not examine - a daemon that is down, a blob that vanished. `open` leaves it usable, `closed` quarantines it. |
-| `FILES_MALWARE_SCAN_MAX_BYTES` | bytes, default 100 MiB | Files larger than this are recorded as `skipped` and stay downloadable. |
+| `FILES_MALWARE_SCAN_MAX_BYTES` | bytes, default 25 MB | Files larger than this are recorded as `skipped` and stay downloadable. Matches clamd's own default; see below before raising it. |
 
 A file whose scan has not run yet stays downloadable. The window is normally a
 few seconds; a persistent backlog shows up as a stalled queue on the admin
 dashboard.
 
-**The daemon has its own cap.** `clamd`'s `StreamMaxLength` defaults to 25 MB,
-so out of the box the daemon refuses before `FILES_MALWARE_SCAN_MAX_BYTES` does,
-and the file is recorded as `skipped`. Raise `StreamMaxLength` in
-`clamd.conf` if you want the application-side cap to be the effective one.
+**The daemon has its own cap, and the two defaults match.** `clamd`'s
+`StreamMaxLength` also defaults to 25 MB, so out of the box the application and
+the daemon agree on where scanning stops.
+
+The effective ceiling is always the lower of the two. Raising
+`FILES_MALWARE_SCAN_MAX_BYTES` alone changes nothing: the daemon still refuses at
+its own limit and the file is recorded as `skipped`, exactly as before. To
+actually scan larger files, raise `StreamMaxLength` in `clamd.conf` as well and
+restart the daemon.
 
 **Relaxing the policy does not undo the search exclusion.** Quarantining a file
 drops its full-text search document. Switching `FILES_MALWARE_ON_DETECTION` from

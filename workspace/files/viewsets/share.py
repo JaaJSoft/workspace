@@ -224,18 +224,15 @@ class ShareMixin:
             except (ValueError, TypeError) as exc:
                 raise ValidationError({field: "Must be a whole number."}) from exc
 
-        try:
-            link = service_create_share_link(
-                file_obj,
-                acting_user=request.user,
-                password=request.data.get("password", ""),
-                expires_at=request.data.get("expires_at"),
-                mode=request.data.get("mode") or FileShareLink.Mode.READ,
-                max_file_bytes=_cap("max_file_bytes"),
-                max_file_count=_cap("max_file_count"),
-            )
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        link = service_create_share_link(
+            file_obj,
+            acting_user=request.user,
+            password=request.data.get("password", ""),
+            expires_at=request.data.get("expires_at"),
+            mode=request.data.get("mode") or FileShareLink.Mode.READ,
+            max_file_bytes=_cap("max_file_bytes"),
+            max_file_count=_cap("max_file_count"),
+        )
         return Response(
             self._serialize_share_link(link, request),
             status=status.HTTP_201_CREATED,

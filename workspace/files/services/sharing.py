@@ -8,9 +8,23 @@ might want to skip notifications, a user request always sends them).
 """
 
 from django.contrib.auth.hashers import make_password
+from rest_framework.exceptions import APIException
 
 from ..models import File, FileEvent, FileShare, FileShareLink
 from .events import record_event
+
+
+class ShareLinkRuleError(APIException):
+    """Share link parameters refused before anything was created.
+
+    A DRF exception so the endpoint answers 400 through the default handler.
+    The view must not catch a broad ValueError and echo its text: that is how
+    an internal message reaches a response.
+    """
+
+    status_code = 400
+    default_code = "invalid_share_link"
+    default_detail = "Invalid share link parameters."
 
 
 def share_file(file_obj, *, target_user, permission, acting_user):
@@ -96,12 +110,14 @@ def create_share_link(
     """
     mode = mode or FileShareLink.Mode.READ
     if mode not in FileShareLink.Mode.values:
-        raise ValueError("Unknown share link mode.")
+        raise ShareLinkRuleError("Unknown share link mode.")
     if mode != FileShareLink.Mode.READ and file_obj.node_type != File.NodeType.FOLDER:
-        raise ValueError("Only a folder can accept uploads through a share link.")
+        raise ShareLinkRuleError(
+            "Only a folder can accept uploads through a share link."
+        )
     for cap in (max_file_bytes, max_file_count):
         if cap is not None and cap < 1:
-            raise ValueError("A cap must be a positive number.")
+            raise ShareLinkRuleError("A cap must be a positive number.")
 
     link = FileShareLink.objects.create(
         file=file_obj,

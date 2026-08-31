@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileShareLink
-from workspace.files.services.sharing import create_share_link
+from workspace.files.services.sharing import ShareLinkRuleError, create_share_link
 
 User = get_user_model()
 
@@ -42,13 +42,13 @@ class ShareLinkModeTests(TestCase):
         self.assertTrue(link.allows_upload)
 
     def test_a_file_target_refuses_an_upload_mode(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ShareLinkRuleError):
             create_share_link(
                 self.doc, acting_user=self.user, mode=FileShareLink.Mode.DROP
             )
 
     def test_an_unknown_mode_is_refused(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ShareLinkRuleError):
             create_share_link(self.folder, acting_user=self.user, mode="admin")
 
     def test_caps_default_to_null_and_counters_to_zero(self):

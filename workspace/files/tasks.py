@@ -333,6 +333,16 @@ def scan_file(self, file_uuid):
         )
         return {"status": "stale"}
 
+    blocked = blocked_statuses()
+    # Read before the write: only a blocked -> readable transition has a
+    # document to restore. Re-indexing every clean verdict would extract the
+    # same text a second time for the same upload and put this task in a race
+    # with the indexing one over a single FTS row.
+    was_blocked = (
+        FileScan.objects.filter(file=file_obj).values_list("status", flat=True).first()
+        in blocked
+    )
+
     FileScan.objects.update_or_create(
         file=file_obj,
         defaults={
@@ -344,7 +354,7 @@ def scan_file(self, file_uuid):
     )
     FILES_MALWARE_SCAN_RESULT.labels(result=verdict.status).inc()
 
-    if verdict.status in blocked_statuses():
+    if verdict.status in blocked:
         unindex_file(file_obj)
         if file_obj.has_thumbnail:
             from workspace.files.services.thumbnails.generation import (
@@ -354,7 +364,7 @@ def scan_file(self, file_uuid):
             delete_thumbnail(file_obj.uuid)
             file_obj.has_thumbnail = False
             file_obj.save(update_fields=["has_thumbnail"])
-    else:
+    elif was_blocked:
         index_file(file_obj)
 
     return {"status": verdict.status, "signature": verdict.signature}

@@ -172,8 +172,18 @@ class ScanTaskTests(TestCase):
             )
         unindex.assert_called_once()
 
-    def test_clean_verdict_reindexes(self):
+    def test_first_clean_verdict_does_not_reindex(self):
+        """The upload pipeline already indexed the file for the same event, so
+        a second pass would extract the text twice and race that task for the
+        one FTS row."""
         f = self._file()
+        with patch("workspace.files.services.search_index.index_file") as index:
+            self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        index.assert_not_called()
+
+    def test_a_file_coming_back_clean_is_reindexed(self):
+        f = self._file()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
         with patch("workspace.files.services.search_index.index_file") as index:
             self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
         index.assert_called_once()

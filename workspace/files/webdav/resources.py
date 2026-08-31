@@ -9,15 +9,84 @@ from contextlib import contextmanager
 
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
+from django.db.models import Prefetch
+from django.db.models.functions import Lower
+from wsgidav import xml_tools
 from wsgidav.dav_error import HTTP_BAD_REQUEST, HTTP_INSUFFICIENT_STORAGE, DAVError
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.common.logging import scrub
-from workspace.files.models import File, file_upload_path
+from workspace.files.models import File, FileTag, file_upload_path
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
 
 logger = logging.getLogger(__name__)
+
+_OC_NS = "{http://owncloud.org/ns}"
+TAGS_PROP = f"{_OC_NS}tags"
+TAG_PROP = f"{_OC_NS}tag"
+
+# Where a prefetched listing leaves each member's tags, so reading the property
+# costs no query of its own.
+_VIEWER_TAGS_ATTR = "viewer_tags"
+
+
+def _viewer_tags_qs(user):
+    """The ``FileTag`` rows *user* is allowed to see, in display order.
+
+    Tags are personal, the DAV tree is not: a listing resolved through
+    ``accessible_files_q`` includes files someone else shared, and those carry
+    *their* tags. Scoping on ``tag__owner`` is what keeps a sharer's tag names
+    from reaching everyone they shared with.
+    """
+    return (
+        FileTag.objects.filter(tag__owner=user)
+        .select_related("tag")
+        .order_by(Lower("tag__name"))
+    )
+
+
+def _prefetch_viewer_tags(queryset, user):
+    return queryset.prefetch_related(
+        Prefetch("file_tags", queryset=_viewer_tags_qs(user), to_attr=_VIEWER_TAGS_ATTR)
+    )
+
+
+class _TaggedResource:
+    """Publishes a node's tags as ownCloud/Nextcloud's ``oc:tags``.
+
+    No WebDAV RFC defines a vocabulary for keywords, so the choice is between
+    inventing a namespace nothing reads and borrowing the one every Nextcloud
+    and ownCloud client already speaks. ``oc:tags`` is the per-user list
+    (``TagsPlugin``); its instance-wide cousin is ``nc:system-tags``, a
+    different concept in a different namespace, and ``oc:systemtag`` is a
+    filter rule of the ``oc:filter-files`` REPORT rather than a property.
+    ``Tag`` carries an owner, so the per-user spelling is the one that matches.
+
+    Read-only and computed on the fly: the app runs with
+    ``property_manager: False``, so nothing is stored as a dead property - the
+    same arrangement as the RFC 4331 quota pair.
+    """
+
+    def get_property_names(self, *, is_allprop):
+        return super().get_property_names(is_allprop=is_allprop) + [TAGS_PROP]
+
+    def get_property_value(self, name):
+        if name != TAGS_PROP:
+            return super().get_property_value(name)
+        # Built through wsgidav's own etree wrapper: it prefers lxml when
+        # installed, and is_etree_element() checks the concrete type.
+        element = xml_tools.etree.Element(TAGS_PROP)
+        for file_tag in self._viewer_tags():
+            child = xml_tools.etree.SubElement(element, TAG_PROP)
+            child.text = file_tag.tag.name
+        return element
+
+    def _viewer_tags(self):
+        prefetched = getattr(self._file, _VIEWER_TAGS_ATTR, None)
+        if prefetched is not None:
+            return prefetched
+        return _viewer_tags_qs(self._user).filter(file=self._file)
 
 
 class _StreamingWriteBuffer:
@@ -172,10 +241,13 @@ class RootCollection(DAVCollection):
         if hasattr(self, "_members_cache"):
             return
         self._members_cache = list(
-            File.objects.filter(
-                FileService.accessible_files_q(self._user),
-                parent__isnull=True,
-                deleted_at__isnull=True,
+            _prefetch_viewer_tags(
+                File.objects.filter(
+                    FileService.accessible_files_q(self._user),
+                    parent__isnull=True,
+                    deleted_at__isnull=True,
+                ),
+                self._user,
             )
         )
 
@@ -236,7 +308,7 @@ class RootCollection(DAVCollection):
         return self._bucket_bytes()[1]
 
 
-class FolderResource(DAVCollection):
+class FolderResource(_TaggedResource, DAVCollection):
     """Wraps a ``File(node_type=FOLDER)`` instance."""
 
     def __init__(self, path, environ, file_obj):
@@ -297,10 +369,13 @@ class FolderResource(DAVCollection):
         if hasattr(self, "_members_cache"):
             return
         self._members_cache = list(
-            File.objects.filter(
-                FileService.accessible_files_q(self._user),
-                parent=self._file,
-                deleted_at__isnull=True,
+            _prefetch_viewer_tags(
+                File.objects.filter(
+                    FileService.accessible_files_q(self._user),
+                    parent=self._file,
+                    deleted_at__isnull=True,
+                ),
+                self._user,
             )
         )
 
@@ -369,7 +444,7 @@ class FolderResource(DAVCollection):
         return True
 
 
-class FileResource(DAVNonCollection):
+class FileResource(_TaggedResource, DAVNonCollection):
     """Wraps a ``File(node_type=FILE)`` instance."""
 
     def __init__(self, path, environ, file_obj):

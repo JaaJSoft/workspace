@@ -49,9 +49,15 @@ def until_for(recurrence_end, duration):
 
 def forwards(apps, schema_editor):
     Event = apps.get_model("calendar", "Event")
+    # Route every query at the connection being migrated. Without this the
+    # ORM uses the DEFAULT database, which is a different one whenever the
+    # target is not the default - migrate_to_postgres being the case that
+    # matters. There the default SQLite source is already at HEAD, so a
+    # bare Event.objects looks for columns 0019 has dropped.
+    db = schema_editor.connection.alias
     updates = []
     fields = ("recurrence_rule", "is_recurring", "recurrence_until")
-    for event in Event.objects.exclude(recurrence_frequency=None).iterator():
+    for event in Event.objects.using(db).exclude(recurrence_frequency=None).iterator():
         duration = (event.end - event.start) if event.end else None
         event.recurrence_rule = rule_for(
             event.recurrence_frequency, event.recurrence_interval, event.recurrence_end
@@ -60,10 +66,10 @@ def forwards(apps, schema_editor):
         event.recurrence_until = until_for(event.recurrence_end, duration)
         updates.append(event)
         if len(updates) >= 500:
-            Event.objects.bulk_update(updates, fields)
+            Event.objects.using(db).bulk_update(updates, fields)
             updates.clear()
     if updates:
-        Event.objects.bulk_update(updates, fields)
+        Event.objects.using(db).bulk_update(updates, fields)
 
 
 def backwards(apps, schema_editor):
@@ -79,7 +85,10 @@ def backwards(apps, schema_editor):
     loses every event's recurrence outright: dump the table first.
     """
     Event = apps.get_model("calendar", "Event")
-    Event.objects.update(recurrence_rule="", is_recurring=False, recurrence_until=None)
+    db = schema_editor.connection.alias
+    Event.objects.using(db).update(
+        recurrence_rule="", is_recurring=False, recurrence_until=None
+    )
 
 
 class Migration(migrations.Migration):

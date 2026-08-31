@@ -235,6 +235,58 @@ class RegistryTests(TestCase):
         with override_settings(**ENABLED, FILES_MALWARE_SCANNER="clamav"):
             self.assertIsInstance(get_scanner(), ClamAVScanner)
 
-    def test_unknown_backend_yields_no_scanner(self):
+    def test_unknown_backend_never_reads_as_scanning_being_off(self):
+        """None means "not asked to scan", never "asked but could not".
+
+        Returning None here would make the scan task report "disabled" and
+        write no verdict, so a typo in the setting would leave every file
+        unscanned on an instance configured to scan them.
+        """
         with override_settings(**ENABLED, FILES_MALWARE_SCANNER="nope"):
+            self.assertIsNotNone(get_scanner())
+
+
+class MisconfiguredBackendTests(TestCase):
+    """A typo in FILES_MALWARE_SCANNER must not read as "scanning is off"."""
+
+    def test_unknown_backend_still_yields_a_scanner(self):
+        from workspace.files.services.scanning.registry import MisconfiguredScanner
+
+        with override_settings(**ENABLED, FILES_MALWARE_SCANNER="clamavv"):
+            scanner = get_scanner()
+        self.assertIsInstance(scanner, MisconfiguredScanner)
+
+    def test_it_reports_an_error_verdict_so_the_policy_applies(self):
+        import io
+
+        with override_settings(**ENABLED, FILES_MALWARE_SCANNER="clamavv"):
+            verdict = get_scanner().scan(io.BytesIO(b"x"), name="a.txt")
+        self.assertEqual(verdict.status, FileScan.Status.ERROR)
+        self.assertIn("clamavv", verdict.detail)
+
+    def test_it_reports_unreachable_health_for_the_admin_card(self):
+        with override_settings(**ENABLED, FILES_MALWARE_SCANNER="clamavv"):
+            health = get_scanner().health()
+        self.assertFalse(health.reachable)
+        self.assertIn("clamavv", health.error)
+
+    def test_disabled_scanning_still_yields_no_scanner(self):
+        with override_settings(
+            FILES_MALWARE_SCAN_ENABLED=False, FILES_MALWARE_SCANNER="clamavv"
+        ):
             self.assertIsNone(get_scanner())
+
+    def test_the_system_check_reports_the_typo(self):
+        from workspace.files.checks import check_malware_scanner_backend
+
+        with override_settings(**ENABLED, FILES_MALWARE_SCANNER="clamavv"):
+            errors = check_malware_scanner_backend(None)
+        self.assertEqual([e.id for e in errors], ["files.E001"])
+
+    def test_the_system_check_is_silent_when_configured(self):
+        from workspace.files.checks import check_malware_scanner_backend
+
+        with override_settings(**ENABLED, FILES_MALWARE_SCANNER="clamav"):
+            self.assertEqual(check_malware_scanner_backend(None), [])
+        with override_settings(FILES_MALWARE_SCAN_ENABLED=False):
+            self.assertEqual(check_malware_scanner_backend(None), [])

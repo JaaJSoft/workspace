@@ -6,7 +6,10 @@
 <template x-if="true">
   <div
     data-testid="drop-zone"
-    x-data="sharedDrop('{{ share_token }}', '{{ access_token }}', {{ max_file_bytes|default:0 }})"
+    data-share-token="{{ share_token }}"
+    data-access-token="{{ access_token }}"
+    data-max-file-bytes="{{ max_file_bytes|default:0 }}"
+    x-data="sharedDrop($el.dataset.shareToken, $el.dataset.accessToken, Number($el.dataset.maxFileBytes))"
     class="card bg-base-100 shadow-lg"
   >
     <div class="card-body">

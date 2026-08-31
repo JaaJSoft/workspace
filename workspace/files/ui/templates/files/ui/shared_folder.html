@@ -6,7 +6,13 @@
   <script src="{% static 'files/ui/js/shared_folder.js' %}"></script>
 {% endblock %}
 {% block content %}
-  <div x-data="sharedFolderBrowser('{{ share_token }}', '{{ access_token }}')" class="space-y-4">
+  {# An Alpine expression is a JS context - HTML-attribute escaping does not protect it, so tokens travel as data attributes and get read with $el.dataset instead. #}
+  <div
+    data-share-token="{{ share_token }}"
+    data-access-token="{{ access_token }}"
+    x-data="sharedFolderBrowser($el.dataset.shareToken, $el.dataset.accessToken)"
+    class="space-y-4"
+  >
     <div class="card bg-base-100 shadow-lg overflow-hidden">
       <!-- Header -->
       <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">

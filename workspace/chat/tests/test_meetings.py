@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -8,6 +9,7 @@ from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event, EventMember
 from workspace.chat.models import Conversation, Meeting, MeetingGuest
+from workspace.chat.services import meetings as meeting_service
 from workspace.chat.services.meeting_guests import issue_token, resolve_guest
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import (
@@ -207,3 +209,48 @@ class MeetingLifecycleTests(TestCase):
         self.assertIsNotNone(resolve_guest(token))
         end_meeting(self.meeting)
         self.assertIsNone(resolve_guest(token))
+
+
+class CreateMeetingRaceTests(TestCase):
+    """Two hosts creating a meeting for the same event at once both pass the
+    ``existing is None`` check in ``_create_meeting_once``; the loser trips
+    ``Meeting.event``'s unique constraint. ``create_meeting`` must recover into
+    the winner's row instead of surfacing the IntegrityError as a 500.
+    """
+
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.owner = User.objects.create_user(username="race", password="x")
+        self.event = make_event(self.owner)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_compound_race_retries_until_it_finds_the_winner(self):
+        # A single retry only closes the two-party race. A compound race (a
+        # third caller's insert also lands in the gap) must keep retrying
+        # instead of surfacing the second IntegrityError as a 500.
+        winner = create_meeting(self.event, self.owner)
+
+        with mock.patch.object(
+            meeting_service,
+            "_create_meeting_once",
+            side_effect=[IntegrityError("x"), IntegrityError("y"), winner],
+        ) as once:
+            result = create_meeting(self.event, self.owner)
+
+        self.assertEqual(result.pk, winner.pk)
+        self.assertEqual(once.call_count, 3)
+
+    def test_unrelated_integrity_error_propagates_without_retry(self):
+        # Recovery only applies to the create race, identified by the meeting
+        # now existing. Any other IntegrityError is a real failure and must
+        # propagate rather than be swallowed.
+        with mock.patch.object(
+            meeting_service, "_create_meeting_once", side_effect=IntegrityError("boom")
+        ) as once:
+            with self.assertRaises(IntegrityError):
+                create_meeting(self.event, self.owner)
+
+        self.assertEqual(once.call_count, 1)

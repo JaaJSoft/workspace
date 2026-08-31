@@ -4,7 +4,7 @@ A meeting owns a dedicated conversation rather than attaching to an existing
 one, so a guest admitted to the meeting has structurally nothing else to read.
 """
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .call_signaling import enqueue_event, notify_participant
@@ -13,8 +13,7 @@ from .participant_keys import guest_key
 
 
 @transaction.atomic
-def create_meeting(event, created_by):
-    """Return the event's meeting, creating it and its conversation if needed."""
+def _create_meeting_once(event, created_by):
     from workspace.calendar.models import EventMember
 
     from ..models import Conversation, ConversationMember, Meeting
@@ -41,6 +40,33 @@ def create_meeting(event, created_by):
     return Meeting.objects.create(
         event=event, conversation=conversation, created_by=created_by
     )
+
+
+def create_meeting(event, created_by):
+    """Return the event's meeting, creating it and its conversation if needed.
+
+    Two requests racing to create the same event's meeting both pass the
+    ``existing is None`` check in ``_create_meeting_once``; the loser's atomic
+    block rolls back cleanly (no orphan conversation) but trips ``Meeting.event``'s
+    unique constraint on INSERT. Recovered the same way
+    ``calls.start_or_join_call`` recovers the equivalent race on
+    ``one_active_call_per_conversation``: retry a bounded number of times,
+    identifying the race by the meeting now existing rather than masking an
+    unrelated IntegrityError.
+    """
+    from ..models import Meeting
+
+    max_attempts = 4
+    for attempt in range(max_attempts):
+        try:
+            return _create_meeting_once(event, created_by)
+        except IntegrityError:
+            race_winner_exists = Meeting.objects.filter(event=event).exists()
+            if not race_winner_exists or attempt == max_attempts - 1:
+                raise
+    # Unreachable: the final iteration either returns or re-raises above. Kept as
+    # a defensive guard so the function never falls through to an implicit None.
+    raise RuntimeError("create_meeting exhausted retries without returning")
 
 
 def _notify_guest(guest, event_name, data=None):

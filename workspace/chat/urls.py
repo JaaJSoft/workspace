@@ -8,6 +8,7 @@ from .views import (
     conversations,
     goals,
     interactions,
+    meetings,
     messages,
     pins,
     scheduled,
@@ -223,6 +224,42 @@ urlpatterns = [
         "api/v1/chat/conversations/<uuid:conversation_id>/regenerate-title",
         bots.ConversationRegenerateTitleView.as_view(),
         name="chat-conversation-regenerate-title",
+    ),
+    # Meetings - host endpoints
+    path(
+        "api/v1/chat/meetings",
+        meetings.MeetingCreateView.as_view(),
+        name="chat-meeting-create",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/lobby",
+        meetings.MeetingLobbyView.as_view(),
+        name="chat-meeting-lobby",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/guests/<uuid:guest_uuid>/admit",
+        meetings.MeetingGuestAdmitView.as_view(),
+        name="chat-meeting-guest-admit",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/guests/<uuid:guest_uuid>/refuse",
+        meetings.MeetingGuestRefuseView.as_view(),
+        name="chat-meeting-guest-refuse",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/guests/<uuid:guest_uuid>/remove",
+        meetings.MeetingGuestRemoveView.as_view(),
+        name="chat-meeting-guest-remove",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/lock",
+        meetings.MeetingLockView.as_view(),
+        name="chat-meeting-lock",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/end",
+        meetings.MeetingEndView.as_view(),
+        name="chat-meeting-end",
     ),
     # Attachments
     path(

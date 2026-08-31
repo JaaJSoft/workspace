@@ -8,6 +8,17 @@ so nothing in this module ever normalizes it on the way in.
 purely so the calendar's two hot queries stay indexable. ``apply_rule`` is their
 only writer; ``tests/test_recurrence_invariant.py`` fails the build on any
 assignment to them elsewhere.
+
+``icalendar`` is the only thing here that understands RFC 5545 syntax, reading
+and writing alike: ``Contentline`` splits a property into its name, parameters
+and value, ``vRecur`` reads an RRULE body into already-typed parts and writes
+one back, ``vDDDLists`` reads an RDATE's values. Re-serializing an RRULE
+reorders its parts (``FREQ;BYDAY;COUNT`` comes back as ``FREQ;COUNT;BYDAY`` -
+identical meaning, different bytes), so a rule an operation does not have to
+change is returned untouched rather than round-tripped: ``continue_after``
+returns early when there is no COUNT to recount, and ``truncate_before`` leaves
+every line but the ones it cuts alone. ``_normalize_for_parse`` is the one place
+that reorders freely - its output goes straight to dateutil and is discarded.
 """
 
 import logging
@@ -16,6 +27,8 @@ from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil.rrule import rrulestr
+from icalendar.parser import Contentline
+from icalendar.prop import vDDDLists, vRecur
 
 from workspace.common.logging import scrub
 
@@ -41,7 +54,7 @@ _SIMPLE_FREQ_INVERSE = {value: key for key, value in _SIMPLE_FREQ.items()}
 # them.
 _FIXED_STEP_FREQ = {"DAILY", "WEEKLY", "HOURLY", "MINUTELY", "SECONDLY"}
 
-_UNTIL_RE = re.compile(r"UNTIL=(\d{8}(?:T\d{6}Z?)?)")
+_INTERVAL_RE = re.compile(r"(?:^|;)\s*INTERVAL\s*=([^;]*)", re.IGNORECASE)
 
 _UNIT_LABELS = {
     "daily": ("day", "days"),
@@ -55,8 +68,6 @@ _UNIT_LABELS = {
 # Anything wider than this set - BYSETPOS, BYMONTH, BYWEEKNO, a second RRULE
 # line, an RDATE - keeps returning the raw rule text, same as before.
 _BY_QUALIFIED_KEYS = {"FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "COUNT", "UNTIL"}
-
-_BYDAY_TOKEN_RE = re.compile(r"^(-?\d{1,2})?(MO|TU|WE|TH|FR|SA|SU)$")
 
 _WEEKDAY_SHORT = {
     "MO": "Mon",
@@ -86,47 +97,69 @@ def _ical_utc(value):
     return value.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
-def _parse_ical_utc(text, zone=UTC):
-    """Parse an RFC 5545 DATE or DATE-TIME into an aware datetime.
-
-    A trailing ``Z`` always means UTC, regardless of *zone*. Without one the
-    value is a local wall-clock time in *zone* - an RDATE/EXDATE under a TZID
-    parameter, per RFC 5545 3.8.5.2/3.8.5.3.
-    """
-    if text.endswith("Z"):
-        text = text[:-1]
-        zone = UTC
-    fmt = "%Y%m%dT%H%M%S" if "T" in text else "%Y%m%d"
-    return datetime.strptime(text, fmt).replace(tzinfo=zone)
-
-
 def _rule_lines(rule_text):
     return [line.strip() for line in rule_text.splitlines() if line.strip()]
 
 
-def _properties(line):
-    """Split ``NAME:a=1;b=2`` into ``("NAME", {"A": "1", "B": "2"})``."""
-    name, _, body = line.partition(":")
-    parts = {}
-    for token in body.split(";"):
-        key, _, value = token.partition("=")
-        parts[key.upper()] = value
-    return name.upper(), parts
+def _contentline(line):
+    """Split one content line into ``(NAME, parameters, value)``.
 
-
-def _name_and_params(name):
-    """Split a property's name segment into its base name and parameters.
-
-    ``RDATE;TZID=America/New_York`` -> (``"RDATE"``, {"TZID": "America/New_York"}).
-    Property parameters live before the colon, so this is distinct from
-    ``_properties``, which parses the value pairs after it.
+    ``RDATE;TZID=America/New_York:20260501T090000`` ->
+    ``("RDATE", {"TZID": "America/New_York"}, "20260501T090000")``. None when
+    icalendar cannot read the line at all, which every caller treats as "not a
+    property I handle": text that malformed is reported once, by ``parse``.
     """
-    base, *param_tokens = name.split(";")
-    params = {}
-    for token in param_tokens:
-        key, _, value = token.partition("=")
-        params[key.upper()] = value
-    return base.upper(), params
+    try:
+        name, params, value = Contentline(line).parts()
+    except ValueError:
+        return None
+    return name.upper(), params, value
+
+
+def _recur_parts(value):
+    """Read an RRULE body into ``{"FREQ": ["DAILY"], "COUNT": [5]}``, or None.
+
+    Every part is a list of already-typed values: COUNT and INTERVAL are ints,
+    UNTIL is a date or a datetime, a BYDAY entry carries ``.relative`` and
+    ``.weekday``. None means icalendar refused the body, which every reader
+    treats like a shape it does not recognise.
+    """
+    try:
+        return dict(vRecur.from_ical(value))
+    except ValueError, TypeError:
+        return None
+
+
+def _rrule_parts(line):
+    """``_recur_parts`` for a line that is exactly an unparameterized RRULE.
+
+    None for anything else - another property, an RRULE carrying a parameter,
+    an unreadable line, a body icalendar refuses - which is the answer the
+    strict readers want for all four.
+    """
+    parsed = _contentline(line)
+    if parsed is None:
+        return None
+    name, params, value = parsed
+    if name != "RRULE" or params:
+        return None
+    return _recur_parts(value)
+
+
+def _rrule_bodies(rule_text):
+    """The value of every RRULE line in *rule_text*, in order."""
+    bodies = []
+    for line in _rule_lines(rule_text):
+        parsed = _contentline(line)
+        if parsed is not None and parsed[0] == "RRULE":
+            bodies.append(parsed[2])
+    return bodies
+
+
+def _single(parts, key, default=None):
+    """First value of a vRecur part, or *default* when the part is absent."""
+    values = parts.get(key)
+    return values[0] if values else default
 
 
 def _zone_or_utc(tzid):
@@ -156,57 +189,79 @@ def _zone_from_name(name):
 
 
 def _until_instant(value, zone):
-    """UTC instant for an ``UNTIL`` literal written in any RFC 5545 form.
+    """UTC instant for an ``UNTIL`` value in any RFC 5545 form.
 
-    A trailing ``Z`` is already an instant. A naive DATE-TIME is a wall-clock
-    time in *zone*. A bare DATE covers the whole day (RFC 5545 3.3.10 requires
-    that form when DTSTART is a DATE, which is what every client emits for a
-    bounded all-day series), so it resolves to the last second of that day -
-    the inclusive reading, and the only one that cannot place the bound before
-    the series' true final occurrence.
+    icalendar hands back an aware datetime for the ``Z`` form (already an
+    instant), a naive one for a local DATE-TIME (a wall-clock time in *zone*)
+    and a date for the DATE form. A bare DATE covers the whole day (RFC 5545
+    3.3.10 requires that form when DTSTART is a DATE, which is what every
+    client emits for a bounded all-day series), so it resolves to the last
+    second of that day - the inclusive reading, and the only one that cannot
+    place the bound before the series' true final occurrence.
     """
-    if value.endswith("Z"):
-        return _parse_ical_utc(value)
-    if "T" in value:
-        return _parse_ical_utc(value, zone).astimezone(UTC)
-    day = datetime.strptime(value, "%Y%m%d").date()
-    return datetime.combine(day, time(23, 59, 59), tzinfo=zone).astimezone(UTC)
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=zone)
+        return value.astimezone(UTC)
+    return datetime.combine(value, time(23, 59, 59), tzinfo=zone).astimezone(UTC)
 
 
-def _date_list_instants(body, params, zone):
-    """Aware instants for one RDATE/EXDATE property body.
+def _until_datetime(value):
+    """An ``UNTIL`` value as an aware UTC datetime, midnight for a bare DATE.
 
-    Covers the three value forms clients emit: a UTC DATE-TIME, a wall-clock
-    DATE-TIME under a TZID parameter (or floating, resolved in *zone*), a bare
-    DATE under ``VALUE=DATE``, and a PERIOD, which is anchored on its start.
+    Deliberately not ``_until_instant``, which stretches a DATE to the last
+    second of its day because it is computing a bound. This one feeds the
+    picker and the English summary, where 00:00 is the honest reading.
     """
-    value_zone = _zone_or_utc(params["TZID"]) if "TZID" in params else zone
-    instants = []
-    for raw in body.split(","):
-        text = raw.strip().split(";")[-1]
-        if not text:
-            continue
+    if isinstance(value, datetime):
+        return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+    return datetime.combine(value, time(), tzinfo=UTC)
+
+
+def _value_instant(value, zone):
+    """Aware instant for one date value icalendar has already typed."""
+    if isinstance(value, tuple):
         # A PERIOD ("<start>/<end>" or "<start>/<duration>") recurs at its
         # start; the length is the occurrence's, not the series'.
-        instants.append(_parse_ical_utc(text.split("/", 1)[0], value_zone))
-    return instants
+        value = value[0]
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=zone)
+    return datetime.combine(value, time(), tzinfo=zone)
 
 
-def _normalized_rrule_body(body, zone):
+def _date_list_instants(value, params, zone):
+    """Aware instants for one RDATE/EXDATE property value.
+
+    Covers every value form clients emit: a UTC DATE-TIME, a wall-clock
+    DATE-TIME under a TZID parameter (or floating, resolved in *zone*), a bare
+    DATE under ``VALUE=DATE``, and a PERIOD. Raises ValueError on a value
+    icalendar cannot read.
+    """
+    text = value.strip().strip(",")
+    if not text:
+        return []
+    value_zone = _zone_or_utc(params["TZID"]) if "TZID" in params else zone
+    return [_value_instant(parsed, value_zone) for parsed in vDDDLists.from_ical(text)]
+
+
+def _normalized_rrule_body(value, zone):
     """An RRULE body with its UNTIL rewritten as a UTC DATE-TIME.
 
     dateutil refuses any UNTIL that is not a UTC instant once dtstart is
     aware, which would reject the bounded all-day rules Google and Thunderbird
-    emit. Only the parser's input is rewritten; the stored column keeps the
-    client's bytes.
+    emit. The result is handed to ``rrulestr`` and thrown away, so the part
+    reordering re-serializing costs never reaches the stored column. A body
+    that needs no rewrite is still returned untouched.
     """
-    tokens = []
-    for token in body.split(";"):
-        key, sep, value = token.partition("=")
-        if sep and key.upper() == "UNTIL":
-            token = f"{key}={_ical_utc(_until_instant(value, zone))}"
-        tokens.append(token)
-    return ";".join(tokens)
+    parts = _recur_parts(value)
+    if parts is None:
+        # rrulestr reports what it chokes on; its message beats ours.
+        return value
+    until = _single(parts, "UNTIL")
+    if until is None or (isinstance(until, datetime) and until.tzinfo):
+        return value
+    parts["UNTIL"] = [_until_instant(until, zone)]
+    return vRecur(parts).to_ical().decode()
 
 
 def _normalize_for_parse(rule_text, zone):
@@ -225,12 +280,15 @@ def _normalize_for_parse(rule_text, zone):
     """
     out = []
     for line in _rule_lines(rule_text):
-        name, _, body = line.partition(":")
-        prop, params = _name_and_params(name)
+        parsed = _contentline(line)
+        if parsed is None:
+            out.append(line)
+            continue
+        prop, params, value = parsed
         if prop in ("RRULE", "EXRULE"):
-            out.append(f"{prop}:{_normalized_rrule_body(body, zone)}")
+            out.append(f"{prop}:{_normalized_rrule_body(value, zone)}")
         elif prop in ("RDATE", "EXDATE"):
-            instants = _date_list_instants(body, params, zone)
+            instants = _date_list_instants(value, params, zone)
             if instants:
                 out.append(f"{prop}:" + ",".join(_ical_utc(dt) for dt in instants))
         else:
@@ -247,17 +305,16 @@ def _has_non_positive_interval(rule_text):
     the pre-window gap by it, so INTERVAL=0 raises ZeroDivisionError out of
     the expansion rather than degrading. Rejecting it here, where every read
     already passes, keeps that failure a non-series instead of a 500.
+
+    Reads the literal rather than icalendar's typed value on purpose:
+    ``vRecur.from_ical`` refuses a body as a whole, so ``INTERVAL=x`` would
+    come back as "this rule is malformed" with no way to tell it from a broken
+    FREQ - and those two deserve different warnings.
     """
-    for line in _rule_lines(rule_text):
-        prop, _ = _name_and_params(line.partition(":")[0])
-        if prop != "RRULE":
-            continue
-        for token in line.partition(":")[2].split(";"):
-            key, _, value = token.partition("=")
-            if key.strip().upper() != "INTERVAL":
-                continue
+    for body in _rrule_bodies(rule_text):
+        for raw in _INTERVAL_RE.findall(body):
             try:
-                if int(value) < 1:
+                if int(raw) < 1:
                     return True
             except ValueError:
                 return True
@@ -304,11 +361,18 @@ def _is_bounded(rule_text):
     One unbounded RRULE makes the whole set infinite however bounded its
     siblings are, so this is an ``all`` and not an ``any``.
     """
-    rules = [ln for ln in _rule_lines(rule_text) if ln.upper().startswith("RRULE")]
-    if not rules:
+    bodies = _rrule_bodies(rule_text)
+    if not bodies:
         # RDATE-only sets are finite by construction.
         return True
-    return all("UNTIL=" in ln.upper() or "COUNT=" in ln.upper() for ln in rules)
+    for body in bodies:
+        parts = _recur_parts(body)
+        # A body icalendar refuses is not a series at all, and ``parse`` says
+        # so a line later; reporting it unbounded reaches that answer without
+        # inventing a bound of its own.
+        if parts is None or not ("UNTIL" in parts or "COUNT" in parts):
+            return False
+    return True
 
 
 def _rdate_instants(rule_text, zone):
@@ -319,12 +383,11 @@ def _rdate_instants(rule_text, zone):
     """
     instants = []
     for line in _rule_lines(rule_text):
-        name, _, body = line.partition(":")
-        prop, params = _name_and_params(name)
-        if prop != "RDATE":
+        parsed = _contentline(line)
+        if parsed is None or parsed[0] != "RDATE":
             continue
         try:
-            instants.extend(_date_list_instants(body, params, zone))
+            instants.extend(_date_list_instants(parsed[2], parsed[1], zone))
         except ValueError:
             return None
     return instants
@@ -346,12 +409,12 @@ def _loose_bound(rule_text, duration, zone=UTC):
     the series - the one direction that silently deletes live events from a
     calendar view.
     """
-    rules = [ln for ln in _rule_lines(rule_text) if ln.upper().startswith("RRULE")]
-    if not all("UNTIL=" in ln.upper() for ln in rules):
-        return None
-    candidates = [
-        _until_instant(value, zone) for value in _UNTIL_RE.findall(rule_text.upper())
-    ]
+    candidates = []
+    for body in _rrule_bodies(rule_text):
+        parts = _recur_parts(body)
+        if parts is None or "UNTIL" not in parts:
+            return None
+        candidates.extend(_until_instant(value, zone) for value in parts["UNTIL"])
     rdates = _rdate_instants(rule_text, zone)
     if rdates is None:
         return None
@@ -420,18 +483,18 @@ def to_simple(rule_text):
     lines = _rule_lines(rule_text)
     if len(lines) != 1:
         return None
-    name, parts = _properties(lines[0])
-    if name != "RRULE" or set(parts) - {"FREQ", "INTERVAL", "UNTIL"}:
+    parts = _rrule_parts(lines[0])
+    if parts is None or set(parts) - {"FREQ", "INTERVAL", "UNTIL"}:
         return None
-    frequency = _SIMPLE_FREQ.get(parts.get("FREQ", "").upper())
+    frequency = _SIMPLE_FREQ.get(_single(parts, "FREQ", ""))
     if frequency is None:
         return None
-    try:
-        interval = int(parts.get("INTERVAL", 1))
-        until = _parse_ical_utc(parts["UNTIL"]) if "UNTIL" in parts else None
-    except ValueError:
-        return None
-    return {"frequency": frequency, "interval": interval, "until": until}
+    until = _single(parts, "UNTIL")
+    return {
+        "frequency": frequency,
+        "interval": int(_single(parts, "INTERVAL", 1)),
+        "until": _until_datetime(until) if until is not None else None,
+    }
 
 
 def to_simple_json(rule_text):
@@ -460,12 +523,8 @@ def _until_phrase(until):
     return f", until {until.day} {until.strftime('%B %Y')}"
 
 
-def _count_phrase(count_text):
-    """ ", for 10 occurrences" - or None when *count_text* isn't an integer."""
-    try:
-        count = int(count_text)
-    except ValueError:
-        return None
+def _count_phrase(count):
+    """ ", for 10 occurrences"."""
     return f", for {count} occurrence{'' if count == 1 else 's'}"
 
 
@@ -479,30 +538,13 @@ def _by_qualified_tail(parts):
     if "COUNT" in parts and "UNTIL" in parts:
         return None
     if "COUNT" in parts:
-        return _count_phrase(parts["COUNT"])
+        return _count_phrase(_single(parts, "COUNT"))
     if "UNTIL" in parts:
-        try:
-            until = _parse_ical_utc(parts["UNTIL"])
-        except ValueError:
-            return None
-        return _until_phrase(until)
+        return _until_phrase(_until_datetime(_single(parts, "UNTIL")))
     return ""
 
 
-def _parse_byday_tokens(value):
-    """``"2TU,3WE"`` -> ``[(2, "TU"), (3, "WE")]``, or None if any token is
-    outside the RFC 5545 ``[+-]ordwk`` grammar this function accepts."""
-    tokens = []
-    for raw in value.split(","):
-        match = _BYDAY_TOKEN_RE.match(raw.strip().upper())
-        if not match:
-            return None
-        ordinal_text, weekday = match.groups()
-        tokens.append((int(ordinal_text) if ordinal_text else None, weekday))
-    return tokens
-
-
-def _describe_byday(freq, interval, value):
+def _describe_byday(freq, interval, weekdays):
     """Phrase a BYDAY clause, or None outside the two shapes this covers.
 
     A single ordinal weekday (``2TU``) reads as "Every 2nd Tuesday of the
@@ -512,7 +554,7 @@ def _describe_byday(freq, interval, value):
     phrases. A weekday set with no ordinals (``MO,WE,FR``) reads as "Every
     week on Mon, Wed and Fri" and only makes sense against FREQ=WEEKLY.
     """
-    tokens = _parse_byday_tokens(value)
+    tokens = [(day.relative, day.weekday) for day in weekdays]
     if not tokens:
         return None
 
@@ -546,21 +588,15 @@ def _describe_byday(freq, interval, value):
     return f"{prefix} on {joined}"
 
 
-def _describe_bymonthday(freq, interval, value):
+def _describe_bymonthday(freq, interval, days):
     """Phrase a single-day BYMONTHDAY clause, or None otherwise.
 
     Only a lone day number is covered ("Monthly on day 15", -1 as "on the
     last day") - a list of days ("15,20") is outside what this phrases.
     """
-    if freq != "MONTHLY":
+    if freq != "MONTHLY" or len(days) != 1:
         return None
-    tokens = [token.strip() for token in value.split(",")]
-    if len(tokens) != 1:
-        return None
-    try:
-        day = int(tokens[0])
-    except ValueError:
-        return None
+    day = days[0]
     if day == -1:
         day_phrase = "on the last day"
     elif 1 <= day <= 31:
@@ -583,16 +619,13 @@ def _describe_by_qualified(rule_text):
     lines = _rule_lines(rule_text)
     if len(lines) != 1:
         return None
-    name, parts = _properties(lines[0])
-    if name != "RRULE" or set(parts) - _BY_QUALIFIED_KEYS:
+    parts = _rrule_parts(lines[0])
+    if parts is None or set(parts) - _BY_QUALIFIED_KEYS:
         return None
     if "BYDAY" in parts and "BYMONTHDAY" in parts:
         return None
-    freq = parts.get("FREQ", "").upper()
-    try:
-        interval = int(parts.get("INTERVAL", 1))
-    except ValueError:
-        return None
+    freq = _single(parts, "FREQ", "")
+    interval = int(_single(parts, "INTERVAL", 1))
 
     if "BYDAY" in parts:
         body = _describe_byday(freq, interval, parts["BYDAY"])
@@ -642,6 +675,10 @@ def continue_after(rule_text, dtstart, instant, tz=None):
     three occurrences would leave 3 + 10 rather than 10.
 
     The recount walks the original series, which a COUNT bounds by definition.
+
+    A rule with nothing to recount comes back byte-identical: the early return
+    is what keeps an UNTIL or unbounded rule out of the re-serializer, which
+    would reorder its parts for no gain.
     """
     if "COUNT=" not in rule_text.upper():
         return rule_text
@@ -652,18 +689,14 @@ def continue_after(rule_text, dtstart, instant, tz=None):
 
     out = []
     for line in _rule_lines(rule_text):
-        name, _, body = line.partition(":")
-        prop, _params = _name_and_params(name)
-        if prop != "RRULE":
+        name, _, _ = line.partition(":")
+        parsed = _contentline(line)
+        parts = _recur_parts(parsed[2]) if parsed and parsed[0] == "RRULE" else None
+        if parts is None or "COUNT" not in parts:
             out.append(line)
             continue
-        kept = [
-            f"COUNT={remaining}"
-            if token.split("=")[0].strip().upper() == "COUNT"
-            else token
-            for token in body.split(";")
-        ]
-        out.append(f"{name}:" + ";".join(kept))
+        parts["COUNT"] = [remaining]
+        out.append(f"{name}:" + vRecur(parts).to_ical().decode())
     return "\n".join(out)
 
 
@@ -680,32 +713,37 @@ def truncate_before(rule_text, instant):
     to be truncatable at all, and appending an UNTIL beside a COUNT produces a
     rule clients reject.
     """
-    until_token = f"UNTIL={_ical_utc(instant)}"
     out = []
     for line in _rule_lines(rule_text):
         name, _, body = line.partition(":")
-        prop, params = _name_and_params(name)
-        if prop == "RRULE":
-            kept = [
-                token
-                for token in body.split(";")
-                if token.split("=")[0].upper() not in ("UNTIL", "COUNT")
-            ]
-            kept.append(until_token)
-            out.append(f"{name}:" + ";".join(kept))
+        parsed = _contentline(line)
+        prop, params = (parsed[0], parsed[1]) if parsed else ("", {})
+        parts = _recur_parts(parsed[2]) if prop == "RRULE" else None
+        if parts is not None:
+            parts.pop("COUNT", None)
+            parts["UNTIL"] = [instant]
+            out.append(f"{name}:" + vRecur(parts).to_ical().decode())
+        elif prop == "RRULE":
+            # A body icalendar cannot read is a body ``parse`` refuses too, so
+            # there is no series here to stop. A second bound beside the
+            # broken one would only make the text harder to repair.
+            out.append(line)
         elif prop in ("RDATE", "EXDATE"):
-            # A TZID parameter means the values are local wall-clock times
-            # with no trailing Z; resolve them in that zone before comparing
-            # to *instant*, which is a UTC-anchored cutoff.
+            # Rebuilt from the line's own name-and-parameters segment: a
+            # TZID says the values are local wall-clock times, so dropping it
+            # would move every surviving date by the zone's offset. It also
+            # means they carry no trailing Z, so they are resolved in that
+            # zone before comparing to *instant*, a UTC-anchored cutoff.
             zone = _zone_or_utc(params.get("TZID"))
             surviving = []
             for value in body.split(","):
-                text = value.strip().split(";")[-1]
                 try:
                     # A PERIOD value ("<start>/<end>") is compared on its
                     # start; anything else is a bare DATE or DATE-TIME.
-                    occurrence = _parse_ical_utc(text.split("/", 1)[0], zone)
-                except ValueError:
+                    occurrence = _value_instant(
+                        vDDDLists.from_ical(value.strip())[0], zone
+                    )
+                except ValueError, IndexError:
                     # Unreadable here means unreadable to parse() too, so the
                     # value fires nothing. Keep it rather than silently
                     # deleting a date the user wrote.
@@ -732,8 +770,8 @@ def is_simple_stepping(rule_text):
     lines = _rule_lines(rule_text)
     if len(lines) != 1:
         return False
-    name, parts = _properties(lines[0])
-    if name != "RRULE" or parts.get("FREQ", "").upper() not in _FIXED_STEP_FREQ:
+    parts = _rrule_parts(lines[0])
+    if parts is None or _single(parts, "FREQ", "") not in _FIXED_STEP_FREQ:
         return False
     if "COUNT" in parts:
         return False
@@ -752,12 +790,10 @@ def simple_stepping_frequency(rule_text):
     vs. "can this be rendered in the three-field picker?") and only look
     alike for the frequencies where the answer happens to agree.
     """
-    _, parts = _properties(_rule_lines(rule_text)[0])
-    try:
-        interval = int(parts.get("INTERVAL", 1))
-    except ValueError:
+    parts = _rrule_parts(_rule_lines(rule_text)[0])
+    if parts is None:
         return None
-    return parts["FREQ"].lower(), interval
+    return _single(parts, "FREQ", "").lower(), int(_single(parts, "INTERVAL", 1))
 
 
 def apply_rule(event, rule_text):

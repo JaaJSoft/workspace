@@ -17,13 +17,13 @@ _PAGE_SIZE = 500
 
 
 class Command(BaseCommand):
-    help = "Queue malware scans for files that have never been scanned."
+    help = "Queue malware scans for files whose verdict is missing or stale."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--rescan",
             action="store_true",
-            help="Scan every file, not only those without a verdict.",
+            help="Scan every file, not only those with a missing or stale verdict.",
         )
         parser.add_argument(
             "--limit",

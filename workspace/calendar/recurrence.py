@@ -28,15 +28,21 @@ _FIXED_STEP_DAYS = {
     "weekly": 7,
 }
 
-# Sub-day frequencies proven safe to anchor by plain (absolute) timedelta
-# arithmetic even under a wall-clock zone: swept every hour across both a
-# spring-forward and a fall-back Europe/Paris transition, at several minute
-# offsets, and the anchored stream matched a fresh series on the same phase
-# in every case. MINUTELY and SECONDLY are deliberately excluded - the same
-# sweep produced mismatched instants right at a spring-forward gap (a local
-# minute that does not exist), so anchoring them under a zone is not proven
-# safe. They still anchor under UTC (tz is None), where there is no DST to
-# get wrong.
+# Sub-day frequency proven safe to anchor by plain (absolute) timedelta
+# arithmetic even under a wall-clock zone - and ONLY at INTERVAL == 1 (see
+# the interval == 1 check at the call site below). Proof: swept every hour
+# across both a spring-forward and a fall-back Europe/Paris transition, at
+# several minute offsets, and the anchored stream matched a fresh series on
+# the same phase in every case (672 combinations, zero mismatches) - see
+# test_old_hourly_master_anchor_matches_unanchored_across_dst. No interval
+# other than 1 has an equivalent proof, so HOURLY at any other interval,
+# MINUTELY at any interval, and SECONDLY at any interval all fall back to
+# the true start under a zone and rely on the skip budget in
+# occurrences_in_range instead - see
+# test_old_hourly_interval_master_matches_its_own_true_walk for why that
+# fallback, not a wider anchor, is the correct default absent a proof. All
+# of them still anchor under UTC (tz is None), where there is no DST to get
+# wrong.
 _ABSOLUTE_STEP_UNDER_TZ = {"hourly"}
 
 
@@ -53,10 +59,12 @@ def _anchored_dtstart(master, floor, tz, frequency, interval):
     plain timedelta arithmetic - there is no DST to get wrong. With *tz*,
     DAILY/WEEKLY anchor by stepping whole local calendar days and
     reattaching the original local time (a fixed timedelta would drift
-    across DST transitions); HOURLY anchors the same way as the untz-ed case
-    (proven equivalent, see ``_ABSOLUTE_STEP_UNDER_TZ``); MINUTELY, SECONDLY,
-    and everything ``is_simple_stepping`` rejects (monthly, yearly, BY- and
-    COUNT-qualified rules) keep the true start instead.
+    across DST transitions); HOURLY at INTERVAL == 1 anchors the same way as
+    the tz-less case (proven equivalent for exactly that one combination,
+    see ``_ABSOLUTE_STEP_UNDER_TZ``). Every other zoned combination - HOURLY
+    at any other interval, MINUTELY at any interval, SECONDLY at any
+    interval, and everything ``is_simple_stepping`` rejects (monthly,
+    yearly, BY- and COUNT-qualified rules) - keeps the true start instead.
     """
     if tz is None:
         dtstart = master.start
@@ -77,7 +85,7 @@ def _anchored_dtstart(master, floor, tz, frequency, interval):
             dtstart = datetime.combine(anchored_date, dtstart.time(), tzinfo=tz)
         return dtstart
 
-    if frequency in _ABSOLUTE_STEP_UNDER_TZ and dtstart < floor:
+    if frequency in _ABSOLUTE_STEP_UNDER_TZ and interval == 1 and dtstart < floor:
         step = _FIXED_STEP[frequency] * interval
         dtstart += ((floor - dtstart) // step) * step
     return dtstart

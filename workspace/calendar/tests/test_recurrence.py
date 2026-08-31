@@ -1,5 +1,6 @@
 import time
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -772,7 +773,9 @@ class WallClockExpansionTests(TestCase):
         self.user = User.objects.create_user(username="wc", password="p")
         self.cal = Calendar.objects.create(name="W", owner=self.user)
 
-    def _master(self, tz="Europe/Paris", freq="daily", start=None, **kwargs):
+    def _master(
+        self, tz="Europe/Paris", freq="daily", start=None, interval=1, **kwargs
+    ):
         dtstart = start or datetime(2026, 3, 27, 8, 0, tzinfo=UTC)  # 09:00 Paris
         event = Event(
             calendar=self.cal,
@@ -783,7 +786,10 @@ class WallClockExpansionTests(TestCase):
             timezone=tz,
             **kwargs,
         )
-        apply_rule(event, f"RRULE:FREQ={freq.upper()}")
+        rule = f"RRULE:FREQ={freq.upper()}"
+        if interval != 1:
+            rule += f";INTERVAL={interval}"
+        apply_rule(event, rule)
         event.save()
         return event
 
@@ -848,10 +854,13 @@ class WallClockExpansionTests(TestCase):
         )
 
     def test_old_hourly_master_anchor_matches_unanchored_across_dst(self):
-        """HOURLY anchoring under a wall-clock zone must reproduce exactly
-        the same stream a fresh (unanchored) series on the same phase
-        produces, including across the spring-forward transition - proving
-        the sub-day anchoring optimization safe for HOURLY under a zone."""
+        """HOURLY at INTERVAL == 1 anchoring under a wall-clock zone must
+        reproduce exactly the same stream a fresh (unanchored) series on the
+        same phase produces, including across the spring-forward transition
+        - proving the sub-day anchoring optimization safe for HOURLY at
+        INTERVAL == 1 under a zone. This does not cover any other interval -
+        see test_old_hourly_interval_master_matches_its_own_true_walk for
+        why the anchor is deliberately not attempted at other intervals."""
         window_start = datetime(2026, 3, 28, 12, 0, tzinfo=UTC)
         window_end = datetime(2026, 3, 30, 12, 0, tzinfo=UTC)
 
@@ -868,6 +877,35 @@ class WallClockExpansionTests(TestCase):
         # 49 hourly ticks over 2 days with one spring-forward hour skipped.
         self.assertEqual(len(recent_occs), 49)
         self.assertEqual(recent_occs, old_occs)
+
+    def test_old_hourly_interval_master_matches_its_own_true_walk(self):
+        """Zoned HOURLY with INTERVAL > 1 must not use the absolute-time
+        anchor jump at all - _anchored_dtstart gates it on interval == 1
+        precisely because comparing an anchored dtstart against an
+        unrelated master is not a valid correctness check once INTERVAL > 1
+        (two masters starting at different phases are not expected to
+        agree; that is ordinary modular arithmetic, not a bug). The only
+        valid ground truth is the SAME master's own unmodified walk, so this
+        compares occurrences_in_range's anchored result against a direct
+        parse() call seeded with the master's true (unmodified) start,
+        across a window straddling the spring-forward transition."""
+        from workspace.calendar.services.recurrence_rule import parse
+
+        old = self._master(
+            freq="hourly", interval=7, start=datetime(2019, 6, 1, 6, 0, tzinfo=UTC)
+        )
+        window_start = datetime(2026, 3, 27, 0, 0, tzinfo=UTC)
+        window_end = window_start + timedelta(hours=8)
+
+        true_rule = parse(old.recurrence_rule, old.start, ZoneInfo("Europe/Paris"))
+        expected = []
+        for dt in true_rule:
+            if dt >= window_end:
+                break
+            if dt >= window_start:
+                expected.append(dt.astimezone(UTC))
+
+        self.assertEqual(self._expand(old, window_start, window_end), expected)
 
     def test_weekly_series_keeps_wall_clock_across_dst(self):
         master = self._master(freq="weekly")

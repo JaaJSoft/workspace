@@ -163,7 +163,7 @@ Context:
           <button
             type="button"
             class="btn btn-ghost btn-xs gap-1"
-            onclick="window.dispatchEvent(new CustomEvent('open-share-modal', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}' } }))"
+            onclick="window.dispatchEvent(new CustomEvent('open-share-modal', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}', nodeType: '{{ file.node_type }}' } }))"
           >
             <i data-lucide="settings" class="w-3 h-3"></i>
             Manage sharing
@@ -223,7 +223,7 @@ Context:
           <button
             type="button"
             class="btn btn-ghost btn-xs gap-1"
-            onclick="window.dispatchEvent(new CustomEvent('open-share-modal', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}' } }))"
+            onclick="window.dispatchEvent(new CustomEvent('open-share-modal', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}', nodeType: '{{ file.node_type }}' } }))"
           >
             <i data-lucide="settings" class="w-3 h-3"></i>
             Manage links

@@ -3,6 +3,7 @@ window.shareModal = function shareModal() {
     open: false,
     fileUuid: null,
     fileName: '',
+    nodeType: 'file',
     shares: [],        // existing shares from server
     pendingAdds: [],   // users to add (staged), each has { ...user, permission: 'ro' }
     pendingRemovals: new Set(), // user IDs to remove (staged)
@@ -16,6 +17,9 @@ window.shareModal = function shareModal() {
     showLinkForm: false,
     newLinkExpiry: '',
     newLinkPassword: '',
+    newLinkMode: 'read',
+    newLinkMaxBytes: '',
+    newLinkMaxCount: '',
 
     get displayList() {
       const permChanges = this.pendingPermissionChanges;
@@ -45,6 +49,7 @@ window.shareModal = function shareModal() {
       window.addEventListener('open-share-modal', (e) => {
         this.fileUuid = e.detail.uuid;
         this.fileName = e.detail.name;
+        this.nodeType = e.detail.nodeType || 'file';
         this.open = true;
         this.pendingAdds = [];
         this.pendingRemovals = new Set();
@@ -206,9 +211,33 @@ window.shareModal = function shareModal() {
       this.showLinkForm = false;
       this.newLinkExpiry = '';
       this.newLinkPassword = '';
+      this.newLinkMode = 'read';
+      this.newLinkMaxBytes = '';
+      this.newLinkMaxCount = '';
     },
 
     // --- Share Links ---
+
+    canChooseMode() {
+      return this.nodeType === 'folder';
+    },
+
+    availableModes() {
+      return [
+        { value: 'read', label: 'Read only' },
+        { value: 'drop', label: 'Upload only' },
+        { value: 'both', label: 'Read and upload' },
+      ];
+    },
+
+    showsCaps() {
+      return this.newLinkMode === 'drop' || this.newLinkMode === 'both';
+    },
+
+    modeLabel(mode) {
+      const found = this.availableModes().find(m => m.value === mode);
+      return found ? found.label : mode;
+    },
 
     async loadShareLinks() {
       if (!this.fileUuid) return;
@@ -235,6 +264,11 @@ window.shareModal = function shareModal() {
         body.expires_at = window.wallClockToIso(this.newLinkExpiry + 'T23:59:59', tz);
       }
       if (this.newLinkPassword) body.password = this.newLinkPassword;
+      if (this.canChooseMode()) body.mode = this.newLinkMode;
+      if (this.showsCaps()) {
+        if (this.newLinkMaxBytes) body.max_file_bytes = Number(this.newLinkMaxBytes);
+        if (this.newLinkMaxCount) body.max_file_count = Number(this.newLinkMaxCount);
+      }
       try {
         const resp = await fetch(`/api/v1/files/${this.fileUuid}/share-links`, {
           method: 'POST',
@@ -246,6 +280,9 @@ window.shareModal = function shareModal() {
           this.showLinkForm = false;
           this.newLinkExpiry = '';
           this.newLinkPassword = '';
+          this.newLinkMode = 'read';
+          this.newLinkMaxBytes = '';
+          this.newLinkMaxCount = '';
           await this.loadShareLinks();
         }
       } catch (e) {}

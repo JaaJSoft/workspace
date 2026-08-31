@@ -1,11 +1,15 @@
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
+    Meeting,
+    MeetingGuest,
     Message,
     MessageAttachment,
 )
@@ -126,6 +130,42 @@ class ConversationMediaViewTests(APITestCase):
         self.client.force_authenticate(self.outsider)
         resp = self.client.get(self.url(type="images"))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_guest_authored_attachment_survives_media_listing(self):
+        cal = Calendar.objects.create(name="C", owner=self.owner)
+        event = Event.objects.create(
+            calendar=cal, owner=self.owner, title="E", start=timezone.now()
+        )
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.conv, created_by=self.owner
+        )
+        guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=timezone.now(),
+            token_hash="b" * 64,
+        )
+        guest_message = Message.objects.create(
+            conversation=self.conv, guest=guest, body="from a guest"
+        )
+        MessageAttachment.objects.create(
+            message=guest_message,
+            file=SimpleUploadedFile("pic.png", b"x", content_type="image/png"),
+            original_name="pic.png",
+            mime_type="image/png",
+            type="unknown",
+            category="image",
+            size=1,
+        )
+
+        resp = self.client.get(self.url(type="images"))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        author = resp.json()["results"][0]["author"]
+        self.assertIsNone(author["id"])
+        self.assertEqual(author["username"], "Visitor")
+        self.assertEqual(author["first_name"], "")
+        self.assertEqual(author["last_name"], "")
 
     def test_pagination_total_and_slice(self):
         for i in range(5):

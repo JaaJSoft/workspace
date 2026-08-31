@@ -12,6 +12,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .call_signaling import enqueue_event, notify_participant
+from .identities import display_name_for_identity
 from .participant_keys import user_key
 
 DEFAULT_MEDIA_STATE = {"audio": True}
@@ -107,7 +108,7 @@ def list_active_participants(session):
 
     return list(
         CallParticipant.objects.filter(session=session, left_at__isnull=True)
-        .select_related("user")
+        .select_related("user", "guest")
         .order_by("joined_at")
     )
 
@@ -386,7 +387,7 @@ def serialize_call_state(session):
                 # Kept beside the key so the avatar element can resolve a face.
                 # None for a meeting guest, which has no user row.
                 "user_id": p.user_id,
-                "display_name": p.user.get_full_name() or p.user.username,
+                "display_name": display_name_for_identity(p.user, p.guest),
                 "media_state": presence.get(key, dict(DEFAULT_MEDIA_STATE)),
             }
         )

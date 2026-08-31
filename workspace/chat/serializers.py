@@ -12,6 +12,7 @@ from .models import (
     Reaction,
 )
 from .services.avatar import conversation_avatar_initial
+from .services.identities import identity_payload
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -127,7 +128,7 @@ class MessageInteractionSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    author = MemberUserSerializer()
+    author = serializers.SerializerMethodField()
     reactions = ReactionSerializer(many=True, read_only=True)
     attachments = MessageAttachmentSerializer(many=True, read_only=True)
     link_previews = LinkPreviewSerializer(many=True, read_only=True)
@@ -160,6 +161,9 @@ class MessageSerializer(serializers.ModelSerializer):
             "last_reply_at",
             "interaction",
         ]
+
+    def get_author(self, obj):
+        return identity_payload(obj.author, obj.guest)
 
 
 class LastMessageSerializer(serializers.ModelSerializer):

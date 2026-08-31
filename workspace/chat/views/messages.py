@@ -81,6 +81,7 @@ class MessageListView(CacheControlMixin, APIView):
             .select_related(
                 "author",
                 "author__bot_profile",
+                "guest",
                 "reply_to",
                 "reply_to__author",
                 "interaction",
@@ -357,6 +358,7 @@ class MessageListView(CacheControlMixin, APIView):
             .select_related(
                 "author",
                 "author__bot_profile",
+                "guest",
                 "reply_to",
                 "reply_to__author",
                 "interaction",
@@ -438,6 +440,7 @@ class MessageDetailView(APIView):
             .select_related(
                 "author",
                 "author__bot_profile",
+                "guest",
                 "reply_to",
                 "reply_to__author",
                 "interaction",

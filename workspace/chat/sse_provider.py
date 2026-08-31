@@ -147,6 +147,7 @@ class ChatSSEProvider(SSEProvider):
             .select_related(
                 "author",
                 "author__bot_profile",
+                "guest",
                 "reply_to",
                 "reply_to__author",
                 "interaction",

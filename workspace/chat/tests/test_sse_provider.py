@@ -2,9 +2,12 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
+    Meeting,
+    MeetingGuest,
     Message,
     MessageInteraction,
 )
@@ -100,3 +103,45 @@ class InteractionSSETests(TestCase):
             "message_interaction_updated",
             [e[0] for e in events],
         )
+
+
+class GuestMessageSSETests(TestCase):
+    """Pins the SSE feed's identity resolution: a guest-authored message must
+    render the guest's display name instead of a null author."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="host", email="host@test.com", password="pw"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+        cal = Calendar.objects.create(name="C", owner=self.user)
+        event = Event.objects.create(
+            calendar=cal, owner=self.user, title="E", start=timezone.now()
+        )
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.conv, created_by=self.user
+        )
+        self.guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=timezone.now(),
+            token_hash="f" * 64,
+        )
+
+    def test_guest_authored_message_survives_the_sse_feed(self):
+        provider = ChatSSEProvider(self.user, last_event_id=None)
+        Message.objects.create(
+            conversation=self.conv, guest=self.guest, body="hi from a guest"
+        )
+
+        events = provider.poll(cache_value="dirty")
+
+        message_events = [e for e in events if e[0] == "message"]
+        self.assertEqual(len(message_events), 1)
+        author = message_events[0][1]["message"]["author"]
+        self.assertIsNone(author["id"])
+        self.assertEqual(author["display_name"], "Visitor")
+        self.assertTrue(author["is_guest"])

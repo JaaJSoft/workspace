@@ -4,12 +4,16 @@ from uuid import uuid4
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
 
+from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import (
     CallParticipant,
     CallSession,
     Conversation,
     ConversationMember,
+    Meeting,
+    MeetingGuest,
     Message,
 )
 from workspace.chat.services import call_signaling as sig
@@ -429,3 +433,26 @@ class SerializeCallStateTests(TestCase):
         calls.touch_presence(session.uuid, f"u:{self.a.id}", {"audio": False})
         state = calls.serialize_call_state(session)
         self.assertEqual(state["participants"][0]["media_state"], {"audio": False})
+
+    def test_guest_participant_serializes_with_display_name_and_no_user_id(self):
+        cal = Calendar.objects.create(name="C", owner=self.a)
+        event = Event.objects.create(
+            calendar=cal, owner=self.a, title="E", start=timezone.now()
+        )
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.conv, created_by=self.a
+        )
+        guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=timezone.now(),
+            token_hash="9" * 64,
+        )
+        session = CallSession.objects.create(conversation=self.conv, started_by=self.a)
+        CallParticipant.objects.create(session=session, guest=guest)
+
+        state = calls.serialize_call_state(session)
+
+        p = state["participants"][0]
+        self.assertIsNone(p["user_id"])
+        self.assertEqual(p["display_name"], "Visitor")

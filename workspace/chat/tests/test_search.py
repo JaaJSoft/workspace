@@ -8,7 +8,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.chat.models import Message, MessageAttachment
+from workspace.calendar.models import Calendar, Event
+from workspace.chat.models import Meeting, MeetingGuest, Message, MessageAttachment
 from workspace.common.search import fts5_available
 from workspace.users.services.settings import set_setting
 
@@ -58,6 +59,33 @@ class ConversationMessageSearchTests(ChatTestMixin, APITestCase):
         self.assertEqual(resp.data["count"], 1)
         self.assertEqual(resp.data["query"], "hello")
         self.assertEqual(resp.data["results"][0]["body"], "hello world")
+
+    def test_guest_authored_message_survives_search(self):
+        cal = Calendar.objects.create(name="C", owner=self.creator)
+        event = Event.objects.create(
+            calendar=cal, owner=self.creator, title="E", start=timezone.now()
+        )
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.group, created_by=self.creator
+        )
+        guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=timezone.now(),
+            token_hash="a" * 64,
+        )
+        Message.objects.create(
+            conversation=self.group, guest=guest, body="hello from a guest"
+        )
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid), {"q": "guest"})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        author = resp.data["results"][0]["author"]
+        self.assertIsNone(author["id"])
+        self.assertEqual(author["display_name"], "Visitor")
+        self.assertTrue(author["is_guest"])
 
     def test_case_insensitive_search(self):
         Message.objects.create(

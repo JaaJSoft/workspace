@@ -3,6 +3,7 @@ from django.db.models.functions import Concat
 
 from workspace.chat.models import Conversation, ConversationMember
 from workspace.chat.services.conversations import user_conversation_ids
+from workspace.chat.services.identities import display_name_for_identity
 from workspace.core.module_registry import SearchResult, SearchTag
 
 
@@ -96,14 +97,14 @@ def search_chat_messages(query, user, limit):
 
     messages = (
         search_messages_qs(user, query)
-        .select_related("author", "conversation")
+        .select_related("author", "guest", "conversation")
         .prefetch_related("conversation__members__user")[:limit]
     )
 
     results = []
     for msg in messages:
         conv = msg.conversation
-        author = msg.author.get_full_name() or msg.author.username
+        author = display_name_for_identity(msg.author, msg.guest)
         if conv.title:
             name = conv.title
         elif conv.kind == Conversation.Kind.DM:

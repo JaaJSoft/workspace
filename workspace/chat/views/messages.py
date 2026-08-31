@@ -510,7 +510,10 @@ class MessageDetailView(APIView):
             retract_thread_reply(message)
             recount_thread(message.thread_root)
         else:
-            # Decrement unread_count for members who hadn't read this message
+            # Decrement unread_count for members who hadn't read this message.
+            # exclude(user=message.author) excludes nobody for a guest author
+            # (ConversationMember.user is non-nullable) - correct, a guest
+            # never held an unread count to begin with.
             ConversationMember.objects.filter(
                 conversation_id=message.conversation_id,
                 left_at__isnull=True,

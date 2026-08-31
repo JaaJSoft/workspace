@@ -82,6 +82,9 @@ def deliver_message(
         recipient_ids = _thread_delivery(message, mentioned_user_ids or set())
     else:
         recipient_ids = None
+        # A guest author is never a ConversationMember (user is non-nullable),
+        # so excluding None here excludes nobody - every real member's count
+        # still moves, which is correct since a guest holds no unread count.
         ConversationMember.objects.filter(
             conversation_id=conversation.pk,
             left_at__isnull=True,

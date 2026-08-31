@@ -380,3 +380,27 @@ class GuestThreadReplyDeliveryTests(TestCase):
         self.assertEqual(
             list(participants.values_list("user_id", flat=True)), [self.alice.id]
         )
+
+    def test_guest_non_thread_message_moves_every_real_members_unread_count(self):
+        """Guards the invariant the increment relies on: ConversationMember.user
+        is non-nullable, so exclude(user=None) excludes nobody rather than
+        silently skipping every member. If that ever stops holding, this is
+        the test that goes red - a comment alone would not catch it."""
+        alice_membership = ConversationMember.objects.get(
+            conversation=self.conversation, user=self.alice
+        )
+        bob_membership = ConversationMember.objects.get(
+            conversation=self.conversation, user=self.bob
+        )
+        alice_before = alice_membership.unread_count
+        bob_before = bob_membership.unread_count
+
+        guest_message = Message.objects.create(
+            conversation=self.conversation, guest=self.guest, body="hi from a guest"
+        )
+        deliver_message(self.conversation, guest_message)
+
+        alice_membership.refresh_from_db()
+        bob_membership.refresh_from_db()
+        self.assertEqual(alice_membership.unread_count, alice_before + 1)
+        self.assertEqual(bob_membership.unread_count, bob_before + 1)

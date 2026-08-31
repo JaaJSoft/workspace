@@ -920,9 +920,16 @@ def shared_file_view(request, token):
             # False so the password prompt is rendered again.
             pass
 
+    # The viewers inline the blob into the page (TextViewer and MarkdownViewer
+    # emit the decoded bytes straight into the template), so the policy has to
+    # be consulted before rendering rather than only on the content endpoint.
+    from workspace.files.services.scanning.policy import blocked_reason
+
+    quarantine_reason = blocked_reason(link.file)
+
     # Render viewer HTML if accessible
     viewer_html = ""
-    if not link.has_password or password_verified:
+    if quarantine_reason is None and (not link.has_password or password_verified):
         from workspace.files.ui.viewers import ViewerRegistry
 
         ViewerClass = get_viewer_by_slug(link.file.viewer) or (
@@ -939,6 +946,14 @@ def shared_file_view(request, token):
             viewer._content_url = content_url
             viewer_html = viewer.render(request)
 
+    download_url = None
+    if quarantine_reason is None:
+        download_url = f"/api/v1/files/shared/{token}/download" + (
+            f"?access_token={access_token}"
+            if access_token and password_verified
+            else ""
+        )
+
     return render(
         request,
         "files/ui/shared_file.html",
@@ -947,13 +962,9 @@ def shared_file_view(request, token):
             "file": link.file,
             "link": link,
             "viewer_html": viewer_html,
+            "quarantine_reason": quarantine_reason,
             "needs_password": link.has_password and not password_verified,
             "expired": False,
-            "download_url": f"/api/v1/files/shared/{token}/download"
-            + (
-                f"?access_token={access_token}"
-                if access_token and password_verified
-                else ""
-            ),
+            "download_url": download_url,
         },
     )

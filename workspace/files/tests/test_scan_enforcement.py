@@ -206,6 +206,10 @@ class RestEnforcementTests(APITestCase):
 
 
 class ShareLinkEnforcementTests(APITestCase):
+    # Inlined verbatim by TextViewer/MarkdownViewer into the public page, so
+    # its absence from the response is what proves the bytes never left.
+    MARKER = b"XyzzyPayloadMarker42"
+
     def setUp(self):
         self.user = User.objects.create_user(username="lnk", password="p")
         self.file = File(
@@ -213,9 +217,10 @@ class ShareLinkEnforcementTests(APITestCase):
             name="bad.txt",
             node_type=File.NodeType.FILE,
             mime_type="text/plain",
+            type="text/plain",
         )
-        self.file.content = ContentFile(b"body", name="bad.txt")
-        self.file.size = 4
+        self.file.content = ContentFile(self.MARKER, name="bad.txt")
+        self.file.size = len(self.MARKER)
         self.file.save()
         FileScan.objects.create(
             file=self.file,
@@ -243,6 +248,27 @@ class ShareLinkEnforcementTests(APITestCase):
     def test_public_download_works_when_scanning_is_off(self):
         resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/download")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    @override_settings(**BLOCKING)
+    def test_public_page_does_not_inline_the_quarantined_bytes(self):
+        """The text viewer embeds the blob in the page itself, so refusing the
+        content endpoint is not enough - the page must not carry the bytes."""
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertNotIn(self.MARKER, resp.content)
+        self.assertIn(b"quarantined", resp.content.lower())
+        # A page that refuses the preview but still offers the download link
+        # would contradict itself, and the API would 403 the click.
+        self.assertNotIn(
+            f"/api/v1/files/shared/{self.link.token}/download".encode(),
+            resp.content,
+        )
+
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
+    def test_public_page_serves_the_bytes_when_scanning_is_off(self):
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn(self.MARKER, resp.content)
 
 
 class WopiEnforcementTests(APITestCase):

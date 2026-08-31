@@ -115,19 +115,34 @@
                 <h1 class="text-xl font-bold text-white truncate">{{ file.name }}</h1>
                 <p class="text-white/70 text-sm">{{ file.type|default:"unknown" }} - {{ file.size|filesizeformat }}</p>
               </div>
-              <a
-                href="{{ download_url }}"
-                class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
-              >
-                <i data-lucide="download" class="w-4 h-4"></i>
-                Download
-              </a>
+              {% if download_url %}
+                <a
+                  href="{{ download_url }}"
+                  class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
+                >
+                  <i data-lucide="download" class="w-4 h-4"></i>
+                  Download
+                </a>
+              {% endif %}
             </div>
           </div>
 
           <!-- Viewer -->
           <div class="bg-base-200">
-            {% if viewer_html %}
+            {% if quarantine_reason %}
+              <div class="p-12 text-center">
+                <i
+                  data-lucide="shield-alert"
+                  class="w-12 h-12 text-error mx-auto mb-4"
+                ></i>
+                <h2 class="text-lg font-bold mb-2">File quarantined</h2>
+                <p class="text-base-content/60">
+                  The malware scanner flagged this file, so it can be neither previewed nor
+                  downloaded.
+                </p>
+                <p class="text-base-content/40 text-sm mt-2">{{ quarantine_reason }}</p>
+              </div>
+            {% elif viewer_html %}
               {{ viewer_html|safe }}
             {% else %}
               <div class="p-12 text-center">

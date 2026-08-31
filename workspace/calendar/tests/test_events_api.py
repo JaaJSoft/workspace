@@ -12,6 +12,7 @@ from rest_framework.test import APITestCase
 from workspace.calendar import recurrence
 from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember
 from workspace.calendar.search import search_events
+from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.users.services.settings import set_setting
 
 from .test_calendar import CalendarTestMixin
@@ -611,13 +612,14 @@ class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
         self.client.force_login(self.owner)
 
     def test_editing_legacy_recurring_series_keeps_utc_expansion(self):
-        event = Event.objects.create(
+        event = Event(
             calendar=self.calendar,
             title="Legacy daily",
             start=datetime(2026, 8, 5, 9, 0, tzinfo=UTC),
             owner=self.owner,
-            recurrence_frequency="daily",
         )
+        apply_rule(event, "RRULE:FREQ=DAILY")
+        event.save()
         self._login_paris()
         resp = self.client.put(
             f"{self.url}/{event.uuid}",

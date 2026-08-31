@@ -233,16 +233,15 @@ class MakeVirtualOccurrenceTests(TestCase):
         self.user = User.objects.create_user(username="alice", password="pass")
         self.cal = Calendar.objects.create(name="Test", owner=self.user)
 
+    def _master(self, **kwargs):
+        event = Event(calendar=self.cal, owner=self.user, **kwargs)
+        apply_rule(event, "RRULE:FREQ=DAILY")
+        event.save()
+        return event
+
     def test_returns_dict_with_expected_keys(self):
         now = timezone.now()
-        master = Event.objects.create(
-            calendar=self.cal,
-            owner=self.user,
-            title="Meeting",
-            start=now,
-            end=now + timedelta(hours=1),
-            recurrence_frequency="daily",
-        )
+        master = self._master(title="Meeting", start=now, end=now + timedelta(hours=1))
         occ = make_virtual_occurrence(master, now)
         self.assertEqual(occ["title"], "Meeting")
         self.assertTrue(occ["is_recurring"])
@@ -251,14 +250,7 @@ class MakeVirtualOccurrenceTests(TestCase):
 
     def test_computes_end_from_duration(self):
         now = timezone.now()
-        master = Event.objects.create(
-            calendar=self.cal,
-            owner=self.user,
-            title="Meeting",
-            start=now,
-            end=now + timedelta(hours=2),
-            recurrence_frequency="daily",
-        )
+        master = self._master(title="Meeting", start=now, end=now + timedelta(hours=2))
         occ_start = now + timedelta(days=1)
         occ = make_virtual_occurrence(master, occ_start)
         expected_end = (occ_start + timedelta(hours=2)).isoformat()
@@ -266,14 +258,7 @@ class MakeVirtualOccurrenceTests(TestCase):
 
     def test_end_is_none_when_no_master_end(self):
         now = timezone.now()
-        master = Event.objects.create(
-            calendar=self.cal,
-            owner=self.user,
-            title="All day",
-            start=now,
-            end=None,
-            recurrence_frequency="daily",
-        )
+        master = self._master(title="All day", start=now, end=None)
         occ = make_virtual_occurrence(master, now)
         self.assertIsNone(occ["end"])
 
@@ -407,11 +392,10 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
         self.assertEqual(event.recurrence_rule, "RRULE:FREQ=WEEKLY")
 
     def test_created_recurring_event_expands_to_a_later_occurrence(self):
-        # Asserting on is_recurring alone doesn't exercise the legacy-gated
-        # readers (views/events.py's list endpoint filters on
-        # recurrence_frequency, not is_recurring) - only a window landing on
-        # a LATER occurrence, not the row's own start, proves the event was
-        # actually filed into the recurring bucket and expanded from there.
+        # Asserting on is_recurring alone doesn't exercise the list
+        # endpoint's expansion - only a window landing on a LATER occurrence,
+        # not the row's own start, proves the event was actually filed into
+        # the recurring bucket and expanded from there.
         self.client.force_authenticate(self.owner)
         start = timezone.now() + timedelta(days=1)
         resp = self.client.post(
@@ -540,8 +524,6 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
     """Tests for scope-aware edit and delete of recurring events."""
 
     def _create_weekly(self):
-        # Backfilled shape (Task 2): both the legacy columns the query layer
-        # still reads and the rule text the writer now maintains.
         start = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         event = Event(
             calendar=self.calendar,
@@ -549,8 +531,6 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
             start=start,
             end=start + timedelta(hours=1),
             owner=self.owner,
-            recurrence_frequency="weekly",
-            recurrence_interval=1,
         )
         apply_rule(event, "RRULE:FREQ=WEEKLY;INTERVAL=1")
         event.save()

@@ -567,16 +567,6 @@ def apply_rule(event, rule_text):
     else:
         event.recurrence_until = None
 
-    # Transitional: the query layer and the expansion engine still read the
-    # pre-rule columns, so every write keeps them in step. A rule they cannot
-    # express blanks them - the row stays recurring by `is_recurring`, it is
-    # just invisible to the legacy readers until they are migrated. This block
-    # and the columns go together in the final task.
-    simple = to_simple(event.recurrence_rule)
-    event.recurrence_frequency = simple["frequency"] if simple else None
-    event.recurrence_interval = simple["interval"] if simple else 1
-    event.recurrence_end = simple["until"] if simple else None
-
 
 def derive_into_defaults(defaults):
     """Apply the same derivation to an ``update_or_create`` defaults dict.
@@ -594,9 +584,3 @@ def derive_into_defaults(defaults):
     defaults["recurrence_until"] = (
         last_occurrence_end(rule, start, duration, zone) if rule and start else None
     )
-
-    # Transitional: mirror into the pre-rule columns, same as apply_rule.
-    simple = to_simple(rule)
-    defaults["recurrence_frequency"] = simple["frequency"] if simple else None
-    defaults["recurrence_interval"] = simple["interval"] if simple else 1
-    defaults["recurrence_end"] = simple["until"] if simple else None

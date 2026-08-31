@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services import event_scope
+from workspace.calendar.services.recurrence_rule import apply_rule
 
 User = get_user_model()
 
@@ -61,18 +62,8 @@ class WriterInvariantTests(TestCase):
         self.assertNotIn("COUNT=", event.recurrence_rule)
         self.assertLess(event.recurrence_until, cut + (event.end - event.start))
 
-    def test_clearing_the_rule_on_a_backfilled_row_does_not_resurrect_is_recurring(
-        self,
-    ):
-        # Task 2's backfill gave every legacy recurring row both a
-        # recurrence_frequency and a recurrence_rule. Clearing the rule
-        # through the writer must not let the transitional save() shim in
-        # models.py read the stale frequency column and turn the row back
-        # into a recurring series with no rule.
+    def test_clearing_the_rule_through_the_writer_leaves_is_recurring_false(self):
         event = self._series()
-        event.recurrence_frequency = Event.RecurrenceFrequency.WEEKLY
-        event.save(update_fields=["recurrence_frequency"])
-
         event_scope.update_event(event, {"recurrence_rule": ""}, self.user, scope="all")
         event.refresh_from_db()
         self.assertFalse(event.is_recurring)
@@ -91,12 +82,11 @@ class WriterInvariantTests(TestCase):
         self.assertNotIn("UNTIL=", new_master.recurrence_rule)
 
 
-class LegacyRecurrenceSyncTests(APITestCase):
-    """``_sync_legacy_recurrence`` keeps recurrence_frequency/interval/end in
-    step with the rule, because the query layer and the expansion engine
-    still read those columns (they are not migrated until a later task).
-    Blanking them on every write - the previous behaviour - made an edited
-    backfilled recurring event invisible as a series."""
+class RecurrenceEditThroughApiTests(APITestCase):
+    """An edit through the REST layer must re-derive ``is_recurring`` /
+    ``recurrence_until`` so the series keeps expanding correctly in the list
+    endpoint - editing an unrelated field or changing the cadence must not
+    leave those columns stale."""
 
     url = "/api/v1/events"
 
@@ -106,26 +96,20 @@ class LegacyRecurrenceSyncTests(APITestCase):
         self.start = datetime(2026, 1, 6, 10, tzinfo=UTC)
         self.client.force_authenticate(self.user)
 
-    def _backfilled_weekly(self):
-        # Task 2's backfill shape: both the legacy columns the readers use
-        # and the rule text the writer now maintains.
-        from workspace.calendar.services.recurrence_rule import apply_rule
-
+    def _weekly(self):
         event = Event(
             calendar=self.cal,
             owner=self.user,
             title="Standup",
             start=self.start,
             end=self.start + timedelta(hours=1),
-            recurrence_frequency="weekly",
-            recurrence_interval=1,
         )
         apply_rule(event, "RRULE:FREQ=WEEKLY;INTERVAL=1")
         event.save()
         return event
 
-    def test_editing_title_keeps_the_series_visible_to_legacy_readers(self):
-        event = self._backfilled_weekly()
+    def test_editing_title_keeps_the_series_recurring(self):
+        event = self._weekly()
         resp = self.client.put(
             f"{self.url}/{event.uuid}",
             {"scope": "all", "title": "Standup (renamed)"},
@@ -134,7 +118,6 @@ class LegacyRecurrenceSyncTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()
         self.assertTrue(event.is_recurring)
-        self.assertEqual(event.recurrence_frequency, "weekly")
 
         params = {
             "start": self.start.isoformat(),
@@ -145,7 +128,7 @@ class LegacyRecurrenceSyncTests(APITestCase):
         self.assertGreaterEqual(len(recurring), 3)
 
     def test_changing_cadence_takes_effect_in_the_list_endpoint(self):
-        event = self._backfilled_weekly()
+        event = self._weekly()
         resp = self.client.put(
             f"{self.url}/{event.uuid}",
             {"scope": "all", "recurrence_rule": "RRULE:FREQ=DAILY"},
@@ -153,7 +136,7 @@ class LegacyRecurrenceSyncTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()
-        self.assertEqual(event.recurrence_frequency, "daily")
+        self.assertEqual(event.recurrence_rule, "RRULE:FREQ=DAILY")
 
         params = {
             "start": self.start.isoformat(),
@@ -165,8 +148,8 @@ class LegacyRecurrenceSyncTests(APITestCase):
         # have produced (at most one occurrence in that window).
         self.assertGreater(len(recurring), 1)
 
-    def test_complex_rule_stays_recurring_while_legacy_columns_go_none(self):
-        event = self._backfilled_weekly()
+    def test_complex_rule_stays_recurring(self):
+        event = self._weekly()
         event_scope.update_event(
             event,
             {"recurrence_rule": "RRULE:FREQ=MONTHLY;BYDAY=2TU"},
@@ -175,4 +158,3 @@ class LegacyRecurrenceSyncTests(APITestCase):
         )
         event.refresh_from_db()
         self.assertTrue(event.is_recurring)
-        self.assertIsNone(event.recurrence_frequency)

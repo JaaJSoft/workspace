@@ -45,12 +45,12 @@ class EventAdmin(ModelAdmin):
         "start",
         "end",
         "all_day",
-        "recurrence_frequency",
+        "is_recurring",
         "recurrence_parent",
         "is_cancelled",
         "created_at",
     )
-    list_filter = ("all_day", "calendar", "recurrence_frequency", "is_cancelled")
+    list_filter = ("all_day", "calendar", "is_recurring", "is_cancelled")
     search_fields = ("uuid", "title", "description")
     autocomplete_fields = ("recurrence_parent",)
     # list_display renders calendar/owner/recurrence_parent on every row;

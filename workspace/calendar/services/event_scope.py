@@ -77,16 +77,7 @@ def _truncate_series(master, cut):
     apply_rule(
         master, truncate_before(master.recurrence_rule, cut - timedelta(seconds=1))
     )
-    master.save(
-        update_fields=[
-            "recurrence_rule",
-            "is_recurring",
-            "recurrence_until",
-            "recurrence_frequency",
-            "recurrence_interval",
-            "recurrence_end",
-        ]
-    )
+    master.save(update_fields=["recurrence_rule", "is_recurring", "recurrence_until"])
 
 
 def _apply_fields(event, data, user):

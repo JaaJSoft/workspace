@@ -288,20 +288,17 @@ class SyncExternalCalendarTests(TestCase):
         self.assertEqual(event.recurrence_until.month, 4)
 
     @patch("workspace.calendar.services.ics_sync.httpx2")
-    def test_sync_recurring_event_sets_legacy_columns(self, mock_httpx):
-        # A simple rule (expressible as FREQ/INTERVAL/UNTIL) must mirror into
-        # the legacy columns the query layer and expansion engine still read
-        # - derive_into_defaults sets only is_recurring/recurrence_until on
-        # its own, so a synced recurring VEVENT would otherwise render as a
-        # one-off that never repeats.
+    def test_sync_unbounded_recurring_event(self, mock_httpx):
+        # No COUNT or UNTIL on the RRULE: the series is recurring but has no
+        # derivable bound.
         _mock_httpx(mock_httpx, _mock_response(ICS_RECURRING_SIMPLE))
 
         sync_external_calendar(self.ext)
 
         event = Event.objects.get(ical_uid="ext-recurring-simple@example.com")
         self.assertTrue(event.is_recurring)
-        self.assertEqual(event.recurrence_frequency, "weekly")
-        self.assertEqual(event.recurrence_interval, 1)
+        self.assertIn("FREQ=WEEKLY", event.recurrence_rule)
+        self.assertIsNone(event.recurrence_until)
 
     @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_parses_organizer_email(self, mock_httpx):

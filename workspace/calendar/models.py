@@ -65,12 +65,6 @@ class CalendarSubscription(models.Model):
 
 
 class Event(models.Model):
-    class RecurrenceFrequency(models.TextChoices):
-        DAILY = "daily", "Daily"
-        WEEKLY = "weekly", "Weekly"
-        MONTHLY = "monthly", "Monthly"
-        YEARLY = "yearly", "Yearly"
-
     class Source(models.TextChoices):
         MANUAL = "manual", "Manual"
         ICS = "ics", "ICS invitation"
@@ -105,16 +99,6 @@ class Event(models.Model):
     recurrence_rule = models.TextField(blank=True, default="")
     is_recurring = models.BooleanField(default=False)
     recurrence_until = models.DateTimeField(null=True, blank=True, default=None)
-
-    recurrence_frequency = models.CharField(
-        max_length=7,
-        choices=RecurrenceFrequency.choices,
-        null=True,
-        blank=True,
-        default=None,
-    )
-    recurrence_interval = models.PositiveSmallIntegerField(default=1)
-    recurrence_end = models.DateTimeField(null=True, blank=True, default=None)
 
     # Exception fields (for modified/cancelled occurrences)
     recurrence_parent = models.ForeignKey(
@@ -176,21 +160,6 @@ class Event(models.Model):
 
     def __str__(self):
         return self.title
-
-    def save(self, *args, **kwargs):
-        # Mirrors `is_recurring` from the legacy `recurrence_frequency` column
-        # for every row that has no rule text yet, so existing reads of
-        # `is_recurring` (a property until this column replaced it) keep
-        # seeing the answer they always did. Scheduled for deletion in the
-        # task that drops the legacy columns.
-        if not self.recurrence_rule:
-            mirrored = self.recurrence_frequency is not None
-            if mirrored != self.is_recurring:
-                self.is_recurring = mirrored
-                update_fields = kwargs.get("update_fields")
-                if update_fields is not None:
-                    kwargs["update_fields"] = {*update_fields, "is_recurring"}
-        super().save(*args, **kwargs)
 
     @property
     def is_exception(self):

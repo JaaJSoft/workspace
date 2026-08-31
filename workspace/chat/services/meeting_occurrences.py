@@ -58,6 +58,10 @@ def _reachable_exceptions(event, now, duration):
     """
     return event.exceptions.filter(
         is_cancelled=False,
+        # Filters on the raw start, while the match test above truncates it
+        # first; truncated is always <= raw, so this can only exclude a
+        # match by a sub-millisecond margin at the boundary - fail-closed,
+        # not worth a query restructure for.
         start__lte=now + settings.MEETING_LOBBY_LEAD,
     ).filter(
         Q(end__isnull=False, end__gte=now - settings.MEETING_GRACE)
@@ -103,8 +107,9 @@ def current_occurrence(meeting, now=None):
     # slot, outside the proximity the scan below assumes.
     for exc in _reachable_exceptions(event, now, duration):
         start = exc.start.replace(microsecond=0)
-        exc_duration = (exc.end - exc.start) if exc.end is not None else duration
-        end = start + exc_duration
+        end = (
+            exc.end.replace(microsecond=0) if exc.end is not None else start + duration
+        )
         opens_at, closes_at = _window(start, end)
         if opens_at <= now <= closes_at:
             return start, end

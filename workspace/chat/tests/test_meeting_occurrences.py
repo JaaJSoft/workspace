@@ -149,7 +149,10 @@ class OccurrenceTests(TestCase):
         # comes straight from a DateTimeField, never touched by rrule, so
         # current_occurrence must truncate it itself or this test fails.
         new_start = (now + timedelta(hours=2)).replace(microsecond=123456)
-        new_end = new_start + timedelta(minutes=30)
+        # A different microsecond remainder than new_start on purpose: end
+        # must be truncated on its own terms, not derived by subtracting
+        # start's remainder from it.
+        new_end = (new_start + timedelta(minutes=30)).replace(microsecond=654321)
         Event.objects.create(
             calendar=self.cal,
             owner=self.user,

@@ -25,8 +25,15 @@ window.calendarRecurrenceMixin = function calendarRecurrenceMixin() {
       const interval = this.form.recurrence_interval || 1;
       if (interval > 1) parts.push(`INTERVAL=${interval}`);
       if (this.form.recurrence_end) {
-        const iso = window.wallClockToIso(this.form.recurrence_end + 'T23:59:59', tz);
-        parts.push(`UNTIL=${new Date(iso).toISOString().replace(/[-:]|\.\d{3}/g, '')}`);
+        // RFC 5545 3.3.10: UNTIL must match DTSTART's value type. An all-day
+        // series has a DATE start, so a date-time UNTIL makes the rule invalid
+        // for any client that checks - which CalDAV clients do.
+        if (this.form.all_day) {
+          parts.push(`UNTIL=${this.form.recurrence_end.replace(/-/g, '')}`);
+        } else {
+          const iso = window.wallClockToIso(this.form.recurrence_end + 'T23:59:59', tz);
+          parts.push(`UNTIL=${new Date(iso).toISOString().replace(/[-:]|\.\d{3}/g, '')}`);
+        }
       }
       return `RRULE:${parts.join(';')}`;
     },

@@ -15,7 +15,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.calendar import recurrence
+from workspace.calendar import upcoming
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.calendar.upcoming import get_upcoming_for_user, get_upcoming_page
@@ -216,9 +216,13 @@ class UpcomingPageRecurrenceCacheTests(TestCase):
         event.save()
 
     def test_derived_fields_are_not_recomputed_per_occurrence(self):
+        # Patch the name `upcoming` actually calls. `recurrence.describe` is a
+        # different binding of the same function, so patching it here would
+        # intercept nothing and the assertion would hold for any implementation.
         with patch.object(
-            recurrence, "describe", wraps=recurrence.describe
+            upcoming, "describe", wraps=upcoming.describe
         ) as mock_describe:
             page, _ = get_upcoming_page(self.user, after=timezone.now(), limit=10)
         self.assertGreater(len([e for e in page if e["title"] == "Standup"]), 1)
-        self.assertEqual(mock_describe.call_count, 0)
+        # Once for the single master, not once per occurrence.
+        self.assertEqual(mock_describe.call_count, 1)

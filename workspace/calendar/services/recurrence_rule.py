@@ -238,6 +238,32 @@ def _normalize_for_parse(rule_text, zone):
     return "\n".join(out)
 
 
+def _has_non_positive_interval(rule_text):
+    """True when any RRULE carries an INTERVAL that is not a positive integer.
+
+    RFC 5545 3.3.10 requires INTERVAL to be a positive integer, but dateutil
+    accepts zero and negatives. Zero is the dangerous one: the anchoring
+    optimization multiplies the frequency's step by the interval and divides
+    the pre-window gap by it, so INTERVAL=0 raises ZeroDivisionError out of
+    the expansion rather than degrading. Rejecting it here, where every read
+    already passes, keeps that failure a non-series instead of a 500.
+    """
+    for line in _rule_lines(rule_text):
+        prop, _ = _name_and_params(line.partition(":")[0])
+        if prop != "RRULE":
+            continue
+        for token in line.partition(":")[2].split(";"):
+            key, _, value = token.partition("=")
+            if key.strip().upper() != "INTERVAL":
+                continue
+            try:
+                if int(value) < 1:
+                    return True
+            except ValueError:
+                return True
+    return False
+
+
 def parse(rule_text, dtstart, tz=None):
     """Return a dateutil rruleset for *rule_text* anchored at *dtstart*.
 
@@ -250,6 +276,12 @@ def parse(rule_text, dtstart, tz=None):
     under the guard to move that failure back to where it can still degrade.
     """
     if not rule_text:
+        return None
+    if _has_non_positive_interval(rule_text):
+        logger.warning(
+            "Unparseable recurrence rule %s: INTERVAL must be a positive integer",
+            scrub(rule_text),
+        )
         return None
     anchor = dtstart.astimezone(tz) if tz else dtstart
     zone = anchor.tzinfo or UTC
@@ -601,13 +633,52 @@ def describe(rule_text):
     return described if described is not None else rule_text
 
 
-def truncate_before(rule_text, instant):
-    """Return *rule_text* rewritten so the series stops before *instant*.
+def continue_after(rule_text, dtstart, instant, tz=None):
+    """Return *rule_text* rewritten for the second half of a series split.
 
-    Used by the "this and all following occurrences" split. COUNT is dropped
-    wherever it appears: RFC 5545 forbids COUNT and UNTIL in the same RRULE, so
-    a counted series has to be re-expressed as a dated one to be truncatable at
-    all, and appending an UNTIL beside a COUNT produces a rule clients reject.
+    Only COUNT needs rewriting. An UNTIL rule, or an unbounded one, re-anchored
+    at the split point already yields exactly the remaining tail. A COUNT
+    restarts its tally from the new anchor instead, so splitting COUNT=10 after
+    three occurrences would leave 3 + 10 rather than 10.
+
+    The recount walks the original series, which a COUNT bounds by definition.
+    """
+    if "COUNT=" not in rule_text.upper():
+        return rule_text
+    rule = parse(rule_text, dtstart, tz)
+    if rule is None:
+        return rule_text
+    remaining = max(sum(1 for occ in rule if occ >= instant), 1)
+
+    out = []
+    for line in _rule_lines(rule_text):
+        name, _, body = line.partition(":")
+        prop, _params = _name_and_params(name)
+        if prop != "RRULE":
+            out.append(line)
+            continue
+        kept = [
+            f"COUNT={remaining}"
+            if token.split("=")[0].strip().upper() == "COUNT"
+            else token
+            for token in body.split(";")
+        ]
+        out.append(f"{name}:" + ";".join(kept))
+    return "\n".join(out)
+
+
+def truncate_before(rule_text, instant):
+    """Return *rule_text* rewritten so the series stops at or before *instant*.
+
+    Used by the "this and all following occurrences" split. UNTIL is inclusive
+    per RFC 5545, so the caller passes the last instant to KEEP, not the first
+    to drop - see ``event_scope._truncate_series``, which subtracts a second
+    from the split point.
+
+    COUNT is dropped wherever it appears: RFC 5545 forbids COUNT and UNTIL in
+    the same RRULE, so a counted series has to be re-expressed as a dated one
+    to be truncatable at all, and appending an UNTIL beside a COUNT produces a
+    rule clients reject.
     """
     until_token = f"UNTIL={_ical_utc(instant)}"
     out = []

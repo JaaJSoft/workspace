@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services import event_scope
-from workspace.calendar.services.recurrence_rule import apply_rule
+from workspace.calendar.services.recurrence_rule import apply_rule, parse
 
 User = get_user_model()
 
@@ -30,8 +30,6 @@ class WriterInvariantTests(TestCase):
             start=self.start,
             end=datetime(2026, 1, 6, 11, tzinfo=UTC),
         )
-        from workspace.calendar.services.recurrence_rule import apply_rule
-
         apply_rule(event, rule)
         event.save()
         return event
@@ -43,8 +41,6 @@ class WriterInvariantTests(TestCase):
         self.assertIsNotNone(event.recurrence_until)
 
     def test_clearing_the_rule_clears_the_bound(self):
-        from workspace.calendar.services.recurrence_rule import apply_rule
-
         event = self._series()
         apply_rule(event, "")
         self.assertFalse(event.is_recurring)
@@ -69,17 +65,24 @@ class WriterInvariantTests(TestCase):
         self.assertFalse(event.is_recurring)
 
     def test_future_split_new_master_keeps_original_extent(self):
-        # The new master continues the series past the split point; it must
+        # The new master continues the series past the split point. It must
         # not inherit the OLD master's post-truncation UNTIL, or the split
-        # would silently cap the continuing series at the cut instead of
-        # wherever the original rule actually ended.
+        # would cap the continuation at the cut instead of wherever the
+        # original rule ended - and it must not inherit the full COUNT
+        # either, which would restart the tally and make the two halves add
+        # up to more occurrences than the series ever had.
         event = self._series(rule="RRULE:FREQ=WEEKLY;COUNT=10")
         original_start = self.start + timedelta(weeks=2)
         new_master = event_scope._update_future_occurrences(
             event, {}, self.user, original_start
         )
-        self.assertIn("COUNT=10", new_master.recurrence_rule)
         self.assertNotIn("UNTIL=", new_master.recurrence_rule)
+
+        event.refresh_from_db()
+        kept = list(parse(event.recurrence_rule, event.start))
+        rest = list(parse(new_master.recurrence_rule, new_master.start))
+        self.assertEqual(len(kept), 2)
+        self.assertEqual(len(kept) + len(rest), 10)
 
 
 class RecurrenceEditThroughApiTests(APITestCase):
@@ -150,11 +153,14 @@ class RecurrenceEditThroughApiTests(APITestCase):
 
     def test_complex_rule_stays_recurring(self):
         event = self._weekly()
-        event_scope.update_event(
-            event,
-            {"recurrence_rule": "RRULE:FREQ=MONTHLY;BYDAY=2TU"},
-            self.user,
-            scope="all",
+        resp = self.client.put(
+            f"{self.url}/{event.uuid}",
+            {"scope": "all", "recurrence_rule": "RRULE:FREQ=MONTHLY;BYDAY=2TU"},
+            format="json",
         )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()
         self.assertTrue(event.is_recurring)
+        # Stored verbatim: a rule the picker cannot express must survive the
+        # write path it cannot round-trip through.
+        self.assertEqual(event.recurrence_rule, "RRULE:FREQ=MONTHLY;BYDAY=2TU")

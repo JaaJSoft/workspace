@@ -19,8 +19,8 @@ from workspace.notifications.services.notifications import notify_many
 
 from ..models import Calendar, Event, EventMember
 from ..models_external import ExternalCalendar
-from .recurrence_rule import apply_rule, truncate_before
-from .timezones import current_timezone_name, normalize_all_day
+from .recurrence_rule import apply_rule, continue_after, truncate_before
+from .timezones import current_timezone_name, event_timezone, normalize_all_day
 
 User = get_user_model()
 
@@ -326,7 +326,12 @@ def _update_future_occurrences(master, data, user, original_start):
         # hour across a DST boundary.
         timezone="" if all_day else master.timezone,
     )
-    apply_rule(new_master, data.get("recurrence_rule", original_rule))
+    # The continuation inherits the pre-truncation rule, re-bounded so a COUNT
+    # counts what is left rather than starting over from the split point.
+    inherited = continue_after(
+        original_rule, master.start, original_start, event_timezone(master)
+    )
+    apply_rule(new_master, data.get("recurrence_rule", inherited))
     new_master.save()
 
     if "calendar_id" in data:

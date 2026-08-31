@@ -669,3 +669,69 @@ class UnparseableRuleWriteTests(SimpleTestCase):
             rr.derive_into_defaults(defaults)
         self.assertFalse(defaults["is_recurring"])
         self.assertIsNone(defaults["recurrence_until"])
+
+
+class NonPositiveIntervalTests(SimpleTestCase):
+    """RFC 5545 3.3.10 requires INTERVAL to be a positive integer.
+
+    dateutil accepts zero and negatives, and the anchoring optimization
+    divides the pre-window gap by the interval, so an INTERVAL=0 rule raised
+    ZeroDivisionError out of the expansion instead of degrading.
+    """
+
+    DTSTART = datetime(2020, 1, 1, 9, tzinfo=UTC)
+
+    def test_zero_interval_is_not_a_series(self):
+        self.assertIsNone(rr.parse("RRULE:FREQ=DAILY;INTERVAL=0", self.DTSTART))
+
+    def test_negative_interval_is_not_a_series(self):
+        self.assertIsNone(rr.parse("RRULE:FREQ=DAILY;INTERVAL=-2", self.DTSTART))
+
+    def test_non_numeric_interval_is_not_a_series(self):
+        self.assertIsNone(rr.parse("RRULE:FREQ=DAILY;INTERVAL=x", self.DTSTART))
+
+    def test_positive_interval_still_parses(self):
+        self.assertIsNotNone(rr.parse("RRULE:FREQ=DAILY;INTERVAL=2", self.DTSTART))
+
+
+class ContinueAfterTests(SimpleTestCase):
+    """The continuation half of a "this and all following" split.
+
+    Only COUNT needs rewriting: it would otherwise restart its tally at the
+    split point, so a COUNT=10 series split after three occurrences would run
+    to 13 in total.
+    """
+
+    DTSTART = datetime(2026, 1, 1, 9, tzinfo=UTC)
+
+    def _cut(self, rule, index):
+        return list(rr.parse(rule, self.DTSTART))[index]
+
+    def test_count_is_reduced_to_what_is_left(self):
+        rule = "RRULE:FREQ=DAILY;COUNT=10"
+        cut = self._cut(rule, 3)
+        self.assertEqual(
+            rr.continue_after(rule, self.DTSTART, cut),
+            "RRULE:FREQ=DAILY;COUNT=7",
+        )
+
+    def test_split_halves_sum_to_the_original_length(self):
+        rule = "RRULE:FREQ=DAILY;COUNT=10"
+        cut = self._cut(rule, 3)
+        kept = list(
+            rr.parse(rr.truncate_before(rule, cut - timedelta(seconds=1)), self.DTSTART)
+        )
+        rest = list(rr.parse(rr.continue_after(rule, self.DTSTART, cut), cut))
+        self.assertEqual(len(kept) + len(rest), 10)
+
+    def test_until_rules_are_left_alone(self):
+        rule = "RRULE:FREQ=DAILY;UNTIL=20260110T090000Z"
+        cut = self._cut(rule, 3)
+        self.assertEqual(rr.continue_after(rule, self.DTSTART, cut), rule)
+
+    def test_unbounded_rules_are_left_alone(self):
+        rule = "RRULE:FREQ=WEEKLY"
+        self.assertEqual(
+            rr.continue_after(rule, self.DTSTART, self.DTSTART + timedelta(days=21)),
+            rule,
+        )

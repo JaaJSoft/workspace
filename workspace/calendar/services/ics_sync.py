@@ -174,7 +174,7 @@ def _recurrence_lines(vevent):
     stored text the text the feed sent.
     """
     lines = []
-    for name in ("RRULE", "RDATE"):
+    for name in ("RRULE", "RDATE", "EXDATE"):
         value = vevent.get(name)
         if value is None:
             continue

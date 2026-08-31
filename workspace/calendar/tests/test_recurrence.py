@@ -1,4 +1,3 @@
-import time
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -183,10 +182,10 @@ class OccurrencesInRangeTests(TestCase):
         truncated series instead of hanging the request."""
         now = timezone.now().replace(microsecond=0)
         master = self._make_master("RRULE:FREQ=SECONDLY", now)
-        started = time.monotonic()
         with self.assertLogs("workspace.calendar.recurrence", "WARNING"):
             occs = list(occurrences_in_range(master, now, now + timedelta(days=365)))
-        self.assertLess(time.monotonic() - started, 5)
+        # Structural rather than timed: the cap firing IS the bound, and a
+        # wall-clock assertion only adds flakiness on a loaded CI runner.
         self.assertEqual(len(occs), MAX_ITERATIONS)
 
     def test_count_rule_is_not_reanchored_past_its_true_end(self):
@@ -1036,17 +1035,14 @@ class NextOccurrencesBudgetTests(TestCase):
         apply_rule(master, "RRULE:FREQ=SECONDLY")
         master.save()
 
-        started = time.monotonic()
         with self.assertLogs("workspace.calendar.recurrence", "WARNING") as logs:
             occs = list(
                 next_occurrences_after(
                     master, datetime(2026, 1, 1, tzinfo=UTC), limit=5
                 )
             )
-        elapsed = time.monotonic() - started
-
         # Structural: the walk stops at the pre-window budget rather than
-        # grinding through two years of seconds.
+        # grinding through two years of seconds. Asserted by the log and the
+        # empty result, not by a wall clock the CI runner does not control.
         self.assertEqual(occs, [])
         self.assertIn("skipping to the window", logs.output[0])
-        self.assertLess(elapsed, 30)

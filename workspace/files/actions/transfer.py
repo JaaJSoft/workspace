@@ -12,7 +12,11 @@ class DownloadAction(BaseAction):
     supports_bulk = True
 
     def is_available(self, user, file_obj, *, permission):
+        from workspace.files.services.scanning.policy import is_blocked
+
         if file_obj.deleted_at is not None:
+            return False
+        if is_blocked(file_obj):
             return False
         return permission is not None
 

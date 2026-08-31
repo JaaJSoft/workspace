@@ -146,6 +146,12 @@ class WopiFileContentsView(View):
         if isinstance(auth, HttpResponse):
             return auth
         file_obj, _user, _can_write = auth
+        from workspace.files.services.scanning.policy import blocked_reason
+
+        # WOPI has no "blocked" outcome; 404 is what Collabora handles
+        # gracefully, and it is what a hard-deleted file already returns.
+        if blocked_reason(file_obj) is not None:
+            raise Http404
         try:
             stream = file_obj.content.open("rb")
         except FileNotFoundError, OSError:

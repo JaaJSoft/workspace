@@ -23,13 +23,16 @@
           <i x-show="expanded" data-lucide="minimize-2" class="w-4 h-4" x-cloak></i>
         </button>
 
-        <!-- Download -->
+        <!-- Download - hidden once the panel reports the file is blocked
+             (see viewerBlocked): the malware policy already 403s the
+             request, but a live-looking button on the refusal screen would
+             contradict it. -->
         <a
           :href="`/api/v1/files/${fileUuid}/content`"
           download
           class="btn btn-ghost btn-sm btn-square"
           title="Download file"
-          x-show="fileUuid"
+          x-show="fileUuid && !viewerBlocked"
         >
           <i data-lucide="download" class="w-4 h-4"></i>
         </a>
@@ -134,6 +137,10 @@
         fileName: '',
         fileType: '',
         expanded: false,
+        // Set from the merged panel's marker element (see openFile) rather
+        // than the HTTP status: loadViewerPanel goes through $ajax, which
+        // does not expose it.
+        viewerBlocked: false,
 
         _getViewableFiles() {
           const rows = document.querySelectorAll('[data-uuid][data-viewable="1"][data-node-type="file"]');
@@ -210,6 +217,7 @@
           this.fileUuid = uuid;
           this.fileName = name || 'File';
           this.fileType = fileType || '';
+          this.viewerBlocked = false;
           this.open = true;
           // Gallery navigation re-opens over an already-open dialog: the
           // current spec makes that a no-op, but older engines throw.
@@ -225,6 +233,8 @@
           }
 
           await this.loadViewerPanel(`/files/view/${uuid}`);
+          const panel = document.getElementById(this._viewerPanelId());
+          this.viewerBlocked = !!(panel && panel.querySelector('[data-viewer-blocked]'));
         },
 
         // Every close path funnels here through the dialog's close event -
@@ -237,6 +247,7 @@
           this.fileUuid = null;
           this.fileName = '';
           this.fileType = '';
+          this.viewerBlocked = false;
           this.viewerError = null;
         },
 

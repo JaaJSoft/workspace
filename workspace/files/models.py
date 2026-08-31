@@ -319,6 +319,16 @@ class File(models.Model):
         )
         return is_viewable(label, self.name or "")
 
+    def is_quarantined(self):
+        """True when the malware policy currently denies access to this file.
+
+        Reads ``self.scan``; listing querysets apply ``policy.with_scan`` so
+        the template loop does not issue one query per row.
+        """
+        from workspace.files.services.scanning.policy import is_blocked
+
+        return is_blocked(self)
+
     def is_deleted(self):
         return self.deleted_at is not None
 
@@ -887,6 +897,62 @@ class ThumbnailFailure(models.Model):
 
     def __str__(self):
         return f"{self.file}: {self.attempts} failed thumbnail attempt(s)"
+
+
+class FileScan(models.Model):
+    """The most recent malware-scan verdict for a file.
+
+    One row per scanned file. A file with no row has never been scanned:
+    scanning is off, the file predates the feature, or its scan is still
+    queued. There is deliberately no "pending" status - writing one would put
+    a query on the upload path, and a file whose scan is in flight stays
+    readable, so the absence of a row already carries that meaning.
+
+    A content replacement does NOT clear the row; the scan of the new bytes
+    overwrites it. That is the conservative direction: an infected file cannot
+    be un-quarantined by overwriting it and racing the scan.
+    """
+
+    class Status(models.TextChoices):
+        CLEAN = "clean", "Clean"
+        INFECTED = "infected", "Infected"
+        SKIPPED = "skipped", "Skipped"
+        ERROR = "error", "Scan failed"
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    # Must stay non-nullable: the blocked-ids subquery feeds a NOT IN, where a
+    # single NULL makes the predicate UNKNOWN for every row and would silently
+    # empty every search result page.
+    file = models.OneToOneField(
+        File,
+        on_delete=models.CASCADE,
+        related_name="scan",
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, db_index=True)
+    signature = models.CharField(max_length=200, blank=True, default="")
+    detail = models.CharField(max_length=500, blank=True, default="")
+    # The File.content_hash the verdict describes, so a verdict can be told
+    # apart from the bytes the file holds now. Not indexed: it is only ever
+    # compared against the joined file's own hash, never looked up on its own.
+    # Blank for a row written before this field existed, and for a file whose
+    # own hash could not be computed - both mean "cannot vouch for these
+    # bytes", which is why the backfill treats them as needing a scan.
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    # Set explicitly by the task: rows are written through update_or_create and
+    # auto_now only fires inside Model.save().
+    scanned_at = models.DateTimeField()
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["status", "-scanned_at"], name="file_scan_status_time"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.file}: {self.status}"
 
 
 class UserStorageQuota(models.Model):

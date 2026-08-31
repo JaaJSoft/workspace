@@ -43,6 +43,44 @@ class RestEnforcementTests(APITestCase):
             )
         return f
 
+    def _folder_with_children(self):
+        folder = File.objects.create(
+            owner=self.user, name="Mixed", node_type=File.NodeType.FOLDER
+        )
+        clean_child = File(
+            owner=self.user,
+            name="child_good.txt",
+            node_type=File.NodeType.FILE,
+            parent=folder,
+            mime_type="text/plain",
+        )
+        clean_child.content = ContentFile(b"body", name="child_good.txt")
+        clean_child.size = 4
+        clean_child.save()
+        FileScan.objects.create(
+            file=clean_child,
+            status=FileScan.Status.CLEAN,
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+
+        infected_child = File(
+            owner=self.user,
+            name="child_bad.txt",
+            node_type=File.NodeType.FILE,
+            parent=folder,
+            mime_type="text/plain",
+        )
+        infected_child.content = ContentFile(b"body", name="child_bad.txt")
+        infected_child.size = 4
+        infected_child.save()
+        FileScan.objects.create(
+            file=infected_child,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+        return folder
+
     @override_settings(**BLOCKING)
     def test_content_of_an_infected_file_is_forbidden(self):
         resp = self.client.get(f"/api/v1/files/{self.infected.uuid}/content")
@@ -91,6 +129,41 @@ class RestEnforcementTests(APITestCase):
         archive = b"".join(resp.streaming_content)
         self.assertIn(b"good.txt", archive)
         self.assertNotIn(b"bad.txt", archive)
+
+    @override_settings(**BLOCKING)
+    def test_folder_download_omits_the_infected_descendant(self):
+        folder = self._folder_with_children()
+        resp = self.client.get(f"/api/v1/files/{folder.uuid}/download")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        archive = b"".join(resp.streaming_content)
+        self.assertIn(b"child_good.txt", archive)
+        self.assertNotIn(b"child_bad.txt", archive)
+
+    @override_settings(**BLOCKING)
+    def test_bulk_download_of_a_folder_omits_the_infected_descendant(self):
+        folder = self._folder_with_children()
+        resp = self.client.post(
+            "/api/v1/files/bulk-download",
+            {"uuids": [str(folder.uuid)]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        archive = b"".join(resp.streaming_content)
+        self.assertIn(b"child_good.txt", archive)
+        self.assertNotIn(b"child_bad.txt", archive)
+
+        # Under 'flag' policy the same descendant must stay in the archive -
+        # this is the case that catches a hand-rolled status check creeping
+        # into the ZIP path.
+        with override_settings(**FLAGGING):
+            resp = self.client.post(
+                "/api/v1/files/bulk-download",
+                {"uuids": [str(folder.uuid)]},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            archive = b"".join(resp.streaming_content)
+            self.assertIn(b"child_bad.txt", archive)
 
     @override_settings(**BLOCKING)
     def test_serializer_reports_the_verdict_and_hides_the_viewer(self):

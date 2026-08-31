@@ -6,12 +6,15 @@ ORM or the storage layer.
 
 from __future__ import annotations
 
+import logging
 import posixpath
 import re
 
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import File
+
+logger = logging.getLogger(__name__)
 
 # Anything the filesystem or a log line would rather not carry.
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
@@ -76,6 +79,34 @@ def sanitize_upload_name(raw):
     return name or FALLBACK_NAME
 
 
+def upload_notification_cache_key(link_uuid):
+    return f"files:drop-notify:{link_uuid}"
+
+
 def schedule_upload_notification(link):
-    """Coalesce an owner notification for *link*. Filled in by the task layer."""
+    """Arrange for one notification per burst of uploads on *link*.
+
+    ``cache.add`` is the election: the first upload of a burst wins it and
+    schedules the task, later ones find the key present and do nothing. The
+    task deletes the key as its last action, so the window is exactly "first
+    upload until the notification is sent". Letting the key expire on its own
+    would both double-schedule (an upload between expiry and execution) and
+    swallow uploads (one arriving after execution while the key still lived).
+    """
+    from django.conf import settings
+    from django.core.cache import cache
+
+    from ..tasks import notify_share_link_uploads
+
+    window = settings.FILES_DROP_NOTIFY_WINDOW_SECONDS
+    if not cache.add(upload_notification_cache_key(link.uuid), 1, timeout=window * 5):
+        return None
+    try:
+        notify_share_link_uploads.apply_async(args=[str(link.uuid)], countdown=window)
+    except Exception:
+        # The bytes are already stored and the row is committed. A broker that
+        # is down costs the owner a notification; it must not turn an accepted
+        # upload into a 500.
+        cache.delete(upload_notification_cache_key(link.uuid))
+        logger.exception("Could not schedule the upload notification")
     return None

@@ -237,3 +237,40 @@ def index_search_document(self, file_uuid, include_descendants=False):
             skipped += len(page) - written
 
     return {"status": "ok", "indexed": indexed, "failed": skipped}
+
+
+@shared_task(name="files.notify_share_link_uploads")
+def notify_share_link_uploads(link_uuid):
+    """Tell the link owner about the uploads that landed since the last run."""
+    from django.core.cache import cache
+
+    from workspace.files.models import FileShareLink
+    from workspace.files.services.public_links import upload_notification_cache_key
+    from workspace.notifications.services.notifications import notify
+
+    link = (
+        FileShareLink.objects.select_related("file", "created_by")
+        .filter(uuid=link_uuid)
+        .first()
+    )
+    if link is None:
+        cache.delete(upload_notification_cache_key(link_uuid))
+        return
+
+    delta = link.upload_count - link.notified_upload_count
+    if delta > 0:
+        subject = "1 file was" if delta == 1 else f"{delta} files were"
+        notify(
+            recipient=link.created_by,
+            origin="files",
+            title=f'{subject} added to "{link.file.name}"',
+            body="Uploaded through your share link.",
+            url=f"/files/{link.file.uuid}",
+            source=link.file,
+        )
+        FileShareLink.objects.filter(pk=link.pk).update(
+            notified_upload_count=link.upload_count
+        )
+
+    # Last, so the next upload starts a fresh window.
+    cache.delete(upload_notification_cache_key(link_uuid))

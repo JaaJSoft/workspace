@@ -167,6 +167,11 @@ def _recurrence_lines(vevent):
 
     icalendar returns a bare value for a property that appears once and a
     list when it repeats, so both shapes have to be handled.
+
+    The property parameters are part of the value, not decoration: without the
+    TZID an RDATE's wall-clock time is read in the wrong zone, and without
+    VALUE=DATE a bare date is not a date any more. Re-emitting them keeps the
+    stored text the text the feed sent.
     """
     lines = []
     for name in ("RRULE", "RDATE"):
@@ -174,7 +179,9 @@ def _recurrence_lines(vevent):
         if value is None:
             continue
         for item in value if isinstance(value, list) else [value]:
-            lines.append(f"{name}:{item.to_ical().decode()}")
+            params = item.params.to_ical().decode()
+            prefix = f"{name};{params}" if params else name
+            lines.append(f"{prefix}:{item.to_ical().decode()}")
     return "\n".join(lines)
 
 

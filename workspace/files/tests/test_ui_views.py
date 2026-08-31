@@ -120,3 +120,41 @@ class SharedLinkPageTests(TestCase):
         self.doc.soft_delete()
         resp = self.client.get(f"/files/shared/{self.link.token}")
         self.assertEqual(resp.status_code, 404)
+
+    def test_a_read_mode_folder_link_renders_the_browse_page(self):
+        folder = File.objects.create(
+            owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        link = FileShareLink.objects.create(
+            file=folder, created_by=self.owner, mode=FileShareLink.Mode.READ
+        )
+        resp = self.client.get(f"/files/shared/{link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "files/ui/shared_folder.html")
+
+    def test_a_both_mode_folder_link_renders_the_browse_page_with_a_dropzone(self):
+        folder = File.objects.create(
+            owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        link = FileShareLink.objects.create(
+            file=folder, created_by=self.owner, mode=FileShareLink.Mode.BOTH
+        )
+        resp = self.client.get(f"/files/shared/{link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "files/ui/shared_folder.html")
+        self.assertTemplateUsed(resp, "files/ui/partials/shared_dropzone.html")
+
+    def test_a_drop_mode_folder_link_renders_the_drop_page_with_no_listing(self):
+        folder = File.objects.create(
+            owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        link = FileShareLink.objects.create(
+            file=folder, created_by=self.owner, mode=FileShareLink.Mode.DROP
+        )
+        resp = self.client.get(f"/files/shared/{link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "files/ui/shared_drop.html")
+        self.assertTemplateUsed(resp, "files/ui/partials/shared_dropzone.html")
+        # The write-only guarantee expressed at the template layer: the
+        # folder-browse template (breadcrumbs, entry list) never renders.
+        self.assertTemplateNotUsed(resp, "files/ui/shared_folder.html")

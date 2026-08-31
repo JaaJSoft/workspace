@@ -33,7 +33,8 @@
         <!-- Password form -->
         <div
           class="card bg-base-100 shadow-xl max-w-sm mx-auto mt-8"
-          x-data="sharedFilePassword('{{ share_token }}')"
+          data-share-token="{{ share_token }}"
+          x-data="sharedFilePassword($el.dataset.shareToken)"
         >
           <div class="card-body items-center text-center pt-10 pb-8 px-8">
             <!-- Lock icon -->

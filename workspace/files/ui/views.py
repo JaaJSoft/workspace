@@ -14,6 +14,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_viewer_by_slug
 from workspace.files.services.quota import usage_percent
+from workspace.files.services.scanning.policy import with_scan
 from workspace.files.services.storage_analysis import (
     CATEGORY_META,
     QUERY_MAX_LENGTH,
@@ -246,19 +247,21 @@ def _build_context(request, folder=None, is_trash_view=False):
         file_id=OuterRef("pk"),
         shared_with=request.user,
     ).values("permission")[:1]
-    nodes = nodes.annotate(
-        is_favorite=Exists(favorite_subquery),
-        is_pinned=Exists(pinned_subquery),
-        is_shared=Exists(is_shared_subquery),
-        user_share_permission=Subquery(user_share_subquery),
-    ).prefetch_related(
-        # Scoped to the viewer's own tags: the shared-with-me listing shows
-        # other people's files, and their tags must never leak into it.
-        Prefetch(
-            "file_tags",
-            queryset=FileTag.objects.filter(tag__owner=request.user)
-            .select_related("tag")
-            .order_by(Lower("tag__name")),
+    nodes = with_scan(
+        nodes.annotate(
+            is_favorite=Exists(favorite_subquery),
+            is_pinned=Exists(pinned_subquery),
+            is_shared=Exists(is_shared_subquery),
+            user_share_permission=Subquery(user_share_subquery),
+        ).prefetch_related(
+            # Scoped to the viewer's own tags: the shared-with-me listing shows
+            # other people's files, and their tags must never leak into it.
+            Prefetch(
+                "file_tags",
+                queryset=FileTag.objects.filter(tag__owner=request.user)
+                .select_related("tag")
+                .order_by(Lower("tag__name")),
+            )
         )
     )
     if is_recent_view:
@@ -790,6 +793,19 @@ def view_file(request, uuid):
     if perm is None:
         raise Http404
     user_can_edit = perm >= FilePermission.WRITE
+
+    from workspace.files.services.scanning.policy import blocked_reason
+
+    reason = blocked_reason(file_obj)
+    if reason is not None:
+        return HttpResponse(
+            render_viewer_panel(
+                '<inline-alert type="error" title="Quarantined" '
+                'message="The malware scanner flagged this file, so its '
+                'contents cannot be shown."></inline-alert>'
+            ),
+            status=403,
+        )
 
     # Only files can be viewed
     if file_obj.node_type != File.NodeType.FILE:

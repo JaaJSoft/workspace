@@ -439,6 +439,15 @@
                   {% else %}
                     <span class="font-medium block truncate" title="{{ node.name }}">{{ node.name }}</span>
                   {% endif %}
+                  {% if node.is_quarantined %}
+                    <span
+                      class="badge badge-error badge-sm gap-1 mt-1"
+                      title="This file was flagged by the malware scanner and cannot be opened or downloaded."
+                    >
+                      <i data-lucide="shield-alert" class="w-3 h-3"></i>
+                      Quarantined
+                    </span>
+                  {% endif %}
                 </td>
                 {% if not is_trash_view %}
                   <td

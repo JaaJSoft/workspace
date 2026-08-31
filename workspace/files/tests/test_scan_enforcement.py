@@ -334,3 +334,43 @@ class SearchExclusionTests(TestCase):
         self._file("quarterly-budget.txt")
         names = {r.name for r in search_files("quarterly", self.user, 20)}
         self.assertIn("quarterly-budget.txt", names)
+
+
+class ViewerPanelEnforcementTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="vwr", password="p")
+        self.client.force_login(self.user)
+        self.file = File(
+            owner=self.user,
+            name="bad.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+        )
+        self.file.content = ContentFile(b"body", name="bad.txt")
+        self.file.size = 4
+        self.file.save()
+        FileScan.objects.create(
+            file=self.file,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+
+    @override_settings(**BLOCKING)
+    def test_viewer_panel_is_refused_for_a_quarantined_file(self):
+        resp = self.client.get(f"/files/view/{self.file.uuid}")
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn(b"Quarantined", resp.content)
+
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
+    def test_viewer_panel_renders_when_scanning_is_off(self):
+        resp = self.client.get(f"/files/view/{self.file.uuid}")
+        self.assertEqual(resp.status_code, 200)
+
+    @override_settings(**BLOCKING)
+    def test_a_stranger_still_gets_404_not_403(self):
+        """The guard must not leak existence to someone without access."""
+        other = User.objects.create_user(username="stranger", password="p")
+        self.client.force_login(other)
+        resp = self.client.get(f"/files/view/{self.file.uuid}")
+        self.assertEqual(resp.status_code, 404)

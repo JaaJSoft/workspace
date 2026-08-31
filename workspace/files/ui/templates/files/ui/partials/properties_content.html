@@ -105,6 +105,15 @@ Context:
       </div>
     </div>
 
+    {% if file.is_quarantined %}
+      <inline-alert
+        type="error"
+        title="Quarantined"
+        message="The malware scanner flagged this file. It cannot be opened or downloaded."
+        class="mt-3"
+      ></inline-alert>
+    {% endif %}
+
     {% if can_tag %}
       <!-- Tags (chips are client-rendered from `selectedFile.tags` so the
        tag_manager dropdown checkboxes update them live; the initial

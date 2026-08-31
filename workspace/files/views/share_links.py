@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.files.models import FileShareLink
+from workspace.files.services.scanning.policy import blocked_reason
 
 SIGNER = signing.TimestampSigner(salt="file-share-link")
 ACCESS_TOKEN_MAX_AGE = 3600  # 1 hour
@@ -68,6 +69,22 @@ def _check_password_access(link, request):
             status=status.HTTP_403_FORBIDDEN,
         )
     return None
+
+
+def _check_quarantine(file_obj):
+    """403 when the malware policy denies this file, else None.
+
+    A public link hands bytes to an anonymous visitor, which is exactly the
+    case the scanner exists for; naming the signature here is useful, not a
+    disclosure problem.
+    """
+    reason = blocked_reason(file_obj)
+    if reason is None:
+        return None
+    return Response(
+        {"detail": "File is quarantined.", "reason": reason},
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 def _record_access(link):
@@ -159,6 +176,9 @@ class SharedFileContentView(APIView):
         _record_access(link)
 
         f = link.file
+        quarantined = _check_quarantine(f)
+        if quarantined is not None:
+            return quarantined
         if not f.content:
             return Response(
                 {"detail": "File has no content."},
@@ -210,6 +230,9 @@ class SharedFileDownloadView(APIView):
         _record_access(link)
 
         f = link.file
+        quarantined = _check_quarantine(f)
+        if quarantined is not None:
+            return quarantined
         if not f.content:
             return Response(
                 {"detail": "File has no content."},

@@ -201,3 +201,82 @@ class RestEnforcementTests(APITestCase):
         )
         ids = {a["id"] for a in resp.data[str(self.clean.uuid)]}
         self.assertIn("download", ids)
+
+
+class ShareLinkEnforcementTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="lnk", password="p")
+        self.file = File(
+            owner=self.user,
+            name="bad.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+        )
+        self.file.content = ContentFile(b"body", name="bad.txt")
+        self.file.size = 4
+        self.file.save()
+        FileScan.objects.create(
+            file=self.file,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+        from workspace.files.models import FileShareLink
+
+        self.link = FileShareLink.objects.create(
+            file=self.file, created_by=self.user, token="tok-enforcement-1"
+        )
+
+    @override_settings(**BLOCKING)
+    def test_public_content_is_forbidden(self):
+        resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/content")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(**BLOCKING)
+    def test_public_download_is_forbidden(self):
+        resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/download")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
+    def test_public_download_works_when_scanning_is_off(self):
+        resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/download")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class WopiEnforcementTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="wop", password="p")
+        self.file = File(
+            owner=self.user,
+            name="bad.docx",
+            node_type=File.NodeType.FILE,
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        self.file.content = ContentFile(b"body", name="bad.docx")
+        self.file.size = 4
+        self.file.save()
+        FileScan.objects.create(
+            file=self.file,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+
+    def _contents_url(self):
+        from django.urls import reverse
+
+        from workspace.files.services.wopi.tokens import mint_access_token
+
+        token = mint_access_token(self.user, self.file.uuid, can_write=False)
+        url = reverse("wopi-file-contents", kwargs={"uuid": self.file.uuid})
+        return f"{url}?access_token={token}"
+
+    @override_settings(**BLOCKING)
+    def test_get_file_is_not_found_for_a_quarantined_document(self):
+        resp = self.client.get(self._contents_url())
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
+    def test_get_file_works_when_scanning_is_off(self):
+        resp = self.client.get(self._contents_url())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)

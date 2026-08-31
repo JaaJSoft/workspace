@@ -84,6 +84,7 @@ class MessageListView(CacheControlMixin, APIView):
                 "guest",
                 "reply_to",
                 "reply_to__author",
+                "reply_to__guest",
                 "interaction",
                 "interaction__interacted_by",
             )
@@ -361,6 +362,7 @@ class MessageListView(CacheControlMixin, APIView):
                 "guest",
                 "reply_to",
                 "reply_to__author",
+                "reply_to__guest",
                 "interaction",
                 "interaction__interacted_by",
             )
@@ -443,6 +445,7 @@ class MessageDetailView(APIView):
                 "guest",
                 "reply_to",
                 "reply_to__author",
+                "reply_to__guest",
                 "interaction",
                 "interaction__interacted_by",
             )

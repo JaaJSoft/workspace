@@ -41,7 +41,7 @@ class ReactionSerializer(serializers.ModelSerializer):
 class PinnedMessageSerializer(serializers.ModelSerializer):
     message_uuid = serializers.UUIDField(source="message.uuid")
     message_body = serializers.SerializerMethodField()
-    message_author = MemberUserSerializer(source="message.author")
+    message_author = serializers.SerializerMethodField()
     message_created_at = serializers.DateTimeField(source="message.created_at")
     pinned_by = MemberUserSerializer()
     pinned_at = serializers.DateTimeField(source="created_at")
@@ -61,6 +61,9 @@ class PinnedMessageSerializer(serializers.ModelSerializer):
     def get_message_body(self, obj):
         body = obj.message.body or ""
         return body[:100] + "\u2026" if len(body) > 100 else body
+
+    def get_message_author(self, obj):
+        return identity_payload(obj.message.author, obj.message.guest)
 
 
 class MessageAttachmentSerializer(serializers.ModelSerializer):
@@ -90,7 +93,7 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
 
 
 class ReplyToSerializer(serializers.ModelSerializer):
-    author = MemberUserSerializer()
+    author = serializers.SerializerMethodField()
     body = serializers.SerializerMethodField()
 
     class Meta:
@@ -101,6 +104,9 @@ class ReplyToSerializer(serializers.ModelSerializer):
     def get_body(self, obj):
         body = obj.body or ""
         return body[:200] + "\u2026" if len(body) > 200 else body
+
+    def get_author(self, obj):
+        return identity_payload(obj.author, obj.guest)
 
 
 class LinkPreviewSerializer(serializers.Serializer):
@@ -167,7 +173,7 @@ class MessageSerializer(serializers.ModelSerializer):
 
 
 class LastMessageSerializer(serializers.ModelSerializer):
-    author = MemberUserSerializer()
+    author = serializers.SerializerMethodField()
     has_attachments = serializers.SerializerMethodField()
 
     class Meta:
@@ -181,6 +187,9 @@ class LastMessageSerializer(serializers.ModelSerializer):
         ):
             return len(obj._prefetched_objects_cache["attachments"]) > 0
         return obj.attachments.exists()
+
+    def get_author(self, obj):
+        return identity_payload(obj.author, obj.guest)
 
 
 class GroupBriefSerializer(serializers.Serializer):
@@ -258,7 +267,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             msg = (
                 obj.messages.filter(deleted_at__isnull=True)
                 .order_by("-created_at")
-                .select_related("author")
+                .select_related("author", "guest")
                 .first()
             )
         if msg:

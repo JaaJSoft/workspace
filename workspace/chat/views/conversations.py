@@ -106,7 +106,7 @@ class ConversationListView(CacheControlMixin, APIView):
         last_msgs = {
             m.uuid: m
             for m in Message.objects.filter(uuid__in=last_msg_ids)
-            .select_related("author")
+            .select_related("author", "guest")
             .prefetch_related("attachments")
         }
 

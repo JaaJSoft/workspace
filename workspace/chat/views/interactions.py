@@ -27,6 +27,7 @@ def _refetch_for_serialization(message_pk):
             "author__bot_profile",
             "reply_to",
             "reply_to__author",
+            "reply_to__guest",
             "interaction",
             "interaction__interacted_by",
         )

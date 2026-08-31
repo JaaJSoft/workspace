@@ -150,6 +150,7 @@ class ChatSSEProvider(SSEProvider):
                 "guest",
                 "reply_to",
                 "reply_to__author",
+                "reply_to__guest",
                 "interaction",
                 "interaction__interacted_by",
             )

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Files
+
+- Share a whole folder with a public link, not just a single file. Recipients
+  can browse it and download what is inside.
+- New upload links: send someone a link and they can add files to a folder
+  without an account and without seeing what is already there. Set a password,
+  an expiry date, a maximum file size and a maximum number of files, and get a
+  notification when files arrive.
+
 ## 0.38.0 - Sprints, Office & Voice
 
 ### Highlights

@@ -317,6 +317,50 @@ class WopiEnforcementTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 
+class FileCardEnforcementTests(APITestCase):
+    """The hover popover renders an excerpt of the file's own content, which is
+    a preview like any other."""
+
+    MARKER = "XyzzyExcerptMarker99"
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="card", password="p")
+        self.client.force_login(self.user)
+
+    def _note(self, name, blocked=False):
+        f = File(
+            owner=self.user,
+            name=name,
+            node_type=File.NodeType.FILE,
+            mime_type="text/markdown",
+        )
+        f.content = ContentFile(self.MARKER.encode(), name=name)
+        f.size = len(self.MARKER)
+        f.save()
+        if blocked:
+            FileScan.objects.create(
+                file=f,
+                status=FileScan.Status.INFECTED,
+                signature="Unit.Test",
+                scanned_at="2026-08-30T12:00:00Z",
+            )
+        return f
+
+    @override_settings(**BLOCKING)
+    def test_card_omits_the_excerpt_of_a_quarantined_file(self):
+        blocked = self._note("bad.md", blocked=True)
+        resp = self.client.get(f"/files/{blocked.uuid}/card")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertNotIn(self.MARKER.encode(), resp.content)
+
+    @override_settings(**BLOCKING)
+    def test_card_still_shows_the_excerpt_of_a_clean_file(self):
+        clean = self._note("good.md")
+        resp = self.client.get(f"/files/{clean.uuid}/card")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn(self.MARKER.encode(), resp.content)
+
+
 class AiEnforcementTests(APITestCase):
     """The AI paths hand file bytes to a third-party provider, so the policy
     has to gate them like any other read path."""

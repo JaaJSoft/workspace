@@ -873,13 +873,18 @@ def file_card(request, uuid):
         raise Http404
 
     from workspace.files.services.excerpt import first_content_line
+    from workspace.files.services.scanning.policy import is_blocked
+
+    # An excerpt is a preview: a quarantined file owes the popover nothing.
+    # The template drops the paragraph entirely on an empty string.
+    first_line = "" if is_blocked(file_obj) else first_content_line(file_obj)
 
     return render(
         request,
         "files/ui/partials/file_card.html",
         {
             "file": file_obj,
-            "first_line": first_content_line(file_obj),
+            "first_line": first_line,
         },
     )
 

@@ -17,6 +17,11 @@ FLAGGING = {
     "FILES_MALWARE_SCAN_ENABLED": True,
     "FILES_MALWARE_ON_DETECTION": "flag",
 }
+FAIL_CLOSED = {
+    "FILES_MALWARE_SCAN_ENABLED": True,
+    "FILES_MALWARE_ON_DETECTION": "block",
+    "FILES_MALWARE_ON_ERROR": "closed",
+}
 
 
 class RestEnforcementTests(APITestCase):
@@ -322,8 +327,13 @@ class SearchExclusionTests(TestCase):
             scanned_at="2026-08-30T12:00:00Z",
         )
 
-    def _file(self, name):
-        f = File(owner=self.user, name=name, node_type=File.NodeType.FILE)
+    def _file(self, name, mime_type=""):
+        f = File(
+            owner=self.user,
+            name=name,
+            node_type=File.NodeType.FILE,
+            mime_type=mime_type,
+        )
         f.content = ContentFile(b"body", name=name)
         f.size = 4
         f.save()
@@ -360,6 +370,29 @@ class SearchExclusionTests(TestCase):
         self._file("quarterly-budget.txt")
         names = {r.name for r in search_files("quarterly", self.user, 20)}
         self.assertIn("quarterly-budget.txt", names)
+
+    @override_settings(**FAIL_CLOSED)
+    def test_notes_search_drops_a_file_blocked_by_a_later_policy_change(self):
+        """The notes provider searches the same File rows and the same FTS
+        index as the files provider.
+
+        An 'error' verdict leaves the search document in place - it was never
+        blocking when it was written - so flipping FILES_MALWARE_ON_ERROR to
+        'closed' afterwards is exactly the case a stale index cannot cover.
+        """
+        from workspace.notes.search import search_notes
+
+        note = self._file("quarterly-notes.md", mime_type="text/markdown")
+        readable = self._file("quarterly-plan.md", mime_type="text/markdown")
+        FileScan.objects.create(
+            file=note,
+            status=FileScan.Status.ERROR,
+            detail="daemon unreachable",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+        names = {r.name for r in search_notes("quarterly", self.user, 20)}
+        self.assertIn(readable.name, names)
+        self.assertNotIn(note.name, names)
 
 
 class ViewerPanelEnforcementTests(APITestCase):

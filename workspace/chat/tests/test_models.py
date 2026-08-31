@@ -2,12 +2,16 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.utils import timezone
 
+from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import (
     CallParticipant,
     CallSession,
     Conversation,
     ConversationMember,
+    Meeting,
+    MeetingGuest,
     Message,
     MessageAttachment,
     MessageInteraction,
@@ -258,3 +262,73 @@ class CallParticipantKeyTests(TestCase):
         session = CallSession.objects.create(conversation=conv, started_by=user)
         participant = CallParticipant.objects.create(session=session, user=user)
         self.assertEqual(participant.participant_key, f"u:{user.id}")
+
+
+class GuestIdentityTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="gi", password="x")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.user
+        )
+        self.session = CallSession.objects.create(
+            conversation=self.conv, started_by=self.user
+        )
+        cal = Calendar.objects.create(name="C", owner=self.user)
+        event = Event.objects.create(
+            calendar=cal, owner=self.user, title="E", start=timezone.now()
+        )
+        meeting_conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.user
+        )
+        self.meeting = Meeting.objects.create(
+            event=event, conversation=meeting_conv, created_by=self.user
+        )
+        self.guest = MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Ada",
+            occurrence_start=timezone.now(),
+            token_hash="c" * 64,
+        )
+
+    def test_call_session_starts_unlocked(self):
+        self.assertFalse(self.session.locked)
+
+    def test_guest_participant_key(self):
+        p = CallParticipant.objects.create(session=self.session, guest=self.guest)
+        self.assertEqual(p.participant_key, f"g:{self.guest.uuid}")
+
+    def test_member_participant_key_unchanged(self):
+        p = CallParticipant.objects.create(session=self.session, user=self.user)
+        self.assertEqual(p.participant_key, f"u:{self.user.id}")
+
+    def test_participant_needs_exactly_one_identity(self):
+        with self.assertRaises(IntegrityError):
+            CallParticipant.objects.create(session=self.session)
+
+    def test_participant_rejects_both_identities(self):
+        with self.assertRaises(IntegrityError):
+            CallParticipant.objects.create(
+                session=self.session, user=self.user, guest=self.guest
+            )
+
+    def test_message_needs_exactly_one_identity(self):
+        with self.assertRaises(IntegrityError):
+            Message.objects.create(conversation=self.conv, body="x")
+
+    def test_guest_message_is_allowed(self):
+        msg = Message.objects.create(
+            conversation=self.conv, guest=self.guest, body="hello"
+        )
+        self.assertIsNone(msg.author)
+        self.assertEqual(msg.guest_id, self.guest.uuid)
+
+    def test_a_guest_can_be_in_a_session_only_once(self):
+        CallParticipant.objects.create(session=self.session, guest=self.guest)
+        with self.assertRaises(IntegrityError):
+            CallParticipant.objects.create(session=self.session, guest=self.guest)
+
+    def test_a_member_can_be_in_a_session_only_once(self):
+        CallParticipant.objects.create(session=self.session, user=self.user)
+        with self.assertRaises(IntegrityError):
+            CallParticipant.objects.create(session=self.session, user=self.user)

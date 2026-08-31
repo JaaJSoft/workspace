@@ -103,8 +103,17 @@ class Message(models.Model):
     )
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
         on_delete=models.CASCADE,
         related_name="chat_messages",
+    )
+    guest = models.ForeignKey(
+        "MeetingGuest",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
     )
     reply_to = models.ForeignKey(
         "self",
@@ -135,6 +144,13 @@ class Message(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(author__isnull=False, guest__isnull=True)
+                | models.Q(author__isnull=True, guest__isnull=False),
+                name="message_one_identity",
+            ),
+        ]
         indexes = [
             # B-tree is bidirectional in PostgreSQL and SQLite: this single index
             # serves both ASC and DESC ordering on (conversation, created_at).
@@ -475,6 +491,9 @@ class CallSession(models.Model):
     )
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
+    # Lock lives on the session, not the meeting: a session already ends when
+    # its last participant leaves, so the lock resets itself between occurrences.
+    locked = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -505,15 +524,40 @@ class CallParticipant(models.Model):
         CallSession, on_delete=models.CASCADE, related_name="participants"
     )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
+    )
+    guest = models.ForeignKey(
+        "MeetingGuest",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
     )
     joined_at = models.DateTimeField(auto_now_add=True)
     left_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(user__isnull=False, guest__isnull=True)
+                | models.Q(user__isnull=True, guest__isnull=False),
+                name="call_participant_one_identity",
+            ),
+            # A UniqueConstraint over a nullable column does not constrain NULL
+            # rows, so the old single constraint becomes one per identity.
             models.UniqueConstraint(
-                fields=["session", "user"], name="unique_call_participant"
+                fields=["session", "user"],
+                condition=models.Q(user__isnull=False),
+                name="unique_call_participant_user",
+            ),
+            models.UniqueConstraint(
+                fields=["session", "guest"],
+                condition=models.Q(guest__isnull=False),
+                name="unique_call_participant_guest",
             ),
         ]
         indexes = [
@@ -526,9 +570,11 @@ class CallParticipant(models.Model):
     @property
     def participant_key(self):
         """Routing identity for signalling, presence and the peer table."""
-        from workspace.chat.services.participant_keys import user_key
+        from workspace.chat.services.participant_keys import guest_key, user_key
 
-        return user_key(self.user_id)
+        if self.user_id is not None:
+            return user_key(self.user_id)
+        return guest_key(self.guest_id)
 
 
 def _generate_meeting_slug():

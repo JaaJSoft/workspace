@@ -257,3 +257,31 @@ class ModulePreviewAndVisibilityTests(TestCase):
         self.assertEqual(ModuleVisibility.normalize(" admin"), "admin")
         self.assertEqual(ModuleVisibility.normalize("none "), "none")
         self.assertEqual(ModuleVisibility.normalize("  ALL  "), "all")
+
+
+class SearchProviderRefinementTests(TestCase):
+    def _provider(self, slug, **kwargs):
+        return SearchProviderInfo(
+            slug=slug,
+            module_slug="chat",
+            search_fn=lambda q, u, limit: [],
+            **kwargs,
+        )
+
+    def test_a_provider_refines_nothing_by_default(self):
+        reg = ModuleRegistry()
+        reg.register(_make_module("chat"))
+        reg.register_search_provider(self._provider("chat"))
+        self.assertEqual(reg.refinements(), {})
+
+    def test_refinements_maps_a_provider_to_what_it_supersedes(self):
+        reg = ModuleRegistry()
+        reg.register(_make_module("chat"))
+        reg.register_search_provider(self._provider("chat"))
+        reg.register_search_provider(self._provider("chat-drafts", refines=("chat",)))
+        self.assertEqual(reg.refinements(), {"chat-drafts": frozenset({"chat"})})
+
+    def test_notes_declares_that_it_refines_files(self):
+        from workspace.core.module_registry import registry
+
+        self.assertIn("files", registry.refinements().get("notes", ()))

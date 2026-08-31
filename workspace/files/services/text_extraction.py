@@ -1,134 +1,118 @@
-"""Turn a file's stored blob into plain text for the search index.
+"""Turn a file's stored blob into plain text.
 
-Bounded and failure-tolerant by contract: an extractor either returns text or
-None, never raises and never asks to be retried. A file whose body cannot be
-extracted stays findable by name, which is what search did before this module
-existed.
+The one way this application does that. Search reads a file's body through
+here, and so does the reader behind the assistant's read_file tool, because
+two ways of answering "what words are in this file" is two answers that drift
+apart: search finding a word the reader then cannot show is the shape that bug
+takes.
 
-Extractors are keyed by MIME type. Formats that need a real dependency (PDF,
-office documents) belong here as registrations once their converter exists,
-not as special cases in the caller.
+Everything goes to the same parser, whatever the format. What is left in this
+module is policy rather than parsing - which types are worth looking inside at
+all, since a photograph and a video hold no words and reading them would cost
+a blob apiece for nothing - and the ceilings that bound the read.
+
+Failure-tolerant by contract: this returns text or None, never raises and
+never asks to be retried. A file whose body cannot be read stays findable by
+its name.
 """
 
 from __future__ import annotations
 
-import codecs
-import html
-import re
+import logging
 
-from django.utils.html import strip_tags
+from workspace.common.documents.extraction import (
+    DOCUMENT_MIME_TYPES,
+    MAX_DOCUMENT_BYTES,
+    extract_document,
+)
+from workspace.common.logging import scrub
 
 from ..models import File
+from .detection import detect_from_name
+
+logger = logging.getLogger(__name__)
 
 # PostgreSQL rejects a tsvector built from more than ~1 MB of input; this sits
 # an order of magnitude below that and bounds the SQLite side too.
 BODY_CAP = 100_000
 
-# UTF-8 is at most 4 bytes per character, so this is the widest read that can
-# still be capped down to BODY_CAP characters.
-_MAX_READ_BYTES = BODY_CAP * 4
+# Types the app files under "text" with a text viewer, so a user reading one on
+# screen would not understand why search cannot see the words in front of them.
+# The parser hands these back as they are written, which is what someone
+# searching an XML or JSON file is after: the element and key names.
+_TEXT_LIKE_APPLICATION_TYPES = frozenset(
+    {
+        "application/json",
+        "application/xml",
+        "application/javascript",
+        "application/x-python-code",
+    }
+)
 
-_SCRIPT_OR_STYLE_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.I | re.S)
-
-_WHITESPACE_RE = re.compile(r"\s+")
-
-_EXTRACTORS: dict[str, callable] = {}
+INDEXABLE_MIME_TYPES = DOCUMENT_MIME_TYPES | _TEXT_LIKE_APPLICATION_TYPES
 
 
-def register_extractor(mime_type, extractor):
-    """Register a plain-text extractor for one MIME type.
+def is_indexable(mime_type):
+    """Whether this application looks inside a file of this type."""
+    mime = _base_mime(mime_type)
+    # Any other text/* subtype is worth reading as-is: better a slightly noisy
+    # document than a file nobody can find by its contents.
+    return mime in INDEXABLE_MIME_TYPES or mime.startswith("text/")
 
-    The extractor takes the decoded text and returns plain text.
+
+def file_text(file_obj, *, max_chars):
+    """Plain text of *file_obj*'s content, or None when there is none.
+
+    The catch is deliberately broad: the parser is pointed at whatever a user
+    chose to upload, and every way one of these files can be unreadable -
+    encrypted, truncated, a scan with no text layer - has to land on the same
+    answer rather than on an exception the caller never planned for.
     """
-    _EXTRACTORS[mime_type] = extractor
+    if file_obj.node_type != File.NodeType.FILE:
+        return None
+    if not _looks_indexable(file_obj):
+        return None
+    if not file_obj.content or not file_obj.content.name or _too_large(file_obj):
+        return None
+    try:
+        with file_obj.content.open("rb") as fh:
+            data = fh.read(MAX_DOCUMENT_BYTES)
+        return extract_document(data, max_chars=max_chars).text or None
+    except Exception as exc:
+        logger.info(
+            "No text extracted from file %s: %s", scrub(file_obj.pk), scrub(exc)
+        )
+        return None
 
 
 def extract_text(file_obj):
-    """Plain text of *file_obj*'s content, or None when there is none to index."""
-    if file_obj.node_type != File.NodeType.FILE:
-        return None
-    mime = _base_mime(file_obj.mime_type)
-    extractor = _extractor_for(mime)
-    if extractor is None:
-        return None
-    raw = _read_bounded(file_obj)
-    if raw is None:
-        return None
-    text = _decode_utf8(raw)
-    if text is None:
-        return None
-    text = extractor(text)[:BODY_CAP].strip()
-    return text or None
+    """The searchable body of a file, bounded to what the index accepts."""
+    return file_text(file_obj, max_chars=BODY_CAP)
+
+
+def _looks_indexable(file_obj):
+    """Whether *file_obj* is worth reading, by its type or failing that its name.
+
+    mime_type is nullable, and detection falls back to application/octet-stream
+    for content it cannot place, so the column alone would leave a file called
+    report.docx unread on the strength of a guess that failed.
+    """
+    if is_indexable(file_obj.mime_type):
+        return True
+    return is_indexable(detect_from_name(file_obj.name).mime_type)
 
 
 def _base_mime(mime_type):
     return (mime_type or "").split(";")[0].strip().lower()
 
 
-def _extractor_for(mime):
-    if mime in _EXTRACTORS:
-        return _EXTRACTORS[mime]
-    # Any other text/* subtype is worth indexing as-is: better a slightly
-    # noisy document than a file nobody can find by its contents.
-    return _extract_plain if mime.startswith("text/") else None
-
-
-def _extract_plain(text):
-    return text
-
-
-def _extract_html(text):
-    # Script and style bodies are markup payload, not prose: strip_tags alone
-    # would keep their contents and index minified JavaScript.
-    text = _SCRIPT_OR_STYLE_RE.sub(" ", text)
-    # strip_tags leaves nothing where a tag was, so "<h1>Title</h1><p>Body</p>"
-    # collapses to the single token "TitleBody" and neither word is findable.
-    # A space in front of every "<" restores the boundary - it can only add a
-    # separator, never swallow content, and unlike a tag-shaped regex it leaves
-    # the actual parsing to strip_tags.
-    text = html.unescape(strip_tags(text.replace("<", " <")))
-    # Markup indentation would otherwise eat into the character budget that
-    # real prose needs.
-    return _WHITESPACE_RE.sub(" ", text).strip()
-
-
-register_extractor("text/html", _extract_html)
-
-# Text the app already treats as text: MimeTypeRule files these under the
-# "text" category with the text viewer, so a user reading one on screen would
-# not understand why search cannot see the words in front of them. Indexed
-# raw - element and key names are usually what someone searches an XML or
-# JSON file for.
-for _mime in (
-    "application/json",
-    "application/xml",
-    "application/javascript",
-    "application/x-python-code",
-):
-    register_extractor(_mime, _extract_plain)
-
-
-def _read_bounded(file_obj):
-    if not file_obj.content or not file_obj.content.name:
-        return None
-    try:
-        with file_obj.content.open("rb") as fh:
-            return fh.read(_MAX_READ_BYTES)
-    except OSError, ValueError:
-        # Vanished blob, unreadable mount, or a FieldFile whose storage is
-        # gone. Nothing to index and nothing worth retrying.
-        return None
-
-
-def _decode_utf8(raw):
-    """Decode as UTF-8, tolerating a read that ends mid-character.
-
-    The incremental decoder holds back an incomplete trailing sequence instead
-    of failing, so capping the read never costs more than the last character.
-    Genuinely invalid bytes still raise, which is how binary content declared
-    as text/* is rejected.
-    """
-    try:
-        return codecs.getincrementaldecoder("utf-8")().decode(raw, final=False)
-    except UnicodeDecodeError:
-        return None
+def _too_large(file_obj):
+    size = file_obj.size
+    if size is None:
+        try:
+            size = file_obj.content.size
+        except OSError, ValueError:
+            # Vanished blob or a storage that cannot stat it: the read that
+            # follows would fail too.
+            return True
+    return size > MAX_DOCUMENT_BYTES

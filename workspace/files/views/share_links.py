@@ -25,6 +25,7 @@ from workspace.files.services.public_links import (
     sanitize_upload_name,
     schedule_upload_notification,
 )
+from workspace.files.services.scanning.policy import blocked_reason
 from workspace.files.services.thumbnails.generation import get_thumbnail_path
 from workspace.files.sse_provider import push_file_event
 from workspace.files.ui.viewers import ViewerRegistry
@@ -128,6 +129,22 @@ def _verify_access_token(link, access_token):
 def _check_password_access(link, request):
     """Check password access for a link. Returns error Response or None if OK."""
     return _verify_access_token(link, request.query_params.get("access_token", ""))
+
+
+def _check_quarantine(file_obj):
+    """403 when the malware policy denies this file, else None.
+
+    A public link hands bytes to an anonymous visitor, which is exactly the
+    case the scanner exists for; naming the signature here is useful, not a
+    disclosure problem.
+    """
+    reason = blocked_reason(file_obj)
+    if reason is None:
+        return None
+    return Response(
+        {"detail": "File is quarantined.", "reason": reason},
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 def _record_access(link):
@@ -294,6 +311,10 @@ class SharedFileContentView(APIView):
         if f.node_type != File.NodeType.FILE:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        quarantined = _check_quarantine(f)
+        if quarantined is not None:
+            return quarantined
+
         _record_access(link)
 
         if not f.content:
@@ -352,6 +373,10 @@ class SharedFileDownloadView(APIView):
             return err
         if f.node_type != File.NodeType.FILE:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+        quarantined = _check_quarantine(f)
+        if quarantined is not None:
+            return quarantined
 
         _record_access(link)
 
@@ -438,6 +463,10 @@ class SharedFileThumbnailView(APIView):
             return err
         if node.node_type != File.NodeType.FILE or not node.has_thumbnail:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+        quarantined = _check_quarantine(node)
+        if quarantined is not None:
+            return quarantined
 
         _record_access(link)
 

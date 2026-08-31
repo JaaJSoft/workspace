@@ -5,7 +5,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("files", "0049_file_fts_rowid"),
+        ("files", "0051_filescan_content_hash"),
     ]
 
     operations = [

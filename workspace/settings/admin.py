@@ -72,6 +72,12 @@ UNFOLD = {
                         "link": reverse_lazy("admin:files_thumbnailfailure_changelist"),
                         "badge": "workspace.core.services.admin_dashboard.thumbnail_failure_badge",
                     },
+                    {
+                        "title": "Malware scans",
+                        "icon": "shield",
+                        "link": reverse_lazy("admin:files_filescan_changelist"),
+                        "badge": "workspace.core.services.admin_dashboard.quarantined_file_badge",
+                    },
                 ],
             },
             {

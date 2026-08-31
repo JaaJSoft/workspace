@@ -3,19 +3,27 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
+from django.urls import reverse
+from rest_framework.test import APITestCase
 
+from workspace.common.documents import extraction
 from workspace.common.search import apply_fulltext, fts5_available
+from workspace.common.tests.office_fixtures import make_docx
+from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File, FileEvent
+from workspace.files.services import FileService
 from workspace.files.services.search_index import (
     FILES_FTS,
     build_document,
     index_file,
     unindex_file,
 )
+from workspace.files.services.wopi.tokens import mint_access_token
 
 User = get_user_model()
 
@@ -473,3 +481,98 @@ class KeyAssignmentTests(_FtsTestCase):
         self.assertIsNotNone(note.fts_rowid)
         self.assertNotEqual(note.fts_rowid, victim.uuid.int & ((1 << 63) - 1))
         self.assertEqual(self._matches('"gorgonzola"'), {note.fts_rowid})
+
+
+class DocumentBackfillTests(_FtsTestCase):
+    """Files uploaded before an extractor existed are picked up by the backfill."""
+
+    def _document(self, name, mime, payload):
+        return File.objects.create(
+            name=name,
+            node_type=File.NodeType.FILE,
+            mime_type=mime,
+            owner=self.user,
+            size=len(payload),
+            content=ContentFile(payload, name=name),
+        )
+
+    def test_backfill_indexes_a_pdf_uploaded_before_the_extractor_existed(self):
+        report = self._document(
+            "report.pdf", "application/pdf", make_pdf(["quarterly budget"])
+        )
+        self.assertEqual(self._matches('"budget"'), set())
+
+        call_command("reindex_files_search", stdout=StringIO())
+
+        self.assertEqual(self._matches('"budget"'), {self._rowid(report)})
+
+    def test_backfill_indexes_office_documents(self):
+        minutes = self._document(
+            "minutes.docx", extraction.DOCX, make_docx(["the treasurer resigned"])
+        )
+        call_command("reindex_files_search", stdout=StringIO())
+        self.assertEqual(self._matches('"treasurer"'), {self._rowid(minutes)})
+
+    def test_an_unreadable_document_does_not_stop_the_backfill(self):
+        self._document("broken.pdf", "application/pdf", b"%PDF-1.4 truncated")
+        readable = self._document(
+            "good.docx", extraction.DOCX, make_docx(["the treasurer resigned"])
+        )
+        call_command("reindex_files_search", stdout=StringIO())
+        self.assertEqual(self._matches('"treasurer"'), {self._rowid(readable)})
+
+
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+class WopiSaveReindexTests(_FtsTestCase):
+    def test_saving_through_the_office_editor_reindexes_the_new_body(self):
+        report = FileService.create_file(
+            owner=self.user,
+            name="report.docx",
+            content=SimpleUploadedFile(
+                "report.docx", make_docx(["first draft"]), content_type=extraction.DOCX
+            ),
+            acting_user=self.user,
+        )
+        index_file(report)
+        self.assertEqual(self._matches('"draft"'), {self._rowid(report)})
+
+        url = reverse("wopi-file-contents", kwargs={"uuid": report.uuid})
+        token = mint_access_token(self.user, report.uuid, True)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"{url}?access_token={token}",
+                data=make_docx(["final version"]),
+                content_type="application/octet-stream",
+                headers={"X-WOPI-Override": "PUT"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._matches('"draft"'), set())
+        self.assertEqual(self._matches('"version"'), {self._rowid(report)})
+
+
+class OffRequestExtractionTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.client.force_authenticate(user=self.user)
+
+    def test_uploading_a_document_extracts_nothing_on_the_request_thread(self):
+        # Reading a blob and parsing a document is far too slow to sit in a
+        # response; it has to be deferred, not merely fast.
+        upload = SimpleUploadedFile(
+            "report.pdf", make_pdf(["quarterly budget"]), content_type="application/pdf"
+        )
+        with mock.patch(
+            "workspace.files.services.search_index.extract_text"
+        ) as extract:
+            with self.captureOnCommitCallbacks() as callbacks:
+                response = self.client.post(
+                    "/api/v1/files",
+                    {"name": "report.pdf", "node_type": "file", "content": upload},
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, 201)
+        extract.assert_not_called()
+        # Deferred, not skipped: the commit hook that queues the work is there.
+        self.assertTrue(callbacks)

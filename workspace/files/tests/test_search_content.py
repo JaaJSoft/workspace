@@ -6,7 +6,18 @@ from django.db import connection
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
+from workspace.common.documents import extraction
 from workspace.common.search import fts5_available
+from workspace.common.tests.office_fixtures import ODP as F_ODP
+from workspace.common.tests.office_fixtures import ODS as F_ODS
+from workspace.common.tests.office_fixtures import ODT as F_ODT
+from workspace.common.tests.office_fixtures import (
+    make_docx,
+    make_odf,
+    make_pptx,
+    make_xlsx,
+)
+from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File
 from workspace.files.search import search_files
 from workspace.files.services.search_index import index_file
@@ -221,3 +232,58 @@ class FileListSearchApiTests(APITestCase):
         response = self.client.get("/api/v1/files/trash", {"search": "treasurer"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row["name"] for row in response.data], ["minutes.md"])
+
+
+class DocumentContentSearchTests(ContentSearchTestCase):
+    """The headline case: a word that lives only inside a document."""
+
+    def test_a_word_only_inside_a_pdf_finds_the_file(self):
+        self._file(
+            self.user,
+            "report.pdf",
+            make_pdf(["quarterly budget"]),
+            mime="application/pdf",
+        )
+        results = search_files("budget", self.user, limit=10)
+        self.assertEqual([r.name for r in results], ["report.pdf"])
+        self.assertEqual(results[0].match_type, "content")
+
+    def test_a_word_only_inside_an_office_document_finds_the_file(self):
+        documents = (
+            ("minutes.docx", extraction.DOCX, make_docx(["the treasurer resigned"])),
+            (
+                "sales.xlsx",
+                extraction.XLSX,
+                make_xlsx(sheets={"Sales": [["treasurer"]]}),
+            ),
+            ("deck.pptx", extraction.PPTX, make_pptx([["the treasurer resigned"]])),
+            ("notes.odt", extraction.ODT, make_odf(F_ODT, ["treasurer"])),
+            ("budget.ods", extraction.ODS, make_odf(F_ODS, ["treasurer"])),
+            ("slides.odp", extraction.ODP, make_odf(F_ODP, ["treasurer"])),
+        )
+        for name, mime, payload in documents:
+            self._file(self.user, name, payload, mime=mime)
+
+        results = search_files("treasurer", self.user, limit=10)
+        self.assertEqual(
+            sorted(r.name for r in results), sorted(name for name, _, _ in documents)
+        )
+        self.assertTrue(all(r.match_type == "content" for r in results))
+
+    def test_a_scanned_pdf_is_still_findable_by_its_name(self):
+        # No text layer means no body; the file must not fall out of search.
+        self._file(
+            self.user, "invoice-scan.pdf", make_pdf([""]), mime="application/pdf"
+        )
+        results = search_files("invoice", self.user, limit=10)
+        self.assertEqual([r.name for r in results], ["invoice-scan.pdf"])
+        self.assertEqual(results[0].match_type, "name")
+
+    def test_another_users_document_stays_out_of_reach(self):
+        self._file(
+            self.other,
+            "private.docx",
+            make_docx(["treasurer"]),
+            mime=extraction.DOCX,
+        )
+        self.assertEqual(search_files("treasurer", self.user, limit=10), [])

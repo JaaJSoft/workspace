@@ -14,7 +14,11 @@ class ViewAction(BaseAction):
     keyboard_shortcut = "Enter / Space"
 
     def is_available(self, user, file_obj, *, permission):
+        from workspace.files.services.scanning.policy import is_blocked
+
         if file_obj.deleted_at is not None:
+            return False
+        if is_blocked(file_obj):
             return False
         if not file_obj.is_viewable():
             return False
@@ -45,6 +49,10 @@ class OpenNewTabAction(BaseAction):
     node_types = ("file",)
 
     def is_available(self, user, file_obj, *, permission):
+        from workspace.files.services.scanning.policy import is_blocked
+
         if file_obj.deleted_at is not None:
+            return False
+        if is_blocked(file_obj):
             return False
         return permission is not None

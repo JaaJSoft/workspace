@@ -8,6 +8,7 @@ from django.test import SimpleTestCase, TestCase
 from pypdf import PdfWriter
 
 from workspace.common.documents import extraction
+from workspace.common.documents.extraction import MAX_DOCUMENT_BYTES
 from workspace.common.tests.office_fixtures import ODP as F_ODP
 from workspace.common.tests.office_fixtures import ODS as F_ODS
 from workspace.common.tests.office_fixtures import ODT as F_ODT
@@ -21,7 +22,6 @@ from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File
 from workspace.files.services.detection import get_all_labels
 from workspace.files.services.text_extraction import (
-    _MAX_DOCUMENT_BYTES,
     BODY_CAP,
     extract_text,
     has_extractor,
@@ -258,7 +258,7 @@ class DocumentExtractionTests(TestCase):
 
     def test_a_document_past_the_size_ceiling_is_not_read(self):
         f = self._file("huge.docx", extraction.DOCX, make_docx(["kraken"]))
-        File.objects.filter(pk=f.pk).update(size=_MAX_DOCUMENT_BYTES + 1)
+        File.objects.filter(pk=f.pk).update(size=MAX_DOCUMENT_BYTES + 1)
         self.assertIsNone(extract_text(File.objects.get(pk=f.pk)))
 
     def test_a_missing_blob_yields_nothing(self):

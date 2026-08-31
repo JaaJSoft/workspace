@@ -24,6 +24,7 @@ from django.utils.html import strip_tags
 
 from workspace.common.documents.extraction import (
     DOCUMENT_MIME_TYPES,
+    MAX_DOCUMENT_BYTES,
     extract_document,
 )
 from workspace.common.logging import scrub
@@ -39,12 +40,6 @@ BODY_CAP = 100_000
 # UTF-8 is at most 4 bytes per character, so this is the widest read that can
 # still be capped down to BODY_CAP characters.
 _MAX_READ_BYTES = BODY_CAP * 4
-
-# What a stream extractor may page in. Its format is not prefix-readable, so
-# the blob is opened whole and this is the only thing standing between the
-# indexer and a multi-gigabyte upload. Generous next to any document that
-# carries BODY_CAP characters of prose, which is roughly sixty pages.
-_MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
 
 _SCRIPT_OR_STYLE_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.I | re.S)
 
@@ -124,7 +119,7 @@ def _extract_from_bytes(file_obj, extractor):
         return None
     try:
         with file_obj.content.open("rb") as fh:
-            return extractor(fh.read(_MAX_DOCUMENT_BYTES))[:BODY_CAP].strip()
+            return extractor(fh.read(MAX_DOCUMENT_BYTES))[:BODY_CAP].strip()
     except Exception as exc:
         logger.info(
             "No text extracted from file %s: %s", scrub(file_obj.pk), scrub(exc)
@@ -141,7 +136,7 @@ def _too_large(file_obj):
             # Vanished blob or a storage that cannot stat it: the read that
             # follows would fail too.
             return True
-    return size > _MAX_DOCUMENT_BYTES
+    return size > MAX_DOCUMENT_BYTES
 
 
 def _extractor_for(mime):

@@ -40,6 +40,12 @@ DOCUMENT_MIME_TYPES = frozenset(
     {PDF, DOCX, DOTX, XLSX, PPTX, ODT, ODS, ODP, DOC, XLS, PPT, RTF, EPUB}
 )
 
+# What a caller may page in to hand the parser. These formats are not
+# prefix-readable - a zip's central directory and a PDF's cross-reference
+# table both sit at the end - so the blob is read whole, and this is the only
+# thing between a reader and a multi-gigabyte upload.
+MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
+
 # Tika pads its output with a little leading and trailing whitespace, so the
 # probe that detects "there was more" has to clear the padding as well. Sixty
 # four characters is far more than it ever emits and costs nothing to read.

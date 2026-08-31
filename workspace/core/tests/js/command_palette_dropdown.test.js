@@ -221,3 +221,108 @@ describe('the shortcuts', () => {
     assert.deepEqual(input.selection, [1, 1]);
   });
 });
+
+describe('the states the panel can be in while a search runs', () => {
+  const ok = (payload) => Promise.resolve({ ok: true, json: async () => payload });
+
+  test('a first search shows skeletons, since there is nothing else to show', () => {
+    const { palette } = boot();
+    palette.query = 'notes';
+    palette.search();
+    assert.equal(palette.loading, true);
+    assert.equal(palette.showSkeleton(), true);
+  });
+
+  test('refining a query keeps the previous results on screen instead of skeletons', async () => {
+    const { palette } = boot({ fetchImpl: () => ok({ results: [{ uuid: 'a' }] }) });
+    palette.query = 'note';
+    palette.search();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(palette.results.length, 1);
+
+    palette.query = 'notes';
+    palette.search();
+    assert.equal(palette.loading, true);
+    assert.equal(palette.showSkeleton(), false, 'stale results stay, the progress bar carries the signal');
+    assert.equal(palette.results.length, 1);
+  });
+
+  test('a query below the minimum length asks for more characters rather than showing nothing', () => {
+    const { palette } = boot();
+    palette.query = '';
+    assert.equal(palette.showMinLengthHint(), false);
+    palette.query = 'n';
+    assert.equal(palette.showMinLengthHint(), true);
+    palette.query = 'no';
+    assert.equal(palette.showMinLengthHint(), false);
+    // Command mode has no minimum - a bare > already lists everything.
+    palette.query = '>';
+    assert.equal(palette.showMinLengthHint(), false);
+  });
+});
+
+describe('when the search endpoint fails', () => {
+  test('a rejected request raises the error flag instead of claiming there is nothing', async () => {
+    const { palette } = boot({ fetchImpl: () => Promise.reject(new Error('offline')) });
+    palette.query = 'notes';
+    palette.search();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(palette.error, true);
+    assert.equal(palette.loading, false);
+    assert.equal(palette.showEmptyState(), false, 'an error is not an empty result set');
+  });
+
+  test('an HTTP error is a failure too, not an empty result set', async () => {
+    const { palette } = boot({
+      fetchImpl: () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) }),
+    });
+    palette.query = 'notes';
+    palette.search();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(palette.error, true);
+  });
+
+  test('the next search clears the error before it starts', async () => {
+    let fail = true;
+    const { palette } = boot({
+      fetchImpl: () => (fail
+        ? Promise.reject(new Error('offline'))
+        : Promise.resolve({ ok: true, json: async () => ({ results: [{ uuid: 'a' }] }) })),
+    });
+    palette.query = 'notes';
+    palette.search();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(palette.error, true);
+
+    fail = false;
+    palette.query = 'notes2';
+    palette.search();
+    assert.equal(palette.error, false, 'cleared synchronously, so the panel never shows a stale error');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(palette.error, false);
+    assert.equal(palette.results.length, 1);
+  });
+
+  test('a stale failure cannot raise the error flag on a query that has moved on', async () => {
+    let rejectFetch;
+    const { palette } = boot({
+      fetchImpl: () => new Promise((_, reject) => { rejectFetch = reject; }),
+    });
+    palette.query = 'notes';
+    palette.search();
+    palette.query = '>';
+    palette.search();
+    rejectFetch(new Error('offline'));
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(palette.error, false);
+  });
+
+  test('closing the palette drops the error', async () => {
+    const { palette } = boot({ fetchImpl: () => Promise.reject(new Error('offline')) });
+    palette.query = 'notes';
+    palette.search();
+    await new Promise((r) => setTimeout(r, 0));
+    palette.close();
+    assert.equal(palette.error, false);
+  });
+});

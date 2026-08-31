@@ -68,8 +68,12 @@ class UploadNotificationTests(TestCase):
         self.assertEqual(Notification.objects.filter(recipient=self.owner).count(), 1)
 
     def test_the_task_clears_the_guard_so_the_next_burst_schedules(self):
-        schedule_upload_notification(self.link)
+        # Patched so the assertion below is about scheduling having claimed the
+        # guard, not about whether this environment runs Celery eagerly.
+        with patch("workspace.files.tasks.notify_share_link_uploads.apply_async"):
+            schedule_upload_notification(self.link)
         self.assertIsNotNone(cache.get(upload_notification_cache_key(self.link.uuid)))
+
         notify_share_link_uploads(str(self.link.uuid))
         self.assertIsNone(cache.get(upload_notification_cache_key(self.link.uuid)))
 

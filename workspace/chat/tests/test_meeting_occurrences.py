@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
@@ -33,7 +34,10 @@ class OccurrenceTests(TestCase):
         )
         occ = current_occurrence(m, now=now)
         self.assertIsNotNone(occ)
-        self.assertEqual(occ[0], m.event.start)
+        # current_occurrence truncates to the same microsecond grain rrule
+        # uses for recurring series, so this is the value a caller must write
+        # back into occurrence_start/closed_occurrence_start, not event.start.
+        self.assertEqual(occ[0], m.event.start.replace(microsecond=0))
 
     def test_open_during_the_lobby_lead(self):
         now = timezone.now()
@@ -64,7 +68,26 @@ class OccurrenceTests(TestCase):
         m = self._meeting(start=now - timedelta(minutes=30), end=None)
         occ = current_occurrence(m, now=now)
         self.assertIsNotNone(occ)
-        self.assertEqual(occ[1], m.event.start + timedelta(minutes=60))
+        self.assertEqual(
+            occ[1], m.event.start.replace(microsecond=0) + timedelta(minutes=60)
+        )
+
+    def test_open_exactly_at_the_lobby_open_boundary(self):
+        now = timezone.now().replace(microsecond=0)
+        start = now + settings.MEETING_LOBBY_LEAD
+        m = self._meeting(start=start, end=start + timedelta(minutes=30))
+        occ = current_occurrence(m, now=now)
+        self.assertIsNotNone(occ)
+        self.assertEqual(occ[0], start)
+
+    def test_open_exactly_at_the_grace_close_boundary(self):
+        now = timezone.now().replace(microsecond=0)
+        end = now - settings.MEETING_GRACE
+        start = end - timedelta(minutes=30)
+        m = self._meeting(start=start, end=end)
+        occ = current_occurrence(m, now=now)
+        self.assertIsNotNone(occ)
+        self.assertEqual(occ[1], end)
 
     def test_recurring_event_opens_for_a_later_occurrence(self):
         now = timezone.now()
@@ -77,8 +100,10 @@ class OccurrenceTests(TestCase):
         )
         occ = current_occurrence(m, now=now)
         self.assertIsNotNone(occ)
-        # It is this week's occurrence, not the original series start.
-        self.assertGreater(occ[0], m.event.start)
+        # Exactly this week's instance, three intervals after the series
+        # start - not merely "later than the series start".
+        expected_start = m.event.start.replace(microsecond=0) + timedelta(weeks=3)
+        self.assertEqual(occ[0], expected_start)
 
     def test_recurring_event_is_closed_between_occurrences(self):
         now = timezone.now()
@@ -89,3 +114,49 @@ class OccurrenceTests(TestCase):
             recurrence_interval=1,
         )
         self.assertIsNone(current_occurrence(m, now=now))
+
+    def test_cancelled_occurrence_is_not_reachable(self):
+        now = timezone.now()
+        m = self._meeting(
+            start=now - timedelta(weeks=3, minutes=5),
+            end=now - timedelta(weeks=3) + timedelta(minutes=25),
+            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
+            recurrence_interval=1,
+        )
+        occurrence_start = m.event.start.replace(microsecond=0) + timedelta(weeks=3)
+        Event.objects.create(
+            calendar=self.cal,
+            owner=self.user,
+            title="E (cancelled)",
+            start=occurrence_start,
+            end=occurrence_start + timedelta(minutes=30),
+            recurrence_parent=m.event,
+            original_start=occurrence_start,
+            is_cancelled=True,
+        )
+        self.assertIsNone(current_occurrence(m, now=now))
+
+    def test_rescheduled_occurrence_is_reachable_at_its_new_time_only(self):
+        now = timezone.now()
+        m = self._meeting(
+            start=now - timedelta(weeks=3, minutes=5),
+            end=now - timedelta(weeks=3) + timedelta(minutes=25),
+            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
+            recurrence_interval=1,
+        )
+        original_start = m.event.start.replace(microsecond=0) + timedelta(weeks=3)
+        new_start = now + timedelta(hours=2)
+        new_end = new_start + timedelta(minutes=30)
+        Event.objects.create(
+            calendar=self.cal,
+            owner=self.user,
+            title="E (rescheduled)",
+            start=new_start,
+            end=new_end,
+            recurrence_parent=m.event,
+            original_start=original_start,
+        )
+        # The ghost slot at the original time is closed.
+        self.assertIsNone(current_occurrence(m, now=now))
+        # The real, rescheduled slot is open, at its new time.
+        self.assertEqual(current_occurrence(m, now=new_start), (new_start, new_end))

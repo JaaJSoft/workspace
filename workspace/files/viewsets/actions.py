@@ -168,6 +168,7 @@ class ActionsMixin:
         responses={
             200: OpenApiResponse(description="Base64-encoded edited image."),
             400: OpenApiResponse(description="Missing prompt."),
+            403: OpenApiResponse(description="File is quarantined."),
             404: OpenApiResponse(description="File not found or AI not configured."),
             502: OpenApiResponse(description="AI backend error."),
         },
@@ -182,6 +183,14 @@ class ActionsMixin:
             raise Http404
 
         file_obj = self.get_object()
+
+        # The stored blob is posted to the configured AI provider, so this is
+        # a read path like any other. _quarantine_response comes from
+        # ContentMixin - both mixins compose into FileViewSet, and the shape
+        # has to stay identical to the content and download endpoints'.
+        blocked = self._quarantine_response(file_obj)
+        if blocked is not None:
+            return blocked
 
         if file_obj.node_type != File.NodeType.FILE or file_obj.category != "image":
             return Response(

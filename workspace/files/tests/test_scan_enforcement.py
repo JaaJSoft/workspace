@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
@@ -312,6 +314,74 @@ class WopiEnforcementTests(APITestCase):
     @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
     def test_get_file_works_when_scanning_is_off(self):
         resp = self.client.get(self._contents_url())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class AiEnforcementTests(APITestCase):
+    """The AI paths hand file bytes to a third-party provider, so the policy
+    has to gate them like any other read path."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="aiq", password="p")
+        self.client.force_authenticate(user=self.user)
+        self.file = File.objects.create(
+            owner=self.user,
+            name="photo.png",
+            node_type=File.NodeType.FILE,
+            mime_type="image/png",
+            type="png",
+            category="image",
+        )
+        self.file.content.save("photo.png", ContentFile(b"\x89PNG\r\n\x1a\nfake"))
+        FileScan.objects.create(
+            file=self.file,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+
+    @override_settings(**BLOCKING)
+    def test_read_file_tool_refuses_a_quarantined_file(self):
+        from workspace.files.ai_tools import FilesToolProvider, ReadFileParams
+
+        result = FilesToolProvider().read_file(
+            ReadFileParams(uuid=self.file.uuid),
+            user=self.user,
+            bot=None,
+            conversation_id=None,
+            context={},
+        )
+        self.assertEqual(result, "File is quarantined.")
+
+    @override_settings(**BLOCKING, AI_IMAGE_MODEL="test-model", AI_API_KEY="k")
+    def test_ai_edit_refuses_a_quarantined_image(self):
+        with patch(
+            "workspace.ai.services.image.ai_edit_image",
+            return_value=b"\x89PNGedited",
+        ) as edit:
+            resp = self.client.post(
+                f"/api/v1/files/{self.file.uuid}/ai-edit",
+                {"prompt": "make it blue"},
+                format="json",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["detail"], "File is quarantined.")
+        edit.assert_not_called()
+
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
+    def test_ai_edit_works_when_scanning_is_off(self):
+        with (
+            override_settings(AI_IMAGE_MODEL="test-model", AI_API_KEY="k"),
+            patch(
+                "workspace.ai.services.image.ai_edit_image",
+                return_value=b"\x89PNGedited",
+            ),
+        ):
+            resp = self.client.post(
+                f"/api/v1/files/{self.file.uuid}/ai-edit",
+                {"prompt": "make it blue"},
+                format="json",
+            )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 

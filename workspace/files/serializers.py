@@ -69,6 +69,15 @@ class FileSerializer(serializers.ModelSerializer):
     has_children = serializers.SerializerMethodField(
         help_text="True when a folder contains child folders (folders only)."
     )
+    scan_status = serializers.SerializerMethodField(
+        help_text="Malware scan verdict: clean, infected, skipped, error, or empty when not scanned."
+    )
+    scan_signature = serializers.SerializerMethodField(
+        help_text="Detected malware signature name, when the verdict is 'infected'."
+    )
+    is_quarantined = serializers.SerializerMethodField(
+        help_text="True when the malware policy currently blocks this file."
+    )
     on_conflict = serializers.ChoiceField(
         choices=["error", "rename", "replace"],
         default="error",
@@ -115,6 +124,9 @@ class FileSerializer(serializers.ModelSerializer):
             "tags",
             "has_children",
             "on_conflict",
+            "scan_status",
+            "scan_signature",
+            "is_quarantined",
         ]
         read_only_fields = [
             "owner",
@@ -129,6 +141,9 @@ class FileSerializer(serializers.ModelSerializer):
             "is_pinned",
             "is_shared",
             "tags",
+            "scan_status",
+            "scan_signature",
+            "is_quarantined",
         ]
         extra_kwargs = {
             "uuid": {
@@ -167,6 +182,10 @@ class FileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_viewable(self, obj):
+        from workspace.files.services.scanning.policy import is_blocked
+
+        if is_blocked(obj):
+            return False
         # Delegate to the model so the MIME fallback (for 'unknown'/empty type)
         # and the non-FILE guard stay in one place. File.is_viewable() already
         # returns False for folders.
@@ -174,9 +193,43 @@ class FileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_content_url(self, obj):
+        from workspace.files.services.scanning.policy import is_blocked
+
+        if is_blocked(obj):
+            return None
         if obj.node_type == File.NodeType.FILE and obj.content:
             return f"/api/v1/files/{obj.uuid}/content"
         return None
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_scan_status(self, obj):
+        from workspace.files.models import FileScan
+        from workspace.files.services.scanning.policy import scan_enabled
+
+        if not scan_enabled():
+            return ""
+        try:
+            return obj.scan.status
+        except FileScan.DoesNotExist:
+            return ""
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_scan_signature(self, obj):
+        from workspace.files.models import FileScan
+        from workspace.files.services.scanning.policy import scan_enabled
+
+        if not scan_enabled():
+            return ""
+        try:
+            return obj.scan.signature
+        except FileScan.DoesNotExist:
+            return ""
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_quarantined(self, obj):
+        from workspace.files.services.scanning.policy import is_blocked
+
+        return is_blocked(obj)
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_pinned(self, obj):

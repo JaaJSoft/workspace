@@ -9,7 +9,12 @@ from contextlib import contextmanager
 
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
-from wsgidav.dav_error import HTTP_BAD_REQUEST, HTTP_INSUFFICIENT_STORAGE, DAVError
+from wsgidav.dav_error import (
+    HTTP_BAD_REQUEST,
+    HTTP_FORBIDDEN,
+    HTTP_INSUFFICIENT_STORAGE,
+    DAVError,
+)
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.common.logging import scrub
@@ -393,6 +398,16 @@ class FileResource(DAVNonCollection):
         return {"type": self._file.type or "File"}
 
     def get_content(self):
+        from workspace.files.services.scanning.policy import blocked_reason
+
+        reason = blocked_reason(self._file)
+        if reason is not None:
+            logger.warning(
+                "WebDAV GET refused for quarantined %s (%s)",
+                scrub(self.path),
+                scrub(reason),
+            )
+            raise DAVError(HTTP_FORBIDDEN, "File is quarantined")
         if not self._file.content:
             return io.BytesIO(b"")
         self._file.content.open("rb")

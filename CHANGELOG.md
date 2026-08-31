@@ -27,6 +27,12 @@ Projects grows up: work in sprints, group tasks under epics, break them into che
 ### Files
 
 - Edit office documents in the browser. Word, Excel and PowerPoint files - and their OpenDocument equivalents - now open and save directly in the file viewer when your instance is set up with an editor. Without one, office files keep their download-only behavior.
+- Uploads can now be scanned for malware. When enabled, a flagged file is
+  quarantined: it cannot be downloaded, previewed or shared by link, stays out
+  of search, cannot be attached to a message, an email or a task, and is not
+  readable by the assistant - while remaining visible to its owner so nothing
+  silently disappears. Scanning is off by default and never slows an upload
+  down.
 
 ### AI Assistants
 

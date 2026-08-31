@@ -13,7 +13,7 @@ from django.test import TestCase, override_settings
 from knox.models import AuthToken
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
-from workspace.files.models import File
+from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
 from workspace.files.webdav import dc as dc_module
 from workspace.files.webdav.dc import DjangoBasicDomainController
@@ -886,6 +886,45 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
 
     def test_support_content_length(self):
         self.assertTrue(self.res.support_content_length())
+
+
+class WebDavQuarantineTests(TestCase):
+    """FileResource.get_content must consult the malware scan policy."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="davquar", email="quar@test.com", password="pass"
+        )
+        self.environ = _make_environ(user=self.user)
+        content = ContentFile(b"hello world", name="test.txt")
+        self.file = FileService.create_file(
+            self.user, "test.txt", content=content, mime_type="text/plain"
+        )
+        FileScan.objects.create(
+            file=self.file,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+        self.res = FileResource("/test.txt", self.environ, self.file)
+
+    @override_settings(
+        FILES_MALWARE_SCAN_ENABLED=True, FILES_MALWARE_ON_DETECTION="block"
+    )
+    def test_get_content_refuses_a_quarantined_file(self):
+        from wsgidav.dav_error import HTTP_FORBIDDEN, DAVError
+
+        with self.assertRaises(DAVError) as ctx:
+            self.res.get_content()
+        self.assertEqual(ctx.exception.value, HTTP_FORBIDDEN)
+
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
+    def test_get_content_serves_the_file_when_scanning_is_off(self):
+        stream = self.res.get_content()
+        try:
+            self.assertEqual(stream.read(), b"hello world")
+        finally:
+            stream.close()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────

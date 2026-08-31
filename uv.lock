@@ -454,6 +454,15 @@ wheels = [
 ]
 
 [[package]]
+name = "clamav-client"
+version = "0.7.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/0e/3d1813e43dce80a7f76220a715720906244b93e12692f0f4ede54d2c515f/clamav_client-0.7.2.tar.gz", hash = "sha256:d136f44acc79ceada188a200ac0f68840abb7cfae1fa5f9d535f11cfc244cccd", size = 35393, upload-time = "2026-03-05T14:42:41.495Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/d2/d7eceaa22d6fb01d7c3667c5c7129d8ccd4dde90935a7ea9064f688704c8/clamav_client-0.7.2-py3-none-any.whl", hash = "sha256:294ade0fb1e902db2399daa3f27a7023ca216282f129f0b2466abd5672b27397", size = 14410, upload-time = "2026-03-05T14:42:40.118Z" },
+]
+
+[[package]]
 name = "click"
 version = "8.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2750,6 +2759,7 @@ dependencies = [
     { name = "cairosvg" },
     { name = "cbor2" },
     { name = "celery" },
+    { name = "clamav-client" },
     { name = "cryptography" },
     { name = "dj-database-url" },
     { name = "django" },
@@ -2813,6 +2823,7 @@ requires-dist = [
     { name = "cairosvg", specifier = ">=2.9.0" },
     { name = "cbor2", specifier = ">=5.7.0" },
     { name = "celery", specifier = ">=5.6.2" },
+    { name = "clamav-client", specifier = ">=0.7.2" },
     { name = "cryptography", specifier = ">=50.0.1" },
     { name = "dj-database-url", specifier = ">=2.3.0" },
     { name = "django", specifier = ">=6.1,<7.0" },

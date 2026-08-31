@@ -38,12 +38,17 @@ or when the user asks to read, open, view, or see a specific file. \
 A scan with no text layer has nothing to return, and says so."""
         from workspace.files.models import File
         from workspace.files.services import FileService
+        from workspace.files.services.scanning.policy import is_blocked
 
         file_obj = File.objects.filter(uuid=args.uuid).select_related("owner").first()
         if not file_obj or not FileService.can_access(user, file_obj):
             return "File not found or access denied."
         if file_obj.node_type != File.NodeType.FILE:
             return "This is a folder, not a file."
+        # The content leaves the instance for the configured LLM provider, so
+        # the policy applies here exactly as it does to a download.
+        if is_blocked(file_obj):
+            return "File is quarantined."
         # Try image first
         raw, mime = FileService.read_image_content(file_obj)
         if raw is not None:

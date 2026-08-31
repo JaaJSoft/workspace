@@ -5,13 +5,21 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from workspace.files.models import FileShare
+from workspace.files.models import FileScan, FileShare
 from workspace.files.services import FileService
 
 User = get_user_model()
+BLOCKING = {
+    "FILES_MALWARE_SCAN_ENABLED": True,
+    "FILES_MALWARE_ON_DETECTION": "block",
+}
+FLAGGING = {
+    "FILES_MALWARE_SCAN_ENABLED": True,
+    "FILES_MALWARE_ON_DETECTION": "flag",
+}
 
 
 class ResolveAccessibleFilesTests(TestCase):
@@ -74,3 +82,33 @@ class ResolveAccessibleFilesTests(TestCase):
         self.assertIsNone(
             FileService.resolve_accessible_files(self.user, [folder.uuid])
         )
+
+    def _infected(self, name="bad.txt"):
+        f = self._make_file(self.user, name)
+        FileScan.objects.create(
+            file=f,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+        return f
+
+    @override_settings(**BLOCKING)
+    def test_quarantined_file_returns_none(self):
+        """Attaching copies the blob into a table with no scan row, so a
+        blocked file must never make it past this chokepoint."""
+        blocked = self._infected()
+        clean = self._make_file(self.user, "ok.txt")
+        self.assertIsNone(
+            FileService.resolve_accessible_files(self.user, [blocked.uuid])
+        )
+        # All-or-nothing: one blocked uuid rejects the whole batch.
+        self.assertIsNone(
+            FileService.resolve_accessible_files(self.user, [clean.uuid, blocked.uuid])
+        )
+
+    @override_settings(**FLAGGING)
+    def test_flagged_file_is_still_attachable(self):
+        flagged = self._infected("flagged.txt")
+        result = FileService.resolve_accessible_files(self.user, [flagged.uuid])
+        self.assertEqual({f.uuid for f in result}, {flagged.uuid})

@@ -3,8 +3,9 @@
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.core import signing
+from django.core.files.storage import default_storage
 from django.db.models import F
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -17,13 +18,16 @@ from rest_framework.views import APIView
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.files.models import File, FileEvent, FileShareLink
+from workspace.files.services import FileService
 from workspace.files.services.events import record_event
 from workspace.files.services.public_links import (
     resolve_within,
     sanitize_upload_name,
     schedule_upload_notification,
 )
+from workspace.files.services.thumbnails.generation import get_thumbnail_path
 from workspace.files.sse_provider import push_file_event
+from workspace.files.ui.viewers import ViewerRegistry
 
 SIGNER = signing.TimestampSigner(salt="file-share-link")
 ACCESS_TOKEN_MAX_AGE = 3600  # 1 hour
@@ -128,8 +132,6 @@ def _check_password_access(link, request):
 
 def _record_access(link):
     """Increment view count and update last accessed time."""
-    from django.db.models import F
-
     FileShareLink.objects.filter(pk=link.pk).update(
         view_count=F("view_count") + 1,
         last_accessed_at=timezone.now(),
@@ -163,8 +165,6 @@ def _entry_payload(node):
     FileSerializer exposes ``path``, which would name the folders above the
     share root to an anonymous visitor.
     """
-    from workspace.files.ui.viewers import ViewerRegistry
-
     is_file = node.node_type == File.NodeType.FILE
     return {
         "uuid": str(node.uuid),
@@ -227,8 +227,6 @@ class SharedFileMetaView(APIView):
 
         f = link.file
         if f.node_type == File.NodeType.FILE:
-            from workspace.files.ui.viewers import ViewerRegistry
-
             payload.update(
                 {
                     "mime_type": f.mime_type,
@@ -425,11 +423,6 @@ class SharedFileThumbnailView(APIView):
     authentication_classes = []
 
     def get(self, request, token):
-        from django.core.files.storage import default_storage
-        from django.http import FileResponse
-
-        from workspace.files.services.thumbnails.generation import get_thumbnail_path
-
         link, err = _resolve_link(token)
         if err:
             return err
@@ -557,11 +550,8 @@ class SharedFolderUploadView(APIView):
 
     @staticmethod
     def _store(link, upload, request):
-        from workspace.files.services import _names as _name_helpers
-        from workspace.files.services.files import FileService
-
         root = link.file
-        name = _name_helpers.available_file_name(
+        name = FileService.available_file_name(
             root.owner, root, sanitize_upload_name(upload.name)
         )
         # acting_user is the anonymous request user on purpose: record_event

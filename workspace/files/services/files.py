@@ -132,23 +132,26 @@ class FileService:
         from django.db.models import Exists, OuterRef
 
         from workspace.files.models import FileFavorite, FileShare, PinnedFolder
+        from workspace.files.services.scanning.policy import with_scan
 
-        return queryset.annotate(
-            is_favorite=Exists(
-                FileFavorite.objects.filter(owner=user, file_id=OuterRef("pk"))
-            ),
-            is_pinned=Exists(
-                PinnedFolder.objects.filter(owner=user, folder_id=OuterRef("pk"))
-            ),
-            is_shared=Exists(FileShare.objects.filter(file_id=OuterRef("pk"))),
-            has_children=Exists(
-                File.objects.filter(
-                    parent_id=OuterRef("pk"),
-                    node_type=File.NodeType.FOLDER,
-                    deleted_at__isnull=True,
-                )
-            ),
-        ).prefetch_related("file_tags__tag")
+        return with_scan(
+            queryset.annotate(
+                is_favorite=Exists(
+                    FileFavorite.objects.filter(owner=user, file_id=OuterRef("pk"))
+                ),
+                is_pinned=Exists(
+                    PinnedFolder.objects.filter(owner=user, folder_id=OuterRef("pk"))
+                ),
+                is_shared=Exists(FileShare.objects.filter(file_id=OuterRef("pk"))),
+                has_children=Exists(
+                    File.objects.filter(
+                        parent_id=OuterRef("pk"),
+                        node_type=File.NodeType.FOLDER,
+                        deleted_at__isnull=True,
+                    )
+                ),
+            ).prefetch_related("file_tags__tag")
+        )
 
     # ------------------------------------------------------------------
     # Creation

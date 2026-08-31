@@ -76,16 +76,20 @@ class ActionsMixin:
             folder_id=OuterRef("pk"),
         )
 
+        from workspace.files.services.scanning.policy import with_scan
+
         file_objects = list(
-            File.objects.filter(
-                FileService.accessible_files_q(request.user),
-                uuid__in=uuids,
+            with_scan(
+                File.objects.filter(
+                    FileService.accessible_files_q(request.user),
+                    uuid__in=uuids,
+                )
+                .annotate(
+                    is_favorite=Exists(favorite_subquery),
+                    is_pinned=Exists(pinned_subquery),
+                )
+                .distinct()
             )
-            .annotate(
-                is_favorite=Exists(favorite_subquery),
-                is_pinned=Exists(pinned_subquery),
-            )
-            .distinct()
         )
 
         if len(file_objects) != len(set(uuids)):

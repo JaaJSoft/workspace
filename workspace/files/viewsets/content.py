@@ -17,8 +17,13 @@ from workspace.common.http_ranges import (
     stream_range as _stream_range,
 )
 from workspace.files.metrics import FILES_DOWNLOAD_BYTES
-from workspace.files.models import File
+from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
+from workspace.files.services.scanning.policy import (
+    blocked_reason,
+    blocked_statuses,
+    exclude_blocked,
+)
 
 
 def _chunked_field_file(field_file, block_size=65536):
@@ -63,6 +68,17 @@ def _build_zip_stream(entries):
 class ContentMixin:
     """Adds content, thumbnail, download, bulk_download actions."""
 
+    @staticmethod
+    def _quarantine_response(file_obj):
+        """403 when the malware policy denies this file, else None."""
+        reason = blocked_reason(file_obj)
+        if reason is None:
+            return None
+        return Response(
+            {"detail": "File is quarantined.", "reason": reason},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     @extend_schema(
         summary="Get file content",
         description="Serve file content with proper headers for inline viewing in browser.",
@@ -88,6 +104,10 @@ class ContentMixin:
             return Response(
                 {"detail": "Not a file."}, status=status.HTTP_400_BAD_REQUEST
             )
+
+        blocked = self._quarantine_response(file_obj)
+        if blocked is not None:
+            return blocked
 
         if not file_obj.content:
             return Response({"detail": "No content."}, status=status.HTTP_404_NOT_FOUND)
@@ -194,6 +214,10 @@ class ContentMixin:
                 {"detail": "Not a file."}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        blocked = self._quarantine_response(file_obj)
+        if blocked is not None:
+            return blocked
+
         thumb_path = get_thumbnail_path(file_obj.uuid)
         if not default_storage.exists(thumb_path):
             return Response(
@@ -250,6 +274,10 @@ class ContentMixin:
         except Http404:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        blocked = self._quarantine_response(file_obj)
+        if blocked is not None:
+            return blocked
+
         # Short-circuit: return 304 if ETag matches (single files only)
         if file_obj.node_type == File.NodeType.FILE:
             not_modified = self._check_etag_304(request, file_obj)
@@ -285,7 +313,7 @@ class ContentMixin:
         desc_filter = Q(owner_id=file_obj.owner_id)
         if file_obj.group_id:
             desc_filter = Q(group_id=file_obj.group_id)
-        descendants = (
+        descendants = exclude_blocked(
             File.objects.filter(
                 desc_filter,
                 node_type=File.NodeType.FILE,
@@ -344,6 +372,18 @@ class ContentMixin:
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # A blocked file is dropped from the archive rather than failing the
+        # whole request: the same treatment a missing blob already gets.
+        blocked_statuses_now = blocked_statuses()
+        blocked_uuids = (
+            set(
+                FileScan.objects.filter(
+                    file__uuid__in=uuids, status__in=blocked_statuses_now
+                ).values_list("file__uuid", flat=True)
+            )
+            if blocked_statuses_now
+            else set()
+        )
         file_objects = list(
             File.objects.filter(
                 FileService.accessible_files_q(request.user),
@@ -370,13 +410,13 @@ class ContentMixin:
         def _entries():
             for obj in file_objects:
                 if obj.node_type == File.NodeType.FILE:
-                    if obj.content:
+                    if obj.content and obj.uuid not in blocked_uuids:
                         yield obj, obj.name
                 else:
                     # Folder: add all descendant files under <folder name>/
                     folder_path = obj.path or obj.get_path()
                     prefix = f"{folder_path}/"
-                    descendants = (
+                    descendants = exclude_blocked(
                         File.objects.filter(
                             owner=request.user,
                             node_type=File.NodeType.FILE,

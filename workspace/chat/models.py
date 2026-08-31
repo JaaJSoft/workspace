@@ -1,3 +1,5 @@
+import secrets
+
 from django.conf import settings
 from django.db import models
 
@@ -527,3 +529,82 @@ class CallParticipant(models.Model):
         from workspace.chat.services.participant_keys import user_key
 
         return user_key(self.user_id)
+
+
+def _generate_meeting_slug():
+    return secrets.token_urlsafe(16)
+
+
+class Meeting(models.Model):
+    """A joinable meeting attached to a calendar event.
+
+    One row per event, so the join URL is stable across a recurring series;
+    which occurrence is currently open is derived per request rather than
+    stored (see services/meeting_occurrences.py).
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    event = models.OneToOneField(
+        "calendar.Event", on_delete=models.CASCADE, related_name="meeting"
+    )
+    conversation = models.OneToOneField(
+        Conversation, on_delete=models.CASCADE, related_name="meeting"
+    )
+    slug = models.CharField(max_length=32, unique=True, default=_generate_meeting_slug)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    # The start of the occurrence the host most recently ended. A later
+    # occurrence has a different start, so the same URL opens again next week.
+    closed_occurrence_start = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Meeting {self.slug} for event {self.event_id}"
+
+    @property
+    def join_path(self):
+        return f"/meet/{self.slug}"
+
+
+class MeetingGuest(models.Model):
+    """Someone joining a meeting from the link, with no user row.
+
+    Deliberately not a user: a guest is scoped to one meeting and one
+    occurrence, and holds no workspace access of any kind.
+    """
+
+    class State(models.TextChoices):
+        WAITING = "waiting", "Waiting"
+        ADMITTED = "admitted", "Admitted"
+        REFUSED = "refused", "Refused"
+        REMOVED = "removed", "Removed"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    meeting = models.ForeignKey(
+        Meeting, on_delete=models.CASCADE, related_name="guests"
+    )
+    display_name = models.CharField(max_length=80)
+    state = models.CharField(max_length=8, choices=State.choices, default=State.WAITING)
+    occurrence_start = models.DateTimeField()
+    # sha256 hex of the bearer token; the token itself is never stored.
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    admitted_at = models.DateTimeField(null=True, blank=True)
+    admitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    removed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["meeting", "state"]),
+            models.Index(fields=["meeting", "occurrence_start"]),
+        ]
+
+    def __str__(self):
+        return f"{self.display_name} ({self.state}) in {self.meeting_id}"

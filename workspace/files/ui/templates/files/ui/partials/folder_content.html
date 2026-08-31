@@ -370,7 +370,13 @@
             {% for node in nodes %}
               <tr
                 class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity"
-                :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : '')"
+                {% comment %}
+                The quarantine tint is the last branch on purpose: selection
+                has to stay readable on a flagged row, so bg-primary/10 wins
+                when both would apply rather than the two backgrounds racing
+                on stylesheet order.
+                {% endcomment %}
+                :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
                 @mouseenter="hoveredUuid = '{{ node.uuid }}'"
                 @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
                 data-uuid="{{ node.uuid }}"
@@ -416,38 +422,43 @@
                   {% endif %}
                 </td>
                 <td data-col="name">
-                  {% if node.node_type == 'folder' and not is_trash_view %}
-                    {% comment %}
-                  draggable="false" hands the drag back to the row: an anchor
-                  is draggable by default, and a link drag carries a
-                  text/uri-list payload that Chrome routes through the OS
-                  instead of the page, so the sidebar never sees the drop.
-                    {% endcomment %}
-                    <a
-                      href="/files/{{ node.uuid }}"
-                      class="font-medium hover:text-primary hover:underline block truncate"
-                      x-target.push="folder-browser"
-                      data-folder-link
-                      draggable="false"
-                      title="{{ node.name }}"
-                    >{{ node.name }}</a>
-                  {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
-                    <span
-                      class="font-medium block truncate group-hover:text-primary group-hover:underline"
-                      title="{{ node.name }}"
-                    >{{ node.name }}</span>
-                  {% else %}
-                    <span class="font-medium block truncate" title="{{ node.name }}">{{ node.name }}</span>
-                  {% endif %}
-                  {% if node.is_quarantined %}
-                    <span
-                      class="badge badge-error badge-sm gap-1 mt-1"
-                      title="This file was flagged by the malware scanner and cannot be opened or downloaded."
-                    >
-                      <i data-lucide="shield-alert" class="w-3 h-3"></i>
-                      Quarantined
-                    </span>
-                  {% endif %}
+                  {% comment %}
+                  The quarantine marker sits inline with the name, never below
+                  it: a second line here changes the row's height and breaks
+                  the alignment of every other column in the listing.
+                  {% endcomment %}
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    {% if node.node_type == 'folder' and not is_trash_view %}
+                      {% comment %}
+                    draggable="false" hands the drag back to the row: an anchor
+                    is draggable by default, and a link drag carries a
+                    text/uri-list payload that Chrome routes through the OS
+                    instead of the page, so the sidebar never sees the drop.
+                      {% endcomment %}
+                      <a
+                        href="/files/{{ node.uuid }}"
+                        class="font-medium hover:text-primary hover:underline block truncate min-w-0"
+                        x-target.push="folder-browser"
+                        data-folder-link
+                        draggable="false"
+                        title="{{ node.name }}"
+                      >{{ node.name }}</a>
+                    {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
+                      <span
+                        class="font-medium block truncate min-w-0 group-hover:text-primary group-hover:underline"
+                        title="{{ node.name }}"
+                      >{{ node.name }}</span>
+                    {% else %}
+                      <span class="font-medium block truncate min-w-0" title="{{ node.name }}">{{ node.name }}</span>
+                    {% endif %}
+                    {% if node.is_quarantined %}
+                      <i
+                        data-lucide="shield-alert"
+                        class="w-4 h-4 flex-shrink-0 text-error"
+                        title="Quarantined: the malware scanner flagged this file, so it cannot be opened or downloaded."
+                      ></i>
+                    {% endif %}
+                  </div>
                 </td>
                 {% if not is_trash_view %}
                   <td
@@ -554,8 +565,8 @@
           >
             {% for node in nodes %}
               <div
-                class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
-                :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : '')"
+                class="bg-base-100 border {% if node.is_quarantined %}border-error/40{% else %}border-base-300{% endif %} rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
+                :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
                 data-uuid="{{ node.uuid }}"
                 data-name="{{ node.name|lower }}"
                 data-display-name="{{ node.name }}"
@@ -662,13 +673,22 @@
                 >
                   <div class="flex items-start justify-between gap-1">
                     <div class="flex-1 min-w-0">
-                      <h3
-                        class="font-medium truncate"
-                        :class="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'"
-                        title="{{ node.name }}"
-                      >
-                        {{ node.name }}
-                      </h3>
+                      <div class="flex items-center gap-1 min-w-0">
+                        <h3
+                          class="font-medium truncate min-w-0"
+                          :class="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'"
+                          title="{{ node.name }}"
+                        >
+                          {{ node.name }}
+                        </h3>
+                        {% if node.is_quarantined %}
+                          <i
+                            data-lucide="shield-alert"
+                            class="w-3.5 h-3.5 flex-shrink-0 text-error"
+                            title="Quarantined: the malware scanner flagged this file, so it cannot be opened or downloaded."
+                          ></i>
+                        {% endif %}
+                      </div>
                       <p
                         class="text-xs text-base-content/60"
                         :class="mosaicTileSize <= 1 ? 'hidden' : 'mt-0.5'"

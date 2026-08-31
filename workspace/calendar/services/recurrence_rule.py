@@ -50,6 +50,36 @@ _UNIT_LABELS = {
     "yearly": ("year", "years"),
 }
 
+# describe()'s BY-qualified branch: rules to_simple() rejects (a BYDAY, a
+# BYMONTHDAY, a COUNT) but that still phrases into a short English sentence.
+# Anything wider than this set - BYSETPOS, BYMONTH, BYWEEKNO, a second RRULE
+# line, an RDATE - keeps returning the raw rule text, same as before.
+_BY_QUALIFIED_KEYS = {"FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "COUNT", "UNTIL"}
+
+_BYDAY_TOKEN_RE = re.compile(r"^(-?\d{1,2})?(MO|TU|WE|TH|FR|SA|SU)$")
+
+_WEEKDAY_SHORT = {
+    "MO": "Mon",
+    "TU": "Tue",
+    "WE": "Wed",
+    "TH": "Thu",
+    "FR": "Fri",
+    "SA": "Sat",
+    "SU": "Sun",
+}
+
+_WEEKDAY_FULL = {
+    "MO": "Monday",
+    "TU": "Tuesday",
+    "WE": "Wednesday",
+    "TH": "Thursday",
+    "FR": "Friday",
+    "SA": "Saturday",
+    "SU": "Sunday",
+}
+
+_ORDINAL_LABELS = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", -1: "last"}
+
 
 def _ical_utc(value):
     """Format an aware datetime as an RFC 5545 UTC DATE-TIME."""
@@ -257,22 +287,186 @@ def to_simple_json(rule_text):
     }
 
 
+def _until_phrase(until):
+    """ ", until 1 March 2026" for an aware UTC datetime.
+
+    Shared by the FREQ/INTERVAL/UNTIL branch and the BY-qualified branch so
+    the two never drift into two different UNTIL phrasings.
+    """
+    return f", until {until.day} {until.strftime('%B %Y')}"
+
+
+def _count_phrase(count_text):
+    """ ", for 10 occurrences" - or None when *count_text* isn't an integer."""
+    try:
+        count = int(count_text)
+    except ValueError:
+        return None
+    return f", for {count} occurrence{'' if count == 1 else 's'}"
+
+
+def _by_qualified_tail(parts):
+    """The ", for N occurrences" / ", until ..." suffix, or "" for neither.
+
+    RFC 5545 forbids COUNT and UNTIL on the same RRULE line, so a rule
+    carrying both is malformed; None tells the caller to fall back to the
+    raw text rather than silently picking one.
+    """
+    if "COUNT" in parts and "UNTIL" in parts:
+        return None
+    if "COUNT" in parts:
+        return _count_phrase(parts["COUNT"])
+    if "UNTIL" in parts:
+        try:
+            until = _parse_ical_utc(parts["UNTIL"])
+        except ValueError:
+            return None
+        return _until_phrase(until)
+    return ""
+
+
+def _parse_byday_tokens(value):
+    """``"2TU,3WE"`` -> ``[(2, "TU"), (3, "WE")]``, or None if any token is
+    outside the RFC 5545 ``[+-]ordwk`` grammar this function accepts."""
+    tokens = []
+    for raw in value.split(","):
+        match = _BYDAY_TOKEN_RE.match(raw.strip().upper())
+        if not match:
+            return None
+        ordinal_text, weekday = match.groups()
+        tokens.append((int(ordinal_text) if ordinal_text else None, weekday))
+    return tokens
+
+
+def _describe_byday(freq, interval, value):
+    """Phrase a BYDAY clause, or None outside the two shapes this covers.
+
+    A single ordinal weekday (``2TU``) reads as "Every 2nd Tuesday of the
+    month" and only makes sense against FREQ=MONTHLY - dateutil accepts an
+    ordinal BYDAY on a YEARLY rule too, but that needs a BYMONTH alongside it
+    to mean anything ("the 2nd Tuesday of March"), which is outside what this
+    phrases. A weekday set with no ordinals (``MO,WE,FR``) reads as "Every
+    week on Mon, Wed and Fri" and only makes sense against FREQ=WEEKLY.
+    """
+    tokens = _parse_byday_tokens(value)
+    if not tokens:
+        return None
+
+    if len(tokens) == 1 and tokens[0][0] is not None:
+        if freq != "MONTHLY":
+            return None
+        ordinal, weekday = tokens[0]
+        label = _ORDINAL_LABELS.get(ordinal)
+        if label is None:
+            return None
+        weekday_name = _WEEKDAY_FULL[weekday]
+        phrase = f"Every {label} {weekday_name} of the month"
+        if interval > 1:
+            phrase += f" every {interval} months"
+        return phrase
+
+    if any(ordinal is not None for ordinal, _ in tokens):
+        # A mixed or multi-entry ordinal set ("1MO,3MO") isn't one this
+        # phrases; the raw text beats a confident mistranslation.
+        return None
+    if freq != "WEEKLY":
+        return None
+
+    labels = [_WEEKDAY_SHORT[weekday] for _, weekday in tokens]
+    if len(labels) == 1:
+        joined = labels[0]
+    else:
+        joined = ", ".join(labels[:-1]) + f" and {labels[-1]}"
+    singular, plural = _UNIT_LABELS["weekly"]
+    prefix = f"Every {singular}" if interval == 1 else f"Every {interval} {plural}"
+    return f"{prefix} on {joined}"
+
+
+def _describe_bymonthday(freq, interval, value):
+    """Phrase a single-day BYMONTHDAY clause, or None otherwise.
+
+    Only a lone day number is covered ("Monthly on day 15", -1 as "on the
+    last day") - a list of days ("15,20") is outside what this phrases.
+    """
+    if freq != "MONTHLY":
+        return None
+    tokens = [token.strip() for token in value.split(",")]
+    if len(tokens) != 1:
+        return None
+    try:
+        day = int(tokens[0])
+    except ValueError:
+        return None
+    if day == -1:
+        day_phrase = "on the last day"
+    elif 1 <= day <= 31:
+        day_phrase = f"on day {day}"
+    else:
+        return None
+    if interval == 1:
+        return f"Monthly {day_phrase}"
+    return f"Every {interval} months {day_phrase}"
+
+
+def _describe_by_qualified(rule_text):
+    """describe()'s second attempt: rules to_simple() rejects that still
+    phrase into English - an ordinal or weekday-set BYDAY, or a single-day
+    BYMONTHDAY, each optionally closed with a COUNT or UNTIL tail.
+
+    Returns None for anything wider (BYSETPOS, BYMONTH, a second RRULE line,
+    an RDATE, ...), which tells describe() to fall back to the raw text.
+    """
+    lines = _rule_lines(rule_text)
+    if len(lines) != 1:
+        return None
+    name, parts = _properties(lines[0])
+    if name != "RRULE" or set(parts) - _BY_QUALIFIED_KEYS:
+        return None
+    if "BYDAY" in parts and "BYMONTHDAY" in parts:
+        return None
+    freq = parts.get("FREQ", "").upper()
+    try:
+        interval = int(parts.get("INTERVAL", 1))
+    except ValueError:
+        return None
+
+    if "BYDAY" in parts:
+        body = _describe_byday(freq, interval, parts["BYDAY"])
+    elif "BYMONTHDAY" in parts:
+        body = _describe_bymonthday(freq, interval, parts["BYMONTHDAY"])
+    else:
+        return None
+    if body is None:
+        return None
+
+    tail = _by_qualified_tail(parts)
+    if tail is None:
+        return None
+    return body + tail
+
+
 def describe(rule_text):
     """Human summary of *rule_text*, falling back to the raw text.
 
-    Covers what the picker can express plus the shapes real clients emit most.
-    Anything else is returned verbatim: the user sees a rule they cannot edit
-    here rather than a confident mistranslation.
+    Tries the picker's FREQ/INTERVAL/UNTIL shape first, then the wider set
+    of BY-qualified shapes real clients emit most (an ordinal or weekday-set
+    BYDAY, a single-day BYMONTHDAY, a COUNT or UNTIL tail on either).
+    Anything past that is returned verbatim: the user sees a rule they
+    cannot edit here rather than a confident mistranslation - and it stays
+    unconnected to to_simple(), which must keep rejecting all of it so the
+    picker never overwrites a rule it cannot represent.
     """
     simple = to_simple(rule_text)
-    if simple is None:
-        return rule_text
-    singular, plural = _UNIT_LABELS[simple["frequency"]]
-    interval = simple["interval"]
-    summary = f"Every {singular}" if interval == 1 else f"Every {interval} {plural}"
-    if simple["until"]:
-        summary += f", until {simple['until'].date().isoformat()}"
-    return summary
+    if simple is not None:
+        singular, plural = _UNIT_LABELS[simple["frequency"]]
+        interval = simple["interval"]
+        summary = f"Every {singular}" if interval == 1 else f"Every {interval} {plural}"
+        if simple["until"]:
+            summary += _until_phrase(simple["until"])
+        return summary
+
+    described = _describe_by_qualified(rule_text)
+    return described if described is not None else rule_text
 
 
 def truncate_before(rule_text, instant):

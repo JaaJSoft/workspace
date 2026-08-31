@@ -188,10 +188,131 @@ class DescribeTests(SimpleTestCase):
         self.assertEqual(rr.describe("RRULE:FREQ=WEEKLY"), "Every week")
         self.assertEqual(rr.describe("RRULE:FREQ=DAILY;INTERVAL=3"), "Every 3 days")
 
+    def test_simple_until_reads_as_a_date(self):
+        rule = "RRULE:FREQ=WEEKLY;UNTIL=20260301T000000Z"
+        self.assertEqual(rr.describe(rule), "Every week, until 1 March 2026")
+
+    def test_ordinal_byday_reads_as_english(self):
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYDAY=2TU"),
+            "Every 2nd Tuesday of the month",
+        )
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYDAY=1MO"),
+            "Every 1st Monday of the month",
+        )
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYDAY=3WE"),
+            "Every 3rd Wednesday of the month",
+        )
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYDAY=4TH"),
+            "Every 4th Thursday of the month",
+        )
+
+    def test_ordinal_byday_negative_one_reads_as_last(self):
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYDAY=-1FR"),
+            "Every last Friday of the month",
+        )
+
+    def test_ordinal_byday_still_disqualifies_the_picker(self):
+        # describe() got smarter; to_simple() must not, or the picker could
+        # overwrite a rule it cannot represent on the next save.
+        self.assertIsNone(rr.to_simple("RRULE:FREQ=MONTHLY;BYDAY=2TU"))
+
+    def test_byday_weekday_set_reads_as_english(self):
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"),
+            "Every week on Mon, Wed and Fri",
+        )
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=WEEKLY;BYDAY=MO"),
+            "Every week on Mon",
+        )
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=WEEKLY;BYDAY=MO,TU"),
+            "Every week on Mon and Tue",
+        )
+
+    def test_byday_weekday_set_keeps_the_interval_phrasing(self):
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;INTERVAL=2"),
+            "Every 2 weeks on Mon, Wed and Fri",
+        )
+
+    def test_bymonthday_reads_as_english(self):
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYMONTHDAY=15"), "Monthly on day 15"
+        )
+
+    def test_bymonthday_negative_one_reads_as_last_day(self):
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYMONTHDAY=-1"), "Monthly on the last day"
+        )
+
+    def test_bymonthday_keeps_the_interval_phrasing(self):
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYMONTHDAY=15;INTERVAL=3"),
+            "Every 3 months on day 15",
+        )
+
+    def test_count_tail_is_appended(self):
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYDAY=2TU;COUNT=5"),
+            "Every 2nd Tuesday of the month, for 5 occurrences",
+        )
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYDAY=2TU;COUNT=1"),
+            "Every 2nd Tuesday of the month, for 1 occurrence",
+        )
+
+    def test_until_tail_is_appended(self):
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYDAY=2TU;UNTIL=20260301T000000Z"),
+            "Every 2nd Tuesday of the month, until 1 March 2026",
+        )
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=MONTHLY;BYMONTHDAY=15;UNTIL=20260301T000000Z"),
+            "Monthly on day 15, until 1 March 2026",
+        )
+
+    def test_by_qualified_rules_still_disqualify_the_picker(self):
+        for rule in (
+            "RRULE:FREQ=MONTHLY;BYDAY=2TU;COUNT=5",
+            "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR",
+            "RRULE:FREQ=MONTHLY;BYMONTHDAY=15",
+        ):
+            with self.subTest(rule=rule):
+                self.assertIsNone(rr.to_simple(rule))
+
     def test_unknown_rule_falls_back_to_the_raw_text(self):
         # An honest fallback beats a confident mistranslation: the user
         # sees a rule they cannot edit here, not a wrong summary.
         rule = "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU"
+        self.assertEqual(rr.describe(rule), rule)
+
+    def test_count_and_until_together_is_malformed_and_falls_back(self):
+        # RFC 5545 forbids COUNT and UNTIL on the same RRULE line.
+        rule = "RRULE:FREQ=MONTHLY;BYDAY=2TU;COUNT=5;UNTIL=20260301T000000Z"
+        self.assertEqual(rr.describe(rule), rule)
+
+    def test_mixed_ordinal_byday_falls_back(self):
+        # Two ordinal weekdays in one clause ("the 1st and 3rd Monday") isn't
+        # a shape this phrases.
+        rule = "RRULE:FREQ=MONTHLY;BYDAY=1MO,3MO"
+        self.assertEqual(rr.describe(rule), rule)
+
+    def test_bysetpos_and_bymonth_fall_back(self):
+        for rule in (
+            "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+            "RRULE:FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2",
+        ):
+            with self.subTest(rule=rule):
+                self.assertEqual(rr.describe(rule), rule)
+
+    def test_multiline_rule_falls_back(self):
+        rule = "RRULE:FREQ=MONTHLY;BYDAY=2TU\nRDATE:20260401T090000Z"
         self.assertEqual(rr.describe(rule), rule)
 
 

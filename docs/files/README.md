@@ -112,6 +112,12 @@ so out of the box the daemon refuses before `FILES_MALWARE_SCAN_MAX_BYTES` does,
 and the file is recorded as `skipped`. Raise `StreamMaxLength` in
 `clamd.conf` if you want the application-side cap to be the effective one.
 
+**Relaxing the policy does not undo the search exclusion.** Quarantining a file
+drops its full-text search document. Switching `FILES_MALWARE_ON_DETECTION` from
+`block` back to `flag` makes those files readable again, but re-scanning them
+does not put their documents back, so they stay findable by nothing but a
+browse. Run `python manage.py reindex_files_search` after relaxing the policy.
+
 ### Monitoring
 
 The admin dashboard carries three cards: quarantined files, scanner errors in

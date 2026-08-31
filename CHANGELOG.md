@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Files
+
+- Uploads can now be scanned for malware. When enabled, a flagged file is
+  quarantined: it cannot be downloaded or previewed and stays out of search,
+  while remaining visible to its owner so nothing silently disappears.
+  Scanning is off by default and never slows an upload down.
+
 ## 0.38.0 - Sprints, Office & Voice
 
 ### Highlights

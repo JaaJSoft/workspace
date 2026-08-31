@@ -70,3 +70,66 @@ Setup lives in the deployment examples: [Docker Compose](../deployments/docker-c
 ## API
 
 All endpoints under `/api/v1/files/` - see the [Swagger UI](/schema/swagger-ui/) for full documentation. The WOPI endpoints used by the editor live under `/api/wopi/files/` - their shape is fixed by the [WOPI protocol](https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/) and they authenticate with per-session access tokens, not user sessions.
+
+## Malware scanning
+
+Uploaded file content can be scanned by a [ClamAV](https://www.clamav.net/)
+daemon. The feature is **off by default**: a single-user instance does not need
+it, and the Raspberry Pi deployment target cannot run the daemon.
+
+Scanning runs after the upload response, from the same Celery pipeline that
+builds thumbnails and the search index, so it never slows an upload down. Every
+write path is covered - the REST API, WebDAV, the office editor's save, archive
+extraction and imports all record the file event the scanner subscribes to.
+
+### Enabling it
+
+Point the application at a running `clamd`:
+
+```bash
+FILES_MALWARE_SCAN_ENABLED=1
+# Unix socket (takes precedence when set):
+FILES_CLAMAV_SOCKET=unix:///var/run/clamav/clamd.ctl
+# or TCP:
+FILES_CLAMAV_HOST=127.0.0.1
+FILES_CLAMAV_PORT=3310
+```
+
+### Policy
+
+| Setting | Values | Effect |
+|---|---|---|
+| `FILES_MALWARE_ON_DETECTION` | `block` (default), `flag` | `block` quarantines an infected file: it cannot be downloaded, previewed or found in search, and its owner sees it marked as quarantined. `flag` records the verdict and leaves the file usable. |
+| `FILES_MALWARE_ON_ERROR` | `open` (default), `closed` | What happens to a file the scanner could not examine - a daemon that is down, a blob that vanished. `open` leaves it usable, `closed` quarantines it. |
+| `FILES_MALWARE_SCAN_MAX_BYTES` | bytes, default 100 MiB | Files larger than this are recorded as `skipped` and stay downloadable. |
+
+A file whose scan has not run yet stays downloadable. The window is normally a
+few seconds; a persistent backlog shows up as a stalled queue on the admin
+dashboard.
+
+**The daemon has its own cap.** `clamd`'s `StreamMaxLength` defaults to 25 MB,
+so out of the box the daemon refuses before `FILES_MALWARE_SCAN_MAX_BYTES` does,
+and the file is recorded as `skipped`. Raise `StreamMaxLength` in
+`clamd.conf` if you want the application-side cap to be the effective one.
+
+### Monitoring
+
+The admin dashboard carries three cards: quarantined files, scanner errors in
+the last 24 hours, and live daemon reachability. The full verdict history is at
+**Files > Malware scans** in the admin.
+
+### Backfilling an existing library
+
+```bash
+python manage.py scan_files              # queue every file with no verdict
+python manage.py scan_files --rescan     # re-scan everything
+python manage.py scan_files --dry-run    # count without queueing
+```
+
+### Verifying a real engine
+
+The test suite drives a fake daemon, so it never needs ClamAV and there is no
+EICAR string in this repository. To check a real deployment, write the
+[EICAR test file](https://www.eicar.org/download-anti-malware-testfile/) into a
+scratch directory outside the checkout, upload it, and confirm it is
+quarantined within a few seconds.

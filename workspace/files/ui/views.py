@@ -903,9 +903,14 @@ def shared_file_view(request, token):
             # False so the password prompt is rendered again.
             pass
 
-    # Render viewer HTML if accessible
+    is_folder = link.file.node_type == File.NodeType.FOLDER
+    unlocked = not link.has_password or password_verified
+
+    # Render viewer HTML if accessible. ViewerRegistry has nothing to render
+    # for a folder, so skip it entirely rather than looking up a viewer class
+    # that will never match.
     viewer_html = ""
-    if not link.has_password or password_verified:
+    if unlocked and not is_folder:
         from workspace.files.ui.viewers import ViewerRegistry
 
         ViewerClass = get_viewer_by_slug(link.file.viewer) or (
@@ -922,21 +927,32 @@ def shared_file_view(request, token):
             viewer._content_url = content_url
             viewer_html = viewer.render(request)
 
-    return render(
-        request,
-        "files/ui/shared_file.html",
-        {
-            "share_token": token,
-            "file": link.file,
-            "link": link,
-            "viewer_html": viewer_html,
-            "needs_password": link.has_password and not password_verified,
-            "expired": False,
-            "download_url": f"/api/v1/files/shared/{token}/download"
-            + (
-                f"?access_token={access_token}"
-                if access_token and password_verified
-                else ""
-            ),
-        },
-    )
+    if is_folder:
+        template = (
+            "files/ui/shared_folder.html"
+            if link.allows_read
+            else "files/ui/shared_drop.html"
+        )
+    else:
+        template = "files/ui/shared_file.html"
+
+    context = {
+        "share_token": token,
+        "file": link.file,
+        "link": link,
+        "access_token": access_token if password_verified else "",
+        "viewer_html": viewer_html,
+        "needs_password": link.has_password and not password_verified,
+        "expired": False,
+        "download_url": f"/api/v1/files/shared/{token}/download"
+        + (
+            f"?access_token={access_token}"
+            if access_token and password_verified
+            else ""
+        ),
+    }
+    if is_folder and link.allows_upload:
+        ceiling = settings.FILES_DROP_MAX_FILE_BYTES
+        context["max_file_bytes"] = min(link.max_file_bytes or ceiling, ceiling)
+
+    return render(request, template, context)

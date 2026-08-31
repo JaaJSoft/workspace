@@ -1,0 +1,28 @@
+{% extends "files/ui/shared_base.html" %}
+{% load static %}
+{% block title %}{{ file.name }} - Shared Drop - Workspace{% endblock %}
+{% block head_extra %}
+  <script src="{% static 'ui/js/inline_alert.js' %}"></script>
+  <script src="{% static 'files/ui/js/shared_folder.js' %}"></script>
+{% endblock %}
+{% block content %}
+  <div class="space-y-4">
+    <div class="card bg-base-100 shadow-lg overflow-hidden">
+      <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm"
+          >
+            <i data-lucide="upload-cloud" class="w-5 h-5 text-white"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h1 class="text-xl font-bold text-white truncate">{{ file.name }}</h1>
+            <p class="text-white/70 text-sm">Send files to this folder</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% include "files/ui/partials/shared_dropzone.html" %}
+  </div>
+{% endblock %}

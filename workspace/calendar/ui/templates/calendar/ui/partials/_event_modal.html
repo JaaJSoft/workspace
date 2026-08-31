@@ -124,7 +124,7 @@
           <input
             type="checkbox"
             class="toggle toggle-sm toggle-primary"
-            :checked="form.recurrence_frequency !== null"
+            :checked="form.recurrence_frequency !== null || isComplexRecurrence()"
             :disabled="isComplexRecurrence()"
             @change="toggleRecurrence()"
           />

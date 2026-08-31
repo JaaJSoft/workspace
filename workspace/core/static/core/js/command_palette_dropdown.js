@@ -66,6 +66,7 @@ window.commandPaletteDropdown = function () {
     commands: [],
     results: [],
     loading: false,
+    error: false,
     searchQuery: '',
     // Bumped per search(); a response whose id no longer matches is stale.
     _searchRequestId: 0,
@@ -151,6 +152,23 @@ window.commandPaletteDropdown = function () {
       return this.isCommandMode() || this.query.length >= MIN_SEARCH_LENGTH;
     },
 
+    // Skeletons stand in for a panel that would otherwise collapse to nothing.
+    // Refining a query keeps the previous hits on screen - the progress bar
+    // carries the signal there, so the list never flickers between keystrokes.
+    showSkeleton() {
+      return this.loading && this.commands.length === 0 && this.results.length === 0;
+    },
+
+    showEmptyState() {
+      return !this.loading && !this.error
+        && this.commands.length === 0 && this.results.length === 0;
+    },
+
+    showMinLengthHint() {
+      return !this.isCommandMode()
+        && this.query.length > 0 && this.query.length < MIN_SEARCH_LENGTH;
+    },
+
     enterCommandMode() {
       this.query = COMMAND_PREFIX;
       this.open = true;
@@ -165,6 +183,7 @@ window.commandPaletteDropdown = function () {
 
     search() {
       const requestId = ++this._searchRequestId;
+      this.error = false;
       if (this.isCommandMode()) {
         this.searchQuery = this.commandTerm();
         this.commands = filterCommands(this.searchQuery);
@@ -185,9 +204,13 @@ window.commandPaletteDropdown = function () {
       this.loading = true;
       const q = encodeURIComponent(this.query);
       fetch(`/api/v1/search?q=${q}`, { credentials: 'same-origin' })
-        .then(r => r.json())
+        .then(response => {
+          if (requestId !== this._searchRequestId) return null;
+          if (!response.ok) throw new Error(`search responded ${response.status}`);
+          return response.json();
+        })
         .then(data => {
-          if (requestId !== this._searchRequestId) return;
+          if (data === null || requestId !== this._searchRequestId) return;
           this.commands = data.commands || [];
           this.results = data.results || [];
           this.loading = false;
@@ -196,6 +219,7 @@ window.commandPaletteDropdown = function () {
           if (requestId !== this._searchRequestId) return;
           this.commands = [];
           this.results = [];
+          this.error = true;
           this.loading = false;
         });
     },
@@ -205,6 +229,8 @@ window.commandPaletteDropdown = function () {
       this.query = '';
       this.commands = [];
       this.results = [];
+      this.error = false;
+      this.loading = false;
       this.activeIndex = -1;
       this._cachedItems = null;
       this._cacheKey = '';

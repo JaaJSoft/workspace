@@ -1,4 +1,8 @@
+from collections import Counter
+
+from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin import helpers
 from django.template.defaultfilters import filesizeformat
 from unfold.admin import ModelAdmin, StackedInline
 from unfold.contrib.filters.admin import RangeDateTimeFilter
@@ -106,6 +110,23 @@ class ThumbnailFailureAdmin(ModelAdmin):
         )
 
 
+class _MarkSafeActionForm(helpers.ActionForm):
+    """Adds the clearance justification to the changelist's action bar.
+
+    Optional, because an operator clearing a batch of obviously-benign
+    detections should not be forced to type the same sentence ten times - but
+    it is the only field an audit has to go on later, so it is offered on
+    every action rather than hidden behind a confirmation page.
+    """
+
+    override_reason = forms.CharField(
+        required=False,
+        max_length=500,
+        label="Clearance reason",
+        widget=forms.TextInput(attrs={"placeholder": "Why this detection is wrong"}),
+    )
+
+
 @admin.register(FileScan)
 class FileScanAdmin(ModelAdmin):
     """Malware scan verdicts, one row per scanned file.
@@ -115,13 +136,22 @@ class FileScanAdmin(ModelAdmin):
     the status filter narrows it to the interesting rows in one click.
     """
 
-    list_display = ("file", "owner", "status", "signature", "is_current", "scanned_at")
-    list_filter = ("status", "scanned_at")
-    list_select_related = ("file", "file__owner")
-    search_fields = ("file__name", "signature")
+    list_display = (
+        "file",
+        "owner",
+        "status",
+        "signature",
+        "is_current",
+        "overridden_at",
+        "scanned_at",
+    )
+    list_filter = ("status", "overridden_at", "scanned_at")
+    list_select_related = ("file", "file__owner", "overridden_by")
+    search_fields = ("file__name", "signature", "override_reason")
     ordering = ("-scanned_at",)
 
-    actions = ("rescan_files",)
+    actions = ("rescan_files", "mark_safe")
+    action_form = _MarkSafeActionForm
 
     # Rows are written by the scan worker; there is nothing to author by hand.
     def has_add_permission(self, request):
@@ -144,6 +174,51 @@ class FileScanAdmin(ModelAdmin):
         thumbnail, here it withholds the file itself.
         """
         return False
+
+    def has_override_permission(self, request):
+        """Backs ``permissions=["override"]`` on the mark_safe action."""
+        return request.user.has_perm("files.override_filescan")
+
+    @admin.action(
+        description="Clear the quarantine (false positive)",
+        permissions=["override"],
+    )
+    def mark_safe(self, request, queryset):
+        from workspace.files.services.scanning.override import (
+            LIFTED,
+            NOT_BLOCKED,
+            UNPINNABLE,
+            mark_safe,
+        )
+
+        reason = request.POST.get("override_reason", "").strip()
+        outcomes = Counter(
+            mark_safe(scan, user=request.user, reason=reason)
+            for scan in queryset.select_related("file")
+        )
+
+        if outcomes[LIFTED]:
+            self.message_user(
+                request,
+                f"Cleared the quarantine on {outcomes[LIFTED]} file(s). The "
+                "verdict is kept for the record.",
+                messages.SUCCESS,
+            )
+        if outcomes[UNPINNABLE]:
+            self.message_user(
+                request,
+                f"{outcomes[UNPINNABLE]} verdict(s) do not describe the file's "
+                "current content, so clearing them would have no effect. "
+                "Re-scan those files first.",
+                messages.WARNING,
+            )
+        if outcomes[NOT_BLOCKED]:
+            self.message_user(
+                request,
+                f"{outcomes[NOT_BLOCKED]} selected verdict(s) were not "
+                "blocking anything.",
+                messages.INFO,
+            )
 
     @admin.action(description="Re-scan the selected files", permissions=["view"])
     def rescan_files(self, request, queryset):

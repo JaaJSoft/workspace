@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
@@ -264,3 +265,109 @@ class FileScanAdminCurrencyTests(TestCase):
         resp = self.client.get("/admin/files/filescan/")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Up to date")
+
+
+BLOCKING_SETTINGS = {
+    "FILES_MALWARE_SCAN_ENABLED": True,
+    "FILES_MALWARE_ON_DETECTION": "block",
+}
+
+
+@override_settings(**BLOCKING_SETTINGS)
+class FileScanAdminOverrideTests(TestCase):
+    """Clearing a false positive: the one thing re-scanning cannot do."""
+
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            username="ovroot", email="ovroot@example.com", password="p"
+        )
+        self.client.force_login(self.admin_user)
+        owner = User.objects.create_user(username="ovowner", password="p")
+        self.file = File.objects.create(
+            owner=owner,
+            name="report.doc",
+            node_type=File.NodeType.FILE,
+            content_hash="h1",
+        )
+        self.scan = FileScan.objects.create(
+            file=self.file,
+            status=FileScan.Status.INFECTED,
+            signature="Heuristics.False.Positive",
+            content_hash="h1",
+            scanned_at=timezone.now(),
+        )
+
+    def _run_action(self, **extra):
+        return self.client.post(
+            "/admin/files/filescan/",
+            {
+                "action": "mark_safe",
+                "_selected_action": [str(self.scan.pk)],
+                **extra,
+            },
+            follow=True,
+        )
+
+    def test_the_action_lifts_the_quarantine(self):
+        from workspace.files.services.scanning.policy import is_blocked
+
+        self._run_action()
+
+        self.file.refresh_from_db()
+        self.assertFalse(is_blocked(self.file))
+
+    def test_the_action_records_who_cleared_it_and_why(self):
+        self._run_action(override_reason="Confirmed benign with the vendor")
+
+        self.scan.refresh_from_db()
+        self.assertEqual(self.scan.overridden_by, self.admin_user)
+        self.assertEqual(self.scan.override_reason, "Confirmed benign with the vendor")
+
+    def test_the_action_keeps_the_verdict_it_overrides(self):
+        self._run_action()
+
+        self.scan.refresh_from_db()
+        self.assertEqual(self.scan.status, FileScan.Status.INFECTED)
+        self.assertEqual(self.scan.signature, "Heuristics.False.Positive")
+
+    def test_a_verdict_about_older_bytes_is_refused_with_a_warning(self):
+        File.objects.filter(pk=self.file.pk).update(content_hash="h2")
+
+        resp = self._run_action()
+
+        self.scan.refresh_from_db()
+        self.assertIsNone(self.scan.overridden_at)
+        self.assertContains(resp, "Re-scan those files first")
+
+    def test_the_changelist_offers_a_reason_field(self):
+        """Unfold renders the action bar itself; a silently dropped ActionForm
+        would leave every clearance unexplained in the audit trail."""
+        resp = self.client.get("/admin/files/filescan/")
+        self.assertContains(resp, 'name="override_reason"')
+
+    def test_a_staff_user_without_the_permission_cannot_clear_a_quarantine(self):
+        viewer = User.objects.create_user(
+            username="ovviewer", password="p", is_staff=True
+        )
+        viewer.user_permissions.add(Permission.objects.get(codename="view_filescan"))
+        self.client.force_login(viewer)
+
+        self._run_action()
+
+        self.scan.refresh_from_db()
+        self.assertIsNone(self.scan.overridden_at)
+
+    def test_the_permission_is_enough_on_its_own(self):
+        clearer = User.objects.create_user(
+            username="ovclearer", password="p", is_staff=True
+        )
+        clearer.user_permissions.add(
+            Permission.objects.get(codename="view_filescan"),
+            Permission.objects.get(codename="override_filescan"),
+        )
+        self.client.force_login(clearer)
+
+        self._run_action()
+
+        self.scan.refresh_from_db()
+        self.assertIsNotNone(self.scan.overridden_at)

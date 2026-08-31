@@ -131,9 +131,37 @@ the last 24 hours, and live daemon reachability. The full verdict history is at
 
 Verdicts cannot be deleted there. A file with no verdict reads as never
 scanned, and never scanned is readable, so deleting a row would quietly
-un-quarantine the file. To clear a false positive, select the rows and run
-**Re-scan the selected files**: the verdict stays in place until the new scan
+un-quarantine the file.
+
+### Getting a file out of quarantine
+
+Two actions on **Files > Malware scans**, for two different problems.
+
+**Re-scan the selected files** answers a verdict that has gone *stale* - the
+signature database has moved on, or the file was quarantined by a bug since
+fixed. It queues a fresh scan and leaves the row in place until the new verdict
 replaces it.
+
+**Clear the quarantine (false positive)** answers a verdict that is simply
+*wrong*. Re-scanning cannot fix that one: the same bytes fed to the same
+signature database come back infected every time. The action records who
+cleared it, when, and the reason typed into the action bar, and leaves the
+verdict and its signature untouched - the decision is filed next to the
+detection, not in place of it. The file becomes readable again immediately,
+its search document and its thumbnail come back, and its owner sees an
+ordinary file.
+
+The clearance is pinned to the file's content hash, so it vouches for those
+exact bytes and nothing else. Replace the content and the file blocks again at
+once, before the new bytes have even been scanned - an infected upload cannot
+inherit an earlier clearance. For the same reason the action refuses a verdict
+that does not describe the file's current content, and says so: re-scan first,
+then clear the verdict that comes back.
+
+Clearing a quarantine needs the dedicated **Can clear a malware quarantine**
+permission (`files.override_filescan`), which is separate from the permission
+to read the verdict list - handing out the audit surface does not hand out the
+ability to release flagged files.
 
 If `FILES_MALWARE_SCANNER` names a backend that does not exist, the application
 refuses to start rather than running unprotected. Should it reach a worker

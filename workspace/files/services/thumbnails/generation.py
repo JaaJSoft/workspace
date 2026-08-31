@@ -210,12 +210,17 @@ def generate_missing_thumbnails(*, retry_failed=False):
     Returns a dict with generation statistics.
     """
     from workspace.files.models import File
+    from workspace.files.services.scanning.policy import exclude_blocked
 
     unparked = failures.clear_all_failures() if retry_failed else 0
 
     started_at = timezone.now()
 
-    qs = (
+    # Quarantining a file deletes its thumbnail, and "no thumbnail" is exactly
+    # what this pass looks for - so without the exclusion the preview of an
+    # infected image reappears at the next run. It also means a file leaving
+    # quarantine becomes a candidate again on its own.
+    qs = exclude_blocked(
         File.objects.filter(
             node_type=File.NodeType.FILE,
             has_thumbnail=False,

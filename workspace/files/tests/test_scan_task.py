@@ -188,6 +188,21 @@ class ScanTaskTests(TestCase):
             self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
         index.assert_called_once()
 
+    def test_a_file_coming_back_clean_gets_its_thumbnail_back(self):
+        """Quarantining deleted it, so clearing the quarantine owes it back."""
+        f = self._file(name="a.png")
+        File.objects.filter(pk=f.pk).update(type="png")
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+        with patch(
+            "workspace.files.services.thumbnails.generation.generate_thumbnail",
+            return_value=True,
+        ) as generate:
+            self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        generate.assert_called_once()
+        f.refresh_from_db()
+        self.assertTrue(f.has_thumbnail)
+
     def _run_racing(self, file_obj, verdict, new_hash):
         scanner = _RacingScanner(verdict, file_obj, new_hash)
         with (

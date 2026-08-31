@@ -943,6 +943,20 @@ class FileScan(models.Model):
     # Set explicitly by the task: rows are written through update_or_create and
     # auto_now only fires inside Model.save().
     scanned_at = models.DateTimeField()
+    # An administrator's "this detection is wrong". It vouches for the bytes
+    # named by content_hash above, not for the row: replacing the content makes
+    # the hashes diverge and the file blocks again, before the rescan of the new
+    # bytes has even run. Kept beside the verdict rather than replacing it -
+    # the signature is what the decision has to be audited against later.
+    overridden_at = models.DateTimeField(null=True, blank=True)
+    overridden_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    override_reason = models.CharField(max_length=500, blank=True, default="")
 
     class Meta:
         indexes = [
@@ -950,6 +964,11 @@ class FileScan(models.Model):
                 fields=["status", "-scanned_at"], name="file_scan_status_time"
             ),
         ]
+        # Its own permission because the built-in three are all disabled on
+        # this model, and because reading verdicts and waiving one are not the
+        # same trust: the audit surface can be handed out far more widely than
+        # the ability to hand a flagged file back to its owner.
+        permissions = [("override_filescan", "Can clear a malware quarantine")]
 
     def __str__(self):
         return f"{self.file}: {self.status}"

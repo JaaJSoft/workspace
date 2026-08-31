@@ -260,7 +260,7 @@ def scan_file(self, file_uuid):
     from workspace.files.services.scanning.capped import CappedReader
     from workspace.files.services.scanning.policy import blocked_statuses
     from workspace.files.services.scanning.registry import get_scanner
-    from workspace.files.services.search_index import index_file, unindex_file
+    from workspace.files.services.search_index import unindex_file
 
     scanner = get_scanner()
     if scanner is None:
@@ -367,6 +367,8 @@ def scan_file(self, file_uuid):
             file_obj.has_thumbnail = False
             file_obj.save(update_fields=["has_thumbnail"])
     elif was_blocked:
-        index_file(file_obj)
+        from workspace.files.services.scanning.override import restore_after_unblock
+
+        restore_after_unblock(file_obj)
 
     return {"status": verdict.status, "signature": verdict.signature}

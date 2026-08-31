@@ -129,6 +129,17 @@ The admin dashboard carries three cards: quarantined files, scanner errors in
 the last 24 hours, and live daemon reachability. The full verdict history is at
 **Files > Malware scans** in the admin.
 
+Verdicts cannot be deleted there. A file with no verdict reads as never
+scanned, and never scanned is readable, so deleting a row would quietly
+un-quarantine the file. To clear a false positive, select the rows and run
+**Re-scan the selected files**: the verdict stays in place until the new scan
+replaces it.
+
+If `FILES_MALWARE_SCANNER` names a backend that does not exist, the application
+refuses to start rather than running unprotected. Should it reach a worker
+anyway, every scan is recorded as an error, so `FILES_MALWARE_ON_ERROR` decides
+what happens and the scanner card says what is wrong.
+
 ### Backfilling an existing library
 
 ```bash

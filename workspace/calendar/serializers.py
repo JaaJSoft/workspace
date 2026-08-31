@@ -130,14 +130,7 @@ class EventSerializer(serializers.ModelSerializer):
         None is the signal the web modal uses to go read-only; deriving it
         server-side keeps a second RRULE parser out of the frontend.
         """
-        simple = recurrence_rule.to_simple(obj.recurrence_rule)
-        if simple is None:
-            return None
-        return {
-            "frequency": simple["frequency"],
-            "interval": simple["interval"],
-            "until": simple["until"].isoformat() if simple["until"] else None,
-        }
+        return recurrence_rule.to_simple_json(obj.recurrence_rule)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

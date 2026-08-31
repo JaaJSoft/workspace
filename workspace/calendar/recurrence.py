@@ -3,12 +3,13 @@ from datetime import UTC, datetime, timedelta
 
 from workspace.common.logging import scrub
 
-from .services import recurrence_rule as recurrence_rule_service
 from .services.recurrence_rule import (
     MAX_ITERATIONS,
+    describe,
     is_simple_stepping,
     parse,
     simple_stepping_frequency,
+    to_simple_json,
 )
 from .services.timezones import event_timezone
 
@@ -221,16 +222,23 @@ def _event_dt_str(dt, all_day):
     return dt.isoformat()
 
 
-def _simple_payload(rule_text):
-    """`to_simple` shaped for JSON, or None when the picker cannot edit it."""
-    simple = recurrence_rule_service.to_simple(rule_text)
-    if simple is None:
-        return None
-    return {
-        "frequency": simple["frequency"],
-        "interval": simple["interval"],
-        "until": simple["until"].isoformat() if simple["until"] else None,
-    }
+def _recurrence_fields(rule, cache_source=None):
+    """(recurrence_summary, recurrence_simple) for *rule*.
+
+    Reuses `cache_source._cached_recurrence_summary` /
+    `_cached_recurrence_simple` when present - the per-master cache
+    `expand_recurring_events` populates - instead of recomputing them from
+    `rule`. `_UNCACHED` (not `None`) is the "absent" sentinel because a
+    legitimate cached `recurrence_simple` value is `None` for any rule the
+    picker cannot express.
+    """
+    summary = getattr(cache_source, "_cached_recurrence_summary", _UNCACHED)
+    if summary is _UNCACHED:
+        summary = describe(rule)
+    simple = getattr(cache_source, "_cached_recurrence_simple", _UNCACHED)
+    if simple is _UNCACHED:
+        simple = to_simple_json(rule)
+    return summary, simple
 
 
 def make_virtual_occurrence(master, occ_start):
@@ -238,13 +246,7 @@ def make_virtual_occurrence(master, occ_start):
     duration = (master.end - master.start) if master.end else None
     occ_end = (occ_start + duration) if duration else None
     rule = master.recurrence_rule
-
-    summary = getattr(master, "_cached_recurrence_summary", _UNCACHED)
-    if summary is _UNCACHED:
-        summary = recurrence_rule_service.describe(rule)
-    simple = getattr(master, "_cached_recurrence_simple", _UNCACHED)
-    if simple is _UNCACHED:
-        simple = _simple_payload(rule)
+    summary, simple = _recurrence_fields(rule, master)
 
     return {
         "uuid": f"{master.uuid}:{occ_start.isoformat()}",
@@ -270,9 +272,18 @@ def make_virtual_occurrence(master, occ_start):
     }
 
 
-def make_exception_dict(exc):
-    """Convert a materialized exception Event to the occurrence dict format."""
+def make_exception_dict(exc, master=None):
+    """Convert a materialized exception Event to the occurrence dict format.
+
+    `master` is the row `expand_recurring_events` is already iterating for
+    this exception's series - pass it so the derived recurrence fields reuse
+    its per-master cache. `exc.recurrence_parent` is never that same Python
+    object (it comes back from a separate `select_related` query per
+    exception row), so reading the cache off it would silently miss every
+    time.
+    """
     rule = exc.recurrence_parent.recurrence_rule if exc.recurrence_parent else ""
+    summary, simple = _recurrence_fields(rule, master)
     return {
         "uuid": str(exc.uuid),
         "calendar_id": str(exc.calendar_id),
@@ -293,8 +304,8 @@ def make_exception_dict(exc):
         if exc.original_start
         else None,
         "recurrence_rule": rule,
-        "recurrence_summary": recurrence_rule_service.describe(rule),
-        "recurrence_simple": _simple_payload(rule),
+        "recurrence_summary": summary,
+        "recurrence_simple": simple,
     }
 
 
@@ -337,17 +348,15 @@ def expand_recurring_events(masters_qs, range_start, range_end):
         # Same idea for the derived recurrence fields: describe()/to_simple()
         # are pure functions of the rule text, so run them once per master
         # rather than once per occurrence.
-        master._cached_recurrence_summary = recurrence_rule_service.describe(
-            master.recurrence_rule
-        )
-        master._cached_recurrence_simple = _simple_payload(master.recurrence_rule)
+        master._cached_recurrence_summary = describe(master.recurrence_rule)
+        master._cached_recurrence_simple = to_simple_json(master.recurrence_rule)
         for occ_start in occurrences_in_range(master, range_start, range_end):
             key = (master.uuid, occ_start)
             exc = exc_index.get(key)
             if exc:
                 if exc.is_cancelled:
                     continue  # Skip cancelled occurrences
-                occurrences.append(make_exception_dict(exc))
+                occurrences.append(make_exception_dict(exc, master))
             else:
                 occurrences.append(make_virtual_occurrence(master, occ_start))
 

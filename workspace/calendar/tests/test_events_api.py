@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -8,6 +9,7 @@ from django.utils import timezone as dj_timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.calendar import recurrence
 from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember
 from workspace.calendar.search import search_events
 from workspace.users.services.settings import set_setting
@@ -700,3 +702,56 @@ class RecurrenceRuleApiTests(APITestCase):
             self.assertEqual(occ["recurrence_summary"], "Every 2 days")
             self.assertEqual(occ["recurrence_simple"]["frequency"], "daily")
             self.assertEqual(occ["recurrence_simple"]["interval"], 2)
+
+    def _create_exception(self, master, days_after_start):
+        exc_start = master.start + timedelta(days=days_after_start)
+        return Event.objects.create(
+            calendar=self.cal,
+            title="E (moved)",
+            start=exc_start + timedelta(hours=1),
+            end=exc_start + timedelta(hours=2),
+            owner=self.user,
+            recurrence_parent=master,
+            original_start=exc_start,
+        )
+
+    def test_materialized_exception_exposes_master_summary_and_simple(self):
+        # A materialized exception is a *different* Event row than its
+        # master, fetched by a separate query - the derived fields must
+        # still reflect the master's rule, not the exception's own (blank)
+        # recurrence_rule.
+        create_resp = self._create("RRULE:FREQ=DAILY;INTERVAL=2")
+        master = Event.objects.get(uuid=create_resp.json()["uuid"])
+        self._create_exception(master, days_after_start=2)
+
+        resp = self.client.get(
+            "/api/v1/events",
+            {"start": "2026-01-06T00:00:00Z", "end": "2026-01-10T00:00:00Z"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        occ = next(e for e in resp.json() if e["title"] == "E (moved)")
+        self.assertTrue(occ["is_exception"])
+        self.assertEqual(occ["recurrence_summary"], "Every 2 days")
+        self.assertEqual(occ["recurrence_simple"]["frequency"], "daily")
+        self.assertEqual(occ["recurrence_simple"]["interval"], 2)
+
+    def test_recurrence_summary_computed_once_per_master_not_per_occurrence(self):
+        # Pins the per-master cache: expanding a master that yields both a
+        # virtual occurrence and a materialized exception must call
+        # describe() exactly once, not once per occurrence - a regression
+        # here means make_exception_dict stopped reusing the master's cache.
+        create_resp = self._create("RRULE:FREQ=DAILY;INTERVAL=2")
+        master = Event.objects.get(uuid=create_resp.json()["uuid"])
+        self._create_exception(master, days_after_start=2)
+
+        with patch.object(
+            recurrence, "describe", wraps=recurrence.describe
+        ) as mock_describe:
+            resp = self.client.get(
+                "/api/v1/events",
+                {"start": "2026-01-06T00:00:00Z", "end": "2026-01-10T00:00:00Z"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        occurrences = [e for e in resp.json() if e["title"] in ("E", "E (moved)")]
+        self.assertEqual(len(occurrences), 2)
+        self.assertEqual(mock_describe.call_count, 1)

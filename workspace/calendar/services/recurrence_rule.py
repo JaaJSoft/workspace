@@ -240,6 +240,23 @@ def to_simple(rule_text):
     return {"frequency": frequency, "interval": interval, "until": until}
 
 
+def to_simple_json(rule_text):
+    """`to_simple`, shaped for a JSON response - or None, same as `to_simple`.
+
+    Single definition for the picker payload shape (frequency/interval/until
+    as an ISO string) shared by EventSerializer and the occurrence-dict
+    builders in recurrence.py, so the two callers can't drift apart.
+    """
+    simple = to_simple(rule_text)
+    if simple is None:
+        return None
+    return {
+        "frequency": simple["frequency"],
+        "interval": simple["interval"],
+        "until": simple["until"].isoformat() if simple["until"] else None,
+    }
+
+
 def describe(rule_text):
     """Human summary of *rule_text*, falling back to the raw text.
 

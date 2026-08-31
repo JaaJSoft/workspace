@@ -153,8 +153,11 @@ ordinary file.
 
 The clearance is pinned to the file's content hash, so it vouches for those
 exact bytes and nothing else. Replace the content and the file blocks again at
-once, before the new bytes have even been scanned - an infected upload cannot
-inherit an earlier clearance. For the same reason the action refuses a verdict
+once, before the new bytes have even been scanned - and the scan of those new
+bytes drops the clearance rather than inheriting it, so an infected upload
+never lands on a cleared row. A re-scan of the *same* bytes keeps it, which is
+what stops the next `scan_files` pass from undoing every clearance it walks
+over. For the same reason the action refuses a verdict
 that does not describe the file's current content, and says so: re-scan first,
 then clear the verdict that comes back.
 

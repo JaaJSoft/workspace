@@ -336,24 +336,33 @@ def scan_file(self, file_uuid):
     # document to restore. Re-indexing every clean verdict would extract the
     # same text a second time for the same upload and put this task in a race
     # with the indexing one over a single FTS row.
-    was_blocked = (
-        FileScan.objects.filter(file=file_obj).values_list("status", flat=True).first()
-        in blocked
+    existing = (
+        FileScan.objects.filter(file=file_obj).values("status", "content_hash").first()
+        or {}
     )
+    was_blocked = existing.get("status") in blocked
 
-    FileScan.objects.update_or_create(
-        file=file_obj,
-        defaults={
-            "status": verdict.status,
-            "signature": verdict.signature,
-            "detail": verdict.detail,
-            # The hash captured before the blob was opened, not a fresh read:
-            # it is the one the verdict actually describes, and the staleness
-            # check above has just confirmed the row still holds it.
-            "content_hash": scanned_hash,
-            "scanned_at": timezone.now(),
-        },
-    )
+    defaults = {
+        "status": verdict.status,
+        "signature": verdict.signature,
+        "detail": verdict.detail,
+        # The hash captured before the blob was opened, not a fresh read:
+        # it is the one the verdict actually describes, and the staleness
+        # check above has just confirmed the row still holds it.
+        "content_hash": scanned_hash,
+        "scanned_at": timezone.now(),
+    }
+    # An administrator's clearance is pinned to the hash on this row, and the
+    # line above moves that pin. Leaving the columns alone would hand a verdict
+    # about bytes nobody vouched for the clearance granted to the previous
+    # ones. A rescan of the same bytes keeps it, which is the whole point of
+    # the action - scan_files would otherwise undo every clearance it passes.
+    if existing.get("content_hash") != scanned_hash:
+        defaults["overridden_at"] = None
+        defaults["overridden_by"] = None
+        defaults["override_reason"] = ""
+
+    FileScan.objects.update_or_create(file=file_obj, defaults=defaults)
     FILES_MALWARE_SCAN_RESULT.labels(result=verdict.status).inc()
 
     if verdict.status in blocked:

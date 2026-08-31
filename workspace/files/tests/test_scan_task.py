@@ -234,3 +234,70 @@ class ScanTaskTests(TestCase):
         f.refresh_from_db()
         self.assertEqual(f.scan.status, FileScan.Status.CLEAN)
         self.assertEqual(f.scan.signature, "")
+
+
+class ScanVerdictContentHashTests(TestCase):
+    """A verdict records which bytes it describes."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="hashtask", password="p")
+
+    def _file(self, body=b"hello", name="a.txt"):
+        """Built through FileService, which is what computes content_hash.
+
+        A bare File(...).save() leaves the hash empty, so a fixture that
+        skipped the service would silently assert "" == "" and prove nothing.
+        """
+        from workspace.files.services import FileService
+
+        return FileService.create_file(
+            self.user, name, content=ContentFile(body, name=name)
+        )
+
+    def _run(self, file_obj, verdict):
+        scanner = _StubScanner(verdict)
+        with (
+            override_settings(**ENABLED),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            return scan_file(str(file_obj.uuid))
+
+    def test_the_verdict_stores_the_hash_of_the_bytes_it_describes(self):
+        f = self._file()
+        self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        f.refresh_from_db()
+        self.assertEqual(f.scan.content_hash, f.content_hash)
+        self.assertTrue(f.scan.content_hash)
+
+    def test_a_rescan_of_new_bytes_overwrites_the_recorded_hash(self):
+        f = self._file(b"first")
+        self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        first_hash = f.scan.content_hash
+
+        from workspace.files.services import FileService
+
+        FileService.update_content(f, ContentFile(b"second", name="a.txt"))
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        f.refresh_from_db()
+        self.assertNotEqual(f.scan.content_hash, first_hash)
+        self.assertEqual(f.scan.content_hash, f.content_hash)
+
+    def test_an_oversize_skip_still_records_the_hash(self):
+        f = self._file(b"x" * 50, name="big.txt")
+        scanner = _StubScanner(ScanVerdict(status=FileScan.Status.CLEAN))
+        with (
+            override_settings(**ENABLED, FILES_MALWARE_SCAN_MAX_BYTES=10),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            scan_file(str(f.uuid))
+        f.refresh_from_db()
+        self.assertEqual(f.scan.status, FileScan.Status.SKIPPED)
+        self.assertEqual(f.scan.content_hash, f.content_hash)
+        self.assertTrue(f.scan.content_hash)

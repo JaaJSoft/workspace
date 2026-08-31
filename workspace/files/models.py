@@ -933,6 +933,13 @@ class FileScan(models.Model):
     status = models.CharField(max_length=16, choices=Status.choices, db_index=True)
     signature = models.CharField(max_length=200, blank=True, default="")
     detail = models.CharField(max_length=500, blank=True, default="")
+    # The File.content_hash the verdict describes, so a verdict can be told
+    # apart from the bytes the file holds now. Not indexed: it is only ever
+    # compared against the joined file's own hash, never looked up on its own.
+    # Blank for a row written before this field existed, and for a file whose
+    # own hash could not be computed - both mean "cannot vouch for these
+    # bytes", which is why the backfill treats them as needing a scan.
+    content_hash = models.CharField(max_length=64, blank=True, default="")
     # Set explicitly by the task: rows are written through update_or_create and
     # auto_now only fires inside Model.save().
     scanned_at = models.DateTimeField()

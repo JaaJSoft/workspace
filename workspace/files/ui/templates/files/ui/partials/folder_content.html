@@ -368,14 +368,14 @@
           </thead>
           <tbody>
             {% for node in nodes %}
+              {% comment %}
+              In the :class below, the quarantine tint is the last branch on
+              purpose: selection has to stay readable on a flagged row, so
+              bg-primary/10 wins when both would apply rather than the two
+              backgrounds racing on stylesheet order.
+              {% endcomment %}
               <tr
                 class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity"
-                {% comment %}
-                The quarantine tint is the last branch on purpose: selection
-                has to stay readable on a flagged row, so bg-primary/10 wins
-                when both would apply rather than the two backgrounds racing
-                on stylesheet order.
-                {% endcomment %}
                 :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
                 @mouseenter="hoveredUuid = '{{ node.uuid }}'"
                 @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"

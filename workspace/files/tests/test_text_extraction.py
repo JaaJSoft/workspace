@@ -24,7 +24,7 @@ from workspace.files.services.detection import get_all_labels
 from workspace.files.services.text_extraction import (
     BODY_CAP,
     extract_text,
-    has_extractor,
+    is_indexable,
 )
 
 User = get_user_model()
@@ -73,42 +73,53 @@ class ExtractTextTests(TestCase):
 
     def test_html_script_and_style_bodies_are_dropped(self):
         payload = (
-            b"<style>.a{color:red}</style>"
-            b"<script>var secretvar = 1;</script>"
-            b"<p>keepme</p>"
+            b"<!DOCTYPE html><html><head><style>.a{color:red}</style>"
+            b"<script>var secretvar = 1;</script></head>"
+            b"<body><p>keepme</p></body></html>"
         )
-        f = self._file("a.html", "text/html", payload)
-        body = extract_text(f)
+        body = extract_text(self._file("a.html", "text/html", payload))
         self.assertIn("keepme", body)
         self.assertNotIn("secretvar", body)
         self.assertNotIn("color", body)
 
     def test_adjacent_html_blocks_stay_separate_words(self):
-        # strip_tags puts nothing in a removed tag's place, so without a
-        # boundary "<h1>Title</h1><p>Body</p>" becomes the single token
-        # "TitleBody" and neither word can ever be found.
-        for payload in (
+        # Real markup has no whitespace between block tags; without a boundary
+        # the two words would be indexed as one token nobody can search for.
+        for markup in (
             b"<p>alpha</p><p>beta</p>",
             b"<h1>alpha</h1><p>beta</p>",
             b"<ul><li>alpha</li><li>beta</li></ul>",
             b"<table><tr><td>alpha</td><td>beta</td></tr></table>",
         ):
-            with self.subTest(payload=payload):
+            with self.subTest(markup=markup):
+                payload = b"<!DOCTYPE html><html><body>" + markup + b"</body></html>"
                 words = extract_text(self._file("a.html", "text/html", payload)).split()
                 self.assertIn("alpha", words)
                 self.assertIn("beta", words)
 
-    def test_html_whitespace_is_collapsed(self):
-        # The body is capped, so runs of markup indentation must not eat the
+    def test_html_markup_does_not_reach_the_body(self):
+        # The body is capped, so markup and its indentation must not eat the
         # budget that real prose needs.
-        payload = b"<p>alpha</p>\n\n   \t<p>beta</p>"
-        self.assertEqual(
-            extract_text(self._file("a.html", "text/html", payload)), "alpha beta"
+        payload = (
+            b"<!DOCTYPE html><html><body><p>alpha</p>\n\n   \t<p>beta</p></body></html>"
         )
+        body = extract_text(self._file("a.html", "text/html", payload))
+        self.assertEqual(body.split(), ["alpha", "beta"])
+        self.assertNotIn("<", body)
 
     def test_html_entities_are_decoded(self):
-        f = self._file("a.html", "text/html", b"<p>caf&eacute; &amp; cr&egrave;me</p>")
-        self.assertIn("café", extract_text(f))
+        payload = (
+            b"<!DOCTYPE html><html><body><p>caf&eacute; &amp; cr&egrave;me</p>"
+            b"</body></html>"
+        )
+        self.assertIn("café", extract_text(self._file("a.html", "text/html", payload)))
+
+    def test_an_html_fragment_is_read_as_the_text_it_is(self):
+        # Type detection reads the container, and a file with no document root
+        # is not an HTML document. Its markup is indexed verbatim rather than
+        # stripped: noisier, but the file is still found by what it contains.
+        f = self._file("part.html", "text/html", b"<p>alpha</p>")
+        self.assertIn("alpha", extract_text(f))
 
     def test_text_like_application_types_are_extracted(self):
         # The app files these under the "text" category with a text viewer,
@@ -130,9 +141,18 @@ class ExtractTextTests(TestCase):
         f = self._file("a.png", "image/png", b"\x89PNG\r\n\x1a\n\xff\xfe")
         self.assertIsNone(extract_text(f))
 
-    def test_undecodable_bytes_declared_as_text_yield_nothing(self):
-        f = self._file("a.txt", "text/plain", b"\xff\xfe\xfd\xfc broken")
-        self.assertIsNone(extract_text(f))
+    def test_binary_content_declared_as_text_indexes_nothing(self):
+        # A file whose type is wrong should not put its bytes in the index.
+        import os
+
+        for label, payload in (
+            ("random", os.urandom(4096)),
+            ("nul bytes", b"\x00" * 2048),
+        ):
+            with self.subTest(label=label):
+                self.assertIsNone(
+                    extract_text(self._file("a.txt", "text/plain", payload))
+                )
 
     def test_folder_yields_nothing(self):
         folder = File.objects.create(
@@ -326,7 +346,7 @@ class ExtractorCoverageTests(SimpleTestCase):
         unclassified = {
             mime
             for mime in declared
-            if not has_extractor(mime) and mime not in self.NOT_INDEXED
+            if not is_indexable(mime) and mime not in self.NOT_INDEXED
         }
         self.assertEqual(
             unclassified,
@@ -339,11 +359,49 @@ class ExtractorCoverageTests(SimpleTestCase):
     def test_the_exclusion_list_does_not_outlive_its_reason(self):
         # An entry that has since gained an extractor has to leave the list, or
         # the list stops being evidence of anything.
-        self.assertEqual({m for m in self.NOT_INDEXED if has_extractor(m)}, set())
+        self.assertEqual({m for m in self.NOT_INDEXED if is_indexable(m)}, set())
 
     def test_every_office_type_the_extractor_supports_is_registered(self):
         # The registration loops over the extractor's own list; this fails if
         # the two ever drift apart.
         for mime in extraction.DOCUMENT_MIME_TYPES:
             with self.subTest(mime=mime):
-                self.assertTrue(has_extractor(mime))
+                self.assertTrue(is_indexable(mime))
+
+
+class TypeFallbackTests(TestCase):
+    """A file whose type the detector could not place is still worth reading."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="carol", password="pw")
+
+    def test_an_undetected_type_falls_back_to_the_name(self):
+        # create_file stores application/octet-stream when detection cannot
+        # place the content; the name still says what the file is.
+        f = File.objects.create(
+            name="report.docx",
+            node_type=File.NodeType.FILE,
+            mime_type="application/octet-stream",
+            owner=self.user,
+            content=ContentFile(make_docx(["the kraken sleeps"]), name="report.docx"),
+        )
+        self.assertIn("kraken", extract_text(f))
+
+    def test_a_row_with_no_type_at_all_keeps_its_body(self):
+        f = File.objects.create(
+            name="note.md",
+            node_type=File.NodeType.FILE,
+            owner=self.user,
+            content=ContentFile(b"# Title\n\nthe kraken sleeps", name="note.md"),
+        )
+        self.assertIn("kraken", extract_text(f))
+
+    def test_a_name_that_says_nothing_is_still_refused(self):
+        f = File.objects.create(
+            name="blob",
+            node_type=File.NodeType.FILE,
+            mime_type="application/octet-stream",
+            owner=self.user,
+            content=ContentFile(b"whatever", name="blob"),
+        )
+        self.assertIsNone(extract_text(f))

@@ -15,7 +15,7 @@ from workspace.common.tests.office_fixtures import make_docx, make_odf, make_xls
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File
 from workspace.files.services import FileService
-from workspace.files.services.text_extraction import has_extractor
+from workspace.files.services.text_extraction import is_indexable
 
 User = get_user_model()
 
@@ -54,7 +54,7 @@ class ReadTextContentTests(TestCase):
         # which formats hold words.
         payload = make_docx(["the treasurer resigned"])
         f = self._file("minutes.docx", extraction.DOCX, payload)
-        self.assertTrue(has_extractor(f.mime_type))
+        self.assertTrue(is_indexable(f.mime_type))
         self.assertIn("treasurer", FileService.read_text_content(f))
 
     def test_a_reader_gets_less_than_the_index_does(self):

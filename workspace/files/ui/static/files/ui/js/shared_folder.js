@@ -13,6 +13,7 @@ window.sharedFolderBrowser = function sharedFolderBrowser(token, accessToken) {
     folderUuid: '',
     loading: false,
     error: '',
+    hasMore: false,
 
     init() {
       this.load('');
@@ -37,6 +38,7 @@ window.sharedFolderBrowser = function sharedFolderBrowser(token, accessToken) {
         this.entries = data.entries;
         this.breadcrumbs = data.breadcrumbs;
         this.folderUuid = folderUuid;
+        this.hasMore = resp.headers.get('X-Has-More') === 'true';
       } catch (e) {
         this.error = 'This folder could not be loaded.';
       }
@@ -118,6 +120,17 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes) {
 
     doneCount() {
       return this.queue.filter(item => item.state === 'done').length;
+    },
+
+    stateLabel(state) {
+      const labels = {
+        pending: 'Waiting',
+        sending: 'Sending',
+        'too-large': 'Too large',
+        failed: 'Failed',
+        done: 'Sent',
+      };
+      return labels[state] || state;
     },
   };
 };

@@ -40,7 +40,7 @@
               'badge-error': item.state === 'failed',
               'badge-warning': item.state === 'too-large',
             }"
-            x-text="item.state"
+            x-text="stateLabel(item.state)"
           ></span>
         </li>
       </template>

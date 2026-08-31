@@ -105,6 +105,14 @@
             </li>
           </template>
         </ul>
+
+        <div
+          x-show="!loading && !error && hasMore"
+          x-cloak
+          class="px-6 py-3 text-sm text-base-content/50 text-center border-t border-base-300"
+        >
+          Only the first 200 entries are shown.
+        </div>
       </div>
     </div>
 

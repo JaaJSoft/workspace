@@ -339,6 +339,18 @@ class FileScanAdminOverrideTests(TestCase):
         self.assertIsNone(self.scan.overridden_at)
         self.assertContains(resp, "Re-scan those files first")
 
+    def test_the_action_select_keeps_its_alpine_binding(self):
+        """Without it the Run button never appears and no action can run.
+
+        Unfold gates that button on ``x-show="action"``, and only its own
+        ActionForm widget carries the matching ``x-model``. Subclassing
+        Django's plain ActionForm instead silently disables every action on
+        this changelist - the POST still works, so no test that posts
+        directly would notice.
+        """
+        resp = self.client.get("/admin/files/filescan/")
+        self.assertContains(resp, 'x-model="action"')
+
     def test_the_changelist_offers_a_reason_field(self):
         """Unfold renders the action bar itself; a silently dropped ActionForm
         would leave every clearance unexplained in the audit trail."""

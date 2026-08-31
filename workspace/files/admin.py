@@ -2,10 +2,11 @@ from collections import Counter
 
 from django import forms
 from django.contrib import admin, messages
-from django.contrib.admin import helpers
 from django.template.defaultfilters import filesizeformat
 from unfold.admin import ModelAdmin, StackedInline
 from unfold.contrib.filters.admin import RangeDateTimeFilter
+from unfold.forms import ActionForm
+from unfold.widgets import UnfoldAdminTextInputWidget
 
 from .models import (
     File,
@@ -110,20 +111,28 @@ class ThumbnailFailureAdmin(ModelAdmin):
         )
 
 
-class _MarkSafeActionForm(helpers.ActionForm):
+class _MarkSafeActionForm(ActionForm):
     """Adds the clearance justification to the changelist's action bar.
 
     Optional, because an operator clearing a batch of obviously-benign
     detections should not be forced to type the same sentence ten times - but
     it is the only field an audit has to go on later, so it is offered on
     every action rather than hidden behind a confirmation page.
+
+    Subclasses unfold's ActionForm, never Django's: the Run button is gated on
+    ``x-show="action"``, and the ``x-model`` that feeds it lives on unfold's
+    widget. Swapping in a plain ActionForm leaves every action on this
+    changelist unrunnable, while a test that posts to the changelist directly
+    still passes.
     """
 
     override_reason = forms.CharField(
         required=False,
         max_length=500,
         label="Clearance reason",
-        widget=forms.TextInput(attrs={"placeholder": "Why this detection is wrong"}),
+        widget=UnfoldAdminTextInputWidget(
+            attrs={"placeholder": "Why this detection is wrong"}
+        ),
     )
 
 

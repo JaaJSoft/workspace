@@ -1,10 +1,15 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
+from workspace.files.models import File, FileShareLink
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -74,3 +79,44 @@ class FilesIndexSettingsTests(TestCase):
             f"expected a single files users_usersetting query, got "
             f"{len(setting_queries)}:\n" + "\n".join(setting_queries),
         )
+
+
+class SharedLinkPageTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="pageowner", email="pageowner@example.com", password="pass123"
+        )
+        self.doc = File.objects.create(
+            owner=self.owner,
+            name="doc.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            type="text",
+            category="text",
+        )
+        self.link = FileShareLink.objects.create(file=self.doc, created_by=self.owner)
+
+    def test_a_file_link_renders_the_file_page(self):
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "doc.txt")
+
+    def test_an_expired_link_renders_the_expired_card(self):
+        self.link.expires_at = timezone.now() - timedelta(days=1)
+        self.link.save(update_fields=["expires_at"])
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertContains(resp, "Link expired")
+
+    def test_a_password_protected_link_renders_the_prompt(self):
+        self.link.password = make_password("secret")
+        self.link.save(update_fields=["password"])
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertContains(resp, "Enter the password")
+
+    def test_an_unknown_token_is_a_404(self):
+        self.assertEqual(self.client.get("/files/shared/nope").status_code, 404)
+
+    def test_a_trashed_target_is_a_404(self):
+        self.doc.soft_delete()
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertEqual(resp.status_code, 404)

@@ -38,3 +38,11 @@ test('a link mode renders a human label', () => {
   const app = modal();
   assert.equal(app.modeLabel('drop'), 'Upload only');
 });
+
+test('only a file target offers user-to-user sharing', () => {
+  const app = modal();
+  app.nodeType = 'file';
+  assert.equal(app.canShareWithPeople(), true);
+  app.nodeType = 'folder';
+  assert.equal(app.canShareWithPeople(), false);
+});

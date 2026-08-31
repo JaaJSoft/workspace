@@ -17,13 +17,13 @@
       </div>
 
       <!-- User search -->
-      <div class="mb-4">
+      <div class="mb-4" x-show="canShareWithPeople()">
         <label class="text-sm font-medium mb-1 block">Add people</label>
         {% include "users/ui/partials/user_selector.html" with on_select_event="share-user-selected" placeholder="Search by username or name..." %}
       </div>
 
       <!-- Current shares list -->
-      <div class="mb-4">
+      <div class="mb-4" x-show="canShareWithPeople()">
         <label class="text-sm font-medium mb-2 block">Shared with</label>
         <div class="space-y-1 max-h-48 overflow-y-auto">
           <!-- Loading -->
@@ -98,7 +98,8 @@
 
       <!-- Share Links -->
       <div class="mb-4">
-        <div class="divider my-2 text-xs text-base-content/40">Public links</div>
+        <div class="divider my-2 text-xs text-base-content/40" x-show="canShareWithPeople()">Public links</div>
+        <label class="text-sm font-medium mb-2 block" x-show="!canShareWithPeople()">Public links</label>
 
         <!-- Loading -->
         <div x-show="linksLoading" class="flex justify-center py-2">

@@ -218,6 +218,10 @@ window.shareModal = function shareModal() {
 
     // --- Share Links ---
 
+    canShareWithPeople() {
+      return this.nodeType === 'file';
+    },
+
     canChooseMode() {
       return this.nodeType === 'folder';
     },

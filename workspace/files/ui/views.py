@@ -800,6 +800,7 @@ def view_file(request, uuid):
     if reason is not None:
         return HttpResponse(
             render_viewer_panel(
+                '<div data-viewer-blocked="1" hidden></div>'
                 '<inline-alert type="error" title="Quarantined" '
                 'message="The malware scanner flagged this file, so its '
                 'contents cannot be shown."></inline-alert>'

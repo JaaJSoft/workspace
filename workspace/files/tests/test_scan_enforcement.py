@@ -361,6 +361,9 @@ class ViewerPanelEnforcementTests(APITestCase):
         resp = self.client.get(f"/files/view/{self.file.uuid}")
         self.assertEqual(resp.status_code, 403)
         self.assertIn(b"Quarantined", resp.content)
+        # The modal reads this marker to hide its own Download button -
+        # $ajax doesn't expose the HTTP status to the component.
+        self.assertIn(b"data-viewer-blocked", resp.content)
 
     @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
     def test_viewer_panel_renders_when_scanning_is_off(self):

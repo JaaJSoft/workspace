@@ -23,8 +23,7 @@ from workspace.ai.tools import (
     WebSearchParams,
     WebToolProvider,
 )
-
-from .pdf_fixtures import make_pdf
+from workspace.common.tests.pdf_fixtures import make_pdf
 
 
 class IsUrlSafeTests(TestCase):

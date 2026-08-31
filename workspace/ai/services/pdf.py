@@ -1,107 +1,49 @@
 """Text extraction from PDF documents fetched by the web tools."""
 
-import io
 import logging
 import re
-from dataclasses import dataclass
 
-from pypdf import PasswordType, PdfReader
-from pypdf.errors import PdfReadError
-
+from workspace.common.documents.extraction import ExtractedDocument, extract_document
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
-MAX_PAGES = 50
+# What a reader can usefully be handed from one document. The web tool trims
+# again to its own budget; this is the ceiling on what is read at all.
+MAX_CHARS = 200_000
 
 _BLANK_RUN_RE = re.compile(r"\n{3,}")
 _TRAILING_SPACE_RE = re.compile(r"[ \t]+\n")
 
 
-@dataclass(frozen=True)
-class PdfDocument:
-    """A PDF reduced to what a reader needs: its text and how much was left."""
+def extract_pdf(data: bytes, *, max_chars: int = MAX_CHARS) -> ExtractedDocument:
+    """Extract the text of a PDF, reading at most *max_chars* characters.
 
-    text: str
-    title: str
-    date: str
-    page_count: int
-    pages_read: int
-
-
-def _open(data: bytes) -> PdfReader:
-    """Open a PDF, mapping every way it can fail onto ``ValueError``."""
-    try:
-        reader = PdfReader(io.BytesIO(data))
-    except (PdfReadError, OSError, RecursionError, ValueError) as exc:
-        raise ValueError(f"Could not read PDF: {exc}") from exc
-
-    if not reader.is_encrypted:
-        return reader
-    # An empty user password is the "printing restricted" case, which every
-    # reader opens; a real one leaves the pages encrypted.
-    try:
-        unlocked = reader.decrypt("") != PasswordType.NOT_DECRYPTED
-    except Exception as exc:
-        logger.debug("PDF decryption failed: %s", scrub(exc))
-        unlocked = False
-    if not unlocked:
-        raise ValueError("PDF is password-protected")
-    return reader
-
-
-def _metadata(reader: PdfReader) -> tuple[str, str]:
-    """Return the document title and creation date, empty when unreadable."""
-    try:
-        meta = reader.metadata
-        if meta is None:
-            return "", ""
-        title = (meta.title or "").strip()
-        created = meta.creation_date
-    except Exception as exc:
-        logger.debug("PDF metadata unreadable: %s", scrub(exc))
-        return "", ""
-    return title, created.date().isoformat() if created else ""
-
-
-def _page_text(page, index: int) -> str:
-    """Extract one page, swallowing the failures a single page can raise.
-
-    A malformed font or content stream costs its own page; the rest of the
-    document is still worth reading.
-    """
-    try:
-        return page.extract_text() or ""
-    except Exception as exc:
-        logger.warning("PDF page %d unreadable: %s", index, scrub(exc))
-        return ""
-
-
-def extract_pdf(data: bytes, *, max_pages: int = MAX_PAGES) -> PdfDocument:
-    """Extract the text of a PDF, reading at most *max_pages* pages.
-
-    ``text`` comes back empty for an image-only PDF — a scan carries no text
+    ``text`` comes back empty for an image-only PDF - a scan carries no text
     layer at all, and the caller is expected to say so rather than report an
     empty page.
 
-    Raises ``ValueError`` when the document cannot be opened.
+    Raises ``ValueError`` when the document cannot be opened, or when it is
+    encrypted with a password we do not have.
     """
-    reader = _open(data)
     try:
-        page_count = len(reader.pages)
-        pages = [
-            _page_text(reader.pages[i], i) for i in range(min(page_count, max_pages))
-        ]
-    except (PdfReadError, OSError, RecursionError) as exc:
-        raise ValueError(f"Could not read PDF: {exc}") from exc
-
-    joined = "\n\n".join(page.strip() for page in pages if page.strip())
-    text = _BLANK_RUN_RE.sub("\n\n", _TRAILING_SPACE_RE.sub("\n", joined)).strip()
-    title, date = _metadata(reader)
-    return PdfDocument(
-        text=text,
-        title=title,
-        date=date,
-        page_count=page_count,
-        pages_read=len(pages),
+        document = extract_document(data, max_chars=max_chars)
+    except ValueError as exc:
+        # The underlying message names Tika classes and a Java object address.
+        # A reader is told what happened; which parser said so goes to the log.
+        logger.info("PDF could not be read: %s", scrub(exc))
+        raise ValueError("Could not read PDF") from exc
+    if document.encrypted and not document.text:
+        # A PDF encrypted with an empty user password only restricts what a
+        # reader may do with it, and Tika reads those; one that comes back
+        # with nothing to show is genuinely locked.
+        raise ValueError("PDF is password-protected")
+    text = _BLANK_RUN_RE.sub("\n\n", _TRAILING_SPACE_RE.sub("\n", document.text))
+    return ExtractedDocument(
+        text=text.strip(),
+        title=document.title,
+        date=document.date,
+        page_count=document.page_count,
+        encrypted=document.encrypted,
+        truncated=document.truncated,
     )

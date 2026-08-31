@@ -54,8 +54,11 @@ dependencies = [
     # web search & scraping
     "httpx2>=2.12.0",
     "trafilatura>=2.2.0",
-    # PDF text extraction for the AI web fetcher (pure Python, no extra deps)
-    "pypdf>=6.16.2",
+    # Apache Tika compiled ahead of time to a native library: text and
+    # metadata out of PDFs, Office and OpenDocument files without a JVM, a
+    # sidecar server, or a parser of our own to keep correct. One wheel per
+    # architecture, no Python dependencies of its own.
+    "iscc-tika>=0.6.0",
     # RSS/Atom parsing; also a trafilatura dependency, declared because the
     # feed parser imports it directly
     "lxml>=6.1.2",
@@ -94,6 +97,18 @@ dev = [
     "ruff==0.16.4",
     # HTML template linter/formatter (djlint workspace --lint / --reformat).
     "djlint>=1.44.2",
+    # Office authoring libraries, used only to write the fixtures the text
+    # extractors are tested against. A container built by hand encodes the same
+    # assumptions the extractor makes, so the two agree with each other rather
+    # than with Word; these emit the real part layout, namespaces and
+    # scaffolding. Never imported by application code - workspace/common/
+    # documents/office.py reads documents and depends on nothing but lxml.
+    # Only ever writes: the fixtures the extractor is tested against.
+    "pypdf>=6.16.2",
+    "python-docx>=1.2.0",
+    "openpyxl>=3.1.5",
+    "python-pptx>=1.0.2",
+    "odfpy>=1.4.1",
 ]
 
 [tool.djlint]

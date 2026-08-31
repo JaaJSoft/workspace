@@ -32,9 +32,10 @@ class FilesToolProvider(ToolProvider):
         concurrent=True,
     )
     def read_file(self, args, user, bot, conversation_id, context):
-        """Read the content of a file by its UUID. Supports text files (returns text) and images (returns the image). \
+        """Read the content of a file by its UUID. Returns text for text files and for documents (PDF, Word, Excel, PowerPoint, OpenDocument, rich text, ebooks), and the image itself for images. \
 Call this after finding a file via search_filenames or search_everything to get its content, \
-or when the user asks to read, open, view, or see a specific file."""
+or when the user asks to read, open, view, or see a specific file. \
+A scan with no text layer has nothing to return, and says so."""
         from workspace.files.models import File
         from workspace.files.services import FileService
 

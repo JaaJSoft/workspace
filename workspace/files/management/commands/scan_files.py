@@ -53,10 +53,18 @@ class Command(BaseCommand):
             )
             return
 
-        queryset = File.objects.filter(
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-        ).exclude(content="")
+        # Both exclusions are needed. Django renders exclude(content="") as
+        # NOT (content = '' AND content IS NOT NULL), so a NULL content makes
+        # the inner AND false and the row survives - it would then consume a
+        # --limit slot only for scan_file to return "not_applicable".
+        queryset = (
+            File.objects.filter(
+                node_type=File.NodeType.FILE,
+                deleted_at__isnull=True,
+            )
+            .exclude(content="")
+            .exclude(content__isnull=True)
+        )
         if not options["rescan"]:
             queryset = queryset.filter(scan__isnull=True)
 

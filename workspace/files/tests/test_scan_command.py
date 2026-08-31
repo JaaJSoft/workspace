@@ -96,3 +96,39 @@ class ScanFilesCommandTests(TestCase):
         _, delay = self._run()
         enqueued = {c.args[0] for c in delay.call_args_list}
         self.assertNotIn(str(trashed.uuid), enqueued)
+
+
+class ScanFilesNullContentTests(TestCase):
+    """A NULL content row survives exclude(content=""), so it needs its own guard."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="nullc", password="p")
+        self.real = File(owner=self.user, name="real.txt", node_type=File.NodeType.FILE)
+        self.real.content = ContentFile(b"body", name="real.txt")
+        self.real.size = 4
+        self.real.save()
+        self.null = File.objects.create(
+            owner=self.user, name="null.txt", node_type=File.NodeType.FILE
+        )
+        File.objects.filter(pk=self.null.pk).update(content=None)
+
+    def test_a_null_content_row_is_not_enqueued(self):
+        out = StringIO()
+        with (
+            override_settings(**ENABLED),
+            patch("workspace.files.tasks.scan_file.delay") as delay,
+        ):
+            call_command("scan_files", stdout=out)
+        enqueued = {c.args[0] for c in delay.call_args_list}
+        self.assertIn(str(self.real.uuid), enqueued)
+        self.assertNotIn(str(self.null.uuid), enqueued)
+
+    def test_a_null_content_row_does_not_consume_the_limit(self):
+        out = StringIO()
+        with (
+            override_settings(**ENABLED),
+            patch("workspace.files.tasks.scan_file.delay") as delay,
+        ):
+            call_command("scan_files", "--limit", "1", stdout=out)
+        self.assertEqual(delay.call_count, 1)
+        self.assertEqual(delay.call_args_list[0].args[0], str(self.real.uuid))

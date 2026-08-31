@@ -20,6 +20,7 @@ from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
 from .quota import check_write_allowed, subtree_bytes
+from .scanning.policy import exclude_blocked
 from .thumbnails.failures import clear_failure
 
 
@@ -668,18 +669,25 @@ class FileService:
 
         Deduplicates the input, keeps only non-trashed regular files the
         user can access (permissions checked in one bulk pass), and returns
-        None as soon as a single uuid is unknown, trashed, a folder or out
-        of reach - callers attach all-or-nothing and must not leak which of
-        the three it was.
+        None as soon as a single uuid is unknown, trashed, a folder, blocked
+        by the malware policy or out of reach - callers attach
+        all-or-nothing and must not leak which of the five it was.
+
+        The malware exclusion belongs here rather than at each caller: every
+        one of them copies the blob into a table with no scan row of its own
+        (a chat attachment, an SMTP payload, a task attachment), so a blocked
+        file that got through would never be re-examined.
         """
         file_uuids = list(dict.fromkeys(file_uuids))
         if not file_uuids:
             return []
         candidates = list(
-            File.objects.filter(
-                uuid__in=file_uuids,
-                node_type=File.NodeType.FILE,
-                deleted_at__isnull=True,
+            exclude_blocked(
+                File.objects.filter(
+                    uuid__in=file_uuids,
+                    node_type=File.NodeType.FILE,
+                    deleted_at__isnull=True,
+                )
             )
         )
         permissions = FileService.get_permissions_bulk(user, candidates)

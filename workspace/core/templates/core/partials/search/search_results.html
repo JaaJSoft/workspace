@@ -5,9 +5,8 @@
   - container_class: classes CSS pour le conteneur (optionnel)
   - size: 'lg' pour des éléments plus grands avec des icônes plus grandes (optionnel)
 
-  Le rappel de longueur minimale est un frère du conteneur de résultats, pas un
-  enfant: showResults() est faux en dessous de deux caractères, c'est justement
-  ce qui laissait le panneau vide.
+  The minimum-length hint is a sibling of the results container, not a child:
+  showResults() is false below two characters, which is what left it blank.
 {% endcomment %}
 <div x-show="showMinLengthHint()" x-cloak class="px-4 py-6 text-center">
   <i data-lucide="type" class="w-6 h-6 mx-auto mb-2 opacity-30"></i>
@@ -25,20 +24,18 @@
 >
 
   {% comment %}
-    Sticky pour rester visible quand la liste conservée defile, et de hauteur
-    nulle en flux pour que son apparition ne pousse pas les resultats.
+    Zero-height so the bar overlays rather than pushing the list down, sticky
+    so it survives scrolling through kept results.
   {% endcomment %}
   <div x-show="loading" x-cloak class="sticky top-0 z-10 h-0">
     <progress class="progress progress-primary block h-0.5 w-full rounded-none"></progress>
   </div>
 
-  {% comment %}
-    Squelettes uniquement quand il n'y a rien d'autre a montrer. Affiner une
-    requete conserve les resultats precedents: la barre porte le signal, la
-    liste ne clignote pas entre deux frappes.
-  {% endcomment %}
+  {# Only when there is nothing else to show: a refined query keeps its hits. #}
   <div x-show="showSkeleton()" x-cloak class="p-2" role="status">
-    <div class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider">
+    <div
+      class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
+    >
       Searching...
     </div>
     <template x-for="i in 3" :key="i">
@@ -60,13 +57,16 @@
     </template>
   </div>
 
-  <div x-show="error" x-cloak class="p-3">
-    <inline-alert
-      type="error"
-      title="Search is unavailable"
-      message="The search service could not be reached. Check your connection, then try again."
-    ></inline-alert>
-  </div>
+  {% comment %}
+    x-if, not x-show: the palette lives in base.html, so x-show would leave a
+    hidden inline-alert in every page's DOM, ahead of the real ones for any
+    selector that targets the bare tag.
+  {% endcomment %}
+  <template x-if="error">
+    <div class="p-3">
+      <inline-alert type="error" title="Search is unavailable" message="The search service could not be reached. Check your connection, then try again."></inline-alert>
+    </div>
+  </template>
 
   <!-- Commands / Actions -->
   <div x-show="commands.length > 0" class="p-2">

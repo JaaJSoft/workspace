@@ -188,11 +188,15 @@ class ExcludeBlockedTests(TestCase):
         with override_settings(**ENABLED, FILES_MALWARE_ON_DETECTION="flag"):
             self.assertEqual(exclude_blocked(File.objects.all()).count(), 3)
 
-    def test_exclusion_issues_no_extra_query_when_disabled(self):
+    def test_exclusion_returns_the_very_same_queryset_when_disabled(self):
+        """Identity, not a query count: ``status__in=frozenset()`` raises
+        EmptyResultSet, so an exclude() that was built anyway would collapse to
+        the same single query and hide a missing short-circuit."""
+        original = File.objects.all()
         with override_settings(FILES_MALWARE_SCAN_ENABLED=False):
-            qs = exclude_blocked(File.objects.all())
+            self.assertIs(exclude_blocked(original), original)
             with self.assertNumQueries(1):
-                self.assertEqual(qs.count(), 3)
+                self.assertEqual(original.count(), 3)
 
 
 class WithScanTests(TestCase):

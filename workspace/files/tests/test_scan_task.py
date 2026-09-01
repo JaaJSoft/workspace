@@ -3,9 +3,11 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from workspace.files.models import File, FileScan
 from workspace.files.services.scanning.base import ScanVerdict
+from workspace.files.services.scanning.policy import is_blocked
 from workspace.files.tasks import scan_file
 
 User = get_user_model()
@@ -187,6 +189,71 @@ class ScanTaskTests(TestCase):
         with patch("workspace.files.services.search_index.index_file") as index:
             self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
         index.assert_called_once()
+
+    def test_a_file_coming_back_clean_gets_its_thumbnail_back(self):
+        """Quarantining deleted it, so clearing the quarantine owes it back."""
+        f = self._file(name="a.png")
+        File.objects.filter(pk=f.pk).update(type="png")
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+        with patch(
+            "workspace.files.services.thumbnails.generation.generate_thumbnail",
+            return_value=True,
+        ) as generate:
+            self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        generate.assert_called_once()
+        f.refresh_from_db()
+        self.assertTrue(f.has_thumbnail)
+
+    def test_a_clearance_does_not_carry_over_to_replaced_content(self):
+        """An administrator vouched for h1; the verdict about h2 is nobody's.
+
+        The clearance pins itself to FileScan.content_hash, and this task
+        overwrites that field - so leaving the override columns alone would
+        hand the new bytes a clearance nobody granted them.
+        """
+        f = self._file()
+        File.objects.filter(pk=f.pk).update(content_hash="h1")
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+        FileScan.objects.filter(file=f).update(
+            overridden_at=timezone.now(),
+            overridden_by=self.user,
+            override_reason="Confirmed benign",
+        )
+        f.refresh_from_db()
+        with override_settings(**ENABLED):
+            self.assertFalse(is_blocked(f))
+
+        File.objects.filter(pk=f.pk).update(content_hash="h2")
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Real"))
+
+        f.refresh_from_db()
+        with override_settings(**ENABLED):
+            self.assertTrue(is_blocked(f))
+        scan = FileScan.objects.get(file=f)
+        self.assertIsNone(scan.overridden_at)
+        self.assertIsNone(scan.overridden_by)
+        self.assertEqual(scan.override_reason, "")
+
+    def test_a_clearance_survives_a_rescan_of_the_very_same_bytes(self):
+        """Otherwise the next scan_files pass undoes every clearance."""
+        f = self._file()
+        File.objects.filter(pk=f.pk).update(content_hash="h1")
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+        FileScan.objects.filter(file=f).update(
+            overridden_at=timezone.now(), overridden_by=self.user
+        )
+
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+
+        f.refresh_from_db()
+        with override_settings(**ENABLED):
+            self.assertFalse(is_blocked(f))
+        self.assertIsNotNone(FileScan.objects.get(file=f).overridden_at)
 
     def _run_racing(self, file_obj, verdict, new_hash):
         scanner = _RacingScanner(verdict, file_obj, new_hash)

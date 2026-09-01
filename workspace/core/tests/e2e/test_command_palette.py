@@ -6,6 +6,8 @@ and mails out. The list is filtered from the commands the page already
 embeds, so the unified search endpoint is never asked.
 """
 
+from playwright.sync_api import expect
+
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 
 PALETTE = ".navbar [x-data*='commandPaletteDropdown']"
@@ -36,9 +38,13 @@ class CommandPaletteActionsModeTests(PlaywrightTestCase):
 
         self.assertEqual(self.page.input_value(INPUT), ">")
         self.assertTrue(self.page.is_visible(NOTES_APP))
-        self.assertTrue(
-            self.page.evaluate("document.activeElement.tagName === 'INPUT'")
-        )
+        # Retried rather than read once: enterCommandMode opens the dropdown
+        # and focuses the input in a $nextTick, so the wait above can return
+        # in between the two. Naming the palette's own input also says more
+        # than asking whether some input somewhere holds the focus - and
+        # .first because the navbar carries the palette twice, desktop and
+        # mobile, which the other assertions here already resolve that way.
+        expect(self.page.locator(INPUT).first).to_be_focused()
         self.assertEqual(self.search_requests, [])
 
     def test_typing_after_the_prefix_narrows_the_actions(self):

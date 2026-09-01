@@ -85,7 +85,7 @@
           switched between them would be a button whose meaning depends on the
           state, so they get a line each.
         {% endcomment %}
-        <div x-show="panelCarries('totp')">
+        <div x-show="panelCarries('totp') && panelHasAction('copy_totp')">
           <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Authenticator code</div>
           <div class="flex items-center gap-2">
             <template x-if="totp && totp.unreadable">

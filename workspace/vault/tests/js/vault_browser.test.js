@@ -823,6 +823,70 @@ test('navigating away takes the revealed value with it', async () => {
   assert.deepStrictEqual({ ...component.revealed }, {});
 });
 
+test('opening another entry drops the value revealed for the last one', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryRow('e-1'), entryRow('e-2')],
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), true);
+  component.openEntryFromRow(component.entries[1]);
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
+test('a decryption that lands after the vault locked is dropped, not shown', async () => {
+  // The same shape as the stale-menu-answer tests above: the promise is held
+  // open by hand so the assertion can land the panel somewhere else before
+  // the decryption resolves. Only the password's own decryption is held open -
+  // the listing's own opens (name, username) must resolve normally or load()
+  // itself never returns.
+  let resolveOpen;
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    crypto: {
+      open: (key, ciphertext, ad) => {
+        if (!String(ad).endsWith('|password')) {
+          return Promise.resolve(new TextEncoder().encode('open:' + ad));
+        }
+        return new Promise((resolve) => {
+          resolveOpen = () => resolve(new TextEncoder().encode('open:' + ad));
+        });
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  const reveal = component.toggleReveal('password');
+  // toggleReveal awaits openEntryKey before it ever reaches V.open, so
+  // resolveOpen is not assigned yet on this same tick - give it the queued
+  // microtasks it needs before locking and letting the decryption through.
+  await settle();
+  component.onLocked();
+  resolveOpen();
+  await reveal;
+  await settle();
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
+test('the reveal button is gated on the same action id as the copy button', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [] }),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelHasAction('copy_password'), false);
+});
+
 // --- the entry form, driven by the type registry ---------------------------
 
 const LOGIN_TYPE = {

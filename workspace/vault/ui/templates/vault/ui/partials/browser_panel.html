@@ -57,9 +57,11 @@
               class="flex-1 font-mono break-all"
               x-text="isRevealed('password') ? revealedValue('password') : '••••••••••'"
             ></span>
+            {# The registry has no id of its own for revealing - a row whose copy_password is hidden (a trashed entry) must not show its password either. #}
             <button
               type="button"
               class="btn btn-ghost btn-xs btn-square"
+              x-show="panelHasAction('copy_password')"
               @click="toggleReveal('password')"
               :aria-label="isRevealed('password') ? 'Hide the password' : 'Reveal the password'"
             >

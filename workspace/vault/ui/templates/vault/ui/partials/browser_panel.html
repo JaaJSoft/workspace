@@ -92,7 +92,7 @@
               <span class="flex-1 text-sm opacity-60">This key cannot be read.</span>
             </template>
             <template x-if="totp && !totp.unreadable">
-              <span class="flex-1 font-mono tracking-widest" x-text="totp.code"></span>
+              <span class="flex-1 font-mono tracking-widest" data-totp-code x-text="totp.code"></span>
             </template>
             <span
               class="text-xs opacity-50 tabular-nums"

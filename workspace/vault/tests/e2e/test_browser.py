@@ -17,10 +17,13 @@ through it - which is exactly what makes the database the right place to
 imitate a hostile server.
 """
 
+import time
+
 from django.core.cache import cache
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.vault.models import VaultEntry, VaultTag
+from workspace.vault.tests.reference import totp
 
 GOOD_PASSWORD = "correct-horse-battery-staple-42"
 CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
@@ -117,6 +120,29 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.fill(".modal-box input[type=password]", password)
         self.page.click(".modal-box button:has-text('Save')")
         self.page.wait_for_selector(f"tbody tr:has-text('{name}')", timeout=30000)
+
+    # The key the RFC 4648 examples use, and the one the browser tests read
+    # back through the reference implementation.
+    TOTP_SECRET = "JBSWY3DPEHPK3PXP"
+
+    def _add_totp_key(self, name):
+        """Open an entry's dialog and put an authenticator key in it.
+
+        Through the control rather than through the API: what this test is for
+        is that a key can be entered at all, which was impossible before this
+        change - the form dropped the field on its way in and on its way out.
+        """
+        self.page.click(f"tbody tr:has-text('{name}')")
+        self.page.locator(PANEL).get_by_role("button", name="Edit").click()
+        self.page.wait_for_selector(".modal-box")
+        self.page.get_by_role("button", name="Add").click()
+        self.page.fill(".modal-box input[placeholder='Key or otpauth:// address']", self.TOTP_SECRET)
+        self.page.click(".modal-box button:has-text('Save')")
+        # Scoped to the entry dialog itself: the page carries several other
+        # ``.modal-box`` elements (help, prompts, the file picker) that stay
+        # in the DOM - out of view but not display:none - the whole time, so
+        # a bare ``.modal-box`` never reports hidden.
+        self.page.wait_for_selector(".modal-box:has-text('Save')", state="hidden", timeout=30000)
 
     # ---- the walk ---------------------------------------------------------
 
@@ -374,3 +400,87 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.goto(f"{self.live_server_url}/vault?action=new")
         self._unlock()
         self.page.wait_for_selector(".modal.modal-open", timeout=30000)
+
+    def test_no_vault_content_field_is_eligible_for_autofill(self):
+        """The browser's own password manager must not offer to save vault
+        entries, and no field content may reach a remote spell checker.
+
+        Read off the rendered page rather than off the templates: a field a
+        component inserts at runtime is exactly the one a template scan misses.
+        """
+        self._open_vault()
+        self.page.get_by_role("button", name="New", exact=True).click()
+        self.page.get_by_role("button", name="New login").first.click()
+        self.page.wait_for_selector(".modal-box input[type=text]")
+        # The authenticator key input only exists once its control is opened,
+        # so the audit has to open it to see it.
+        self.page.get_by_role("button", name="Add").click()
+        # Scoped to the entry dialog: the shared layout also mounts the help,
+        # prompt and file-picker dialogs on this page, and their fields are
+        # someone else's surface to harden.
+        offenders = self.page.eval_on_selector_all(
+            ".modal-box:has-text('Save') input, .modal-box:has-text('Save') textarea",
+            """(nodes) => nodes
+                .filter((node) => !['checkbox', 'radio', 'hidden'].includes(node.type))
+                .filter((node) => node.autocomplete !== 'current-password')
+                .filter((node) => node.autocomplete !== 'off' || node.spellcheck !== false)
+                .map((node) => node.placeholder || node.name || node.outerHTML.slice(0, 90))""",
+        )
+        self.assertEqual(offenders, [])
+
+    def test_a_revealed_password_is_hidden_again_when_the_panel_closes(self):
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self.page.click("tbody tr:has-text('GitHub')")
+        panel = self.page.locator(PANEL)
+        panel.wait_for(timeout=10000)
+        self.assertNotIn("hunter2", panel.inner_text())
+
+        self.page.click("button[aria-label='Reveal the password']")
+        self.page.wait_for_selector("button[aria-label='Hide the password']")
+        self.assertIn("hunter2", panel.inner_text())
+
+        self.page.click("button[aria-label='Close the panel']")
+        self.page.click("tbody tr:has-text('GitHub')")
+        panel.wait_for(timeout=10000)
+        # Reopening must not bring the value back: the reveal is per visit.
+        self.assertNotIn("hunter2", panel.inner_text())
+        self.page.wait_for_selector("button[aria-label='Reveal the password']")
+
+    def test_the_one_time_code_matches_the_reference_implementation(self):
+        """The bundle against the Python oracle in a real engine.
+
+        The node:vm parity suite runs the same bundle under another realm, and
+        cbor-x already proved that is not the same thing.
+        """
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self._add_totp_key("GitHub")
+        self.page.click("tbody tr:has-text('GitHub')")
+        panel = self.page.locator(PANEL)
+        panel.wait_for(timeout=10000)
+        code = panel.locator("[data-totp-code]")
+        code.wait_for(timeout=15000)
+        shown = code.inner_text().strip()
+
+        secret = totp.base32_decode(self.TOTP_SECRET)
+        now = int(time.time())
+        # The period may roll over between the render and this line, so the
+        # previous window counts as agreement. Widening the product's window
+        # to make a test pass would be the wrong repair.
+        accepted = {
+            totp.totp_code(secret, algorithm="SHA1", digits=6, period=30, at=at)
+            for at in (now, now - 30)
+        }
+        self.assertIn(shown, accepted)
+
+    def test_copying_the_one_time_code_never_copies_the_key(self):
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self._add_totp_key("GitHub")
+        self.page.click("tbody tr:has-text('GitHub')")
+        self.page.wait_for_selector("button[aria-label='Copy the authenticator code']")
+        self.page.click("button[aria-label='Copy the authenticator code']")
+        copied = self.page.evaluate("() => navigator.clipboard.readText()")
+        self.assertRegex(copied, r"^[0-9]{6}$")
+        self.assertNotIn(self.TOTP_SECRET, copied)

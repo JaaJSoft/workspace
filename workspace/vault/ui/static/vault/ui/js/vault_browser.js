@@ -590,9 +590,12 @@ window.vaultBrowser = (function () {
 
       isRevealed: function (fieldId) {
         if (!this.panelEntry) return false;
-        return Object.prototype.hasOwnProperty.call(
-          this.revealed, this.panelEntry.uuid + '|' + fieldId
-        );
+        // `in`, not `hasOwnProperty.call`: the latter reads through the
+        // reactive proxy's getOwnPropertyDescriptor trap, which Alpine does
+        // not instrument, so a slot appearing in `revealed` would update
+        // this method's return value without ever re-running the template
+        // that calls it.
+        return (this.panelEntry.uuid + '|' + fieldId) in this.revealed;
       },
 
       revealedValue: function (fieldId) {

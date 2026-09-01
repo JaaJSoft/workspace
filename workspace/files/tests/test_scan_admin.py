@@ -383,3 +383,160 @@ class FileScanAdminOverrideTests(TestCase):
 
         self.scan.refresh_from_db()
         self.assertIsNotNone(self.scan.overridden_at)
+
+
+@override_settings(**BLOCKING_SETTINGS)
+class FileScanAdminRowActionTests(TestCase):
+    """Clearing one row without touching the bulk-selection machinery."""
+
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            username="rowroot", email="rowroot@example.com", password="p"
+        )
+        self.client.force_login(self.admin_user)
+        owner = User.objects.create_user(username="rowowner", password="p")
+        self.file = File.objects.create(
+            owner=owner,
+            name="report.doc",
+            node_type=File.NodeType.FILE,
+            content_hash="h1",
+        )
+        self.scan = FileScan.objects.create(
+            file=self.file,
+            status=FileScan.Status.INFECTED,
+            signature="Heuristics.False.Positive",
+            content_hash="h1",
+            scanned_at=timezone.now(),
+        )
+        self.url = f"/admin/files/filescan/{self.scan.pk}/clear-quarantine/"
+
+    def test_the_changelist_renders_the_row_button(self):
+        """Posting to the URL is not proof the operator can reach it.
+
+        The bulk action shipped broken once because every test took the POST
+        path a real click never takes; this asserts the button is on the page.
+        """
+        resp = self.client.get("/admin/files/filescan/")
+        self.assertContains(resp, f"{self.scan.pk}/clear-quarantine/")
+
+    def test_a_get_opens_the_dialog_without_clearing_anything(self):
+        resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.scan.refresh_from_db()
+        self.assertIsNone(self.scan.overridden_at)
+
+    def test_submitting_the_dialog_clears_the_quarantine(self):
+        from workspace.files.services.scanning.policy import is_blocked
+
+        resp = self.client.post(
+            self.url,
+            {"_form_submitted": "1", "override_reason": "Confirmed benign"},
+            follow=True,
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.scan.refresh_from_db()
+        self.assertEqual(self.scan.overridden_by, self.admin_user)
+        self.assertEqual(self.scan.override_reason, "Confirmed benign")
+        self.file.refresh_from_db()
+        self.assertFalse(is_blocked(self.file))
+
+    def test_the_htmx_submit_tells_the_browser_to_navigate(self):
+        """The dialog posts through htmx, which swaps the response into the
+        modal instead of following a redirect - so the operator would sit on a
+        spinning dialog while the clearance had already happened. Only an
+        HX-Redirect header gets the page back to the changelist."""
+        resp = self.client.post(
+            self.url,
+            {"_form_submitted": "1", "override_reason": "x"},
+            headers={"hx-request": "true"},
+        )
+
+        self.assertEqual(resp.headers.get("HX-Redirect"), "/admin/files/filescan/")
+
+    def test_it_keeps_the_verdict_it_overrides(self):
+        self.client.post(
+            self.url, {"_form_submitted": "1", "override_reason": "x"}, follow=True
+        )
+
+        self.scan.refresh_from_db()
+        self.assertEqual(self.scan.status, FileScan.Status.INFECTED)
+        self.assertEqual(self.scan.signature, "Heuristics.False.Positive")
+
+    def test_a_staff_user_without_the_permission_is_refused(self):
+        viewer = User.objects.create_user(
+            username="rowviewer", password="p", is_staff=True
+        )
+        viewer.user_permissions.add(Permission.objects.get(codename="view_filescan"))
+        self.client.force_login(viewer)
+
+        resp = self.client.post(
+            self.url, {"_form_submitted": "1", "override_reason": "x"}
+        )
+
+        self.assertEqual(resp.status_code, 403)
+        self.scan.refresh_from_db()
+        self.assertIsNone(self.scan.overridden_at)
+
+    def test_a_verdict_about_older_bytes_is_refused_with_a_warning(self):
+        File.objects.filter(pk=self.file.pk).update(content_hash="h2")
+
+        resp = self.client.post(
+            self.url, {"_form_submitted": "1", "override_reason": "x"}, follow=True
+        )
+
+        self.scan.refresh_from_db()
+        self.assertIsNone(self.scan.overridden_at)
+        self.assertContains(resp, "Re-scan it first")
+
+
+@override_settings(**BLOCKING_SETTINGS)
+class FileScanAdminQuarantineColumnTests(TestCase):
+    """The changelist answers "what is blocked right now?", not "what was scanned"."""
+
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            username="colroot", email="colroot@example.com", password="p"
+        )
+        self.client.force_login(self.admin_user)
+        self.owner = User.objects.create_user(username="colowner", password="p")
+
+    def _scan(self, name, status, **fields):
+        f = File.objects.create(
+            owner=self.owner,
+            name=name,
+            node_type=File.NodeType.FILE,
+            content_hash="h1",
+        )
+        return FileScan.objects.create(
+            file=f,
+            status=status,
+            content_hash="h1",
+            scanned_at=timezone.now(),
+            **fields,
+        )
+
+    def test_a_blocking_verdict_reads_as_quarantined(self):
+        self._scan("bad.txt", FileScan.Status.INFECTED)
+
+        self.assertContains(self.client.get("/admin/files/filescan/"), "Quarantined")
+
+    def test_a_cleared_verdict_reads_as_cleared(self):
+        self._scan(
+            "ok.txt",
+            FileScan.Status.INFECTED,
+            overridden_at=timezone.now(),
+            overridden_by=self.admin_user,
+        )
+
+        resp = self.client.get("/admin/files/filescan/")
+        self.assertContains(resp, "Cleared")
+        self.assertNotContains(resp, "Quarantined")
+
+    def test_a_clean_verdict_reads_as_neither(self):
+        self._scan("fine.txt", FileScan.Status.CLEAN)
+
+        resp = self.client.get("/admin/files/filescan/")
+        self.assertNotContains(resp, "Quarantined")
+        self.assertNotContains(resp, "Cleared")

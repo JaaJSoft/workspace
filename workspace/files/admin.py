@@ -2,10 +2,16 @@ from collections import Counter
 
 from django import forms
 from django.contrib import admin, messages
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.template.defaultfilters import filesizeformat
+from django.urls import reverse
 from unfold.admin import ModelAdmin, StackedInline
 from unfold.contrib.filters.admin import RangeDateTimeFilter
-from unfold.forms import ActionForm
+from unfold.decorators import action as unfold_action
+from unfold.decorators import display
+from unfold.enums import ActionVariant
+from unfold.forms import ActionForm, BaseDialogForm
 from unfold.widgets import UnfoldAdminTextInputWidget
 
 from .models import (
@@ -25,6 +31,7 @@ from .services.quota import (
     personal_usage,
     personal_usage_subquery,
 )
+from .services.scanning.policy import blocked_statuses, override_applies
 from .services.thumbnails.failures import retry_failures
 
 
@@ -126,6 +133,26 @@ class _MarkSafeActionForm(ActionForm):
     still passes.
     """
 
+    # No label: the action bar lays its fields out in a row, and a label above
+    # the input makes that one cell taller than the select and the run button.
+    # The placeholder carries the meaning instead, exactly as unfold's own
+    # action field does.
+    override_reason = forms.CharField(
+        required=False,
+        max_length=500,
+        label="",
+        widget=UnfoldAdminTextInputWidget(
+            attrs={"placeholder": "Clearance reason (optional)"}
+        ),
+    )
+
+
+class _ClearQuarantineDialogForm(BaseDialogForm):
+    """The one-row version of the same question, asked in a dialog.
+
+    A dialog has room for a label, so unlike the bulk bar this one keeps it.
+    """
+
     override_reason = forms.CharField(
         required=False,
         max_length=500,
@@ -134,6 +161,17 @@ class _MarkSafeActionForm(ActionForm):
             attrs={"placeholder": "Why this detection is wrong"}
         ),
     )
+
+
+_CLEAR_DIALOG = {
+    "title": "Clear this quarantine",
+    "description": (
+        "The file becomes readable again. Its verdict and signature stay on "
+        "the record, together with your name and the reason below."
+    ),
+    "form_class": _ClearQuarantineDialogForm,
+    "form_submit_text": "Clear the quarantine",
+}
 
 
 @admin.register(FileScan)
@@ -151,7 +189,7 @@ class FileScanAdmin(ModelAdmin):
         "status",
         "signature",
         "is_current",
-        "overridden_at",
+        "quarantine",
         "scanned_at",
     )
     list_filter = ("status", "overridden_at", "scanned_at")
@@ -160,6 +198,7 @@ class FileScanAdmin(ModelAdmin):
     ordering = ("-scanned_at",)
 
     actions = ("rescan_files", "mark_safe")
+    actions_row = ("clear_quarantine",)
     action_form = _MarkSafeActionForm
 
     # Rows are written by the scan worker; there is nothing to author by hand.
@@ -187,6 +226,81 @@ class FileScanAdmin(ModelAdmin):
     def has_override_permission(self, request):
         """Backs ``permissions=["override"]`` on the mark_safe action."""
         return request.user.has_perm("files.override_filescan")
+
+    # The label has to fit unfold's w-48 row dropdown, which truncates rather
+    # than wraps, and the icon has to be a real Material Symbols ligature - an
+    # unknown name renders as its own text in the menu.
+    @unfold_action(
+        description="Clear quarantine",
+        url_path="clear-quarantine",
+        permissions=["files.override_filescan"],
+        icon="gpp_good",
+        variant=ActionVariant.SUCCESS,
+        dialog=_CLEAR_DIALOG,
+    )
+    def clear_quarantine(self, request, form, object_id):
+        """The single-row path: no checkbox, no bulk dropdown, one dialog.
+
+        unfold hands row actions the request only, never the object, so this
+        button shows on every row - including the ones nothing is withholding.
+        The outcomes below say which case the operator landed on, which is why
+        mark_safe reports three of them rather than a boolean.
+        """
+        from workspace.files.services.scanning.override import (
+            LIFTED,
+            UNPINNABLE,
+            mark_safe,
+        )
+
+        scan = get_object_or_404(FileScan.objects.select_related("file"), pk=object_id)
+        outcome = mark_safe(
+            scan, user=request.user, reason=form.cleaned_data["override_reason"]
+        )
+
+        if outcome == LIFTED:
+            self.message_user(
+                request,
+                f"Cleared the quarantine on {scan.file}. The verdict is kept "
+                "for the record.",
+                messages.SUCCESS,
+            )
+        elif outcome == UNPINNABLE:
+            self.message_user(
+                request,
+                "This verdict does not describe the file's current content, so "
+                "clearing it would have no effect. Re-scan it first.",
+                messages.WARNING,
+            )
+        else:
+            self.message_user(
+                request, "That verdict was not blocking anything.", messages.INFO
+            )
+
+        changelist = reverse(f"{self.admin_site.name}:files_filescan_changelist")
+        if request.headers.get("HX-Request"):
+            # The dialog posts through htmx, which swaps the response into the
+            # modal rather than following a redirect - the operator would be
+            # left on a spinning dialog over a clearance that already happened.
+            # This header is what makes the browser navigate instead.
+            response = HttpResponse(status=204)
+            response["HX-Redirect"] = changelist
+            return response
+        return redirect(changelist)
+
+    @display(
+        description="Quarantine",
+        label={"Quarantined": "danger", "Cleared": "success"},
+    )
+    def quarantine(self, obj):
+        """Whether this verdict is withholding the file right now.
+
+        The derived answer, which neither the status nor a clearance timestamp
+        gives on its own. Computed from the row and its joined file rather than
+        through is_blocked(file), which would re-fetch file.scan once per row.
+        """
+        if obj.status not in blocked_statuses():
+            return None
+        return "Cleared" if override_applies(obj, obj.file) else "Quarantined"
 
     @admin.action(
         description="Clear the quarantine (false positive)",

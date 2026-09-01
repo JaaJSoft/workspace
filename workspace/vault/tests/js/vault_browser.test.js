@@ -912,7 +912,7 @@ test('opening an entry with a key shows its code and its validity', async () => 
   });
   component.init();
   await component.load();
-  await component.startTotp(component.entries[0]);
+  await component.openEntryFromRow(component.entries[0]);
   assert.equal(component.totp.code, '123456');
   assert.equal(component.totp.secondsLeft, 17);
 });
@@ -924,7 +924,7 @@ test('the panel holds a key handle, never the secret', async () => {
   });
   component.init();
   await component.load();
-  await component.startTotp(component.entries[0]);
+  await component.openEntryFromRow(component.entries[0]);
   const held = JSON.stringify(component.totp);
   assert.ok(!held.includes('otpauth'), 'the uri must not survive in state');
   assert.ok(!held.includes('secret'), 'nothing secret-shaped survives in state');
@@ -940,7 +940,7 @@ test('a key that does not parse is reported without taking the entry down', asyn
   });
   component.init();
   await component.load();
-  await component.startTotp(component.entries[0]);
+  await component.openEntryFromRow(component.entries[0]);
   assert.equal(component.totp.unreadable, true);
   assert.equal(component.error, '', 'the rest of the entry is unaffected');
 });
@@ -952,7 +952,7 @@ test('an entry without a key has no totp state at all', async () => {
   });
   component.init();
   await component.load();
-  await component.startTotp(component.entries[0]);
+  await component.openEntryFromRow(component.entries[0]);
   assert.equal(component.totp, null);
 });
 
@@ -963,7 +963,7 @@ test('locking the vault drops the key handle', async () => {
   });
   component.init();
   await component.load();
-  await component.startTotp(component.entries[0]);
+  await component.openEntryFromRow(component.entries[0]);
   component.onLocked();
   await settle();
   assert.equal(component.totp, null);
@@ -1001,13 +1001,82 @@ test('the countdown rides the session tick and never resets the lock deadline', 
   });
   component.init();
   await component.load();
-  await component.startTotp(component.entries[0]);
+  await component.openEntryFromRow(component.entries[0]);
   assert.ok(tickCallbacks.length > 0, 'the refresh must subscribe through onTick');
   for (let i = 0; i < 50; i += 1) {
     tickCallbacks.forEach((callback) => callback());
   }
   await settle();
   assert.equal(noted, 0, 'refreshing the code must never touch the lock deadline');
+});
+
+test('closing the panel while a key is still decrypting leaves no code behind', async () => {
+  // The success-path staleness check has to be an identity comparison
+  // (`this.panelEntry !== entry`), not `this.panelEntry && ...uuid !== ...`:
+  // a closed panel sets panelEntry to null, and the `&&` form would short-
+  // circuit past that and resurrect the code under a panel showing nothing.
+  let resolveOpen;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [totpRow('e-1')],
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      open: (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|totp')) {
+          return new Promise((resolve) => {
+            resolveOpen = () => resolve(new TextEncoder().encode('open:' + ad));
+          });
+        }
+        return Promise.resolve(new TextEncoder().encode('open:' + ad));
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  const opening = component.openEntryFromRow(component.entries[0]);
+  await settle();
+  component.closePanel();
+  resolveOpen();
+  await opening;
+  assert.equal(component.totp, null, 'the code must not appear once the panel closed');
+});
+
+test('a key that fails to parse after the panel moved on reports nothing for the entry that left', async () => {
+  // The same race on the catch path: an unreadable-key report landing after
+  // the panel switched to another entry must not overwrite that entry's
+  // state with the previous row's failure.
+  let resolveOpen;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [totpRow('e-1'), entryRow('e-2')],
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      parseOtpauth: () => { throw new Error('unsupported algorithm MD5'); },
+      open: (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|totp')) {
+          return new Promise((resolve) => {
+            resolveOpen = () => resolve(new TextEncoder().encode('open:' + ad));
+          });
+        }
+        return Promise.resolve(new TextEncoder().encode('open:' + ad));
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  const opening = component.openEntryFromRow(component.entries[0]);
+  await settle();
+  await component.openEntryFromRow(component.entries[1]);
+  resolveOpen();
+  await opening;
+  assert.equal(
+    component.totp, null,
+    'no unreadable state must land under the entry that left the screen',
+  );
 });
 
 // --- the entry form, driven by the type registry ---------------------------

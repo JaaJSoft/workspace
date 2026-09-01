@@ -637,21 +637,28 @@ window.vaultBrowser = (function () {
         if (!entry || !(entry.fieldIds || []).includes('totp')) return;
         const row = this.rowFor(entry.uuid);
         if (!row || !this.openVault) return;
+        let key;
         let parsed;
         try {
           const uri = await window.vaultReader.openField(
             window.vaultSession, this.openVault, row, 'totp'
           );
           parsed = window.vaultCrypto.parseOtpauth(uri);
+          key = await window.vaultCrypto.importTotpKey(parsed);
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          // The panel may have moved to another entry, or closed, while this
+          // was in flight - a slow failure must not land under a row that is
+          // no longer the one on screen.
+          if (this.panelEntry !== entry) return;
           // Localised like a failed signature: this line says it cannot be
           // read, and the rest of the entry is shown as usual.
           this.totp = { entryUuid: entry.uuid, unreadable: true };
           return;
         }
-        const key = await window.vaultCrypto.importTotpKey(parsed);
-        if (this.panelEntry && this.panelEntry.uuid !== entry.uuid) return;
+        // Same check on the success path: an identity comparison, not a uuid
+        // one, so a panel closed mid-flight (panelEntry null) is caught too.
+        if (this.panelEntry !== entry) return;
         this.totp = {
           entryUuid: entry.uuid,
           key: key,
@@ -710,7 +717,7 @@ window.vaultBrowser = (function () {
       openEntryFromRow: function (entry) {
         this.panelEntry = entry;
         this.revealed = {};
-        this.startTotp(entry);
+        return this.startTotp(entry);
       },
 
       closePanel: function () {

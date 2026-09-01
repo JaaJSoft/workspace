@@ -42,7 +42,12 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   // re-seal, and this refuses to write the record that would prove otherwise.
   const carried = draft.carriedFields || {};
   const carriedIds = Object.keys(carried);
-  if (carriedIds.length && (draft.keyVersion || keyVersion) !== keyVersion) {
+  // Notes carry the same way a field does when the draft has no typed
+  // plaintext for them (see encryptedNotes below), so a mismatched key
+  // version has to refuse the write on their account too - not just when a
+  // field slot is carried.
+  const carriesNotes = !draft.notes && !!draft.encryptedNotes;
+  if ((carriedIds.length || carriesNotes) && (draft.keyVersion || keyVersion) !== keyVersion) {
     throw new Error(
       `cannot carry fields sealed under key version ${draft.keyVersion} into ${keyVersion}`,
     );

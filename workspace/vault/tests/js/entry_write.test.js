@@ -191,6 +191,24 @@ test('carrying a ciphertext sealed under another key version is refused', async 
   );
 });
 
+test('carrying a notes ciphertext sealed under another key version is refused', async () => {
+  // An entry with notes but no unedited field slot still carries
+  // encryptedNotes unchecked - the same silent, unrecoverable corruption the
+  // carriedFields guard exists to prevent, just for the one field that is a
+  // column instead of a slot.
+  const { ctx, session } = builder();
+  await assert.rejects(
+    ctx.buildEntryWriteRequest(session, VAULT, {
+      ...DRAFT,
+      values: { username: 'ada' },
+      notes: '',
+      encryptedNotes: 'ct:notes-as-stored',
+      keyVersion: VAULT.key_version - 1,
+    }),
+    /key version/i,
+  );
+});
+
 test('the signed payload covers the carried field', async () => {
   const { ctx, session, signed } = builder();
   await ctx.buildEntryWriteRequest(session, VAULT, {

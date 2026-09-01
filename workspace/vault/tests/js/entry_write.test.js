@@ -140,3 +140,64 @@ test('an entry that never had notes writes an empty column', async () => {
   const body = await ctx.buildEntryWriteRequest(session, VAULT, { ...DRAFT, notes: '' });
   assert.equal(body.encrypted_notes, '');
 });
+
+test('a field the form never opened survives the write', async () => {
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    values: { username: 'ada' },
+    // The row holds a totp the dialog does not edit. Rebuilding `fields` from
+    // `values` alone would drop it, and the drop is silent: the record still
+    // verifies, because it is re-signed without the field.
+    carriedFields: { totp: 'ct:totp' },
+    keyVersion: VAULT.key_version,
+  });
+  assert.equal(body.fields.totp, 'ct:totp');
+  assert.ok(body.fields.username, 'the edited field is still written');
+});
+
+test('an edited field wins over the carried ciphertext', async () => {
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    values: { password: 'typed' },
+    carriedFields: { password: 'ct:stale' },
+    keyVersion: VAULT.key_version,
+  });
+  assert.notEqual(body.fields.password, 'ct:stale');
+});
+
+test('an emptied field is removed even when it was carried', async () => {
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    values: { totp: '' },
+    carriedFields: { totp: 'ct:totp' },
+    keyVersion: VAULT.key_version,
+  });
+  assert.ok(!('totp' in body.fields), 'clearing a field must beat carrying it');
+});
+
+test('carrying a ciphertext sealed under another key version is refused', async () => {
+  const { ctx, session } = builder();
+  await assert.rejects(
+    ctx.buildEntryWriteRequest(session, VAULT, {
+      ...DRAFT,
+      values: { username: 'ada' },
+      carriedFields: { totp: 'ct:totp' },
+      keyVersion: VAULT.key_version - 1,
+    }),
+    /key version/i,
+  );
+});
+
+test('the signed payload covers the carried field', async () => {
+  const { ctx, session, signed } = builder();
+  await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    values: { username: 'ada' },
+    carriedFields: { totp: 'ct:totp' },
+    keyVersion: VAULT.key_version,
+  });
+  assert.equal(signed[0].fields.totp, 'ct:totp');
+});

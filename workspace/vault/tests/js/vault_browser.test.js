@@ -847,6 +847,23 @@ test('editing carries the notes ciphertext without opening it', async () => {
   );
 });
 
+test('editing an entry carries the fields the dialog does not edit', async () => {
+  const row = entryWith('e-1', {
+    entry_fields: [
+      { field_id: 'username', encrypted_value: 'ct:username' },
+      { field_id: 'totp', encrypted_value: 'ct:totp' },
+    ],
+  });
+  const { component } = typed({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [row]) },
+  });
+  component.init();
+  await component.load();
+  await component.editEntry(component.entries[0]);
+  assert.deepStrictEqual({ ...component.draft.carriedFields }, { totp: 'ct:totp' });
+  assert.ok(!('totp' in component.draft.values), 'the key is never opened for the form');
+});
+
 test('saving a new entry posts, saving an edit puts', async () => {
   const calls = [];
   const { component } = typed({

@@ -9,6 +9,10 @@
 // A field's key is derived per entry, so an empty value is a *removed*
 // field rather than an empty ciphertext. Sealing "" would leave a row
 // claiming to carry a password and an action endpoint offering to copy one.
+//
+// A field the form does not edit is carried as its stored ciphertext rather
+// than re-sealed: the AD binds it to this entry and this slot, so it cannot be
+// moved, and re-sealing would need a plaintext this page has no reason to open.
 window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   session,
   vault,
@@ -26,9 +30,32 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
     );
 
   const fields = {};
+  // Ciphertexts the form never opened, carried through rather than re-sealed -
+  // the same treatment encrypted_notes already gets, for the same reason: the
+  // record is signed whole, so a field absent from the payload is a field
+  // deleted.
+  //
+  // Their key version has to match the one being written. `open` takes the key
+  // it is handed and ignores the version in the header, so a ciphertext sealed
+  // under an older vault key would be stored inside a record claiming the new
+  // one and would never open again - silently. Rotation is therefore a full
+  // re-seal, and this refuses to write the record that would prove otherwise.
+  const carried = draft.carriedFields || {};
+  const carriedIds = Object.keys(carried);
+  if (carriedIds.length && (draft.keyVersion || vault.key_version) !== vault.key_version) {
+    throw new Error(
+      `cannot carry fields sealed under key version ${draft.keyVersion} into ${keyVersion}`,
+    );
+  }
+  for (const fieldId of carriedIds.sort()) {
+    fields[fieldId] = carried[fieldId];
+  }
   for (const fieldId of Object.keys(draft.values || {}).sort()) {
     const value = draft.values[fieldId];
-    if (value === '' || value === null || value === undefined) continue;
+    if (value === '' || value === null || value === undefined) {
+      delete fields[fieldId];
+      continue;
+    }
     fields[fieldId] = await seal(String(value), fieldId);
   }
 

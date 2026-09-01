@@ -779,6 +779,8 @@ window.vaultBrowser = (function () {
           name: '',
           notes: '',
           values: {},
+          carriedFields: {},
+          keyVersion: (this.openVault && this.openVault.key_version) || 1,
           entryVersion: 1,
           isNew: true,
         };
@@ -791,7 +793,13 @@ window.vaultBrowser = (function () {
         const row = this.rowFor(entry.uuid);
         if (!row || !this.openVault) return;
         const values = {};
+        const carriedFields = {};
         const type = this.typeFor(entry.type);
+        const editable = new Set(
+          (type ? type.fields : [])
+            .filter(function (field) { return field.kind !== 'totp'; })
+            .map(function (field) { return field.field_id; }),
+        );
         try {
           for (const field of type ? type.fields : []) {
             if (field.kind === 'totp') continue;
@@ -806,6 +814,14 @@ window.vaultBrowser = (function () {
           return;
         }
         if (!window.vaultSession.isUnlocked()) return;
+        // Everything the dialog does not edit - the authenticator key, and any
+        // field a future type declares - travels as its ciphertext. Rebuilding
+        // the record from the form alone would delete it.
+        (row.entry_fields || []).forEach(function (field) {
+          if (!editable.has(field.field_id)) {
+            carriedFields[field.field_id] = field.encrypted_value;
+          }
+        });
         this.draft = {
           uuid: entry.uuid,
           type: entry.type,
@@ -819,6 +835,8 @@ window.vaultBrowser = (function () {
           // an entry whose notes are gone.
           encryptedNotes: row.encrypted_notes || '',
           values: values,
+          carriedFields: carriedFields,
+          keyVersion: row.key_version || 1,
           entryVersion: row.entry_version || 1,
           isNew: false,
         };

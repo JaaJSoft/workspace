@@ -201,3 +201,63 @@ test('the signed payload covers the carried field', async () => {
   });
   assert.equal(signed[0].fields.totp, 'ct:totp');
 });
+
+test('a vault with no explicit key version still accepts a carried field at version 1', async () => {
+  // Both sides of the guard must fall back to the same default. Comparing a
+  // defaulted draft version against a raw, possibly-undefined vault version
+  // would refuse a write neither side actually disagrees about.
+  const { ctx, session } = builder();
+  const vaultWithNoVersion = { uuid: 'v-2', wrapped_key: 'AQ' };
+  const body = await ctx.buildEntryWriteRequest(session, vaultWithNoVersion, {
+    ...DRAFT,
+    values: { username: 'ada' },
+    carriedFields: { totp: 'ct:totp' },
+    keyVersion: 1,
+  });
+  assert.equal(body.fields.totp, 'ct:totp');
+});
+
+test('a rejected carry names the draft version and the vault version, not the same number twice', async () => {
+  const { ctx, session } = builder();
+  await assert.rejects(
+    ctx.buildEntryWriteRequest(session, VAULT, {
+      ...DRAFT,
+      values: { username: 'ada' },
+      carriedFields: { totp: 'ct:totp' },
+      keyVersion: 1,
+    }),
+    (err) => {
+      assert.equal(err.message, 'cannot carry fields sealed under key version 1 into 3');
+      return true;
+    },
+  );
+});
+
+test('the signed key version is the vault key version when the draft agrees with it', async () => {
+  const { ctx, session, signed } = builder();
+  await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    keyVersion: VAULT.key_version,
+  });
+  assert.equal(signed[0].key_version, VAULT.key_version);
+});
+
+test('a stale key version remembered on the draft never relabels the write', async () => {
+  // No carried fields here, so the guard has nothing to refuse - this isolates
+  // the label from the guard. openEntryKey always derives the sealing key from
+  // the vault's current wrapped key, so the record must be signed under the
+  // vault's key version, not whatever the draft happened to remember from
+  // before a rotation.
+  const { ctx, session, signed } = builder();
+  await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    keyVersion: 1,
+  });
+  assert.equal(signed[0].key_version, VAULT.key_version);
+});
+
+test('a draft with no key version at all still signs under the vault key version', async () => {
+  const { ctx, session, signed } = builder();
+  await ctx.buildEntryWriteRequest(session, VAULT, { ...DRAFT });
+  assert.equal(signed[0].key_version, VAULT.key_version);
+});

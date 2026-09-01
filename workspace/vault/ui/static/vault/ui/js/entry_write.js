@@ -19,7 +19,7 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   draft,
 ) {
   const V = window.vaultCrypto;
-  const keyVersion = draft.keyVersion || vault.key_version || 1;
+  const keyVersion = vault.key_version || 1;
   const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, draft.uuid);
   const seal = async (text, fieldId) =>
     V.toBase64Url(
@@ -42,7 +42,7 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   // re-seal, and this refuses to write the record that would prove otherwise.
   const carried = draft.carriedFields || {};
   const carriedIds = Object.keys(carried);
-  if (carriedIds.length && (draft.keyVersion || vault.key_version) !== vault.key_version) {
+  if (carriedIds.length && (draft.keyVersion || keyVersion) !== keyVersion) {
     throw new Error(
       `cannot carry fields sealed under key version ${draft.keyVersion} into ${keyVersion}`,
     );

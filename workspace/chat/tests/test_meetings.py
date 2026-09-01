@@ -142,6 +142,27 @@ class CreateMeetingTests(TestCase):
         self.assertEqual(first.pk, second.pk)
         self.assertEqual(Conversation.objects.filter(meeting__isnull=False).count(), 1)
 
+    def test_pending_invitee_is_seeded_as_a_host(self):
+        # self.invitee's EventMember row defaults to PENDING (set in setUp).
+        # An invitee who has not yet responded is still a legitimate
+        # attendee and must host.
+        self.assertEqual(
+            EventMember.objects.get(event=self.event, user=self.invitee).status,
+            EventMember.Status.PENDING,
+        )
+        meeting = create_meeting(self.event, self.owner)
+        member_ids = set(meeting.conversation.members.values_list("user_id", flat=True))
+        self.assertIn(self.invitee.id, member_ids)
+
+    def test_declined_invitee_is_not_seeded_as_a_host(self):
+        decliner = get_user_model().objects.create_user(username="decl", password="x")
+        EventMember.objects.create(
+            event=self.event, user=decliner, status=EventMember.Status.DECLINED
+        )
+        meeting = create_meeting(self.event, self.owner)
+        member_ids = set(meeting.conversation.members.values_list("user_id", flat=True))
+        self.assertNotIn(decliner.id, member_ids)
+
 
 class MeetingLifecycleTests(TestCase):
     def setUp(self):

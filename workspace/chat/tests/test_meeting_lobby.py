@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from workspace.calendar.models import Calendar, Event
-from workspace.chat.models import MeetingGuest
+from workspace.chat.models import CallSession, MeetingGuest
 from workspace.chat.services import calls
 from workspace.chat.services.meeting_guests import resolve_guest
 from workspace.chat.services.meeting_occurrences import current_occurrence
@@ -342,6 +342,22 @@ class MeetingPublicViewTests(TestCase):
         resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
         self.assertTrue(resp.data["locked"])
 
+    def test_summary_does_not_end_a_stale_call(self):
+        # get_active_call self-heals a call whose participants have no live
+        # heartbeat by ending it (write + call_ended broadcast). The public
+        # summary endpoint must not trigger that off a bare, unauthenticated
+        # GET - it only reads the locked flag.
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        cache.clear()  # wipes every heartbeat -> the participant looks stale
+
+        resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
+
+        self.assertEqual(resp.status_code, 200)
+        session.refresh_from_db()
+        self.assertEqual(session.state, CallSession.State.ACTIVE)
+
     def test_summary_404_for_unknown_slug(self):
         resp = self.client.get("/api/v1/chat/meet/does-not-exist")
         self.assertEqual(resp.status_code, 404)
@@ -450,6 +466,25 @@ class MeetingPublicViewTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 423)
+
+    def test_knock_does_not_end_a_stale_call(self):
+        # Same self-heal hazard as the summary endpoint above, but on the
+        # POST path: a knock must not end a stale call as a side effect of
+        # checking whether it is locked.
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        cache.clear()
+
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, 201)
+        session.refresh_from_db()
+        self.assertEqual(session.state, CallSession.State.ACTIVE)
 
     def test_knock_blank_display_name_is_400(self):
         resp = self.client.post(

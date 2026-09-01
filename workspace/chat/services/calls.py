@@ -92,13 +92,33 @@ def get_active_call(conversation_id):
     return session
 
 
+def is_call_locked(conversation_id):
+    """Whether *conversation_id* has a locked active call, no self-heal.
+
+    Unlike ``get_active_call``, this never takes the cleanup write-lock or
+    ends a stale call - it is for the public meeting endpoints, which are
+    reachable by an anonymous caller holding only a slug and must not be
+    able to drive a DB write and an SSE broadcast off a plain GET/POST.
+    """
+    from ..models import CallSession
+
+    session = (
+        CallSession.objects.filter(
+            conversation_id=conversation_id, state=CallSession.State.ACTIVE
+        )
+        .only("locked")
+        .first()
+    )
+    return session.locked if session is not None else False
+
+
 def _has_stale_participants(session):
     """Whether any active participant lacks a fresh heartbeat (no DB lock)."""
     from ..models import CallParticipant
 
     fresh = set(get_presence(session.uuid))
     active = CallParticipant.objects.filter(session=session, left_at__isnull=True).only(
-        "user_id"
+        "user_id", "guest_id"
     )
     return any(p.participant_key not in fresh for p in active)
 

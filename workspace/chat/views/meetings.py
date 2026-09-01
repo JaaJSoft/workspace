@@ -15,7 +15,7 @@ from workspace.common.request_ip import client_ip
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..services import meetings as meeting_service
-from ..services.calls import get_active_call
+from ..services.calls import is_call_locked
 from ..services.conversations import get_active_membership
 from ..services.meeting_guests import issue_token
 from ..services.meeting_occurrences import current_occurrence
@@ -105,8 +105,7 @@ class MeetingSummaryView(APIView):
         occurrence = current_occurrence(meeting)
         start = occurrence[0] if occurrence is not None else meeting.event.start
 
-        session = get_active_call(meeting.conversation_id)
-        locked = session.locked if session is not None else False
+        locked = is_call_locked(meeting.conversation_id)
         return Response(
             {
                 "title": meeting.event.title,
@@ -153,8 +152,7 @@ class MeetingKnockView(APIView):
         if meeting.closed_occurrence_start == occurrence_start:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        session = get_active_call(meeting.conversation_id)
-        if session is not None and session.locked:
+        if is_call_locked(meeting.conversation_id):
             return Response(status=status.HTTP_423_LOCKED)
 
         # Rate limit: max 10 knocks per IP per hour, mirroring

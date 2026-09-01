@@ -29,7 +29,9 @@ def _create_meeting_once(event, created_by):
     )
     member_ids = {event.owner_id, created_by.id}
     member_ids.update(
-        EventMember.objects.filter(event=event).values_list("user_id", flat=True)
+        EventMember.objects.filter(event=event)
+        .exclude(status=EventMember.Status.DECLINED)
+        .values_list("user_id", flat=True)
     )
     ConversationMember.objects.bulk_create(
         [
@@ -44,6 +46,16 @@ def _create_meeting_once(event, created_by):
 
 def create_meeting(event, created_by):
     """Return the event's meeting, creating it and its conversation if needed.
+
+    Membership of the meeting's conversation - which is what makes someone a
+    host, see ``_meeting_for_host`` - is seeded once, at creation, from the
+    event's owner, its creator and every invitee whose RSVP is not DECLINED
+    (PENDING included). It is never re-synced afterwards: inviting someone
+    to the event after the meeting exists grants them no host powers, and
+    removing someone from the event does not revoke powers they already
+    have. That is a deliberate limitation, not an oversight - reconciling
+    live host membership raises its own questions (what happens to someone
+    removed mid-meeting?) that are out of scope here.
 
     Two requests racing to create the same event's meeting both pass the
     ``existing is None`` check in ``_create_meeting_once``; the loser's atomic

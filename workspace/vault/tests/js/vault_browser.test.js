@@ -864,6 +864,112 @@ test('editing an entry carries the fields the dialog does not edit', async () =>
   assert.ok(!('totp' in component.draft.values), 'the key is never opened for the form');
 });
 
+test('a pasted authenticator key is normalized before it is sealed', async () => {
+  const written = [];
+  const normalized = [];
+  const { component } = browser({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    crypto: {
+      normalizeTotpInput: (text, options) => {
+        normalized.push({ text: text, label: options.label });
+        return 'otpauth://totp/Bank?secret=JBSWY3DPEHPK3PXP';
+      },
+      // Seals to its own plaintext so the test can read which value was sealed
+      // into which slot without a real cipher.
+      seal: async (key, plaintext) => plaintext,
+      toBase64Url: (value) => new TextDecoder().decode(value),
+    },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {}, carriedFields: {}, keyVersion: 1,
+    hasTotp: false, totpInput: 'JBSWY3DPEHPK3PXP', totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  await component.saveEntry();
+  assert.equal(written.length, 1);
+  // What is sealed is the uri, never the raw thing the user pasted.
+  assert.equal(written[0].fields.totp, 'otpauth://totp/Bank?secret=JBSWY3DPEHPK3PXP');
+  // The label handed to the normalizer is the entry's name, so the uri an
+  // export emits names the account it belongs to.
+  assert.deepStrictEqual(normalized, [{ text: 'JBSWY3DPEHPK3PXP', label: 'Bank' }]);
+});
+
+test('removing the key drops it from the write instead of carrying it', async () => {
+  const written = [];
+  const { component } = browser({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {},
+    carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
+    hasTotp: true, totpInput: null, totpRemoved: true,
+    entryVersion: 1, isNew: false,
+  };
+  await component.saveEntry();
+  assert.ok(!('totp' in written[0].fields), 'a removed key must not be carried');
+});
+
+test('an untouched key is carried through an edit', async () => {
+  const written = [];
+  const { component } = browser({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Renamed', notes: '', values: {},
+    carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
+    hasTotp: true, totpInput: null, totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  await component.saveEntry();
+  assert.equal(written[0].fields.totp, 'ct:totp');
+});
+
+test('the three states of the key control are exclusive', () => {
+  const { component } = browser();
+  component.init();
+  component.draft = { hasTotp: false, totpInput: null, totpRemoved: false };
+  assert.equal(component.totpFieldState(), 'none');
+  component.draft = { hasTotp: true, totpInput: null, totpRemoved: false };
+  assert.equal(component.totpFieldState(), 'set');
+  component.startTotpEntry();
+  assert.equal(component.totpFieldState(), 'editing');
+  component.cancelTotpEntry();
+  assert.equal(component.totpFieldState(), 'set');
+  component.removeTotp();
+  assert.equal(component.totpFieldState(), 'none');
+});
+
+test('a malformed key is refused with a message rather than saved', async () => {
+  const written = [];
+  const { component } = browser({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    crypto: {
+      normalizeTotpInput: () => { throw new Error('illegal base32 character !'); },
+    },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {}, carriedFields: {}, keyVersion: 1,
+    hasTotp: false, totpInput: 'nope!', totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  await component.saveEntry();
+  assert.equal(written.length, 0, 'nothing is written');
+  assert.match(component.error, /authenticator/i);
+  assert.ok(component.draft, 'the dialog stays open on the value the user typed');
+});
+
 test('saving a new entry posts, saving an edit puts', async () => {
   const calls = [];
   const { component } = typed({

@@ -766,6 +766,31 @@ window.vaultBrowser = (function () {
         });
       },
 
+      // The authenticator key is not a value to type over. The dialog shows
+      // whether one is set and offers two deliberate gestures; the ciphertext
+      // travels untouched until one of them is used.
+      totpFieldState: function () {
+        if (!this.draft) return 'none';
+        if (this.draft.totpInput !== null && this.draft.totpInput !== undefined) {
+          return 'editing';
+        }
+        return this.draft.hasTotp && !this.draft.totpRemoved ? 'set' : 'none';
+      },
+
+      startTotpEntry: function () {
+        this.draft.totpInput = '';
+        this.draft.totpRemoved = false;
+      },
+
+      cancelTotpEntry: function () {
+        this.draft.totpInput = null;
+      },
+
+      removeTotp: function () {
+        this.draft.totpInput = null;
+        this.draft.totpRemoved = true;
+      },
+
       newEntry: function (typeId) {
         this.closeMenu();
         this.draft = {
@@ -781,6 +806,9 @@ window.vaultBrowser = (function () {
           values: {},
           carriedFields: {},
           keyVersion: (this.openVault && this.openVault.key_version) || 1,
+          hasTotp: false,
+          totpInput: null,
+          totpRemoved: false,
           entryVersion: 1,
           isNew: true,
         };
@@ -837,6 +865,9 @@ window.vaultBrowser = (function () {
           values: values,
           carriedFields: carriedFields,
           keyVersion: row.key_version || 1,
+          hasTotp: (entry.fieldIds || []).includes('totp'),
+          totpInput: null,
+          totpRemoved: false,
           entryVersion: row.entry_version || 1,
           isNew: false,
         };
@@ -860,12 +891,35 @@ window.vaultBrowser = (function () {
         // The name is the only thing a listing shows: a row without one is a
         // row the user cannot tell from another.
         if (!name) return;
+        // Three outcomes, and only one of them seals: a typed key becomes the
+        // uri that will be stored, a removed one is dropped from both maps so
+        // the write deletes it, and an untouched one stays in carriedFields.
+        const values = Object.assign({}, draft.values);
+        const carriedFields = Object.assign({}, draft.carriedFields);
+        if (draft.totpInput !== null && draft.totpInput !== undefined
+            && String(draft.totpInput).trim()) {
+          try {
+            values.totp = window.vaultCrypto.normalizeTotpInput(
+              draft.totpInput, { label: name }
+            );
+          } catch (err) {
+            this.error = 'That authenticator key could not be read. Paste the key or '
+              + 'the otpauth:// address the service showed you.';
+            return;
+          }
+          delete carriedFields.totp;
+        } else if (draft.totpRemoved) {
+          delete carriedFields.totp;
+          delete values.totp;
+        }
         this.busy = true;
         try {
           const body = await window.buildEntryWriteRequest(
             window.vaultSession,
             this.openVault,
-            Object.assign({}, draft, { name: name }),
+            Object.assign({}, draft, {
+              name: name, values: values, carriedFields: carriedFields,
+            }),
           );
           if (draft.isNew) {
             await window.vaultApi.createEntry(body);

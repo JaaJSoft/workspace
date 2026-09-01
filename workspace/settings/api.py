@@ -114,6 +114,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Message attachments and the conversation media gallery.",
         },
         {
+            "name": "Chat - Meetings",
+            "description": "Meetings attached to calendar events: hosting, guest admission, public joining, and the guest lobby.",
+        },
+        {
             "name": "Files",
             "description": "Browse and manage files and folders.",
         },

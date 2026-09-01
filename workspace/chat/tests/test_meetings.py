@@ -199,7 +199,7 @@ class MeetingLifecycleTests(TestCase):
 
     def test_ending_revokes_an_admitted_guest(self):
         token, digest = issue_token()
-        guest = MeetingGuest.objects.create(
+        MeetingGuest.objects.create(
             meeting=self.meeting,
             display_name="Bob",
             state=MeetingGuest.State.ADMITTED,

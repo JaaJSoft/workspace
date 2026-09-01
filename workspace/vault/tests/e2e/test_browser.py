@@ -418,14 +418,37 @@ class VaultBrowserTests(PlaywrightTestCase):
         # Scoped to the entry dialog: the shared layout also mounts the help,
         # prompt and file-picker dialogs on this page, and their fields are
         # someone else's surface to harden.
-        offenders = self.page.eval_on_selector_all(
+        result = self.page.eval_on_selector_all(
             ".modal-box:has-text('Save') input, .modal-box:has-text('Save') textarea",
-            """(nodes) => nodes
-                .filter((node) => !['checkbox', 'radio', 'hidden'].includes(node.type))
-                .filter((node) => node.autocomplete !== 'current-password')
-                .filter((node) => node.autocomplete !== 'off' || node.spellcheck !== false)
-                .map((node) => node.placeholder || node.name || node.outerHTML.slice(0, 90))""",
+            """(nodes) => {
+                const identify = (node) => {
+                    const label = node.closest('label');
+                    const labelText = label && label.textContent.trim();
+                    return labelText || node.placeholder || node.name || node.outerHTML.slice(0, 90);
+                };
+                return {
+                    audited: nodes.map(identify),
+                    offenders: nodes
+                        .filter((node) => !['checkbox', 'radio', 'hidden'].includes(node.type))
+                        .filter((node) => node.autocomplete !== 'current-password')
+                        .filter((node) => node.autocomplete !== 'off' || node.spellcheck !== false)
+                        .map(identify),
+                };
+            }""",
         )
+        audited, offenders = result["audited"], result["offenders"]
+        # An empty offenders list is also what a selector matching nothing
+        # produces - a relabelled Save button or a restructured dialog must
+        # fail this test, not pass it vacuously. Naming the three fields the
+        # test exists to cover (the name, a secret field, and the
+        # authenticator key control only "Add" reveals) makes that failure
+        # specific rather than a bare "matched zero".
+        self.assertTrue(audited, "the audit selector matched no fields at all")
+        for expected in ("Name", "Password", "Key or otpauth:// address"):
+            self.assertTrue(
+                any(expected in identifier for identifier in audited),
+                f"expected the audit to see the {expected!r} field, saw {audited!r}",
+            )
         self.assertEqual(offenders, [])
 
     def test_a_revealed_password_is_hidden_again_when_the_panel_closes(self):

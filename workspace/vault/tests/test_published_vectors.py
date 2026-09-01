@@ -301,8 +301,8 @@ class TotpPublishedVectorTests(SimpleTestCase):
                     )
 
     def test_the_seed_length_is_what_separates_the_three_columns(self):
-        """Guards the guard: with one seed for all three, the SHA-256 and
-        SHA-512 columns could only pass by coincidence."""
+        """Guards the guard: with one seed for all three, the SHA-256
+        column could only pass by coincidence."""
         at, _, sha256, _ = self.VECTORS[0]
         self.assertNotEqual(
             totp.totp_code(

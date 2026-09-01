@@ -73,9 +73,7 @@
           {% comment %}
             x-if, not x-show: x-show leaves the input in the DOM, and a second
             password field there makes `.modal-box input[type=password]`
-            ambiguous for anything selecting the entry password. Keeping an
-            unused password box out of the document is also what the field
-            hygiene of this change is about.
+            ambiguous for anything selecting the entry password.
           {% endcomment %}
           <template x-if="totpFieldState() === 'editing'">
             <div class="mt-1">

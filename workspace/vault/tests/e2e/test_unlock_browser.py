@@ -73,15 +73,18 @@ class UnlockWalkTests(PlaywrightTestCase):
         self.page.click("button:has-text('Unlock')")
 
     def _wait_for_vault_named(self, name, timeout=30000):
-        """Wait for the exact vault name, not a substring of it.
+        """Wait for the open vault to be named on the switcher.
 
-        A plain ``text=`` selector is a substring match, and the navbar logo
-        renders the literal word "Workspace" on every page - "text=Work"
-        resolves to that on load, before the vault list has decrypted
-        anything, and the wait returns green whether or not the feature
-        works.
+        Scoped to the switcher, and exact. Unscoped it is ambiguous - the name
+        is on the breadcrumb and on the switcher's own row for that vault as
+        well - and a plain ``text=`` selector is a substring match, which the
+        navbar logo satisfies: "text=Work" resolves to "Workspace" on load,
+        before anything has been decrypted, and the wait returns green whether
+        or not the feature works.
         """
-        self.page.get_by_text(name, exact=True).wait_for(timeout=timeout)
+        self.page.get_by_test_id("vault-switcher").get_by_text(
+            name, exact=True
+        ).wait_for(timeout=timeout)
 
     def test_onboarding_ends_at_the_unlock_screen_for_the_new_vault(self):
         self._onboard()
@@ -188,32 +191,11 @@ class UnlockWalkTests(PlaywrightTestCase):
         self.page.reload()
         self._unlock()
         self._wait_for_vault_named("Personal", timeout=60000)
-        self.page.get_by_role("button", name="New vault").click()
+        self.page.get_by_test_id("vault-switcher").click()
+        self.page.get_by_text("New vault", exact=True).click()
         self.page.fill("input[placeholder='Personal, Work…']", "Work")
         self.page.get_by_role("button", name="Create", exact=True).click()
         self._wait_for_vault_named("Work")
         self.page.reload()
         self._unlock()
         self._wait_for_vault_named("Work", timeout=60000)
-
-    def test_the_two_context_menus_answer_to_what_was_right_clicked(self):
-        """A row's menu addresses that vault, the empty space's addresses the
-        listing. Only a browser settles it: the row's handler and the pane's
-        handler are the same event travelling up, and a missing ``.stop``
-        replaces the vault menu with the listing one without failing."""
-        self._onboard()
-        self.page.reload()
-        self._unlock()
-        self._wait_for_vault_named("Personal", timeout=60000)
-
-        self.page.get_by_text("Personal", exact=True).click(button="right")
-        menu = self.page.locator("ul.menu:visible")
-        menu.get_by_text("Personal", exact=True).wait_for(timeout=5000)
-        self.assertEqual(menu.get_by_text("New vault", exact=True).count(), 0)
-
-        self.page.locator("#vault-list-pane").click(
-            button="right", position={"x": 400, "y": 400}
-        )
-        self.page.locator("ul.menu:visible").get_by_text(
-            "New vault", exact=True
-        ).wait_for(timeout=5000)

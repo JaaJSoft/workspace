@@ -10,10 +10,12 @@
 //
 // The vault is in the URL and the folder is not: the server assigns a vault's
 // UUID and it leaks nothing, whereas a folder is named by a ciphertext the
-// server has never read. So switching vault is a navigation, and walking the
-// tree is not - and because the keys live in vaultSession's closure, that
-// navigation drops them. Every page load starts locked, which is why the
-// vault is loaded by afterUnlock and never by init.
+// server has never read. Neither switching vault nor walking the tree is a
+// navigation: the keys live in vaultSession's closure and a page load would
+// take them with it, so the vault is swapped in place and the URL follows
+// through replaceState. What a navigation used to reset for free, loadVault
+// now resets on purpose - see resetNavigation. Every page load starts locked,
+// which is why the vault is loaded by afterUnlock and never by init.
 // Every id runAction can carry out. The registry answers what the caller may
 // do; an id it offers that lands on no branch here would be a menu row that
 // does nothing when clicked - worse than an absent one, and exactly the drift
@@ -34,7 +36,53 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'delete_forever',
 ];
 
+// The swatches the vault offers. Not ICON_PICKER_COLORS: that list is written
+// in full CSS classes, two of which the vault's colour column refuses, and the
+// signed metadata holds a bare daisyUI role rather than a class.
+window.VAULT_COLOR_SWATCHES = [
+  { name: 'Primary', class: 'text-primary' },
+  { name: 'Secondary', class: 'text-secondary' },
+  { name: 'Accent', class: 'text-accent' },
+  { name: 'Info', class: 'text-info' },
+  { name: 'Success', class: 'text-success' },
+  { name: 'Warning', class: 'text-warning' },
+  { name: 'Error', class: 'text-error' },
+  { name: 'Neutral', class: 'text-neutral' },
+];
+
 window.vaultBrowser = (function () {
+  // Which vault to come back to, per device. It never leaves the browser: the
+  // server resolves no vault, and a stored setting would tell it which one is
+  // in use.
+  const LAST_VAULT_KEY = 'vault.lastVault';
+
+  function readPreference(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (err) {
+      // Private browsing and a blocked-storage setting both throw on read. A
+      // page that forgets which vault was last open is a smaller loss than one
+      // that does not mount.
+      return null;
+    }
+  }
+
+  function writePreference(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (err) {
+      /* nothing to do: the choice does not survive the reload */
+    }
+  }
+
+  function removePreference(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (err) {
+      /* the same blocked storage that refused the write */
+    }
+  }
+
   // Its own title and a red button, so an irreversible question does not read
   // like a reversible one.
   const DESTRUCTIVE = {
@@ -72,11 +120,12 @@ window.vaultBrowser = (function () {
     return {
       ...window.vaultUnlockMixin(),
       ...window.vaultPrefsMixin(),
-      ...window.vaultViewPrefsMixin('vault.browser'),
+      ...window.vaultViewPrefsMixin(),
+      ...window.vaultSwitcherMixin(),
       ...store,
 
-      // The vault this page was routed to. Null on /vault, where the listing
-      // renders instead.
+      // The vault this page was routed to. Null on /vault, where the vault to
+      // open is resolved once the account is unlocked.
       vaultUuid: null,
       // Every vault the account can open, for the switcher.
       vaults: [],
@@ -139,6 +188,8 @@ window.vaultBrowser = (function () {
       init: function () {
         this.vaultUuid = readJson('vault-uuid');
         this.entryTypes = readJson('entry-types') || [];
+        this.icons = window.ICON_PICKER_ICONS || [];
+        this.colors = window.VAULT_COLOR_SWATCHES || [];
         this.restoreViewPrefs();
         this.loadPrefs();
         this.initUnlock();
@@ -183,10 +234,10 @@ window.vaultBrowser = (function () {
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;
+        this.onSwitcherLocked();
       },
 
       load: async function () {
-        if (!this.vaultUuid) return;
         this.loading = true;
         this.error = '';
         // Every row is about to be rebuilt, and a menu left open would go on
@@ -194,7 +245,18 @@ window.vaultBrowser = (function () {
         this.closeMenu();
         try {
           await this.loadVault();
-          if (this.openVault) await this.loadContents();
+          if (this.openVault) {
+            await this.loadContents();
+          } else {
+            // Nothing to browse, so nothing the sidebar may go on showing: its
+            // tags and its trash count belong to a vault that is out of reach
+            // or gone, and leaving them there offers a way into neither.
+            this.setData({});
+            this.entryRows = [];
+            this.entryActions = {};
+            this.panelEntry = null;
+          }
+          await this.loadVaultActions();
           // The palette command reaches the page before there is a vault to
           // write into, so it waits here for one.
           if (this.openVault && this.pendingNewEntry) {
@@ -214,6 +276,7 @@ window.vaultBrowser = (function () {
       },
 
       loadVault: async function () {
+        const leaving = this.openVault ? String(this.openVault.uuid) : null;
         const rows = await window.vaultApi.listVaults();
         const vaults = [];
         for (const row of rows) {
@@ -221,9 +284,79 @@ window.vaultBrowser = (function () {
         }
         if (!window.vaultSession.isUnlocked()) return;
         this.vaults = vaults;
-        const uuid = String(this.vaultUuid);
-        this.openVault = vaults.find((vault) => String(vault.uuid) === uuid) || null;
-        this.missing = this.openVault === null;
+        if (this.vaultUuid) {
+          const uuid = String(this.vaultUuid);
+          this.openVault = vaults.find((vault) => String(vault.uuid) === uuid) || null;
+          // Asked for by UUID and not found: that vault is out of reach, which
+          // is worth saying. Arriving with no UUID at all is not.
+          this.missing = this.openVault === null;
+        } else {
+          this.openVault = this.resolveLandingVault(vaults);
+          this.missing = false;
+        }
+        // A different vault than the one on screen: its folders and the trail
+        // through them belong to the vault being left, and every UUID in them
+        // is meaningless here. A plain refresh keeps them, which is the point
+        // of comparing rather than resetting on every load.
+        const arriving = this.openVault ? String(this.openVault.uuid) : null;
+        if (arriving !== leaving) {
+          this.resetNavigation();
+        }
+        if (this.openVault) {
+          this.rememberVault(this.openVault.uuid);
+        } else if (!this.vaultUuid) {
+          this.forgetVault();
+        }
+      },
+
+      // The first moment the choice can be made: before the unlock every name
+      // is a ciphertext and no key exists, so neither the server nor the page
+      // could have made it earlier.
+      resolveLandingVault: function (vaults) {
+        const openable = vaults.filter(function (vault) {
+          return !(vault.tampered || vault.unopenable || vault.unreadable);
+        });
+        if (!openable.length) return null;
+        const remembered = String(readPreference(LAST_VAULT_KEY) || '');
+        return (
+          openable.find((vault) => String(vault.uuid) === remembered) ||
+          openable.find((vault) => vault.is_favorite) ||
+          openable[0]
+        );
+      },
+
+      // The account has nothing left to open. Naming a deleted vault in the
+      // address bar would hand out a link that opens a banner, and a device
+      // pointing at one costs the next visit a fallback it need not make.
+      forgetVault: function () {
+        removePreference(LAST_VAULT_KEY);
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, '', '/vault');
+        }
+      },
+
+      rememberVault: function (uuid) {
+        this.vaultUuid = uuid;
+        writePreference(LAST_VAULT_KEY, String(uuid));
+        // replaceState, never a navigation: the keys live in a closure that a
+        // page load would take with it, and the master password with them.
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, '', '/vault/' + uuid);
+        }
+      },
+
+      // Told apart from `missing` on purpose: one is an account with nothing in
+      // it, the other is a vault that exists for somebody else.
+      hasNoVault: function () {
+        return !this.loading && !this.openVault && !this.missing && this.vaults.length === 0;
+      },
+
+      // The account holds vaults and not one of them opened: every signature
+      // was refused or no key here unwraps them. Nothing was routed to, so
+      // `missing` says nothing, and the listing is empty for a reason the
+      // empty state would get wrong - hence a state of its own.
+      hasNoOpenableVault: function () {
+        return !this.loading && !this.openVault && !this.missing && this.vaults.length > 0;
       },
 
       rowFor: function (uuid) {

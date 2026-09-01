@@ -66,10 +66,10 @@ class BrowserRoutingTests(TestCase):
 
     """`/vault` and `/vault/<uuid>` are one view.
 
-    A palette command is a plain link, so it can name no UUID: the two URLs
-    have to share a view for `?action=new` to reach a page able to honour it.
-    The uuid path converter validates at routing time, so nothing in the view
-    parses one.
+    A palette command is a plain link, so it can name no UUID, which is why the
+    two URLs share a view: `?action=new` lands on `/vault`, and the page it
+    reaches has a vault to write into because it resolves one itself. The uuid
+    path converter validates at routing time, so nothing in the view parses one.
     """
 
     def setUp(self):
@@ -103,7 +103,10 @@ class BrowserRoutingTests(TestCase):
         response = self.client.get(reverse("vault_ui:vault", args=[vault.uuid]))
         self.assertEqual(str(response.context["vault_uuid"]), str(vault.uuid))
 
-    def test_the_listing_is_handed_no_vault(self):
+    def test_the_bare_route_is_handed_no_vault(self):
+        """And that is the mechanism, not an omission: the server cannot read a
+        vault's name, so which one to open is a question only the unlocked page
+        can answer."""
         response = self.client.get(reverse("vault_ui:index"))
         self.assertIsNone(response.context["vault_uuid"])
 

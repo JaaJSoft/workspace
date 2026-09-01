@@ -1,1 +1,132 @@
-{% include "vault/ui/partials/filter_bar.html" with grid_mode="mosaic" grid_label="Mosaic view" show_type_filter=True show_entries_sort=False %}
+{% comment %}
+  Search, filter, sort, the tile slider and the list/mosaic switch. Every
+  control writes to the store, which decides what is shown; nothing here
+  queries the server, because a name is a ciphertext there and no WHERE clause
+  could match one.
+
+  The name states what the sort button does, not the order already in use: it
+  toggles, so announcing the current direction sends a screen reader user the
+  opposite way.
+{% endcomment %}
+<div class="bg-base-100 border-b border-base-300 px-3 py-2 flex-none">
+  <div class="flex flex-wrap items-center gap-2">
+    <label
+      class="input input-sm input-bordered flex items-center gap-2 w-full sm:w-48 md:w-64"
+    >
+      <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+      <input
+        type="search"
+        class="grow"
+        placeholder="Filter by name"
+        x-model.debounce.200ms="search"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </label>
+
+    <select
+      class="select select-sm select-bordered"
+      x-model="typeFilter"
+      aria-label="Show"
+    >
+      <option value="all">Everything</option>
+      <option value="folders">Folders</option>
+      <option value="entries">Entries</option>
+      <option value="favorites">Favorites</option>
+    </select>
+
+    <div class="join">
+      <select
+        class="select select-sm select-bordered join-item"
+        x-model="sortField"
+        aria-label="Sort by"
+      >
+        <option value="default">Default</option>
+        <option value="name">Name</option>
+        <option value="favorite">Favorite</option>
+        <option value="created">Created</option>
+        <option value="modified">Modified</option>
+      </select>
+      {% comment %}
+        The name states what the button does, not the order already in use: it
+        toggles, so announcing the current direction sends a screen reader
+        user the opposite way.
+      {% endcomment %}
+      <button
+        type="button"
+        class="btn btn-sm btn-outline join-item"
+        :disabled="sortField === 'default'"
+        @click="toggleSortDir()"
+        :aria-label="sortDir === 'asc' ? 'Sort descending' : 'Sort ascending'"
+      >
+        <i data-lucide="arrow-up" class="w-4 h-4" x-show="sortDir === 'asc'"></i>
+        <i
+          data-lucide="arrow-down"
+          class="w-4 h-4"
+          x-show="sortDir === 'desc'"
+          x-cloak
+        ></i>
+      </button>
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-sm btn-ghost"
+      title="Reset filters and sorting"
+      @click="resetAll()"
+    >
+      Reset
+    </button>
+
+    <div class="flex-1"></div>
+
+    <div class="flex items-center gap-2 shrink-0">
+      {% comment %}
+        The tile slider, in the tiled view only: it drives that grid's own
+        geometry, so in the list there is nothing for it to size.
+      {% endcomment %}
+      <div
+        class="flex items-center gap-1.5 text-error"
+        x-show="viewMode === 'mosaic'"
+        x-cloak
+      >
+        <i data-lucide="grid-2x2" class="w-3 h-3 opacity-60"></i>
+        <input
+          type="range"
+          min="1"
+          max="5"
+          step="1"
+          x-model.number="tileSize"
+          @change="setTileSize(tileSize)"
+          class="range range-xs range-error w-24"
+          title="Tile size"
+          aria-label="Tile size"
+        />
+        <i data-lucide="grid-2x2" class="w-5 h-5 opacity-60"></i>
+      </div>
+
+      <div class="join">
+        <button
+          type="button"
+          class="btn btn-sm btn-outline join-item"
+          :class="viewMode === 'list' ? 'bg-error/10 text-error' : ''"
+          @click="setViewMode('list')"
+          title="List view"
+          aria-label="List view"
+        >
+          <i data-lucide="list" class="w-4 h-4"></i>
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline join-item"
+          :class="viewMode === 'mosaic' ? 'bg-error/10 text-error' : ''"
+          @click="setViewMode('mosaic')"
+          title="Mosaic view"
+          aria-label="Mosaic view"
+        >
+          <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

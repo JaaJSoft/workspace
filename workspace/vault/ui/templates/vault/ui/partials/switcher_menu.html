@@ -1,0 +1,24 @@
+{% comment %}
+  Rows of the menu a vault carries, in the order the endpoint returned them.
+  No fallback list: a vault the caller cannot act on comes back empty, and an
+  empty menu is the honest rendering of that.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  <li
+    class="menu-title text-xs truncate px-3 py-1"
+    x-text="vaultMenu.vault ? vaultMenu.vault.name : ''"
+  ></li>
+  <template
+    x-for="(action, idx) in vaultActionsFor(vaultMenu.vault)"
+    :key="action.id"
+  >
+    <li
+      :class="idx > 0 && action.category !== vaultActionsFor(vaultMenu.vault)[idx - 1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
+    >
+      {% include "ui/partials/context_menu_item.html" with bare=1 icon_expr="action.icon" label_expr="action.label" class_expr="action.css_class" shortcut_expr="action.shortcut" click="runVaultAction(action, vaultMenu.vault); closeVaultMenu()" only %}
+    </li>
+  </template>
+  <li x-show="!vaultActionsFor(vaultMenu.vault).length">
+    <span class="opacity-50">Nothing can be done with this vault</span>
+  </li>
+</ul>

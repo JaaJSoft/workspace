@@ -1,4 +1,4 @@
-// What both vault screens show in a date cell.
+// What a date cell shows.
 const test = require('node:test');
 const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');

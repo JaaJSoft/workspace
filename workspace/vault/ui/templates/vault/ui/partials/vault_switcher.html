@@ -1,0 +1,139 @@
+{% comment %}
+  The switcher, which is now the whole of vault management: one row per vault
+  carrying what it is, what it holds, and what may be done to it.
+
+  x-show on the panel rather than a daisyUI `dropdown`: that component's open
+  state is CSS-only (:focus-within), so nothing could close it after a choice,
+  and the popover would sit over the vault it had just opened.
+
+  Every row's menu comes from POST /api/v1/vault/actions with target "vault" -
+  the row itself concludes no permission. A vault whose signature the account
+  refuses shows struck through with its badge and carries no menu: it has no
+  name to show and no contents to read.
+{% endcomment %}
+<div class="pb-2 relative" x-show="!collapsed" x-transition>
+  <button
+    type="button"
+    class="btn btn-ghost h-10 min-h-10 w-full justify-between border border-base-300 font-normal text-base"
+    data-testid="vault-switcher"
+    :aria-expanded="switcherOpen"
+    aria-haspopup="listbox"
+    @click="toggleSwitcher()"
+  >
+    <span class="flex items-center gap-2 min-w-0">
+      <i
+        :data-lucide="openVault ? (openVault.icon || 'lock') : 'lock'"
+        class="w-5 h-5 text-error shrink-0"
+      ></i>
+      <span class="truncate" x-text="vaultName() || 'Vault'"></span>
+      <span class="badge badge-ghost badge-sm" x-show="isMember(openVault)">member</span>
+    </span>
+    <i data-lucide="chevrons-up-down" class="w-4 h-4 shrink-0 opacity-60"></i>
+  </button>
+
+  <div
+    x-show="switcherOpen"
+    x-cloak
+    x-transition
+    @click.outside="closeSwitcher()"
+    @keydown.escape.window="closeSwitcher()"
+    class="absolute left-0 right-0 z-50 mt-1 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
+    role="listbox"
+  >
+    <label
+      class="input input-sm input-bordered flex items-center gap-2 mb-2"
+      x-show="switcherNeedsSearch()"
+    >
+      <i data-lucide="search" class="w-3.5 h-3.5 opacity-60"></i>
+      <input
+        type="search"
+        class="grow"
+        placeholder="Find a vault"
+        autocomplete="off"
+        spellcheck="false"
+        x-model="switcherSearch"
+      />
+    </label>
+
+    <ul class="menu p-0 gap-1 w-full max-h-72 overflow-y-auto flex-nowrap">
+      <template x-for="candidate in switcherVaults()" :key="candidate.uuid">
+        <li>
+          <a
+            data-testid="vault-row"
+            role="option"
+            tabindex="0"
+            :aria-selected="candidate.uuid === vaultUuid"
+            :class="candidate.uuid === vaultUuid ? 'active' : (vaultIsDegraded(candidate) ? 'opacity-70' : '')"
+            @click="switchVault(candidate)"
+            @keydown.enter.prevent="switchVault(candidate)"
+            @keydown.space.prevent="switchVault(candidate)"
+            @contextmenu="openVaultMenu($event, candidate)"
+          >
+            <i
+              :data-lucide="vaultIsDegraded(candidate) ? 'triangle-alert' : (candidate.icon || 'lock')"
+              :class="vaultIsDegraded(candidate) ? 'w-4 h-4 shrink-0 text-warning' : 'w-4 h-4 shrink-0'"
+            ></i>
+            <span
+              class="truncate flex-1"
+              :class="vaultIsDegraded(candidate) ? 'line-through' : ''"
+              x-text="vaultIsDegraded(candidate) ? 'Unreadable vault' : (candidate.name || 'Unnamed')"
+            ></span>
+
+            <span
+              class="badge badge-warning badge-xs"
+              x-show="candidate.tampered"
+              x-cloak
+            >tampered</span>
+            <span class="badge badge-ghost badge-sm" x-show="isMember(candidate)">member</span>
+            <span
+              class="text-xs opacity-60 tabular-nums"
+              x-show="typeof candidate.entry_count === 'number'"
+              x-text="candidate.entry_count"
+            ></span>
+
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="canFavoriteVault(candidate)"
+              :aria-label="candidate.is_favorite ? 'Remove from favourites' : 'Add to favourites'"
+              @click.stop="toggleVaultFavorite(candidate)"
+            >
+              <i
+                data-lucide="star"
+                class="w-3.5 h-3.5"
+                :class="candidate.is_favorite ? 'text-warning fill-current' : 'opacity-30'"
+              ></i>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="vaultActionsFor(candidate).length"
+              aria-label="Vault options"
+              @click.stop="openVaultMenu($event, candidate)"
+            >
+              <i data-lucide="ellipsis" class="w-3.5 h-3.5 opacity-50"></i>
+            </button>
+          </a>
+        </li>
+      </template>
+      <li x-show="!switcherVaults().length">
+        <span class="opacity-50">No vault matches</span>
+      </li>
+    </ul>
+
+    <div class="border-t border-base-300 mt-2 pt-2">
+      <ul class="menu p-0 w-full">
+        <li>
+          <button
+            type="button"
+            class="text-error font-medium"
+            @click="openCreateDialog()"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            New vault
+          </button>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>

@@ -1,10 +1,9 @@
-// The unlock gate, shared by the two screens the vault serves.
+// The unlock gate: the whole of what the vault shows until the account is
+// open, since a locked page has no vault to navigate and no filter to apply.
 //
-// Both the vault listing and the browser sit behind the same master password,
-// and both have to show the same countdown and the same "locks in" behaviour.
-// Keeping one implementation is not tidiness: the wording below distinguishes
-// a mistyped password from a substituted signing key, and a second copy is a
-// second place for that distinction to go wrong.
+// A mixin rather than part of the controller: the wording below distinguishes
+// a mistyped password from a substituted signing key, and that distinction is
+// worth having one place to go wrong rather than two.
 //
 // A component spreading this mixin defines two hooks:
 //   afterUnlock()  what to load once the keys are live, errors included

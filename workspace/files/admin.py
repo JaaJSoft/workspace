@@ -233,7 +233,11 @@ class FileScanAdmin(ModelAdmin):
     @unfold_action(
         description="Clear quarantine",
         url_path="clear-quarantine",
-        permissions=["files.override_filescan"],
+        # The method form, not "files.override_filescan": unfold validates a
+        # dotted permission with a query against auth_permission, and system
+        # checks run before migrations - so the dotted form makes migrate
+        # crash on a database that does not have that table yet.
+        permissions=["override"],
         icon="gpp_good",
         variant=ActionVariant.SUCCESS,
         dialog=_CLEAR_DIALOG,

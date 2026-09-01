@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.contrib.admin import site
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import RequestFactory, TestCase, override_settings
@@ -409,6 +410,22 @@ class FileScanAdminRowActionTests(TestCase):
             scanned_at=timezone.now(),
         )
         self.url = f"/admin/files/filescan/{self.scan.pk}/clear-quarantine/"
+
+    def test_system_checks_do_not_touch_the_database(self):
+        """Checks run before migrations do, on a schema that does not exist yet.
+
+        unfold validates a dotted `app.codename` action permission with a
+        query against auth_permission, so declaring one that way makes
+        `manage.py migrate` crash on a fresh database - every first deploy.
+        The method form (`permissions=["override"]`) is checked against the
+        ModelAdmin instead, without a query.
+        """
+        model_admin = site._registry[FileScan]
+
+        with self.assertNumQueries(0):
+            errors = model_admin.check()
+
+        self.assertEqual(errors, [])
 
     def test_the_changelist_renders_the_row_button(self):
         """Posting to the URL is not proof the operator can reach it.

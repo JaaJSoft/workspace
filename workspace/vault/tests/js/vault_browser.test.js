@@ -758,6 +758,71 @@ test('the panel says which fields a row carries without opening one', async () =
   assert.ok(!('password' in component.panelEntry));
 });
 
+test('revealing a field opens exactly that ciphertext', async () => {
+  const { component, opened } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  const before = opened.length;
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), true);
+  assert.match(component.revealedValue('password'), /password/);
+  assert.equal(opened.length, before + 1, 'one field, one decryption');
+});
+
+test('revealing twice hides again without a second decryption', async () => {
+  const { component, opened } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  const after = opened.length;
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), false);
+  assert.equal(opened.length, after);
+});
+
+test('closing the panel takes the revealed value with it', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  component.closePanel();
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
+test('locking the vault takes the revealed value with it', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  component.onLocked();
+  await settle();
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
+test('navigating away takes the revealed value with it', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  component.setView('trash');
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
 // --- the entry form, driven by the type registry ---------------------------
 
 const LOGIN_TYPE = {

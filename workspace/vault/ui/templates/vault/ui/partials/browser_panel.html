@@ -2,10 +2,13 @@
   What a row is, without opening what it keeps.
 
   The login is already in the clear - the listing opened it - so it is shown.
-  The password is not, and the row of dots is not a mask over a value held
-  here: nothing on this page has decrypted it. That is why the field is drawn
-  from `panelCarries`, which reads the field ids the listing collected, rather
-  than from a value.
+  The password is not: the field is drawn from `panelCarries`, which reads the
+  field ids the listing collected, rather than from a value. The row of dots
+  is a mask over nothing until the user asks to see it with the reveal
+  button, which decrypts on demand through `toggleReveal`. The plaintext it
+  produces leaves component state the moment the panel closes, another entry
+  is opened, or the vault locks - never on a timer, because it is on screen
+  rather than on the clipboard, and one click undoes it.
 
   Every button is gated on `panelHasAction`, which is the endpoint's answer
   for this row and not a rule written here.
@@ -50,7 +53,18 @@
         <div x-show="panelCarries('password')">
           <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Password</div>
           <div class="flex items-center gap-2">
-            <span class="flex-1 font-mono">••••••••••</span>
+            <span
+              class="flex-1 font-mono break-all"
+              x-text="isRevealed('password') ? revealedValue('password') : '••••••••••'"
+            ></span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              @click="toggleReveal('password')"
+              :aria-label="isRevealed('password') ? 'Hide the password' : 'Reveal the password'"
+            >
+              <i :data-lucide="isRevealed('password') ? 'eye-off' : 'eye'" class="w-3.5 h-3.5"></i>
+            </button>
             <button
               type="button"
               class="btn btn-ghost btn-xs btn-square"

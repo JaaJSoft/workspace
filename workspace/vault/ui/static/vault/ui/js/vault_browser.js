@@ -170,6 +170,12 @@ window.vaultBrowser = (function () {
       // The row whose properties are on screen. Distinct from the selection:
       // the checkbox owns that, the row body opens this.
       panelEntry: null,
+      // Plaintexts the user asked to see, keyed by entry and field so a value
+      // can never be shown under another row. There is no timer: the clipboard
+      // needs one because it is invisible and machine-wide, whereas this is on
+      // screen and one click undoes it. It is dropped when the panel closes,
+      // when another entry is selected, and when the vault locks.
+      revealed: {},
       // The context menu: which row it belongs to and where it was raised.
       menu: { open: false, entry: null, x: 0, y: 0 },
       // The folder menu is its own, and its rows are written rather than
@@ -228,6 +234,7 @@ window.vaultBrowser = (function () {
         this.error = '';
         this.entryActions = {};
         this.panelEntry = null;
+        this.revealed = {};
         this.closeMenu();
         this.pendingNewEntry = false;
         // The drafts hold typed-in plaintext, so they go with the keys.
@@ -573,6 +580,47 @@ window.vaultBrowser = (function () {
         return Boolean(entry && (entry.fieldIds || []).includes(fieldId));
       },
 
+      isRevealed: function (fieldId) {
+        if (!this.panelEntry) return false;
+        return Object.prototype.hasOwnProperty.call(
+          this.revealed, this.panelEntry.uuid + '|' + fieldId
+        );
+      },
+
+      revealedValue: function (fieldId) {
+        if (!this.panelEntry) return '';
+        return this.revealed[this.panelEntry.uuid + '|' + fieldId] || '';
+      },
+
+      // The one other moment a secret is decrypted, alongside copyField: this
+      // one keeps the plaintext in component state instead of handing it off,
+      // because the point is to show it rather than move it. The panel may
+      // have moved to another entry, or the vault may have locked, while the
+      // decryption was in flight - the entry captured before the await is
+      // checked against panelEntry again after it, so a slow answer can never
+      // land under a different row's name.
+      toggleReveal: async function (fieldId) {
+        const entry = this.panelEntry;
+        if (!entry) return;
+        const slot = entry.uuid + '|' + fieldId;
+        if (Object.prototype.hasOwnProperty.call(this.revealed, slot)) {
+          delete this.revealed[slot];
+          return;
+        }
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        try {
+          const value = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, fieldId
+          );
+          if (this.panelEntry !== entry) return;
+          this.revealed[slot] = value;
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That value could not be revealed.';
+        }
+      },
+
       // ---- gestures --------------------------------------------------------
 
       // The gesture of the file browser: the checkbox selects, the row body
@@ -584,10 +632,12 @@ window.vaultBrowser = (function () {
 
       openEntryFromRow: function (entry) {
         this.panelEntry = entry;
+        this.revealed = {};
       },
 
       closePanel: function () {
         this.panelEntry = null;
+        this.revealed = {};
       },
 
       // Every navigation the store knows about lands here - forward, back,
@@ -596,6 +646,7 @@ window.vaultBrowser = (function () {
       apply: function (state) {
         store.apply.call(this, state);
         this.panelEntry = null;
+        this.revealed = {};
         this.closeMenu();
       },
 

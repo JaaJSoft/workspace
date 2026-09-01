@@ -21,6 +21,10 @@ import { canonicalCbor, decodeCbor } from './src/vault/cbor.js';
 import { SIG_ALG_ED25519, sign, verify, signBytes, verifyBytes, importSigner } from './src/vault/sign.js';
 import { crockfordEncode, crockfordDecode } from './src/vault/crockford.js';
 import {
+  base32Decode, parseOtpauth, normalizeTotpInput, importTotpKey, totpCode,
+  totpSecondsRemaining,
+} from './src/vault/totp.js';
+import {
   VAULT_METADATA_TYPE, vaultMetadataPayload, ENTRY_METADATA_TYPE, FOLDER_METADATA_TYPE,
   TAG_METADATA_TYPE, entryMetadataPayload, folderMetadataPayload, tagMetadataPayload,
 } from './src/vault/metadata.js';
@@ -69,6 +73,12 @@ window.vaultCrypto = {
   importSigner,
   crockfordEncode,
   crockfordDecode,
+  base32Decode,
+  parseOtpauth,
+  normalizeTotpInput,
+  importTotpKey,
+  totpCode,
+  totpSecondsRemaining,
   VAULT_METADATA_TYPE,
   vaultMetadataPayload,
   ENTRY_METADATA_TYPE,

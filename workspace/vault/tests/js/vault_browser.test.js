@@ -840,6 +840,33 @@ test('opening another entry drops the value revealed for the last one', async ()
   assert.deepStrictEqual({ ...component.revealed }, {});
 });
 
+test('a reload triggered by a row action takes the revealed value and the totp handle with it', async () => {
+  // loadContents runs on every reload, and a mutating row action (favourite,
+  // trash, a folder or tag save) ends with one just like a manual refresh
+  // does - so a secret revealed before the click must not survive it under a
+  // panel that has already gone from the screen.
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.favorite, ACTION.copy_totp] }),
+      updateEntry: async (uuid, body) => body,
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), true);
+  assert.notEqual(component.totp, null, 'the totp handle was derived on open');
+
+  await component.runAction(ACTION.favorite, component.entries[0]);
+
+  assert.equal(component.panelEntry, null);
+  assert.deepStrictEqual({ ...component.revealed }, {});
+  assert.equal(component.totp, null);
+});
+
 test('a decryption that lands after the vault locked is dropped, not shown', async () => {
   // The same shape as the stale-menu-answer tests above: the promise is held
   // open by hand so the assertion can land the panel somewhere else before
@@ -907,7 +934,10 @@ const TOTP_CRYPTO = {
 
 test('opening an entry with a key shows its code and its validity', async () => {
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
     crypto: TOTP_CRYPTO,
   });
   component.init();
@@ -919,8 +949,20 @@ test('opening an entry with a key shows its code and its validity', async () => 
 
 test('the panel holds a key handle, never the secret', async () => {
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
-    crypto: TOTP_CRYPTO,
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      // The default `open` stub echoes the associated data back, which never
+      // contains the words this test looks for - so a plaintext leak into
+      // component state would pass unnoticed. A real otpauth uri closes that
+      // gap.
+      open: async () => new TextEncoder().encode(
+        'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+      ),
+    },
   });
   component.init();
   await component.load();
@@ -932,7 +974,10 @@ test('the panel holds a key handle, never the secret', async () => {
 
 test('a key that does not parse is reported without taking the entry down', async () => {
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
     crypto: {
       ...TOTP_CRYPTO,
       parseOtpauth: () => { throw new Error('unsupported algorithm MD5'); },
@@ -956,9 +1001,36 @@ test('an entry without a key has no totp state at all', async () => {
   assert.equal(component.totp, null);
 });
 
+test('a trashed row does not decrypt its authenticator key when its panel opens', async () => {
+  // CopyTotpAction is unavailable once trashed (available_when_trashed is
+  // False), so the registry withholds copy_totp for this row - and opening
+  // the panel must not decrypt the key just because the row still carries
+  // the field.
+  const { component, opened } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? [Object.assign(totpRow('e-1'), { deleted_at: '2026-08-28T09:00:00Z' })]
+          : [],
+      fetchEntryActions: async () => ({ 'e-1': [] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  component.setView('trash');
+  const before = opened.length;
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.totp, null, 'no code is derived for a row copy_totp was withheld from');
+  assert.equal(opened.length, before, 'the key was never decrypted');
+});
+
 test('locking the vault drops the key handle', async () => {
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
     crypto: TOTP_CRYPTO,
   });
   component.init();
@@ -992,7 +1064,10 @@ test('the countdown rides the session tick and never resets the lock deadline', 
   const tickCallbacks = [];
   let noted = 0;
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
     crypto: TOTP_CRYPTO,
     session: {
       onTick: (callback) => tickCallbacks.push(callback),
@@ -1020,6 +1095,7 @@ test('closing the panel while a key is still decrypting leaves no code behind', 
     api: {
       listEntries: async (uuid, opts) =>
         opts && opts.trashed ? [] : [totpRow('e-1')],
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
     },
     crypto: {
       ...TOTP_CRYPTO,
@@ -1052,6 +1128,7 @@ test('a key that fails to parse after the panel moved on reports nothing for the
     api: {
       listEntries: async (uuid, opts) =>
         opts && opts.trashed ? [] : [totpRow('e-1'), entryRow('e-2')],
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
     },
     crypto: {
       ...TOTP_CRYPTO,

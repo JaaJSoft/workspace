@@ -240,9 +240,7 @@ window.vaultBrowser = (function () {
         this.openVault = null;
         this.error = '';
         this.entryActions = {};
-        this.panelEntry = null;
-        this.revealed = {};
-        this.totp = null;
+        this.resetPanel();
         this.closeMenu();
         this.pendingNewEntry = false;
         // The drafts hold typed-in plaintext, so they go with the keys.
@@ -411,7 +409,12 @@ window.vaultBrowser = (function () {
           // banner speaks about entries.
           tamperedCount: entries.tamperedCount,
         });
-        this.panelEntry = null;
+        // Every row is rebuilt from the fresh listing, so the panel and
+        // whatever it had decrypted belong to a row this pass no longer
+        // vouches for - a mutating action elsewhere (favourite, trash, a
+        // folder or tag save) reloads through here just like a manual
+        // refresh does.
+        this.resetPanel();
         await this.loadEntryActions();
       },
 
@@ -628,6 +631,7 @@ window.vaultBrowser = (function () {
           this.revealed[slot] = value;
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          if (this.panelEntry !== entry) return;
           this.error = 'That value could not be revealed.';
         }
       },
@@ -638,6 +642,10 @@ window.vaultBrowser = (function () {
       startTotp: async function (entry) {
         this.totp = null;
         if (!entry || !(entry.fieldIds || []).includes('totp')) return;
+        // The same gate the copy button reads: a trashed row's key is not
+        // decrypted just because the panel opened, only because copy_totp is
+        // still on offer for it.
+        if (!this.hasAction(entry, 'copy_totp')) return;
         const row = this.rowFor(entry.uuid);
         if (!row || !this.openVault) return;
         let key;
@@ -723,10 +731,17 @@ window.vaultBrowser = (function () {
         return this.startTotp(entry);
       },
 
-      closePanel: function () {
+      // The one place that takes the panel and everything it decrypted down
+      // together - a partial reset would leave a revealed value or a totp key
+      // handle attached to a row the screen no longer shows one for.
+      resetPanel: function () {
         this.panelEntry = null;
         this.revealed = {};
         this.totp = null;
+      },
+
+      closePanel: function () {
+        this.resetPanel();
       },
 
       // Every navigation the store knows about lands here - forward, back,
@@ -734,9 +749,7 @@ window.vaultBrowser = (function () {
       // panel with it. The row it describes has left the screen.
       apply: function (state) {
         store.apply.call(this, state);
-        this.panelEntry = null;
-        this.revealed = {};
-        this.totp = null;
+        this.resetPanel();
         this.closeMenu();
       },
 

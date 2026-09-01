@@ -508,6 +508,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         recurrence_frequency: null,
         recurrence_interval: 1,
         recurrence_end: '',
+        recurrence_rule: '',
+        recurrence_simple: null,
+        recurrence_summary: '',
       };
       this._panelRaw = null;
       this.selectedMembers = [];
@@ -539,9 +542,12 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           : '',
         all_day: allDay,
         location: event.location || '',
-        recurrence_frequency: event.recurrence_frequency || null,
-        recurrence_interval: event.recurrence_interval || 1,
-        recurrence_end: event.recurrence_end ? this.toLocalDate(event.recurrence_end) : '',
+        recurrence_rule: event.recurrence_rule || '',
+        recurrence_simple: event.recurrence_simple || null,
+        recurrence_summary: event.recurrence_summary || '',
+        recurrence_frequency: event.recurrence_simple?.frequency || null,
+        recurrence_interval: event.recurrence_simple?.interval || 1,
+        recurrence_end: event.recurrence_simple?.until ? this.toLocalDate(event.recurrence_simple.until) : '',
       };
       this.eventOwner = event.owner;
       this.externalOrganizer = event.external_organizer || '';
@@ -596,9 +602,12 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         this.form.end = this.toLocalDate(this.form.end);
       }
       // Populate recurrence fields from raw data
-      this.form.recurrence_frequency = this._panelRaw?.recurrence_frequency || null;
-      this.form.recurrence_interval = this._panelRaw?.recurrence_interval || 1;
-      this.form.recurrence_end = this._panelRaw?.recurrence_end ? this.toLocalDate(this._panelRaw.recurrence_end) : '';
+      this.form.recurrence_rule = this._panelRaw?.recurrence_rule || '';
+      this.form.recurrence_simple = this._panelRaw?.recurrence_simple || null;
+      this.form.recurrence_summary = this._panelRaw?.recurrence_summary || '';
+      this.form.recurrence_frequency = this._panelRaw?.recurrence_simple?.frequency || null;
+      this.form.recurrence_interval = this._panelRaw?.recurrence_simple?.interval || 1;
+      this.form.recurrence_end = this._panelRaw?.recurrence_simple?.until ? this.toLocalDate(this._panelRaw.recurrence_simple.until) : '';
       this.showModal = true;
 
     },
@@ -635,11 +644,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         all_day: this.form.all_day,
         location: this.form.location,
         member_ids: this.selectedMembers.map(u => u.id),
-        recurrence_frequency: this.form.recurrence_frequency || null,
-        recurrence_interval: this.form.recurrence_interval || 1,
-        recurrence_end: this.form.recurrence_end
-          ? window.wallClockToIso(this.form.recurrence_end + 'T23:59:59', tz)
-          : null,
+        recurrence_rule: this.buildRecurrenceRule(tz),
       };
 
       try {
@@ -695,9 +700,12 @@ window.calendarEventsMixin = function calendarEventsMixin() {
                 : '',
               all_day: saved.all_day,
               location: saved.location || '',
-              recurrence_frequency: saved.recurrence_frequency || null,
-              recurrence_interval: saved.recurrence_interval || 1,
-              recurrence_end: saved.recurrence_end ? this.toLocalDate(saved.recurrence_end) : '',
+              recurrence_rule: saved.recurrence_rule || '',
+              recurrence_simple: saved.recurrence_simple || null,
+              recurrence_summary: saved.recurrence_summary || '',
+              recurrence_frequency: saved.recurrence_simple?.frequency || null,
+              recurrence_interval: saved.recurrence_simple?.interval || 1,
+              recurrence_end: saved.recurrence_simple?.until ? this.toLocalDate(saved.recurrence_simple.until) : '',
             };
             this.eventOwner = saved.owner;
             this.externalOrganizer = saved.external_organizer || '';

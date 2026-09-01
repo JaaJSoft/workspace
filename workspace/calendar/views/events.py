@@ -27,6 +27,7 @@ from ..serializers import (
     EventSerializer,
     EventUpdateSerializer,
 )
+from ..services import recurrence_rule
 from ..services.event_scope import (
     EventScopeError,
     cancel_event,
@@ -222,7 +223,7 @@ class EventListView(CacheControlMixin, APIView):
         # Non-recurring events (exclude exceptions)
         non_recurring = Event.objects.filter(
             cal_or_member,
-            recurrence_frequency__isnull=True,
+            is_recurring=False,
             recurrence_parent__isnull=True,
             is_cancelled=False,
             start__lt=range_end,
@@ -236,11 +237,11 @@ class EventListView(CacheControlMixin, APIView):
         # Recurring masters overlapping the range
         masters = Event.objects.filter(
             cal_or_member,
-            recurrence_frequency__isnull=False,
+            is_recurring=True,
             recurrence_parent__isnull=True,
             start__lt=range_end,
         ).filter(
-            Q(recurrence_end__isnull=True) | Q(recurrence_end__gt=range_start),
+            Q(recurrence_until__isnull=True) | Q(recurrence_until__gte=range_start),
         )
         masters = _prefetch_event(masters)
 
@@ -275,7 +276,7 @@ class EventListView(CacheControlMixin, APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        event = Event.objects.create(
+        event = Event(
             calendar=cal,
             title=data["title"],
             description=data["description"],
@@ -287,10 +288,9 @@ class EventListView(CacheControlMixin, APIView):
             timezone="" if data["all_day"] else current_timezone_name(),
             location=data["location"],
             owner=request.user,
-            recurrence_frequency=data.get("recurrence_frequency"),
-            recurrence_interval=data.get("recurrence_interval", 1),
-            recurrence_end=data.get("recurrence_end"),
         )
+        recurrence_rule.apply_rule(event, data.get("recurrence_rule", ""))
+        event.save()
 
         member_ids = data.get("member_ids", [])
         if member_ids:

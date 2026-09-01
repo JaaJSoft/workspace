@@ -26,6 +26,7 @@ dependencies = [
     "cryptography>=50.0.1",
     "nh3>=0.3.7",
     "myl-discovery>=0.6.4",
+    "python-dateutil>=2.9",
     "icalendar>=7.3.0",
     # vault
     "cbor2>=5.7.0",

@@ -65,12 +65,6 @@ class CalendarSubscription(models.Model):
 
 
 class Event(models.Model):
-    class RecurrenceFrequency(models.TextChoices):
-        DAILY = "daily", "Daily"
-        WEEKLY = "weekly", "Weekly"
-        MONTHLY = "monthly", "Monthly"
-        YEARLY = "yearly", "Yearly"
-
     class Source(models.TextChoices):
         MANUAL = "manual", "Manual"
         ICS = "ics", "ICS invitation"
@@ -97,16 +91,14 @@ class Event(models.Model):
         related_name="calendar_events",
     )
 
-    # Recurrence fields
-    recurrence_frequency = models.CharField(
-        max_length=7,
-        choices=RecurrenceFrequency.choices,
-        null=True,
-        blank=True,
-        default=None,
-    )
-    recurrence_interval = models.PositiveSmallIntegerField(default=1)
-    recurrence_end = models.DateTimeField(null=True, blank=True, default=None)
+    # Recurrence. `recurrence_rule` is authoritative: it holds the client's
+    # RFC 5545 lines verbatim, because a CalDAV client compares what it PUT
+    # against what it GETs. The two fields below are derived from it by
+    # services.recurrence_rule.apply_rule and exist only to keep the range
+    # queries indexable - never read them as a source of truth.
+    recurrence_rule = models.TextField(blank=True, default="")
+    is_recurring = models.BooleanField(default=False)
+    recurrence_until = models.DateTimeField(null=True, blank=True, default=None)
 
     # Exception fields (for modified/cancelled occurrences)
     recurrence_parent = models.ForeignKey(
@@ -168,10 +160,6 @@ class Event(models.Model):
 
     def __str__(self):
         return self.title
-
-    @property
-    def is_recurring(self):
-        return self.recurrence_frequency is not None
 
     @property
     def is_exception(self):

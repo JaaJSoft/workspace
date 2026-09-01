@@ -7,7 +7,7 @@ The endpoint supports two modes:
 Mode is selected by the presence of the `after` query param.
 """
 
-from datetime import timedelta
+from datetime import UTC, timedelta
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -15,8 +15,14 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, Event, EventMember
+from workspace.calendar.services.recurrence_rule import apply_rule
 
 User = get_user_model()
+
+
+def _until(dt):
+    """RFC 5545 UNTIL token for an aware datetime, in UTC."""
+    return dt.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 class CursorModeMixin:
@@ -183,16 +189,19 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
     """Edge cases for recurring event expansion in cursor mode."""
 
     def _make_weekly(self, start, rec_end=None, title="Weekly"):
-        return Event.objects.create(
+        event = Event(
             calendar=self.cal,
             owner=self.owner,
             title=title,
             start=start,
             end=start + timedelta(hours=1),
-            recurrence_frequency="weekly",
-            recurrence_interval=1,
-            recurrence_end=rec_end,
         )
+        rule = "RRULE:FREQ=WEEKLY"
+        if rec_end:
+            rule += f";UNTIL={_until(rec_end)}"
+        apply_rule(event, rule)
+        event.save()
+        return event
 
     def test_recurring_weekly_future_master(self):
         """Weekly master starting tomorrow → 20 occurrences + cursor for 21st."""
@@ -290,15 +299,15 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
     def test_recurring_monthly_stride(self):
         """Monthly master → correct strides across months."""
         now = timezone.now().replace(day=1, hour=10, minute=0, second=0, microsecond=0)
-        Event.objects.create(
+        event = Event(
             calendar=self.cal,
             owner=self.owner,
             title="Monthly",
             start=now + timedelta(days=1),
             end=now + timedelta(days=1, hours=1),
-            recurrence_frequency="monthly",
-            recurrence_interval=1,
         )
+        apply_rule(event, "RRULE:FREQ=MONTHLY")
+        event.save()
         resp = self._get_cursor(after=now)
         events = resp.data["events"]
         self.assertEqual(len(events), 20)
@@ -311,15 +320,15 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
     def test_recurring_interval_respected(self):
         """Bi-weekly master → 14-day stride between consecutive occurrences."""
         now = timezone.now().replace(microsecond=0)
-        Event.objects.create(
+        event = Event(
             calendar=self.cal,
             owner=self.owner,
             title="BiWeekly",
             start=now + timedelta(days=1),
             end=now + timedelta(days=1, hours=1),
-            recurrence_frequency="weekly",
-            recurrence_interval=2,
         )
+        apply_rule(event, "RRULE:FREQ=WEEKLY;INTERVAL=2")
+        event.save()
         resp = self._get_cursor(after=now)
         from dateutil.parser import parse as _p
 
@@ -335,15 +344,15 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
         self._make_event("N4", now + timedelta(days=4))
         self._make_event("N6", now + timedelta(days=6))
         # Daily recurring from day 1 → day 1, 2, 3, 4, 5, 6, ...
-        Event.objects.create(
+        event = Event(
             calendar=self.cal,
             owner=self.owner,
             title="Daily",
             start=now + timedelta(days=1),
             end=now + timedelta(days=1, hours=1),
-            recurrence_frequency="daily",
-            recurrence_interval=1,
         )
+        apply_rule(event, "RRULE:FREQ=DAILY")
+        event.save()
         resp = self._get_cursor(after=now)
         # Compare parsed datetimes, not strings: DRF serializes UTC with a
         # "Z" suffix and `make_virtual_occurrence` uses isoformat ("+00:00").
@@ -412,15 +421,15 @@ class CursorModeFiltersTests(CursorModeMixin, APITestCase):
         leak into a filtered request."""
         now = timezone.now()
         cal2 = Calendar.objects.create(name="Other", owner=self.owner)
-        Event.objects.create(
+        event = Event(
             calendar=cal2,
             owner=self.owner,
             title="ExcludedWeekly",
             start=now + timedelta(days=1),
             end=now + timedelta(days=1, hours=1),
-            recurrence_frequency="weekly",
-            recurrence_interval=1,
         )
+        apply_rule(event, "RRULE:FREQ=WEEKLY")
+        event.save()
 
         resp = self.client.get(
             self.url,
@@ -486,15 +495,15 @@ class CursorModeFiltersTests(CursorModeMixin, APITestCase):
         when show_declined=false."""
         now = timezone.now()
         other_cal = Calendar.objects.create(name="Other", owner=self.other)
-        master = Event.objects.create(
+        master = Event(
             calendar=other_cal,
             owner=self.other,
             title="DeclinedWeekly",
             start=now + timedelta(days=1),
             end=now + timedelta(days=1, hours=1),
-            recurrence_frequency="weekly",
-            recurrence_interval=1,
         )
+        apply_rule(master, "RRULE:FREQ=WEEKLY")
+        master.save()
         EventMember.objects.create(
             event=master,
             user=self.owner,

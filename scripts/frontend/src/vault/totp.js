@@ -8,7 +8,7 @@
 // What an entry stores is always a complete otpauth:// URI, never a bare
 // secret: it is what every exporter emits, so the import of the export step
 // receives its own format rather than having to discard the parameters that
-// decide the code. See 2026-09-01-vault-entry-secrets-design.md §2.
+// decide the code.
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const BASE32_DECODE = new Map([...BASE32_ALPHABET].map((symbol, index) => [symbol, index]));
 

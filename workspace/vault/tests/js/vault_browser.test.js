@@ -427,6 +427,7 @@ const ACTION = {
   favorite: { id: 'favorite', label: 'Add to favourites', icon: 'star', bulk: true, css_class: '' },
   unfavorite: { id: 'unfavorite', label: 'Remove from favourites', icon: 'star-off', bulk: true, css_class: '' },
   copy_password: { id: 'copy_password', label: 'Copy password', icon: 'key-round', bulk: false, css_class: '' },
+  copy_totp: { id: 'copy_totp', label: 'Copy authenticator code', icon: 'timer', bulk: false, css_class: '' },
 };
 
 function ids(actions) {
@@ -885,6 +886,128 @@ test('the reveal button is gated on the same action id as the copy button', asyn
   await component.load();
   component.openEntryFromRow(component.entries[0]);
   assert.equal(component.panelHasAction('copy_password'), false);
+});
+
+// --- the authenticator code, held as a key handle rather than a secret -----
+
+function totpRow(uuid) {
+  const row = entryRow(uuid);
+  row.entry_fields = row.entry_fields.concat([
+    { field_id: 'totp', encrypted_value: 'ct:totp' },
+  ]);
+  return row;
+}
+
+const TOTP_CRYPTO = {
+  parseOtpauth: () => ({ secret: new Uint8Array(20), hash: 'SHA-1', algorithm: 'SHA1', digits: 6, period: 30 }),
+  importTotpKey: async () => ({ opaque: true }),
+  totpCode: async () => '123456',
+  totpSecondsRemaining: () => 17,
+};
+
+test('opening an entry with a key shows its code and its validity', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.startTotp(component.entries[0]);
+  assert.equal(component.totp.code, '123456');
+  assert.equal(component.totp.secondsLeft, 17);
+});
+
+test('the panel holds a key handle, never the secret', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.startTotp(component.entries[0]);
+  const held = JSON.stringify(component.totp);
+  assert.ok(!held.includes('otpauth'), 'the uri must not survive in state');
+  assert.ok(!held.includes('secret'), 'nothing secret-shaped survives in state');
+});
+
+test('a key that does not parse is reported without taking the entry down', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
+    crypto: {
+      ...TOTP_CRYPTO,
+      parseOtpauth: () => { throw new Error('unsupported algorithm MD5'); },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.startTotp(component.entries[0]);
+  assert.equal(component.totp.unreadable, true);
+  assert.equal(component.error, '', 'the rest of the entry is unaffected');
+});
+
+test('an entry without a key has no totp state at all', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.startTotp(component.entries[0]);
+  assert.equal(component.totp, null);
+});
+
+test('locking the vault drops the key handle', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.startTotp(component.entries[0]);
+  component.onLocked();
+  await settle();
+  assert.equal(component.totp, null);
+});
+
+test('copying the code never puts the key on the clipboard', async () => {
+  const { component, copied } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.runAction({ id: 'copy_totp' }, component.entries[0]);
+  assert.deepStrictEqual(copied, ['123456']);
+});
+
+test('the countdown rides the session tick and never resets the lock deadline', async () => {
+  // A second setInterval could outlive the component, and pushing the
+  // deadline back from a tick would make an open panel with a code counting
+  // down keep the vault unlocked forever. Neither is acceptable, so this
+  // pins both: the callback comes from vaultSession.onTick, and running it
+  // many times never calls noteActivity.
+  const tickCallbacks = [];
+  let noted = 0;
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]) },
+    crypto: TOTP_CRYPTO,
+    session: {
+      onTick: (callback) => tickCallbacks.push(callback),
+      noteActivity: () => { noted += 1; },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.startTotp(component.entries[0]);
+  assert.ok(tickCallbacks.length > 0, 'the refresh must subscribe through onTick');
+  for (let i = 0; i < 50; i += 1) {
+    tickCallbacks.forEach((callback) => callback());
+  }
+  await settle();
+  assert.equal(noted, 0, 'refreshing the code must never touch the lock deadline');
 });
 
 // --- the entry form, driven by the type registry ---------------------------
@@ -1706,9 +1829,8 @@ test('a new folder is still created rather than updated', async () => {
 });
 
 test('an action the client cannot carry out is never put in the menu', async () => {
-  // The endpoint offers `move`, `set_tags` and `copy_totp`; nothing here can
-  // run them yet. A row that does nothing when clicked is worse than one that
-  // is not there.
+  // The endpoint offers `move` and `set_tags`; nothing here can run them yet.
+  // A row that does nothing when clicked is worse than one that is not there.
   const { component } = browser({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
@@ -1717,7 +1839,6 @@ test('an action the client cannot carry out is never put in the menu', async () 
           { id: 'edit', label: 'Edit', icon: 'pen', category: 'edit' },
           { id: 'move', label: 'Move to folder', icon: 'folder', category: 'organize', bulk: true },
           { id: 'set_tags', label: 'Edit tags', icon: 'tag', category: 'organize', bulk: true },
-          { id: 'copy_totp', label: 'Copy code', icon: 'clock', category: 'clipboard' },
         ],
       }),
     },

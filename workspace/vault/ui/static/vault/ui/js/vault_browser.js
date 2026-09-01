@@ -22,12 +22,13 @@
 // a server-driven menu exists to prevent. So the menu is narrowed to this
 // list, and a test holds the list against the registry.
 //
-// `move`, `set_tags` and `copy_totp` are what the registry offers and this
-// client does not do yet. They are hidden rather than shown dead.
+// `move` and `set_tags` are what the registry offers and this client does
+// not do yet. They are hidden rather than shown dead.
 window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'edit',
   'copy_username',
   'copy_password',
+  'copy_totp',
   'open_uri',
   'favorite',
   'unfavorite',
@@ -176,6 +177,11 @@ window.vaultBrowser = (function () {
       // screen and one click undoes it. It is dropped when the panel closes,
       // when another entry is selected, and when the vault locks.
       revealed: {},
+      // The authenticator key, held as a handle rather than as a secret: the
+      // HMAC key is imported non-extractable, so what sits here is something
+      // javascript cannot read back. `code` is a six-digit derivative that
+      // expires within the period, which is why it may live in state at all.
+      totp: null,
       // The context menu: which row it belongs to and where it was raised.
       menu: { open: false, entry: null, x: 0, y: 0 },
       // The folder menu is its own, and its rows are written rather than
@@ -204,6 +210,7 @@ window.vaultBrowser = (function () {
         window.vaultClipboard.onChange(function (state) {
           self.clipboard = state;
         });
+        window.vaultSession.onTick(function () { self.refreshTotp(); });
       },
 
       // A palette command is a plain link, so the only thing it can carry is
@@ -235,6 +242,7 @@ window.vaultBrowser = (function () {
         this.entryActions = {};
         this.panelEntry = null;
         this.revealed = {};
+        this.totp = null;
         this.closeMenu();
         this.pendingNewEntry = false;
         // The drafts hold typed-in plaintext, so they go with the keys.
@@ -621,6 +629,75 @@ window.vaultBrowser = (function () {
         }
       },
 
+      // Opens the key once, derives the HMAC handle from it and lets the
+      // base32 bytes go: what stays in state afterward is the non-extractable
+      // key plus the six-digit derivative, never the shared secret itself.
+      startTotp: async function (entry) {
+        this.totp = null;
+        if (!entry || !(entry.fieldIds || []).includes('totp')) return;
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        let parsed;
+        try {
+          const uri = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'totp'
+          );
+          parsed = window.vaultCrypto.parseOtpauth(uri);
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          // Localised like a failed signature: this line says it cannot be
+          // read, and the rest of the entry is shown as usual.
+          this.totp = { entryUuid: entry.uuid, unreadable: true };
+          return;
+        }
+        const key = await window.vaultCrypto.importTotpKey(parsed);
+        if (this.panelEntry && this.panelEntry.uuid !== entry.uuid) return;
+        this.totp = {
+          entryUuid: entry.uuid,
+          key: key,
+          digits: parsed.digits,
+          period: parsed.period,
+          code: '',
+          secondsLeft: 0,
+          unreadable: false,
+        };
+        await this.refreshTotp();
+      },
+
+      // Driven by the session's own tick, which already beats once a second
+      // for the lock countdown. A second interval could outlive the component;
+      // this one dies with the session. It does not push the lock back either:
+      // only real DOM events call noteActivity.
+      refreshTotp: async function () {
+        const totp = this.totp;
+        if (!totp || totp.unreadable || !totp.key) return;
+        const now = Date.now() / 1000;
+        const code = await window.vaultCrypto.totpCode(totp.key, totp, now);
+        if (this.totp !== totp) return;
+        totp.code = code;
+        totp.secondsLeft = window.vaultCrypto.totpSecondsRemaining(totp, now);
+      },
+
+      // Reached from the row menu as well as from the panel, so it opens and
+      // derives on its own rather than reading panel state. It copies the
+      // derived code: copyField would copy the stored value, which is the key.
+      copyTotp: async function (entry) {
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        try {
+          const uri = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'totp'
+          );
+          const parsed = window.vaultCrypto.parseOtpauth(uri);
+          const key = await window.vaultCrypto.importTotpKey(parsed);
+          const code = await window.vaultCrypto.totpCode(key, parsed, Date.now() / 1000);
+          await window.vaultClipboard.copy('Authenticator code', code, { transient: true });
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That authenticator code could not be copied.';
+        }
+      },
+
       // ---- gestures --------------------------------------------------------
 
       // The gesture of the file browser: the checkbox selects, the row body
@@ -633,11 +710,13 @@ window.vaultBrowser = (function () {
       openEntryFromRow: function (entry) {
         this.panelEntry = entry;
         this.revealed = {};
+        this.startTotp(entry);
       },
 
       closePanel: function () {
         this.panelEntry = null;
         this.revealed = {};
+        this.totp = null;
       },
 
       // Every navigation the store knows about lands here - forward, back,
@@ -647,6 +726,7 @@ window.vaultBrowser = (function () {
         store.apply.call(this, state);
         this.panelEntry = null;
         this.revealed = {};
+        this.totp = null;
         this.closeMenu();
       },
 
@@ -658,6 +738,7 @@ window.vaultBrowser = (function () {
         this.closeMenu();
         if (!entry || !this.hasAction(entry, action.id)) return;
         if (action.id === 'edit') return this.editEntry(entry);
+        if (action.id === 'copy_totp') return this.copyTotp(entry);
         const copies = {
           copy_username: ['Username', 'username', false],
           copy_password: ['Password', 'password', true],

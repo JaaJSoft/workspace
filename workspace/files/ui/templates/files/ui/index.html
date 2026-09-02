@@ -292,14 +292,21 @@
         animating while the main thread is busy binding the new listing -
         that is the only part of the wait the user would otherwise read as
         a freeze.
+
+        The fade-in waits 200 ms so a folder that answers at once never
+        flashes a half-drawn veil. The wait is a CSS transition-delay, not
+        a timer: a timer set before the request cannot fire while the main
+        thread is busy binding the listing, the compositor runs the delay
+        regardless. The veil never takes pointer events, so the page is
+        not silently click-proof while the delay runs.
         {% endcomment %}
         <div
           x-show="folderLoading"
           x-cloak
-          x-transition:enter="transition-opacity duration-150"
+          x-transition:enter="transition-opacity duration-150 delay-200"
           x-transition:enter-start="opacity-0"
           x-transition:enter-end="opacity-100"
-          class="absolute inset-0 z-10 flex items-center justify-center bg-base-100/60"
+          class="absolute inset-0 z-10 flex items-center justify-center bg-base-100/60 pointer-events-none"
           role="status"
           aria-live="polite"
           data-testid="folder-loading"

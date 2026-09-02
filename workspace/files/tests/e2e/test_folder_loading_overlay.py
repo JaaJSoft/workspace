@@ -64,6 +64,26 @@ class FolderLoadingOverlayTests(PlaywrightTestCase):
         expect(self.page.locator("#folder-browser h1")).to_have_text("Reports")
         expect(overlay).to_be_hidden()
 
+    def test_overlay_stays_invisible_for_the_first_200ms(self):
+        # The fade-in is delayed so a folder that answers at once never
+        # flashes a half-drawn veil. Playwright's visibility check ignores
+        # opacity, so the computed style is what pins the delay down.
+        overlay = self._open_files()
+
+        held = []
+        self.page.route(
+            f"**/files/{self.folder.uuid}*", lambda route: held.append(route)
+        )
+        self.page.locator(f'a[data-folder-link][href$="{self.folder.uuid}"]').click()
+        self._wait_for(held)
+        expect(overlay).to_be_visible()
+        self.assertEqual(overlay.evaluate("el => getComputedStyle(el).opacity"), "0")
+        self.page.wait_for_timeout(600)
+        self.assertEqual(overlay.evaluate("el => getComputedStyle(el).opacity"), "1")
+
+        held[0].continue_()
+        expect(overlay).to_be_hidden()
+
     def test_overlay_clears_when_a_refresh_fails(self):
         # A failed link navigation falls back to a full page load, which
         # takes the overlay away with the page. A failed in-place refresh

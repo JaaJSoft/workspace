@@ -157,35 +157,14 @@ class VaultBrowserTests(PlaywrightTestCase):
         )
         self.assertIn("totp", written, f"the key was not written, fields are {written}")
 
-    def _panel_diagnosis(self):
-        """What the panel is actually bound to, read out of the component."""
-        return self.page.evaluate(
-            """() => {
-                const root = document.querySelector('[x-data="vaultBrowser()"]');
-                const d = window.Alpine.$data(root);
-                return {
-                    panelUuid: d.panelEntry ? d.panelEntry.uuid : null,
-                    panelFieldIds: d.panelEntry ? [...(d.panelEntry.fieldIds || [])] : null,
-                    entries: d.entries.map((e) => [e.uuid, [...(e.fieldIds || [])]]),
-                    actions: Object.fromEntries(
-                        Object.entries(d.entryActions).map(
-                            ([k, v]) => [k, v.map((a) => a.id)]
-                        )
-                    ),
-                    totp: d.totp
-                        ? { unreadable: !!d.totp.unreadable, code: !!d.totp.code }
-                        : null,
-                    loading: d.loading,
-                    error: d.error,
-                };
-            }"""
-        )
-
     def _wait_for_totp_section(self, panel):
-        try:
-            panel.get_by_text("Authenticator code", exact=True).wait_for(timeout=15000)
-        except Exception:
-            self.fail(f"no authenticator section: {self._panel_diagnosis()}")
+        """The section, before the code inside it.
+
+        Three faults share one symptom - the row carrying no key, the registry
+        withholding copy_totp, and the derivation failing - and waiting on the
+        section first tells the last one apart from the other two.
+        """
+        panel.get_by_text("Authenticator code", exact=True).wait_for(timeout=15000)
 
     # ---- the walk ---------------------------------------------------------
 

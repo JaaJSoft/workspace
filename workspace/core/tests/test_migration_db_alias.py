@@ -29,6 +29,14 @@ RUN_PYTHON = re.compile(r"\bRunPython\s*\(")
 # still writes to the default database, and that partial shape is the likeliest
 # way the next mistake arrives - someone adds a query to a migration that
 # already looks correct.
+#
+# Deliberately stricter than correctness requires. A queryset built only to be
+# wrapped in Subquery() or Exists() is compiled against the OUTER query's
+# connection, so routing it changes nothing - but telling that apart from a
+# real query needs statement-level analysis (the OuterRef marking it as
+# correlated is usually on a different line from the `.objects`), and the
+# routing is a harmless no-op there. One rule that is occasionally redundant
+# beats a clever one that is occasionally wrong.
 UNROUTED_MANAGER = re.compile(r"\.objects\b(?!\.using\()")
 # Where the alias has to come from. `.using("default")` routes every manager
 # and is still wrong, so the two checks are not redundant.

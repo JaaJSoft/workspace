@@ -474,7 +474,9 @@ window.fileTableControls = function fileTableControls() {
           break;
         }
         case 'download':
-          this._bulkDownload(uuids);
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'download', uuids }
+          }));
           break;
         case 'cut':
           window.dispatchEvent(new CustomEvent('bulk-action', {
@@ -501,29 +503,6 @@ window.fileTableControls = function fileTableControls() {
             detail: { action: 'purge', uuids }
           }));
           break;
-      }
-    },
-
-    async _bulkDownload(uuids) {
-      try {
-        const csrfToken = getCSRFToken();
-        const resp = await fetch('/api/v1/files/bulk-download', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ uuids }),
-        });
-        if (!resp.ok) return;
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'download.zip';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        // silent
       }
     },
 

@@ -1108,6 +1108,18 @@ window.fileBrowser = function fileBrowser() {
 
     async bulkDownload(uuids) {
       if (!uuids || uuids.length === 0) return;
+      // Nothing shows until the whole archive has arrived, which takes a
+      // while for a large selection. The notice waits a moment so a small
+      // one does not flash it.
+      let noticeEl = null;
+      const noticeTimer = setTimeout(() => {
+        noticeEl = window.AppAlert.show({
+          message: `Preparing an archive of ${uuids.length} item${uuids.length > 1 ? 's' : ''}...`,
+          type: 'info',
+          duration: 0,
+          dismissible: false,
+        });
+      }, 1000);
       try {
         const csrfToken = getCSRFToken();
         const resp = await fetch('/api/v1/files/bulk-download', {
@@ -1116,7 +1128,8 @@ window.fileBrowser = function fileBrowser() {
           body: JSON.stringify({ uuids }),
         });
         if (!resp.ok) {
-          window.AppAlert.error('Failed to download selected files');
+          const data = await resp.json().catch(() => ({}));
+          window.AppAlert.error(data.detail || 'Failed to download selected files');
           return;
         }
         const blob = await resp.blob();
@@ -1130,6 +1143,9 @@ window.fileBrowser = function fileBrowser() {
         URL.revokeObjectURL(url);
       } catch (e) {
         window.AppAlert.error('Failed to download selected files');
+      } finally {
+        clearTimeout(noticeTimer);
+        if (noticeEl) window.AppAlert.dismiss(noticeEl);
       }
     },
 

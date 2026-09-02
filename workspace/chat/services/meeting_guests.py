@@ -81,6 +81,11 @@ def guest_for_token(token):
     with no state check and no occurrence check. It exists so a WAITING guest
     can be told their own lobby status, which resolve_guest rejects by design.
     Anything reading meeting content must use resolve_guest instead.
+
+    No select_related: the lobby only needs guest.state, and guest.meeting_id
+    is already on the row. resolve_guest hydrates meeting/meeting__event because
+    it hands back content; this one deliberately does not, so a bare row is
+    the only thing a not-yet-admitted caller can reach for.
     """
     from ..models import MeetingGuest
 
@@ -88,8 +93,4 @@ def guest_for_token(token):
     if digest is None:
         return None
 
-    return (
-        MeetingGuest.objects.select_related("meeting", "meeting__event")
-        .filter(token_hash=digest)
-        .first()
-    )
+    return MeetingGuest.objects.filter(token_hash=digest).first()

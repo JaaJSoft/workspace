@@ -123,6 +123,25 @@ def _has_stale_participants(session):
     return any(p.participant_key not in fresh for p in active)
 
 
+def close_guest_participation(guest):
+    """Close any active call participant row for *guest* and drop their heartbeat.
+
+    Called when a host removes a guest from the meeting. Nothing else sweeps
+    this row: _active_guest_keys already excludes a removed guest from the
+    fan-out by state, but without this their CallParticipant row survives,
+    still holding a capacity slot and a stale entry in
+    list_active_participants until the heartbeat lapses on its own.
+    """
+    from ..models import CallParticipant, CallSession
+
+    participants = CallParticipant.objects.filter(
+        guest=guest, left_at__isnull=True, session__state=CallSession.State.ACTIVE
+    )
+    for participant in participants:
+        drop_presence(participant.session_id, guest_key(guest.uuid))
+    participants.update(left_at=timezone.now())
+
+
 def list_active_participants(session):
     from ..models import CallParticipant
 
@@ -144,13 +163,18 @@ def _active_member_ids(conversation_id):
 
 
 def _active_guest_keys(conversation_id):
-    """Participant keys for guests in the conversation's active call.
+    """Participant keys for admitted guests in the conversation's active call.
 
     A plain read on purpose: get_active_call self-heals, and _broadcast is
     called from inside that self-heal (via cleanup_stale_participants), so
     reaching for it here would recurse.
+
+    guest__state=ADMITTED matters: a host removing a guest flips MeetingGuest.state
+    but leaves the CallParticipant row alone (nothing sweeps it), so without this
+    filter a removed guest would keep receiving every call event until their
+    heartbeat lapses.
     """
-    from ..models import CallParticipant, CallSession
+    from ..models import CallParticipant, CallSession, MeetingGuest
 
     return [
         guest_key(guest_uuid)
@@ -159,14 +183,28 @@ def _active_guest_keys(conversation_id):
             session__state=CallSession.State.ACTIVE,
             left_at__isnull=True,
             guest__isnull=False,
+            guest__state=MeetingGuest.State.ADMITTED,
         ).values_list("guest_id", flat=True)
     ]
 
 
-def _broadcast(conversation_id, event, data, exclude_key=None):
-    """Fan a call event out to every active member and guest, then wake them."""
-    keys = [user_key(uid) for uid in _active_member_ids(conversation_id)]
-    keys += _active_guest_keys(conversation_id)
+def _active_recipient_keys(conversation_id):
+    """Every active member key plus every admitted-guest-in-the-call key."""
+    return [
+        user_key(uid) for uid in _active_member_ids(conversation_id)
+    ] + _active_guest_keys(conversation_id)
+
+
+def _broadcast(conversation_id, event, data, exclude_key=None, recipients=None):
+    """Fan a call event out to every active member and guest, then wake them.
+
+    *recipients*, when given, is used verbatim instead of a fresh lookup. This
+    matters for call_ended: _active_guest_keys only matches an ACTIVE session,
+    so a caller that flips the session to ENDED before broadcasting must
+    resolve who was in the call first and pass that list through, or every
+    guest recipient silently drops out of their own end-of-call notice.
+    """
+    keys = _active_recipient_keys(conversation_id) if recipients is None else recipients
     for key in keys:
         if exclude_key is not None and key == exclude_key:
             continue
@@ -331,6 +369,11 @@ def _end_call(session):
     """Mark a session ended, finalize its system message, broadcast call_ended."""
     from ..models import CallSession
 
+    # Resolve who is in the call before flipping state to ENDED:
+    # _active_guest_keys only matches an ACTIVE session, so computing this
+    # after the save below would silently drop every guest from call_ended.
+    recipients = _active_recipient_keys(session.conversation_id)
+
     session.state = CallSession.State.ENDED
     session.ended_at = timezone.now()
     session.save(update_fields=["state", "ended_at"])
@@ -356,6 +399,7 @@ def _end_call(session):
             "duration": duration,
             "duration_label": label,
         },
+        recipients=recipients,
     )
     return session
 

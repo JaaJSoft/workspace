@@ -150,6 +150,13 @@ class GuestForTokenTests(TestCase):
         self.guest.save(update_fields=["state"])
         self.assertEqual(guest_for_token(self.token), self.guest)
 
+    def test_costs_a_single_query_no_join(self):
+        # guest_for_token hands the lobby a bare row on purpose: hydrating
+        # meeting/meeting__event here is the fastest route to a lobby response
+        # that leaks event content to someone not yet admitted.
+        with self.assertNumQueries(1):
+            guest_for_token(self.token)
+
     def test_rejects_an_unknown_token(self):
         self.assertIsNone(guest_for_token("nope"))
 

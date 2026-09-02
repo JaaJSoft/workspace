@@ -8,9 +8,17 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event, EventMember
-from workspace.chat.models import Conversation, Meeting, MeetingGuest
+from workspace.chat.models import (
+    CallParticipant,
+    Conversation,
+    Meeting,
+    MeetingGuest,
+)
+from workspace.chat.services import call_signaling as sig
+from workspace.chat.services import calls
 from workspace.chat.services import meetings as meeting_service
 from workspace.chat.services.meeting_guests import issue_token, resolve_guest
+from workspace.chat.services.participant_keys import guest_key
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import (
     admit_guest,
@@ -207,6 +215,20 @@ class MeetingLifecycleTests(TestCase):
         self.assertEqual(self.guest.state, MeetingGuest.State.REMOVED)
         self.assertIsNotNone(self.guest.removed_at)
 
+    def test_remove_closes_the_guests_call_participation(self):
+        admit_guest(self.guest, self.owner)
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        participant = CallParticipant.objects.create(session=session, guest=self.guest)
+        calls.touch_presence(session.uuid, guest_key(self.guest.uuid), {"audio": True})
+
+        remove_guest(self.guest)
+
+        participant.refresh_from_db()
+        self.assertIsNotNone(participant.left_at)
+        self.assertNotIn(guest_key(self.guest.uuid), calls.get_presence(session.uuid))
+
     def test_end_records_the_current_occurrence(self):
         self.assertTrue(end_meeting(self.meeting))
         self.meeting.refresh_from_db()
@@ -230,6 +252,20 @@ class MeetingLifecycleTests(TestCase):
         self.assertIsNotNone(resolve_guest(token))
         end_meeting(self.meeting)
         self.assertIsNone(resolve_guest(token))
+
+    def test_ending_notifies_an_admitted_guest_in_the_call(self):
+        admit_guest(self.guest, self.owner)
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        CallParticipant.objects.create(session=session, guest=self.guest)
+        calls.touch_presence(session.uuid, guest_key(self.guest.uuid), {"audio": True})
+        sig.drain_events(guest_key(self.guest.uuid))  # clear join noise
+
+        end_meeting(self.meeting)
+
+        events = sig.drain_events(guest_key(self.guest.uuid))
+        self.assertIn("call_ended", [e["event"] for e in events])
 
     def test_ending_refuses_waiting_guests_of_this_occurrence(self):
         # A WAITING row for the occurrence being closed must not survive as

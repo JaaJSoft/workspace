@@ -109,10 +109,12 @@ def refuse_guest(guest):
 
 def remove_guest(guest):
     from ..models import MeetingGuest
+    from .calls import close_guest_participation
 
     guest.state = MeetingGuest.State.REMOVED
     guest.removed_at = timezone.now()
     guest.save(update_fields=["state", "removed_at"])
+    close_guest_participation(guest)
     _notify_guest(guest, "meeting_removed")
     return guest
 

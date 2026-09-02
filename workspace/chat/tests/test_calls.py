@@ -193,6 +193,7 @@ class BroadcastGuestTests(TestCase):
         self.guest = MeetingGuest.objects.create(
             meeting=meeting,
             display_name="Visitor",
+            state=MeetingGuest.State.ADMITTED,
             occurrence_start=timezone.now(),
             token_hash="9" * 64,
         )
@@ -219,6 +220,15 @@ class BroadcastGuestTests(TestCase):
         sig.drain_events(key)
         calls._broadcast(self.conv.uuid, "x", {}, exclude_key=key)
         self.assertEqual(sig.drain_events(key), [])
+
+    def test_broadcast_ignores_a_removed_guest(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        CallParticipant.objects.create(session=session, guest=self.guest)
+        self.guest.state = MeetingGuest.State.REMOVED
+        self.guest.save(update_fields=["state"])
+        sig.drain_events(guest_key(self.guest.uuid))
+        calls._broadcast(self.conv.uuid, "x", {})
+        self.assertEqual(sig.drain_events(guest_key(self.guest.uuid)), [])
 
     def test_broadcast_ignores_a_departed_guest(self):
         session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)

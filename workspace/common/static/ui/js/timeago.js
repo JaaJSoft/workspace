@@ -4,12 +4,28 @@
 // on the same page match.
 // Registers window.formatTimeAgo(value) and window.formatLastSeenAgo(value).
 (function () {
+  // 'en-US' pins the English month abbreviations the server's %b emits.
+  const _DATE_PARTS_OPTIONS = { year: 'numeric', month: 'short', day: '2-digit' };
+
+  // Building the formatter costs far more than formatting with it, and a
+  // feed asks for one per <time data-localtime="relative">, so there is one
+  // formatter per configured zone. Without a configured zone the formatter
+  // binds the browser zone at construction, which can change while the
+  // page is open, so that case is not cached.
+  const _datePartsFormatters = new Map();
+  function _datePartsFormatter(tz) {
+    if (!tz) return new Intl.DateTimeFormat('en-US', _DATE_PARTS_OPTIONS);
+    let formatter = _datePartsFormatters.get(tz);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, ..._DATE_PARTS_OPTIONS });
+      _datePartsFormatters.set(tz, formatter);
+    }
+    return formatter;
+  }
+
   function _dateParts(d, tz) {
     const parts = {};
-    // 'en-US' pins the English month abbreviations the server's %b emits.
-    new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: 'short', day: '2-digit' })
-      .formatToParts(d)
-      .forEach((p) => { parts[p.type] = p.value; });
+    _datePartsFormatter(tz).formatToParts(d).forEach((p) => { parts[p.type] = p.value; });
     return parts;
   }
 

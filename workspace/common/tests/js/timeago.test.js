@@ -69,3 +69,57 @@ test('formatLastSeenAgo skips the first minute and prefixes a dot', () => {
   assert.equal(ctx.formatLastSeenAgo(null, NOW), '');
   assert.equal(ctx.formatLastSeenAgo('not-a-date', NOW), '');
 });
+
+// Counts Intl.DateTimeFormat constructions. Shadows the context's own
+// Intl: the script looks the global up on every call, so the count sees
+// each constructor invocation.
+function countFormatters(context) {
+  const counter = { built: 0 };
+  context.Intl = {
+    DateTimeFormat: function (...args) {
+      counter.built++;
+      return new Intl.DateTimeFormat(...args);
+    },
+  };
+  return counter;
+}
+
+// Older than a week, so every value reaches the absolute-date branch.
+function oldValues(count) {
+  return Array.from({ length: count }, (_, i) => `2026-01-${String(i % 28 + 1).padStart(2, '0')}T20:00:00Z`);
+}
+
+test('builds one date-parts formatter per zone, not one per value', () => {
+  let zone = 'Europe/Paris';
+  const zoned = loadScript('workspace/common/static/ui/js/timeago.js', {
+    getUserTimeZone: () => zone,
+  });
+  const counter = countFormatters(zoned);
+
+  oldValues(50).forEach((v) => zoned.formatTimeAgo(v, NOW));
+  assert.equal(counter.built, 1);
+  assert.equal(zoned.formatTimeAgo('2026-01-31T23:30:00Z', NOW), 'Feb 01');
+  assert.equal(counter.built, 1);
+
+  // The zone is part of the key: another zone gets its own formatter, once.
+  zone = 'America/New_York';
+  oldValues(50).forEach((v) => zoned.formatTimeAgo(v, NOW));
+  assert.equal(counter.built, 2);
+  // 03:00 UTC on Feb 1 is still Jan 31 in New York.
+  assert.equal(zoned.formatTimeAgo('2026-02-01T03:00:00Z', NOW), 'Jan 31');
+  assert.equal(counter.built, 2);
+});
+
+test('without a configured zone the formatter is rebuilt every time', () => {
+  // The browser zone binds at construction and can change while the page
+  // is open (a laptop crossing a border), so that one must not be cached.
+  const unzoned = loadScript('workspace/common/static/ui/js/timeago.js', {
+    getUserTimeZone: () => undefined,
+  });
+  const counter = countFormatters(unzoned);
+  unzoned.formatTimeAgo('2026-01-15T12:00:00Z', NOW);
+  const afterFirst = counter.built;
+  assert.ok(afterFirst > 0);
+  unzoned.formatTimeAgo('2026-01-15T12:00:00Z', NOW);
+  assert.equal(counter.built, afterFirst * 2);
+});

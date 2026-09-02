@@ -48,3 +48,30 @@ test('pasting an empty clipboard warns instead of failing silently', async () =>
   await browser.pasteFromClipboard();
   assert.deepEqual(Array.from(calls), [['warning', 'Clipboard is empty']]);
 });
+
+// The bulk-download endpoint answers a refusal with {detail: "..."}; the
+// user has to see that reason, not a generic failure that hides it.
+function makeBrowserWithDownload(response) {
+  const { browser, calls, ctx } = makeBrowser();
+  ctx.getCSRFToken = () => 'token';
+  ctx.fetch = async () => response;
+  return { browser, calls };
+}
+
+test('a refused bulk download surfaces the server reason', async () => {
+  const { browser, calls } = makeBrowserWithDownload({
+    ok: false,
+    json: async () => ({ detail: 'One or more UUIDs not found.' }),
+  });
+  await browser.bulkDownload(['a', 'b']);
+  assert.deepEqual(Array.from(calls), [['error', 'One or more UUIDs not found.']]);
+});
+
+test('a refused bulk download without a JSON body falls back to the generic message', async () => {
+  const { browser, calls } = makeBrowserWithDownload({
+    ok: false,
+    json: async () => { throw new SyntaxError('not JSON'); },
+  });
+  await browser.bulkDownload(['a']);
+  assert.deepEqual(Array.from(calls), [['error', 'Failed to download selected files']]);
+});

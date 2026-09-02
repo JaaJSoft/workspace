@@ -1116,7 +1116,8 @@ window.fileBrowser = function fileBrowser() {
           body: JSON.stringify({ uuids }),
         });
         if (!resp.ok) {
-          window.AppAlert.error('Failed to download selected files');
+          const data = await resp.json().catch(() => ({}));
+          window.AppAlert.error(data.detail || 'Failed to download selected files');
           return;
         }
         const blob = await resp.blob();

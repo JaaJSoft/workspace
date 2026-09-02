@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from .call_signaling import enqueue_event, notify_participant
 from .identities import display_name_for_identity
-from .participant_keys import user_key
+from .participant_keys import guest_key, user_key
 
 DEFAULT_MEDIA_STATE = {"audio": True}
 
@@ -143,10 +143,31 @@ def _active_member_ids(conversation_id):
     )
 
 
+def _active_guest_keys(conversation_id):
+    """Participant keys for guests in the conversation's active call.
+
+    A plain read on purpose: get_active_call self-heals, and _broadcast is
+    called from inside that self-heal (via cleanup_stale_participants), so
+    reaching for it here would recurse.
+    """
+    from ..models import CallParticipant, CallSession
+
+    return [
+        guest_key(guest_uuid)
+        for guest_uuid in CallParticipant.objects.filter(
+            session__conversation_id=conversation_id,
+            session__state=CallSession.State.ACTIVE,
+            left_at__isnull=True,
+            guest__isnull=False,
+        ).values_list("guest_id", flat=True)
+    ]
+
+
 def _broadcast(conversation_id, event, data, exclude_key=None):
-    """Fan a call event out to every active conversation member, then wake them."""
-    for uid in _active_member_ids(conversation_id):
-        key = user_key(uid)
+    """Fan a call event out to every active member and guest, then wake them."""
+    keys = [user_key(uid) for uid in _active_member_ids(conversation_id)]
+    keys += _active_guest_keys(conversation_id)
+    for key in keys:
         if exclude_key is not None and key == exclude_key:
             continue
         enqueue_event(key, event, data)

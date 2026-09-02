@@ -18,7 +18,7 @@ from workspace.chat.models import (
 )
 from workspace.chat.services import call_signaling as sig
 from workspace.chat.services import calls
-from workspace.chat.services.participant_keys import user_key
+from workspace.chat.services.participant_keys import guest_key, user_key
 
 
 class DurationFormatTests(SimpleTestCase):
@@ -172,6 +172,62 @@ class LifecycleTests(TestCase):
             calls.start_or_join_call(self.a, self.conv.uuid)
             with self.assertRaises(calls.CallFull):
                 calls.start_or_join_call(self.b, self.conv.uuid)
+
+
+class BroadcastGuestTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.a = User.objects.create_user(username="bcg", password="x")
+        cal = Calendar.objects.create(name="C", owner=self.a)
+        event = Event.objects.create(
+            calendar=cal, owner=self.a, title="E", start=timezone.now()
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.a
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.a)
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.conv, created_by=self.a
+        )
+        self.guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=timezone.now(),
+            token_hash="9" * 64,
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_broadcast_reaches_an_admitted_guest_in_the_call(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        CallParticipant.objects.create(session=session, guest=self.guest)
+        sig.drain_events(guest_key(self.guest.uuid))  # clear join noise
+        calls._broadcast(
+            self.conv.uuid,
+            "call_participant_left",
+            {"session_id": str(session.uuid)},
+        )
+        events = sig.drain_events(guest_key(self.guest.uuid))
+        self.assertEqual([e["event"] for e in events], ["call_participant_left"])
+
+    def test_broadcast_excludes_a_guest_by_key(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        CallParticipant.objects.create(session=session, guest=self.guest)
+        key = guest_key(self.guest.uuid)
+        sig.drain_events(key)
+        calls._broadcast(self.conv.uuid, "x", {}, exclude_key=key)
+        self.assertEqual(sig.drain_events(key), [])
+
+    def test_broadcast_ignores_a_departed_guest(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        p = CallParticipant.objects.create(session=session, guest=self.guest)
+        p.left_at = timezone.now()
+        p.save(update_fields=["left_at"])
+        sig.drain_events(guest_key(self.guest.uuid))
+        calls._broadcast(self.conv.uuid, "x", {})
+        self.assertEqual(sig.drain_events(guest_key(self.guest.uuid)), [])
 
 
 class StaleReconciliationTests(TestCase):

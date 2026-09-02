@@ -35,6 +35,7 @@ from workspace.projects.services.analytics import (
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.history import (
+    EventLog,
     cumulative_flow,
     duration_buckets,
     duration_summary,
@@ -414,6 +415,27 @@ def task_card(request, project_uuid, task_uuid):
     )
 
 
+def _switchable_sprints(request, sprints_qs):
+    """The sprints a switcher offers and the one ``?sprint=`` picks.
+
+    Returns ``(sprints, switchable, selected)``: every sprint oldest first,
+    the switchable ones - active first, then closed history newest first,
+    so a retrospective opens the last sprint rather than sprint 1 - and the
+    switchable sprint the query names, or None. Planned sprints have no
+    board and no burndown yet, so they stay out of the switcher; each
+    caller applies its own fallback when nothing was picked.
+    """
+    sprints = list(sprints_qs.order_by("created_at"))
+    active = [s for s in sprints if s.state == Sprint.State.ACTIVE]
+    closed = [s for s in sprints if s.state == Sprint.State.CLOSED]
+    switchable = active + closed[::-1]
+    selected = None
+    param = parse_uuid_or_none(request.GET.get("sprint") or "")
+    if param is not None:
+        selected = next((s for s in switchable if s.uuid == param), None)
+    return sprints, switchable, selected
+
+
 def _sprint_context(request, project):
     """Sprint switcher context for the scrum board.
 
@@ -424,24 +446,14 @@ def _sprint_context(request, project):
     """
     if project.type != Project.Type.SCRUM:
         return {}
-    sprints = list(
-        project.sprints.annotate(task_count=Count("tasks")).order_by("created_at")
+    sprints, switchable, selected = _switchable_sprints(
+        request, project.sprints.annotate(task_count=Count("tasks"))
     )
-    active = [s for s in sprints if s.state == Sprint.State.ACTIVE]
-    closed = [s for s in sprints if s.state == Sprint.State.CLOSED]
-    # Active first, then history newest first: a retrospective opens the
-    # last sprint, not sprint 1. Planned sprints have no board yet and are
-    # started from the empty state, so they stay out of the switcher.
-    switchable = active + closed[::-1]
-    selected = None
-    param = parse_uuid_or_none(request.GET.get("sprint") or "")
-    if param is not None:
-        selected = next((s for s in switchable if s.uuid == param), None)
     if selected is None:
         selected = next((s for s in sprints if s.state == Sprint.State.ACTIVE), None)
     context = {
         "sprints": switchable,
-        "has_closed_sprints": bool(closed),
+        "has_closed_sprints": any(s.state == Sprint.State.CLOSED for s in sprints),
         "selected_sprint": selected,
         "sprint_read_only": selected is not None
         and selected.state == Sprint.State.CLOSED,
@@ -668,17 +680,19 @@ def analytics(request, project_uuid):
         }
     )
     if not context["is_empty"]:
-        context.update(_flow_reports_context(project))
+        # One read of the event log serves every report on the page.
+        log = EventLog(project)
+        context.update(_flow_reports_context(project, log))
         if project.type == Project.Type.SCRUM:
-            context.update(_sprint_reports_context(request, project))
+            context.update(_sprint_reports_context(request, project, log))
     return _render_project_view(request, context)
 
 
-def _flow_reports_context(project):
+def _flow_reports_context(project, log):
     """Cycle/lead time and cumulative flow, both replayed from the event log."""
-    durations = task_durations(project)
+    durations = task_durations(project, log=log)
     buckets = duration_buckets(durations)
-    flow = cumulative_flow(project)
+    flow = cumulative_flow(project, log=log)
     return {
         "duration_stats": duration_summary(durations),
         "duration_chart": column_chart(
@@ -725,21 +739,16 @@ def _flow_reports_context(project):
     }
 
 
-def _sprint_reports_context(request, project):
+def _sprint_reports_context(request, project, log):
     """Burndown of the sprint picked with ``?sprint=`` (the running one by
     default, else the latest closed) and velocity over the closed sprints."""
-    sprints = list(project.sprints.order_by("created_at"))
-    active = [s for s in sprints if s.state == Sprint.State.ACTIVE]
-    closed = [s for s in sprints if s.state == Sprint.State.CLOSED]
-    switchable = active + closed[::-1]
-    selected = None
-    param = parse_uuid_or_none(request.GET.get("sprint") or "")
-    if param is not None:
-        selected = next((s for s in switchable if s.uuid == param), None)
+    _, switchable, selected = _switchable_sprints(request, project.sprints)
     if selected is None and switchable:
         selected = switchable[0]
     context = {"report_sprints": switchable, "report_sprint": selected}
-    burndown = sprint_burndown(project, selected) if selected is not None else None
+    burndown = (
+        sprint_burndown(project, selected, log=log) if selected is not None else None
+    )
     if burndown is not None:
         context["burndown"] = burndown
         context["burndown_chart"] = line_chart(

@@ -104,20 +104,17 @@ def _parse_estimate(text):
         return None
 
 
-class _Replay:
-    """The project's event log as a cursor over reconstructed task states.
+class EventLog:
+    """The project's replayable events, loaded once.
 
-    ``advance(until)`` applies every event before *until*; passing a
-    ``measure`` callback keeps *totals* in step by adding each task's
-    measurement after the event and removing the one before, so a sweep
-    over many instants costs one pass over the log rather than one pass
-    per instant.
+    Every report replays the same rows, and the analytics page renders
+    several reports per request: load the log once and hand it to each of
+    them rather than reading the table once per report.
     """
 
     def __init__(self, project):
-        self.states = {}
+        self.project = project
         self.events = []
-        self._position = 0
         first_estimate_change = {}
         rows = (
             TaskEvent.objects.filter(project=project, type__in=_REPLAYED_TYPES)
@@ -146,24 +143,44 @@ class _Replay:
         # A task's estimate at creation is not an event. The first change
         # says what it was before; a task never re-estimated still carries
         # it today, unless it has been deleted since - then it is lost.
-        self._initial_estimates = {
+        self.initial_estimates = {
             number: estimate
             for number, estimate in project.tasks.filter(
                 estimate__isnull=False
             ).values_list("number", "estimate")
         }
         for key, before in first_estimate_change.items():
-            self._initial_estimates[key] = _parse_estimate(before)
+            self.initial_estimates[key] = _parse_estimate(before)
+
+    def replay(self):
+        return _Replay(self)
+
+
+class _Replay:
+    """A cursor over the log that reconstructs task states as it goes.
+
+    ``advance(until)`` applies every event before *until*; passing a
+    ``measure`` callback keeps *totals* in step by adding each task's
+    measurement after the event and removing the one before, so a sweep
+    over many instants costs one pass over the log rather than one pass
+    per instant.
+    """
+
+    def __init__(self, log):
+        self.log = log
+        self.states = {}
+        self._position = 0
 
     def advance(self, until, *, measure=None, totals=None):
-        while self._position < len(self.events):
-            event = self.events[self._position]
+        events = self.log.events
+        while self._position < len(events):
+            event = events[self._position]
             if event.at >= until:
                 break
             self._position += 1
             state = self.states.get(event.key)
             if state is None:
-                state = _TaskState(estimate=self._initial_estimates.get(event.key))
+                state = _TaskState(estimate=self.log.initial_estimates.get(event.key))
                 self.states[event.key] = state
             before = measure(state) if measure else {}
             _apply(state, event)
@@ -175,6 +192,10 @@ class _Replay:
     def finish(self):
         self.advance(timezone.now() + timedelta(days=1))
         return self.states
+
+
+def _log(project, log):
+    return log if log is not None else EventLog(project)
 
 
 def _apply(state, event):
@@ -203,7 +224,7 @@ def _end_of_day(date):
     return timezone.make_aware(datetime.combine(date + timedelta(days=1), time.min))
 
 
-def task_durations(project, weeks=DEFAULT_WEEKS):
+def task_durations(project, weeks=DEFAULT_WEEKS, *, log=None):
     """One sample per task finished in the last *weeks* weeks.
 
     Lead time runs from creation to the last completion, cycle time from
@@ -214,7 +235,7 @@ def task_durations(project, weeks=DEFAULT_WEEKS):
     """
     since = timezone.now() - timedelta(weeks=weeks)
     samples = []
-    for state in _Replay(project).finish().values():
+    for state in _log(project, log).replay().finish().values():
         if (
             state.created_at is None
             or state.completed_at is None
@@ -276,12 +297,12 @@ def _bucket_counts(durations):
     return counts
 
 
-def cumulative_flow(project, days=DEFAULT_DAYS):
+def cumulative_flow(project, days=DEFAULT_DAYS, *, log=None):
     """Live tasks per status category at the end of each of the last *days*
     days, oldest first; the last point is the current state. Deleted tasks
     leave every band on the day of their deletion."""
     today = timezone.localdate()
-    replay = _Replay(project)
+    replay = _log(project, log).replay()
     totals = Counter()
     rows = []
     for offset in reversed(range(days)):
@@ -302,25 +323,27 @@ def _live_category(state):
     return {state.category: 1} if state.live else {}
 
 
-def sprint_burndown(project, sprint):
+def sprint_burndown(project, sprint, *, log=None):
     """Effort left in *sprint* at the end of each of its days.
 
     Effort is the estimate when the project estimates (an unestimated task
     weighs nothing there, and is counted separately so the page can say
-    so), one per task otherwise. Membership follows the SPRINT events, so
-    a task carried over at sprint close leaves the remaining line at that
-    moment, as it should. Days after today have no value yet; a running
+    so), one per task otherwise. Membership follows the SPRINT events by
+    sprint name (a rename carries the snapshots along, see
+    propagate_sprint_rename), so a task carried over at sprint close
+    leaves the remaining line at that moment, as it should. Days after today have no value yet; a running
     sprint with no end date is drawn up to today. The ideal line falls
     from the scope at the end of the first day to zero on the last.
 
-    Returns None for a sprint that has not started.
+    Returns None for a sprint that has not started. *log* lets the caller
+    share one EventLog across reports; every report reads the same rows.
     """
     if sprint.start_date is None:
         return None
     today = timezone.localdate()
     end = sprint.end_date if sprint.end_date is not None else today
     end = max(end, sprint.start_date)
-    replay = _Replay(project)
+    replay = _log(project, log).replay()
     use_estimates = bool(project.estimate_unit)
 
     def measure(state):

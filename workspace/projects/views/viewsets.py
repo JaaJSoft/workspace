@@ -76,7 +76,12 @@ from ..services.members import (
     remove_member,
 )
 from ..services.projects import create_project
-from ..services.sprints import assign_tasks_to_sprint, complete_sprint, start_sprint
+from ..services.sprints import (
+    assign_tasks_to_sprint,
+    complete_sprint,
+    propagate_sprint_rename,
+    start_sprint,
+)
 from ..services.statuses import create_status, delete_status, reorder_statuses
 from ..services.subtasks import create_subtask, reorder_subtasks
 from ..services.task_filters import (
@@ -488,6 +493,12 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(project=self.project)
+
+    def perform_update(self, serializer):
+        old_name = serializer.instance.name
+        sprint = serializer.save()
+        if sprint.name != old_name:
+            propagate_sprint_rename(self.project, old_name, sprint.name)
 
     def _require_scrum(self):
         """Sprints are the scrum board model; a kanban project only ever

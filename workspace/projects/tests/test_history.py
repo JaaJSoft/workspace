@@ -8,6 +8,7 @@ from workspace.projects.models import Project, Sprint, TaskEvent
 from workspace.projects.services.history import (
     DURATION_BUCKETS,
     DurationSample,
+    EventLog,
     cumulative_flow,
     duration_buckets,
     duration_summary,
@@ -20,6 +21,7 @@ from workspace.projects.services.projects import create_project
 from workspace.projects.services.sprints import (
     assign_tasks_to_sprint,
     complete_sprint,
+    propagate_sprint_rename,
     start_sprint,
 )
 from workspace.projects.services.tasks import create_task, delete_task, move_tasks
@@ -393,6 +395,46 @@ class SprintBurndownTests(ScrumHistoryTestCase):
         self.assertEqual(
             [r["scope"] for r in sprint_burndown(self.scrum, sprint)["days"]], [0, 0, 1]
         )
+
+    def test_a_renamed_sprint_keeps_its_history(self):
+        sprint = self._sprint(days=2, started_days_ago=1)
+        create_task(self.scrum, self.admin, title="a", sprint=sprint, status=self.todo)
+        propagate_sprint_rename(self.scrum, sprint.name, "Iteration 1")
+        sprint.name = "Iteration 1"
+        sprint.save(update_fields=["name"])
+        self.assertEqual(sprint_burndown(self.scrum, sprint)["scope"], 1)
+
+
+class SharedEventLogTests(HistoryTestCase):
+    def test_one_log_serves_several_reports_with_the_same_answers(self):
+        self._finished_task(created_days_ago=6, started_days_ago=3, done_days_ago=1)
+        create_task(self.project, self.admin, title="Open", status=self.doing)
+        log = EventLog(self.project)
+        self.assertEqual(
+            [s.lead for s in task_durations(self.project, log=log)],
+            [s.lead for s in task_durations(self.project)],
+        )
+        self.assertEqual(
+            cumulative_flow(self.project, days=7, log=log),
+            cumulative_flow(self.project, days=7),
+        )
+
+    def test_each_replay_starts_from_the_beginning(self):
+        create_task(self.project, self.admin, title="A")
+        log = EventLog(self.project)
+        self.assertEqual(
+            cumulative_flow(self.project, days=2, log=log)[-1]["backlog"], 1
+        )
+        self.assertEqual(
+            cumulative_flow(self.project, days=2, log=log)[-1]["backlog"], 1
+        )
+
+    def test_the_log_is_read_once(self):
+        create_task(self.project, self.admin, title="A")
+        log = EventLog(self.project)
+        with self.assertNumQueries(0):
+            cumulative_flow(self.project, days=3, log=log)
+            task_durations(self.project, log=log)
 
 
 class SprintVelocityTests(ScrumHistoryTestCase):

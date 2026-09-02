@@ -222,3 +222,16 @@ def assign_tasks_to_sprint(project, sprint, task_uuids, *, actor=None):
             if to_board:
                 move_tasks(project, board_status, to_board, actor=actor)
     return [task for task, _ in changed]
+
+
+def propagate_sprint_rename(project, old_name, new_name):
+    """Carry a sprint's SPRINT event snapshots over to its new name.
+
+    Events snapshot the sprint *name* so the trail survives the sprint's
+    deletion. A rename must follow, or the burndown loses every task that
+    joined under the old name and the activity feed keeps naming a sprint
+    the board no longer shows.
+    """
+    events = project.task_events.filter(type=TaskEvent.Type.SPRINT)
+    events.filter(from_value=old_name).update(from_value=new_name)
+    events.filter(to_value=old_name).update(to_value=new_name)

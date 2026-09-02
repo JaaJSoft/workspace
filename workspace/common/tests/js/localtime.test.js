@@ -73,23 +73,54 @@ test('date mode labels the current day Today and the previous day Yesterday', ()
   assert.equal(convert(ctx, mkEl(yesterday.toISOString(), 'date')), 'Yesterday');
 });
 
-test('date labels build one day-key formatter per zone, not one per element', () => {
-  const ctx = load('Asia/Tokyo');
-  let built = 0;
-  // Shadows the context's own Intl: the script looks the global up on
-  // every call, so the count sees each constructor invocation.
+// Counts Intl.DateTimeFormat constructions. Shadows the context's own
+// Intl: the script looks the global up on every call, so the count sees
+// each constructor invocation.
+function countFormatters(ctx) {
+  const counter = { built: 0 };
   ctx.Intl = {
     DateTimeFormat: function (...args) {
-      built++;
+      counter.built++;
       return new Intl.DateTimeFormat(...args);
     },
   };
-  const els = Array.from({ length: 50 }, (_, i) => mkEl(`2026-01-${String(i % 28 + 1).padStart(2, '0')}T20:00:00Z`, 'date'));
-  ctx.convertLocaltimes({ querySelectorAll: () => els });
-  assert.equal(built, 1);
-  // The zone is part of the key: another zone gets its own formatter.
+  return counter;
+}
+
+function dateEls(count) {
+  return Array.from({ length: count }, (_, i) => mkEl(`2026-01-${String(i % 28 + 1).padStart(2, '0')}T20:00:00Z`, 'date'));
+}
+
+test('date labels build one day-key formatter per zone, not one per element', () => {
+  let zone = 'Asia/Tokyo';
+  const ctx = loadScript('workspace/common/static/ui/js/localtime.js', {
+    document: { ...docStub(null), documentElement: { getAttribute: (n) => (n === 'data-timezone' ? zone : null) } },
+    MutationObserver: ObserverStub,
+  });
+  const counter = countFormatters(ctx);
+
+  ctx.convertLocaltimes({ querySelectorAll: () => dateEls(50) });
+  assert.equal(counter.built, 1);
   assert.equal(ctx.userTzDayKey(new Date('2026-01-31T20:00:00Z')), '2026-02-01');
-  assert.equal(built, 1);
+  assert.equal(counter.built, 1);
+
+  // The zone is part of the key: another zone gets its own formatter, once.
+  zone = 'America/New_York';
+  ctx.convertLocaltimes({ querySelectorAll: () => dateEls(50) });
+  assert.equal(counter.built, 2);
+  // 03:00 UTC on Feb 1 is still Jan 31 in New York.
+  assert.equal(ctx.userTzDayKey(new Date('2026-02-01T03:00:00Z')), '2026-01-31');
+  assert.equal(counter.built, 2);
+});
+
+test('without a configured zone the day-key formatter is rebuilt every time', () => {
+  // The browser zone binds at construction and can change while the page
+  // is open (a laptop crossing a border), so that one must not be cached.
+  const ctx = load(null);
+  const counter = countFormatters(ctx);
+  ctx.userTzDayKey(new Date());
+  ctx.userTzDayKey(new Date());
+  assert.equal(counter.built, 2);
 });
 
 test('smart mode falls back to a dated label across day boundaries', () => {

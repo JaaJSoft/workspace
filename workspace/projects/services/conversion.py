@@ -91,9 +91,10 @@ def _wind_down_sprints(sprints):
         if sprint.state != Sprint.State.ACTIVE:
             continue
         sprint.state = Sprint.State.CLOSED
+        sprint.closed_at = timezone.now()
         if sprint.end_date is None:
             sprint.end_date = timezone.localdate()
-        sprint.save(update_fields=["state", "end_date"])
+        sprint.save(update_fields=["state", "end_date", "closed_at"])
     planned = [s.pk for s in sprints if s.state == Sprint.State.PLANNED]
     if planned:
         Sprint.objects.filter(pk__in=planned).delete()

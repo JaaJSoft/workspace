@@ -530,6 +530,41 @@ class SprintVelocityTests(ScrumHistoryTestCase):
         delete_task(doomed, actor=self.admin)
         self.assertEqual(sprint_velocity(self.scrum)[0]["completed"], 2)
 
+    def test_a_task_reopened_after_the_close_still_counts_for_the_sprint(self):
+        sprint = self._sprint("S1", days=2, started_days_ago=1)
+        task = create_task(
+            self.scrum, self.admin, title="a", sprint=sprint, status=self.todo
+        )
+        move_tasks(self.scrum, self.done, [task.uuid])
+        complete_sprint(sprint, actor=self.admin)
+        move_tasks(self.scrum, self.todo, [task.uuid])
+        self.assertEqual(sprint_velocity(self.scrum)[0]["completed"], 1)
+
+    def test_work_finished_after_the_close_is_not_credited_to_the_sprint(self):
+        sprint = self._sprint("S1", days=2, started_days_ago=1)
+        task = create_task(
+            self.scrum, self.admin, title="a", sprint=sprint, status=self.todo
+        )
+        complete_sprint(sprint, actor=self.admin)
+        # Carried back to the pool at close; finishing it now belongs to no sprint.
+        move_tasks(self.scrum, self.done, [task.uuid])
+        self.assertEqual(sprint_velocity(self.scrum)[0]["completed"], 0)
+
+    def test_a_sprint_closed_before_the_stamp_existed_is_read_as_it_stands(self):
+        sprint = self._closed_sprint("S1", [None])
+        self.assertIsNone(sprint.closed_at)
+        self.assertEqual(sprint_velocity(self.scrum)[0]["completed"], 1)
+
+    def test_sprints_are_ordered_by_their_close(self):
+        late = self._sprint("Closed second", days=2, started_days_ago=1)
+        complete_sprint(late, actor=self.admin)
+        early = self._closed_sprint("Closed first", [None], end_days_ago=30)
+        self.assertEqual(
+            [r["sprint"].name for r in sprint_velocity(self.scrum)],
+            ["Closed second", "Closed first"],
+        )
+        self.assertIsNotNone(early)
+
     def test_a_task_carried_over_at_close_counts_for_neither_sprint(self):
         first = self._sprint("S1", days=2, started_days_ago=1)
         task = create_task(

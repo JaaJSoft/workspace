@@ -113,6 +113,11 @@ class Migration(migrations.Migration):
             name="to_ref",
             field=models.UUIDField(blank=True, null=True),
         ),
+        migrations.AddField(
+            model_name="sprint",
+            name="closed_at",
+            field=models.DateTimeField(blank=True, null=True),
+        ),
         migrations.RunPython(backfill_categories, migrations.RunPython.noop),
         migrations.RunPython(backfill_sprint_refs, migrations.RunPython.noop),
         migrations.RunPython(backfill_creation_estimates, migrations.RunPython.noop),

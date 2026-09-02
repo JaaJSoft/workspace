@@ -412,22 +412,32 @@ def sprint_velocity(project, limit=10, *, log=None):
     """Effort completed per closed sprint, oldest first, with the rolling
     average over the last VELOCITY_WINDOW sprints up to and including each.
 
-    Replayed from the log like the burndown: a task finished in a sprint
-    and deleted since still counts - the work was done - where the sprint's
-    board no longer shows it. Unfinished work leaves the sprint at close,
-    so what remains attached and done is what the sprint delivered.
+    Each sprint is read at the instant it was closed: what was attached and
+    done then is what the sprint delivered, and a task reopened or deleted
+    afterwards does not take that back. Unfinished work leaves the sprint
+    at close, so nothing completed later can be attributed to it. A sprint
+    closed before the close stamp existed is read as it stands today.
     """
-    sprints = list(
-        project.sprints.filter(state=Sprint.State.CLOSED).order_by(
-            "end_date", "created_at"
-        )
+    now = timezone.now()
+    sprints = sorted(
+        project.sprints.filter(state=Sprint.State.CLOSED),
+        key=lambda s: (s.closed_at or now, s.end_date or now.date(), s.created_at),
     )[-limit:]
     use_estimates = bool(project.estimate_unit)
-    completed = Counter()
-    for state in _log(project, log).replay().finish().values():
-        if state.sprint is not None and state.category == TaskStatus.Category.DONE:
-            completed[state.sprint] += _effort(state, use_estimates)
-    rows = [{"sprint": s, "completed": completed[s.pk]} for s in sprints]
+    replay = _log(project, log).replay()
+    rows = []
+    for sprint in sprints:
+        replay.advance(sprint.closed_at or now + timedelta(days=1))
+        completed = sum(
+            (
+                _effort(state, use_estimates)
+                for state in replay.states.values()
+                if state.sprint == sprint.pk
+                and state.category == TaskStatus.Category.DONE
+            ),
+            0,
+        )
+        rows.append({"sprint": sprint, "completed": completed})
     for index, row in enumerate(rows):
         window = rows[max(0, index - VELOCITY_WINDOW + 1) : index + 1]
         row["average"] = sum(r["completed"] for r in window) / len(window)

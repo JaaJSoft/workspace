@@ -281,6 +281,11 @@ class Sprint(models.Model):
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     state = models.CharField(max_length=7, choices=State.choices, default=State.PLANNED)
+    # The instant the sprint was completed. end_date is the planned end and
+    # may sit days away from the actual close, so velocity is read at this
+    # boundary. Null for sprints closed before the stamp existed: those are
+    # read as they stand today.
+    closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -150,9 +150,10 @@ def complete_sprint(sprint, *, move_to=None, actor=None):
                     to_ref=move_to.pk if move_to is not None else None,
                 )
         current.state = Sprint.State.CLOSED
+        current.closed_at = timezone.now()
         if current.end_date is None:
             current.end_date = timezone.localdate()
-        current.save(update_fields=["state", "end_date"])
+        current.save(update_fields=["state", "end_date", "closed_at"])
     return current
 
 

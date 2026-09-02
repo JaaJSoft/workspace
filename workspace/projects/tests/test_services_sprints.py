@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.test import TestCase
 from django.utils import timezone
 
@@ -78,6 +80,8 @@ class CompleteSprintTests(SprintServiceTestCase):
         sprint.refresh_from_db()
         self.assertEqual(sprint.state, Sprint.State.CLOSED)
         self.assertEqual(sprint.end_date, timezone.localdate())
+        self.assertIsNotNone(sprint.closed_at)
+        self.assertLess(timezone.now() - sprint.closed_at, timedelta(minutes=1))
 
     def test_complete_appends_returned_tasks_to_backlog_tail(self):
         sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)

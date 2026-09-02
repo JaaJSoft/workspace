@@ -10,8 +10,17 @@
   }
 
   // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
+  // Building the formatter costs far more than formatting with it, and a
+  // date label needs three keys per <time> - a folder listing asks for
+  // thousands - so there is one formatter per zone.
+  const _dayKeyFormatters = new Map();
   function _dayKey(d, tz) {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+    let formatter = _dayKeyFormatters.get(tz);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz });
+      _dayKeyFormatters.set(tz, formatter);
+    }
+    return formatter.format(d);
   }
 
   function userTzDayKey(d) {

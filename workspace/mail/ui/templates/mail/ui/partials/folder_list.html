@@ -1,5 +1,14 @@
+{% comment %}
+  The three blocks that come and go with the rail carry their first-paint
+  state in the HTML (the stored preference, and whether any account exists)
+  and drop it through the object-form binding once Alpine takes over.
+{% endcomment %}
 <!-- All Inboxes (unified view) — expanded -->
-<div x-show="accounts.length > 0 && !sidebarCollapsed()" class="mb-2">
+<div
+  x-show="accounts.length > 0 && !sidebarCollapsed()"
+  class="mb-2{% if not accounts or workspace_sidebar_collapsed %} hidden{% endif %}"
+  :class="{ hidden: !(accounts.length > 0 && !sidebarCollapsed()) }"
+>
   <button
     class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
     :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
@@ -19,8 +28,8 @@
 <!-- All Inboxes (unified view) — collapsed -->
 <div
   x-show="accounts.length > 0 && sidebarCollapsed()"
-  x-cloak
-  class="mb-2"
+  class="mb-2{% if not accounts or not workspace_sidebar_collapsed %} hidden{% endif %}"
+  :class="{ hidden: !(accounts.length > 0 && sidebarCollapsed()) }"
 >
   <button
     class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
@@ -227,7 +236,11 @@
 </template>
 
 <!-- Add account button (expanded) -->
-<div class="mt-2" x-show="!sidebarCollapsed()">
+<div
+  class="mt-2{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+  :class="{ hidden: sidebarCollapsed() }"
+  x-show="!sidebarCollapsed()"
+>
   <button
     class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-warning"
     @click="showAddAccount()"

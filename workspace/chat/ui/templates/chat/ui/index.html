@@ -84,7 +84,7 @@ be defined before the parser reaches the markup using it, or server-rendered
           class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
           :class="{ 'justify-center': collapsed, 'justify-between': !collapsed }"
         >
-          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" %}
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
           <div
             x-show="!collapsed"
             x-transition
@@ -177,9 +177,9 @@ be defined before the parser reaches the markup using it, or server-rendered
       >
         <ul class="menu p-0">
           {% if ai_enabled %}
-            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" %}
+            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
           {% endif %}
-          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="info" onclick="showNewConversationDialog()" tooltip="New chat" %}
+          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="info" onclick="showNewConversationDialog()" tooltip="New chat" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
 
@@ -233,17 +233,17 @@ be defined before the parser reaches the markup using it, or server-rendered
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="info" onclick="document.getElementById('chat-help-dialog').showModal()" tooltip="Help" %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="info" onclick="document.getElementById('chat-help-dialog').showModal()" tooltip="Help" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
 
       <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
       <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
         </ul>
         <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
     </aside>

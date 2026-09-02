@@ -24,6 +24,9 @@ Optional context:
 - button_class: extra classes on the trigger, e.g. "hover:text-primary mr-1".
 - show_expr: x-show expression on the whole popover, e.g. "!collapsed", for
   sidebars that hide the trigger when collapsed.
+  With `collapsed_initial` / `mobile_rail` in the context (see
+  ui/partials/drawer_item.html) the trigger is also hidden in the HTML itself
+  when the sidebar first paints as the rail, before Alpine binds.
 - close_on_event: name of a window event that also closes the panel, for a
   module that opens something else over the same sidebar.
 - panel_id: id of the panel, only needed on a page that includes the popover
@@ -31,12 +34,7 @@ Optional context:
   collide.
 {% endcomment %}
 {% firstof panel_id "preferences-panel" as pid %}
-<div
-  x-data="{ {% if component %}...{{ component }}, {% endif %}prefsOpen: false }"
-  @keydown.escape.window="if (prefsOpen) { prefsOpen = false; $refs.prefsTrigger.focus(); }"
-  {% if close_on_event %}@{{ close_on_event }}.window="prefsOpen = false"{% endif %}
-  {% if show_expr %}x-show="{{ show_expr }}" x-transition{% endif %}
->
+<div x-data="{ {% if component %}...{{ component }}, {% endif %}prefsOpen: false }" @keydown.escape.window="if (prefsOpen) { prefsOpen = false; $refs.prefsTrigger.focus(); }" {% if close_on_event %}@{{ close_on_event }}.window="prefsOpen = false"{% endif %} {% if show_expr %}x-show="{{ show_expr }}" x-transition class="{% if collapsed_initial %}hidden{% elif mobile_rail %}max-lg:hidden{% endif %}" :class="{ hidden: !({{ show_expr }}) }"{% endif %}>
   <button
     type="button"
     x-ref="prefsTrigger"

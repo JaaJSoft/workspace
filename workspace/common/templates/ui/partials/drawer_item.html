@@ -12,6 +12,9 @@ Parameters:
   otherwise. Both icons are rendered statically and toggled with x-show
   because a reactive :data-lucide binding cannot work: Lucide draws the
   SVG once at hydration and never re-renders when the attribute changes.
+- icon_initial: Boolean, the value icon_expr has when the page renders, so
+  only the matching icon is in the HTML's visible state - without it both
+  icons show side by side until Alpine binds.
 - label: Text label for the item
 - color: Optional DaisyUI color token (e.g., "primary", "warning", "error").
          Controls icon tint when inactive and highlight when active.
@@ -32,6 +35,18 @@ Parameters:
 - collapse_expr: Optional Alpine.js expression for the effective collapse state
                  (default: "collapsed"). Pass e.g. "sidebarCollapsed()" for modules
                  that decouple mobile layout from the stored desktop preference.
+- collapsed_initial: Boolean, the collapsed state the server knows when it
+                 renders the page (the module's stored preference). Alpine binds
+                 only after the parse, so without it the item paints expanded,
+                 label and all, and snaps to the rail a few frames later.
+- mobile_rail: Boolean, the drawer is the 64px icon rail below `lg` whatever the
+                 preference says (a `drawer-open` shell, not `lg:drawer-open`).
+                 Adds the `max-lg:` variants of the collapsed classes so the
+                 first paint on a phone is the rail too.
+                 Both are usually set once, in a {% with %} around the whole
+                 <aside>: an {% include %} inherits them from the enclosing
+                 context. Every collapsed-state binding below is the object
+                 form, so Alpine drops the static class on mount.
 - aria_label: Optional static aria-label text
 - aria_label_binding: Optional Alpine.js expression for aria-label
 
@@ -44,11 +59,11 @@ Usage Examples:
 
 {% with c=color|default:"primary" %}
   <li
-    class="list-none"
-    :class="{{ collapse_expr|default:"collapsed" }} ? 'flex justify-center' : ''"
+    class="list-none{% if collapsed_initial %} flex justify-center{% elif mobile_rail %} max-lg:flex max-lg:justify-center{% endif %}"
+    :class="{ 'flex justify-center': {{ collapse_expr|default:"collapsed" }} }"
   >
     {% if disabled %}
-      <span class="flex items-center opacity-50 cursor-not-allowed text-base rounded-lg transition-colors hover:bg-base-300/30" :class="{{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'" {% if title_binding %} :title="{{ title_binding|safe }}" {% else %} :title="{{ collapse_expr|default:"collapsed" }} ? '{{ label }}{% if badge %} ({{ badge }}){% endif %}' : ''" {% endif %} {% if aria_label_binding %} :aria-label="{{ aria_label_binding|safe }}" {% elif aria_label %} aria-label="{{ aria_label }}" {% endif %} {% if onclick %}@click="{{ onclick }}"{% endif %}>
+      <span class="flex items-center opacity-50 cursor-not-allowed text-base rounded-lg transition-colors hover:bg-base-300/30 {% if collapsed_initial %}justify-center w-10 h-10 !p-0{% else %}p-2 gap-3{% if mobile_rail %} max-lg:justify-center max-lg:w-10 max-lg:h-10 max-lg:!p-0{% endif %}{% endif %}" :class="{ 'justify-center w-10 h-10 !p-0': {{ collapse_expr|default:"collapsed" }}, 'p-2 gap-3': !({{ collapse_expr|default:"collapsed" }}) }" {% if title_binding %} :title="{{ title_binding|safe }}" {% else %} :title="{{ collapse_expr|default:"collapsed" }} ? '{{ label }}{% if badge %} ({{ badge }}){% endif %}' : ''" {% endif %} {% if aria_label_binding %} :aria-label="{{ aria_label_binding|safe }}" {% elif aria_label %} aria-label="{{ aria_label }}" {% endif %} {% if onclick %}@click="{{ onclick }}"{% endif %}>
         {% if icon_expr %}
           {% comment %}
             The x-show rides a span, never the <i>: Lucide replaces the <i>
@@ -56,10 +71,18 @@ Usage Examples:
             to the <i> then re-evaluates against a detached node with no scope
             above it. Same reason refresh_button.html wraps its spinner.
           {% endcomment %}
-          <span class="inline-flex flex-shrink-0" x-show="{{ icon_expr|safe }}">
+          <span
+            class="inline-flex flex-shrink-0{% if icon_initial is False %} hidden{% endif %}"
+            :class="{ hidden: !({{ icon_expr|safe }}) }"
+            x-show="{{ icon_expr|safe }}"
+          >
             <i data-lucide="{{ icon_true }}" class="w-5 h-5"></i>
           </span>
-          <span class="inline-flex flex-shrink-0" x-show="!({{ icon_expr|safe }})">
+          <span
+            class="inline-flex flex-shrink-0{% if icon_initial is True %} hidden{% endif %}"
+            :class="{ hidden: ({{ icon_expr|safe }}) }"
+            x-show="!({{ icon_expr|safe }})"
+          >
             <i data-lucide="{{ icon_false }}" class="w-5 h-5"></i>
           </span>
         {% else %}
@@ -68,7 +91,8 @@ Usage Examples:
         <span
           x-show="!{{ collapse_expr|default:"collapsed" }}"
           x-transition
-          class="flex items-center gap-2 flex-1"
+          class="flex items-center gap-2 flex-1{% if collapsed_initial %} hidden{% elif mobile_rail %} max-lg:hidden{% endif %}"
+          :class="{ hidden: {{ collapse_expr|default:"collapsed" }} }"
         >
           {{ label }}
           {% if badge %}
@@ -82,10 +106,7 @@ Usage Examples:
         </span>
       </span>
     {% elif href %}
-      <a href="{{ href }}" {% if active_binding %} class="flex items-center text-base rounded-lg transition-colors" :class="[
-          {{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
-          ({{ active_binding|safe }}) ? 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}'
-        ]" {% else %} class="flex items-center {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} text-base rounded-lg transition-colors" :class="{{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'" {% endif %} {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %} {% if onclick %}@click="{{ onclick }}"{% endif %} {% if title_binding %} :title="{{ title_binding|safe }}" {% else %} :title="{{ collapse_expr|default:"collapsed" }} ? '{{ tooltip|default:label }}' : ''" {% endif %} {% if aria_label_binding %} :aria-label="{{ aria_label_binding|safe }}" {% elif aria_label %} aria-label="{{ aria_label }}" {% endif %}>
+      <a href="{{ href }}" {% if active_binding %} class="flex items-center {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} {% if collapsed_initial %}justify-center w-10 h-10 !p-0{% else %}p-2 gap-3{% if mobile_rail %} max-lg:justify-center max-lg:w-10 max-lg:h-10 max-lg:!p-0{% endif %}{% endif %} text-base rounded-lg transition-colors" :class="{ 'justify-center w-10 h-10 !p-0': {{ collapse_expr|default:"collapsed" }}, 'p-2 gap-3': !({{ collapse_expr|default:"collapsed" }}), 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20': ({{ active_binding|safe }}), 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}': !({{ active_binding|safe }}) }" {% else %} class="flex items-center {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} {% if collapsed_initial %}justify-center w-10 h-10 !p-0{% else %}p-2 gap-3{% if mobile_rail %} max-lg:justify-center max-lg:w-10 max-lg:h-10 max-lg:!p-0{% endif %}{% endif %} text-base rounded-lg transition-colors" :class="{ 'justify-center w-10 h-10 !p-0': {{ collapse_expr|default:"collapsed" }}, 'p-2 gap-3': !({{ collapse_expr|default:"collapsed" }}) }" {% endif %} {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %} {% if onclick %}@click="{{ onclick }}"{% endif %} {% if title_binding %} :title="{{ title_binding|safe }}" {% else %} :title="{{ collapse_expr|default:"collapsed" }} ? '{{ tooltip|default:label }}' : ''" {% endif %} {% if aria_label_binding %} :aria-label="{{ aria_label_binding|safe }}" {% elif aria_label %} aria-label="{{ aria_label }}" {% endif %}>
         {% if icon_expr %}
           {% comment %}
             The x-show rides a span, never the <i>: Lucide replaces the <i>
@@ -93,10 +114,18 @@ Usage Examples:
             to the <i> then re-evaluates against a detached node with no scope
             above it. Same reason refresh_button.html wraps its spinner.
           {% endcomment %}
-          <span class="inline-flex flex-shrink-0" x-show="{{ icon_expr|safe }}">
+          <span
+            class="inline-flex flex-shrink-0{% if icon_initial is False %} hidden{% endif %}"
+            :class="{ hidden: !({{ icon_expr|safe }}) }"
+            x-show="{{ icon_expr|safe }}"
+          >
             <i data-lucide="{{ icon_true }}" class="w-5 h-5"></i>
           </span>
-          <span class="inline-flex flex-shrink-0" x-show="!({{ icon_expr|safe }})">
+          <span
+            class="inline-flex flex-shrink-0{% if icon_initial is True %} hidden{% endif %}"
+            :class="{ hidden: ({{ icon_expr|safe }}) }"
+            x-show="!({{ icon_expr|safe }})"
+          >
             <i data-lucide="{{ icon_false }}" class="w-5 h-5"></i>
           </span>
         {% else %}
@@ -105,7 +134,8 @@ Usage Examples:
         <span
           x-show="!{{ collapse_expr|default:"collapsed" }}"
           x-transition
-          class="flex items-center gap-2 flex-1"
+          class="flex items-center gap-2 flex-1{% if collapsed_initial %} hidden{% elif mobile_rail %} max-lg:hidden{% endif %}"
+          :class="{ hidden: {{ collapse_expr|default:"collapsed" }} }"
         >
           {{ label }}
           {% if badge %}
@@ -121,10 +151,7 @@ Usage Examples:
         </span>
       </a>
     {% else %}
-      <button type="button" {% if active_binding %} class="flex items-center w-full text-left text-base rounded-lg transition-colors" :class="[
-          {{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
-          ({{ active_binding|safe }}) ? 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}'
-        ]" {% else %} class="flex items-center w-full text-left {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} text-base rounded-lg transition-colors" :class="{{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'" {% endif %} {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %} {% if onclick %}@click="{{ onclick }}"{% endif %} {% if title_binding %} :title="{{ title_binding|safe }}" {% else %} :title="{{ collapse_expr|default:"collapsed" }} ? '{{ tooltip|default:label }}' : ''" {% endif %} {% if aria_label_binding %} :aria-label="{{ aria_label_binding|safe }}" {% elif aria_label %} aria-label="{{ aria_label }}" {% endif %}>
+      <button type="button" {% if active_binding %} class="flex items-center w-full text-left {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} {% if collapsed_initial %}justify-center w-10 h-10 !p-0{% else %}p-2 gap-3{% if mobile_rail %} max-lg:justify-center max-lg:w-10 max-lg:h-10 max-lg:!p-0{% endif %}{% endif %} text-base rounded-lg transition-colors" :class="{ 'justify-center w-10 h-10 !p-0': {{ collapse_expr|default:"collapsed" }}, 'p-2 gap-3': !({{ collapse_expr|default:"collapsed" }}), 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20': ({{ active_binding|safe }}), 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}': !({{ active_binding|safe }}) }" {% else %} class="flex items-center w-full text-left {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} {% if collapsed_initial %}justify-center w-10 h-10 !p-0{% else %}p-2 gap-3{% if mobile_rail %} max-lg:justify-center max-lg:w-10 max-lg:h-10 max-lg:!p-0{% endif %}{% endif %} text-base rounded-lg transition-colors" :class="{ 'justify-center w-10 h-10 !p-0': {{ collapse_expr|default:"collapsed" }}, 'p-2 gap-3': !({{ collapse_expr|default:"collapsed" }}) }" {% endif %} {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %} {% if onclick %}@click="{{ onclick }}"{% endif %} {% if title_binding %} :title="{{ title_binding|safe }}" {% else %} :title="{{ collapse_expr|default:"collapsed" }} ? '{{ tooltip|default:label }}' : ''" {% endif %} {% if aria_label_binding %} :aria-label="{{ aria_label_binding|safe }}" {% elif aria_label %} aria-label="{{ aria_label }}" {% endif %}>
         {% if icon_expr %}
           {% comment %}
             The x-show rides a span, never the <i>: Lucide replaces the <i>
@@ -132,10 +159,18 @@ Usage Examples:
             to the <i> then re-evaluates against a detached node with no scope
             above it. Same reason refresh_button.html wraps its spinner.
           {% endcomment %}
-          <span class="inline-flex flex-shrink-0" x-show="{{ icon_expr|safe }}">
+          <span
+            class="inline-flex flex-shrink-0{% if icon_initial is False %} hidden{% endif %}"
+            :class="{ hidden: !({{ icon_expr|safe }}) }"
+            x-show="{{ icon_expr|safe }}"
+          >
             <i data-lucide="{{ icon_true }}" class="w-5 h-5"></i>
           </span>
-          <span class="inline-flex flex-shrink-0" x-show="!({{ icon_expr|safe }})">
+          <span
+            class="inline-flex flex-shrink-0{% if icon_initial is True %} hidden{% endif %}"
+            :class="{ hidden: ({{ icon_expr|safe }}) }"
+            x-show="!({{ icon_expr|safe }})"
+          >
             <i data-lucide="{{ icon_false }}" class="w-5 h-5"></i>
           </span>
         {% else %}
@@ -144,7 +179,8 @@ Usage Examples:
         <span
           x-show="!{{ collapse_expr|default:"collapsed" }}"
           x-transition
-          class="flex items-center gap-2 flex-1"
+          class="flex items-center gap-2 flex-1{% if collapsed_initial %} hidden{% elif mobile_rail %} max-lg:hidden{% endif %}"
+          :class="{ hidden: {{ collapse_expr|default:"collapsed" }} }"
         >
           {{ label }}
           {% if badge %}

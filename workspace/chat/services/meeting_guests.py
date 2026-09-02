@@ -83,9 +83,11 @@ def guest_for_token(token):
     Anything reading meeting content must use resolve_guest instead.
 
     No select_related: the lobby only needs guest.state, and guest.meeting_id
-    is already on the row. resolve_guest hydrates meeting/meeting__event because
-    it hands back content; this one deliberately does not, so a bare row is
-    the only thing a not-yet-admitted caller can reach for.
+    is already on the row for the slug check every caller still must make.
+    resolve_guest hydrates meeting/meeting__event because it hands back
+    meeting content; this one deliberately does not, so dereferencing
+    guest.meeting for anything beyond that check (the slug, say) costs an
+    extra query rather than coming pre-fetched.
     """
     from ..models import MeetingGuest
 

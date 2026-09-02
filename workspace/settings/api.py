@@ -50,6 +50,11 @@ REST_FRAMEWORK = {
         # endpoint's own per-meeting counter, and the only limit on the
         # summary endpoint.
         "chat.meeting.public.ip": "30/min",
+        # Guest call heartbeat: fires every 5s per participant while in a
+        # call (~12/min each), and several guests can share one IP behind a
+        # NAT, so it needs its own, more generous v1 starting value than the
+        # scope above - retune on telemetry, same as it.
+        "chat.meeting.guest.heartbeat.ip": "120/min",
     },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",

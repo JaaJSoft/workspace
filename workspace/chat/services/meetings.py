@@ -119,6 +119,7 @@ def remove_guest(guest):
     return guest
 
 
+@transaction.atomic
 def set_locked(meeting, locked):
     """Lock or unlock the meeting, durably.
 
@@ -126,7 +127,9 @@ def set_locked(meeting, locked):
     written unconditionally, so a host can pre-lock an empty room. When a
     call is already active, its session's live flag is written to match in
     the same call, so participants already in the room see the change too.
-    Not guest-reachable (this is behind the host membership gate), so the
+    Wrapped in one transaction so a failure on the second write cannot leave
+    the durable flag committed while the live one stays stale. Not
+    guest-reachable (this is behind the host membership gate), so the
     get_active_call self-heal is fine here.
     """
     from .calls import get_active_call
@@ -153,7 +156,13 @@ def end_meeting(meeting, now=None):
         return False
     start, _end = occurrence
     meeting.closed_occurrence_start = start
-    meeting.save(update_fields=["closed_occurrence_start"])
+    # The lock is scoped to the occurrence it was set during: CallSession.locked
+    # already disappears with the session it lives on (ended below), but
+    # Meeting.locked has no such reset of its own, so it is cleared here -
+    # otherwise a lock from this occurrence would silently carry into the
+    # lobby of the next one.
+    meeting.locked = False
+    meeting.save(update_fields=["closed_occurrence_start", "locked"])
 
     # A swept row can never become admittable again - resolve_guest denies
     # any occurrence_start matching closed_occurrence_start - so this also

@@ -11,7 +11,12 @@ from workspace.chat.models import CallSession, MeetingGuest
 from workspace.chat.services import calls
 from workspace.chat.services.meeting_guests import resolve_guest
 from workspace.chat.services.meeting_occurrences import current_occurrence
-from workspace.chat.services.meetings import admit_guest, create_meeting, end_meeting
+from workspace.chat.services.meetings import (
+    admit_guest,
+    create_meeting,
+    end_meeting,
+    set_locked,
+)
 
 User = get_user_model()
 
@@ -260,6 +265,20 @@ class MeetingHostViewTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 404)
+
+    def test_lock_does_not_carry_into_the_next_occurrence(self):
+        # I-1 regression: Meeting.locked must be scoped to the occurrence it
+        # was set during. Locking this week's standup must not 423 next
+        # week's guests once the host has ended this occurrence.
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        set_locked(self.meeting, True)
+        self.assertTrue(calls.is_call_locked(self.meeting.conversation_id))
+
+        end_meeting(self.meeting)
+
+        self.meeting.refresh_from_db()
+        self.assertFalse(self.meeting.locked)
+        self.assertFalse(calls.is_call_locked(self.meeting.conversation_id))
 
     # --- end ---
 

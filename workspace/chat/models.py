@@ -498,7 +498,11 @@ class CallSession(models.Model):
     # The live value while this session is active. Meeting.locked is the
     # durable one - it seeds this field at creation (see start_or_join_call)
     # and is written alongside it on every set_locked call, so a host can
-    # lock an empty room and still find it locked once someone joins.
+    # lock an empty room and still find it locked once someone joins. Neither
+    # flag outlives its occurrence: this one goes away with the session (a
+    # session already ends when its last participant leaves), and
+    # Meeting.locked is explicitly cleared by end_meeting, so a lock never
+    # carries over into the next occurrence of a recurring meeting.
     locked = models.BooleanField(default=False)
 
     class Meta:
@@ -609,9 +613,11 @@ class Meeting(models.Model):
     # The start of the occurrence the host most recently ended. A later
     # occurrence has a different start, so the same URL opens again next week.
     closed_occurrence_start = models.DateTimeField(null=True, blank=True)
-    # Durable lock: survives even with no CallSession (pre-locking an empty
-    # room). Seeds CallSession.locked when a session is created; set_locked
-    # writes both. See CallSession.locked for which one a reader wants.
+    # Durable lock: survives even with no CallSession, so a host can pre-lock
+    # an empty room before anyone joins. Seeds CallSession.locked when a
+    # session is created; set_locked writes both while a session is active.
+    # Scoped to the occurrence it was set during - end_meeting clears it - so
+    # next week's guests are never locked out by last week's lock.
     locked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

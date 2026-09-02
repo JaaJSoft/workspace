@@ -22,7 +22,12 @@ def base32_decode(text: str) -> bytes:
 
 
 def totp_code(
-    secret: bytes, *, algorithm: str = "SHA1", digits: int = 6, period: int = 30, at: int
+    secret: bytes,
+    *,
+    algorithm: str = "SHA1",
+    digits: int = 6,
+    period: int = 30,
+    at: int,
 ) -> str:
     counter = int(at) // period
     mac = hmac.new(secret, struct.pack(">Q", counter), _HASHES[algorithm]).digest()

@@ -313,6 +313,4 @@ class TotpPublishedVectorTests(SimpleTestCase):
 
     def test_base32_round_trips_the_rfc_seed(self):
         secret = self._secret("SHA1")
-        self.assertEqual(
-            totp.base32_decode("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"), secret
-        )
+        self.assertEqual(totp.base32_decode("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"), secret)

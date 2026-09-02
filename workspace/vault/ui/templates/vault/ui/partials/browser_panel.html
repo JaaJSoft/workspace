@@ -65,7 +65,10 @@
               @click="toggleReveal('password')"
               :aria-label="isRevealed('password') ? 'Hide the password' : 'Reveal the password'"
             >
-              <i :data-lucide="isRevealed('password') ? 'eye-off' : 'eye'" class="w-3.5 h-3.5"></i>
+              <i
+                :data-lucide="isRevealed('password') ? 'eye-off' : 'eye'"
+                class="w-3.5 h-3.5"
+              ></i>
             </button>
             <button
               type="button"
@@ -92,7 +95,11 @@
               <span class="flex-1 text-sm opacity-60">This key cannot be read.</span>
             </template>
             <template x-if="totp && !totp.unreadable">
-              <span class="flex-1 font-mono tracking-widest" data-totp-code x-text="totp.code"></span>
+              <span
+                class="flex-1 font-mono tracking-widest"
+                data-totp-code
+                x-text="totp.code"
+              ></span>
             </template>
             <span
               class="text-xs opacity-50 tabular-nums"
@@ -125,7 +132,10 @@
               @click="toggleReveal('totp')"
               :aria-label="isRevealed('totp') ? 'Hide the authenticator key' : 'Reveal the authenticator key'"
             >
-              <i :data-lucide="isRevealed('totp') ? 'eye-off' : 'eye'" class="w-3.5 h-3.5"></i>
+              <i
+                :data-lucide="isRevealed('totp') ? 'eye-off' : 'eye'"
+                class="w-3.5 h-3.5"
+              ></i>
             </button>
           </div>
         </div>

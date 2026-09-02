@@ -7,6 +7,7 @@ from django.utils import timezone
 from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import Conversation, Meeting, MeetingGuest
 from workspace.chat.services.meeting_guests import (
+    guest_for_token,
     hash_token,
     issue_token,
     resolve_guest,
@@ -107,6 +108,55 @@ class ResolveGuestTests(TestCase):
         self.guest.occurrence_start = self.occurrence_start - timedelta(days=7)
         self.guest.save(update_fields=["occurrence_start"])
         self.assertIsNone(resolve_guest(self.token, now=self.now))
+
+
+class GuestForTokenTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="gft", password="x")
+        cal = Calendar.objects.create(name="C", owner=self.user)
+        self.now = timezone.now()
+        self.event = Event.objects.create(
+            calendar=cal,
+            owner=self.user,
+            title="E",
+            start=self.now - timedelta(minutes=5),
+            end=self.now + timedelta(minutes=25),
+        )
+        conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.user
+        )
+        self.meeting = Meeting.objects.create(
+            event=self.event, conversation=conv, created_by=self.user
+        )
+        self.occurrence_start = current_occurrence(self.meeting, now=self.now)[0]
+        self.token, digest = issue_token()
+        self.guest = MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Ada",
+            state=MeetingGuest.State.ADMITTED,
+            occurrence_start=self.occurrence_start,
+            token_hash=digest,
+        )
+
+    def test_finds_a_waiting_guest_that_resolve_guest_rejects(self):
+        self.guest.state = MeetingGuest.State.WAITING
+        self.guest.save(update_fields=["state"])
+        self.assertIsNone(resolve_guest(self.token, now=self.now))
+        self.assertEqual(guest_for_token(self.token), self.guest)
+
+    def test_finds_a_refused_guest(self):
+        self.guest.state = MeetingGuest.State.REFUSED
+        self.guest.save(update_fields=["state"])
+        self.assertEqual(guest_for_token(self.token), self.guest)
+
+    def test_rejects_an_unknown_token(self):
+        self.assertIsNone(guest_for_token("nope"))
+
+    def test_rejects_garbage_without_raising(self):
+        for bad in (None, "", 12, [], "\ud800"):
+            with self.subTest(bad=bad):
+                self.assertIsNone(guest_for_token(bad))
 
 
 class ResolveGuestRecurringTests(TestCase):

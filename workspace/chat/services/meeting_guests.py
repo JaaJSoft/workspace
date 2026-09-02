@@ -25,6 +25,22 @@ def hash_token(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _hash_token_or_none(token):
+    """``hash_token(token)``, or None for anything that cannot be hashed.
+
+    A lone surrogate passes a str/truthy check but cannot be UTF-8 encoded -
+    reachable from any JSON-bodied request, since json.loads accepts unpaired
+    surrogates. Shared by every lookup keyed on the token so the guard is
+    applied once rather than copied.
+    """
+    if not token or not isinstance(token, str):
+        return None
+    try:
+        return hash_token(token)
+    except UnicodeEncodeError:
+        return None
+
+
 def resolve_guest(token, now=None):
     """The MeetingGuest this token currently authorizes, or None.
 
@@ -34,15 +50,8 @@ def resolve_guest(token, now=None):
     """
     from ..models import MeetingGuest
 
-    if not token or not isinstance(token, str):
-        return None
-
-    try:
-        digest = hash_token(token)
-    except UnicodeEncodeError:
-        # A lone surrogate passes the str/truthy checks above but cannot be
-        # UTF-8 encoded - reachable from any JSON-bodied request, since
-        # json.loads accepts unpaired surrogates.
+    digest = _hash_token_or_none(token)
+    if digest is None:
         return None
 
     guest = (
@@ -63,3 +72,24 @@ def resolve_guest(token, now=None):
     if guest.meeting.closed_occurrence_start == start:
         return None
     return guest
+
+
+def guest_for_token(token):
+    """The MeetingGuest this token names, whatever its state, or None.
+
+    This is NOT the gate - it checks only that the token names a real guest,
+    with no state check and no occurrence check. It exists so a WAITING guest
+    can be told their own lobby status, which resolve_guest rejects by design.
+    Anything reading meeting content must use resolve_guest instead.
+    """
+    from ..models import MeetingGuest
+
+    digest = _hash_token_or_none(token)
+    if digest is None:
+        return None
+
+    return (
+        MeetingGuest.objects.select_related("meeting", "meeting__event")
+        .filter(token_hash=digest)
+        .first()
+    )

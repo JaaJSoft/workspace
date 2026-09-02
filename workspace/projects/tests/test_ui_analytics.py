@@ -1,8 +1,13 @@
+from decimal import Decimal
+
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.projects.models import Task, TaskEvent
-from workspace.projects.services.tasks import create_task
+from workspace.projects.models import Project, Task, TaskEvent
+from workspace.projects.services.members import add_member
+from workspace.projects.services.projects import create_project
+from workspace.projects.services.sprints import complete_sprint, start_sprint
+from workspace.projects.services.tasks import create_task, move_tasks
 from workspace.users.services.settings import get_setting
 
 from .base import ProjectTestMixin
@@ -150,3 +155,171 @@ class AnalyticsContentTests(ProjectTestMixin, TestCase):
         html = self.client.get(self.url).content.decode()
         self.assertNotIn("one-dimensional case", html)
         self.assertNotIn("Parameters:", html)
+
+
+class FlowReportsContentTests(ProjectTestMixin, TestCase):
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
+    @property
+    def url(self):
+        return f"/projects/{self.project.uuid}/analytics"
+
+    def test_finished_tasks_feed_the_cycle_time_section(self):
+        done = self.project.statuses.get(name="Done")
+        task = create_task(self.project, self.admin, title="Work")
+        move_tasks(self.project, done, [task.uuid])
+        self.client.force_login(self.member)
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["duration_stats"]["count"], 1)
+        chart = response.context["duration_chart"]
+        self.assertEqual(
+            [s["name"] for s in chart["series"]], ["Lead time", "Cycle time"]
+        )
+        self.assertIn("task measured", response.content.decode())
+
+    def test_nothing_finished_shows_the_section_placeholder(self):
+        create_task(self.project, self.admin, title="Open")
+        self.client.force_login(self.member)
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("No task finished in the last 12 weeks yet.", html)
+
+    def test_cumulative_flow_covers_twelve_weeks_of_days(self):
+        create_task(self.project, self.admin, title="Work")
+        self.client.force_login(self.member)
+        chart = self.client.get(self.url).context["cumulative_flow_chart"]
+        self.assertEqual(
+            [s["name"] for s in chart["series"]], ["Done", "Active", "Backlog"]
+        )
+        self.assertEqual(chart["series"][0]["segments"][0]["line"].count(","), 84)
+
+    def test_kanban_projects_have_no_sprint_sections(self):
+        create_task(self.project, self.admin, title="Work")
+        self.client.force_login(self.member)
+        response = self.client.get(self.url)
+        html = response.content.decode()
+        self.assertNotIn("Sprint burndown", html)
+        self.assertNotIn("Velocity", html)
+        self.assertNotIn("burndown", response.context)
+
+    def test_empty_project_skips_the_replays_entirely(self):
+        self.client.force_login(self.member)
+        response = self.client.get(self.url)
+        self.assertNotIn("cumulative_flow_chart", response.context)
+
+
+class SprintReportsContentTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.scrum = create_project(
+            self.admin, name="Rocket", project_type=Project.Type.SCRUM
+        )
+        add_member(self.scrum, self.member)
+        self.todo = self.scrum.statuses.get(name="To do")
+        self.done = self.scrum.statuses.get(name="Done")
+        self.client.force_login(self.member)
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
+    @property
+    def url(self):
+        return f"/projects/{self.scrum.uuid}/analytics"
+
+    def _closed_sprint(self, name, *, done_tasks=1):
+        sprint = self.scrum.sprints.create(name=name)
+        for _ in range(done_tasks):
+            create_task(
+                self.scrum, self.admin, title="Done", sprint=sprint, status=self.todo
+            )
+        start_sprint(sprint, actor=self.admin)
+        move_tasks(
+            self.scrum, self.done, list(sprint.tasks.values_list("uuid", flat=True))
+        )
+        complete_sprint(sprint, actor=self.admin)
+        return sprint
+
+    def test_without_sprints_both_sections_show_their_placeholders(self):
+        create_task(self.scrum, self.admin, title="Work")
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("Start a sprint to see its burndown here.", html)
+        self.assertIn("Velocity appears once a sprint has been completed.", html)
+
+    def test_running_sprint_is_the_default_burndown(self):
+        self._closed_sprint("Sprint 1")
+        active = self.scrum.sprints.create(name="Sprint 2")
+        create_task(
+            self.scrum, self.admin, title="Now", sprint=active, status=self.todo
+        )
+        start_sprint(active, actor=self.admin)
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["report_sprint"], active)
+        self.assertEqual(response.context["burndown"]["remaining"], 1)
+        self.assertEqual(
+            [s["name"] for s in response.context["burndown_chart"]["series"]],
+            ["Ideal", "Remaining"],
+        )
+
+    def test_sprint_param_picks_a_closed_sprint(self):
+        first = self._closed_sprint("Sprint 1", done_tasks=2)
+        self._closed_sprint("Sprint 2")
+        response = self.client.get(f"{self.url}?sprint={first.uuid}")
+        self.assertEqual(response.context["report_sprint"], first)
+        self.assertEqual(response.context["burndown"]["scope"], 2)
+
+    def test_unknown_or_malformed_sprint_param_falls_back_to_the_latest(self):
+        self._closed_sprint("Sprint 1")
+        latest = self._closed_sprint("Sprint 2")
+        for param in ("not-a-uuid", "00000000-0000-0000-0000-000000000000"):
+            response = self.client.get(f"{self.url}?sprint={param}")
+            self.assertEqual(response.context["report_sprint"], latest)
+
+    def test_planned_sprints_are_not_offered(self):
+        self._closed_sprint("Sprint 1")
+        planned = self.scrum.sprints.create(name="Someday")
+        response = self.client.get(self.url)
+        self.assertNotIn(planned, response.context["report_sprints"])
+        self.assertNotIn(f"?sprint={planned.uuid}", response.content.decode())
+
+    def test_velocity_lists_closed_sprints_oldest_first(self):
+        self._closed_sprint("Sprint 1", done_tasks=2)
+        self._closed_sprint("Sprint 2", done_tasks=3)
+        response = self.client.get(self.url)
+        chart = response.context["velocity_chart"]
+        self.assertEqual(
+            [c["label"] for c in chart["categories"]], ["Sprint 1", "Sprint 2"]
+        )
+        self.assertEqual(response.context["velocity_summary"]["last"], 3)
+        self.assertIn("tasks completed", response.content.decode())
+
+    def test_velocity_reads_points_when_the_project_estimates(self):
+        self.scrum.estimate_unit = Project.EstimateUnit.POINTS
+        self.scrum.save(update_fields=["estimate_unit"])
+        sprint = self.scrum.sprints.create(name="Sprint 1")
+        create_task(
+            self.scrum,
+            self.admin,
+            title="Big",
+            sprint=sprint,
+            status=self.todo,
+            estimate=Decimal("5.5"),
+        )
+        start_sprint(sprint, actor=self.admin)
+        move_tasks(
+            self.scrum, self.done, list(sprint.tasks.values_list("uuid", flat=True))
+        )
+        complete_sprint(sprint, actor=self.admin)
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["velocity_unit"], "points")
+        self.assertEqual(
+            response.context["velocity_chart"]["bars"][0]["tooltip"],
+            "Sprint 1: 5.5 completed",
+        )
+        self.assertIn("5.5", response.content.decode())
+
+    def test_burndown_switcher_links_back_to_the_analytics_view(self):
+        sprint = self._closed_sprint("Sprint 1")
+        html = self.client.get(self.url).content.decode()
+        self.assertIn(f"{self.url}?sprint={sprint.uuid}", html)

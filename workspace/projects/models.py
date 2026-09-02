@@ -635,6 +635,17 @@ class TaskEvent(models.Model):
     # deletable, a FK would rewrite history.
     from_status = models.CharField(max_length=100, blank=True, default="")
     to_status = models.CharField(max_length=100, blank=True, default="")
+    # The categories of those statuses, snapshotted for the same reason: the
+    # flow reports (cycle time, cumulative flow, burndown) need to know
+    # whether a move entered or left the board, and a column can be renamed
+    # or recategorized after the fact. Empty on events that carry no status
+    # and on history written before the snapshot existed.
+    from_category = models.CharField(
+        max_length=8, choices=TaskStatus.Category.choices, blank=True, default=""
+    )
+    to_category = models.CharField(
+        max_length=8, choices=TaskStatus.Category.choices, blank=True, default=""
+    )
     # Old/new snapshots for scalar field changes (estimate and epic name
     # today), as display strings; empty when the side was unset. Same
     # survive-the-task rationale as the status name snapshots above.

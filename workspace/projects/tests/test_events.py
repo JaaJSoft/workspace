@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from workspace.projects.models import TaskEvent
+from workspace.projects.models import TaskEvent, TaskStatus
 from workspace.projects.services.events import (
     events_for_project,
     move_event_type,
@@ -75,12 +75,25 @@ class RecordTaskEventTests(ProjectTestMixin, TestCase):
         self.assertEqual(event.from_status, "To do")
         self.assertEqual(event.to_status, "Done")
 
+    def test_record_snapshots_status_categories(self):
+        event = record_task_event(
+            self.task,
+            type=TaskEvent.Type.COMPLETED,
+            from_status=self.todo,
+            to_status=self.done,
+        )
+        event.refresh_from_db()
+        self.assertEqual(event.from_category, TaskStatus.Category.ACTIVE)
+        self.assertEqual(event.to_category, TaskStatus.Category.DONE)
+
     def test_record_without_statuses_leaves_blank(self):
         event = record_task_event(
             self.task, type=TaskEvent.Type.DELETED, actor=self.admin
         )
         self.assertEqual(event.from_status, "")
         self.assertEqual(event.to_status, "")
+        self.assertEqual(event.from_category, "")
+        self.assertEqual(event.to_category, "")
 
     def test_move_event_type_done_maps_to_completed(self):
         self.assertEqual(move_event_type(self.done), TaskEvent.Type.COMPLETED)

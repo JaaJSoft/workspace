@@ -24,6 +24,17 @@
       class="drawer-toggle"
     />
 
+    {% comment %}
+      The sidebar comes before the content in the DOM on purpose. The browser
+      paints a long document as it parses it, and the content of a large
+      listing is several megabytes: with the sidebar last, the page painted
+      the content at full width for as long as the parse took, then shifted
+      it right when the aside finally arrived. daisyUI places the two by grid
+      column, not by order, and every drawer rule selects the side from the
+      toggle (`.drawer-toggle ~ .drawer-side`), so the swap costs nothing.
+    {% endcomment %}
+    {% block drawer_sidebar %}{% endblock %}
+
     <div
       class="drawer-content flex flex-col {% block drawer_content_class %}h-full overflow-hidden{% endblock %}"
     >
@@ -33,7 +44,5 @@
         {% block content %}{% endblock %}
       </main>
     </div>
-
-    {% block drawer_sidebar %}{% endblock %}
   </div>
 {% endblock %}

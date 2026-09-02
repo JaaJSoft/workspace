@@ -257,6 +257,36 @@ class MyModel(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
 ```
 
+### Data migrations - always query the connection being migrated
+
+A `RunPython` callable receives a `schema_editor`, but the ORM never reads it. A bare `Model.objects` goes to the **default** database, which is the right one only while there is a single database. `migrate_to_postgres` migrates a PostgreSQL target while SQLite stays the default, and there an unrouted migration silently reads and writes the source instead of the target.
+
+Take the alias from the schema editor and pass it to every manager:
+
+```python
+def forwards(apps, schema_editor):
+    Event = apps.get_model("calendar", "Event")
+    db = schema_editor.connection.alias
+    for event in Event.objects.using(db).filter(...).iterator():
+        ...
+    Event.objects.using(db).bulk_update(batch, ["field"])
+```
+
+**When the work lives in a helper, give the helper a `using` parameter** rather than letting it default. Several migrations hand historical models to a service function (`chat.services.threads.backfill_threads`, `chat.services.deletion.purge_deleted_message_backlog`); the connection is the same kind of argument as the models, and a default keeps existing callers working:
+
+```python
+def backfill_threads(message_model, participant_model, member_model, using=DEFAULT_DB_ALIAS):
+    message_model.objects.using(using).filter(...)
+```
+
+**Rules:**
+
+- Route **every** manager access, including a queryset built only to be wrapped in `Subquery()` or `Exists()`. Routing a correlated subquery is a no-op (it compiles against the outer query's connection), but one uniform rule beats reasoning case by case about which accesses matter.
+- Never name a database with a literal. `.using("default")` routes every manager and still points at whichever database the migration was not asked to touch.
+- Instance `save()` and `delete()` need nothing extra: they inherit `_state.db` from the queryset that loaded the object, so they follow automatically once that queryset is routed.
+- A migration is a historical record. Do not import live application code that could change meaning under it - inline the logic instead. The exceptions above pass their models in precisely so the function keeps working against historical model classes.
+- `core/tests/test_migration_db_alias.py` enforces all of this mechanically. It exists because the mistake is invisible to the rest of the suite: under a single database `.using(default)` **is** the default, so correct and incorrect code behave identically and no test can tell them apart. Only the SQLite-to-PostgreSQL path in the Docker workflow exercises the difference.
+
 ### Services
 
 Business logic that doesn't belong in views, models, or tasks lives in **services**. Services are reusable across views, REST endpoints, Celery tasks, and management commands.

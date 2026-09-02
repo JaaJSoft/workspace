@@ -500,6 +500,13 @@ class SerializeCallStateTests(TestCase):
         state = calls.serialize_call_state(session)
         self.assertEqual(state["participants"][0]["media_state"], {"audio": False})
 
+    def test_serialize_call_state_carries_locked_flag(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        self.assertFalse(calls.serialize_call_state(session)["locked"])
+        session.locked = True
+        session.save(update_fields=["locked"])
+        self.assertTrue(calls.serialize_call_state(session)["locked"])
+
     def test_guest_participant_serializes_with_display_name_and_no_user_id(self):
         cal = Calendar.objects.create(name="C", owner=self.a)
         event = Event.objects.create(

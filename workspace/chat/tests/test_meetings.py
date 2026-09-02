@@ -18,7 +18,6 @@ from workspace.chat.services import call_signaling as sig
 from workspace.chat.services import calls
 from workspace.chat.services import meetings as meeting_service
 from workspace.chat.services.meeting_guests import issue_token, resolve_guest
-from workspace.chat.services.participant_keys import guest_key
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import (
     admit_guest,
@@ -27,6 +26,7 @@ from workspace.chat.services.meetings import (
     refuse_guest,
     remove_guest,
 )
+from workspace.chat.services.participant_keys import guest_key
 
 
 def make_event(owner, start=None):

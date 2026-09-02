@@ -203,14 +203,30 @@ class MeetingHostViewTests(TestCase):
 
     # --- lock ---
 
-    def test_lock_returns_409_without_an_active_call(self):
+    def test_lock_before_any_session_persists_to_the_meeting(self):
         self.client.force_authenticate(self.owner)
         resp = self.client.post(
             f"/api/v1/chat/meetings/{self.meeting.uuid}/lock",
             {"locked": True},
             format="json",
         )
-        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.status_code, 200)
+        self.meeting.refresh_from_db()
+        self.assertTrue(self.meeting.locked)
+
+    def test_pre_lock_carries_over_to_the_session_created_on_join(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            f"/api/v1/chat/meetings/{self.meeting.uuid}/lock",
+            {"locked": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        self.assertTrue(session.locked)
 
     def test_lock_locks_the_active_call(self):
         calls.start_or_join_call(self.owner, self.meeting.conversation_id)
@@ -460,6 +476,20 @@ class MeetingPublicViewTests(TestCase):
         )
         session.locked = True
         session.save(update_fields=["locked"])
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 423)
+
+    def test_knock_returns_423_when_meeting_locked_before_any_session(self):
+        # Pre-locking (MeetingLockView, before anyone has joined) writes only
+        # Meeting.locked - there is no CallSession yet. is_call_locked must
+        # still surface that as a 423 on the knock, not treat "no session" as
+        # "not locked".
+        self.meeting.locked = True
+        self.meeting.save(update_fields=["locked"])
         resp = self.client.post(
             f"/api/v1/chat/meet/{self.meeting.slug}/knock",
             {"display_name": "Ada"},

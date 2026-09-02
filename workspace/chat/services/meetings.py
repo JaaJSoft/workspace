@@ -120,14 +120,25 @@ def remove_guest(guest):
 
 
 def set_locked(meeting, locked):
-    """Lock or unlock the meeting's active call session. False when none."""
+    """Lock or unlock the meeting, durably.
+
+    Meeting.locked is the value that survives with no active call - it is
+    written unconditionally, so a host can pre-lock an empty room. When a
+    call is already active, its session's live flag is written to match in
+    the same call, so participants already in the room see the change too.
+    Not guest-reachable (this is behind the host membership gate), so the
+    get_active_call self-heal is fine here.
+    """
     from .calls import get_active_call
 
+    locked = bool(locked)
+    meeting.locked = locked
+    meeting.save(update_fields=["locked"])
+
     session = get_active_call(meeting.conversation_id)
-    if session is None:
-        return False
-    session.locked = bool(locked)
-    session.save(update_fields=["locked"])
+    if session is not None:
+        session.locked = locked
+        session.save(update_fields=["locked"])
     return True
 
 

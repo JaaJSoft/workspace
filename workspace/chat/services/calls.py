@@ -93,14 +93,18 @@ def get_active_call(conversation_id):
 
 
 def is_call_locked(conversation_id):
-    """Whether *conversation_id* has a locked active call, no self-heal.
+    """Whether *conversation_id* has a locked call, no self-heal.
 
     Unlike ``get_active_call``, this never takes the cleanup write-lock or
     ends a stale call - it is for the public meeting endpoints, which are
     reachable by an anonymous caller holding only a slug and must not be
     able to drive a DB write and an SSE broadcast off a plain GET/POST.
+
+    Prefers the session's flag (the live value) while a call is active, and
+    falls back to the meeting's flag (the durable value) when there is no
+    session yet - a host can pre-lock an empty room, see set_locked.
     """
-    from ..models import CallSession
+    from ..models import CallSession, Meeting
 
     session = (
         CallSession.objects.filter(
@@ -109,7 +113,12 @@ def is_call_locked(conversation_id):
         .only("locked")
         .first()
     )
-    return session.locked if session is not None else False
+    if session is not None:
+        return session.locked
+    meeting = (
+        Meeting.objects.filter(conversation_id=conversation_id).only("locked").first()
+    )
+    return meeting.locked if meeting is not None else False
 
 
 def _has_stale_participants(session):
@@ -239,13 +248,24 @@ def _active_session_for_update(conversation_id):
 
 @transaction.atomic
 def _start_or_join_once(user, conversation_id):
-    from ..models import CallParticipant, CallSession, Message
+    from ..models import CallParticipant, CallSession, Meeting, Message
 
     session = _active_session_for_update(conversation_id)
     created_session = False
     if session is None:
+        # Seed from the meeting's durable lock, if this conversation belongs
+        # to one: a host locking the room before anyone has joined still
+        # finds it locked on the session created here. Plain (non-meeting)
+        # conversations have no Meeting row, so this is a no-op for them.
+        meeting = (
+            Meeting.objects.filter(conversation_id=conversation_id)
+            .only("locked")
+            .first()
+        )
         session = CallSession.objects.create(
-            conversation_id=conversation_id, started_by=user
+            conversation_id=conversation_id,
+            started_by=user,
+            locked=meeting.locked if meeting is not None else False,
         )
         msg = Message.objects.create(
             conversation_id=conversation_id,
@@ -483,5 +503,6 @@ def serialize_call_state(session):
         "started_by": session.started_by_id,
         "started_at": session.started_at.isoformat(),
         "media_kind": session.media_kind,
+        "locked": session.locked,
         "participants": participants,
     }

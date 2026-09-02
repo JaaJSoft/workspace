@@ -368,8 +368,7 @@ class MeetingLockView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         locked = is_truthy(request.data.get("locked"))
-        if not meeting_service.set_locked(meeting, locked):
-            return Response(status=status.HTTP_409_CONFLICT)
+        meeting_service.set_locked(meeting, locked)
         return Response({"locked": locked})
 
 

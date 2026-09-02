@@ -438,6 +438,10 @@ window.vaultBrowser = (function () {
         if (generation !== this.actionsGeneration) return;
         if (!window.vaultSession.isUnlocked()) return;
         this.entryActions = answer;
+        // The rows reach the screen a round trip before this answer does, and
+        // startTotp is gated on it: a row opened in between was refused by a
+        // map that had no entry for it yet, and no other pass would ask again.
+        if (this.panelEntry && !this.totp) await this.startTotp(this.panelEntry);
       },
 
       refresh: function () {

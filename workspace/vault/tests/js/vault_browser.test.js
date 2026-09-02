@@ -947,6 +947,41 @@ test('opening an entry with a key shows its code and its validity', async () => 
   assert.equal(component.totp.secondsLeft, 17);
 });
 
+test('a row opened while its action list is still in flight still derives a code', async () => {
+  // The listing lands a round trip before the actions do, so there is a
+  // window where the rows are on screen and the map startTotp reads is still
+  // the one from before. A row opened in it was gated on an answer nobody
+  // had yet, and nothing asked again once the answer arrived - the panel kept
+  // the key line with no code under it until the row was reopened.
+  let reached;
+  const entered = new Promise((resolve) => { reached = resolve; });
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => {
+        reached();
+        await held;
+        return { 'e-1': [ACTION.copy_totp] };
+      },
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  const loading = component.load();
+  await entered;
+
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.totp, null, 'nothing is derived on an unanswered gate');
+
+  release();
+  await loading;
+  await settle();
+  assert.notEqual(component.totp, null, 'the code is derived once the gate answers');
+  assert.equal(component.totp.code, '123456');
+});
+
 test('the panel holds a key handle, never the secret', async () => {
   const { component } = browser({
     api: {

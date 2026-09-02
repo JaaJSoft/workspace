@@ -62,9 +62,10 @@ class FilesIndexSettingsTests(TestCase):
         self.assertContains(response, 'class="grid"')
         self.assertNotContains(response, 'data-col="name"')
 
-        set_setting(self.user, "files", "preferences", {"defaultViewMode": "carousel"})
-        response = self.client.get(reverse("files_ui:index"))
-        self.assertEqual(response.context["view_mode"], "list")
+        for junk in ("carousel", ["mosaic"], {"mode": "mosaic"}, 3):
+            set_setting(self.user, "files", "preferences", {"defaultViewMode": junk})
+            response = self.client.get(reverse("files_ui:index"))
+            self.assertEqual(response.context["view_mode"], "list")
 
     def test_index_defaults_when_settings_absent(self):
         """Missing settings fall back to the documented defaults."""

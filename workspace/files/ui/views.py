@@ -406,7 +406,7 @@ def _build_context(request, folder=None, is_trash_view=False):
     # the browser as much to bind as it has markup, and the toggle is rare
     # enough to be a re-render.
     view_mode = file_prefs.get("defaultViewMode")
-    if view_mode not in {"list", "mosaic"}:
+    if not isinstance(view_mode, str) or view_mode not in {"list", "mosaic"}:
         view_mode = "list"
     viewer_prefs = files_settings.get("viewer") or {}
     if not isinstance(viewer_prefs, dict):

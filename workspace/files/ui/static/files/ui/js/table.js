@@ -263,28 +263,9 @@ window.fileTableControls = function fileTableControls() {
       // Shift-click: select range from last selected to current
       if (shiftKey && this.lastSelectedUuid && this.lastSelectedUuid !== uuid) {
         // Get all visible items in current view (filtered rows in list view, or all items in mosaic view)
-        let allUuids = [];
-
-        // Try to get from visible rows (after filtering/sorting)
-        if (this.visibleRows && this.visibleRows.length > 0) {
-          allUuids = this.visibleRows.map(r => r.dataset?.uuid).filter(Boolean);
-        } else {
-          // Fallback: get from DOM
-          // For list view: tbody > tr[data-uuid]
-          // For mosaic view: .grid > div[data-uuid]
-          const tbody = document.querySelector('tbody tr[data-uuid]');
-          const gridContainer = document.querySelector('div.grid div[data-uuid]');
-
-          if (tbody) {
-            // List view
-            const items = Array.from(document.querySelectorAll('tbody tr[data-uuid]'));
-            allUuids = items.map(r => r.dataset.uuid).filter(Boolean);
-          } else if (gridContainer) {
-            // Mosaic view
-            const items = Array.from(document.querySelectorAll('div.grid > div[data-uuid]'));
-            allUuids = items.map(r => r.dataset.uuid).filter(Boolean);
-          }
-        }
+        // The range runs over what is on screen, in its current order: a
+        // filtered-out item is never swept into a selection.
+        const allUuids = this.visibleItemUuids();
 
         const startIdx = allUuids.indexOf(this.lastSelectedUuid);
         const endIdx = allUuids.indexOf(uuid);
@@ -571,7 +552,7 @@ window.fileTableControls = function fileTableControls() {
 
     _getRowDataByUuid(uuid) {
       if (!uuid) return null;
-      const row = document.querySelector(`tr[data-uuid="${uuid}"]`);
+      const row = this.$el.querySelector(`[data-uuid="${uuid}"]`);
       if (!row) return null;
       return {
         uuid,
@@ -726,8 +707,14 @@ window.fileTableControls = function fileTableControls() {
       if (key === 'Enter' || key === ' ') {
         e.preventDefault();
         if (this._nodeHasAction(data, 'open')) {
-          const link = document.querySelector(`tr[data-uuid="${data.uuid}"] a[data-folder-link]`);
-          if (link) link.click();
+          // A row carries a folder link; a card navigates through the
+          // hidden nav link, as a click on it does.
+          const link = this.$el.querySelector(`[data-uuid="${data.uuid}"] a[data-folder-link]`)
+            || document.querySelector('#folder-nav-push');
+          if (link) {
+            if (!link.hasAttribute('data-folder-link')) link.href = `/files/${data.uuid}`;
+            link.click();
+          }
         } else if (this._nodeHasAction(data, 'view')) {
           window.dispatchEvent(new CustomEvent('open-file-viewer', {
             detail: { uuid: data.uuid, name: data.name, type: data.fileType }

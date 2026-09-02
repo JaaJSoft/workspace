@@ -47,15 +47,24 @@ window.filePreferences = function filePreferences() {
     },
 
     update(key, value) {
+      const previous = this.prefs[key];
       this.prefs[key] = value;
       this._broadcast();
       // Breadcrumb collapse and the view mode are rendered server-side:
       // save right away and re-render once the save has landed, or the
-      // re-render reads the value the user just left.
+      // re-render reads the value the user just left. A save that fails
+      // rolls the dialog back instead, so it never shows a value the
+      // listing does not.
       if (key === 'breadcrumbCollapse' || key === 'defaultViewMode') {
         clearTimeout(this._saveTimer);
-        this._saveNow().then(() => {
-          this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+        this._saveNow().then((saved) => {
+          if (saved) {
+            this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+            return;
+          }
+          this.prefs[key] = previous;
+          this._broadcast();
+          window.AppAlert?.error('Could not save the preference');
         });
         return;
       }
@@ -72,13 +81,14 @@ window.filePreferences = function filePreferences() {
       this._saveTimer = setTimeout(() => this._saveNow(), 500);
     },
 
+    // Resolves to whether the server took the save.
     _saveNow() {
       const csrfToken = getCSRFToken();
       return fetch(API_URL, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
         body: JSON.stringify({ value: this.prefs }),
-      }).catch(() => {});
+      }).then((resp) => resp.ok, () => false);
     },
   };
 };

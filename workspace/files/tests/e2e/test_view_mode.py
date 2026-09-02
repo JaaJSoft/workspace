@@ -54,6 +54,54 @@ class ViewModeTests(PlaywrightTestCase):
         expect(cards.filter(has_text="alpha.txt")).to_be_hidden()
         expect(self.page.locator("#folder-browser")).to_contain_text("1 of 3 items")
 
+    def test_keyboard_shortcuts_act_on_a_selected_card(self):
+        # Rows used to sit hidden behind the mosaic, so the shortcuts found
+        # their target in the table. Now the card is all there is.
+        set_setting(self.user, "files", "preferences", {"defaultViewMode": "mosaic"})
+        folder = File.objects.create(
+            owner=self.user, name="Reports", node_type=File.NodeType.FOLDER
+        )
+        self._open_files()
+
+        card = self.page.locator(f'div.grid > div[data-uuid="{folder.uuid}"]')
+        card.locator('input[type="checkbox"]').click()
+        expect(self.page.locator("#folder-browser")).to_contain_text("1 selected")
+
+        self.page.keyboard.press("Enter")
+        expect(self.page.locator("#folder-browser h1")).to_have_text("Reports")
+
+    def test_shift_range_skips_filtered_cards(self):
+        set_setting(self.user, "files", "preferences", {"defaultViewMode": "mosaic"})
+        File.objects.filter(owner=self.user).delete()
+        cards = {}
+        for name in ("art.txt", "bee.txt", "cart.txt"):
+            cards[name] = File.objects.create(
+                owner=self.user,
+                name=name,
+                node_type=File.NodeType.FILE,
+                mime_type="text/plain",
+            )
+        self._open_files()
+
+        # "rt" keeps art and cart on screen and hides bee, which sits between them.
+        self.page.locator("#folder-browser").get_by_placeholder("Filter by name").fill(
+            "rt"
+        )
+        bee = self.page.locator(f'div.grid > div[data-uuid="{cards["bee.txt"].uuid}"]')
+        expect(bee).to_be_hidden()
+
+        self.page.locator(
+            f'div.grid > div[data-uuid="{cards["art.txt"].uuid}"] input[type="checkbox"]'
+        ).click()
+        self.page.locator(
+            f'div.grid > div[data-uuid="{cards["cart.txt"].uuid}"] input[type="checkbox"]'
+        ).click(modifiers=["Shift"])
+
+        expect(self.page.locator("#folder-browser")).to_contain_text("2 selected")
+        self.assertFalse(
+            bee.locator('input[type="checkbox"]').evaluate("el => el.checked")
+        )
+
     def test_toggle_saves_the_preference_and_re_renders(self):
         self._open_files()
         expect(self.page.locator("#folder-browser tbody tr[data-uuid]")).to_have_count(

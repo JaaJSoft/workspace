@@ -3,6 +3,9 @@
 // selection, duration shortcuts, keyboard shortcuts, context menu, and
 // event card popover actions. Also includes panel display formatters.
 window.calendarEventsMixin = function calendarEventsMixin() {
+  // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
+  const dayKeyFormatter = window.zonedFormatter('en-CA');
+
   // Hardcoded SVG markup for the recurring-event indicator. Kept as a
   // module-level constant so the hot path in eventDidMount() doesn't
   // re-allocate the string on every render.
@@ -338,7 +341,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       let currentGroup = null;
 
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      const keyIn = (d, zone) => new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(d);
+      const keyIn = (d, zone) => dayKeyFormatter(zone).format(d);
 
       const todayDate = new Date();
       const todayKey = keyIn(todayDate, tz);

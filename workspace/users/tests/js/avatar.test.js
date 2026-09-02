@@ -12,6 +12,7 @@ const { loadScripts } = require('../../../common/tests/js/loader');
 function patchWithStatus(status, lastSeen) {
   const ctx = loadScripts(
     [
+      'workspace/common/static/ui/js/zoned_formatter.js',
       'workspace/common/static/ui/js/timeago.js',
       'workspace/users/ui/static/users/ui/js/avatar.js',
     ],

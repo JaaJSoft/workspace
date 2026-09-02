@@ -136,13 +136,18 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.locator(PANEL).get_by_role("button", name="Edit").click()
         self.page.wait_for_selector(".modal-box")
         self.page.get_by_role("button", name="Add").click()
-        self.page.fill(".modal-box input[placeholder='Key or otpauth:// address']", self.TOTP_SECRET)
+        self.page.fill(
+            ".modal-box input[placeholder='Key or otpauth:// address']",
+            self.TOTP_SECRET,
+        )
         self.page.click(".modal-box button:has-text('Save')")
         # Scoped to the entry dialog itself: the page carries several other
         # ``.modal-box`` elements (help, prompts, the file picker) that stay
         # in the DOM - out of view but not display:none - the whole time, so
         # a bare ``.modal-box`` never reports hidden.
-        self.page.wait_for_selector(".modal-box:has-text('Save')", state="hidden", timeout=30000)
+        self.page.wait_for_selector(
+            ".modal-box:has-text('Save')", state="hidden", timeout=30000
+        )
 
     # ---- the walk ---------------------------------------------------------
 
@@ -430,7 +435,6 @@ class VaultBrowserTests(PlaywrightTestCase):
                     audited: nodes.map(identify),
                     offenders: nodes
                         .filter((node) => !['checkbox', 'radio', 'hidden'].includes(node.type))
-                        .filter((node) => node.autocomplete !== 'current-password')
                         .filter((node) => node.autocomplete !== 'off' || node.spellcheck !== false)
                         .map(identify),
                 };
@@ -504,6 +508,9 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.click("tbody tr:has-text('GitHub')")
         self.page.wait_for_selector("button[aria-label='Copy the authenticator code']")
         self.page.click("button[aria-label='Copy the authenticator code']")
+        # The copy opens the field, derives the code and only then writes: the
+        # banner is the postcondition, as it is for the password copy above.
+        self.page.wait_for_selector("text=Authenticator code copied", timeout=10000)
         copied = self.page.evaluate("() => navigator.clipboard.readText()")
         self.assertRegex(copied, r"^[0-9]{6}$")
         self.assertNotIn(self.TOTP_SECRET, copied)

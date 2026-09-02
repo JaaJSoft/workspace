@@ -157,6 +157,36 @@ class VaultBrowserTests(PlaywrightTestCase):
         )
         self.assertIn("totp", written, f"the key was not written, fields are {written}")
 
+    def _panel_diagnosis(self):
+        """What the panel is actually bound to, read out of the component."""
+        return self.page.evaluate(
+            """() => {
+                const root = document.querySelector('[x-data="vaultBrowser()"]');
+                const d = window.Alpine.$data(root);
+                return {
+                    panelUuid: d.panelEntry ? d.panelEntry.uuid : null,
+                    panelFieldIds: d.panelEntry ? [...(d.panelEntry.fieldIds || [])] : null,
+                    entries: d.entries.map((e) => [e.uuid, [...(e.fieldIds || [])]]),
+                    actions: Object.fromEntries(
+                        Object.entries(d.entryActions).map(
+                            ([k, v]) => [k, v.map((a) => a.id)]
+                        )
+                    ),
+                    totp: d.totp
+                        ? { unreadable: !!d.totp.unreadable, code: !!d.totp.code }
+                        : null,
+                    loading: d.loading,
+                    error: d.error,
+                };
+            }"""
+        )
+
+    def _wait_for_totp_section(self, panel):
+        try:
+            panel.get_by_text("Authenticator code", exact=True).wait_for(timeout=15000)
+        except Exception:
+            self.fail(f"no authenticator section: {self._panel_diagnosis()}")
+
     # ---- the walk ---------------------------------------------------------
 
     def test_an_entry_is_created_browsed_and_read_back(self):
@@ -497,7 +527,7 @@ class VaultBrowserTests(PlaywrightTestCase):
         # Two gates, one symptom: the section is hidden when the row carries
         # no key or the registry withholds copy_totp, the code is missing when
         # the derivation did not land. Waiting on each in turn says which.
-        panel.get_by_text("Authenticator code", exact=True).wait_for(timeout=15000)
+        self._wait_for_totp_section(panel)
         code = panel.locator("[data-totp-code]")
         code.wait_for(timeout=15000)
         shown = code.inner_text().strip()
@@ -519,7 +549,7 @@ class VaultBrowserTests(PlaywrightTestCase):
         self._add_totp_key("GitHub")
         self.page.click("tbody tr:has-text('GitHub')")
         panel = self.page.locator(PANEL)
-        panel.get_by_text("Authenticator code", exact=True).wait_for(timeout=15000)
+        self._wait_for_totp_section(panel)
         self.page.wait_for_selector("button[aria-label='Copy the authenticator code']")
         self.page.click("button[aria-label='Copy the authenticator code']")
         # The copy opens the field, derives the code and only then writes: the

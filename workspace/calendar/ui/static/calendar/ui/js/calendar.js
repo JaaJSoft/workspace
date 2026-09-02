@@ -6,6 +6,9 @@ window.calendarApp = function calendarApp() {
     try { calendarsData = JSON.parse(calsEl.textContent); } catch (e) {}
   }
 
+  // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
+  const dayKeyFormatter = window.zonedFormatter('en-CA');
+
   return {
     // ── State ────────────────────────────────────────────────
     calendar: null,
@@ -401,8 +404,7 @@ window.calendarApp = function calendarApp() {
     },
 
     _dayKeyIn(d, tz) {
-      // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
-      return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+      return dayKeyFormatter(tz).format(d);
     },
 
     _dayKey(d) {

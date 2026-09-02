@@ -2,14 +2,17 @@
 
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 const mixinStub = () => ({});
 
 // In the browser localtime.js shares the window with every calendar
 // script; load the real production helpers once and mirror them into
 // each vm realm so the tests exercise the shared implementation.
-const localtimeCtx = loadScript('workspace/common/static/ui/js/localtime.js', {
+const localtimeCtx = loadScripts([
+  'workspace/common/static/ui/js/zoned_formatter.js',
+  'workspace/common/static/ui/js/localtime.js',
+], {
   document: {
     documentElement: { getAttribute: () => null },
     body: {},
@@ -24,7 +27,10 @@ function injectTzHelpers(ctx) {
 }
 
 function makeEventsMixin(userTz) {
-  const ctx = loadScript('workspace/calendar/ui/static/calendar/ui/js/calendar_events.js', {
+  const ctx = loadScripts([
+    'workspace/common/static/ui/js/zoned_formatter.js',
+    'workspace/calendar/ui/static/calendar/ui/js/calendar_events.js',
+  ], {
     document: { getElementById: () => null },
   });
   ctx.getUserTimeZone = () => userTz;
@@ -33,7 +39,10 @@ function makeEventsMixin(userTz) {
 }
 
 function makeCalendarApp(userTz) {
-  const ctx = loadScript('workspace/calendar/ui/static/calendar/ui/js/calendar.js', {
+  const ctx = loadScripts([
+    'workspace/common/static/ui/js/zoned_formatter.js',
+    'workspace/calendar/ui/static/calendar/ui/js/calendar.js',
+  ], {
     document: { getElementById: () => null },
 localStorage: { getItem: () => null, setItem: () => {} },
     sidebarPreference: { initial: () => false, save: () => {} },
@@ -74,6 +83,40 @@ test('agendaByDay groups timed events on the user-timezone day', () => {
   // 20:00 UTC on Jan 31 is already Feb 1 in Tokyo.
   assert.equal(groups[0].date, '2026-02-01');
   assert.match(groups[0].label, /February 1|1 février/);
+});
+
+// Counts Intl.DateTimeFormat constructions. Shadows the context's own
+// Intl: the script looks the global up on every call, so the count sees
+// each constructor invocation.
+function countFormatters(ctx) {
+  const counter = { built: 0 };
+  ctx.Intl = {
+    DateTimeFormat: function (...args) {
+      counter.built++;
+      return new Intl.DateTimeFormat(...args);
+    },
+  };
+  return counter;
+}
+
+function timedEvents(count) {
+  return Array.from({ length: count }, (_, i) => ({
+    uuid: String(i), title: 'Call', start: `2026-01-${String(i % 28 + 1).padStart(2, '0')}T20:00:00Z`, all_day: false,
+  }));
+}
+
+test('agendaByDay builds one day-key formatter per zone, not one per event', () => {
+  const { ctx, mixin } = makeEventsMixin('Asia/Tokyo');
+  const counter = countFormatters(ctx);
+  mixin.agenda = { events: timedEvents(50) };
+  mixin.agendaByDay();
+  assert.equal(counter.built, 1);
+  mixin.agendaByDay();
+  assert.equal(counter.built, 1);
+  // All-day events are keyed in UTC: another zone, another cached formatter.
+  mixin.agenda = { events: [{ uuid: 'x', title: 'Off', start: '2026-08-01T00:00:00Z', all_day: true }, ...timedEvents(10)] };
+  mixin.agendaByDay();
+  assert.equal(counter.built, 2);
 });
 
 test('panelDateDisplay keeps a single-day all-day event on its day', () => {

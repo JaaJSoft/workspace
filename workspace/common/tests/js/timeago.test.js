@@ -2,11 +2,11 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('./loader');
+const { loadScripts } = require('./loader');
 
 // Pin the timezone so the date-fallback assertions don't depend on the
 // machine running the tests.
-const ctx = loadScript('workspace/common/static/ui/js/timeago.js', {
+const ctx = loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/timeago.js'], {
   getUserTimeZone: () => 'Europe/Paris',
 });
 
@@ -91,7 +91,7 @@ function oldValues(count) {
 
 test('builds one date-parts formatter per zone, not one per value', () => {
   let zone = 'Europe/Paris';
-  const zoned = loadScript('workspace/common/static/ui/js/timeago.js', {
+  const zoned = loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/timeago.js'], {
     getUserTimeZone: () => zone,
   });
   const counter = countFormatters(zoned);
@@ -113,7 +113,7 @@ test('builds one date-parts formatter per zone, not one per value', () => {
 test('without a configured zone the formatter is rebuilt every time', () => {
   // The browser zone binds at construction and can change while the page
   // is open (a laptop crossing a border), so that one must not be cached.
-  const unzoned = loadScript('workspace/common/static/ui/js/timeago.js', {
+  const unzoned = loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/timeago.js'], {
     getUserTimeZone: () => undefined,
   });
   const counter = countFormatters(unzoned);

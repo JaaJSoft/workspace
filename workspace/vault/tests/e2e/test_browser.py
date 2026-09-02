@@ -148,6 +148,14 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.wait_for_selector(
             ".modal-box:has-text('Save')", state="hidden", timeout=30000
         )
+        # The dialog closes on a write that carried no key just as readily as
+        # on one that did - saveEntry only keeps it open when sealing raised.
+        # Without this the panel assertions downstream blame the panel for a
+        # key the form never sent.
+        written = set(
+            VaultEntry.objects.get().fields.values_list("field_id", flat=True)
+        )
+        self.assertIn("totp", written, f"the key was not written, fields are {written}")
 
     # ---- the walk ---------------------------------------------------------
 
@@ -486,6 +494,10 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.click("tbody tr:has-text('GitHub')")
         panel = self.page.locator(PANEL)
         panel.wait_for(timeout=10000)
+        # Two gates, one symptom: the section is hidden when the row carries
+        # no key or the registry withholds copy_totp, the code is missing when
+        # the derivation did not land. Waiting on each in turn says which.
+        panel.get_by_text("Authenticator code", exact=True).wait_for(timeout=15000)
         code = panel.locator("[data-totp-code]")
         code.wait_for(timeout=15000)
         shown = code.inner_text().strip()
@@ -506,6 +518,8 @@ class VaultBrowserTests(PlaywrightTestCase):
         self._create_entry("GitHub", "octocat", "hunter2")
         self._add_totp_key("GitHub")
         self.page.click("tbody tr:has-text('GitHub')")
+        panel = self.page.locator(PANEL)
+        panel.get_by_text("Authenticator code", exact=True).wait_for(timeout=15000)
         self.page.wait_for_selector("button[aria-label='Copy the authenticator code']")
         self.page.click("button[aria-label='Copy the authenticator code']")
         # The copy opens the field, derives the code and only then writes: the

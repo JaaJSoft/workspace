@@ -44,7 +44,7 @@ dependencies = [
     "gevent>=26.8.0",
     "django-prometheus>=2.5.0",
     # push notifications
-    "pywebpush>=2.4.0",
+    "pywebpush>=2.5.0",
     # oauth2
     "authlib>=1.7.2",
     # file type detection

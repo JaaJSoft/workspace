@@ -44,7 +44,7 @@ class ViewModeTests(PlaywrightTestCase):
         expect(cards).to_have_count(3)
         expect(self.page.locator("#folder-browser table")).to_have_count(0)
         # Actions were fetched for the cards, not for absent rows.
-        self.assertEqual(len(actions.json()), 3)
+        self.assertEqual(len(actions.json()["files"]), 3)
 
         # The filter hides cards in place.
         self.page.locator("#folder-browser").get_by_placeholder("Filter by name").fill(

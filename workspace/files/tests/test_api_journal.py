@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.tests.test_actions import actions_of
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -114,7 +115,7 @@ class JournalRenameGateTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()
-        action_ids = {a["id"] for a in data[str(self.journal_note.uuid)]}
+        action_ids = {a["id"] for a in actions_of(data, str(self.journal_note.uuid))}
         self.assertNotIn("rename", action_ids)
         # Other actions should still be offered - the frontend keeps those buttons enabled.
         self.assertIn("toggle_favorite", action_ids)
@@ -128,5 +129,5 @@ class JournalRenameGateTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()
-        action_ids = {a["id"] for a in data[str(self.normal_note.uuid)]}
+        action_ids = {a["id"] for a in actions_of(data, str(self.normal_note.uuid))}
         self.assertIn("rename", action_ids)

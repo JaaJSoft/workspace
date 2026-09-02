@@ -415,7 +415,6 @@ window.fileTableControls = function fileTableControls() {
 
       this.actionsLoading = true;
       try {
-        const csrfToken = getCSRFToken();
         // The endpoint answers at most 200 UUIDs per call; a larger listing
         // asks in slices. Each answer is merged as it lands: a row only
         // needs its own entry, so the first rows are usable while the rest
@@ -427,13 +426,8 @@ window.fileTableControls = function fileTableControls() {
         // allSettled: a slice lost to the network must not end the wait for
         // the ones still in flight, nor drop the loading state early.
         await Promise.allSettled(slices.map(async (slice) => {
-          const resp = await fetch('/api/v1/files/actions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ uuids: slice }),
-          });
-          if (!resp.ok) return;
-          const part = await resp.json();
+          const part = await window.fileActions.fetchActions(slice);
+          if (!part) return;
           // Read the current map only after the await: a spread evaluated
           // before it would merge into a snapshot another slice has since
           // replaced.

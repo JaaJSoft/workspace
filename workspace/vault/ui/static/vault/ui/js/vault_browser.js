@@ -171,6 +171,9 @@ window.vaultBrowser = (function () {
       // The row whose properties are on screen. Distinct from the selection:
       // the checkbox owns that, the row body opens this.
       panelEntry: null,
+      // Slots whose decryption is in flight, so a second click can take the
+      // gesture back before the value ever lands.
+      revealing: {},
       // Plaintexts the user asked to see, keyed by entry and field so a value
       // can never be shown under another row. There is no timer: the clipboard
       // needs one because it is invisible and machine-wide, whereas this is on
@@ -267,7 +270,7 @@ window.vaultBrowser = (function () {
             this.setData({});
             this.entryRows = [];
             this.entryActions = {};
-            this.panelEntry = null;
+            this.resetPanel();
           }
           await this.loadVaultActions();
           // The palette command reaches the page before there is a vault to
@@ -409,12 +412,27 @@ window.vaultBrowser = (function () {
           // banner speaks about entries.
           tamperedCount: entries.tamperedCount,
         });
-        // Every row is rebuilt from the fresh listing, so the panel and
-        // whatever it had decrypted belong to a row this pass no longer
-        // vouches for - a mutating action elsewhere (favourite, trash, a
-        // folder or tag save) reloads through here just like a manual
-        // refresh does.
+        // Every row is rebuilt from the fresh listing, so whatever the panel
+        // had decrypted belongs to a row this pass no longer vouches for - a
+        // mutating action elsewhere (favourite, trash, a folder or tag save)
+        // reloads through here just like a manual refresh does.
+        //
+        // The panel itself survives when its row does. Dropping it outright
+        // discarded a panel the user had just opened: a reload runs for a
+        // whole round trip after saveEntry closes its dialog, and a row
+        // clicked in that window opened a panel this line then closed under
+        // the user - reachable by hand on a slow link, and the reason both
+        // authenticator walks failed on CI and neither did locally.
+        const open = this.panelEntry;
         this.resetPanel();
+        if (open) {
+          const fresh = this.entries.find(function (entry) {
+            return entry.uuid === open.uuid;
+          });
+          // Gone from the listing - trashed away, deleted elsewhere - is the
+          // one case where the panel has nothing left to describe.
+          if (fresh) this.panelEntry = fresh;
+        }
         await this.loadEntryActions();
       },
 
@@ -625,15 +643,32 @@ window.vaultBrowser = (function () {
           delete this.revealed[slot];
           return;
         }
+        // A second click while the first decryption is still in flight is the
+        // gesture taken back, not a second reveal. `revealed` cannot see one
+        // in flight, so without this the value lands after the click meant to
+        // hide it, under a button already reading "hide".
+        if (Object.prototype.hasOwnProperty.call(this.revealing, slot)) {
+          delete this.revealing[slot];
+          return;
+        }
+        this.revealing[slot] = true;
         const row = this.rowFor(entry.uuid);
-        if (!row || !this.openVault) return;
+        if (!row || !this.openVault) {
+          delete this.revealing[slot];
+          return;
+        }
         try {
           const value = await window.vaultReader.openField(
             window.vaultSession, this.openVault, row, fieldId
           );
           if (this.panelEntry !== entry) return;
+          // Taken back while this was in flight: the slot is gone, and so is
+          // the only reason to show what just arrived.
+          if (!Object.prototype.hasOwnProperty.call(this.revealing, slot)) return;
+          delete this.revealing[slot];
           this.revealed[slot] = value;
         } catch (err) {
+          delete this.revealing[slot];
           if (err && err.reason === 'locked') return;
           if (this.panelEntry !== entry) return;
           this.error = 'That value could not be revealed.';
@@ -732,6 +767,7 @@ window.vaultBrowser = (function () {
       openEntryFromRow: function (entry) {
         this.panelEntry = entry;
         this.revealed = {};
+        this.revealing = {};
         return this.startTotp(entry);
       },
 
@@ -741,6 +777,7 @@ window.vaultBrowser = (function () {
       resetPanel: function () {
         this.panelEntry = null;
         this.revealed = {};
+        this.revealing = {};
         this.totp = null;
       },
 
@@ -930,6 +967,14 @@ window.vaultBrowser = (function () {
       // travels untouched until one of them is used.
       totpFieldState: function () {
         if (!this.draft) return 'none';
+        // The same schema formFields() reads. Without it a type that declares
+        // no authenticator key is still offered one, and saveEntry seals a
+        // field the type does not have.
+        const type = this.typeFor(this.draft.type);
+        const declared = (type ? type.fields : []).some(function (field) {
+          return field.kind === 'totp';
+        });
+        if (!declared) return 'unsupported';
         if (this.draft.totpInput !== null && this.draft.totpInput !== undefined) {
           return 'editing';
         }

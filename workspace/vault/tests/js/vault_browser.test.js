@@ -787,6 +787,74 @@ test('revealing twice hides again without a second decryption', async () => {
   assert.equal(opened.length, after);
 });
 
+test('taking a reveal back while it is still decrypting leaves nothing on screen', async () => {
+  // The first click starts a decryption, the second is the user changing
+  // their mind before it lands. Deciding on `revealed` alone cannot see the
+  // one in flight, so the value used to arrive after the very gesture meant
+  // to hide it - under a button already reading "hide".
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let opens = 0;
+  // Only the reveal is held: the listing opens a username on its way in, and
+  // holding that one would deadlock load() itself.
+  let holding = false;
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    crypto: {
+      open: async () => {
+        if (holding) {
+          opens += 1;
+          await held;
+        }
+        return new TextEncoder().encode('hunter2');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  holding = true;
+
+  const first = component.toggleReveal('password');
+  const second = component.toggleReveal('password');
+  release();
+  await first;
+  await second;
+  await settle();
+
+  assert.equal(component.isRevealed('password'), false, 'the second click took it back');
+  assert.deepStrictEqual({ ...component.revealed }, {});
+  assert.equal(opens, 1, 'the second click must not start a second decryption');
+});
+
+test('a vault falling out of reach takes the revealed value and the key handle with it', async () => {
+  // The fifth reset site: load()'s no-vault branch cleared panelEntry alone,
+  // so a revoked membership or a deleted vault left a decrypted password in
+  // state and a live key handle deriving a fresh code once a second, for a
+  // vault the page no longer holds open.
+  const { component, options } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp, ACTION.copy_password] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), true);
+  assert.notEqual(component.totp, null, 'the handle was derived on open');
+
+  options.vaults = [];
+  component.vaultUuid = null;
+  await component.load();
+
+  assert.equal(component.panelEntry, null);
+  assert.deepStrictEqual({ ...component.revealed }, {});
+  assert.equal(component.totp, null, 'the handle must not go on deriving');
+});
+
 test('closing the panel takes the revealed value with it', async () => {
   const { component } = browser({
     api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
@@ -840,11 +908,14 @@ test('opening another entry drops the value revealed for the last one', async ()
   assert.deepStrictEqual({ ...component.revealed }, {});
 });
 
-test('a reload triggered by a row action takes the revealed value and the totp handle with it', async () => {
+test('a reload triggered by a row action takes the revealed value with it', async () => {
   // loadContents runs on every reload, and a mutating row action (favourite,
   // trash, a folder or tag save) ends with one just like a manual refresh
-  // does - so a secret revealed before the click must not survive it under a
-  // panel that has already gone from the screen.
+  // does. Every row is rebuilt, so nothing decrypted against the old ones may
+  // carry over: the revealed password is dropped and the user has to ask
+  // again. The panel itself stays on its row - it is the same entry, and
+  // closing it under a favourite click was never the point - so the code is
+  // derived afresh from the row this pass verified, never from the old handle.
   const { component } = browser({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
@@ -860,11 +931,15 @@ test('a reload triggered by a row action takes the revealed value and the totp h
   assert.equal(component.isRevealed('password'), true);
   assert.notEqual(component.totp, null, 'the totp handle was derived on open');
 
+  const derived = component.totp;
   await component.runAction(ACTION.favorite, component.entries[0]);
 
-  assert.equal(component.panelEntry, null);
-  assert.deepStrictEqual({ ...component.revealed }, {});
-  assert.equal(component.totp, null);
+  assert.deepStrictEqual(
+    { ...component.revealed }, {}, 'the revealed password did not survive'
+  );
+  assert.equal(component.panelEntry.uuid, 'e-1', 'the panel stayed on its row');
+  assert.notEqual(component.totp, derived, 'the old handle was dropped');
+  assert.notEqual(component.totp, null, 'and a fresh one derived');
 });
 
 test('a decryption that lands after the vault locked is dropped, not shown', async () => {
@@ -945,6 +1020,44 @@ test('opening an entry with a key shows its code and its validity', async () => 
   await component.openEntryFromRow(component.entries[0]);
   assert.equal(component.totp.code, '123456');
   assert.equal(component.totp.secondsLeft, 17);
+});
+
+test('a reload does not close a panel opened while it was in flight', async () => {
+  // saveEntry closes its dialog and only then reloads, so the listing is
+  // still being rebuilt for a whole round trip afterwards. A row clicked in
+  // that window used to open a panel that loadContents then closed under the
+  // user - the failure both authenticator walks hit on CI and neither hit
+  // locally, because only a slow listing makes the window wide enough.
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let live = 0;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => {
+        if (opts && opts.trashed) return [];
+        live += 1;
+        if (live === 2) await held;
+        return [totpRow('e-1')];
+      },
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+
+  const reloading = component.load();
+  await settle();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.notEqual(component.panelEntry, null, 'the click opened a panel');
+
+  release();
+  await reloading;
+  await settle(20);
+
+  assert.notEqual(component.panelEntry, null, 'the reload must not close it');
+  assert.equal(component.panelCarries('totp'), true, 'and it describes the fresh row');
+  assert.notEqual(component.totp, null, 'whose code is derived');
 });
 
 test('a row opened while its action list is still in flight still derives a code', async () => {
@@ -1366,12 +1479,22 @@ test('an untouched key is carried through an edit', async () => {
   assert.equal(written[0].fields.totp, 'ct:totp');
 });
 
-test('the three states of the key control are exclusive', () => {
+test('a type that declares no authenticator key is not offered one', () => {
+  // formFields() filters on the type's schema; this control did not ask at
+  // all, so any future type would be offered a key its schema never declares
+  // - and the write path would seal it.
   const { component } = browser();
   component.init();
-  component.draft = { hasTotp: false, totpInput: null, totpRemoved: false };
+  component.newEntry('login');
+  assert.equal(component.totpFieldState(), 'unsupported');
+});
+
+test('the three states of the key control are exclusive', () => {
+  const { component } = typed();
+  component.init();
+  component.draft = { type: 'login', hasTotp: false, totpInput: null, totpRemoved: false };
   assert.equal(component.totpFieldState(), 'none');
-  component.draft = { hasTotp: true, totpInput: null, totpRemoved: false };
+  component.draft = { type: 'login', hasTotp: true, totpInput: null, totpRemoved: false };
   assert.equal(component.totpFieldState(), 'set');
   component.startTotpEntry();
   assert.equal(component.totpFieldState(), 'editing');

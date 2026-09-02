@@ -49,7 +49,7 @@
           offer to overwrite it with whatever was typed. Three states, one
           visible at a time - none, set, being entered.
         {% endcomment %}
-        <div class="form-control">
+        <div class="form-control" x-show="totpFieldState() !== 'unsupported'">
           {# for, not a wrapping label: the control's other two states are buttons, and a label around a button steals its click. #}
           <label class="label-text" for="entry-totp-input">Authenticator key</label>
 

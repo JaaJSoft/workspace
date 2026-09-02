@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import DEFAULT_DB_ALIAS, transaction
 
 # One order for every member list, so the member panel and the mention
 # autocomplete present people as they joined rather than as the database
@@ -91,7 +91,7 @@ def display_name_for(kind, title, partner=None):
     return "Group"
 
 
-def backfill_group_titles(conversation_model, member_model):
+def backfill_group_titles(conversation_model, member_model, using=DEFAULT_DB_ALIAS):
     """Name the group conversations whose creator left the title blank.
 
     Called by migration 0030_name_untitled_groups, which passes the historical
@@ -108,14 +108,17 @@ def backfill_group_titles(conversation_model, member_model):
     Idempotent: a conversation that already has a title is left alone.
     """
     untitled = list(
-        conversation_model.objects.filter(kind="group", title="").only("uuid")
+        conversation_model.objects.using(using)
+        .filter(kind="group", title="")
+        .only("uuid")
     )
     if not untitled:
         return 0
 
     names = {}
     members = (
-        member_model.objects.filter(
+        member_model.objects.using(using)
+        .filter(
             conversation_id__in=[c.uuid for c in untitled],
             left_at__isnull=True,
         )
@@ -131,7 +134,7 @@ def backfill_group_titles(conversation_model, member_model):
 
     for conversation in untitled:
         conversation.title = ", ".join(names.get(conversation.uuid, [])) or "Group"
-    conversation_model.objects.bulk_update(untitled, ["title"])
+    conversation_model.objects.using(using).bulk_update(untitled, ["title"])
     return len(untitled)
 
 

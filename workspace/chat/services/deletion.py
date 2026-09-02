@@ -9,7 +9,7 @@ that row has to be erased by hand - that is what this module does.
 import logging
 
 from django.core.files.storage import default_storage
-from django.db import transaction
+from django.db import DEFAULT_DB_ALIAS, transaction
 
 from workspace.common.cache import invalidate_tags
 from workspace.common.logging import scrub
@@ -84,7 +84,14 @@ def delete_attachment_blob(name):
 
 
 def purge_deleted_message_backlog(
-    *, messages, attachments, reactions, link_previews, interactions, pins
+    *,
+    messages,
+    attachments,
+    reactions,
+    link_previews,
+    interactions,
+    pins,
+    using=DEFAULT_DB_ALIAS,
 ):
     """Apply the purge to messages deleted before the purge existed.
 
@@ -101,16 +108,18 @@ def purge_deleted_message_backlog(
 
     blob_names = [
         name
-        for name in attachments.objects.filter(**deleted).values_list("file", flat=True)
+        for name in attachments.objects.using(using)
+        .filter(**deleted)
+        .values_list("file", flat=True)
         if name
     ]
 
-    attachments.objects.filter(**deleted).delete()
-    reactions.objects.filter(**deleted).delete()
-    link_previews.objects.filter(**deleted).delete()
-    interactions.objects.filter(**deleted).delete()
-    pins.objects.filter(**deleted).delete()
-    messages.objects.filter(deleted_at__isnull=False).update(
+    attachments.objects.using(using).filter(**deleted).delete()
+    reactions.objects.using(using).filter(**deleted).delete()
+    link_previews.objects.using(using).filter(**deleted).delete()
+    interactions.objects.using(using).filter(**deleted).delete()
+    pins.objects.using(using).filter(**deleted).delete()
+    messages.objects.using(using).filter(deleted_at__isnull=False).update(
         body="", body_html="", tool_data=None
     )
 

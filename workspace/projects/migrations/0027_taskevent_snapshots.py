@@ -13,11 +13,14 @@ def backfill_categories(apps, schema_editor):
     means."""
     TaskStatus = apps.get_model("projects", "TaskStatus")
     TaskEvent = apps.get_model("projects", "TaskEvent")
-    events = TaskEvent.objects.using(schema_editor.connection.alias)
+    db = schema_editor.connection.alias
+    events = TaskEvent.objects.using(db)
     for side in ("from", "to"):
-        category = TaskStatus.objects.filter(
-            project_id=OuterRef("project_id"), name=OuterRef(f"{side}_status")
-        ).values("category")[:1]
+        category = (
+            TaskStatus.objects.using(db)
+            .filter(project_id=OuterRef("project_id"), name=OuterRef(f"{side}_status"))
+            .values("category")[:1]
+        )
         events.exclude(**{f"{side}_status": ""}).update(
             **{f"{side}_category": Coalesce(Subquery(category), Value(""))}
         )
@@ -33,14 +36,21 @@ def backfill_sprint_refs(apps, schema_editor):
     claimed by the new one."""
     Sprint = apps.get_model("projects", "Sprint")
     TaskEvent = apps.get_model("projects", "TaskEvent")
-    events = TaskEvent.objects.using(schema_editor.connection.alias).filter(type="sprint")
+    db = schema_editor.connection.alias
+    events = TaskEvent.objects.using(db).filter(type="sprint")
     for side in ("from", "to"):
-        sprint = Sprint.objects.filter(
-            project_id=OuterRef("project_id"),
-            name=OuterRef(f"{side}_value"),
-            created_at__lte=OuterRef("created_at"),
-        ).values("uuid")[:1]
-        events.exclude(**{f"{side}_value": ""}).update(**{f"{side}_ref": Subquery(sprint)})
+        sprint = (
+            Sprint.objects.using(db)
+            .filter(
+                project_id=OuterRef("project_id"),
+                name=OuterRef(f"{side}_value"),
+                created_at__lte=OuterRef("created_at"),
+            )
+            .values("uuid")[:1]
+        )
+        events.exclude(**{f"{side}_value": ""}).update(
+            **{f"{side}_ref": Subquery(sprint)}
+        )
 
 
 def backfill_creation_estimates(apps, schema_editor):
@@ -52,16 +62,21 @@ def backfill_creation_estimates(apps, schema_editor):
     CREATED event stays blank."""
     Task = apps.get_model("projects", "Task")
     TaskEvent = apps.get_model("projects", "TaskEvent")
-    events = TaskEvent.objects.using(schema_editor.connection.alias)
+    db = schema_editor.connection.alias
+    events = TaskEvent.objects.using(db)
     created = events.filter(type="created")
     first_change = events.filter(
         project_id=OuterRef("project_id"),
         task_number=OuterRef("task_number"),
         type="estimate",
     ).order_by("created_at", "uuid")
-    current = Task.objects.filter(pk=OuterRef("task_id"), estimate__isnull=False)
+    current = Task.objects.using(db).filter(
+        pk=OuterRef("task_id"), estimate__isnull=False
+    )
     created.filter(Exists(current)).update(
-        to_value=Cast(Subquery(current.values("estimate")[:1]), CharField(max_length=100))
+        to_value=Cast(
+            Subquery(current.values("estimate")[:1]), CharField(max_length=100)
+        )
     )
     created.exclude(task_number__isnull=True).filter(Exists(first_change)).update(
         to_value=Subquery(first_change.values("from_value")[:1])
@@ -69,7 +84,6 @@ def backfill_creation_estimates(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("projects", "0026_alter_project_type_alter_taskevent_type_sprint_and_more"),
     ]

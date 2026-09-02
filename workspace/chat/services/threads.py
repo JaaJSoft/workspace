@@ -6,6 +6,7 @@ decides membership, and it always points at the message that started the whole
 thing.
 """
 
+from django.db import DEFAULT_DB_ALIAS
 from django.db.models import Count, F, Max, Q, Value
 from django.db.models.functions import Greatest
 from django.utils import timezone
@@ -160,7 +161,9 @@ def show_thread_replies_inline(user):
     return bool(preferences.get("showThreadRepliesInline"))
 
 
-def backfill_threads(message_model, participant_model, member_model):
+def backfill_threads(
+    message_model, participant_model, member_model, using=DEFAULT_DB_ALIAS
+):
     """Turn historical `reply_to` chains into threads.
 
     Called by migration 0028_backfill_thread_roots, which passes the historical
@@ -169,7 +172,10 @@ def backfill_threads(message_model, participant_model, member_model):
     classes: no model methods, no properties, only fields and the manager.
 
     Takes its models as arguments so the data migration can pass the historical
-    versions from the app registry while the tests pass the real ones.
+    versions from the app registry while the tests pass the real ones, and
+    *using* for the same reason: the migration passes the connection being
+    migrated, which is not the default one when the target is a second
+    database.
     Idempotent: re-running it recomputes the same counters and adds no
     duplicate participants.
 
@@ -178,9 +184,9 @@ def backfill_threads(message_model, participant_model, member_model):
     exactly as it does today, which is the safe failure.
     """
     parents = dict(
-        message_model.objects.filter(reply_to__isnull=False).values_list(
-            "uuid", "reply_to_id"
-        )
+        message_model.objects.using(using)
+        .filter(reply_to__isnull=False)
+        .values_list("uuid", "reply_to_id")
     )
 
     roots = {}
@@ -200,13 +206,15 @@ def backfill_threads(message_model, participant_model, member_model):
         return
 
     replies = list(
-        message_model.objects.filter(uuid__in=roots).only(
-            "uuid", "author_id", "created_at", "conversation_id", "deleted_at"
-        )
+        message_model.objects.using(using)
+        .filter(uuid__in=roots)
+        .only("uuid", "author_id", "created_at", "conversation_id", "deleted_at")
     )
     for reply in replies:
         reply.thread_root_id = roots[reply.uuid]
-    message_model.objects.bulk_update(replies, ["thread_root"], batch_size=500)
+    message_model.objects.using(using).bulk_update(
+        replies, ["thread_root"], batch_size=500
+    )
 
     by_root = {}
     for reply in replies:
@@ -214,35 +222,37 @@ def backfill_threads(message_model, participant_model, member_model):
 
     roots_meta = {
         uuid: (author_id, conversation_id)
-        for uuid, author_id, conversation_id in message_model.objects.filter(
-            uuid__in=by_root
-        ).values_list("uuid", "author_id", "conversation_id")
+        for uuid, author_id, conversation_id in message_model.objects.using(using)
+        .filter(uuid__in=by_root)
+        .values_list("uuid", "author_id", "conversation_id")
     }
 
     # Live replies only, matching recount_thread: the panel does not render a
     # soft-deleted reply, so it must not be advertised either. A soft-deleted
     # reply still gets its thread_root above - identity is not accounting.
-    root_rows = list(message_model.objects.filter(uuid__in=by_root).only("uuid"))
+    root_rows = list(
+        message_model.objects.using(using).filter(uuid__in=by_root).only("uuid")
+    )
     for root in root_rows:
         live = [r for r in by_root[root.uuid] if r.deleted_at is None]
         root.reply_count = len(live)
         root.last_reply_at = max((r.created_at for r in live), default=None)
-    message_model.objects.bulk_update(
+    message_model.objects.using(using).bulk_update(
         root_rows, ["reply_count", "last_reply_at"], batch_size=500
     )
 
     read_marks = {
         (conversation_id, user_id): last_read_at
-        for conversation_id, user_id, last_read_at in member_model.objects.filter(
-            conversation_id__in={c for _, c in roots_meta.values()}
-        ).values_list("conversation_id", "user_id", "last_read_at")
+        for conversation_id, user_id, last_read_at in member_model.objects.using(using)
+        .filter(conversation_id__in={c for _, c in roots_meta.values()})
+        .values_list("conversation_id", "user_id", "last_read_at")
     }
 
     existing = {
         (root_id, user_id)
-        for root_id, user_id in participant_model.objects.filter(
-            root_message_id__in=by_root
-        ).values_list("root_message_id", "user_id")
+        for root_id, user_id in participant_model.objects.using(using)
+        .filter(root_message_id__in=by_root)
+        .values_list("root_message_id", "user_id")
     }
 
     to_create = []
@@ -259,6 +269,6 @@ def backfill_threads(message_model, participant_model, member_model):
                     last_read_at=read_marks.get((conversation_id, user_id)),
                 )
             )
-    participant_model.objects.bulk_create(
+    participant_model.objects.using(using).bulk_create(
         to_create, batch_size=500, ignore_conflicts=True
     )

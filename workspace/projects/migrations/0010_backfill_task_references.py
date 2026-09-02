@@ -20,22 +20,23 @@ def backfill(apps, schema_editor):
     Project = apps.get_model("projects", "Project")
     Task = apps.get_model("projects", "Task")
     TaskEvent = apps.get_model("projects", "TaskEvent")
+    db = schema_editor.connection.alias
 
     taken = set()
-    for project in Project.objects.order_by("created_at", "uuid").iterator():
+    for project in Project.objects.using(db).order_by("created_at", "uuid").iterator():
         key = unique_project_key(generate_base_key(project.name), taken=taken)
         taken.add(key)
         tasks = list(project.tasks.order_by("created_at", "uuid").only("uuid"))
         for i, task in enumerate(tasks, start=1):
             task.number = i
-        Task.objects.bulk_update(tasks, ["number"], batch_size=500)
+        Task.objects.using(db).bulk_update(tasks, ["number"], batch_size=500)
         project.key = key
         project.next_task_number = len(tasks) + 1
         project.save(update_fields=["key", "next_task_number"])
 
-    TaskEvent.objects.filter(task__isnull=False).update(
+    TaskEvent.objects.using(db).filter(task__isnull=False).update(
         task_number=Subquery(
-            Task.objects.filter(uuid=OuterRef("task_id")).values("number")[:1]
+            Task.objects.using(db).filter(uuid=OuterRef("task_id")).values("number")[:1]
         )
     )
 

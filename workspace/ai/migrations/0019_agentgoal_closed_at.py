@@ -9,7 +9,8 @@ def backfill_closed_at(apps, schema_editor):
     NULL that hides every already-finished goal from the recall window.
     """
     AgentGoal = apps.get_model("ai", "AgentGoal")
-    AgentGoal.objects.filter(
+    db = schema_editor.connection.alias
+    AgentGoal.objects.using(db).filter(
         status__in=["completed", "abandoned"], closed_at__isnull=True
     ).update(closed_at=F("updated_at"))
 

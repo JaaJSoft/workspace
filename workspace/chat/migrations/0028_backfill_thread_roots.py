@@ -12,16 +12,20 @@ def forwards(apps, schema_editor):
         apps.get_model("chat", "Message"),
         apps.get_model("chat", "ThreadParticipant"),
         apps.get_model("chat", "ConversationMember"),
+        schema_editor.connection.alias,
     )
 
 
 def backwards(apps, schema_editor):
     message_model = apps.get_model("chat", "Message")
-    message_model.objects.filter(thread_root__isnull=False).update(thread_root=None)
-    message_model.objects.filter(reply_count__gt=0).update(
+    db = schema_editor.connection.alias
+    message_model.objects.using(db).filter(thread_root__isnull=False).update(
+        thread_root=None
+    )
+    message_model.objects.using(db).filter(reply_count__gt=0).update(
         reply_count=0, last_reply_at=None
     )
-    apps.get_model("chat", "ThreadParticipant").objects.all().delete()
+    apps.get_model("chat", "ThreadParticipant").objects.using(db).all().delete()
 
 
 class Migration(migrations.Migration):

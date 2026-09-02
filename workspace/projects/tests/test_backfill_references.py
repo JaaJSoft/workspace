@@ -4,6 +4,7 @@ from django.apps import apps
 from django.db.models import F
 from django.test import TestCase
 
+from workspace.common.tests.migrations import schema_editor_stub
 from workspace.projects.models import Project, Task, TaskEvent
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.references import KEY_RE
@@ -32,7 +33,7 @@ class BackfillReferencesTests(ProjectTestMixin, TestCase):
         delete_task(t2, actor=self.admin)
         self._simulate_legacy_state()
 
-        backfill(apps, None)
+        backfill(apps, schema_editor_stub())
 
         t1.refresh_from_db()
         t3.refresh_from_db()
@@ -48,7 +49,7 @@ class BackfillReferencesTests(ProjectTestMixin, TestCase):
         # Corrupt the snapshot: creation already wrote 1, and the test must
         # prove the backfill repairs it rather than inherit it.
         TaskEvent.objects.update(task_number=None)
-        backfill(apps, None)
+        backfill(apps, schema_editor_stub())
         self.assertEqual(task.events.get().task_number, 1)
 
     def test_keys_regenerate_deterministically_for_same_name_projects(self):
@@ -59,6 +60,6 @@ class BackfillReferencesTests(ProjectTestMixin, TestCase):
             Project.objects.order_by("created_at").values_list("pk", flat=True)
         ):
             Project.objects.filter(pk=pk).update(key=f"ZZZ{i + 1}")
-        backfill(apps, None)
+        backfill(apps, schema_editor_stub())
         keys = [p.key for p in Project.objects.order_by("created_at").only("key")]
         self.assertEqual(keys, ["WEBS", "WEBS2"])

@@ -48,12 +48,18 @@ window.filePreferences = function filePreferences() {
 
     update(key, value) {
       this.prefs[key] = value;
-      this._saveRemote();
       this._broadcast();
-      // Breadcrumb collapse is rendered server-side; refresh to apply
-      if (key === 'breadcrumbCollapse') {
-        this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+      // Breadcrumb collapse and the view mode are rendered server-side:
+      // save right away and re-render once the save has landed, or the
+      // re-render reads the value the user just left.
+      if (key === 'breadcrumbCollapse' || key === 'defaultViewMode') {
+        clearTimeout(this._saveTimer);
+        this._saveNow().then(() => {
+          this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+        });
+        return;
       }
+      this._saveRemote();
     },
 
     _broadcast() {
@@ -63,14 +69,16 @@ window.filePreferences = function filePreferences() {
 
     _saveRemote() {
       clearTimeout(this._saveTimer);
-      this._saveTimer = setTimeout(() => {
-        const csrfToken = getCSRFToken();
-        fetch(API_URL, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ value: this.prefs }),
-        }).catch(() => {});
-      }, 500);
+      this._saveTimer = setTimeout(() => this._saveNow(), 500);
+    },
+
+    _saveNow() {
+      const csrfToken = getCSRFToken();
+      return fetch(API_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ value: this.prefs }),
+      }).catch(() => {});
     },
   };
 };

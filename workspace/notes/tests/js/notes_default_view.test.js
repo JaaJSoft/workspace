@@ -13,7 +13,7 @@ const { loadScript } = require('../../../common/tests/js/loader');
 function loadNotes(embeddedPrefs) {
   return loadScript('workspace/notes/ui/static/notes/ui/js/notes.js', {
     fetch: () => Promise.resolve({ ok: false }),
-    localStorage: { getItem: () => null, setItem: () => {} },
+    sidebarPreference: { initial: () => false, save: () => {} },
     addEventListener: () => {},
     document: {
       getElementById: (id) =>

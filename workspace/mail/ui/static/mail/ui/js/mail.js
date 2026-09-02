@@ -27,7 +27,7 @@ function mailApp() {
     expandedAccounts: {},
 
     // UI
-    collapsed: false,
+    collapsed: window.sidebarPreference.initial(),
     loadingMessages: false,
     loadingMoreMessages: false,
     loadingDetail: false,
@@ -448,6 +448,7 @@ function mailApp() {
 
     toggleCollapse() {
       this.collapsed = !this.collapsed;
+      window.sidebarPreference.save('mail', this.collapsed);
     },
 
     isMobile() {

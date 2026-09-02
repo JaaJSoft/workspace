@@ -7,7 +7,8 @@ const { loadScript } = require('../../../common/tests/js/loader');
 function makeApp(userTz) {
   const ctx = loadScript('workspace/calendar/ui/static/calendar/ui/js/calendar.js', {
     document: { getElementById: () => null },
-    localStorage: { getItem: () => null, setItem: () => {} },
+localStorage: { getItem: () => null, setItem: () => {} },
+    sidebarPreference: { initial: () => false, save: () => {} },
     matchMedia: () => ({ matches: false, addEventListener: () => {}, addListener: () => {} }),
     // The domain mixins live in separate files; the formatting helpers under
     // test are defined in calendar.js itself, so empty stubs are enough.

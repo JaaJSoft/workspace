@@ -77,7 +77,10 @@ window.filePreferences = function filePreferences() {
 
 window.sidebarCollapse = function sidebarCollapse() {
   return {
-    collapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+    // Seeded synchronously so Alpine's first bind matches the width the
+    // server rendered: the rail below `lg`, the stored preference above.
+    collapsed: window.matchMedia('(max-width: 1023px)').matches
+      || window.sidebarPreference.initial(),
     activeView: null,
     showPinned: window._filePrefsCache.showPinned !== false,
     showGroups: window._filePrefsCache.showGroups !== false,
@@ -87,9 +90,6 @@ window.sidebarCollapse = function sidebarCollapse() {
     },
 
     init() {
-      if (this.isMobile()) {
-        this.collapsed = true;
-      }
       this.syncActiveView();
       window.addEventListener('popstate', () => this.syncActiveView());
       window.addEventListener('nav-state-changed', () => this.syncActiveView());
@@ -110,7 +110,7 @@ window.sidebarCollapse = function sidebarCollapse() {
         return;
       }
       this.collapsed = !this.collapsed;
-      localStorage.setItem('sidebarCollapsed', this.collapsed);
+      window.sidebarPreference.save('files', this.collapsed);
     },
 
     syncActiveView() {

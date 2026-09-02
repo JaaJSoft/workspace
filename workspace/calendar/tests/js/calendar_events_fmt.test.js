@@ -35,7 +35,8 @@ function makeEventsMixin(userTz) {
 function makeCalendarApp(userTz) {
   const ctx = loadScript('workspace/calendar/ui/static/calendar/ui/js/calendar.js', {
     document: { getElementById: () => null },
-    localStorage: { getItem: () => null, setItem: () => {} },
+localStorage: { getItem: () => null, setItem: () => {} },
+    sidebarPreference: { initial: () => false, save: () => {} },
     matchMedia: () => ({ matches: false, addEventListener: () => {}, addListener: () => {} }),
     calendarCalendarsMixin: mixinStub,
     calendarEventsMixin: mixinStub,

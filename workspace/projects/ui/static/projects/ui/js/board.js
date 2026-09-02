@@ -274,7 +274,7 @@ function labelSelector(eventName, allLabels, selectedUuids, createUrl) {
 function projectBoard(config) {
   return {
     currentView: config.view || 'board',
-    collapsed: localStorage.getItem('projectsSidebarCollapsed') === 'true',
+    collapsed: window.sidebarPreference.initial(),
     dragging: null,
     saving: false,
     statuses: [],
@@ -329,7 +329,7 @@ function projectBoard(config) {
     toggleCollapse() {
       if (this.isMobile()) return;
       this.collapsed = !this.collapsed;
-      localStorage.setItem('projectsSidebarCollapsed', this.collapsed);
+      window.sidebarPreference.save('projects', this.collapsed);
     },
 
     _closeDrawerOnMobile() {

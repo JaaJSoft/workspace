@@ -146,7 +146,7 @@ window.notesApp = function notesApp(config) {
 
     return {
         // Sidebar
-        collapsed: false,
+        collapsed: window.sidebarPreference.initial(),
         activeView: initialView,
         activeId: config.id || null,
         viewTitle: titleMap[initialView] || 'My Notes',
@@ -203,8 +203,6 @@ window.notesApp = function notesApp(config) {
         _actionsFetchGen: 0,
 
         async init() {
-            this.collapsed = localStorage.getItem('notes-sidebar-collapsed') === 'true';
-
             // Load folder data from embedded JSON
             this._loadFolderData();
 
@@ -1495,7 +1493,7 @@ window.notesApp = function notesApp(config) {
 
         toggleCollapse() {
             this.collapsed = !this.collapsed;
-            localStorage.setItem('notes-sidebar-collapsed', this.collapsed);
+            window.sidebarPreference.save('notes', this.collapsed);
         },
 
         isMobile() {

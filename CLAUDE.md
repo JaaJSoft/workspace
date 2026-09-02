@@ -766,6 +766,27 @@ The failure mode is silent and easy to misread: no console error, and sibling bi
 - Reviewing a mixin: `grep -n "get [a-zA-Z_]*()" workspace/*/ui/static/*/ui/js/*.js` and check each hit is on a root literal.
 - Getters on Alpine **stores** (`Alpine.store(...)`) are safe - stores are registered as objects, not spread.
 
+### The module sidebar's width is server-rendered - never leave it to `:class` alone
+
+Alpine is loaded with `defer`, so it binds `:class` only after the whole document is parsed - after the first paint on any page of real size. A sidebar `<aside>` whose width lives only in that binding paints content-sized (or as the mobile rail) and snaps to its real width a few frames later, shifting the entire page. No `x-cloak` fixes this: cloaking hides content, it does not size the box.
+
+The collapsed preference is therefore a per-module user setting (`<module>` / `sidebar_collapsed`, key `SIDEBAR_COLLAPSED` in `core/setting_keys.py`), not `localStorage`. The core context processor exposes it as `workspace_sidebar_collapsed` for the current module, the template puts the final width class in the static `class` attribute, and the binding uses the **object form** so Alpine removes the static class when the state changes - the string form never removes a class that was in the HTML.
+
+```html
+<!-- ✅ drawer hidden on mobile (lg:drawer-open): swap the two widths -->
+<aside class="... {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+       :class="{ 'w-16': collapsed, 'w-72': !collapsed }">
+
+<!-- ✅ drawer open on mobile too (drawer-open): the rail is always there, desktop opens it -->
+<aside class="... w-16{% if not workspace_sidebar_collapsed %} lg:w-72{% endif %}"
+       :class="{ 'lg:w-72': !collapsed }">
+
+<!-- ❌ no static width, string form: first paint is content-sized, then jumps -->
+<aside class="..." :class="collapsed ? 'w-16' : 'w-72'">
+```
+
+On the JS side the component seeds `collapsed` from `window.sidebarPreference.initial()` (the value the shell embeds in `#sidebar-collapsed-data`, the same one the server sized the aside with) and writes toggles back with `window.sidebarPreference.save('<module>', collapsed)` - both in `core/static/core/js/sidebar_preference.js`. A drawer that is open on mobile seeds `collapsed` with `matchMedia('(max-width: 1023px)').matches || ...` so the first bind never opens the rail below `lg`. `core/tests/e2e/test_sidebar_first_paint.py` records the class list and every painted width of each module's aside from the first frame and fails on any change.
+
 ### `:style` takes an object, never a string, on anything `x-show` also touches
 
 Alpine binds a **string** `:style` by writing the whole `style` attribute, and

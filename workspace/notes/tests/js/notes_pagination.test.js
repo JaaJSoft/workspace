@@ -14,7 +14,7 @@ const NOTES_ROOT = '11111111-1111-1111-1111-111111111111';
 function loadNotes(fetchStub) {
   return loadScript('workspace/notes/ui/static/notes/ui/js/notes.js', {
     fetch: fetchStub || (() => Promise.resolve({ ok: false })),
-    localStorage: { getItem: () => null, setItem: () => {} },
+    sidebarPreference: { initial: () => false, save: () => {} },
     addEventListener: () => {},
     document: { getElementById: () => null },
     tagsMixin: () => ({}),

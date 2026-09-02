@@ -417,7 +417,9 @@ window.fileTableControls = function fileTableControls() {
         for (let i = 0; i < uuids.length; i += ACTIONS_BATCH_SIZE) {
           slices.push(uuids.slice(i, i + ACTIONS_BATCH_SIZE));
         }
-        await Promise.all(slices.map(async (slice) => {
+        // allSettled: a slice lost to the network must not end the wait for
+        // the ones still in flight, nor drop the loading state early.
+        await Promise.allSettled(slices.map(async (slice) => {
           const resp = await fetch('/api/v1/files/actions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },

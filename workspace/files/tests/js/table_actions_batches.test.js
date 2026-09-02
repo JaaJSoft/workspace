@@ -7,7 +7,7 @@ const { loadScript } = require('../../../common/tests/js/loader');
 // The actions endpoint refuses more than 200 UUIDs per call. A listing
 // larger than that used to get a 400 back and no actions at all: no
 // context menu, no favourite toggle, no bulk bar. The fetch has to slice.
-function makeTable(fetchCalls, { deferred = false } = {}) {
+function makeTable(fetchCalls, { deferred = false, failing = [] } = {}) {
   const ctx = loadScript('workspace/files/ui/static/files/ui/js/table.js', {
     _filePrefsCache: {},
     document: { createDocumentFragment: () => ({ appendChild() {} }) },
@@ -19,9 +19,14 @@ function makeTable(fetchCalls, { deferred = false } = {}) {
         ok: true,
         json: async () => Object.fromEntries(uuids.map((uuid) => [uuid, [{ id: 'rename', bulk: false }]])),
       };
-      const promise = deferred
-        ? new Promise((resolve) => { call.resolve = () => resolve(response); })
-        : Promise.resolve(response);
+      let promise;
+      if (failing.includes(fetchCalls.length)) {
+        promise = Promise.reject(new TypeError('Failed to fetch'));
+      } else if (deferred) {
+        promise = new Promise((resolve) => { call.resolve = () => resolve(response); });
+      } else {
+        promise = Promise.resolve(response);
+      }
       fetchCalls.push(call);
       return promise;
     },
@@ -67,6 +72,20 @@ test('fetchActions exposes each slice as it lands, without waiting for the other
   fetchCalls[2].resolve();
   await done;
   assert.equal(Object.keys(table.actionsMap).length, 450);
+  assert.equal(table.actionsLoading, false);
+});
+
+test('a slice lost to the network does not cost the other slices their answers', async () => {
+  const fetchCalls = [];
+  const table = makeTable(fetchCalls, { failing: [1] });
+  table.originalRows = rows(450);
+
+  await table.fetchActions();
+
+  assert.equal(Object.keys(table.actionsMap).length, 250);
+  assert.ok(table.actionsMap['uuid-0']);
+  assert.equal(table.actionsMap['uuid-200'], undefined);
+  assert.ok(table.actionsMap['uuid-449']);
   assert.equal(table.actionsLoading, false);
 });
 

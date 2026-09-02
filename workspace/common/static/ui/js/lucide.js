@@ -11,8 +11,38 @@
  */
 function initLucideIcons() {
   if (typeof lucide !== 'undefined' && lucide.createIcons) {
-    lucide.createIcons();
+    renderLucideIcons(document);
   }
+}
+
+/**
+ * Replace every `[data-lucide]` placeholder (and stale svg) under
+ * `container` with a fresh svg, without Alpine's MutationObserver watching.
+ *
+ * To tell a moved node from a removed one, Alpine checks every removed
+ * initialised node against every added node in the same mutation batch
+ * (`added.some(n => n.contains(removed))`). One render pass over a large
+ * listing swaps thousands of `<i>` for as many `<svg>` in a single batch,
+ * so that check goes quadratic: a 1,500-entry folder draws 9,000 icons,
+ * which is 80 million `contains` calls and a multi-second freeze.
+ *
+ * The swap therefore runs inside `Alpine.mutateDom`, which hides it from
+ * the observer, and the two things the observer would have done are done
+ * by hand: release the outgoing nodes' directives (an icon can carry
+ * `x-show`), and bind the new svgs, which inherit the placeholder's
+ * attributes. Without Alpine on the page there is nothing to hide from.
+ *
+ * @param {Document|Element} container - where to look for icons
+ */
+function renderLucideIcons(container) {
+  const alpine = typeof Alpine !== 'undefined' && Alpine.mutateDom ? Alpine : null;
+  if (!alpine) {
+    lucide.createIcons({ root: container });
+    return;
+  }
+  container.querySelectorAll('[data-lucide]').forEach((el) => alpine.destroyTree(el));
+  alpine.mutateDom(() => lucide.createIcons({ root: container }));
+  container.querySelectorAll('svg[data-lucide]').forEach((svg) => alpine.initTree(svg));
 }
 
 /**
@@ -96,7 +126,7 @@ function initLucideIconsInElement(element) {
  * paths silently freeze on their initial state).
  *
  * Renders are scoped: each changed element queues its parent container and
- * a debounced `createIcons({ root: container })` re-renders every
+ * a debounced render pass (see `renderLucideIcons`) re-renders every
  * `[data-lucide]` element inside - including already-hydrated svgs, which
  * Lucide rebuilds from the current attribute value. (Lucide has no
  * per-node API: an unknown option like `nodes` is ignored and would fall
@@ -150,7 +180,7 @@ function observeLucideIcons(root = document.body) {
       stale = new Set();
       pending = null;
       for (const container of containers) {
-        if (container.isConnected) lucide.createIcons({ root: container });
+        if (container.isConnected) renderLucideIcons(container);
       }
     });
   });
@@ -173,7 +203,8 @@ if (typeof module !== 'undefined' && module.exports) {
     initLucideIconsAlpineNextTick,
     initLucideIconsAfterAlpine,
     initLucideIconsInElement,
-    observeLucideIcons
+    observeLucideIcons,
+    renderLucideIcons
   };
 } else {
   window.LucideUtils = {
@@ -183,6 +214,7 @@ if (typeof module !== 'undefined' && module.exports) {
     alpineNextTick: initLucideIconsAlpineNextTick,
     afterAlpine: initLucideIconsAfterAlpine,
     inElement: initLucideIconsInElement,
-    observe: observeLucideIcons
+    observe: observeLucideIcons,
+    render: renderLucideIcons
   };
 }

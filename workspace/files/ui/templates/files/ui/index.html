@@ -158,7 +158,7 @@
     ></a>
     <div class="flex-1 flex min-h-0 relative">
       <!-- Folder browser (replaced on navigation) -->
-      <div class="flex-1 flex flex-col min-w-0">
+      <div class="flex-1 flex flex-col min-w-0 relative">
         {% partialdef folder-browser inline %}
           <div
             class="h-full flex flex-col"
@@ -286,6 +286,29 @@
             </div>
           </div>
         {% endpartialdef %}
+        {% comment %}
+        Sits outside #folder-browser so it survives the swap. The spinner
+        rotates through a CSS transform, which the compositor keeps
+        animating while the main thread is busy binding the new listing -
+        that is the only part of the wait the user would otherwise read as
+        a freeze.
+        {% endcomment %}
+        <div
+          x-show="folderLoading"
+          x-cloak
+          x-transition:enter="transition-opacity duration-150"
+          x-transition:enter-start="opacity-0"
+          x-transition:enter-end="opacity-100"
+          class="absolute inset-0 z-10 flex items-center justify-center bg-base-100/60"
+          role="status"
+          aria-live="polite"
+          data-testid="folder-loading"
+        >
+          <span class="inline-flex text-primary animate-spin">
+            <i data-lucide="loader-circle" class="w-8 h-8"></i>
+          </span>
+          <span class="sr-only">Loading folder…</span>
+        </div>
       </div>
 
       <!-- Properties sidebar: full-coverage overlay on mobile, in-flow 320 px panel on md+.

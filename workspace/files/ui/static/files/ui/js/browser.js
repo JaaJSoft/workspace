@@ -15,6 +15,12 @@ window.fileBrowser = function fileBrowser() {
 
     cleaningTrash: false,
 
+    // True from the moment a folder request leaves until the new listing is
+    // bound. The binding of a large folder blocks the page for a while, and
+    // that wait is part of what the user is looking at the overlay for, so
+    // the flag only clears once the new #folder-browser announces itself.
+    folderLoading: false,
+
     // Upload progress state
     uploading: false,
     uploadTotal: 0,
@@ -1496,9 +1502,23 @@ window.fileBrowser = function fileBrowser() {
         }
       });
 
+      // alpine-ajax marks every swap target aria-busy for the life of its
+      // request. Listening on the document, that attribute is what tells a
+      // folder navigation (sidebar links live outside this component) apart
+      // from a properties-panel or activity refresh.
+      document.addEventListener('ajax:send', () => {
+        if (document.getElementById('folder-browser')?.getAttribute('aria-busy') === 'true') {
+          this.folderLoading = true;
+        }
+      });
+      const stopFolderLoading = () => { this.folderLoading = false; };
+      document.addEventListener('ajax:error', stopFolderLoading);
+      document.addEventListener('ajax:missing', stopFolderLoading);
+
       // Close properties panel on folder navigation (but not on same-folder refresh)
       this._lastViewUrl = null;
       window.addEventListener('folder-browser-replaced', (e) => {
+        this.folderLoading = false;
         const newUrl = e.detail?.viewUrl;
         if (this._lastViewUrl && newUrl && newUrl !== this._lastViewUrl && this.showPropertiesPanel) {
           this.closePropertiesPanel();

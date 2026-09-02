@@ -9,6 +9,7 @@ from django.core.exceptions import SuspiciousOperation
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from workspace.common.tests.migrations import schema_editor_stub
 from workspace.users.models import OIDCIdentity
 from workspace.users.services.oidc import WorkspaceOIDCBackend, is_oidc_managed
 
@@ -509,7 +510,7 @@ class DisableLinkedPasswordsMigrationTests(TestCase):
         migration = importlib.import_module(
             "workspace.users.migrations.0009_disable_oidc_linked_passwords"
         )
-        migration.disable_linked_passwords(django_apps, None)
+        migration.disable_linked_passwords(django_apps, schema_editor_stub())
 
         linked.refresh_from_db()
         already_unusable.refresh_from_db()

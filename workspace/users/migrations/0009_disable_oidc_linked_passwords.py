@@ -14,16 +14,17 @@ from django.db import migrations
 def disable_linked_passwords(apps, schema_editor):
     User = apps.get_model(*settings.AUTH_USER_MODEL.split("."))
     OIDCIdentity = apps.get_model("users", "OIDCIdentity")
+    db = schema_editor.connection.alias
 
-    linked_ids = OIDCIdentity.objects.values_list("user_id", flat=True)
+    linked_ids = OIDCIdentity.objects.using(db).values_list("user_id", flat=True)
     users = list(
-        User.objects.filter(pk__in=linked_ids).exclude(
+        User.objects.using(db).filter(pk__in=linked_ids).exclude(
             password__startswith=UNUSABLE_PASSWORD_PREFIX
         )
     )
     for user in users:
         user.password = make_password(None)
-    User.objects.bulk_update(users, ["password"])
+    User.objects.using(db).bulk_update(users, ["password"])
 
 
 class Migration(migrations.Migration):

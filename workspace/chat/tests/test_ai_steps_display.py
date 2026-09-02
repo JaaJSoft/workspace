@@ -10,6 +10,7 @@ from django.test import SimpleTestCase, TestCase
 from workspace.ai.tool_registry import tool_registry
 from workspace.chat.models import Conversation, Message
 from workspace.chat.ui.templatetags.chat_tags import render_ai_steps
+from workspace.common.tests.migrations import schema_editor_stub
 
 migration = import_module(
     "workspace.chat.migrations.0023_strip_tool_badges_from_body_html"
@@ -300,7 +301,7 @@ class StripToolBadgesMigrationTests(TestCase):
 
     def test_badge_block_stripped_when_tool_data_is_list(self):
         msg = self._message("<p>hi</p>" + BADGE_BLOCK, [make_round()])
-        migration.strip_tool_badges(django_apps, None)
+        migration.strip_tool_badges(django_apps, schema_editor_stub())
         msg.refresh_from_db()
         self.assertEqual(msg.body_html, "<p>hi</p>")
 
@@ -311,26 +312,26 @@ class StripToolBadgesMigrationTests(TestCase):
             "</div>"
         )
         msg = self._message("<p>hi</p>" + block, [make_round()])
-        migration.strip_tool_badges(django_apps, None)
+        migration.strip_tool_badges(django_apps, schema_editor_stub())
         msg.refresh_from_db()
         self.assertEqual(msg.body_html, "<p>hi</p>")
 
     def test_dict_tool_data_untouched(self):
         html = "<p>call</p>" + BADGE_BLOCK
         msg = self._message(html, {"type": "call", "state": "ended"})
-        migration.strip_tool_badges(django_apps, None)
+        migration.strip_tool_badges(django_apps, schema_editor_stub())
         msg.refresh_from_db()
         self.assertEqual(msg.body_html, html)
 
     def test_null_tool_data_untouched(self):
         html = "<p>old</p>" + BADGE_BLOCK
         msg = self._message(html, None)
-        migration.strip_tool_badges(django_apps, None)
+        migration.strip_tool_badges(django_apps, schema_editor_stub())
         msg.refresh_from_db()
         self.assertEqual(msg.body_html, html)
 
     def test_no_marker_untouched(self):
         msg = self._message("<p>plain</p>", [make_round()])
-        migration.strip_tool_badges(django_apps, None)
+        migration.strip_tool_badges(django_apps, schema_editor_stub())
         msg.refresh_from_db()
         self.assertEqual(msg.body_html, "<p>plain</p>")

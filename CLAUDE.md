@@ -785,6 +785,8 @@ The collapsed preference is therefore a per-module user setting (`<module>` / `s
 <aside class="..." :class="collapsed ? 'w-16' : 'w-72'">
 ```
 
+The preference is a desktop one. A drawer that is off-canvas on mobile (`lg:drawer-open`) opens as the full sidebar whatever the preference says: the templates bind on a `sidebarCollapsed()` method that returns `false` below `lg`, and `toggleCollapse()` is a no-op there - a 64px icon rail is no use on a phone. Every `collapse_expr` in those templates is `"sidebarCollapsed()"`, never the bare `collapsed`.
+
 On the JS side the component seeds `collapsed` from `window.sidebarPreference.initial()` (the value the shell embeds in `#sidebar-collapsed-data`, the same one the server sized the aside with) and writes toggles back with `window.sidebarPreference.save('<module>', collapsed)` - both in `core/static/core/js/sidebar_preference.js`. A drawer that is open on mobile seeds `collapsed` with `matchMedia('(max-width: 1023px)').matches || ...` so the first bind never opens the rail below `lg`. `core/tests/e2e/test_sidebar_first_paint.py` records the class list and every painted width of each module's aside from the first frame and fails on any change.
 
 ### `:style` takes an object, never a string, on anything `x-show` also touches

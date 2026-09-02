@@ -1,5 +1,5 @@
 <!-- All Inboxes (unified view) — expanded -->
-<div x-show="accounts.length > 0 && !collapsed" class="mb-2">
+<div x-show="accounts.length > 0 && !sidebarCollapsed()" class="mb-2">
   <button
     class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
     :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
@@ -17,7 +17,7 @@
   </button>
 </div>
 <!-- All Inboxes (unified view) — collapsed -->
-<div x-show="accounts.length > 0 && collapsed" x-cloak class="mb-2">
+<div x-show="accounts.length > 0 && sidebarCollapsed()" x-cloak class="mb-2">
   <button
     class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
     :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
@@ -35,7 +35,7 @@
     <div
       class="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-lg hover:bg-base-content/5"
       @click="toggleAccountExpanded(account.uuid)"
-      x-show="!collapsed"
+      x-show="!sidebarCollapsed()"
     >
       <i
         :data-lucide="expandedAccounts[account.uuid] ? 'chevron-down' : 'chevron-right'"
@@ -60,7 +60,7 @@
     </div>
 
     <!-- Folders (expanded — hierarchical tree) -->
-    <div x-show="expandedAccounts[account.uuid] && !collapsed" x-collapse>
+    <div x-show="expandedAccounts[account.uuid] && !sidebarCollapsed()" x-collapse>
       <div
         class="pl-3 pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between"
       >
@@ -127,7 +127,7 @@
 
     <!-- Labels section (expanded only) -->
     <template
-      x-if="labels[account.uuid]?.length && expandedAccounts[account.uuid] && !collapsed"
+      x-if="labels[account.uuid]?.length && expandedAccounts[account.uuid] && !sidebarCollapsed()"
     >
       <div>
         <div
@@ -174,7 +174,7 @@
     </template>
     <!-- Show create label button even when no labels exist (expanded only) -->
     <template
-      x-if="!labels[account.uuid]?.length && !collapsed && expandedAccounts[account.uuid]"
+      x-if="!labels[account.uuid]?.length && !sidebarCollapsed() && expandedAccounts[account.uuid]"
     >
       <div>
         <button
@@ -188,7 +188,7 @@
     </template>
 
     <!-- Folders (collapsed: icons only with tooltip) -->
-    <div x-show="collapsed" x-cloak>
+    <div x-show="sidebarCollapsed()" x-cloak>
       <template
         x-for="folder in getFolders(account.uuid)"
         :key="'c-' + folder.uuid + '-' + (folder.icon || '') + '-' + (folder.color || '')"
@@ -220,7 +220,7 @@
 </template>
 
 <!-- Add account button (expanded) -->
-<div class="mt-2" x-show="!collapsed">
+<div class="mt-2" x-show="!sidebarCollapsed()">
   <button
     class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-warning"
     @click="showAddAccount()"

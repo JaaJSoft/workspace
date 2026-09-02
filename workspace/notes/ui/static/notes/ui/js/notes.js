@@ -1492,12 +1492,20 @@ window.notesApp = function notesApp(config) {
         },
 
         toggleCollapse() {
+            if (this.isMobile()) return;
             this.collapsed = !this.collapsed;
             window.sidebarPreference.save('notes', this.collapsed);
         },
 
         isMobile() {
             return window.innerWidth < 1024;
+        },
+
+        // The drawer is off-canvas below `lg`, so an opened one is the full
+        // sidebar whatever the desktop preference says: a 64px icon rail is
+        // no use on a phone.
+        sidebarCollapsed() {
+            return this.isMobile() ? false : this.collapsed;
         },
 
         _closeDrawerOnMobile() {

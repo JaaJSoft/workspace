@@ -39,6 +39,16 @@ EXPANDED = {
 }
 COLLAPSED = "w-16"
 
+# Drawers that are off-canvas below `lg` (the `lg:drawer-open` shells).
+OFF_CANVAS_ON_MOBILE = ("notes", "mail", "calendar", "projects")
+MOBILE = {"width": 375, "height": 667}
+FULL_WIDTH = 288  # w-72
+OPEN_DRAWER = """() => {
+  const toggle = document.querySelector('input.drawer-toggle');
+  toggle.checked = true;
+  toggle.dispatchEvent(new Event('change', { bubbles: true }));
+}"""
+
 OBSERVER = """
 window.__aside = { firstClass: null, widths: [] };
 const seen = () => {
@@ -114,3 +124,21 @@ class SidebarFirstPaintTests(PlaywrightTestCase):
                 seen = self._load(module)
                 self._assert_stable(seen, COLLAPSED)
                 self.assertNotIn(EXPANDED[module], seen["final"], seen)
+
+    def test_mobile_drawer_opens_at_full_width_whatever_the_preference(self):
+        # Below `lg` these drawers are off-canvas until the hamburger opens
+        # them, and an opened one is the full sidebar: the desktop
+        # preference must not turn it into a 64px icon rail on a phone.
+        for module in OFF_CANVAS_ON_MOBILE:
+            set_setting(self.user, module, "sidebar_collapsed", True)
+        self.page.set_viewport_size(MOBILE)
+        for module in OFF_CANVAS_ON_MOBILE:
+            with self.subTest(module=module):
+                self.page.goto(f"{self.live_server_url}{self.urls[module]}")
+                self.page.wait_for_selector(".drawer-side aside")
+                self.page.wait_for_timeout(600)
+                self.page.evaluate(OPEN_DRAWER)
+                self.page.wait_for_timeout(600)
+                box = self.page.locator(".drawer-side aside").first.bounding_box()
+                self.assertEqual(round(box["x"]), 0, box)
+                self.assertEqual(round(box["width"]), FULL_WIDTH, box)

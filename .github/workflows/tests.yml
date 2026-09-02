@@ -234,6 +234,7 @@ jobs:
           - files
           - mail
           - notes
+          - projects
           - users
           - vault
     name: E2E (${{ matrix.module }})

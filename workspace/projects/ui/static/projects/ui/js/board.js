@@ -75,6 +75,9 @@ function taskFilterUrl(href, filters) {
   return url.pathname + url.search;
 }
 
+// Swap targets that replace #task-collection, see collectionLoading.
+const COLLECTION_SWAP_TARGETS = ['task-collection', 'project-content'];
+
 function emptyTaskForm() {
   return {
     title: '',
@@ -291,6 +294,11 @@ function projectBoard(config) {
     // panel survives those because this flag is on the root component,
     // which no swap ever re-renders.
     filtersPanelOpen: false,
+    // The task collection is being swapped: filters target #task-collection
+    // alone, sprint switches, view navigations and SSE refreshes the whole
+    // #project-content, and both replace it. Drives the veil in
+    // _collection_loading.html.
+    collectionLoading: false,
     selected: [],
     // Panel section open/closed choices, kept here because patchTask swaps
     // the whole panel after every field commit; the shell survives the swap.
@@ -316,6 +324,41 @@ function projectBoard(config) {
       // Catch up on board changes made elsewhere while the stream was down
       // (resumed tab, or a bfcache restore after a mobile back).
       window.addEventListener('sse:reconnect', () => this.refresh());
+
+      // alpine-ajax marks every swap target aria-busy for the life of its
+      // request. Listening on the document, that attribute is what tells a
+      // collection swap (drawer links and the sprint switcher fire their
+      // own requests) apart from a task panel or popover refresh.
+      document.addEventListener('ajax:send', () => {
+        if (this._collectionSwapPending()) this.collectionLoading = true;
+      });
+      // Failures bubble up here for every request, and a task panel
+      // failing must not take the veil off a collection still loading. On
+      // ajax:missing the event names its target. On ajax:error it does
+      // not, but alpine-ajax releases the target's aria-busy right after
+      // dispatching, so the attribute answers once this handler yields.
+      document.addEventListener('ajax:missing', (e) => {
+        if (COLLECTION_SWAP_TARGETS.includes(e.detail?.target?.id)) {
+          this.collectionLoading = false;
+        }
+      });
+      document.addEventListener('ajax:error', () => {
+        queueMicrotask(() => {
+          if (!this._collectionSwapPending()) this.collectionLoading = false;
+        });
+      });
+      // The fragment that landed is bound: #task-collection announces
+      // itself after a filter swap, #project-content after a content swap
+      // (an overview or settings fragment has no collection to do it).
+      window.addEventListener('project-fragment-bound', () => {
+        this.collectionLoading = false;
+      });
+    },
+
+    _collectionSwapPending() {
+      return COLLECTION_SWAP_TARGETS.some(
+        (id) => document.getElementById(id)?.getAttribute('aria-busy') === 'true'
+      );
     },
 
     isMobile() {

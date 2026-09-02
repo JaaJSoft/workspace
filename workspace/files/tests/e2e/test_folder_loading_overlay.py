@@ -88,6 +88,36 @@ class FolderLoadingOverlayTests(PlaywrightTestCase):
         expect(self.page.locator("#folder-browser h1")).to_have_text("My Files")
         self.assertTrue(self.page.url.endswith("/files"))
 
+    def test_an_unrelated_failure_keeps_the_overlay_up(self):
+        # A properties request failing while the folder request is still
+        # pending is not the folder request failing: the veil stays.
+        overlay = self._open_files()
+
+        held = []
+        self.page.route(
+            f"**/files/{self.folder.uuid}*", lambda route: held.append(route)
+        )
+        self.page.route(
+            "**/files/properties/*",
+            lambda route: route.fulfill(status=500, body="boom"),
+        )
+        self.page.locator(f'a[data-folder-link][href$="{self.folder.uuid}"]').click()
+        self._wait_for(held)
+        expect(overlay).to_be_visible()
+
+        with self.page.expect_response(lambda r: "/files/properties/" in r.url):
+            self.page.evaluate(
+                "uuid => window.dispatchEvent(new CustomEvent('open-properties',"
+                " { detail: { uuid, nodeType: 'folder' } }))",
+                str(self.folder.uuid),
+            )
+        self.page.wait_for_timeout(300)
+        expect(overlay).to_be_visible()
+
+        held[0].continue_()
+        expect(self.page.locator("#folder-browser h1")).to_have_text("Reports")
+        expect(overlay).to_be_hidden()
+
     def test_a_properties_panel_request_does_not_show_the_overlay(self):
         overlay = self._open_files()
 

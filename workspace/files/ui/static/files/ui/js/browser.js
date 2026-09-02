@@ -1511,9 +1511,21 @@ window.fileBrowser = function fileBrowser() {
           this.folderLoading = true;
         }
       });
-      const stopFolderLoading = () => { this.folderLoading = false; };
-      document.addEventListener('ajax:error', stopFolderLoading);
-      document.addEventListener('ajax:missing', stopFolderLoading);
+      // Failures bubble up here for every request, and a properties panel
+      // failing must not take the veil off a folder still loading. On
+      // ajax:missing the event names its target. On ajax:error it does
+      // not, but alpine-ajax releases the target's aria-busy right after
+      // dispatching, so the attribute answers once this handler yields.
+      document.addEventListener('ajax:missing', (e) => {
+        if (e.detail?.target?.id === 'folder-browser') this.folderLoading = false;
+      });
+      document.addEventListener('ajax:error', () => {
+        queueMicrotask(() => {
+          if (document.getElementById('folder-browser')?.getAttribute('aria-busy') !== 'true') {
+            this.folderLoading = false;
+          }
+        });
+      });
 
       // Close properties panel on folder navigation (but not on same-folder refresh)
       this._lastViewUrl = null;

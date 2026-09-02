@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from workspace.files.models import File, FileScan
 from workspace.files.search import search_files
 from workspace.files.services.search_index import index_file
+from workspace.files.tests.test_actions import actions_of
 
 User = get_user_model()
 BLOCKING = {
@@ -196,7 +197,7 @@ class RestEnforcementTests(APITestCase):
             {"uuids": [str(self.infected.uuid)]},
             format="json",
         )
-        ids = {a["id"] for a in resp.data[str(self.infected.uuid)]}
+        ids = {a["id"] for a in actions_of(resp.data, str(self.infected.uuid))}
         self.assertNotIn("download", ids)
         self.assertNotIn("view", ids)
         self.assertNotIn("open_new_tab", ids)
@@ -208,7 +209,7 @@ class RestEnforcementTests(APITestCase):
             {"uuids": [str(self.clean.uuid)]},
             format="json",
         )
-        ids = {a["id"] for a in resp.data[str(self.clean.uuid)]}
+        ids = {a["id"] for a in actions_of(resp.data, str(self.clean.uuid))}
         self.assertIn("download", ids)
 
 

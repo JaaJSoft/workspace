@@ -1,5 +1,6 @@
 """Bulk actions endpoint + shared-with-me + AI edit."""
 
+import json
 import logging
 
 from django.conf import settings
@@ -25,8 +26,11 @@ class ActionsMixin:
         summary="Get available actions for files/folders",
         description=(
             "Return available actions for a list of file/folder UUIDs. "
-            "Returns a map keyed by UUID, each value being the list of "
-            "available actions for that item."
+            "`actions` is a catalogue keyed by action key, `files` maps each "
+            "UUID to the catalogue keys that apply to it. A key is the action "
+            "id, suffixed with `#n` when the same action serializes "
+            "differently for some files (a toggle whose label follows the "
+            "file's state)."
         ),
         request={
             "application/json": {
@@ -44,7 +48,7 @@ class ActionsMixin:
         responses={
             200: OpenApiResponse(
                 response=OpenApiTypes.OBJECT,
-                description="Map of UUID to list of available actions.",
+                description="Catalogue of actions and, per UUID, the keys that apply.",
             ),
             400: OpenApiResponse(description="Invalid request."),
             404: OpenApiResponse(description="One or more UUIDs not found."),
@@ -100,14 +104,34 @@ class ActionsMixin:
 
         permissions = FileService.get_permissions_bulk(request.user, file_objects)
 
-        result = {}
+        # The same dozen actions repeat for every file, so the response is a
+        # catalogue of distinct serialized actions plus, per file, the keys
+        # that apply: a 1,500-entry listing answered 2 MB of repeated
+        # objects before. A key is the action id, suffixed when the same
+        # action serializes differently for some files.
+        catalogue = {}
+        keys_by_payload = {}
+        files = {}
         for file_obj in file_objects:
-            result[str(file_obj.uuid)] = ActionRegistry.get_available_actions(
+            keys = []
+            for data in ActionRegistry.get_available_actions(
                 request.user,
                 file_obj,
                 permission=permissions[file_obj.pk],
-            )
-        return Response(result)
+            ):
+                payload = json.dumps(data, sort_keys=True)
+                key = keys_by_payload.get(payload)
+                if key is None:
+                    key = data["id"]
+                    variant = 1
+                    while key in catalogue:
+                        variant += 1
+                        key = f"{data['id']}#{variant}"
+                    catalogue[key] = data
+                    keys_by_payload[payload] = key
+                keys.append(key)
+            files[str(file_obj.uuid)] = keys
+        return Response({"actions": catalogue, "files": files})
 
     @extend_schema(
         summary="Files shared with me",

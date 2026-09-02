@@ -26,6 +26,7 @@ from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import File
+from workspace.files.tests.test_actions import actions_of
 
 
 class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
@@ -67,7 +68,7 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
             f"actions endpoint returned {api_response.status} {api_response.url}"
         )
         api_payload = api_response.json()
-        api_actions = api_payload.get(str(f.uuid), [])
+        api_actions = actions_of(api_payload, str(f.uuid))
 
         # ``data-uuid`` is set on both the list-view ``<tr>`` and the
         # mosaic-view ``<div>``; we don't care which layout the user

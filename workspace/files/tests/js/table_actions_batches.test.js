@@ -2,22 +2,29 @@
 
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 // The actions endpoint refuses more than 200 UUIDs per call. A listing
 // larger than that used to get a 400 back and no actions at all: no
 // context menu, no favourite toggle, no bulk bar. The fetch has to slice.
 function makeTable(fetchCalls, { deferred = false, failing = [] } = {}) {
-  const ctx = loadScript('workspace/files/ui/static/files/ui/js/table.js', {
+  const ctx = loadScripts([
+    'workspace/files/ui/static/files/ui/js/file_actions.js',
+    'workspace/files/ui/static/files/ui/js/table.js',
+  ], {
     _filePrefsCache: {},
-    document: { createDocumentFragment: () => ({ appendChild() {} }) },
+    document: { createDocumentFragment: () => ({ appendChild() {} }), getElementById: () => null },
     getCSRFToken: () => 'token',
     fetch: (url, options) => {
       const { uuids } = JSON.parse(options.body);
       const call = { url, uuids };
+      // The wire shape: one catalogue, and per file the keys that apply.
       const response = {
         ok: true,
-        json: async () => Object.fromEntries(uuids.map((uuid) => [uuid, [{ id: 'rename', bulk: false }]])),
+        json: async () => ({
+          actions: { rename: { id: 'rename', bulk: false } },
+          files: Object.fromEntries(uuids.map((uuid) => [uuid, ['rename']])),
+        }),
       };
       let promise;
       if (failing.includes(fetchCalls.length)) {

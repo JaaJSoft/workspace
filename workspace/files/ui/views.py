@@ -402,6 +402,12 @@ def _build_context(request, folder=None, is_trash_view=False):
     if not isinstance(file_prefs, dict):
         file_prefs = {}
     breadcrumb_collapse = file_prefs.get("breadcrumbCollapse", 4)
+    # The listing is rendered in one view mode only: a large folder costs
+    # the browser as much to bind as it has markup, and the toggle is rare
+    # enough to be a re-render.
+    view_mode = file_prefs.get("defaultViewMode")
+    if not isinstance(view_mode, str) or view_mode not in {"list", "mosaic"}:
+        view_mode = "list"
     viewer_prefs = files_settings.get("viewer") or {}
     if not isinstance(viewer_prefs, dict):
         viewer_prefs = {}
@@ -433,6 +439,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         "sidebar_active": sidebar_active,
         "pinned_folders": pinned_folders_qs,
         "breadcrumb_collapse": breadcrumb_collapse,
+        "view_mode": view_mode,
         "file_prefs": file_prefs,
         "viewer_prefs": viewer_prefs,
         "group_folders": group_folders,

@@ -47,13 +47,28 @@ window.filePreferences = function filePreferences() {
     },
 
     update(key, value) {
+      const previous = this.prefs[key];
       this.prefs[key] = value;
-      this._saveRemote();
       this._broadcast();
-      // Breadcrumb collapse is rendered server-side; refresh to apply
-      if (key === 'breadcrumbCollapse') {
-        this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+      // Breadcrumb collapse and the view mode are rendered server-side:
+      // save right away and re-render once the save has landed, or the
+      // re-render reads the value the user just left. A save that fails
+      // rolls the dialog back instead, so it never shows a value the
+      // listing does not.
+      if (key === 'breadcrumbCollapse' || key === 'defaultViewMode') {
+        clearTimeout(this._saveTimer);
+        this._saveNow().then((saved) => {
+          if (saved) {
+            this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+            return;
+          }
+          this.prefs[key] = previous;
+          this._broadcast();
+          window.AppAlert?.error('Could not save the preference');
+        });
+        return;
       }
+      this._saveRemote();
     },
 
     _broadcast() {
@@ -63,14 +78,17 @@ window.filePreferences = function filePreferences() {
 
     _saveRemote() {
       clearTimeout(this._saveTimer);
-      this._saveTimer = setTimeout(() => {
-        const csrfToken = getCSRFToken();
-        fetch(API_URL, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ value: this.prefs }),
-        }).catch(() => {});
-      }, 500);
+      this._saveTimer = setTimeout(() => this._saveNow(), 500);
+    },
+
+    // Resolves to whether the server took the save.
+    _saveNow() {
+      const csrfToken = getCSRFToken();
+      return fetch(API_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ value: this.prefs }),
+      }).then((resp) => resp.ok, () => false);
     },
   };
 };

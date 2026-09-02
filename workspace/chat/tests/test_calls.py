@@ -272,6 +272,55 @@ class StaleReconciliationTests(TestCase):
         self.assertEqual(session.state, CallSession.State.ENDED)
 
 
+class LockClearedOnCallEndTests(TestCase):
+    """I-1 remainder: the lock must not survive whichever path ends the
+    call, not only the host's explicit End button (end_meeting).
+    _end_call is the single choke point leave_call, leave_call_as_guest and
+    cleanup_stale_participants all converge on, so it is the one place that
+    can clear Meeting.locked for all three at once."""
+
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.a = User.objects.create_user(username="lock-a", password="x")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.a
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.a)
+        cal = Calendar.objects.create(name="C", owner=self.a)
+        event = Event.objects.create(
+            calendar=cal, owner=self.a, title="E", start=timezone.now()
+        )
+        self.meeting = Meeting.objects.create(
+            event=event, conversation=self.conv, created_by=self.a
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_lock_does_not_survive_a_call_that_empties_out(self):
+        calls.start_or_join_call(self.a, self.conv.uuid)
+        self.meeting.locked = True
+        self.meeting.save(update_fields=["locked"])
+
+        ended = calls.leave_call(self.a, self.conv.uuid)
+        self.assertEqual(ended.state, CallSession.State.ENDED)
+
+        self.meeting.refresh_from_db()
+        self.assertFalse(self.meeting.locked)
+
+    def test_lock_does_not_survive_the_stale_sweep(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        self.meeting.locked = True
+        self.meeting.save(update_fields=["locked"])
+
+        calls.drop_presence(session.uuid, user_key(self.a.id))
+        self.assertTrue(calls.cleanup_stale_participants(session))
+
+        self.meeting.refresh_from_db()
+        self.assertFalse(self.meeting.locked)
+
+
 class FirstJoinRaceTests(TestCase):
     """Two members starting a call in the same tiny window both pass the
     "no active call" check. The partial unique constraint lets only one

@@ -616,8 +616,11 @@ class Meeting(models.Model):
     # Durable lock: survives even with no CallSession, so a host can pre-lock
     # an empty room before anyone joins. Seeds CallSession.locked when a
     # session is created; set_locked writes both while a session is active.
-    # Scoped to the occurrence it was set during - end_meeting clears it - so
-    # next week's guests are never locked out by last week's lock.
+    # Scoped to the occurrence it was set during - cleared whichever way that
+    # occurrence's call ends (calls._end_call, reached by the last leaver and
+    # the stale sweep alike) or, when no call was ever active, by end_meeting
+    # directly - so next week's guests are never locked out by last week's
+    # lock, however this one closed.
     locked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

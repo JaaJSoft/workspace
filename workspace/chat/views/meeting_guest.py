@@ -9,11 +9,22 @@ differently than an anonymous guest hitting the same URL. Every class below
 also empties ``authentication_classes`` so the token is the only thing that
 grants anything, for every caller alike.
 
-Across this file, a 404 means exactly one thing: the token is missing,
-unknown, revoked, or names a guest of a different meeting than *slug*. Every
-other failure (no call to join yet, the call is full, the call is locked) has
-its own status code, so a client can tell "you are not this meeting's guest"
-apart from "you are, but something else is stopping you".
+On the three content endpoints (join, leave, heartbeat), a 404 means
+exactly one thing: the token is missing, unknown, revoked, or names a guest
+of a different meeting than *slug*. Every other failure on those three (no
+call to join yet, the call is full, the call is locked) has its own status
+code, so a client can tell "you are not this meeting's guest" apart from
+"you are, but something else is stopping you".
+
+state is the deliberate exception, and only a partial one: an unknown token
+or one naming a guest of a different meeting still 404s there too, same as
+the other three. What state does differently is a token that fails the
+admitted-and-current check yet still names a real guest of *this* meeting
+(waiting, refused, removed, or admitted to an occurrence the host has since
+ended) - that gets 200 with a body describing the guest's own status,
+never 404, because a guest has to be able to learn their own status,
+including a revoked one, without the response itself looking like a dead
+end.
 """
 
 from django.conf import settings

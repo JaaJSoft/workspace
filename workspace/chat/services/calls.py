@@ -486,7 +486,7 @@ def leave_call_as_guest(guest):
 
 def _end_call(session):
     """Mark a session ended, finalize its system message, broadcast call_ended."""
-    from ..models import CallSession
+    from ..models import CallSession, Meeting
 
     # Resolve who is in the call before flipping state to ENDED:
     # _active_guest_keys only matches an ACTIVE session, so computing this
@@ -496,6 +496,18 @@ def _end_call(session):
     session.state = CallSession.State.ENDED
     session.ended_at = timezone.now()
     session.save(update_fields=["state", "ended_at"])
+
+    # Every path that ends a call - the last leaver (leave_call,
+    # leave_call_as_guest), the stale-participant sweep, and the host's
+    # explicit End (end_meeting) - converges here, so this is the one place
+    # that reliably clears Meeting.locked no matter which path fired.
+    # end_meeting also clears it directly, for the case where it ends the
+    # occurrence with no active session at all (this function never runs
+    # then) - the two sites are not redundant, both are needed.
+    # Plain filter on conversation_id, never session.conversation.meeting:
+    # most conversations are not meetings, and that reverse accessor raises
+    # RelatedObjectDoesNotExist for every one of them.
+    Meeting.objects.filter(conversation_id=session.conversation_id).update(locked=False)
 
     duration = session.duration_seconds or 0
     label = format_duration(duration)

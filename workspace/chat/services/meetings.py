@@ -156,11 +156,12 @@ def end_meeting(meeting, now=None):
         return False
     start, _end = occurrence
     meeting.closed_occurrence_start = start
-    # The lock is scoped to the occurrence it was set during: CallSession.locked
-    # already disappears with the session it lives on (ended below), but
-    # Meeting.locked has no such reset of its own, so it is cleared here -
-    # otherwise a lock from this occurrence would silently carry into the
-    # lobby of the next one.
+    # The lock is scoped to the occurrence it was set during, and needs
+    # clearing here as well as in calls._end_call: this branch also runs
+    # with no active session (nothing to route through _end_call), which is
+    # the ordinary case for a host ending a meeting nobody joined - a lock
+    # set on an empty room must not survive that either. The two sites are
+    # not redundant, both are needed for different starting states.
     meeting.locked = False
     meeting.save(update_fields=["closed_occurrence_start", "locked"])
 

@@ -16,10 +16,9 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 
-from django.db.models import Count, Sum
 from django.utils import timezone
 
-from ..models import Sprint, Task, TaskEvent, TaskStatus
+from ..models import Sprint, TaskEvent, TaskStatus
 
 DEFAULT_WEEKS = 12
 DEFAULT_DAYS = 7 * DEFAULT_WEEKS
@@ -54,6 +53,7 @@ class _Event:
     type: str
     category: str
     value: str
+    ref: object
 
 
 @dataclass(slots=True)
@@ -61,7 +61,9 @@ class _TaskState:
     created_at: datetime | None = None
     category: str | None = None
     deleted: bool = False
-    sprint: str = ""
+    # The sprint's UUID; None outside any sprint. Membership is matched on
+    # identity, never on the snapshotted name.
+    sprint: object = None
     estimate: Decimal | None = None
     # First entry into an active column, kept across a reopen: cycle time
     # runs from the moment work first started.
@@ -115,6 +117,7 @@ class EventLog:
     def __init__(self, project):
         self.project = project
         self.events = []
+        born_with = {}
         first_estimate_change = {}
         rows = (
             TaskEvent.objects.filter(project=project, type__in=_REPLAYED_TYPES)
@@ -126,23 +129,42 @@ class EventLog:
                 "to_category",
                 "from_value",
                 "to_value",
+                "to_ref",
                 "created_at",
             )
         )
-        for task_id, number, event_type, to_category, from_value, to_value, at in rows:
+        for (
+            task_id,
+            number,
+            event_type,
+            to_category,
+            from_value,
+            to_value,
+            ref,
+            at,
+        ) in rows:
             key = number if number is not None else task_id
             if key is None:
                 continue
             self.events.append(
                 _Event(
-                    at, key, event_type, _category_of(event_type, to_category), to_value
+                    at,
+                    key,
+                    event_type,
+                    _category_of(event_type, to_category),
+                    to_value,
+                    ref,
                 )
             )
-            if event_type == TaskEvent.Type.ESTIMATED:
+            if event_type == TaskEvent.Type.CREATED and to_value:
+                born_with[key] = to_value
+            elif event_type == TaskEvent.Type.ESTIMATED:
                 first_estimate_change.setdefault(key, from_value)
-        # A task's estimate at creation is not an event. The first change
-        # says what it was before; a task never re-estimated still carries
-        # it today, unless it has been deleted since - then it is lost.
+        # The estimate a task was born with rides on its CREATED event.
+        # History written before that snapshot existed is reconstructed:
+        # the first change says what the estimate was before it, and a task
+        # never re-estimated still carries it today - unless it has been
+        # deleted since, in which case it is lost.
         self.initial_estimates = {
             number: estimate
             for number, estimate in project.tasks.filter(
@@ -151,6 +173,8 @@ class EventLog:
         }
         for key, before in first_estimate_change.items():
             self.initial_estimates[key] = _parse_estimate(before)
+        for key, text in born_with.items():
+            self.initial_estimates[key] = _parse_estimate(text)
 
     def replay(self):
         return _Replay(self)
@@ -214,7 +238,7 @@ def _apply(state, event):
     elif event.type == TaskEvent.Type.DELETED:
         state.deleted = True
     elif event.type == TaskEvent.Type.SPRINT:
-        state.sprint = event.value
+        state.sprint = event.ref
     elif event.type == TaskEvent.Type.ESTIMATED:
         state.estimate = _parse_estimate(event.value)
 
@@ -328,10 +352,9 @@ def sprint_burndown(project, sprint, *, log=None):
 
     Effort is the estimate when the project estimates (an unestimated task
     weighs nothing there, and is counted separately so the page can say
-    so), one per task otherwise. Membership follows the SPRINT events by
-    sprint name (a rename carries the snapshots along, see
-    propagate_sprint_rename), so a task carried over at sprint close
-    leaves the remaining line at that moment, as it should. Days after today have no value yet; a running
+    so), one per task otherwise. Membership follows the SPRINT events, so
+    a task carried over at sprint close leaves the remaining line at that
+    moment, as it should. Days after today have no value yet; a running
     sprint with no end date is drawn up to today. The ideal line falls
     from the scope at the end of the first day to zero on the last.
 
@@ -347,9 +370,9 @@ def sprint_burndown(project, sprint, *, log=None):
     use_estimates = bool(project.estimate_unit)
 
     def measure(state):
-        if not state.live or state.sprint != sprint.name:
+        if not state.live or state.sprint != sprint.pk:
             return {}
-        effort = (state.estimate or 0) if use_estimates else 1
+        effort = _effort(state, use_estimates)
         measured = {"scope": effort}
         if state.category != TaskStatus.Category.DONE:
             measured["remaining"] = effort
@@ -385,42 +408,38 @@ def sprint_burndown(project, sprint, *, log=None):
     }
 
 
-def sprint_velocity(project, limit=10):
+def sprint_velocity(project, limit=10, *, log=None):
     """Effort completed per closed sprint, oldest first, with the rolling
     average over the last VELOCITY_WINDOW sprints up to and including each.
 
-    Reads the sprints' done tasks as they stand: a closed sprint keeps its
-    finished tasks attached precisely so this can be read off the table,
-    and a finished task deleted since is gone from the velocity as it is
-    gone from the sprint's board.
+    Replayed from the log like the burndown: a task finished in a sprint
+    and deleted since still counts - the work was done - where the sprint's
+    board no longer shows it. Unfinished work leaves the sprint at close,
+    so what remains attached and done is what the sprint delivered.
     """
     sprints = list(
         project.sprints.filter(state=Sprint.State.CLOSED).order_by(
             "end_date", "created_at"
         )
     )[-limit:]
-    done = (
-        Task.objects.filter(
-            sprint__in=sprints, status__category=TaskStatus.Category.DONE
-        )
-        .values("sprint_id")
-        .annotate(points=Sum("estimate"), n=Count("uuid"))
-    )
-    by_sprint = {row["sprint_id"]: row for row in done}
-    rows = []
-    for sprint in sprints:
-        row = by_sprint.get(sprint.pk)
-        if row is None:
-            completed = 0
-        elif project.estimate_unit:
-            completed = row["points"] or 0
-        else:
-            completed = row["n"]
-        rows.append({"sprint": sprint, "completed": completed})
+    use_estimates = bool(project.estimate_unit)
+    completed = Counter()
+    for state in _log(project, log).replay().finish().values():
+        if state.sprint is not None and state.category == TaskStatus.Category.DONE:
+            completed[state.sprint] += _effort(state, use_estimates)
+    rows = [{"sprint": s, "completed": completed[s.pk]} for s in sprints]
     for index, row in enumerate(rows):
         window = rows[max(0, index - VELOCITY_WINDOW + 1) : index + 1]
         row["average"] = sum(r["completed"] for r in window) / len(window)
     return rows
+
+
+def _effort(state, use_estimates):
+    """What a task weighs in a sprint report: its estimate (nothing while
+    unestimated) when the project estimates, one task otherwise."""
+    if not use_estimates:
+        return 1
+    return state.estimate if state.estimate is not None else 0
 
 
 def velocity_summary(rows):

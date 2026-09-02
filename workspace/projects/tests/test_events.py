@@ -124,6 +124,20 @@ class CreateTaskEventTests(ProjectTestMixin, TestCase):
         self.assertEqual(event.to_status, "Backlog")
         self.assertEqual(event.from_status, "")
 
+    def test_create_snapshots_the_estimate_the_task_was_born_with(self):
+        from decimal import Decimal
+
+        task = create_task(
+            self.project, self.admin, title="Sized", estimate=Decimal("3.5")
+        )
+        event = TaskEvent.objects.get(task=task, type=TaskEvent.Type.CREATED)
+        self.assertEqual(event.to_value, "3.5")
+        unsized = create_task(self.project, self.admin, title="Unsized")
+        self.assertEqual(
+            TaskEvent.objects.get(task=unsized, type=TaskEvent.Type.CREATED).to_value,
+            "",
+        )
+
     def test_create_directly_in_done_still_records_created(self):
         done = self.project.statuses.get(name="Done")
         task = create_task(self.project, self.admin, title="Hotfix", status=done)

@@ -1,7 +1,9 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 
 from workspace.projects.models import Project, Task, TaskEvent
 from workspace.projects.services.members import add_member
@@ -227,6 +229,22 @@ class SprintReportsContentTests(ProjectTestMixin, TestCase):
     @property
     def url(self):
         return f"/projects/{self.scrum.uuid}/analytics"
+
+    def test_sprint_history_older_than_the_window_still_renders_velocity(self):
+        # No open task and no movement in twelve weeks: the flow charts have
+        # nothing to say, yet the sprint history is worth a page.
+        sprint = self._closed_sprint("Long ago")
+        TaskEvent.objects.update(created_at=timezone.now() - timedelta(weeks=20))
+        response = self.client.get(self.url)
+        self.assertFalse(response.context["is_empty"])
+        self.assertEqual(response.context["velocity"][0]["sprint"], sprint)
+        self.assertEqual(response.context["flow_summary"]["completed"], 0)
+        self.assertNotIn("Nothing to chart yet", response.content.decode())
+
+    def test_a_scrum_project_without_sprints_or_tasks_is_still_empty(self):
+        response = self.client.get(self.url)
+        self.assertTrue(response.context["is_empty"])
+        self.assertEqual(response.context["velocity"], [])
 
     def _closed_sprint(self, name, *, done_tasks=1):
         sprint = self.scrum.sprints.create(name=name)

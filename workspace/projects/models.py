@@ -646,11 +646,20 @@ class TaskEvent(models.Model):
     to_category = models.CharField(
         max_length=8, choices=TaskStatus.Category.choices, blank=True, default=""
     )
-    # Old/new snapshots for scalar field changes (estimate and epic name
-    # today), as display strings; empty when the side was unset. Same
-    # survive-the-task rationale as the status name snapshots above.
+    # Old/new snapshots for scalar field changes (estimate, epic name and
+    # sprint name today), as display strings; empty when the side was
+    # unset. Same survive-the-task rationale as the status name snapshots
+    # above. A CREATED event carries the estimate the task was born with in
+    # to_value: no other event records it, and the burndown needs it once
+    # the task row is gone.
     from_value = models.CharField(max_length=100, blank=True, default="")
     to_value = models.CharField(max_length=100, blank=True, default="")
+    # Identity of the entity named in from_value/to_value (a sprint today).
+    # Names are for display; a report matching on them would mistake a
+    # renamed or reused name for another sprint. Null when the side names
+    # nothing and on history written before the field existed.
+    from_ref = models.UUIDField(null=True, blank=True)
+    to_ref = models.UUIDField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

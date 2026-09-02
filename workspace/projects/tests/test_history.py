@@ -21,7 +21,6 @@ from workspace.projects.services.projects import create_project
 from workspace.projects.services.sprints import (
     assign_tasks_to_sprint,
     complete_sprint,
-    propagate_sprint_rename,
     start_sprint,
 )
 from workspace.projects.services.tasks import create_task, delete_task, move_tasks
@@ -399,10 +398,36 @@ class SprintBurndownTests(ScrumHistoryTestCase):
     def test_a_renamed_sprint_keeps_its_history(self):
         sprint = self._sprint(days=2, started_days_ago=1)
         create_task(self.scrum, self.admin, title="a", sprint=sprint, status=self.todo)
-        propagate_sprint_rename(self.scrum, sprint.name, "Iteration 1")
         sprint.name = "Iteration 1"
         sprint.save(update_fields=["name"])
         self.assertEqual(sprint_burndown(self.scrum, sprint)["scope"], 1)
+
+    def test_a_reused_name_does_not_inherit_the_former_sprints_tasks(self):
+        former = self._sprint("Sprint 9", days=2, started_days_ago=1)
+        create_task(
+            self.scrum, self.admin, title="old", sprint=former, status=self.todo
+        )
+        former.delete()
+        reborn = self._sprint("Sprint 9", days=2, started_days_ago=1)
+        self.assertEqual(sprint_burndown(self.scrum, reborn)["scope"], 0)
+
+    def test_a_task_deleted_before_any_estimate_change_keeps_its_points(self):
+        self._estimating()
+        sprint = self._sprint(days=3, started_days_ago=2)
+        task = create_task(
+            self.scrum,
+            self.admin,
+            title="a",
+            sprint=sprint,
+            status=self.todo,
+            estimate=Decimal("5"),
+        )
+        _shift(task, days=2)
+        delete_task(task, actor=self.admin)
+        remaining = [
+            r["remaining"] for r in sprint_burndown(self.scrum, sprint)["days"]
+        ]
+        self.assertEqual(remaining, [Decimal("5"), Decimal("5"), 0])
 
 
 class SharedEventLogTests(HistoryTestCase):
@@ -498,6 +523,29 @@ class SprintVelocityTests(ScrumHistoryTestCase):
             )
         rows = sprint_velocity(self.scrum, limit=2)
         self.assertEqual([r["sprint"].name for r in rows], ["S2", "S3"])
+
+    def test_a_finished_task_deleted_since_still_counts(self):
+        sprint = self._closed_sprint("S1", [None, None])
+        doomed = sprint.tasks.first()
+        delete_task(doomed, actor=self.admin)
+        self.assertEqual(sprint_velocity(self.scrum)[0]["completed"], 2)
+
+    def test_a_task_carried_over_at_close_counts_for_neither_sprint(self):
+        first = self._sprint("S1", days=2, started_days_ago=1)
+        task = create_task(
+            self.scrum, self.admin, title="slow", sprint=first, status=self.todo
+        )
+        complete_sprint(first, actor=self.admin)
+        self.assertEqual(sprint_velocity(self.scrum)[0]["completed"], 0)
+        self.assertIsNotNone(task)
+
+    def test_velocity_is_read_from_a_shared_log_without_new_queries(self):
+        self._closed_sprint("S1", [None])
+        log = EventLog(self.scrum)
+        with self.assertNumQueries(1):
+            # The one query lists the closed sprints; the log is already loaded.
+            rows = sprint_velocity(self.scrum, log=log)
+        self.assertEqual(rows[0]["completed"], 1)
 
     def test_summary_reads_the_last_sprint(self):
         self._closed_sprint("S1", [None], end_days_ago=7)

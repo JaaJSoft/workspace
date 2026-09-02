@@ -197,3 +197,41 @@ class DefaultSprintTests(SprintServiceTestCase):
         self.assertIsNone(active_sprint(self.scrum))
         sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
         self.assertEqual(active_sprint(self.scrum), sprint)
+
+
+class SprintEventIdentityTests(SprintServiceTestCase):
+    """Every SPRINT writer stores the sprint's identity next to its name."""
+
+    def _sprint_events(self, task):
+        return list(
+            TaskEvent.objects.filter(task=task, type=TaskEvent.Type.SPRINT).order_by(
+                "created_at"
+            )
+        )
+
+    def test_born_in_sprint_and_assignment_carry_refs(self):
+        first = self.scrum.sprints.create(name="Sprint 1")
+        second = self.scrum.sprints.create(name="Sprint 2")
+        task = create_task(self.scrum, self.admin, title="a", sprint=first)
+        assign_tasks_to_sprint(self.scrum, second, [task.uuid], actor=self.admin)
+        assign_tasks_to_sprint(self.scrum, None, [task.uuid], actor=self.admin)
+        refs = [(e.from_ref, e.to_ref) for e in self._sprint_events(task)]
+        self.assertEqual(
+            refs, [(None, first.pk), (first.pk, second.pk), (second.pk, None)]
+        )
+
+    def test_carry_over_at_close_and_joining_the_running_sprint_carry_refs(self):
+        first = self.scrum.sprints.create(name="Sprint 1")
+        second = self.scrum.sprints.create(name="Sprint 2")
+        start_sprint(first, actor=self.admin)
+        carried = create_task(
+            self.scrum, self.admin, title="slow", sprint=first, status=self.todo
+        )
+        joined = create_task(self.scrum, self.admin, title="late")
+        move_tasks(self.scrum, self.todo, [joined.uuid], actor=self.admin)
+        complete_sprint(first, move_to=second, actor=self.admin)
+        self.assertEqual(
+            [(e.from_ref, e.to_ref) for e in self._sprint_events(carried)],
+            [(None, first.pk), (first.pk, second.pk)],
+        )
+        self.assertEqual(self._sprint_events(joined)[0].to_ref, first.pk)

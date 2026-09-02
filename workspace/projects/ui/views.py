@@ -674,17 +674,23 @@ def analytics(request, project_uuid):
             ),
             "distribution": distribution,
             "open_count": open_count,
-            "is_empty": open_count == 0
-            and summary["created"] == 0
-            and summary["completed"] == 0,
         }
     )
+    # One read of the event log serves every report on the page.
+    log = EventLog(project)
+    if project.type == Project.Type.SCRUM:
+        context.update(_sprint_reports_context(request, project, log))
+    # A board with nothing open and no movement in the window has nothing
+    # to chart - unless it is a scrum project whose sprint history is
+    # older than the window: velocity is still worth showing.
+    context["is_empty"] = (
+        open_count == 0
+        and summary["created"] == 0
+        and summary["completed"] == 0
+        and not context.get("report_sprints")
+    )
     if not context["is_empty"]:
-        # One read of the event log serves every report on the page.
-        log = EventLog(project)
         context.update(_flow_reports_context(project, log))
-        if project.type == Project.Type.SCRUM:
-            context.update(_sprint_reports_context(request, project, log))
     return _render_project_view(request, context)
 
 
@@ -770,7 +776,7 @@ def _sprint_reports_context(request, project, log):
                 },
             ],
         )
-    velocity = sprint_velocity(project)
+    velocity = sprint_velocity(project, log=log)
     context.update(
         {
             "velocity": velocity,

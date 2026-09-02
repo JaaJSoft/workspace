@@ -146,7 +146,7 @@ window.notesApp = function notesApp(config) {
 
     return {
         // Sidebar
-        collapsed: false,
+        collapsed: window.sidebarPreference.initial(),
         activeView: initialView,
         activeId: config.id || null,
         viewTitle: titleMap[initialView] || 'My Notes',
@@ -203,8 +203,6 @@ window.notesApp = function notesApp(config) {
         _actionsFetchGen: 0,
 
         async init() {
-            this.collapsed = localStorage.getItem('notes-sidebar-collapsed') === 'true';
-
             // Load folder data from embedded JSON
             this._loadFolderData();
 
@@ -1461,12 +1459,20 @@ window.notesApp = function notesApp(config) {
         },
 
         toggleCollapse() {
+            if (this.isMobile()) return;
             this.collapsed = !this.collapsed;
-            localStorage.setItem('notes-sidebar-collapsed', this.collapsed);
+            window.sidebarPreference.save('notes', this.collapsed);
         },
 
         isMobile() {
             return window.innerWidth < 1024;
+        },
+
+        // The drawer is off-canvas below `lg`, so an opened one is the full
+        // sidebar whatever the desktop preference says: a 64px icon rail is
+        // no use on a phone.
+        sidebarCollapsed() {
+            return this.isMobile() ? false : this.collapsed;
         },
 
         _closeDrawerOnMobile() {

@@ -24,7 +24,7 @@ function makeApp() {
       'workspace/mail/ui/static/mail/ui/js/mail_rules_form.js',
       'workspace/mail/ui/static/mail/ui/js/mail.js',
     ],
-    { document: { getElementById: () => null } },
+    { document: { getElementById: () => null }, sidebarPreference: { initial: () => false, save: () => {} } },
   );
   const app = ctx.mailApp();
   app.folders = {
@@ -100,7 +100,10 @@ function makeDialogApp(responses) {
       'workspace/mail/ui/static/mail/ui/js/mail_rules_form.js',
       'workspace/mail/ui/static/mail/ui/js/mail.js',
     ],
-    { document: { getElementById: () => ({ showModal() {}, close() {} }) } },
+    {
+      document: { getElementById: () => ({ showModal() {}, close() {} }) },
+      sidebarPreference: { initial: () => false, save: () => {} },
+    },
   );
   const app = ctx.mailApp();
   // Each account's response resolves only when its recorded release() runs,

@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.common.charts import column_chart
+from workspace.common.charts import column_chart, line_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.services.activity import annotate_time_ago
 from workspace.projects.actions import ProjectActionRegistry
@@ -34,6 +34,16 @@ from workspace.projects.services.analytics import (
 )
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
+from workspace.projects.services.history import (
+    EventLog,
+    cumulative_flow,
+    duration_buckets,
+    duration_summary,
+    sprint_burndown,
+    sprint_velocity,
+    task_durations,
+    velocity_summary,
+)
 from workspace.projects.services.links import annotate_blocked, links_for_task
 from workspace.projects.services.notification_levels import module_level
 from workspace.projects.services.projects import get_or_create_personal_project
@@ -405,6 +415,27 @@ def task_card(request, project_uuid, task_uuid):
     )
 
 
+def _switchable_sprints(request, sprints_qs):
+    """The sprints a switcher offers and the one ``?sprint=`` picks.
+
+    Returns ``(sprints, switchable, selected)``: every sprint oldest first,
+    the switchable ones - active first, then closed history newest first,
+    so a retrospective opens the last sprint rather than sprint 1 - and the
+    switchable sprint the query names, or None. Planned sprints have no
+    board and no burndown yet, so they stay out of the switcher; each
+    caller applies its own fallback when nothing was picked.
+    """
+    sprints = list(sprints_qs.order_by("created_at"))
+    active = [s for s in sprints if s.state == Sprint.State.ACTIVE]
+    closed = [s for s in sprints if s.state == Sprint.State.CLOSED]
+    switchable = active + closed[::-1]
+    selected = None
+    param = parse_uuid_or_none(request.GET.get("sprint") or "")
+    if param is not None:
+        selected = next((s for s in switchable if s.uuid == param), None)
+    return sprints, switchable, selected
+
+
 def _sprint_context(request, project):
     """Sprint switcher context for the scrum board.
 
@@ -415,24 +446,14 @@ def _sprint_context(request, project):
     """
     if project.type != Project.Type.SCRUM:
         return {}
-    sprints = list(
-        project.sprints.annotate(task_count=Count("tasks")).order_by("created_at")
+    sprints, switchable, selected = _switchable_sprints(
+        request, project.sprints.annotate(task_count=Count("tasks"))
     )
-    active = [s for s in sprints if s.state == Sprint.State.ACTIVE]
-    closed = [s for s in sprints if s.state == Sprint.State.CLOSED]
-    # Active first, then history newest first: a retrospective opens the
-    # last sprint, not sprint 1. Planned sprints have no board yet and are
-    # started from the empty state, so they stay out of the switcher.
-    switchable = active + closed[::-1]
-    selected = None
-    param = parse_uuid_or_none(request.GET.get("sprint") or "")
-    if param is not None:
-        selected = next((s for s in switchable if s.uuid == param), None)
     if selected is None:
         selected = next((s for s in sprints if s.state == Sprint.State.ACTIVE), None)
     context = {
         "sprints": switchable,
-        "has_closed_sprints": bool(closed),
+        "has_closed_sprints": any(s.state == Sprint.State.CLOSED for s in sprints),
         "selected_sprint": selected,
         "sprint_read_only": selected is not None
         and selected.state == Sprint.State.CLOSED,
@@ -653,12 +674,149 @@ def analytics(request, project_uuid):
             ),
             "distribution": distribution,
             "open_count": open_count,
-            "is_empty": open_count == 0
-            and summary["created"] == 0
-            and summary["completed"] == 0,
         }
     )
+    # One read of the event log serves every report on the page.
+    log = EventLog(project)
+    if project.type == Project.Type.SCRUM:
+        context.update(_sprint_reports_context(request, project, log))
+    # A board with nothing open and no movement in the window has nothing
+    # to chart - unless it is a scrum project whose sprint history is
+    # older than the window: velocity is still worth showing.
+    context["is_empty"] = (
+        open_count == 0
+        and summary["created"] == 0
+        and summary["completed"] == 0
+        and not context.get("report_sprints")
+    )
+    if not context["is_empty"]:
+        context.update(_flow_reports_context(project, log))
     return _render_project_view(request, context)
+
+
+def _flow_reports_context(project, log):
+    """Cycle/lead time and cumulative flow, both replayed from the event log."""
+    durations = task_durations(project, log=log)
+    buckets = duration_buckets(durations)
+    flow = cumulative_flow(project, log=log)
+    return {
+        "duration_stats": duration_summary(durations),
+        "duration_chart": column_chart(
+            buckets["labels"],
+            [
+                {
+                    "name": "Lead time",
+                    "css_class": "fill-info",
+                    "values": buckets["lead"],
+                },
+                {
+                    "name": "Cycle time",
+                    "css_class": "fill-success",
+                    "values": buckets["cycle"],
+                },
+            ],
+        ),
+        # Done at the bottom, backlog on top: the band a task crosses when
+        # it progresses is the one below it, so work flows downwards.
+        "cumulative_flow_chart": line_chart(
+            [_day_label(row["date"]) for row in flow],
+            [
+                {
+                    "name": "Done",
+                    "css_class": "stroke-success",
+                    "fill_class": "fill-success",
+                    "values": [row["done"] for row in flow],
+                },
+                {
+                    "name": "Active",
+                    "css_class": "stroke-info",
+                    "fill_class": "fill-info",
+                    "values": [row["active"] for row in flow],
+                },
+                {
+                    "name": "Backlog",
+                    "css_class": "stroke-neutral",
+                    "fill_class": "fill-neutral",
+                    "values": [row["backlog"] for row in flow],
+                },
+            ],
+            stacked=True,
+        ),
+    }
+
+
+def _sprint_reports_context(request, project, log):
+    """Burndown of the sprint picked with ``?sprint=`` (the running one by
+    default, else the latest closed) and velocity over the closed sprints."""
+    _, switchable, selected = _switchable_sprints(request, project.sprints)
+    if selected is None and switchable:
+        selected = switchable[0]
+    context = {"report_sprints": switchable, "report_sprint": selected}
+    burndown = (
+        sprint_burndown(project, selected, log=log) if selected is not None else None
+    )
+    if burndown is not None:
+        context["burndown"] = burndown
+        context["burndown_chart"] = line_chart(
+            [_day_label(day["date"]) for day in burndown["days"]],
+            [
+                {
+                    "name": "Ideal",
+                    "css_class": "stroke-base-content",
+                    "dashed": True,
+                    "values": [_plain_number(day["ideal"]) for day in burndown["days"]],
+                },
+                {
+                    "name": "Remaining",
+                    "css_class": "stroke-accent",
+                    "fill_class": "fill-accent",
+                    "values": [
+                        _plain_number(day["remaining"]) for day in burndown["days"]
+                    ],
+                },
+            ],
+        )
+    velocity = sprint_velocity(project, log=log)
+    context.update(
+        {
+            "velocity": velocity,
+            "velocity_summary": velocity_summary(velocity),
+            "velocity_unit": project.estimate_unit or "tasks",
+            "velocity_chart": column_chart(
+                [row["sprint"].name for row in velocity],
+                [
+                    {
+                        "name": "Completed",
+                        "css_class": "fill-accent",
+                        "values": [_plain_number(row["completed"]) for row in velocity],
+                    },
+                    {
+                        "name": "3-sprint average",
+                        "css_class": "fill-neutral",
+                        "values": [_plain_number(row["average"]) for row in velocity],
+                    },
+                ],
+            ),
+        }
+    )
+    return context
+
+
+def _day_label(date):
+    # "%b %d" rather than "%b %-d": the padding-strip flag is not portable
+    # to Windows.
+    return date.strftime("%b %d")
+
+
+def _plain_number(value):
+    """Chart-friendly number: whole values as int so tooltips read "3", not
+    "3.0"; Decimals as float because the chart geometry mixes them with
+    floats. None passes through as a gap."""
+    if value is None:
+        return None
+    if value == int(value):
+        return int(value)
+    return float(value)
 
 
 def _with_bar_maximum(entries):

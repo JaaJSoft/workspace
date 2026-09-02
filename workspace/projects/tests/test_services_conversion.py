@@ -116,6 +116,7 @@ class ToKanbanTests(ConversionTestCase):
         self.assertEqual(project.type, Project.Type.KANBAN)
         self.assertEqual(sprint.state, Sprint.State.CLOSED)
         self.assertEqual(sprint.end_date, timezone.localdate())
+        self.assertIsNotNone(sprint.closed_at)
         self.assertEqual(task.status_id, doing.pk)
         self.assertEqual(task.sprint_id, sprint.pk)
 

@@ -10,8 +10,12 @@ def record_task_event(
     to_status=None,
     from_value="",
     to_value="",
+    from_ref=None,
+    to_ref=None,
 ):
-    """Insert one TaskEvent row, snapshotting the task title and status names."""
+    """Insert one TaskEvent row, snapshotting the task title and the names
+    and categories of the statuses involved. *from_ref*/*to_ref* carry the
+    identity behind a name in *from_value*/*to_value* (a sprint's UUID)."""
     return TaskEvent.objects.create(
         project=task.project,
         task=task,
@@ -21,8 +25,12 @@ def record_task_event(
         type=type,
         from_status=from_status.name if from_status is not None else "",
         to_status=to_status.name if to_status is not None else "",
+        from_category=from_status.category if from_status is not None else "",
+        to_category=to_status.category if to_status is not None else "",
         from_value=from_value,
         to_value=to_value,
+        from_ref=from_ref,
+        to_ref=to_ref,
     )
 
 

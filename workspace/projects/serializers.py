@@ -217,11 +217,12 @@ class SprintSerializer(serializers.ModelSerializer):
             "state",
             "start_date",
             "end_date",
+            "closed_at",
             "task_count",
             "done_task_count",
             "created_at",
         ]
-        read_only_fields = ["state", "created_at"]
+        read_only_fields = ["state", "closed_at", "created_at"]
 
     def validate_name(self, value):
         project = self.context["project"]

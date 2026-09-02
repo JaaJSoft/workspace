@@ -146,11 +146,14 @@ def complete_sprint(sprint, *, move_to=None, actor=None):
                     actor=actor,
                     from_value=current.name,
                     to_value=move_to.name if move_to is not None else "",
+                    from_ref=current.pk,
+                    to_ref=move_to.pk if move_to is not None else None,
                 )
         current.state = Sprint.State.CLOSED
+        current.closed_at = timezone.now()
         if current.end_date is None:
             current.end_date = timezone.localdate()
-        current.save(update_fields=["state", "end_date"])
+        current.save(update_fields=["state", "end_date", "closed_at"])
     return current
 
 
@@ -209,6 +212,8 @@ def assign_tasks_to_sprint(project, sprint, task_uuids, *, actor=None):
                 actor=actor,
                 from_value=old_sprint.name if old_sprint is not None else "",
                 to_value=sprint.name if sprint is not None else "",
+                from_ref=old_sprint.pk if old_sprint is not None else None,
+                to_ref=sprint.pk if sprint is not None else None,
             )
         if board_status is not None:
             # Every listed task is on the running sprint by now (changed or
@@ -222,3 +227,18 @@ def assign_tasks_to_sprint(project, sprint, task_uuids, *, actor=None):
             if to_board:
                 move_tasks(project, board_status, to_board, actor=actor)
     return [task for task, _ in changed]
+
+
+def propagate_sprint_rename(sprint):
+    """Rewrite the name snapshots of the SPRINT events that refer to *sprint*
+    to its current name.
+
+    Events snapshot the sprint *name* so the activity feed still reads once
+    the sprint is gone, and its *identity* so the reports never mistake a
+    renamed or reused name for another sprint. After a rename the feed
+    should name the sprint the board shows; the identity is what targets
+    the rewrite, so a deleted sprint that once bore the name is left alone.
+    """
+    events = sprint.project.task_events.filter(type=TaskEvent.Type.SPRINT)
+    events.filter(from_ref=sprint.pk).update(from_value=sprint.name)
+    events.filter(to_ref=sprint.pk).update(to_value=sprint.name)

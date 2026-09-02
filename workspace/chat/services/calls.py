@@ -121,6 +121,22 @@ def is_call_locked(conversation_id):
     return meeting.locked if meeting is not None else False
 
 
+def active_call_session_for_guest(guest):
+    """Plain (non-locking, non-self-healing) read of *guest*'s meeting's active
+    call session, or None.
+
+    For the guest-reachable state/heartbeat endpoints: like ``is_call_locked``,
+    this must never be ``get_active_call``, whose self-heal can end a stale
+    call and fan out a broadcast off what looks like a harmless read from an
+    anonymous caller.
+    """
+    from ..models import CallSession
+
+    return CallSession.objects.filter(
+        conversation_id=guest.meeting.conversation_id, state=CallSession.State.ACTIVE
+    ).first()
+
+
 def _has_stale_participants(session):
     """Whether any active participant lacks a fresh heartbeat (no DB lock)."""
     from ..models import CallParticipant
@@ -357,6 +373,56 @@ def start_or_join_call(user, conversation_id):
 
 
 @transaction.atomic
+def join_call_as_guest(guest):
+    """Add *guest* as a participant in their meeting's already-active call.
+
+    Unlike ``start_or_join_call``, this never creates a session:
+    ``CallSession.started_by`` is a user, and a guest has no user row, so
+    there is nothing for a fresh session to be attributed to - a guest can
+    only join a call a host has already started. Returns None when there is
+    no active call (the caller maps that to 404); raises CallFull when the
+    cap is reached.
+
+    Uses ``_active_session_for_update``, not ``get_active_call``: this is
+    guest-reachable with only a token, and get_active_call's self-heal must
+    never run off that.
+    """
+    from ..models import CallParticipant
+
+    session = _active_session_for_update(guest.meeting.conversation_id)
+    if session is None:
+        return None
+
+    active_qs = CallParticipant.objects.filter(session=session, left_at__isnull=True)
+    if not active_qs.filter(guest=guest).exists():
+        if active_qs.count() >= max_participants():
+            raise CallFull()
+
+    participant, _ = CallParticipant.objects.get_or_create(
+        session=session, guest=guest, defaults={"left_at": None}
+    )
+    if participant.left_at is not None:
+        participant.left_at = None
+        participant.save(update_fields=["left_at"])
+
+    key = guest_key(guest.uuid)
+    touch_presence(session.uuid, key, DEFAULT_MEDIA_STATE)
+
+    _broadcast(
+        guest.meeting.conversation_id,
+        "call_participant_joined",
+        {
+            "session_id": str(session.uuid),
+            "participant_key": key,
+            "user_id": None,
+            "display_name": guest.display_name,
+            "media_state": DEFAULT_MEDIA_STATE,
+        },
+    )
+    return session
+
+
+@transaction.atomic
 def leave_call(user, conversation_id):
     from ..models import CallParticipant, CallSession
 
@@ -377,6 +443,39 @@ def leave_call(user, conversation_id):
     if CallParticipant.objects.filter(session=session, left_at__isnull=True).exists():
         _broadcast(
             conversation_id,
+            "call_participant_left",
+            {"session_id": str(session.uuid), "participant_key": key},
+        )
+        return session
+
+    return _end_call(session)
+
+
+@transaction.atomic
+def leave_call_as_guest(guest):
+    """Guest counterpart of ``leave_call``. A no-op when there is no active call."""
+    from ..models import CallParticipant, CallSession
+
+    session = (
+        CallSession.objects.select_for_update()
+        .filter(
+            conversation_id=guest.meeting.conversation_id,
+            state=CallSession.State.ACTIVE,
+        )
+        .first()
+    )
+    if session is None:
+        return None
+
+    key = guest_key(guest.uuid)
+    CallParticipant.objects.filter(
+        session=session, guest=guest, left_at__isnull=True
+    ).update(left_at=timezone.now())
+    drop_presence(session.uuid, key)
+
+    if CallParticipant.objects.filter(session=session, left_at__isnull=True).exists():
+        _broadcast(
+            guest.meeting.conversation_id,
             "call_participant_left",
             {"session_id": str(session.uuid), "participant_key": key},
         )

@@ -8,6 +8,7 @@ from .views import (
     conversations,
     goals,
     interactions,
+    meeting_guest,
     meetings,
     messages,
     pins,
@@ -235,6 +236,27 @@ urlpatterns = [
         "api/v1/chat/meet/<str:slug>/knock",
         meetings.MeetingKnockView.as_view(),
         name="chat-meeting-knock",
+    ),
+    # Meetings - guest runtime, token-authorized (X-Meeting-Token header)
+    path(
+        "api/v1/chat/meet/<str:slug>/join",
+        meeting_guest.MeetingGuestJoinView.as_view(),
+        name="chat-meeting-guest-join",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/leave",
+        meeting_guest.MeetingGuestLeaveView.as_view(),
+        name="chat-meeting-guest-leave",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/heartbeat",
+        meeting_guest.MeetingGuestHeartbeatView.as_view(),
+        name="chat-meeting-guest-heartbeat",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/state",
+        meeting_guest.MeetingGuestStateView.as_view(),
+        name="chat-meeting-guest-state",
     ),
     # Meetings - host endpoints
     path(

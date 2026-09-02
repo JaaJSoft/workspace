@@ -48,7 +48,11 @@
           :class="sidebarCollapsed() ? 'justify-center' : 'justify-between'"
         >
           {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" %}
-          <div class="flex items-center gap-0.5" x-show="!sidebarCollapsed()" x-transition>
+          <div
+            class="flex items-center gap-0.5"
+            x-show="!sidebarCollapsed()"
+            x-transition
+          >
             {% include "ui/partials/preferences_popover.html" with component="notesPreferences()" content="notes/ui/partials/_preferences_content.html" accent="text-success" button_class="hover:text-success" %}
           </div>
         </div>

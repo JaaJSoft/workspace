@@ -50,22 +50,35 @@
           visible at a time - none, set, being entered.
         {% endcomment %}
         <div class="form-control">
-          <span class="label-text">Authenticator key</span>
+          {# for, not a wrapping label: the control's other two states are buttons, and a label around a button steals its click. #}
+          <label class="label-text" for="entry-totp-input">Authenticator key</label>
 
-          <div class="flex items-center gap-2 mt-1" x-show="totpFieldState() === 'none'">
+          <div
+            class="flex items-center gap-2 mt-1"
+            x-show="totpFieldState() === 'none'"
+          >
             <span class="text-sm opacity-60 flex-1">No authenticator key</span>
-            <button type="button" class="btn btn-xs btn-ghost gap-1" @click="startTotpEntry()">
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost gap-1"
+              @click="startTotpEntry()"
+            >
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               Add
             </button>
           </div>
 
-          <div class="flex items-center gap-2 mt-1" x-show="totpFieldState() === 'set'">
+          <div
+            class="flex items-center gap-2 mt-1"
+            x-show="totpFieldState() === 'set'"
+          >
             <span class="text-sm opacity-60 flex-1">An authenticator key is set</span>
-            <button type="button" class="btn btn-xs btn-ghost" @click="startTotpEntry()">
-              Replace
-            </button>
-            <button type="button" class="btn btn-xs btn-ghost text-error" @click="removeTotp()">
+            <button type="button" class="btn btn-xs btn-ghost" @click="startTotpEntry()">Replace</button>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost text-error"
+              @click="removeTotp()"
+            >
               Remove
             </button>
           </div>
@@ -78,6 +91,7 @@
           <template x-if="totpFieldState() === 'editing'">
             <div class="mt-1">
               <input
+                id="entry-totp-input"
                 type="password"
                 class="input input-bordered w-full font-mono"
                 autocomplete="off"
@@ -85,7 +99,11 @@
                 placeholder="Key or otpauth:// address"
                 x-model="draft.totpInput"
               />
-              <button type="button" class="btn btn-xs btn-ghost mt-1" @click="cancelTotpEntry()">
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost mt-1"
+                @click="cancelTotpEntry()"
+              >
                 Cancel
               </button>
             </div>

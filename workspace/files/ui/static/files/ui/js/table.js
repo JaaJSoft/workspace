@@ -1,3 +1,6 @@
+// Upper bound of POST /api/v1/files/actions, mirrored from the endpoint.
+const ACTIONS_BATCH_SIZE = 200;
+
 window.fileTableControls = function fileTableControls() {
   return {
     storageKey: 'fileTableControls:v4',
@@ -406,13 +409,22 @@ window.fileTableControls = function fileTableControls() {
       this.actionsLoading = true;
       try {
         const csrfToken = getCSRFToken();
-        const resp = await fetch('/api/v1/files/actions', {
+        // The endpoint answers at most 200 UUIDs per call; a larger listing
+        // asks in slices and merges the answers.
+        const slices = [];
+        for (let i = 0; i < uuids.length; i += ACTIONS_BATCH_SIZE) {
+          slices.push(uuids.slice(i, i + ACTIONS_BATCH_SIZE));
+        }
+        const responses = await Promise.all(slices.map((slice) => fetch('/api/v1/files/actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ uuids }),
-        });
-        if (resp.ok) {
-          this.actionsMap = await resp.json();
+          body: JSON.stringify({ uuids: slice }),
+        })));
+        const answered = responses.filter((resp) => resp.ok);
+        if (answered.length) {
+          const actionsMap = {};
+          for (const resp of answered) Object.assign(actionsMap, await resp.json());
+          this.actionsMap = actionsMap;
           this._computeBulkActions();
         }
       } catch (e) {

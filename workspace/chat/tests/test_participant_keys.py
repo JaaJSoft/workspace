@@ -67,3 +67,31 @@ class MalformedKeyTests(SimpleTestCase):
         ordered = sorted(["u:2", "g:abc", "u:10"])
         self.assertEqual(len(set(ordered)), 3)
         self.assertEqual(ordered[0], "g:abc")
+
+
+class GuestUuidFromKeyTests(SimpleTestCase):
+    def test_round_trips_a_canonical_key(self):
+        u = uuid.UUID("0192f7c0-0000-7000-8000-000000000001")
+        self.assertEqual(keys.guest_uuid_from_key(keys.guest_key(u)), u)
+
+    def test_rejects_a_user_key(self):
+        self.assertIsNone(keys.guest_uuid_from_key("u:12"))
+
+    def test_rejects_non_canonical_spellings(self):
+        u = "0192f7c0-0000-7000-8000-000000000001"
+        for bad in (
+            f"g:{u.upper()}",  # case
+            f"g:{u.replace('-', '')}",  # no dashes
+            f"g: {u}",  # leading space
+            f"g:{u} ",  # trailing space
+            f"g:{u}\n",  # newline
+            f"g:urn:uuid:{u}",  # urn form
+            f"g:{{{u}}}",  # braces
+        ):
+            with self.subTest(bad=bad):
+                self.assertIsNone(keys.guest_uuid_from_key(bad))
+
+    def test_rejects_garbage_without_raising(self):
+        for bad in (None, "", "g:", "g:nope", 12, [], {}, object()):
+            with self.subTest(bad=bad):
+                self.assertIsNone(keys.guest_uuid_from_key(bad))

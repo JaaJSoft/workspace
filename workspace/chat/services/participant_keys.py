@@ -11,6 +11,7 @@ offerer by comparing two keys, and any total order satisfies that.
 """
 
 import re
+import uuid
 
 USER_PREFIX = "u"
 GUEST_PREFIX = "g"
@@ -57,3 +58,21 @@ def user_id_from_key(key):
     if not _USER_ID_PAYLOAD_RE.fullmatch(payload):
         return None
     return int(payload)
+
+
+def guest_uuid_from_key(key):
+    """The guest UUID a guest key addresses, or None for anything else.
+
+    Canonical spelling only. ``uuid.UUID`` accepts uppercase, dashless, urn and
+    brace forms, so a round-trip check is what makes the value we authorize the
+    same value we route with - the differential ``user_id_from_key`` was
+    tightened to close, on the lane that is actually exposed to strangers.
+    """
+    if not is_guest_key(key):
+        return None
+    payload = key.split(":", 1)[1]
+    try:
+        parsed = uuid.UUID(payload)
+    except ValueError, AttributeError, TypeError:
+        return None
+    return parsed if str(parsed) == payload else None

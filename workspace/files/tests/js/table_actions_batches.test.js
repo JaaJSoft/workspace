@@ -7,36 +7,66 @@ const { loadScript } = require('../../../common/tests/js/loader');
 // The actions endpoint refuses more than 200 UUIDs per call. A listing
 // larger than that used to get a 400 back and no actions at all: no
 // context menu, no favourite toggle, no bulk bar. The fetch has to slice.
-function makeTable(fetchCalls) {
+function makeTable(fetchCalls, { deferred = false } = {}) {
   const ctx = loadScript('workspace/files/ui/static/files/ui/js/table.js', {
     _filePrefsCache: {},
     document: { createDocumentFragment: () => ({ appendChild() {} }) },
     getCSRFToken: () => 'token',
-    fetch: async (url, options) => {
+    fetch: (url, options) => {
       const { uuids } = JSON.parse(options.body);
-      fetchCalls.push({ url, uuids });
-      return {
+      const call = { url, uuids };
+      const response = {
         ok: true,
         json: async () => Object.fromEntries(uuids.map((uuid) => [uuid, [{ id: 'rename', bulk: false }]])),
       };
+      const promise = deferred
+        ? new Promise((resolve) => { call.resolve = () => resolve(response); })
+        : Promise.resolve(response);
+      fetchCalls.push(call);
+      return promise;
     },
   });
   return ctx.fileTableWithView();
 }
 
+function rows(count) {
+  return Array.from({ length: count }, (_, i) => ({ dataset: { uuid: `uuid-${i}` } }));
+}
+
 test('fetchActions asks in slices of 200 and merges the answers', async () => {
   const fetchCalls = [];
   const table = makeTable(fetchCalls);
-  const uuids = Array.from({ length: 450 }, (_, i) => `uuid-${i}`);
-  table.originalRows = uuids.map((uuid) => ({ dataset: { uuid } }));
+  table.originalRows = rows(450);
 
   await table.fetchActions();
 
   assert.deepStrictEqual(fetchCalls.map((c) => c.uuids.length), [200, 200, 50]);
   assert.ok(fetchCalls.every((c) => c.url === '/api/v1/files/actions'));
-  assert.deepStrictEqual(Array.from(fetchCalls.flatMap((c) => c.uuids)), uuids);
+  assert.deepStrictEqual(Array.from(fetchCalls.flatMap((c) => c.uuids)), table.originalRows.map((r) => r.dataset.uuid));
   assert.equal(Object.keys(table.actionsMap).length, 450);
   assert.equal(table.actionsMap['uuid-449'][0].id, 'rename');
+  assert.equal(table.actionsLoading, false);
+});
+
+test('fetchActions exposes each slice as it lands, without waiting for the others', async () => {
+  const fetchCalls = [];
+  const table = makeTable(fetchCalls, { deferred: true });
+  table.originalRows = rows(450);
+
+  const done = table.fetchActions();
+  assert.equal(fetchCalls.length, 3);
+
+  fetchCalls[1].resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(Object.keys(table.actionsMap).length, 200);
+  assert.ok(table.actionsMap['uuid-200']);
+  assert.equal(table.actionsMap['uuid-0'], undefined);
+  assert.equal(table.actionsLoading, true);
+
+  fetchCalls[0].resolve();
+  fetchCalls[2].resolve();
+  await done;
+  assert.equal(Object.keys(table.actionsMap).length, 450);
   assert.equal(table.actionsLoading, false);
 });
 

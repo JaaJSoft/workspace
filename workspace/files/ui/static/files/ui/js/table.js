@@ -410,23 +410,27 @@ window.fileTableControls = function fileTableControls() {
       try {
         const csrfToken = getCSRFToken();
         // The endpoint answers at most 200 UUIDs per call; a larger listing
-        // asks in slices and merges the answers.
+        // asks in slices. Each answer is merged as it lands: a row only
+        // needs its own entry, so the first rows are usable while the rest
+        // of the listing is still being answered.
         const slices = [];
         for (let i = 0; i < uuids.length; i += ACTIONS_BATCH_SIZE) {
           slices.push(uuids.slice(i, i + ACTIONS_BATCH_SIZE));
         }
-        const responses = await Promise.all(slices.map((slice) => fetch('/api/v1/files/actions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ uuids: slice }),
-        })));
-        const answered = responses.filter((resp) => resp.ok);
-        if (answered.length) {
-          const actionsMap = {};
-          for (const resp of answered) Object.assign(actionsMap, await resp.json());
-          this.actionsMap = actionsMap;
+        await Promise.all(slices.map(async (slice) => {
+          const resp = await fetch('/api/v1/files/actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ uuids: slice }),
+          });
+          if (!resp.ok) return;
+          const part = await resp.json();
+          // Read the current map only after the await: a spread evaluated
+          // before it would merge into a snapshot another slice has since
+          // replaced.
+          this.actionsMap = { ...this.actionsMap, ...part };
           this._computeBulkActions();
-        }
+        }));
       } catch (e) {
         // silent
       } finally {

@@ -128,10 +128,15 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
 
     human_user = User.objects.filter(pk=schedule.created_by_id).first()
 
+    # One snapshot for the history and the run note below: assembling the
+    # history can take minutes, and a message posted meanwhile must not
+    # show up in the note alone.
+    snapshot = timezone.now()
     history, summary_text = build_conversation_history(
         str(conversation.pk),
         bot_profile,
         human_user,
+        as_of=snapshot,
     )
 
     bot_name = bot_user.get_full_name() or bot_user.username
@@ -155,7 +160,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         user=human_user,
         bot=bot_user,
         summary=summary_text,
-        situation=unprompted_run_note(str(conversation.pk), bot_user),
+        situation=unprompted_run_note(str(conversation.pk), bot_user, as_of=snapshot),
     )
 
     ai_task = AITask.objects.create(

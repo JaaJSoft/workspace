@@ -206,10 +206,15 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
     human_user = User.objects.filter(pk=goal.created_by_id).first()
     user_tz = get_user_timezone(human_user or goal.created_by)
 
+    # One snapshot for the history and the run note below: assembling the
+    # history can take minutes, and a message posted meanwhile must not
+    # show up in the note alone.
+    snapshot = timezone.now()
     history, summary_text = build_conversation_history(
         str(conversation.pk),
         bot_profile,
         human_user,
+        as_of=snapshot,
     )
 
     bot_name = bot_user.get_full_name() or bot_user.username
@@ -221,7 +226,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         user=human_user,
         bot=bot_user,
         summary=summary_text,
-        situation=unprompted_run_note(str(conversation.pk), bot_user),
+        situation=unprompted_run_note(str(conversation.pk), bot_user, as_of=snapshot),
     )
 
     ai_task = AITask.objects.create(

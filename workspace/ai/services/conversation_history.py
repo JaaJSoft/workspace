@@ -107,18 +107,24 @@ def _message_header(msg, is_bot, prev_msg, user_tz, att_cache):
     return " ".join(parts)
 
 
-def unprompted_run_note(conversation_id, bot_user):
+def unprompted_run_note(conversation_id, bot_user, as_of=None):
     """Context sentence for a run nothing in the chat triggered.
 
     Scheduled messages and goal check-ins send the history exactly as a
     reply would, so the last turn the model reads is usually its own. Said
     outright, that stops it answering that turn as if the user had written.
+
+    *as_of* is the same snapshot time the history was built with, so a
+    message posted while the history was being assembled (minutes, on an
+    image-heavy conversation) is left out of both rather than only one.
     """
     from workspace.chat.models import Message
 
-    now = timezone.now()
+    now = as_of or timezone.now()
     live = Message.objects.filter(
-        conversation_id=conversation_id, deleted_at__isnull=True
+        conversation_id=conversation_id,
+        deleted_at__isnull=True,
+        created_at__lte=now,
     )
     last = live.order_by("-created_at").first()
     lead = (
@@ -351,7 +357,7 @@ def _assistant_images_message(media_parts, caption_notes=()):
     }
 
 
-def build_conversation_history(conversation_id, bot_profile, human_user):
+def build_conversation_history(conversation_id, bot_profile, human_user, as_of=None):
     """Build the LLM message history for a conversation.
 
     Loads up to ``AI_CHAT_CONTEXT_SIZE`` recent messages, reconstructs
@@ -359,6 +365,9 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
     supports them. Older messages that fall outside the window are
     represented by ``ConversationSummary`` (refreshed by
     ``ai.update_conversation_summary``).
+
+    *as_of* bounds the history to messages posted by that time; pass the
+    same value to ``unprompted_run_note`` so both read one snapshot.
 
     Returns ``(history, summary_text)``.
     """
@@ -372,12 +381,13 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
     ).first()
     summary_text = conv_summary.content if conv_summary else ""
 
+    live = Message.objects.filter(
+        conversation_id=conversation_id, deleted_at__isnull=True
+    )
+    if as_of is not None:
+        live = live.filter(created_at__lte=as_of)
     all_msgs = list(
-        Message.objects.filter(
-            conversation_id=conversation_id,
-            deleted_at__isnull=True,
-        )
-        .select_related(
+        live.select_related(
             "author",
             "author__bot_profile",
             "reply_to__author",

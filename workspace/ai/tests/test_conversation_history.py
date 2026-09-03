@@ -661,3 +661,17 @@ class UnpromptedRunNoteTests(TestCase):
     def test_empty_conversation(self):
         note = unprompted_run_note(self.conv.pk, self.bot_user)
         self.assertIn("no messages yet", note)
+
+    def test_a_message_posted_after_the_snapshot_is_left_out_of_both(self):
+        self._post(self.user, "hi", timedelta(days=3))
+        self._post(self.bot_user, "Still there?", timedelta(days=1))
+        bot_profile = BotProfile.objects.get(user=self.bot_user)
+        snapshot = timezone.now()
+        history, _ = build_conversation_history(
+            self.conv.pk, bot_profile, self.user, as_of=snapshot
+        )
+        Message.objects.create(conversation=self.conv, author=self.user, body="late")
+        note = unprompted_run_note(self.conv.pk, self.bot_user, as_of=snapshot)
+
+        self.assertNotIn("late", [e.get("content") for e in history])
+        self.assertIn("The last message in the conversation is yours", note)

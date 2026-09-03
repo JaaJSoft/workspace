@@ -67,6 +67,7 @@ _MESSAGE_SELECT_RELATED = (
     "reply_to",
     "reply_to__author",
     "reply_to__guest",
+    "thread_root",
     "interaction",
     "interaction__interacted_by",
 )
@@ -78,6 +79,41 @@ def _message_queryset():
         "attachments",
         "link_previews__preview",
     )
+
+
+class _GuestMessageSerializer(MessageSerializer):
+    """MessageSerializer, redacted for a guest audience.
+
+    Two things the plain serializer emits are unsafe once a guest is reading
+    it: ``conversation_id`` (the same "must not learn to address the
+    host-side conversation endpoints" invariant _guest_call_state already
+    enforces for call state), and a ``reply_to``/``thread_root`` pointing
+    below this guest's occurrence floor. The top-level queryset floors at
+    ``created_at >= occurrence_start``, but an in-window reply can legitimately
+    target a pre-window message - ordinary behaviour in a recurring meeting's
+    conversation - and reply_to/thread_root are hydrated from that target
+    regardless of its own created_at. Left alone, ReplyToSerializer would
+    hand a guest the pre-window body and author, and the bare thread_root
+    UUID would let them name that pre-window message as reply_to_uuid on a
+    POST - a pull primitive around the floor. Redacting post-serialization
+    (rather than re-querying) is cheap: reply_to and thread_root are already
+    select_related, so their created_at is already in memory.
+
+    A subclass instead of touching MessageSerializer itself: the redaction is
+    a guest-only concern with no meaning on the member path, and every other
+    behaviour must resolve through get_author, ReplyToSerializer etc.
+    unmodified.
+    """
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data.pop("conversation_id", None)
+        floor = self.context["floor"]
+        if instance.reply_to_id and instance.reply_to.created_at < floor:
+            data["reply_to"] = None
+        if instance.thread_root_id and instance.thread_root.created_at < floor:
+            data["thread_root"] = None
+        return data
 
 
 # The only media_state keys chatCallMediaState() (call.js) ever produces.
@@ -389,7 +425,9 @@ class MeetingGuestMessagesView(APIView):
             messages = messages[:limit]
         messages.reverse()
 
-        serializer = MessageSerializer(messages, many=True)
+        serializer = _GuestMessageSerializer(
+            messages, many=True, context={"floor": guest.occurrence_start}
+        )
         return Response({"messages": serializer.data, "has_more": has_more})
 
     @extend_schema(
@@ -403,6 +441,18 @@ class MeetingGuestMessagesView(APIView):
 
         serializer = MessageCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        # No attachment support for a guest (see the module docstring's
+        # posting section for why): silently dropping file_uuids/duration
+        # would hide that boundary behind a message with no attachment and
+        # no explanation. Reject instead, so it is visible from the API.
+        if serializer.validated_data.get("file_uuids") or (
+            serializer.validated_data.get("duration") is not None
+        ):
+            return Response(
+                {"detail": "Guest messages do not support file uploads."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         body = serializer.validated_data.get("body", "").strip()
         if not body:
@@ -425,10 +475,18 @@ class MeetingGuestMessagesView(APIView):
         reply_to_uuid = serializer.validated_data.get("reply_to_uuid")
         if reply_to_uuid:
             try:
+                # Floored the same as the read side: a reply target below
+                # guest.occurrence_start is refused exactly like one in
+                # another conversation - otherwise a guest could read a
+                # pre-window UUID off an in-window reply's (unfloored)
+                # thread_root and use it here to pull that pre-window
+                # message's excerpt back through the 201 response, and to
+                # bump its reply_count/last_reply_at besides.
                 reply_to = Message.objects.get(
                     uuid=reply_to_uuid,
                     conversation_id=conversation_id,
                     deleted_at__isnull=True,
+                    created_at__gte=guest.occurrence_start,
                 )
             except Message.DoesNotExist:
                 return Response(
@@ -454,6 +512,11 @@ class MeetingGuestMessagesView(APIView):
                 mention_everyone=has_everyone,
             )
 
+        # Deliberately no AI bot trigger here, unlike MessageListView.post:
+        # an unauthenticated guest must never drive a billable LLM call or
+        # write into the host's conversation under a bot identity. This is a
+        # permanent omission, not a gap to fill in.
+
         if body:
             from ..services.link_preview import extract_urls
 
@@ -464,4 +527,7 @@ class MeetingGuestMessagesView(APIView):
                 fetch_link_previews.delay(str(message.pk), urls)
 
         msg = _message_queryset().filter(pk=message.pk).first()
-        return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
+        response_serializer = _GuestMessageSerializer(
+            msg, context={"floor": guest.occurrence_start}
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)

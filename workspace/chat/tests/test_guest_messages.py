@@ -5,6 +5,7 @@ already validated for this token) so a guest can never read the conversation's
 history from before their occurrence opened, nor reach any other conversation.
 """
 
+import uuid
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -190,3 +191,137 @@ class GuestMessagesTests(TestCase):
         guest, token = self._admit()
         resp = self._post(token, {"body": "  "})
         self.assertEqual(resp.status_code, 400)
+
+    def test_post_rejects_file_uuids(self):
+        guest, token = self._admit()
+        resp = self._post(token, {"body": "hi", "file_uuids": [str(uuid.uuid4())]})
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(Message.objects.filter(body="hi").exists())
+
+    def test_post_rejects_duration(self):
+        guest, token = self._admit()
+        resp = self._post(token, {"body": "hi", "duration": 3.5})
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(Message.objects.filter(body="hi").exists())
+
+    # --- containment: conversation_id must not reach a guest ---
+
+    def test_read_does_not_expose_conversation_id(self):
+        self._make_message(
+            self.meeting.conversation, self.occurrence_start, body="during"
+        )
+        guest, token = self._admit()
+        resp = self._get(token)
+        self.assertEqual(resp.status_code, 200)
+        for message in resp.data["messages"]:
+            self.assertNotIn("conversation_id", message)
+
+    def test_post_response_does_not_expose_conversation_id(self):
+        guest, token = self._admit()
+        resp = self._post(token, {"body": "hello"})
+        self.assertEqual(resp.status_code, 201)
+        self.assertNotIn("conversation_id", resp.data)
+
+    # --- C1: the reply preview must not defeat the floor ---
+
+    def test_in_window_reply_to_a_pre_window_message_redacts_reply_to(self):
+        pre_window = self._make_message(
+            self.meeting.conversation,
+            self.occurrence_start - timedelta(minutes=1),
+            body="before",
+        )
+        reply = Message.objects.create(
+            conversation=self.meeting.conversation,
+            author=self.owner,
+            body="in window reply",
+            reply_to=pre_window,
+            thread_root=pre_window,
+        )
+        Message.objects.filter(pk=reply.pk).update(created_at=self.occurrence_start)
+        guest, token = self._admit()
+
+        resp = self._get(token)
+        self.assertEqual(resp.status_code, 200)
+        bodies = {m["uuid"]: m for m in resp.data["messages"]}
+        self.assertIn(str(reply.pk), bodies)
+        self.assertIsNone(bodies[str(reply.pk)]["reply_to"])
+        self.assertIsNone(bodies[str(reply.pk)]["thread_root"])
+
+    def test_in_window_reply_to_an_in_window_message_keeps_reply_to(self):
+        root = self._make_message(
+            self.meeting.conversation, self.occurrence_start, body="root"
+        )
+        reply = Message.objects.create(
+            conversation=self.meeting.conversation,
+            author=self.owner,
+            body="reply",
+            reply_to=root,
+            thread_root=root,
+        )
+        Message.objects.filter(pk=reply.pk).update(
+            created_at=self.occurrence_start + timedelta(seconds=1)
+        )
+        guest, token = self._admit()
+
+        resp = self._get(token)
+        self.assertEqual(resp.status_code, 200)
+        bodies = {m["uuid"]: m for m in resp.data["messages"]}
+        self.assertIsNotNone(bodies[str(reply.pk)]["reply_to"])
+        self.assertEqual(bodies[str(reply.pk)]["thread_root"], str(root.pk))
+
+    def test_reply_to_uuid_naming_a_pre_floor_message_is_refused(self):
+        pre_window = self._make_message(
+            self.meeting.conversation,
+            self.occurrence_start - timedelta(minutes=1),
+            body="before",
+        )
+        guest, token = self._admit()
+
+        resp = self._post(token, {"body": "hi", "reply_to_uuid": str(pre_window.pk)})
+        self.assertEqual(resp.status_code, 400)
+
+        pre_window.refresh_from_db()
+        self.assertEqual(pre_window.reply_count, 0)
+        self.assertIsNone(pre_window.last_reply_at)
+        self.assertFalse(Message.objects.filter(reply_to=pre_window).exists())
+
+    # --- M5: pin down two already-correct behaviours ---
+
+    def test_reply_to_uuid_naming_message_in_another_conversation_is_refused(self):
+        other_owner = User.objects.create_user(username="other-host", password="x")
+        other_conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=other_owner
+        )
+        ConversationMember.objects.create(conversation=other_conv, user=other_owner)
+        other_message = self._make_message(
+            other_conv, self.occurrence_start, body="elsewhere", author=other_owner
+        )
+        guest, token = self._admit()
+
+        resp = self._post(token, {"body": "hi", "reply_to_uuid": str(other_message.pk)})
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(Message.objects.filter(reply_to=other_message).exists())
+
+    def test_before_cursor_naming_a_pre_floor_message_cannot_page_below_floor(self):
+        pre_window = self._make_message(
+            self.meeting.conversation,
+            self.occurrence_start - timedelta(minutes=1),
+            body="before",
+        )
+        in_window = self._make_message(
+            self.meeting.conversation, self.occurrence_start, body="during"
+        )
+        guest, token = self._admit()
+
+        resp = self.client.get(
+            self._url() + f"?before={pre_window.pk}", HTTP_X_MEETING_TOKEN=token
+        )
+        self.assertEqual(resp.status_code, 200)
+        # The cursor names a message the floor already excludes, so it is
+        # unknown from this guest's point of view - treated as no cursor at
+        # all, never as a doorway to page past the floor.
+        bodies = [m["body"] for m in resp.data["messages"]]
+        self.assertEqual(bodies, ["during"])
+        self.assertEqual(
+            {m["uuid"] for m in resp.data["messages"]}, {str(in_window.pk)}
+        )

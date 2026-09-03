@@ -46,7 +46,7 @@ dependencies = [
     # push notifications
     "pywebpush>=2.5.0",
     # oauth2
-    "authlib>=1.7.2",
+    "authlib>=1.8.0",
     # file type detection
     "magika>=1.0.0",
     # malware scanning (clamd protocol client; the daemon itself is optional

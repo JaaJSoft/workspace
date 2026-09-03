@@ -2,10 +2,13 @@
 
 Only a real browser exercises this. The upload answers 204 with no body, so
 there is nothing for the test client to assert on beyond a status code. The
-two tests pin down different halves of the "sees nothing else" guarantee:
-the first checks the drop page's own markup never grows a listing, the
-second checks the listing endpoint itself refuses a drop-mode token - the
-page not rendering a leak is not proof the endpoint would refuse one.
+test below pins down half of the "sees nothing else" guarantee: the drop
+page's own markup never grows a listing. The other half - that a drop-mode
+link can never resolve a listing at all, not just that this particular page
+doesn't render one - is covered at the Django level by
+``workspace.files.tests.test_ui_views.SharedLinkPageTests.test_a_drop_mode_folder_link_never_resolves_node``,
+which replaced the old ``GET .../entries`` endpoint (removed along with the
+client-rendered browser) that used to carry this half.
 """
 
 from __future__ import annotations
@@ -57,9 +60,3 @@ class ShareDropLinkTests(PlaywrightTestCase):
         self.assertTrue(
             File.objects.filter(parent=self.folder, name="from-outside.txt").exists()
         )
-
-    def test_the_listing_endpoint_is_closed_to_a_drop_link(self):
-        response = self.page.request.get(
-            f"{self.live_server_url}/api/v1/files/shared/{self.link.token}/entries"
-        )
-        self.assertEqual(response.status, 404)

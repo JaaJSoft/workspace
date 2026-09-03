@@ -102,6 +102,33 @@ class ShareLinkCreationApiTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["mode"], "read")
 
+    def test_a_cap_beyond_the_column_is_a_400(self):
+        """PostgreSQL raises a DataError above the column ceiling and SQLite
+        silently stores it, so the refusal has to happen before the write."""
+        for field, value in (
+            ("max_file_bytes", 9223372036854775808),
+            ("max_file_count", 2147483648),
+        ):
+            with self.subTest(field=field):
+                resp = self.client.post(
+                    f"/api/v1/files/{self.folder.uuid}/share-links",
+                    {"mode": "drop", field: value},
+                    format="json",
+                )
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_cap_at_the_column_ceiling_is_accepted(self):
+        resp = self.client.post(
+            f"/api/v1/files/{self.folder.uuid}/share-links",
+            {
+                "mode": "drop",
+                "max_file_bytes": 9223372036854775807,
+                "max_file_count": 2147483647,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
     def test_a_negative_cap_is_a_400(self):
         resp = self.client.post(
             f"/api/v1/files/{self.folder.uuid}/share-links",

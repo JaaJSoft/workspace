@@ -13,6 +13,12 @@ from rest_framework.exceptions import APIException
 from ..models import File, FileEvent, FileShare, FileShareLink
 from .events import record_event
 
+# Ceilings of the columns the caps land in. Above them PostgreSQL raises a
+# DataError and SQLite silently stores an oversized row, so refuse the value
+# here rather than at the database.
+MAX_FILE_BYTES_CEILING = 9223372036854775807  # PositiveBigIntegerField
+MAX_FILE_COUNT_CEILING = 2147483647  # PositiveIntegerField
+
 
 class ShareLinkRuleError(APIException):
     """Share link parameters refused before anything was created.
@@ -115,9 +121,16 @@ def create_share_link(
         raise ShareLinkRuleError(
             "Only a folder can accept uploads through a share link."
         )
-    for cap in (max_file_bytes, max_file_count):
-        if cap is not None and cap < 1:
+    for cap, ceiling in (
+        (max_file_bytes, MAX_FILE_BYTES_CEILING),
+        (max_file_count, MAX_FILE_COUNT_CEILING),
+    ):
+        if cap is None:
+            continue
+        if cap < 1:
             raise ShareLinkRuleError("A cap must be a positive number.")
+        if cap > ceiling:
+            raise ShareLinkRuleError("A cap is larger than this server can store.")
 
     link = FileShareLink.objects.create(
         file=file_obj,

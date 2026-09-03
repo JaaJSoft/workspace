@@ -144,18 +144,21 @@ class SharedLinkPageTests(TestCase):
         self.assertIsNone(resp.context["breadcrumbs"])
         self.assertNotIn(b"<nav", resp.content)
 
-    def test_the_content_wrapper_reloads_on_a_missing_or_failed_swap(self):
-        """A swap answered by a 200 whose body has no #shared-content (the
-        gate closed mid-session: an expired access token, or the link
-        itself expiring) makes alpine-ajax silently remove the target with
-        nothing left on screen. The wrapper must reload instead, which is
-        the only way back to the real gate (the expired card or the
-        password prompt). Untestable end-to-end without a browser - this
-        only pins down that the handler is actually rendered on the page.
+    def test_the_content_wrapper_carries_an_alpine_scope_with_reload_handlers(self):
+        """Markup-only check, deliberately not a claim that anything is
+        bound: a first pass at this fix put the @ajax:missing/@ajax:error
+        attributes on a wrapper with no x-data, so the markup rendered
+        (this exact assertion would have passed) while Alpine silently
+        never bound the listeners at all - it does not scan for @event
+        outside a component scope. The real proof that a refused swap
+        reloads the page lives in the Playwright test in
+        tests/e2e/test_share_link_expiry.py; this only pins down that the
+        wrapper still carries x-data alongside the two handlers.
         """
         resp = self.client.get(f"/files/shared/{self.link.token}")
-        self.assertContains(resp, "@ajax:missing.window")
-        self.assertContains(resp, "@ajax:error.window")
+        self.assertContains(resp, "x-data")
+        self.assertContains(resp, '@ajax:missing="window.location.reload()"')
+        self.assertContains(resp, '@ajax:error="window.location.reload()"')
 
     def test_a_read_mode_folder_link_renders_the_browse_page(self):
         folder = File.objects.create(

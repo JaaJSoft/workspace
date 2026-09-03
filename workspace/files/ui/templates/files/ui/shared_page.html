@@ -16,11 +16,21 @@
     view and renders the real gate (the expired card or the password
     prompt) instead of a page that dead-ends. ajax:error covers the same
     "swap could not complete" family for network-level failures.
+
+    x-data is required, not decorative: Alpine only binds @event listeners
+    on elements inside a component scope, and this wrapper is not a
+    descendant of one (the only x-data on this page is inside the password
+    branch, which never wraps this content). A bare x-data opens an empty
+    scope so the listeners below actually bind. The events are dispatched
+    on the link that triggered the swap and bubble, and that link is a
+    descendant of this wrapper, so listening here (no .window) is enough
+    and is more precise than catching every swap on the page from window.
   {% endcomment %}
   <div
+    x-data
     class="space-y-4"
-    @ajax:missing.window="window.location.reload()"
-    @ajax:error.window="window.location.reload()"
+    @ajax:missing="window.location.reload()"
+    @ajax:error="window.location.reload()"
   >
     {% partialdef shared-content inline %}
       <div

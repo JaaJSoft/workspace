@@ -48,8 +48,10 @@ from django.utils import timezone
 
 from workspace.core.views.sse import _format_sse
 
-from ..models import MeetingGuest, Message
+from ..models import MeetingGuest
+from ..serializers import GuestMessageSerializer
 from .call_signaling import drain_events
+from .guest_messages import message_queryset
 from .meeting_guests import guest_for_token, resolve_guest
 from .participant_keys import guest_key
 
@@ -102,31 +104,21 @@ def stream_guest_events(token, slug, *, now=timezone.now, sleep=time.sleep):
             for envelope in call_events:
                 yield _format_sse(envelope["event"], envelope["data"])
 
-            # Deferred to break the services -> views import cycle:
-            # views.meeting_guest imports this module at load time, so this
-            # module cannot import it back at load time. By the time this
-            # generator is driven, views.meeting_guest is already fully
-            # loaded, so this is safe.
-            from ..views.meeting_guest import (
-                _MESSAGE_SELECT_RELATED,
-                _GuestMessageSerializer,
-            )
-
             floor = max(since, guest.occurrence_start)
             new_messages = (
-                Message.objects.filter(
+                message_queryset()
+                .filter(
                     conversation_id=guest.meeting.conversation_id,
                     created_at__gt=floor,
                 )
                 .exclude(guest_id=guest.uuid)
                 .exclude(uuid__in=seen_message_ids)
-                .select_related(*_MESSAGE_SELECT_RELATED)
                 .order_by("created_at")[:_MESSAGE_BATCH_LIMIT]
             )
             for msg in new_messages:
                 seen_message_ids.add(msg.uuid)
                 since = max(since, msg.created_at)
-                serialized = _GuestMessageSerializer(
+                serialized = GuestMessageSerializer(
                     msg, context={"floor": guest.occurrence_start}
                 ).data
                 yield _format_sse(

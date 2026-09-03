@@ -31,7 +31,6 @@ import logging
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Prefetch
 from django.http import StreamingHttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -42,10 +41,11 @@ from rest_framework.views import APIView
 from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import CallParticipant, Conversation, Message, Reaction
-from ..serializers import MessageCreateSerializer, MessageSerializer
+from ..models import CallParticipant, Conversation, Message
+from ..serializers import GuestMessageSerializer, MessageCreateSerializer
 from ..services import calls
 from ..services.call_signaling import send_signal
+from ..services.guest_messages import message_queryset
 from ..services.guest_stream import stream_guest_events
 from ..services.meeting_guests import guest_for_token, resolve_guest
 from ..services.mentions import build_mention_map
@@ -65,62 +65,6 @@ from ..throttling import (
 )
 
 logger = logging.getLogger(__name__)
-
-_MESSAGE_SELECT_RELATED = (
-    "author",
-    "author__bot_profile",
-    "guest",
-    "reply_to",
-    "reply_to__author",
-    "reply_to__guest",
-    "thread_root",
-    "interaction",
-    "interaction__interacted_by",
-)
-
-
-def _message_queryset():
-    return Message.objects.select_related(*_MESSAGE_SELECT_RELATED).prefetch_related(
-        Prefetch("reactions", queryset=Reaction.objects.select_related("user")),
-        "attachments",
-        "link_previews__preview",
-    )
-
-
-class _GuestMessageSerializer(MessageSerializer):
-    """MessageSerializer, redacted for a guest audience.
-
-    Two things the plain serializer emits are unsafe once a guest is reading
-    it: ``conversation_id`` (the same "must not learn to address the
-    host-side conversation endpoints" invariant _guest_call_state already
-    enforces for call state), and a ``reply_to``/``thread_root`` pointing
-    below this guest's occurrence floor. The top-level queryset floors at
-    ``created_at >= occurrence_start``, but an in-window reply can legitimately
-    target a pre-window message - ordinary behaviour in a recurring meeting's
-    conversation - and reply_to/thread_root are hydrated from that target
-    regardless of its own created_at. Left alone, ReplyToSerializer would
-    hand a guest the pre-window body and author, and the bare thread_root
-    UUID would let them name that pre-window message as reply_to_uuid on a
-    POST - a pull primitive around the floor. Redacting post-serialization
-    (rather than re-querying) is cheap: reply_to and thread_root are already
-    select_related, so their created_at is already in memory.
-
-    A subclass instead of touching MessageSerializer itself: the redaction is
-    a guest-only concern with no meaning on the member path, and every other
-    behaviour must resolve through get_author, ReplyToSerializer etc.
-    unmodified.
-    """
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data.pop("conversation_id", None)
-        floor = self.context["floor"]
-        if instance.reply_to_id and instance.reply_to.created_at < floor:
-            data["reply_to"] = None
-        if instance.thread_root_id and instance.thread_root.created_at < floor:
-            data["thread_root"] = None
-        return data
-
 
 # The only media_state keys chatCallMediaState() (call.js) ever produces.
 # request.data is anonymous input reaching one shared cache value per session
@@ -438,7 +382,7 @@ class MeetingGuestMessagesView(APIView):
         # Floored to guest.occurrence_start - the value resolve_guest already
         # validated for this token - never recomputed here. A guest must never
         # read the conversation's history from before their occurrence opened.
-        messages = _message_queryset().filter(
+        messages = message_queryset().filter(
             conversation_id=conversation_id, created_at__gte=guest.occurrence_start
         )
 
@@ -467,7 +411,7 @@ class MeetingGuestMessagesView(APIView):
             messages = messages[:limit]
         messages.reverse()
 
-        serializer = _GuestMessageSerializer(
+        serializer = GuestMessageSerializer(
             messages, many=True, context={"floor": guest.occurrence_start}
         )
         return Response({"messages": serializer.data, "has_more": has_more})
@@ -580,8 +524,8 @@ class MeetingGuestMessagesView(APIView):
 
                 fetch_link_previews.delay(str(message.pk), urls)
 
-        msg = _message_queryset().filter(pk=message.pk).first()
-        response_serializer = _GuestMessageSerializer(
+        msg = message_queryset().filter(pk=message.pk).first()
+        response_serializer = GuestMessageSerializer(
             msg, context={"floor": guest.occurrence_start}
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)

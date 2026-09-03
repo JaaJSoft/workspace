@@ -172,6 +172,48 @@ class MessageSerializer(serializers.ModelSerializer):
         return identity_payload(obj.author, obj.guest)
 
 
+class GuestMessageSerializer(MessageSerializer):
+    """MessageSerializer, redacted for a guest audience.
+
+    Two things the plain serializer emits are unsafe once a guest is reading
+    it: ``conversation_id`` (the same "must not learn to address the
+    host-side conversation endpoints" invariant guest call state enforces),
+    and a ``reply_to``/``thread_root`` pointing below this guest's occurrence
+    floor. The top-level queryset floors at ``created_at >= occurrence_start``,
+    but an in-window reply can legitimately target a pre-window message -
+    ordinary behaviour in a recurring meeting's conversation - and
+    reply_to/thread_root are hydrated from that target regardless of its own
+    created_at. Left alone, ReplyToSerializer would hand a guest the
+    pre-window body and author, and the bare thread_root UUID would let them
+    name that pre-window message as reply_to_uuid on a POST - a pull
+    primitive around the floor. Redacting post-serialization (rather than
+    re-querying) is cheap: reply_to and thread_root are already
+    select_related, so their created_at is already in memory.
+
+    A subclass instead of touching MessageSerializer itself: the redaction is
+    a guest-only concern with no meaning on the member path, and every other
+    behaviour must resolve through get_author, ReplyToSerializer etc.
+    unmodified.
+
+    Public and imported from both the guest REST views and the guest SSE
+    stream - it must stay the one place this redaction is implemented, or the
+    two paths can silently drift apart on what a guest is allowed to read.
+    """
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data.pop("conversation_id", None)
+        # A missing floor must fail loud (KeyError), never default to None -
+        # a None floor would compare False to every created_at below it and
+        # silently hand a guest pre-window reply_to/thread_root content.
+        floor = self.context["floor"]
+        if instance.reply_to_id and instance.reply_to.created_at < floor:
+            data["reply_to"] = None
+        if instance.thread_root_id and instance.thread_root.created_at < floor:
+            data["thread_root"] = None
+        return data
+
+
 class LastMessageSerializer(serializers.ModelSerializer):
     author = serializers.SerializerMethodField()
     has_attachments = serializers.SerializerMethodField()

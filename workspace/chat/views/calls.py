@@ -112,8 +112,12 @@ class CallSignalView(APIView):
             )
         # A member may reach another active member of this conversation, or a
         # meeting guest who is themselves an active participant of this SAME
-        # session - mirrors MeetingGuestSignalView's guest-target branch
-        # exactly, so a member can complete a handshake with a guest.
+        # session - the guest branch mirrors MeetingGuestSignalView's own.
+        # The member branch stays looser on purpose (active member, not
+        # active CallParticipant): a member may signal a fellow member who
+        # has not joined the call yet, which is how a ringing invite works.
+        # A guest has no such use case - a guest reaches the call surface
+        # only by joining it - so the guest branch requires participation.
         target_user_id = user_id_from_key(to_participant)
         target_guest_uuid = guest_uuid_from_key(to_participant)
         if target_user_id is not None:

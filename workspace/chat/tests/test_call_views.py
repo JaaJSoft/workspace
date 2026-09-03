@@ -294,7 +294,7 @@ class CallSignalToGuestTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def _admit_and_join(self, meeting, session, display_name="Ada"):
+    def _admit_and_join(self, meeting, display_name="Ada"):
         _token, token_hash = issue_token()
         guest = MeetingGuest.objects.create(
             meeting=meeting,
@@ -310,10 +310,8 @@ class CallSignalToGuestTests(TestCase):
         return f"/api/v1/chat/conversations/{self.meeting.conversation_id}/call/signal"
 
     def test_member_can_signal_an_admitted_guest_in_the_same_call(self):
-        session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
-        )
-        guest = self._admit_and_join(self.meeting, session)
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        guest = self._admit_and_join(self.meeting)
         sig.drain_events(guest_key(guest.uuid))  # clear lifecycle noise
 
         self.client.force_authenticate(self.owner)
@@ -338,12 +336,8 @@ class CallSignalToGuestTests(TestCase):
         other_owner = User.objects.create_user(username="other-host", password="x")
         other_event = make_event(other_owner)
         other_meeting = create_meeting(other_event, other_owner)
-        other_session, _, _ = calls.start_or_join_call(
-            other_owner, other_meeting.conversation_id
-        )
-        other_guest = self._admit_and_join(
-            other_meeting, other_session, display_name="Bea"
-        )
+        calls.start_or_join_call(other_owner, other_meeting.conversation_id)
+        other_guest = self._admit_and_join(other_meeting, display_name="Bea")
 
         self.client.force_authenticate(self.owner)
         resp = self.client.post(

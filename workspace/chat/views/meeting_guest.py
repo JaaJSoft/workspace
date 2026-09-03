@@ -501,6 +501,18 @@ class MeetingGuestMessagesView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         thread_root = resolve_thread_root(reply_to) if reply_to else None
+        # The reply target itself can be in-window while the thread it
+        # belongs to is not: resolve_thread_root hops straight to that root,
+        # one step past the floor already checked above. A guest may see the
+        # in-window reply but not the thread it is part of, so refuse rather
+        # than store the reply unthreaded (which would break the "replies
+        # flatten onto one root" invariant) - same failure as any other
+        # below-floor target.
+        if thread_root is not None and thread_root.created_at < guest.occurrence_start:
+            return Response(
+                {"detail": "Reply target message not found in this conversation."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         with transaction.atomic():
             message = Message.objects.create(

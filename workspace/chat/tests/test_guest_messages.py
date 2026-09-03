@@ -20,6 +20,7 @@ from workspace.chat.models import (
     ConversationMember,
     MeetingGuest,
     Message,
+    ThreadParticipant,
 )
 from workspace.chat.services.meeting_guests import issue_token
 from workspace.chat.services.meeting_occurrences import current_occurrence
@@ -284,6 +285,42 @@ class GuestMessagesTests(TestCase):
         self.assertEqual(pre_window.reply_count, 0)
         self.assertIsNone(pre_window.last_reply_at)
         self.assertFalse(Message.objects.filter(reply_to=pre_window).exists())
+
+    def test_reply_to_uuid_naming_an_in_window_reply_with_a_pre_floor_root_is_refused(
+        self,
+    ):
+        # C1 residual: the reply target itself can be in-window while the
+        # thread it belongs to is not - resolve_thread_root hops straight to
+        # that pre-floor root, so the floor on reply_to alone is not enough.
+        pre_window_root = self._make_message(
+            self.meeting.conversation,
+            self.occurrence_start - timedelta(minutes=1),
+            body="root",
+        )
+        in_window_reply = Message.objects.create(
+            conversation=self.meeting.conversation,
+            author=self.owner,
+            body="in window reply",
+            reply_to=pre_window_root,
+            thread_root=pre_window_root,
+        )
+        Message.objects.filter(pk=in_window_reply.pk).update(
+            created_at=self.occurrence_start
+        )
+        guest, token = self._admit()
+
+        resp = self._post(
+            token, {"body": "hi", "reply_to_uuid": str(in_window_reply.pk)}
+        )
+        self.assertEqual(resp.status_code, 400)
+
+        pre_window_root.refresh_from_db()
+        self.assertEqual(pre_window_root.reply_count, 0)
+        self.assertIsNone(pre_window_root.last_reply_at)
+        self.assertFalse(
+            ThreadParticipant.objects.filter(root_message=pre_window_root).exists()
+        )
+        self.assertFalse(Message.objects.filter(reply_to=in_window_reply).exists())
 
     # --- M5: pin down two already-correct behaviours ---
 

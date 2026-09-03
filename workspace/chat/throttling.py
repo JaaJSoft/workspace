@@ -7,7 +7,7 @@ meeting_guest`` that a guest reaches runs with ``authentication_classes =
 trusts the whole ``X-Forwarded-For`` header when ``NUM_PROXIES`` is unset
 (the default), letting a caller mint a fresh identity per request and defeat
 the limit. ``workspace.common.request_ip.client_ip`` does not have that gap,
-so both throttles below use it instead.
+so all three throttles below use it instead.
 """
 
 from rest_framework.throttling import SimpleRateThrottle

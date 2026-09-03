@@ -23,7 +23,13 @@ content cadence. Forwarding a ``call_*`` event therefore trusts the
 stale - the same staleness core accepts for its own dirty-flag check, and
 bounded the same way: a removal or an occurrence closing is never learned
 this way, because those go through the mailbox drain (meeting_removed) or
-the gate itself on its next tick, never through a cached flag alone.
+the gate itself on its next tick, never through a cached flag alone. One
+exception, forced rather than merely bounded: a ``meeting_admitted`` drained
+this cycle forces the gate to run immediately (see ``just_admitted`` below),
+because the mailbox drain that just found it is destructive - a ``call_*``
+event fanned out in the same window would already be gone from the mailbox
+by the time an unforced gate tick eventually set ``admitted``, dropped
+rather than merely delayed.
 
 The loop's exit conditions are the security-relevant part. Every gate cycle
 re-resolves the guest through ``resolve_guest`` - the same gate every other
@@ -155,7 +161,11 @@ def stream_guest_events(
     last_keepalive = start
     last_gate_check = None
     admitted = False
-    seen_message_ids = set()
+    # uuid -> created_at, pruned after each batch: since only grows, so an
+    # entry whose created_at is already below it can never satisfy a future
+    # __gte floor again - keeping it around would grow unboundedly over a
+    # 600s connection for no reason.
+    seen_message_ids = {}
 
     while True:
         current = now()
@@ -176,15 +186,24 @@ def stream_guest_events(
         # meant for.
 
         stop = False
+        just_admitted = False
         for envelope in lifecycle_events:
             yield _format_sse(envelope["event"], envelope["data"])
             if envelope["event"] in _TERMINAL_LIFECYCLE_EVENTS:
                 stop = True
+            if envelope["event"] == "meeting_admitted":
+                just_admitted = True
         if stop:
             return
 
+        # drain_events is destructive and runs every 1s cycle; admitted only
+        # flips on a gate tick, up to _GATE_INTERVAL_SECONDS later. Without
+        # forcing the gate here, a call_* event fanned out in that window
+        # would already have been drained above (and so is gone) by the time
+        # admitted turns True - dropped, not merely delayed.
         run_gate = (
-            last_gate_check is None
+            just_admitted
+            or last_gate_check is None
             or (current - last_gate_check).total_seconds() >= _GATE_INTERVAL_SECONDS
         )
         if run_gate:
@@ -195,7 +214,7 @@ def stream_guest_events(
                 if since is None:
                     since, resume_uuid = _resolve_since(last_event_id, guest, start)
                     if resume_uuid is not None:
-                        seen_message_ids.add(resume_uuid)
+                        seen_message_ids[resume_uuid] = since
 
                 floor = max(since, guest.occurrence_start)
                 new_messages = (
@@ -215,7 +234,7 @@ def stream_guest_events(
                     .order_by("created_at")[:_MESSAGE_BATCH_LIMIT]
                 )
                 for msg in new_messages:
-                    seen_message_ids.add(msg.uuid)
+                    seen_message_ids[msg.uuid] = msg.created_at
                     since = max(since, msg.created_at)
                     serialized = GuestMessageSerializer(
                         msg, context={"floor": guest.occurrence_start}
@@ -225,6 +244,11 @@ def stream_guest_events(
                         {"type": "message", "message": serialized},
                         str(msg.uuid),
                     )
+                seen_message_ids = {
+                    uuid: created
+                    for uuid, created in seen_message_ids.items()
+                    if created >= since
+                }
             elif lobby_guest.state == MeetingGuest.State.ADMITTED:
                 # ADMITTED per the DB row, yet resolve_guest just rejected
                 # it: the occurrence closed or its window elapsed - report it

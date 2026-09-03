@@ -338,7 +338,11 @@ class GuestStreamTests(TestCase):
             self.now + timedelta(seconds=2), author=self.owner
         )
 
-        second_clock = _FakeClock(self.now, max_cycles=1)
+        # The reconnect clock starts well after second_msg's created_at, so
+        # the plain "since I connected" fallback would miss it entirely -
+        # this is what proves the Last-Event-Id resume, not just its dedup,
+        # is what recovers the gap message.
+        second_clock = _FakeClock(self.now + timedelta(seconds=10), max_cycles=1)
         second_events, _terminated = _drive(
             token, self.meeting.uuid, second_clock, last_event_id=last_id
         )
@@ -439,6 +443,15 @@ class GuestStreamViewTests(TestCase):
             occurrence_start=self.occurrence_start,
             token_hash=token_hash,
         )
+        # A positive control alongside the thing under test: without it, this
+        # test would also pass if drain_events returned nothing at all -
+        # meeting_admitted proves events ARE flowing through this stream,
+        # call_started proves that specific one is fenced regardless.
+        enqueue_event(
+            guest_key(guest.uuid),
+            "meeting_admitted",
+            {"meeting_id": str(self.meeting.uuid)},
+        )
         enqueue_event(guest_key(guest.uuid), "call_started", {"session_id": "x"})
 
         resp = self.client.get(self._stream_url(), HTTP_X_MEETING_TOKEN=token)
@@ -449,6 +462,11 @@ class GuestStreamViewTests(TestCase):
         def _stop_after_one_cycle(_seconds):
             raise _StopDriving
 
+        # Patches the real time.sleep process-wide for the duration of this
+        # block (guest_stream.time IS the stdlib time module, not a copy) -
+        # safe here because nothing else in this synchronous test thread
+        # calls it, and the context manager restores it unconditionally on
+        # exit, including on the _StopDriving raise below.
         with patch(
             "workspace.chat.services.guest_stream.time.sleep",
             side_effect=_stop_after_one_cycle,
@@ -461,4 +479,49 @@ class GuestStreamViewTests(TestCase):
                 pass
 
         parsed = [_parse(e) for e in events]
-        self.assertNotIn("call_started", [name for name, _data in parsed])
+        names = [name for name, _data in parsed]
+        self.assertIn("meeting_admitted", names)
+        self.assertNotIn("call_started", names)
+
+    def test_stream_refuses_a_token_for_another_meeting(self):
+        # The stream view moved off the shared _guest_for_request helper
+        # onto its own inline slug check when it widened its gate off
+        # resolve_guest - this pins that check at the layer the widening
+        # made critical, with a real second meeting rather than a bare slug.
+        other_owner = User.objects.create_user(username="other-host", password="x")
+        other_event = make_event(
+            other_owner,
+            start=self.now - timedelta(minutes=5),
+            end=self.now + timedelta(minutes=25),
+        )
+        other_meeting = create_meeting(other_event, other_owner)
+        other_occurrence_start = current_occurrence(other_meeting, now=self.now)[0]
+
+        token, token_hash = issue_token()
+        MeetingGuest.objects.create(
+            meeting=other_meeting,
+            display_name="Ada",
+            state=MeetingGuest.State.ADMITTED,
+            occurrence_start=other_occurrence_start,
+            token_hash=token_hash,
+        )
+
+        resp = self.client.get(self._stream_url(), HTTP_X_MEETING_TOKEN=token)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_waiting_guest_with_a_stale_occurrence_cannot_open_the_stream(self):
+        # N1: guest_for_token does no occurrence check and stale WAITING rows
+        # are never purged, so without this the documented per-occurrence
+        # bound on concurrent streams would not hold - a token from any past
+        # occurrence could hold a stream open forever, reconnected by
+        # EventSource every 600s.
+        token, token_hash = issue_token()
+        MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Wendy",
+            state=MeetingGuest.State.WAITING,
+            occurrence_start=self.occurrence_start - timedelta(weeks=1),
+            token_hash=token_hash,
+        )
+        resp = self.client.get(self._stream_url(), HTTP_X_MEETING_TOKEN=token)
+        self.assertEqual(resp.status_code, 404)

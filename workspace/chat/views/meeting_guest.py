@@ -48,6 +48,7 @@ from ..services.call_signaling import send_signal
 from ..services.guest_messages import message_queryset
 from ..services.guest_stream import stream_guest_events
 from ..services.meeting_guests import guest_for_token, resolve_guest
+from ..services.meeting_occurrences import current_occurrence
 from ..services.mentions import build_mention_map
 from ..services.participant_keys import (
     guest_key,
@@ -344,11 +345,24 @@ class MeetingGuestStreamView(APIView):
 
     This does widen the unauthenticated, long-lived surface: any token that
     merely names a real guest of this meeting - including one never
-    admitted - can now hold a connection open. That is bounded the same way
-    the lobby itself is bounded: the knock endpoint caps new tokens at
-    10/IP/hour, and ``MEETING_MAX_WAITING_GUESTS`` (20) caps how many WAITING
-    rows - and so how many such streams - a single occurrence can have at
-    once.
+    admitted - can now hold a connection open. Bounding that requires more
+    than the knock endpoint's 10/IP/hour cap and ``MEETING_MAX_WAITING_GUESTS``
+    (20): both cap WAITING rows *within one occurrence*, but ``guest_for_token``
+    does no occurrence check, stale WAITING rows are never purged (a host
+    ending a meeting only sweeps the occurrence being closed, see
+    ``end_meeting``), and a WAITING guest's own generator loop has no
+    occurrence check either - so an unbounded gate here would let a token
+    from occurrence N-5 hold a full 600s connection, reconnected forever by
+    EventSource, and the real cap would be 20 WAITING streams *per
+    occurrence the series has ever had*, not per occurrence. So a WAITING
+    guest is refused here, at connect time, unless their ``occurrence_start``
+    is the occurrence reachable right now - the same 404 an unknown token
+    gets. That makes the 20-per-occurrence bound true at connect time; it is
+    not re-checked once the stream is open, so a WAITING guest whose
+    occurrence rolls over mid-connection keeps their stream until the 600s
+    budget forces a reconnect, which then re-runs this same check. No
+    in-loop occurrence query was added for that narrower, self-correcting
+    case.
     """
 
     permission_classes = [AllowAny]
@@ -357,10 +371,17 @@ class MeetingGuestStreamView(APIView):
 
     @extend_schema(summary="Server-sent event stream for a meeting guest")
     def get(self, request, slug):
+        from ..models import MeetingGuest
+
         token = request.headers.get("X-Meeting-Token", "")
         lobby_guest = guest_for_token(token)
         if lobby_guest is None or lobby_guest.meeting.slug != slug:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if lobby_guest.state == MeetingGuest.State.WAITING:
+            occurrence = current_occurrence(lobby_guest.meeting)
+            if occurrence is None or occurrence[0] != lobby_guest.occurrence_start:
+                return Response(status=status.HTTP_404_NOT_FOUND)
 
         last_event_id = request.META.get("HTTP_LAST_EVENT_ID")
         response = StreamingHttpResponse(

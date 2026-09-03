@@ -27,24 +27,58 @@ including a revoked one, without the response itself looking like a dead
 end.
 """
 
+import logging
+
 from django.conf import settings
+from django.db import transaction
+from django.db.models import Prefetch
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..models import CallParticipant
+from workspace.common.logging import scrub
+from workspace.common.uuids import parse_uuid_or_none
+
+from ..models import CallParticipant, Conversation, Message, Reaction
+from ..serializers import MessageCreateSerializer, MessageSerializer
 from ..services import calls
 from ..services.call_signaling import send_signal
 from ..services.meeting_guests import guest_for_token, resolve_guest
+from ..services.mentions import build_mention_map
 from ..services.participant_keys import (
     guest_key,
     guest_uuid_from_key,
     user_id_from_key,
     user_key,
 )
+from ..services.posting import deliver_message
+from ..services.rendering import render_message_body
+from ..services.threads import resolve_thread_root
 from ..throttling import MeetingGuestHeartbeatThrottle, MeetingPublicIpThrottle
+
+logger = logging.getLogger(__name__)
+
+_MESSAGE_SELECT_RELATED = (
+    "author",
+    "author__bot_profile",
+    "guest",
+    "reply_to",
+    "reply_to__author",
+    "reply_to__guest",
+    "interaction",
+    "interaction__interacted_by",
+)
+
+
+def _message_queryset():
+    return Message.objects.select_related(*_MESSAGE_SELECT_RELATED).prefetch_related(
+        Prefetch("reactions", queryset=Reaction.objects.select_related("user")),
+        "attachments",
+        "link_previews__preview",
+    )
+
 
 # The only media_state keys chatCallMediaState() (call.js) ever produces.
 # request.data is anonymous input reaching one shared cache value per session
@@ -300,3 +334,134 @@ class MeetingGuestStateView(APIView):
         else:
             reported_state = lobby_guest.state
         return Response({"admitted": False, "state": reported_state})
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestMessagesView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [MeetingPublicIpThrottle]
+
+    @extend_schema(
+        summary="List messages in the guest's meeting, floored to their occurrence"
+    )
+    def get(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        conversation_id = guest.meeting.conversation_id
+        try:
+            limit = min(max(int(request.query_params.get("limit", 50)), 1), 100)
+        except TypeError, ValueError:
+            limit = 50
+        before = request.query_params.get("before")
+
+        # Floored to guest.occurrence_start - the value resolve_guest already
+        # validated for this token - never recomputed here. A guest must never
+        # read the conversation's history from before their occurrence opened.
+        messages = _message_queryset().filter(
+            conversation_id=conversation_id, created_at__gte=guest.occurrence_start
+        )
+
+        if before:
+            before_uuid = parse_uuid_or_none(before)
+            if before_uuid is None:
+                logger.debug("Ignoring malformed ?before cursor: %s", scrub(before))
+            else:
+                cursor_msg = (
+                    Message.objects.filter(
+                        conversation_id=conversation_id,
+                        uuid=before_uuid,
+                        created_at__gte=guest.occurrence_start,
+                    )
+                    .only("created_at")
+                    .first()
+                )
+                if cursor_msg is not None:
+                    messages = messages.filter(created_at__lt=cursor_msg.created_at)
+                else:
+                    logger.debug("Ignoring unknown ?before cursor: %s", scrub(before))
+
+        messages = list(messages.order_by("-created_at")[: limit + 1])
+        has_more = len(messages) > limit
+        if has_more:
+            messages = messages[:limit]
+        messages.reverse()
+
+        serializer = MessageSerializer(messages, many=True)
+        return Response({"messages": serializer.data, "has_more": has_more})
+
+    @extend_schema(
+        summary="Post a message as an admitted meeting guest",
+        request=MessageCreateSerializer,
+    )
+    def post(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        serializer = MessageCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        body = serializer.validated_data.get("body", "").strip()
+        if not body:
+            return Response(
+                {"detail": "Message must have text."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # conversation_id always comes from the guest's own meeting - never
+        # from the request body, which carries no such field to begin with
+        # (MessageCreateSerializer has none). That is what keeps a guest from
+        # ever naming a conversation to write into.
+        conversation_id = guest.meeting.conversation_id
+
+        mention_map, has_everyone = build_mention_map(body)
+        mentioned_user_ids = {uid for uid in mention_map.values() if uid}
+        body_html = render_message_body(body, mention_map=mention_map or None)
+
+        reply_to = None
+        reply_to_uuid = serializer.validated_data.get("reply_to_uuid")
+        if reply_to_uuid:
+            try:
+                reply_to = Message.objects.get(
+                    uuid=reply_to_uuid,
+                    conversation_id=conversation_id,
+                    deleted_at__isnull=True,
+                )
+            except Message.DoesNotExist:
+                return Response(
+                    {"detail": "Reply target message not found in this conversation."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        thread_root = resolve_thread_root(reply_to) if reply_to else None
+
+        with transaction.atomic():
+            message = Message.objects.create(
+                conversation_id=conversation_id,
+                guest=guest,
+                body=body,
+                body_html=body_html,
+                reply_to=reply_to,
+                thread_root=thread_root,
+            )
+            conversation = Conversation.objects.get(pk=conversation_id)
+            deliver_message(
+                conversation,
+                message,
+                mentioned_user_ids=mentioned_user_ids,
+                mention_everyone=has_everyone,
+            )
+
+        if body:
+            from ..services.link_preview import extract_urls
+
+            urls = extract_urls(body)
+            if urls:
+                from ..tasks import fetch_link_previews
+
+                fetch_link_previews.delay(str(message.pk), urls)
+
+        msg = _message_queryset().filter(pk=message.pk).first()
+        return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)

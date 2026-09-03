@@ -263,6 +263,11 @@ urlpatterns = [
         meeting_guest.MeetingGuestSignalView.as_view(),
         name="chat-meeting-guest-signal",
     ),
+    path(
+        "api/v1/chat/meet/<str:slug>/messages",
+        meeting_guest.MeetingGuestMessagesView.as_view(),
+        name="chat-meeting-guest-messages",
+    ),
     # Meetings - host endpoints
     path(
         "api/v1/chat/meetings",

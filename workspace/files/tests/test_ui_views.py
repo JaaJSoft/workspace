@@ -141,6 +141,19 @@ class SharedLinkPageTests(TestCase):
         self.assertIsNone(resp.context["breadcrumbs"])
         self.assertNotIn(b"<nav", resp.content)
 
+    def test_the_content_wrapper_reloads_on_a_missing_or_failed_swap(self):
+        """A swap answered by a 200 whose body has no #shared-content (the
+        gate closed mid-session: an expired access token, or the link
+        itself expiring) makes alpine-ajax silently remove the target with
+        nothing left on screen. The wrapper must reload instead, which is
+        the only way back to the real gate (the expired card or the
+        password prompt). Untestable end-to-end without a browser - this
+        only pins down that the handler is actually rendered on the page.
+        """
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertContains(resp, "@ajax:missing.window")
+        self.assertContains(resp, "@ajax:error.window")
+
     def test_a_read_mode_folder_link_renders_the_browse_page(self):
         folder = File.objects.create(
             owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER

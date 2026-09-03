@@ -2,13 +2,26 @@
 {% load static %}
 {% block title %}{{ target.name }} - Workspace{% endblock %}
 {% block head_extra %}
-  <script src="{% static 'ui/js/inline_alert.js' %}"></script>
   {% if link.allows_upload %}
+    <script src="{% static 'ui/js/inline_alert.js' %}"></script>
     <script src="{% static 'files/ui/js/shared_dropzone.js' %}"></script>
   {% endif %}
 {% endblock %}
 {% block content %}
-  <div class="space-y-4">
+  {% comment %}
+    A swap answered by a 200 whose body has no #shared-content (the gate
+    closed mid-session: the password token expired, or the link itself
+    expired) makes alpine-ajax silently remove the target with nothing left
+    on screen - no error, no console message. Reloading re-runs the full
+    view and renders the real gate (the expired card or the password
+    prompt) instead of a page that dead-ends. ajax:error covers the same
+    "swap could not complete" family for network-level failures.
+  {% endcomment %}
+  <div
+    class="space-y-4"
+    @ajax:missing.window="window.location.reload()"
+    @ajax:error.window="window.location.reload()"
+  >
     {% partialdef shared-content inline %}
       <div
         id="shared-content"

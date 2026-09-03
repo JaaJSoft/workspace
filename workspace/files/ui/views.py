@@ -13,6 +13,7 @@ from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_viewer_by_slug
+from workspace.files.services.public_links import resolve_within
 from workspace.files.services.quota import usage_percent
 from workspace.files.services.scanning.policy import with_scan
 from workspace.files.services.storage_analysis import (
@@ -20,6 +21,7 @@ from workspace.files.services.storage_analysis import (
     QUERY_MAX_LENGTH,
     analyze_storage,
 )
+from workspace.files.views.share_links import _record_access
 from workspace.users.services.settings import get_module_settings
 
 from ..models import (
@@ -943,8 +945,6 @@ def _resolve_shared_target(link, request):
     if not node_param:
         return link.file
 
-    from workspace.files.services.public_links import resolve_within
-
     node = resolve_within(link, node_param)
     if node is None:
         raise Http404
@@ -1132,12 +1132,12 @@ def shared_file_view(request, token):
             )
         )
 
-    # Mirrors the content/download endpoints' own order (quarantine check
-    # before _record_access): a blocked preview must not count as a served
-    # view, but a folder listing always can.
-    if show_listing or (show_viewer and quarantine_reason is None):
-        from workspace.files.views.share_links import _record_access
-
+    # A listing is entirely server-rendered here, so this is the only place
+    # that would ever count it. A viewer target must not record here too:
+    # SharedFileContentView already records when it actually serves the
+    # bytes the viewer requests, and recording on both would count one visit
+    # to a single-file link twice.
+    if show_listing:
         _record_access(link)
 
     if show_content and request.headers.get("X-Alpine-Request"):

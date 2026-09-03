@@ -140,7 +140,13 @@ def _check_quarantine(file_obj):
 
 
 def _record_access(link):
-    """Increment view count and update last accessed time."""
+    """Increment view count and update last accessed time.
+
+    Underscore-private by convention, not by enforcement: ``files.ui.views``
+    also imports this directly for the page's own listing render, which
+    needs the exact same increment the content/download/thumbnail endpoints
+    below already do. Deliberately shared, not a leak.
+    """
     FileShareLink.objects.filter(pk=link.pk).update(
         view_count=F("view_count") + 1,
         last_accessed_at=timezone.now(),

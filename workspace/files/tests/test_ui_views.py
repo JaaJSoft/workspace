@@ -127,12 +127,15 @@ class SharedLinkPageTests(TestCase):
         resp = self.client.get(f"/files/shared/{self.link.token}")
         self.assertEqual(resp.status_code, 404)
 
-    def test_a_file_link_records_a_view(self):
+    def test_a_file_link_page_does_not_record_a_view_by_itself(self):
+        """The page renders the viewer but does not call _record_access for
+        it - SharedFileContentView already records when it actually serves
+        the bytes the viewer's own fetch requests, and the page recording
+        too would double-count a single visit."""
         resp = self.client.get(f"/files/shared/{self.link.token}")
         self.assertEqual(resp.status_code, 200)
         self.link.refresh_from_db()
-        self.assertEqual(self.link.view_count, 1)
-        self.assertIsNotNone(self.link.last_accessed_at)
+        self.assertEqual(self.link.view_count, 0)
 
     def test_a_file_link_has_no_breadcrumb(self):
         """The target IS the link's own root - there is nowhere to browse
@@ -500,10 +503,33 @@ class SharedFolderListingTests(TestCase):
         self.read_link.refresh_from_db()
         self.assertEqual(self.read_link.view_count, 1)
 
-    def test_viewing_a_descendant_file_records_a_view(self):
+    def test_viewing_a_descendant_file_does_not_record_a_view_by_itself(self):
+        """Same as the plain-file-link case: the page renders the viewer for
+        a descendant reached through ?node=, but recording that view is
+        SharedFileContentView's job, not the page's - otherwise one visit
+        would count twice."""
         resp = self.client.get(
             f"/files/shared/{self.read_link.token}", {"node": str(self.doc.uuid)}
         )
         self.assertEqual(resp.status_code, 200)
         self.read_link.refresh_from_db()
-        self.assertEqual(self.read_link.view_count, 1)
+        self.assertEqual(self.read_link.view_count, 0)
+
+    def test_a_locked_link_does_not_record_a_view(self):
+        """The negative half of the access-count guarantee: a request the
+        password gate refuses must not bump the counter at all."""
+        self.read_link.password = make_password("secret")
+        self.read_link.save(update_fields=["password"])
+        resp = self.client.get(f"/files/shared/{self.read_link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Enter the password")
+        self.read_link.refresh_from_db()
+        self.assertEqual(self.read_link.view_count, 0)
+
+    def test_a_drop_link_does_not_record_a_view(self):
+        """Mode drop never resolves a listing or a viewer, so it must never
+        record one either."""
+        resp = self.client.get(f"/files/shared/{self.drop_link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.drop_link.refresh_from_db()
+        self.assertEqual(self.drop_link.view_count, 0)

@@ -102,3 +102,29 @@ test('the edited marker is added once, not on every edit', async () => {
   // so without it a second insertion would be invisible to this test.
   assert.equal(copies[0].appendCalls, 1, 'the marker is inserted exactly once');
 });
+
+test('starting an edit puts the caret at the end of the prefilled body', () => {
+  // Regression: startEdit only focused the textarea, so the caret landed
+  // wherever the browser left it after the value swap - the start on
+  // Firefox, and the start on every browser when ArrowUp triggered the edit.
+  const copies = [bubble('m1', 'hello world')];
+  const app = buildApp(copies, { editedBody: 'unused' });
+  const textarea = {
+    value: '',
+    focused: false,
+    selection: null,
+    focus() { this.focused = true; },
+    setSelectionRange(start, end) { this.selection = [start, end]; },
+  };
+  app.getMessageInput = () => textarea;
+  app.$nextTick = (fn) => {
+    // x-model has written the body into the textarea by the time the tick runs.
+    textarea.value = app.messageBody;
+    fn();
+  };
+
+  app.startEdit('m1');
+
+  assert.equal(textarea.focused, true);
+  assert.deepStrictEqual(textarea.selection, ['hello world'.length, 'hello world'.length]);
+});

@@ -459,7 +459,15 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (!el) return;
       this.editingMessageUuid = msgUuid;
       this.messageBody = el.dataset.body || '';
-      this.$nextTick(() => this.getMessageInput()?.focus());
+      this.$nextTick(() => {
+        const ta = this.getMessageInput();
+        if (!ta) return;
+        ta.focus();
+        // Where the caret lands after a programmatic value change is browser
+        // dependent, and ArrowUp's own default action pulls it to the start.
+        const end = ta.value.length;
+        ta.setSelectionRange(end, end);
+      });
     },
 
     cancelEdit() {

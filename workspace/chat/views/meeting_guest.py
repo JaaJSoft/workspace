@@ -32,6 +32,7 @@ import logging
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Prefetch
+from django.http import StreamingHttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -45,6 +46,7 @@ from ..models import CallParticipant, Conversation, Message, Reaction
 from ..serializers import MessageCreateSerializer, MessageSerializer
 from ..services import calls
 from ..services.call_signaling import send_signal
+from ..services.guest_stream import stream_guest_events
 from ..services.meeting_guests import guest_for_token, resolve_guest
 from ..services.mentions import build_mention_map
 from ..services.participant_keys import (
@@ -377,6 +379,39 @@ class MeetingGuestStateView(APIView):
         else:
             reported_state = lobby_guest.state
         return Response({"admitted": False, "state": reported_state})
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestStreamView(APIView):
+    """Server-sent events for an admitted guest: call signalling plus messages.
+
+    The initial gate is the same 404-on-anything-else contract as join/leave/
+    heartbeat/signal - a bad token never gets a stream opened for it. Once
+    open, the stream re-runs the gate itself every cycle (see
+    ``guest_stream.stream_guest_events``), so nothing here needs to react to
+    the meeting ending or the guest being removed after the fact.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [MeetingPublicIpThrottle]
+
+    @extend_schema(summary="Server-sent event stream for an admitted meeting guest")
+    def get(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        token = request.headers.get("X-Meeting-Token", "")
+        response = StreamingHttpResponse(
+            stream_guest_events(token, slug),
+            content_type="text/event-stream",
+        )
+        response["Cache-Control"] = "no-cache, no-transform"
+        response["X-Accel-Buffering"] = "no"
+        response.streaming = True
+        response["Content-Encoding"] = "identity"
+        return response
 
 
 @extend_schema(tags=["Chat - Meetings"])

@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 
 from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import CallParticipant, MeetingGuest
+from workspace.chat.services import call_signaling as sig
 from workspace.chat.services import calls
 from workspace.chat.services.meeting_guests import issue_token
 from workspace.chat.services.meeting_occurrences import current_occurrence
@@ -17,7 +18,7 @@ from workspace.chat.services.meetings import (
     remove_guest,
     set_locked,
 )
-from workspace.chat.services.participant_keys import guest_key
+from workspace.chat.services.participant_keys import guest_key, user_key
 
 User = get_user_model()
 
@@ -295,3 +296,134 @@ class GuestRuntimeTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.data["admitted"])
         self.assertNotEqual(resp.data.get("state"), "admitted")
+
+
+class GuestSignalTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.owner = User.objects.create_user(username="host", password="x")
+        now = timezone.now()
+        self.event = make_event(
+            self.owner,
+            start=now - timedelta(minutes=5),
+            end=now + timedelta(minutes=25),
+        )
+        self.meeting = create_meeting(self.event, self.owner)
+        self.occurrence_start = current_occurrence(self.meeting, now=now)[0]
+        self.client = APIClient()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _admit(self, meeting=None, occurrence_start=None, display_name="Ada"):
+        meeting = meeting or self.meeting
+        token, token_hash = issue_token()
+        guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name=display_name,
+            state=MeetingGuest.State.ADMITTED,
+            occurrence_start=occurrence_start or self.occurrence_start,
+            token_hash=token_hash,
+        )
+        return guest, token
+
+    def _url(self, meeting=None):
+        return f"/api/v1/chat/meet/{(meeting or self.meeting).slug}/signal"
+
+    def _signal(self, token, to_participant, signal=None, meeting=None):
+        return self.client.post(
+            self._url(meeting),
+            {"to_participant": to_participant, "signal": signal or {"type": "offer"}},
+            format="json",
+            HTTP_X_MEETING_TOKEN=token,
+        )
+
+    def test_guest_can_signal_a_member(self):
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        guest, token = self._admit()
+        self._post_join(token)
+        sig.drain_events(user_key(self.owner.id))  # clear lifecycle noise
+
+        resp = self._signal(token, user_key(self.owner.id))
+        self.assertEqual(resp.status_code, 200)
+
+        delivered = [
+            e
+            for e in sig.drain_events(user_key(self.owner.id))
+            if e["event"] == "call_signal"
+        ]
+        self.assertEqual(len(delivered), 1)
+        self.assertEqual(
+            delivered[0]["data"]["from_participant"], guest_key(guest.uuid)
+        )
+
+    def test_guest_can_signal_another_guest(self):
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        guest_a, token_a = self._admit(display_name="Ada")
+        guest_b, token_b = self._admit(display_name="Bea")
+        self._post_join(token_a)
+        self._post_join(token_b)
+        sig.drain_events(guest_key(guest_b.uuid))  # clear lifecycle noise
+
+        resp = self._signal(token_a, guest_key(guest_b.uuid))
+        self.assertEqual(resp.status_code, 200)
+
+        delivered = [
+            e
+            for e in sig.drain_events(guest_key(guest_b.uuid))
+            if e["event"] == "call_signal"
+        ]
+        self.assertEqual(len(delivered), 1)
+        self.assertEqual(
+            delivered[0]["data"]["from_participant"], guest_key(guest_a.uuid)
+        )
+
+    def test_signal_to_a_participant_of_a_different_session_is_refused(self):
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        guest, token = self._admit()
+        self._post_join(token)
+
+        other_owner = User.objects.create_user(username="other-host", password="x")
+        other_event = make_event(other_owner)
+        other_meeting = create_meeting(other_event, other_owner)
+        calls.start_or_join_call(other_owner, other_meeting.conversation_id)
+
+        resp = self._signal(token, user_key(other_owner.id))
+        self.assertEqual(resp.status_code, 400)
+
+    def test_signal_rejects_a_non_canonical_member_key(self):
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        guest, token = self._admit()
+        self._post_join(token)
+
+        resp = self._signal(token, "u:007")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_signal_rejects_a_non_canonical_guest_key(self):
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        guest_a, token_a = self._admit(display_name="Ada")
+        guest_b, _token_b = self._admit(display_name="Bea")
+        self._post_join(token_a)
+
+        resp = self._signal(token_a, f"g:{str(guest_b.uuid).upper()}")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_guest_who_has_not_joined_the_call_cannot_signal(self):
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        guest, token = self._admit()
+        # Deliberately no join call here.
+
+        resp = self._signal(token, user_key(self.owner.id))
+        self.assertEqual(resp.status_code, 400)
+
+    def test_signal_with_no_active_call_is_refused(self):
+        guest, token = self._admit()
+
+        resp = self._signal(token, user_key(self.owner.id))
+        self.assertEqual(resp.status_code, 400)
+
+    def _post_join(self, token, meeting=None):
+        meeting = meeting or self.meeting
+        return self.client.post(
+            f"/api/v1/chat/meet/{meeting.slug}/join", HTTP_X_MEETING_TOKEN=token
+        )

@@ -34,9 +34,16 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ..models import CallParticipant
 from ..services import calls
+from ..services.call_signaling import send_signal
 from ..services.meeting_guests import guest_for_token, resolve_guest
-from ..services.participant_keys import guest_key
+from ..services.participant_keys import (
+    guest_key,
+    guest_uuid_from_key,
+    user_id_from_key,
+    user_key,
+)
 from ..throttling import MeetingGuestHeartbeatThrottle, MeetingPublicIpThrottle
 
 # The only media_state keys chatCallMediaState() (call.js) ever produces.
@@ -179,6 +186,72 @@ class MeetingGuestHeartbeatView(APIView):
                 },
                 exclude_key=key,
             )
+        return Response({"status": "ok"})
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestSignalView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [MeetingPublicIpThrottle]
+
+    @extend_schema(summary="Relay a WebRTC signal to a peer in the guest's call")
+    def post(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        session = calls.active_call_session_for_guest(guest)
+        if session is None:
+            return Response(
+                {"detail": "No active call."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        own_key = guest_key(guest.uuid)
+        is_own_active_participant = CallParticipant.objects.filter(
+            session=session, guest=guest, left_at__isnull=True
+        ).exists()
+        if not is_own_active_participant:
+            return Response(
+                {"detail": "Join the call before signalling."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        to_participant = request.data.get("to_participant")
+        signal = request.data.get("signal")
+        if not isinstance(to_participant, str) or not isinstance(signal, dict):
+            return Response(
+                {"detail": "to_participant (string) and signal (object) are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # A guest may reach a member or another guest, but only one who is
+        # themselves an active participant of this SAME session - which is
+        # already scoped to this guest's own meeting, so this single check
+        # also rejects any target from a different meeting's call.
+        target_user_id = user_id_from_key(to_participant)
+        target_guest_uuid = guest_uuid_from_key(to_participant)
+        if target_user_id is not None:
+            target_key = user_key(target_user_id)
+            target_is_active = CallParticipant.objects.filter(
+                session=session, user_id=target_user_id, left_at__isnull=True
+            ).exists()
+        elif target_guest_uuid is not None:
+            target_key = guest_key(target_guest_uuid)
+            target_is_active = CallParticipant.objects.filter(
+                session=session, guest_id=target_guest_uuid, left_at__isnull=True
+            ).exists()
+        else:
+            target_key = None
+            target_is_active = False
+
+        if not target_is_active:
+            return Response(
+                {"detail": "Target is not a participant of this call."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        send_signal(session.uuid, target_key, own_key, signal)
         return Response({"status": "ok"})
 
 

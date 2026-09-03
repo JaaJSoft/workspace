@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.files.models import File, FileShareLink
+from workspace.files.ui.views import SHARED_FOLDER_PAGE_SIZE
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -113,6 +114,11 @@ class SharedLinkPageTests(TestCase):
         resp = self.client.get(f"/files/shared/{self.link.token}")
         self.assertContains(resp, "Enter the password")
 
+    def test_a_file_link_names_who_shared_it(self):
+        """A recipient should know whose file this is, as on the folder pages."""
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertContains(resp, self.owner.username)
+
     def test_an_unknown_token_is_a_404(self):
         self.assertEqual(self.client.get("/files/shared/nope").status_code, 404)
 
@@ -184,3 +190,158 @@ class SharedLinkPageTests(TestCase):
         resp = self.client.get(f"/files/shared/{link.token}")
         self.assertContains(resp, "Enter the password")
         self.assertNotContains(resp, self.owner.username)
+
+
+class SharedFolderListingTests(TestCase):
+    """Server-rendered folder listing on the public share page.
+
+    Ports the guarantees previously pinned on ``GET .../entries`` (removed
+    along with the client-rendered browser) onto the page render itself.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="listingowner",
+            email="listingowner@example.com",
+            password="pass123",
+        )
+        self.other = User.objects.create_user(
+            username="listingother",
+            email="listingother@example.com",
+            password="pass123",
+        )
+        self.root = File.objects.create(
+            owner=self.owner, name="Shared", node_type=File.NodeType.FOLDER
+        )
+        self.sub = File.objects.create(
+            owner=self.owner,
+            name="Sub",
+            node_type=File.NodeType.FOLDER,
+            parent=self.root,
+        )
+        self.doc = File.objects.create(
+            owner=self.owner,
+            name="in.txt",
+            node_type=File.NodeType.FILE,
+            parent=self.sub,
+        )
+        self.outside = File.objects.create(
+            owner=self.owner, name="out.txt", node_type=File.NodeType.FILE
+        )
+        self.read_link = FileShareLink.objects.create(
+            file=self.root, created_by=self.owner, mode=FileShareLink.Mode.READ
+        )
+        self.drop_link = FileShareLink.objects.create(
+            file=self.root, created_by=self.owner, mode=FileShareLink.Mode.DROP
+        )
+
+    def test_renders_the_root_listing(self):
+        resp = self.client.get(f"/files/shared/{self.read_link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Sub")
+        self.assertNotContains(resp, "out.txt")
+
+    def test_folder_param_renders_the_subfolder(self):
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"folder": str(self.sub.uuid)}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "in.txt")
+
+    def test_folder_param_outside_the_subtree_is_a_404(self):
+        stranger = File.objects.create(
+            owner=self.owner, name="Elsewhere", node_type=File.NodeType.FOLDER
+        )
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"folder": str(stranger.uuid)}
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_folder_param_of_another_users_colliding_path_is_a_404(self):
+        """`path` text is not globally unique - mirrors ResolveWithinTests."""
+        their_root = File.objects.create(
+            owner=self.other, name="Shared", node_type=File.NodeType.FOLDER
+        )
+        their_file = File.objects.create(
+            owner=self.other,
+            name="secret.txt",
+            node_type=File.NodeType.FILE,
+            parent=their_root,
+        )
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"folder": str(their_file.uuid)}
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_a_trashed_descendant_is_a_404(self):
+        self.sub.soft_delete()
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"folder": str(self.sub.uuid)}
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_breadcrumbs_never_go_above_the_share_root(self):
+        parent = File.objects.create(
+            owner=self.owner, name="TopSecretParent", node_type=File.NodeType.FOLDER
+        )
+        self.root.parent = parent
+        self.root.save(update_fields=["parent"])
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"folder": str(self.sub.uuid)}
+        )
+        self.assertNotContains(resp, "TopSecretParent")
+
+    def test_listing_never_exposes_an_absolute_path(self):
+        parent = File.objects.create(
+            owner=self.owner, name="TopSecretParent", node_type=File.NodeType.FOLDER
+        )
+        self.root.parent = parent
+        self.root.save(update_fields=["parent"])
+        resp = self.client.get(f"/files/shared/{self.read_link.token}")
+        self.root.refresh_from_db()
+        self.assertNotContains(resp, self.root.path)
+        self.assertNotContains(resp, "TopSecretParent")
+
+    def test_a_drop_link_gets_no_listing(self):
+        resp = self.client.get(f"/files/shared/{self.drop_link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'id="folder-listing"')
+
+    def test_more_children_than_the_page_size_are_truncated(self):
+        bulk_root = File.objects.create(
+            owner=self.owner, name="Bulk", node_type=File.NodeType.FOLDER
+        )
+        link = FileShareLink.objects.create(
+            file=bulk_root, created_by=self.owner, mode=FileShareLink.Mode.READ
+        )
+        for index in range(SHARED_FOLDER_PAGE_SIZE + 5):
+            File.objects.create(
+                owner=self.owner,
+                name=f"f{index:04}.txt",
+                node_type=File.NodeType.FILE,
+                parent=bulk_root,
+            )
+        resp = self.client.get(f"/files/shared/{link.token}")
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode()
+        self.assertEqual(content.count('title="Download"'), SHARED_FOLDER_PAGE_SIZE)
+        self.assertContains(
+            resp, f"Only the first {SHARED_FOLDER_PAGE_SIZE} entries are shown."
+        )
+
+    def test_password_protected_fragment_request_without_a_token_has_no_listing(self):
+        """A raw X-Alpine-Request must not bypass the password gate.
+
+        Nothing stops an attacker sending this header directly at the URL -
+        it must be answered exactly like a normal, gate-failing request.
+        """
+        self.read_link.password = make_password("secret")
+        self.read_link.save(update_fields=["password"])
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}",
+            HTTP_X_ALPINE_REQUEST="true",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "Sub")
+        self.assertNotContains(resp, 'id="folder-listing"')
+        self.assertContains(resp, "Enter the password")

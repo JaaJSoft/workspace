@@ -9,7 +9,6 @@ from .views.share_links import (
     SharedFileMetaView,
     SharedFileThumbnailView,
     SharedFileVerifyView,
-    SharedFolderEntriesView,
     SharedFolderUploadView,
 )
 from .views.tags import FileTagView, TagViewSet
@@ -40,11 +39,6 @@ urlpatterns = [
         "api/v1/files/shared/<str:token>/download",
         SharedFileDownloadView.as_view(),
         name="shared-file-download",
-    ),
-    path(
-        "api/v1/files/shared/<str:token>/entries",
-        SharedFolderEntriesView.as_view(),
-        name="shared-folder-entries",
     ),
     path(
         "api/v1/files/shared/<str:token>/thumbnail",

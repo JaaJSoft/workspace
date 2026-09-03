@@ -4,61 +4,6 @@ window.sharedLinkUrl = function sharedLinkUrl(token, suffix, params) {
   return `/api/v1/files/shared/${encodeURIComponent(token)}${suffix}${tail ? '?' + tail : ''}`;
 };
 
-window.sharedFolderBrowser = function sharedFolderBrowser(token, accessToken) {
-  return {
-    token,
-    accessToken: accessToken || '',
-    entries: [],
-    breadcrumbs: [],
-    folderUuid: '',
-    loading: false,
-    error: '',
-    hasMore: false,
-
-    init() {
-      this.load('');
-    },
-
-    params(extra) {
-      const base = extra ? { ...extra } : {};
-      if (this.accessToken) base.access_token = this.accessToken;
-      return base;
-    },
-
-    async load(folderUuid) {
-      this.loading = true;
-      this.error = '';
-      try {
-        const url = window.sharedLinkUrl(
-          this.token, '/entries', this.params(folderUuid ? { folder: folderUuid } : {}),
-        );
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error('unavailable');
-        const data = await resp.json();
-        this.entries = data.entries;
-        this.breadcrumbs = data.breadcrumbs;
-        this.folderUuid = folderUuid;
-        this.hasMore = resp.headers.get('X-Has-More') === 'true';
-      } catch (e) {
-        this.error = 'This folder could not be loaded.';
-      }
-      this.loading = false;
-    },
-
-    downloadUrl(entry) {
-      return window.sharedLinkUrl(this.token, '/download', this.params({ file: entry.uuid }));
-    },
-
-    thumbnailUrl(entry) {
-      return window.sharedLinkUrl(this.token, '/thumbnail', this.params({ file: entry.uuid }));
-    },
-
-    isFolder(entry) {
-      return entry.node_type === 'folder';
-    },
-  };
-};
-
 window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes) {
   return {
     token,

@@ -1,4 +1,4 @@
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -36,6 +36,9 @@ from .viewers import ViewerRegistry, render_viewer_panel
 RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
 INITIAL_EVENTS_LIMIT = 15
 MAX_EVENTS_LIMIT = 200
+# A public share link has no authentication behind it, so an unbounded
+# listing would let anyone turn one link into a folder-dump DoS.
+SHARED_FOLDER_PAGE_SIZE = 200
 
 
 def build_breadcrumbs(folder, user=None):
@@ -889,6 +892,114 @@ def file_card(request, uuid):
     )
 
 
+def _shared_page_url(path, access_token, **params):
+    """A link back to *path* (the share page itself), preserving *access_token*.
+
+    Used for folder navigation and breadcrumbs so a password-protected link
+    stays unlocked across clicks instead of re-prompting on every navigation.
+    """
+    query = dict(params)
+    if access_token:
+        query["access_token"] = access_token
+    return f"{path}?{urlencode(query)}" if query else path
+
+
+def _shared_action_url(token, suffix, access_token, **params):
+    """A public API URL (download/thumbnail) for *token*, with *access_token*."""
+    query = dict(params)
+    if access_token:
+        query["access_token"] = access_token
+    qs = urlencode(query)
+    return f"/api/v1/files/shared/{token}{suffix}" + (f"?{qs}" if qs else "")
+
+
+def _shared_breadcrumbs(root, folder, path, access_token):
+    """Trail from the link's own root down to *folder* - never above it."""
+    trail = []
+    node = folder
+    while node is not None and node.pk != root.pk:
+        trail.append(node)
+        node = node.parent
+    trail.append(root)
+    trail.reverse()
+
+    crumbs = [
+        {"label": n.name, "url": _shared_page_url(path, access_token, folder=n.uuid)}
+        for n in trail[:-1]
+    ]
+    crumbs.append({"label": trail[-1].name})
+    return crumbs
+
+
+def _resolve_shared_folder(link, request):
+    """The folder to list for *link*: its own root, or the ``?folder=``
+    descendant. Raises Http404 for anything outside the link's subtree or
+    that is not a folder."""
+    folder_param = request.GET.get("folder")
+    if not folder_param:
+        return link.file
+
+    from workspace.files.services.public_links import resolve_within
+
+    node = resolve_within(link, folder_param)
+    if node is None or node.node_type != File.NodeType.FOLDER:
+        raise Http404
+    return node
+
+
+def _shared_folder_listing_context(link, current, request, access_token):
+    """Children of *current*, capped at ``SHARED_FOLDER_PAGE_SIZE``, plus
+    breadcrumbs - the context the ``folder-listing`` fragment renders."""
+    token = link.token
+    children = list(
+        File.objects.filter(parent=current, deleted_at__isnull=True).name_ordered(
+            "-node_type"
+        )[: SHARED_FOLDER_PAGE_SIZE + 1]
+    )
+    has_more = len(children) > SHARED_FOLDER_PAGE_SIZE
+    children = children[:SHARED_FOLDER_PAGE_SIZE]
+
+    entries = []
+    for node in children:
+        is_dir = node.node_type == File.NodeType.FOLDER
+        entries.append(
+            {
+                "uuid": node.uuid,
+                "name": node.name,
+                "is_folder": is_dir,
+                "has_thumbnail": node.has_thumbnail,
+                "folder_url": (
+                    _shared_page_url(request.path, access_token, folder=node.uuid)
+                    if is_dir
+                    else None
+                ),
+                "download_url": (
+                    None
+                    if is_dir
+                    else _shared_action_url(
+                        token, "/download", access_token, file=node.uuid
+                    )
+                ),
+                "thumbnail_url": (
+                    _shared_action_url(
+                        token, "/thumbnail", access_token, file=node.uuid
+                    )
+                    if node.has_thumbnail
+                    else None
+                ),
+            }
+        )
+
+    return {
+        "current_folder": current,
+        "entries": entries,
+        "has_more": has_more,
+        "breadcrumbs": _shared_breadcrumbs(
+            link.file, current, request.path, access_token
+        ),
+    }
+
+
 @ensure_csrf_cookie
 def shared_file_view(request, token):
     """Public standalone page for viewing a shared file."""
@@ -976,11 +1087,13 @@ def shared_file_view(request, token):
             else ""
         )
 
+    effective_access_token = access_token if password_verified else ""
+
     context = {
         "share_token": token,
         "file": link.file,
         "link": link,
-        "access_token": access_token if password_verified else "",
+        "access_token": effective_access_token,
         "viewer_html": viewer_html,
         "quarantine_reason": quarantine_reason,
         "needs_password": link.has_password and not password_verified,
@@ -990,5 +1103,27 @@ def shared_file_view(request, token):
     if is_folder and link.allows_upload:
         ceiling = settings.FILES_DROP_MAX_FILE_BYTES
         context["max_file_bytes"] = min(link.max_file_bytes or ceiling, ceiling)
+
+    # Every gate the full page enforces (link exists, not expired, read
+    # allowed, password satisfied) must hold before a listing - including the
+    # fragment - is served: an X-Alpine-Request is just a header an attacker
+    # can send directly, not proof any of the above already happened.
+    show_listing = is_folder and link.allows_read and unlocked
+    if show_listing:
+        current = _resolve_shared_folder(link, request)
+        context.update(
+            _shared_folder_listing_context(
+                link, current, request, effective_access_token
+            )
+        )
+
+        from workspace.files.views.share_links import _record_access
+
+        _record_access(link)
+
+        if request.headers.get("X-Alpine-Request"):
+            return render(
+                request, "files/ui/shared_folder.html#folder-listing", context
+            )
 
     return render(request, template, context)

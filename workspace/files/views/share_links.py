@@ -16,7 +16,6 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from workspace.common.http_ranges import serve_with_ranges
-from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.files.models import File, FileEvent, FileShareLink
 from workspace.files.services import FileService
 from workspace.files.services.events import record_event
@@ -69,13 +68,6 @@ class ShareLinkUploadIPThrottle(AnonRateThrottle):
 
     def get_rate(self):
         return settings.FILES_DROP_UPLOAD_RATE_IP
-
-
-class SharedEntriesPagination(OptInLimitOffsetPagination):
-    """Always paginates: this endpoint is anonymous, so an unbounded folder
-    listing would be a denial-of-service primitive costing one request."""
-
-    default_limit = 200
 
 
 def _lookup_link(token):
@@ -174,41 +166,6 @@ def _target_node(link, request, param):
     if node is None:
         return None, Response(status=status.HTTP_404_NOT_FOUND)
     return node, None
-
-
-def _entry_payload(node):
-    """The public shape of one listed child. Deliberately not FileSerializer.
-
-    FileSerializer exposes ``path``, which would name the folders above the
-    share root to an anonymous visitor.
-    """
-    is_file = node.node_type == File.NodeType.FILE
-    return {
-        "uuid": str(node.uuid),
-        "name": node.name,
-        "node_type": node.node_type,
-        "size": node.size,
-        "type": node.type,
-        "category": node.category,
-        "mime_type": node.mime_type,
-        "has_thumbnail": node.has_thumbnail,
-        "updated_at": node.updated_at.isoformat() if node.updated_at else None,
-        "is_viewable": bool(
-            is_file and node.type and ViewerRegistry.is_supported(node.type, node.name)
-        ),
-    }
-
-
-def _breadcrumbs(root, node):
-    """Trail from the share root down to *node*, never above the root."""
-    trail = []
-    current = node
-    while current is not None and current.pk != root.pk:
-        trail.append({"uuid": str(current.uuid), "name": current.name})
-        current = current.parent
-    trail.append({"uuid": str(root.uuid), "name": root.name})
-    trail.reverse()
-    return trail
 
 
 @extend_schema(tags=["Files - Shared Links"])
@@ -398,46 +355,6 @@ class SharedFileDownloadView(APIView):
             content_type=f.mime_type or "application/octet-stream",
             attachment_filename=f.name,
         )
-
-
-@extend_schema(tags=["Files - Shared Links"])
-class SharedFolderEntriesView(APIView):
-    """GET /api/v1/files/shared/{token}/entries - public folder listing."""
-
-    permission_classes = [AllowAny]
-    authentication_classes = []
-    pagination_class = SharedEntriesPagination
-
-    def get(self, request, token):
-        link, err = _resolve_link(token)
-        if err:
-            return err
-        read_err = _require_read(link)
-        if read_err:
-            return read_err
-        pwd_err = _check_password_access(link, request)
-        if pwd_err:
-            return pwd_err
-
-        folder, err = _target_node(link, request, "folder")
-        if err:
-            return err
-        if folder.node_type != File.NodeType.FOLDER:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        _record_access(link)
-
-        children = File.objects.filter(
-            parent=folder, deleted_at__isnull=True
-        ).name_ordered("-node_type")
-
-        paginator = self.pagination_class()
-        page = paginator.paginate_queryset(children, request, view=self)
-        body = {
-            "breadcrumbs": _breadcrumbs(link.file, folder),
-            "entries": [_entry_payload(node) for node in page],
-        }
-        return paginator.get_paginated_response(body)
 
 
 @extend_schema(tags=["Files - Shared Links"])

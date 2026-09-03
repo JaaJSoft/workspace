@@ -6,13 +6,7 @@
   <script src="{% static 'files/ui/js/shared_folder.js' %}"></script>
 {% endblock %}
 {% block content %}
-  {# An Alpine expression is a JS context - HTML-attribute escaping does not protect it, so tokens travel as data attributes and get read with $el.dataset instead. #}
-  <div
-    data-share-token="{{ share_token }}"
-    data-access-token="{{ access_token }}"
-    x-data="sharedFolderBrowser($el.dataset.shareToken, $el.dataset.accessToken)"
-    class="space-y-4"
-  >
+  <div class="space-y-4">
     <div class="card bg-base-100 shadow-lg overflow-hidden">
       <!-- Header -->
       <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
@@ -31,89 +25,73 @@
         </div>
       </div>
 
-      <!-- Breadcrumbs -->
-      <div class="px-6 py-3 border-b border-base-300 bg-base-100 overflow-x-auto">
-        <div class="flex items-center gap-1 text-sm whitespace-nowrap">
-          <template x-for="(crumb, index) in breadcrumbs" :key="crumb.uuid">
-            <span class="flex items-center gap-1">
-              <button
-                type="button"
-                class="link link-hover"
-                :class="index === breadcrumbs.length - 1 ? 'font-semibold text-base-content' : 'text-base-content/60'"
-                @click="load(crumb.uuid)"
-                x-text="crumb.name"
-              ></button>
-              <i
-                x-show="index < breadcrumbs.length - 1"
-                data-lucide="chevron-right"
-                class="w-3.5 h-3.5 text-base-content/30"
-              ></i>
-            </span>
-          </template>
-        </div>
-      </div>
+      {% partialdef folder-listing inline %}
+        <div id="folder-listing">
+          <!-- Breadcrumbs -->
+          <div
+            class="px-6 py-3 border-b border-base-300 bg-base-100 overflow-x-auto"
+          >
+            {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="folder-listing" %}
+          </div>
 
-      <!-- Entries -->
-      <div class="bg-base-200 min-h-48">
-        <div x-show="loading" class="p-12 text-center">
-          <span class="loading loading-spinner loading-lg"></span>
-        </div>
+          <!-- Entries -->
+          <div class="bg-base-200 min-h-48">
+            {% if not entries %}
+              <div class="p-12 text-center text-base-content/50">This folder is empty.</div>
+            {% else %}
+              <ul class="divide-y divide-base-300">
+                {% for entry in entries %}
+                  <li
+                    class="flex items-center gap-3 px-6 py-3 hover:bg-base-100 transition-colors"
+                  >
+                    {% if entry.has_thumbnail %}
+                      <img
+                        src="{{ entry.thumbnail_url }}"
+                        class="w-10 h-10 rounded object-cover flex-shrink-0"
+                        alt=""
+                      />
+                    {% else %}
+                      <i
+                        data-lucide="{% if entry.is_folder %}folder{% else %}file{% endif %}"
+                        class="w-8 h-8 flex-shrink-0 text-base-content/40"
+                      ></i>
+                    {% endif %}
 
-        <div x-show="!loading && error" x-cloak class="p-6">
-          <inline-alert type="error"><span x-text="error"></span></inline-alert>
-        </div>
+                    {% if entry.is_folder %}
+                      <a
+                        href="{{ entry.folder_url }}"
+                        x-target="folder-listing"
+                        class="flex-1 min-w-0 text-left cursor-pointer"
+                      >
+                        <span class="block truncate">{{ entry.name }}</span>
+                      </a>
+                    {% else %}
+                      <span class="flex-1 min-w-0 text-left cursor-default">
+                        <span class="block truncate">{{ entry.name }}</span>
+                      </span>
+                      <a
+                        href="{{ entry.download_url }}"
+                        class="btn btn-ghost btn-sm btn-square"
+                        title="Download"
+                      >
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                      </a>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
 
-        <div
-          x-show="!loading && !error && entries.length === 0"
-          x-cloak
-          class="p-12 text-center text-base-content/50"
-        >
-          This folder is empty.
-        </div>
-
-        <ul x-show="!loading && !error && entries.length > 0" x-cloak class="divide-y divide-base-300">
-          <template x-for="entry in entries" :key="entry.uuid">
-            <li class="flex items-center gap-3 px-6 py-3 hover:bg-base-100 transition-colors">
-              <template x-if="entry.has_thumbnail">
-                <img
-                  :src="thumbnailUrl(entry)"
-                  class="w-10 h-10 rounded object-cover flex-shrink-0"
-                  alt=""
-                />
-              </template>
-              <template x-if="!entry.has_thumbnail">
-                <i
-                  :data-lucide="isFolder(entry) ? 'folder' : 'file'"
-                  class="w-8 h-8 flex-shrink-0 text-base-content/40"
-                ></i>
-              </template>
-
-              <button
-                type="button"
-                class="flex-1 min-w-0 text-left"
-                :class="isFolder(entry) ? 'cursor-pointer' : 'cursor-default'"
-                @click="isFolder(entry) && load(entry.uuid)"
+            {% if has_more %}
+              <div
+                class="px-6 py-3 text-sm text-base-content/50 text-center border-t border-base-300"
               >
-                <span class="block truncate" x-text="entry.name"></span>
-              </button>
-
-              <template x-if="!isFolder(entry)">
-                <a :href="downloadUrl(entry)" class="btn btn-ghost btn-sm btn-square" title="Download">
-                  <i data-lucide="download" class="w-4 h-4"></i>
-                </a>
-              </template>
-            </li>
-          </template>
-        </ul>
-
-        <div
-          x-show="!loading && !error && hasMore"
-          x-cloak
-          class="px-6 py-3 text-sm text-base-content/50 text-center border-t border-base-300"
-        >
-          Only the first 200 entries are shown.
+                Only the first {{ entries|length }} entries are shown.
+              </div>
+            {% endif %}
+          </div>
         </div>
-      </div>
+      {% endpartialdef %}
     </div>
 
     {% if link.allows_upload %}

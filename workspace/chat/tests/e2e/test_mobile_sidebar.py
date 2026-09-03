@@ -78,3 +78,21 @@ class ChatMobileSidebarTests(PlaywrightTestCase):
             "sidebar painted wider than the rail on mobile during load - "
             f"flicker regression. Widths seen: {widths}"
         )
+
+    def test_mobile_load_shows_the_empty_state_beside_the_rail(self):
+        # Regression: the conversation pane hid itself on mobile whenever no
+        # conversation was active, so `/chat` painted the rail and nothing
+        # else - the "Welcome to Chat" empty state it wraps never showed.
+        self.page.set_viewport_size(MOBILE_VIEWPORT)
+        self.login_as(self.user)
+        self.page.goto(f"{self.live_server_url}/chat")
+
+        heading = self.page.get_by_role("heading", name="Welcome to Chat")
+        expect(heading).to_be_visible()
+        expect(self.page.locator("aside").first).to_have_class(re.compile(r"\bw-16\b"))
+
+        # Beside the rail, not under it: the pane starts where the rail ends.
+        box = heading.bounding_box()
+        assert box is not None and box["x"] >= RAIL_WIDTH, (
+            f"empty state overlaps the rail: {box}"
+        )

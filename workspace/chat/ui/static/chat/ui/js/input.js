@@ -196,6 +196,7 @@ window.chatInputMixin = function chatInputMixin() {
 
       // Arrow Up when input is empty → edit last own message
       if (e.key === 'ArrowUp' && !this.messageBody) {
+        e.preventDefault();
         this.editLastOwnMessage();
         return;
       }

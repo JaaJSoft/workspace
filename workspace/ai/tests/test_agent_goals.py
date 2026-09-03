@@ -464,6 +464,23 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertIn("Research a topic over time.", system_content)
         self.assertIn("Previous findings: nothing yet.", system_content)
 
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_checkin_tells_the_model_nobody_wrote_to_it(self, mock_llm):
+        mock_llm.return_value = self._llm_result("[SILENT]")
+        goal = self._goal()
+        Message.objects.create(
+            conversation=self.conversation, author=self.bot_user, body="Progress?"
+        )
+
+        from workspace.ai.tasks.agent_goals import run_agent_goal_check
+
+        run_agent_goal_check(str(goal.uuid))
+
+        last = mock_llm.call_args.args[0][-1]
+        self.assertEqual(last["role"], "system")
+        self.assertIn("own initiative", last["content"])
+        self.assertIn("The last message in the conversation is yours", last["content"])
+
 
 # ---------------------------------------------------------------------------
 # 4. API Tests

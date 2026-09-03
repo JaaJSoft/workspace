@@ -7,7 +7,10 @@ from django.utils import timezone
 
 from workspace.ai.metrics import AI_AGENT_CHECKINS
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
-from workspace.ai.services.conversation_history import build_conversation_history
+from workspace.ai.services.conversation_history import (
+    build_conversation_history,
+    unprompted_run_note,
+)
 from workspace.ai.services.llm import sanitize_messages_for_storage
 from workspace.ai.services.responses import post_bot_message, produced_media
 from workspace.ai.services.tool_loop import run_tool_loop
@@ -203,21 +206,18 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
     human_user = User.objects.filter(pk=goal.created_by_id).first()
     user_tz = get_user_timezone(human_user or goal.created_by)
 
-    history, summary_text = build_conversation_history(
-        str(conversation.pk),
-        bot_profile,
-        human_user,
-    )
+    history = build_conversation_history(str(conversation.pk), bot_profile, human_user)
 
     bot_name = bot_user.get_full_name() or bot_user.username
 
     messages = build_chat_messages(
         bot_profile.system_prompt + _build_goal_instruction(goal, user_tz),
-        history,
+        history.messages,
         bot_name=bot_name,
         user=human_user,
         bot=bot_user,
-        summary=summary_text,
+        summary=history.summary,
+        situation=unprompted_run_note(history.window, bot_user.id),
     )
 
     ai_task = AITask.objects.create(
@@ -305,7 +305,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             tool_data=tool_data,
         )
 
-        maybe_dispatch_summary_update(str(conversation.pk), summary_text)
+        maybe_dispatch_summary_update(str(conversation.pk), history.summary)
 
         AI_AGENT_CHECKINS.labels(outcome="message").inc()
         logger.info(

@@ -979,3 +979,56 @@ class ScheduleToolTests(TestCase):
         self.assertIn("Active schedules (2)", result)
         self.assertIn("First schedule", result)
         self.assertIn("Second schedule", result)
+
+
+class ScheduledRunContextTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="ctxuser", password="pass123")
+        self.bot_user = User.objects.create_user(username="ctxbot", first_name="AI")
+        self.bot_profile = BotProfile.objects.create(
+            user=self.bot_user, system_prompt="You are a test bot."
+        )
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        for member in (self.user, self.bot_user):
+            ConversationMember.objects.create(
+                conversation=self.conversation, user=member
+            )
+        Message.objects.create(
+            conversation=self.conversation, author=self.user, body="hi"
+        )
+        Message.objects.create(
+            conversation=self.conversation, author=self.bot_user, body="hello"
+        )
+
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    def test_run_tells_the_model_nobody_wrote_to_it(self, mock_llm):
+        mock_llm.return_value = {
+            "content": "Still there?",
+            "tool_calls": None,
+            "message": MagicMock(
+                content="Still there?", tool_calls=None, to_dict=lambda: {}
+            ),
+            "model": "m",
+            "prompt_tokens": 1,
+            "completion_tokens": 1,
+        }
+        schedule = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt="Check on the user",
+            kind=ScheduledMessage.Kind.ONCE,
+            next_run_at=timezone.now() - timedelta(minutes=1),
+        )
+        from workspace.ai.tasks.scheduled import generate_scheduled_response
+
+        generate_scheduled_response(str(schedule.uuid))
+
+        messages = mock_llm.call_args.args[0]
+        last = messages[-1]
+        self.assertEqual(last["role"], "system")
+        self.assertIn("<context>", last["content"])
+        self.assertIn("own initiative", last["content"])
+        self.assertIn("The last message in the conversation is yours", last["content"])

@@ -6,7 +6,10 @@ from celery import shared_task
 from django.utils import timezone
 
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
-from workspace.ai.services.conversation_history import build_conversation_history
+from workspace.ai.services.conversation_history import (
+    build_conversation_history,
+    unprompted_run_note,
+)
 from workspace.ai.services.llm import (
     clean_llm_content,
     sanitize_messages_for_storage,
@@ -125,11 +128,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
 
     human_user = User.objects.filter(pk=schedule.created_by_id).first()
 
-    history, summary_text = build_conversation_history(
-        str(conversation.pk),
-        bot_profile,
-        human_user,
-    )
+    history = build_conversation_history(str(conversation.pk), bot_profile, human_user)
 
     bot_name = bot_user.get_full_name() or bot_user.username
 
@@ -147,11 +146,12 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
 
     messages = build_chat_messages(
         bot_profile.system_prompt + scheduled_instruction,
-        history,
+        history.messages,
         bot_name=bot_name,
         user=human_user,
         bot=bot_user,
-        summary=summary_text,
+        summary=history.summary,
+        situation=unprompted_run_note(history.window, bot_user.id),
     )
 
     ai_task = AITask.objects.create(
@@ -233,7 +233,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             tool_data=tool_data,
         )
 
-        maybe_dispatch_summary_update(str(conversation.pk), summary_text)
+        maybe_dispatch_summary_update(str(conversation.pk), history.summary)
 
         logger.info(
             "Scheduled response generated: schedule=%s conversation=%s tokens=%s+%s",

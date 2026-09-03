@@ -76,21 +76,17 @@ def generate_chat_response(
     )
 
     try:
-        history, summary_text = build_conversation_history(
-            conversation_id,
-            bot_profile,
-            human_user,
-        )
+        history = build_conversation_history(conversation_id, bot_profile, human_user)
 
         bot_name = bot_user.get_full_name() or bot_user.username
 
         messages = build_chat_messages(
             bot_profile.system_prompt,
-            history,
+            history.messages,
             bot_name=bot_name,
             user=human_user,
             bot=bot_user,
-            summary=summary_text,
+            summary=history.summary,
         )
 
         initial_messages = sanitize_messages_for_storage(list(messages))
@@ -160,7 +156,7 @@ def generate_chat_response(
         if not conversation.title and msg_count >= 2:
             generate_conversation_title.delay(str(conversation_id))
 
-        maybe_dispatch_summary_update(conversation_id, summary_text)
+        maybe_dispatch_summary_update(conversation_id, history.summary)
 
         logger.info(
             "Bot response generated: conversation=%s tokens=%s+%s",

@@ -1065,7 +1065,11 @@ def shared_file_view(request, token):
     show_content = link.allows_read and unlocked
     show_listing = show_content and is_folder
     show_viewer = show_content and not is_folder
-    show_dropzone = is_folder and link.allows_upload
+    # Root-scoped, not target-scoped: the dropzone always uploads into
+    # link.file (see SharedFolderUploadView._store), never into whatever
+    # subfolder is currently browsed, so its visibility must not depend on
+    # ?node= - it is page chrome, not part of the navigable content.
+    show_dropzone = link.allows_upload
 
     # Render viewer HTML if accessible. ViewerRegistry has nothing to render
     # for a folder, so skip it entirely rather than looking up a viewer class

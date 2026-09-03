@@ -3,14 +3,17 @@
 {% block title %}{{ target.name }} - Workspace{% endblock %}
 {% block head_extra %}
   <script src="{% static 'ui/js/inline_alert.js' %}"></script>
-  {% if is_folder %}
+  {% if link.allows_upload %}
     <script src="{% static 'files/ui/js/shared_dropzone.js' %}"></script>
   {% endif %}
 {% endblock %}
 {% block content %}
-  {% partialdef shared-content inline %}
-    <div id="shared-content" class="space-y-4">
-      <div class="card bg-base-100 shadow-lg overflow-hidden">
+  <div class="space-y-4">
+    {% partialdef shared-content inline %}
+      <div
+        id="shared-content"
+        class="card bg-base-100 shadow-lg overflow-hidden"
+      >
         <!-- Header -->
         <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
           <div class="flex items-center gap-3">
@@ -61,10 +64,17 @@
           {% include "files/ui/partials/shared_viewer.html" %}
         {% endif %}
       </div>
+    {% endpartialdef %}
 
-      {% if show_dropzone %}
-        {% include "files/ui/partials/shared_dropzone.html" %}
-      {% endif %}
-    </div>
-  {% endpartialdef %}
+    {% if show_dropzone %}
+      {% comment %}
+        Deliberately outside the shared-content partial: the dropzone always
+        uploads into the link's own root, never the folder currently being
+        browsed, so it must survive navigation instead of being torn down and
+        rebuilt (which would also drop its in-flight upload queue) every time
+        a visitor clicks into a subfolder.
+      {% endcomment %}
+      {% include "files/ui/partials/shared_dropzone.html" %}
+    {% endif %}
+  </div>
 {% endblock %}

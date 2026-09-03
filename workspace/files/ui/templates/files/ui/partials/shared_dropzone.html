@@ -1,7 +1,11 @@
 {% comment %}
-  The anonymous drop zone on shared_page.html, shown whenever the currently
-  browsed target is a folder that accepts uploads (drop or both mode). Needs
-  share_token, access_token and max_file_bytes in context.
+  The anonymous drop zone on shared_page.html, shown page-wide whenever the
+  link accepts uploads (drop or both mode). Lives outside the shared-content
+  swap region on purpose: uploads always land in the link's own root
+  (SharedFolderUploadView never takes a target folder), never in whatever
+  subfolder is currently browsed, so the zone - and its in-flight upload
+  queue - must survive navigating into one. Needs share_token, access_token
+  and max_file_bytes in context.
 {% endcomment %}
 <div
   data-testid="drop-zone"
@@ -14,7 +18,7 @@
   <div class="card-body">
     <h2 class="text-lg font-bold mb-2 flex items-center gap-2">
       <i data-lucide="upload-cloud" class="w-5 h-5"></i>
-      Send files
+      Send files to {{ link.file.name }}
     </h2>
 
     <label

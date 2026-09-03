@@ -167,6 +167,52 @@ class SharedLinkPageTests(TestCase):
         self.assertTemplateUsed(resp, "files/ui/partials/shared_dropzone.html")
         self.assertContains(resp, self.owner.username)
 
+    def test_the_dropzone_is_outside_the_navigation_fragment(self):
+        """The dropzone always uploads into the link's own root, never the
+        subfolder being browsed, so it must survive a swap instead of being
+        torn down and rebuilt (losing its queue) on every navigation."""
+        folder = File.objects.create(
+            owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        link = FileShareLink.objects.create(
+            file=folder, created_by=self.owner, mode=FileShareLink.Mode.BOTH
+        )
+
+        fragment = self.client.get(
+            f"/files/shared/{link.token}", HTTP_X_ALPINE_REQUEST="true"
+        )
+        self.assertEqual(fragment.status_code, 200)
+        self.assertNotContains(fragment, 'data-testid="drop-zone"')
+
+        full_page = self.client.get(f"/files/shared/{link.token}")
+        self.assertEqual(full_page.status_code, 200)
+        self.assertContains(full_page, 'data-testid="drop-zone"')
+
+    def test_the_dropzone_names_the_share_root_while_browsing_a_subfolder(self):
+        """Uploads always land in the share root (SharedFolderUploadView
+        never takes a target folder), so the dropzone must keep naming that
+        root - not the subfolder currently on screen - or the interface
+        misleads the visitor about where their files are going."""
+        folder = File.objects.create(
+            owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        sub = File.objects.create(
+            owner=self.owner,
+            name="Sub",
+            node_type=File.NodeType.FOLDER,
+            parent=folder,
+        )
+        link = FileShareLink.objects.create(
+            file=folder, created_by=self.owner, mode=FileShareLink.Mode.BOTH
+        )
+
+        resp = self.client.get(f"/files/shared/{link.token}", {"node": str(sub.uuid)})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'data-testid="drop-zone"')
+        self.assertContains(resp, "Send files to Docs")
+        self.assertNotContains(resp, "Send files to Sub")
+
     def test_a_drop_mode_folder_link_renders_the_drop_page_with_no_listing(self):
         folder = File.objects.create(
             owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER

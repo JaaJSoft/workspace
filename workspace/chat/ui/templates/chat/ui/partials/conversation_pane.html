@@ -1,8 +1,5 @@
 {% load static %}
-<div
-  class="h-full flex flex-col min-w-0 bg-base-100"
-  :style="!activeConversation && !pendingInitialConvUuid && isMobile() ? 'display:none!important' : ''"
->
+<div class="h-full flex flex-col min-w-0 bg-base-100">
 
   <!-- Empty state -->
   <template x-if="!activeConversation && !pendingInitialConvUuid">

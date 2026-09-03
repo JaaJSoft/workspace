@@ -5,6 +5,7 @@
 // SHA-512. Using one seed for all three is the classic way to fail this table.
 const test = require('node:test');
 const assert = require('node:assert');
+const vm = require('node:vm');
 const { loadScript } = require('../../../common/tests/js/loader');
 
 const ctx = loadScript(
@@ -37,10 +38,17 @@ const RFC_VECTORS = [
 
 const HASHES = { SHA1: 'SHA-1', SHA256: 'SHA-256', SHA512: 'SHA-512' };
 
+// Encoded inside the vm: the bundle is entitled to branch on prototypes, and a
+// Uint8Array built out here carries the wrong realm's - the shape the cbor-x
+// incident was about.
+const seedBytes = (algorithm) => vm.runInContext(
+  `new TextEncoder().encode(${JSON.stringify(SEEDS[algorithm])})`, ctx
+);
+
 test('the RFC 6238 vectors replay exactly', async () => {
   for (const vector of RFC_VECTORS) {
     for (const algorithm of ['SHA1', 'SHA256', 'SHA512']) {
-      const secret = new TextEncoder().encode(SEEDS[algorithm]);
+      const secret = seedBytes(algorithm);
       const key = await V.importTotpKey({ secret: secret, hash: HASHES[algorithm] });
       const code = await V.totpCode(key, { digits: 8, period: 30 }, vector.at);
       assert.equal(code, vector[algorithm], `${algorithm} at t=${vector.at}`);
@@ -50,7 +58,7 @@ test('the RFC 6238 vectors replay exactly', async () => {
 
 test('the imported key cannot be read back', async () => {
   const key = await V.importTotpKey({
-    secret: new TextEncoder().encode(SEEDS.SHA1), hash: 'SHA-1',
+    secret: seedBytes('SHA1'), hash: 'SHA-1',
   });
   assert.equal(key.extractable, false);
   await assert.rejects(() => crypto.subtle.exportKey('raw', key));
@@ -59,7 +67,7 @@ test('the imported key cannot be read back', async () => {
 test('a six-digit code is padded rather than shortened', async () => {
   // The dynamic truncation can land on a value below 100000, and a code shown
   // as five digits is a code the user types wrong.
-  const secret = new TextEncoder().encode(SEEDS.SHA1);
+  const secret = seedBytes('SHA1');
   const key = await V.importTotpKey({ secret: secret, hash: 'SHA-1' });
   for (let at = 0; at < 30 * 400; at += 30) {
     const code = await V.totpCode(key, { digits: 6, period: 30 }, at);
@@ -77,6 +85,21 @@ test('base32 accepts what a service actually prints', () => {
   ]) {
     assert.deepStrictEqual(Array.from(V.base32Decode(variant)), Array.from(expected), variant);
   }
+});
+
+test('a decoded key re-encodes to what the service printed', () => {
+  // The panel reveals the key the user retypes into a phone, and it gets there
+  // by decoding the stored uri and encoding the bytes back. Padding and
+  // grouping are presentation, so only the symbols have to survive.
+  for (const key of [
+    'JBSWY3DPEHPK3PXP',
+    'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
+    'AAAAAAAA',
+    '7777777777777777',
+  ]) {
+    assert.equal(V.base32Encode(V.base32Decode(key)), key);
+  }
+  assert.equal(V.base32Encode(V.base32Decode('JBSW Y3DP EHPK 3PXP')), 'JBSWY3DPEHPK3PXP');
 });
 
 test('base32 refuses rather than skips', () => {

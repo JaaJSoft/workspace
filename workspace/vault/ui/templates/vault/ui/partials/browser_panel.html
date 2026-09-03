@@ -118,6 +118,7 @@
           </div>
         </div>
 
+        {# Revealed as the base32 key, not the otpauth:// uri it is stored as: what a user does with this row is retype it into another authenticator. #}
         <div x-show="panelCarries('totp')">
           <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Authenticator key</div>
           <div class="flex items-center gap-2">

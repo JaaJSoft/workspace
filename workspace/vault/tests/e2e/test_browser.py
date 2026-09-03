@@ -522,6 +522,28 @@ class VaultBrowserTests(PlaywrightTestCase):
         }
         self.assertIn(shown, accepted)
 
+    def test_revealing_the_key_shows_the_key_and_not_the_uri(self):
+        """What the row is labelled is what it shows.
+
+        The field is stored as a whole ``otpauth://`` uri, so a reveal that
+        printed it verbatim would put the parameters on screen and leave the
+        user to pick the secret out of them - which is what they retype into
+        another authenticator.
+        """
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self._add_totp_key("GitHub")
+        self.page.click("tbody tr:has-text('GitHub')")
+        panel = self.page.locator(PANEL)
+        self._wait_for_totp_section(panel)
+        self.assertNotIn(self.TOTP_SECRET, panel.inner_text())
+
+        self.page.click("button[aria-label='Reveal the authenticator key']")
+        self.page.wait_for_selector("button[aria-label='Hide the authenticator key']")
+        shown = panel.inner_text()
+        self.assertIn(self.TOTP_SECRET, shown)
+        self.assertNotIn("otpauth://", shown)
+
     def test_copying_the_one_time_code_never_copies_the_key(self):
         self._open_vault()
         self._create_entry("GitHub", "octocat", "hunter2")

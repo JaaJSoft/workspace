@@ -417,12 +417,9 @@ window.vaultBrowser = (function () {
         // mutating action elsewhere (favourite, trash, a folder or tag save)
         // reloads through here just like a manual refresh does.
         //
-        // The panel itself survives when its row does. Dropping it outright
-        // discarded a panel the user had just opened: a reload runs for a
-        // whole round trip after saveEntry closes its dialog, and a row
-        // clicked in that window opened a panel this line then closed under
-        // the user - reachable by hand on a slow link, and the reason both
-        // authenticator walks failed on CI and neither did locally.
+        // The panel itself survives when its row does: a reload runs for a
+        // whole round trip, and a row clicked inside that window must not have
+        // its panel closed under the user when the listing lands.
         const open = this.panelEntry;
         this.resetPanel();
         if (open) {
@@ -628,6 +625,17 @@ window.vaultBrowser = (function () {
         return this.revealed[this.panelEntry.uuid + '|' + fieldId] || '';
       },
 
+      // The stored totp field is a whole otpauth:// uri, and the row showing
+      // it is labelled with what a user retypes into a phone: the key. The
+      // uri's parameters are what the derivation reads, not what a human
+      // copies off a screen, so the reveal shows the secret alone.
+      shownValue: function (fieldId, value) {
+        if (fieldId !== 'totp') return value;
+        return window.vaultCrypto.base32Encode(
+          window.vaultCrypto.parseOtpauth(value).secret
+        );
+      },
+
       // The one other moment a secret is decrypted, alongside copyField: this
       // one keeps the plaintext in component state instead of handing it off,
       // because the point is to show it rather than move it. The panel may
@@ -638,6 +646,11 @@ window.vaultBrowser = (function () {
       toggleReveal: async function (fieldId) {
         const entry = this.panelEntry;
         if (!entry) return;
+        // The same gate the button is drawn behind, read again here: the map
+        // the template consulted is a round trip old, and a row trashed in
+        // that window must not open its password because the menu had not
+        // caught up when the click landed.
+        if (!this.hasAction(entry, 'copy_' + fieldId)) return;
         const slot = entry.uuid + '|' + fieldId;
         if (Object.prototype.hasOwnProperty.call(this.revealed, slot)) {
           delete this.revealed[slot];
@@ -666,7 +679,7 @@ window.vaultBrowser = (function () {
           // the only reason to show what just arrived.
           if (!Object.prototype.hasOwnProperty.call(this.revealing, slot)) return;
           delete this.revealing[slot];
-          this.revealed[slot] = value;
+          this.revealed[slot] = this.shownValue(fieldId, value);
         } catch (err) {
           delete this.revealing[slot];
           if (err && err.reason === 'locked') return;
@@ -981,9 +994,11 @@ window.vaultBrowser = (function () {
         return this.draft.hasTotp && !this.draft.totpRemoved ? 'set' : 'none';
       },
 
+      // No reset of totpRemoved: `editing` already wins over it while there is
+      // an input, and clearing it here made Cancel fall back to `set` on an
+      // entry whose key had just been removed - bringing the key back.
       startTotpEntry: function () {
         this.draft.totpInput = '';
-        this.draft.totpRemoved = false;
       },
 
       cancelTotpEntry: function () {

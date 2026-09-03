@@ -51,6 +51,25 @@ export function base32Decode(text) {
   return new Uint8Array(out);
 }
 
+// The reverse, for showing a stored key rather than reading one. Unpadded:
+// base32Decode strips padding on the way in, and every authenticator prints
+// the key without it.
+export function base32Encode(bytes) {
+  let out = '';
+  let value = 0;
+  let bits = 0;
+  for (const byte of new Uint8Array(bytes)) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      out += BASE32_ALPHABET[(value >> bits) & 31];
+    }
+  }
+  if (bits) out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  return out;
+}
+
 export function parseOtpauth(text) {
   let url;
   try {

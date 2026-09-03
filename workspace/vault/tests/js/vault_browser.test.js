@@ -430,6 +430,15 @@ const ACTION = {
   copy_totp: { id: 'copy_totp', label: 'Copy authenticator code', icon: 'timer', bulk: false, css_class: '' },
 };
 
+// Answers every uuid asked about with the same actions. The reveal buttons are
+// drawn from this answer and toggleReveal reads it again, so a test that
+// reveals a field has to be offered the copy action that field is gated on.
+function offering(...actions) {
+  return async (uuids) => Object.fromEntries(
+    Array.from(uuids, (uuid) => [uuid, actions])
+  );
+}
+
 function ids(actions) {
   return Array.from(actions, (action) => action.id);
 }
@@ -761,7 +770,10 @@ test('the panel says which fields a row carries without opening one', async () =
 
 test('revealing a field opens exactly that ciphertext', async () => {
   const { component, opened } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
   });
   component.init();
   await component.load();
@@ -775,7 +787,10 @@ test('revealing a field opens exactly that ciphertext', async () => {
 
 test('revealing twice hides again without a second decryption', async () => {
   const { component, opened } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
   });
   component.init();
   await component.load();
@@ -799,7 +814,10 @@ test('taking a reveal back while it is still decrypting leaves nothing on screen
   // holding that one would deadlock load() itself.
   let holding = false;
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
     crypto: {
       open: async () => {
         if (holding) {
@@ -857,7 +875,10 @@ test('a vault falling out of reach takes the revealed value and the key handle w
 
 test('closing the panel takes the revealed value with it', async () => {
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
   });
   component.init();
   await component.load();
@@ -869,7 +890,10 @@ test('closing the panel takes the revealed value with it', async () => {
 
 test('locking the vault takes the revealed value with it', async () => {
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
   });
   component.init();
   await component.load();
@@ -882,7 +906,10 @@ test('locking the vault takes the revealed value with it', async () => {
 
 test('navigating away takes the revealed value with it', async () => {
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
   });
   component.init();
   await component.load();
@@ -897,6 +924,7 @@ test('opening another entry drops the value revealed for the last one', async ()
     api: {
       listEntries: async (uuid, opts) =>
         opts && opts.trashed ? [] : [entryRow('e-1'), entryRow('e-2')],
+      fetchEntryActions: offering(ACTION.copy_password),
     },
   });
   component.init();
@@ -919,7 +947,7 @@ test('a reload triggered by a row action takes the revealed value with it', asyn
   const { component } = browser({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
-      fetchEntryActions: async () => ({ 'e-1': [ACTION.favorite, ACTION.copy_totp] }),
+      fetchEntryActions: offering(ACTION.favorite, ACTION.copy_totp, ACTION.copy_password),
       updateEntry: async (uuid, body) => body,
     },
     crypto: TOTP_CRYPTO,
@@ -950,7 +978,10 @@ test('a decryption that lands after the vault locked is dropped, not shown', asy
   // itself never returns.
   let resolveOpen;
   const { component } = browser({
-    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
     crypto: {
       open: (key, ciphertext, ad) => {
         if (!String(ad).endsWith('|password')) {
@@ -978,7 +1009,7 @@ test('a decryption that lands after the vault locked is dropped, not shown', asy
 });
 
 test('the reveal button is gated on the same action id as the copy button', async () => {
-  const { component } = browser({
+  const { component, opened } = browser({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
       fetchEntryActions: async () => ({ 'e-1': [] }),
@@ -988,6 +1019,12 @@ test('the reveal button is gated on the same action id as the copy button', asyn
   await component.load();
   component.openEntryFromRow(component.entries[0]);
   assert.equal(component.panelHasAction('copy_password'), false);
+  // Hiding the button is not the gate: the map the template read is a round
+  // trip old, so the handler asks again rather than trusting the click.
+  const before = opened.length;
+  await component.toggleReveal('password');
+  assert.deepStrictEqual({ ...component.revealed }, {}, 'nothing was revealed');
+  assert.equal(opened.length, before, 'and nothing was decrypted');
 });
 
 // --- the authenticator code, held as a key handle rather than a secret -----
@@ -1006,6 +1043,59 @@ const TOTP_CRYPTO = {
   totpCode: async () => '123456',
   totpSecondsRemaining: () => 17,
 };
+
+test('the key row reveals the key, never the uri it is stored as', async () => {
+  const uri = 'otpauth://totp/Bank?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1&digits=6&period=30';
+  const secret = new Uint8Array([0x48, 0x65, 0x6c, 0x6c, 0x6f]);
+  const parsed = [];
+  const encoded = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_totp),
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      open: async (key, ciphertext, ad) => new TextEncoder().encode(
+        String(ad).endsWith('|totp') ? uri : 'open:' + ad
+      ),
+      parseOtpauth: (text) => {
+        parsed.push(text);
+        return { secret: secret, hash: 'SHA-1', algorithm: 'SHA1', digits: 6, period: 30 };
+      },
+      base32Encode: (bytes) => { encoded.push(bytes); return 'JBSWY3DPEHPK3PXP'; },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('totp');
+  // The row is labelled with what a user retypes into a phone, so what it
+  // shows is the secret alone - the parameters around it are the
+  // derivation's, not the reader's.
+  assert.equal(component.revealedValue('totp'), 'JBSWY3DPEHPK3PXP');
+  assert.equal(parsed[parsed.length - 1], uri, 'the stored uri is what was parsed');
+  assert.equal(encoded[encoded.length - 1], secret, 'and its secret is what was shown');
+});
+
+test('a key that cannot be parsed says so rather than showing the uri', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_totp),
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      parseOtpauth: () => { throw new Error('authenticator key is not a uri'); },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('totp');
+  assert.deepStrictEqual({ ...component.revealed }, {}, 'nothing half-read reaches the row');
+  assert.match(component.error, /could not be revealed/i);
+});
 
 test('opening an entry with a key shows its code and its validity', async () => {
   const { component } = browser({
@@ -1502,6 +1592,64 @@ test('the three states of the key control are exclusive', () => {
   assert.equal(component.totpFieldState(), 'set');
   component.removeTotp();
   assert.equal(component.totpFieldState(), 'none');
+});
+
+test('cancelling an add after a remove does not bring the key back', async () => {
+  // Cancel returns to whatever state Add was clicked from. Clearing the
+  // removal on the way in made it return to `set` instead, and the save that
+  // followed carried the ciphertext through as if Remove had never happened.
+  const written = [];
+  const { component } = typed({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {},
+    carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
+    hasTotp: true, totpInput: null, totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  assert.equal(component.totpFieldState(), 'set');
+  component.removeTotp();
+  assert.equal(component.totpFieldState(), 'none');
+  component.startTotpEntry();
+  assert.equal(component.totpFieldState(), 'editing');
+  component.cancelTotpEntry();
+  assert.equal(component.totpFieldState(), 'none', 'the removal survives the cancel');
+  await component.saveEntry();
+  assert.ok(!('totp' in written[0].fields), 'and the write still drops the key');
+});
+
+test('typing a key after a remove seals the new one', async () => {
+  const written = [];
+  const { component } = typed({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    crypto: {
+      normalizeTotpInput: (text) => 'otpauth://totp/Bank?secret=' + text,
+      // Seals to its own plaintext, so the test reads which value was sealed.
+      seal: async (key, plaintext) => plaintext,
+      toBase64Url: (value) => new TextDecoder().decode(value),
+    },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {},
+    carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
+    hasTotp: true, totpInput: null, totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  component.removeTotp();
+  component.startTotpEntry();
+  component.draft.totpInput = 'JBSWY3DPEHPK3PXP';
+  await component.saveEntry();
+  assert.equal(
+    written[0].fields.totp, 'otpauth://totp/Bank?secret=JBSWY3DPEHPK3PXP',
+    'a typed key wins over the removal that preceded it'
+  );
 });
 
 test('a malformed key is refused with a message rather than saved', async () => {

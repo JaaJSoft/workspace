@@ -21,7 +21,7 @@ import { canonicalCbor, decodeCbor } from './src/vault/cbor.js';
 import { SIG_ALG_ED25519, sign, verify, signBytes, verifyBytes, importSigner } from './src/vault/sign.js';
 import { crockfordEncode, crockfordDecode } from './src/vault/crockford.js';
 import {
-  base32Decode, parseOtpauth, normalizeTotpInput, importTotpKey, totpCode,
+  base32Decode, base32Encode, parseOtpauth, normalizeTotpInput, importTotpKey, totpCode,
   totpSecondsRemaining,
 } from './src/vault/totp.js';
 import {
@@ -74,6 +74,7 @@ window.vaultCrypto = {
   crockfordEncode,
   crockfordDecode,
   base32Decode,
+  base32Encode,
   parseOtpauth,
   normalizeTotpInput,
   importTotpKey,

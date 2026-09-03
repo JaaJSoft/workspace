@@ -3,11 +3,14 @@
 Every generator is driven directly (never through a live HTTP connection),
 with an injectable clock/sleep pair so a test controls exactly how many poll
 cycles run and what wall-clock time each one observes - see ``_FakeClock``
-and ``_drive`` below.
+and ``_drive`` below. ``GuestStreamViewTests`` covers the view's own gate,
+which the generator-level tests cannot: they call ``stream_guest_events``
+directly, bypassing ``MeetingGuestStreamView.get`` entirely.
 """
 
 import re
 from datetime import timedelta
+from unittest.mock import patch
 
 import orjson
 from django.contrib.auth import get_user_model
@@ -40,7 +43,8 @@ def make_event(owner, start=None, end=None):
 
 
 class _StopDriving(Exception):
-    """Raised by a _FakeClock to bound a test to a fixed number of poll cycles."""
+    """Raised by a _FakeClock (or a patched sleep) to bound a test to a
+    fixed number of poll cycles."""
 
 
 class _FakeClock:
@@ -48,13 +52,15 @@ class _FakeClock:
 
     *advance* is added to the clock on every ``sleep()`` call, so a test can
     simulate the occurrence window elapsing or the connection budget being
-    reached between one cycle and the next. *max_cycles*, when set, forces
-    the driver to stop after that many completed cycles even if the stream
-    never naturally terminates - the WAITING-guest and message-gating tests
-    use this since the guest stays reachable indefinitely otherwise.
+    reached between one cycle and the next. *max_cycles* forces the driver to
+    stop after that many completed cycles even if the stream never naturally
+    terminates - it defaults to a generous-but-finite cap so a regression
+    that breaks termination fails the test instead of hanging the suite; the
+    WAITING-guest and message-gating tests pass an explicit small value since
+    they know exactly how many cycles they need.
     """
 
-    def __init__(self, start, advance=None, max_cycles=None):
+    def __init__(self, start, advance=None, max_cycles=20):
         self.value = start
         self.advance = advance
         self.cycles = 0
@@ -71,7 +77,7 @@ class _FakeClock:
             raise _StopDriving
 
 
-def _drive(token, slug, clock):
+def _drive(token, meeting_uuid, clock, last_event_id=None):
     """Run the generator to completion (or until the clock forces a stop).
 
     Returns (events, terminated) - terminated is True only when the
@@ -79,7 +85,11 @@ def _drive(token, slug, clock):
     up after max_cycles.
     """
     gen = guest_stream.stream_guest_events(
-        token, slug, now=clock.now, sleep=clock.sleep
+        token,
+        meeting_uuid,
+        last_event_id=last_event_id,
+        now=clock.now,
+        sleep=clock.sleep,
     )
     events = []
     try:
@@ -96,6 +106,11 @@ def _parse(sse_text):
     match = re.search(r"^data: (.+)$", sse_text, re.MULTILINE)
     payload = orjson.loads(match.group(1))
     return payload["event"], payload["data"]
+
+
+def _event_id(sse_text):
+    match = re.search(r"^id: (.+)$", sse_text, re.MULTILINE)
+    return match.group(1) if match else None
 
 
 class GuestStreamTests(TestCase):
@@ -159,7 +174,7 @@ class GuestStreamTests(TestCase):
         end_meeting(self.meeting, now=self.now)
 
         clock = _FakeClock(self.now)
-        events, terminated = _drive(token, self.meeting.slug, clock)
+        events, terminated = _drive(token, self.meeting.uuid, clock)
 
         self.assertTrue(terminated)
         parsed = [_parse(e) for e in events]
@@ -170,7 +185,7 @@ class GuestStreamTests(TestCase):
         remove_guest(guest)
 
         clock = _FakeClock(self.now)
-        events, terminated = _drive(token, self.meeting.slug, clock)
+        events, terminated = _drive(token, self.meeting.uuid, clock)
 
         self.assertTrue(terminated)
         parsed = [_parse(e) for e in events]
@@ -196,7 +211,7 @@ class GuestStreamTests(TestCase):
         )
 
         clock = _FakeClock(self.now, advance=timedelta(minutes=2))
-        events, terminated = _drive(token, meeting.slug, clock)
+        events, terminated = _drive(token, meeting.uuid, clock)
 
         self.assertTrue(terminated)
         parsed = [_parse(e) for e in events]
@@ -206,7 +221,7 @@ class GuestStreamTests(TestCase):
         _guest, token = self._admit()
 
         clock = _FakeClock(self.now, advance=timedelta(seconds=700))
-        events, terminated = _drive(token, self.meeting.slug, clock)
+        events, terminated = _drive(token, self.meeting.uuid, clock)
 
         self.assertTrue(terminated)
         # Forced reconnect, not a gate failure: no meeting_ended is invented
@@ -227,12 +242,31 @@ class GuestStreamTests(TestCase):
         self._make_message(self.now + timedelta(seconds=1))
 
         clock = _FakeClock(self.now, max_cycles=1)
-        events, terminated = _drive(token, self.meeting.slug, clock)
+        events, terminated = _drive(token, self.meeting.uuid, clock)
 
         self.assertFalse(terminated)
         parsed = [_parse(e) for e in events]
         self.assertEqual(
             parsed, [("meeting_admitted", {"meeting_id": str(self.meeting.uuid)})]
+        )
+
+    # --- call signalling ---
+
+    def test_admitted_guest_receives_call_event_verbatim(self):
+        guest, token = self._admit()
+        enqueue_event(
+            guest_key(guest.uuid),
+            "call_signal",
+            {"session_id": "abc", "signal": {"type": "offer"}},
+        )
+
+        clock = _FakeClock(self.now, max_cycles=1)
+        events, terminated = _drive(token, self.meeting.uuid, clock)
+
+        self.assertFalse(terminated)
+        parsed = [_parse(e) for e in events]
+        self.assertIn(
+            ("call_signal", {"session_id": "abc", "signal": {"type": "offer"}}), parsed
         )
 
     # --- message content ---
@@ -244,7 +278,7 @@ class GuestStreamTests(TestCase):
         )
 
         clock = _FakeClock(self.now, max_cycles=1)
-        events, terminated = _drive(token, self.meeting.slug, clock)
+        events, terminated = _drive(token, self.meeting.uuid, clock)
 
         self.assertFalse(terminated)
         parsed = [_parse(e) for e in events]
@@ -262,7 +296,7 @@ class GuestStreamTests(TestCase):
         )
 
         clock = _FakeClock(self.now, max_cycles=1)
-        events, terminated = _drive(token, self.meeting.slug, clock)
+        events, terminated = _drive(token, self.meeting.uuid, clock)
 
         self.assertFalse(terminated)
         parsed = [_parse(e) for e in events]
@@ -279,16 +313,66 @@ class GuestStreamTests(TestCase):
         self._make_message(self.now + timedelta(seconds=1), guest=guest)
 
         clock = _FakeClock(self.now, max_cycles=1)
-        events, terminated = _drive(token, self.meeting.slug, clock)
+        events, terminated = _drive(token, self.meeting.uuid, clock)
 
         self.assertFalse(terminated)
         parsed = [_parse(e) for e in events]
         self.assertNotIn("message", [name for name, _data in parsed])
 
+    # --- Last-Event-Id resume ---
+
+    def test_message_posted_between_connections_is_delivered_on_reconnect(self):
+        _guest, token = self._admit()
+        first_msg = self._make_message(
+            self.now + timedelta(seconds=1), author=self.owner
+        )
+
+        first_clock = _FakeClock(self.now, max_cycles=1)
+        first_events, _terminated = _drive(token, self.meeting.uuid, first_clock)
+        first_message_chunks = [e for e in first_events if _parse(e)[0] == "message"]
+        self.assertEqual(len(first_message_chunks), 1)
+        last_id = _event_id(first_message_chunks[0])
+        self.assertEqual(last_id, str(first_msg.pk))
+
+        second_msg = self._make_message(
+            self.now + timedelta(seconds=2), author=self.owner
+        )
+
+        second_clock = _FakeClock(self.now, max_cycles=1)
+        second_events, _terminated = _drive(
+            token, self.meeting.uuid, second_clock, last_event_id=last_id
+        )
+        parsed = [_parse(e) for e in second_events]
+        message_events = [data for name, data in parsed if name == "message"]
+        # Exactly the message posted in the gap - not first_msg again.
+        self.assertEqual(len(message_events), 1)
+        self.assertEqual(message_events[0]["message"]["uuid"], str(second_msg.pk))
+
+    def test_last_event_id_naming_a_pre_floor_message_does_not_lower_the_floor(self):
+        _guest, token = self._admit()
+        pre_floor = self._make_message(
+            self.occurrence_start - timedelta(minutes=1), author=self.owner
+        )
+        in_window = self._make_message(
+            self.now + timedelta(seconds=1), author=self.owner
+        )
+
+        clock = _FakeClock(self.now, max_cycles=1)
+        events, _terminated = _drive(
+            token, self.meeting.uuid, clock, last_event_id=str(pre_floor.pk)
+        )
+        parsed = [_parse(e) for e in events]
+        message_events = [data for name, data in parsed if name == "message"]
+        self.assertEqual(len(message_events), 1)
+        self.assertEqual(message_events[0]["message"]["uuid"], str(in_window.pk))
+
 
 class GuestStreamViewTests(TestCase):
-    """Thin view-level checks - headers and the initial gate, never draining
-    the streaming body (which would run the generator's real poll loop)."""
+    """Thin view-level checks - headers, the widened gate, and content
+    fencing through the real StreamingHttpResponse, never draining more of
+    the streaming body than a bounded, deterministic number of cycles (a
+    patched ``sleep`` raises to stop pulling once that budget is spent, so a
+    regression fails fast instead of hanging on a real 1s wait)."""
 
     def setUp(self):
         cache.clear()
@@ -306,11 +390,11 @@ class GuestStreamViewTests(TestCase):
     def tearDown(self):
         cache.clear()
 
+    def _stream_url(self):
+        return f"/api/v1/chat/meet/{self.meeting.slug}/stream"
+
     def test_invalid_token_is_404(self):
-        resp = self.client.get(
-            f"/api/v1/chat/meet/{self.meeting.slug}/stream",
-            HTTP_X_MEETING_TOKEN="nope",
-        )
+        resp = self.client.get(self._stream_url(), HTTP_X_MEETING_TOKEN="nope")
         self.assertEqual(resp.status_code, 404)
 
     def test_valid_token_opens_an_event_stream(self):
@@ -322,13 +406,59 @@ class GuestStreamViewTests(TestCase):
             occurrence_start=self.occurrence_start,
             token_hash=token_hash,
         )
-        resp = self.client.get(
-            f"/api/v1/chat/meet/{self.meeting.slug}/stream",
-            HTTP_X_MEETING_TOKEN=token,
-        )
+        resp = self.client.get(self._stream_url(), HTTP_X_MEETING_TOKEN=token)
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.streaming)
         self.assertEqual(resp["Content-Type"], "text/event-stream")
         self.assertEqual(resp["Cache-Control"], "no-cache, no-transform")
         self.assertEqual(resp["X-Accel-Buffering"], "no")
         self.assertEqual(resp["Content-Encoding"], "identity")
+
+    def test_waiting_guest_token_opens_a_stream(self):
+        # The regression this pins: MeetingGuestStreamView used to gate on
+        # resolve_guest, which rejects any non-ADMITTED row - a WAITING
+        # guest's own token 404'd before the generator ever ran.
+        token, token_hash = issue_token()
+        MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Wendy",
+            state=MeetingGuest.State.WAITING,
+            occurrence_start=self.occurrence_start,
+            token_hash=token_hash,
+        )
+        resp = self.client.get(self._stream_url(), HTTP_X_MEETING_TOKEN=token)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.streaming)
+
+    def test_waiting_guest_does_not_receive_call_events_until_admitted(self):
+        token, token_hash = issue_token()
+        guest = MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Wendy",
+            state=MeetingGuest.State.WAITING,
+            occurrence_start=self.occurrence_start,
+            token_hash=token_hash,
+        )
+        enqueue_event(guest_key(guest.uuid), "call_started", {"session_id": "x"})
+
+        resp = self.client.get(self._stream_url(), HTTP_X_MEETING_TOKEN=token)
+        self.assertEqual(resp.status_code, 200)
+
+        events = []
+
+        def _stop_after_one_cycle(_seconds):
+            raise _StopDriving
+
+        with patch(
+            "workspace.chat.services.guest_stream.time.sleep",
+            side_effect=_stop_after_one_cycle,
+        ):
+            content_iter = resp.streaming_content
+            try:
+                while True:
+                    events.append(next(content_iter).decode("utf-8"))
+            except StopIteration, _StopDriving:
+                pass
+
+        parsed = [_parse(e) for e in events]
+        self.assertNotIn("call_started", [name for name, _data in parsed])

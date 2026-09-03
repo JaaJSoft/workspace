@@ -327,28 +327,46 @@ class MeetingGuestStateView(APIView):
 
 @extend_schema(tags=["Chat - Meetings"])
 class MeetingGuestStreamView(APIView):
-    """Server-sent events for an admitted guest: call signalling plus messages.
+    """Server-sent events for a meeting guest: lobby status, call signalling
+    and messages.
 
-    The initial gate is the same 404-on-anything-else contract as join/leave/
-    heartbeat/signal - a bad token never gets a stream opened for it. Once
-    open, the stream re-runs the gate itself every cycle (see
-    ``guest_stream.stream_guest_events``), so nothing here needs to react to
-    the meeting ending or the guest being removed after the fact.
+    Gated on ``guest_for_token`` (the WAITING-tolerant lookup), not
+    ``resolve_guest`` like every other view in this file - deliberately
+    wider. A WAITING guest has to be able to hold a stream open to learn
+    they were admitted; gating on ``resolve_guest`` here would 404 that
+    guest before the generator ever runs, which is exactly what made
+    ``meeting_refused`` undeliverable before this view existed (see
+    ``guest_stream``'s module docstring). The generator itself still fences
+    every piece of *content*: ``call_*`` events and messages are only ever
+    forwarded once its own per-cycle ``resolve_guest`` call succeeds, so a
+    WAITING/REFUSED/REMOVED guest's stream carries nothing but the four
+    ``meeting_*`` lifecycle events.
+
+    This does widen the unauthenticated, long-lived surface: any token that
+    merely names a real guest of this meeting - including one never
+    admitted - can now hold a connection open. That is bounded the same way
+    the lobby itself is bounded: the knock endpoint caps new tokens at
+    10/IP/hour, and ``MEETING_MAX_WAITING_GUESTS`` (20) caps how many WAITING
+    rows - and so how many such streams - a single occurrence can have at
+    once.
     """
 
     permission_classes = [AllowAny]
     authentication_classes = []
     throttle_classes = [MeetingPublicIpThrottle]
 
-    @extend_schema(summary="Server-sent event stream for an admitted meeting guest")
+    @extend_schema(summary="Server-sent event stream for a meeting guest")
     def get(self, request, slug):
-        guest = _guest_for_request(request, slug)
-        if guest is None:
+        token = request.headers.get("X-Meeting-Token", "")
+        lobby_guest = guest_for_token(token)
+        if lobby_guest is None or lobby_guest.meeting.slug != slug:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        token = request.headers.get("X-Meeting-Token", "")
+        last_event_id = request.META.get("HTTP_LAST_EVENT_ID")
         response = StreamingHttpResponse(
-            stream_guest_events(token, slug),
+            stream_guest_events(
+                token, lobby_guest.meeting_id, last_event_id=last_event_id
+            ),
             content_type="text/event-stream",
         )
         response["Cache-Control"] = "no-cache, no-transform"

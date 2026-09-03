@@ -12,10 +12,12 @@
 <template x-if="draft">
   <div class="modal modal-open">
     <div class="modal-box max-w-lg">
-      <h2
-        class="font-semibold text-lg"
-        x-text="draft.isNew ? 'New ' + typeLabel(draft.type).toLowerCase() : 'Edit entry'"
-      ></h2>
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i :data-lucide="typeIcon(draft.type)" class="w-5 h-5 text-error"></i>
+        <span
+          x-text="draft.isNew ? 'New ' + typeLabel(draft.type).toLowerCase() : 'Edit entry'"
+        ></span>
+      </h3>
 
       <form @submit.prevent="saveEntry()" class="mt-4 space-y-3">
         <label class="form-control">
@@ -73,12 +75,20 @@
             x-show="totpFieldState() === 'set'"
           >
             <span class="text-sm opacity-60 flex-1">An authenticator key is set</span>
-            <button type="button" class="btn btn-xs btn-ghost" @click="startTotpEntry()">Replace</button>
             <button
               type="button"
-              class="btn btn-xs btn-ghost text-error"
+              class="btn btn-xs btn-ghost gap-1"
+              @click="startTotpEntry()"
+            >
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+              Replace
+            </button>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost text-error gap-1"
               @click="removeTotp()"
             >
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
               Remove
             </button>
           </div>
@@ -159,10 +169,13 @@
 <template x-if="folderDraft">
   <div class="modal modal-open">
     <div class="modal-box max-w-sm">
-      <h2
-        class="font-semibold text-lg"
-        x-text="folderDraft.existing ? 'Rename folder' : 'New folder'"
-      ></h2>
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i
+          :data-lucide="folderDraft.existing ? 'folder-pen' : 'folder-plus'"
+          class="w-5 h-5 text-error"
+        ></i>
+        <span x-text="folderDraft.existing ? 'Rename folder' : 'New folder'"></span>
+      </h3>
       <form @submit.prevent="saveFolder()">
         <input
           type="text"

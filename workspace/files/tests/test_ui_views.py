@@ -360,6 +360,16 @@ class SharedFolderListingTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "in.txt")
 
+    def test_a_two_level_descent_produces_the_exact_breadcrumb_trail(self):
+        """Not just "contains Sub somewhere" - the full, ordered sequence
+        from the share root down to the current folder, in order."""
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"node": str(self.sub.uuid)}
+        )
+        self.assertEqual(resp.status_code, 200)
+        labels = [crumb["label"] for crumb in resp.context["breadcrumbs"]]
+        self.assertEqual(labels, ["Shared", "Sub"])
+
     def test_node_param_of_a_file_renders_the_viewer_with_a_breadcrumb(self):
         """A file inside a shared folder behaves like a file shared on its
         own: viewer box, download link, and a breadcrumb back to its

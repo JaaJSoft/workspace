@@ -2,8 +2,19 @@
 {% load static %}
 {% block title %}{{ target.name }} - Workspace{% endblock %}
 {% block head_extra %}
+  {% comment %}
+    This page does not extend base.html, so nothing base.html loads
+    globally - including inline_alert.js - is present. Loading it
+    unconditionally here is deliberate: it is also emitted by
+    files/ui/templates/files/ui/viewers/office_viewer_unavailable.html,
+    reachable from a plain read-only link at an office document with no
+    upload involved, and an unregistered <inline-alert> renders as an
+    empty, invisible tag (attribute-only content, no fallback CSS on this
+    page) rather than an error - a silent failure a narrower gate already
+    produced once.
+  {% endcomment %}
+  <script src="{% static 'ui/js/inline_alert.js' %}"></script>
   {% if link.allows_upload %}
-    <script src="{% static 'ui/js/inline_alert.js' %}"></script>
     <script src="{% static 'files/ui/js/shared_dropzone.js' %}"></script>
   {% endif %}
 {% endblock %}

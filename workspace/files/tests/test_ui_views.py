@@ -102,6 +102,14 @@ class SharedLinkPageTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "doc.txt")
 
+    def test_a_read_only_link_still_loads_inline_alert_js(self):
+        """<inline-alert> is also emitted by office_viewer_unavailable.html,
+        reachable from a plain read link with no upload involved - it must
+        not be gated on link.allows_upload, or the custom element never
+        upgrades and its warning silently disappears."""
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertContains(resp, "ui/js/inline_alert.js")
+
     def test_an_expired_link_renders_the_expired_card(self):
         self.link.expires_at = timezone.now() - timedelta(days=1)
         self.link.save(update_fields=["expires_at"])

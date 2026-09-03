@@ -81,11 +81,16 @@ be defined before the parser reaches the markup using it, or server-rendered
       <!-- Sidebar header -->
       <div class="border-b border-base-300 py-4 px-3 relative">
         <div
-          class="flex items-center"
-          :class="collapsed ? 'justify-center' : 'justify-between'"
+          class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
+          :class="{ 'justify-center': collapsed, 'justify-between': !collapsed }"
         >
-          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" %}
-          <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          <div
+            x-show="!collapsed"
+            x-transition
+            class="flex items-center gap-0.5 max-lg:hidden{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+            :class="{ hidden: collapsed }"
+          >
             {% include "ui/partials/preferences_popover.html" with component="chatPreferences()" content="chat/ui/partials/_preferences_content.html" accent="text-info" button_class="hover:text-info" close_on_event="chat-run-diagnostic" %}
             {% if ai_enabled %}
               <button
@@ -119,7 +124,15 @@ be defined before the parser reaches the markup using it, or server-rendered
            },
          }"
       >
-        <div class="px-3 pt-3" x-show="!collapsed" x-cloak>
+        {% comment %}
+          Like the aside width, the search box's presence is server-rendered
+          so the list below it paints at its final offset before Alpine binds
+          (the rail below lg never shows it, hence the permanent max-lg:hidden).
+        {% endcomment %}
+        <div
+          class="px-3 pt-3 max-lg:hidden{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+          :class="{ hidden: collapsed }"
+        >
           <label class="input input-sm input-bordered w-full flex items-center gap-2">
             <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
             <input
@@ -142,21 +155,31 @@ be defined before the parser reaches the markup using it, or server-rendered
             </button>
           </label>
         </div>
-        {% comment %}The cloak wrapper stays outside the #conversation-list swap
-      target so alpine-ajax refreshes never re-hide the list; "invisible" keeps
-        its space reserved while Alpine boots.{% endcomment %}
-        <div class="flex-1 overflow-y-auto py-4 px-3" x-cloak="invisible">
-          {% include "chat/ui/partials/conversation_list.html" %}
+        {% comment %}
+          The cloak wrapper stays outside the #conversation-list swap target so
+          alpine-ajax refreshes never re-hide the list; "invisible" keeps its
+          space reserved while Alpine boots, and the skeleton overlays that
+          space until then.
+        {% endcomment %}
+        <div class="flex-1 min-h-0 relative">
+          {% include "chat/ui/partials/_conversation_list_skeleton.html" %}
+          <div class="h-full overflow-y-auto py-4 px-3" x-cloak="invisible">
+            {% include "chat/ui/partials/conversation_list.html" %}
+          </div>
         </div>
       </div>
 
       <!-- New chat buttons (visible when collapsed) -->
-      <div class="px-3 pb-2" x-show="collapsed" x-cloak>
+      <div
+        class="px-3 pb-2{% if not workspace_sidebar_collapsed %} lg:hidden{% endif %}"
+        :class="{ 'lg:hidden': !collapsed }"
+        x-show="collapsed"
+      >
         <ul class="menu p-0">
           {% if ai_enabled %}
-            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" %}
+            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
           {% endif %}
-          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="info" onclick="showNewConversationDialog()" tooltip="New chat" %}
+          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="info" onclick="showNewConversationDialog()" tooltip="New chat" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
 
@@ -210,17 +233,17 @@ be defined before the parser reaches the markup using it, or server-rendered
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="info" onclick="document.getElementById('chat-help-dialog').showModal()" tooltip="Help" %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="info" onclick="document.getElementById('chat-help-dialog').showModal()" tooltip="Help" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
 
       <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
       <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
         </ul>
         <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
     </aside>

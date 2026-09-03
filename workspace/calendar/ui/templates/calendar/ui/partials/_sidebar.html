@@ -18,14 +18,15 @@
     <!-- Header -->
     <div class="lg:border-b border-base-300 py-4 px-3 relative">
       <div
-        class="flex items-center"
-        :class="sidebarCollapsed() ? 'justify-center' : 'justify-between'"
+        class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
+        :class="{ 'justify-center': sidebarCollapsed(), 'justify-between': !sidebarCollapsed() }"
       >
-        {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" %}
+        {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         <div
           x-show="!sidebarCollapsed()"
           x-transition
-          class="flex items-center gap-0.5"
+          class="flex items-center gap-0.5{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+          :class="{ hidden: sidebarCollapsed() }"
         >
           <button
             type="button"
@@ -41,8 +42,8 @@
 
     <!-- View controls (hidden when collapsed) -->
     <div
-      class="border-b border-base-300 overflow-hidden transition-all duration-200"
-      :class="sidebarCollapsed() ? 'max-h-0 py-0 opacity-0 border-b-0' : 'max-h-40 opacity-100 py-3 px-3'"
+      class="border-b border-base-300 overflow-hidden transition-all duration-200 {% if workspace_sidebar_collapsed %}max-h-0 py-0 opacity-0 border-b-0{% else %}max-h-40 opacity-100 py-3 px-3{% endif %}"
+      :class="{ 'max-h-0 py-0 opacity-0 border-b-0': sidebarCollapsed(), 'max-h-40 opacity-100 py-3 px-3': !sidebarCollapsed() }"
     >
       <!-- Navigation: prev / period title / next -->
       <div class="flex items-center justify-between mb-2">
@@ -109,8 +110,8 @@
 
       <!-- My Calendars -->
       <div
-        class="flex items-center justify-between overflow-hidden transition-all duration-200"
-        :class="sidebarCollapsed() ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'"
+        class="flex items-center justify-between overflow-hidden transition-all duration-200 {% if workspace_sidebar_collapsed %}max-h-0 mb-0 opacity-0{% else %}max-h-6 mb-3 opacity-100{% endif %}"
+        :class="{ 'max-h-0 mb-0 opacity-0': sidebarCollapsed(), 'max-h-6 mb-3 opacity-100': !sidebarCollapsed() }"
       >
         <h3
           class="text-sm font-semibold text-base-content/60 uppercase tracking-wider"
@@ -180,7 +181,8 @@
         </template>
         <li
           x-show="ownedCalendars.length === 0 && !sidebarCollapsed()"
-          class="text-xs text-base-content/40 px-1.5 py-1"
+          class="text-xs text-base-content/40 px-1.5 py-1{% if owned_calendars or workspace_sidebar_collapsed %} hidden{% endif %}"
+          :class="{ hidden: !(ownedCalendars.length === 0 && !sidebarCollapsed()) }"
         >
           No calendars yet
         </li>
@@ -287,8 +289,8 @@
           :class="sidebarCollapsed() ? 'opacity-0' : 'opacity-100'"
         />
         <h3
-          class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
-          :class="sidebarCollapsed() ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'"
+          class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200 {% if workspace_sidebar_collapsed %}max-h-0 mb-0 opacity-0{% else %}max-h-6 mb-3 opacity-100{% endif %}"
+          :class="{ 'max-h-0 mb-0 opacity-0': sidebarCollapsed(), 'max-h-6 mb-3 opacity-100': !sidebarCollapsed() }"
         >
           <span class="flex items-center gap-2">
             <i data-lucide="kanban" class="w-3 h-3"></i>
@@ -297,8 +299,8 @@
         </h3>
         <ul class="space-y-1 mb-4">
           <li
-            class="flex items-center gap-2 p-1.5 rounded-lg text-sm hover:bg-base-content/5"
-            :class="sidebarCollapsed() ? 'justify-center' : ''"
+            class="flex items-center gap-2 p-1.5 rounded-lg text-sm hover:bg-base-content/5{% if workspace_sidebar_collapsed %} justify-center{% endif %}"
+            :class="{ 'justify-center': sidebarCollapsed() }"
           >
             <span
               class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-secondary"
@@ -306,11 +308,17 @@
             >
               <i data-lucide="square-check-big" class="w-4 h-4"></i>
             </span>
-            <span x-show="!sidebarCollapsed()" x-transition class="flex-1 truncate">Task due dates</span>
+            <span
+              x-show="!sidebarCollapsed()"
+              x-transition
+              class="flex-1 truncate{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+              :class="{ hidden: sidebarCollapsed() }"
+            >Task due dates</span>
             <input
               x-show="!sidebarCollapsed()"
               type="checkbox"
-              class="checkbox checkbox-xs checkbox-secondary flex-shrink-0"
+              class="checkbox checkbox-xs checkbox-secondary flex-shrink-0{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+              :class="{ hidden: sidebarCollapsed() }"
               :checked="prefs.showTasks"
               @change="updatePref('showTasks', !prefs.showTasks)"
             />
@@ -370,9 +378,9 @@
     <div class="px-3 pb-2">
       <ul class="menu p-0">
         {% if poll_count %}
-          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="accent" onclick="openPollList()" tooltip="Polls" badge=poll_count collapse_expr="sidebarCollapsed()" %}
+          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="accent" onclick="openPollList()" tooltip="Polls" badge=poll_count collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         {% else %}
-          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="accent" onclick="openPollList()" tooltip="Polls" collapse_expr="sidebarCollapsed()" %}
+          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="accent" onclick="openPollList()" tooltip="Polls" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         {% endif %}
       </ul>
     </div>
@@ -380,17 +388,17 @@
     <!-- Help button -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="accent" onclick="document.getElementById('calendar-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" %}
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="accent" onclick="document.getElementById('calendar-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       </ul>
     </div>
 
     <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0 hidden lg:block">
-        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" %}
+        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
       </ul>
       <ul class="menu p-0 lg:hidden">
-        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="accent" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" %}
+        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="accent" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       </ul>
     </div>
   </aside>

@@ -99,11 +99,11 @@
             ambiguous for anything selecting the entry password.
           {% endcomment %}
           <template x-if="totpFieldState() === 'editing'">
-            <div class="mt-1">
+            <div class="flex items-center gap-2 mt-1">
               <input
                 id="entry-totp-input"
                 type="password"
-                class="input input-bordered input-sm w-full font-mono"
+                class="input input-bordered input-sm flex-1 font-mono"
                 autocomplete="off"
                 spellcheck="false"
                 placeholder="Key or otpauth:// address"
@@ -111,9 +111,10 @@
               />
               <button
                 type="button"
-                class="btn btn-xs btn-ghost mt-1"
+                class="btn btn-xs btn-ghost gap-1"
                 @click="cancelTotpEntry()"
               >
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
                 Cancel
               </button>
             </div>

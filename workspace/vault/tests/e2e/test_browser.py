@@ -31,6 +31,12 @@ CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
 # other <aside> elements, and "the one with a Username label" would match the
 # sidebar the moment a tag is called that.
 PANEL = "aside:has(button[aria-label='Close the panel'])"
+# The drawer the views live in. Scoping to it is not tidiness: Playwright
+# matches an accessible name by substring, so a bare "Trash" also matches the
+# panel's "Move to trash" button, and which one `.first` picks depends on what
+# is on screen. Under load that resolved to the panel's hidden button and the
+# click waited out its timeout.
+SIDEBAR = ".drawer-side"
 
 
 class VaultBrowserTests(PlaywrightTestCase):
@@ -242,13 +248,13 @@ class VaultBrowserTests(PlaywrightTestCase):
 
         # Not exact: the sidebar entry carries a count badge, so its
         # accessible name grows a number the moment the trash is not empty.
-        self.page.get_by_role("button", name="Trash").first.click()
+        self.page.locator(SIDEBAR).get_by_role("button", name="Trash").click()
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=10000)
         self.page.click("tbody tr:has-text('GitHub')")
         self.page.click(f"{PANEL} button:has-text('Restore')")
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", state="detached")
 
-        self.page.get_by_role("button", name="All entries").first.click()
+        self.page.locator(SIDEBAR).get_by_role("button", name="All entries").click()
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=10000)
 
     def test_a_folder_is_created_renamed_and_deleted_from_its_menu(self):
@@ -312,7 +318,7 @@ class VaultBrowserTests(PlaywrightTestCase):
         )
 
         # The sidebar view is the other half: a favourite is what it lists.
-        self.page.get_by_role("button", name="Favorites").first.click()
+        self.page.locator(SIDEBAR).get_by_role("button", name="Favorites").click()
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=10000)
 
         self.page.locator("tbody tr", has_text="GitHub").click(button="right")

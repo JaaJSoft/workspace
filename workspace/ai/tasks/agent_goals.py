@@ -7,7 +7,10 @@ from django.utils import timezone
 
 from workspace.ai.metrics import AI_AGENT_CHECKINS
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
-from workspace.ai.services.conversation_history import build_conversation_history
+from workspace.ai.services.conversation_history import (
+    build_conversation_history,
+    unprompted_run_note,
+)
 from workspace.ai.services.llm import sanitize_messages_for_storage
 from workspace.ai.services.responses import post_bot_message, produced_media
 from workspace.ai.services.tool_loop import run_tool_loop
@@ -218,6 +221,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         user=human_user,
         bot=bot_user,
         summary=summary_text,
+        situation=unprompted_run_note(str(conversation.pk), bot_user),
     )
 
     ai_task = AITask.objects.create(

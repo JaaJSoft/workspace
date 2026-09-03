@@ -1,14 +1,148 @@
 import base64
 import logging
+from datetime import timedelta
 
 from django.conf import settings
+from django.utils import timezone
 
 from workspace.ai.metrics import AI_HISTORY_TOOL_CHARS
+from workspace.ai.prompts.base import sanitize_prompt_line
 from workspace.ai.services.llm import truncate_tool_result
 from workspace.ai.services.video import extract_video_frames
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
+
+# A gap shorter than this between two messages is the normal rhythm of a chat
+# and goes unmentioned; past it the header spells the delay out.
+GAP_NOTE_MIN = timedelta(hours=1)
+
+
+def _plural(count, unit):
+    return f"{count} {unit}" if count == 1 else f"{count} {unit}s"
+
+
+def _elapsed_phrase(delta):
+    """Coarse wording of a delay: '2 days', '3 hours', '12 minutes'.
+
+    Rounded, not truncated: a reply sent two days later minus the seconds
+    the first one took to write is "2 days", the way a person would say it.
+    """
+    minutes = round(delta.total_seconds() / 60)
+    if minutes < 1:
+        return "less than a minute"
+    if minutes < 60:
+        return _plural(minutes, "minute")
+    hours = round(minutes / 60)
+    if hours < 24:
+        return _plural(hours, "hour")
+    return _plural(round(hours / 24), "day")
+
+
+def _message_header(msg, is_bot, prev_msg, user_tz, att_cache):
+    """The system line before a message: when it was sent, by whom, and how.
+
+    Everything the model cannot read off the role alone is said here. Two
+    assistant turns in a row are the case that matters: a scheduled message
+    or a goal check-in lands right after the bot's previous reply, and a
+    model trained on strict user/assistant alternation reads that second
+    turn as the user's unless the line says whose it is.
+
+    Names and file names are user-controlled and flattened to one line: a
+    system line carries an authority a user turn does not, so a newline in
+    a first name must not be able to forge an instruction on it.
+    """
+    local_dt = msg.created_at.astimezone(user_tz) if user_tz else msg.created_at
+    parts = [f"[{local_dt.strftime('%Y-%m-%d %H:%M')}]"]
+
+    gap_note = ""
+    if prev_msg is not None:
+        gap = msg.created_at - prev_msg.created_at
+        if gap >= GAP_NOTE_MIN:
+            gap_note = f", {_elapsed_phrase(gap)} after the previous message"
+
+    if is_bot:
+        if prev_msg is None:
+            parts.append("Your message.")
+        elif hasattr(prev_msg.author, "bot_profile"):
+            parts.append(
+                "Message you sent on your own initiative (a scheduled message "
+                f"or a goal check-in){gap_note}. The user had not written in "
+                "between."
+            )
+        else:
+            parts.append(f"Your reply{gap_note}.")
+        return " ".join(parts)
+
+    author = msg.author
+    display = sanitize_prompt_line(author.get_full_name() or author.username, 100)
+    username = sanitize_prompt_line(author.username, 100)
+    parts.append(f"Message from the user, {display} (@{username}){gap_note}.")
+
+    replied = msg.reply_to
+    if replied is not None:
+        # Only the bot's own words are quoted back: a quote of the user's
+        # text would put user-controlled prose on a system line.
+        if hasattr(replied.author, "bot_profile"):
+            quote = sanitize_prompt_line(replied.body, 80)
+            if len(replied.body) > 80:
+                quote += "..."
+            if quote:
+                parts.append(f'In reply to your message: "{quote}".')
+            else:
+                parts.append("In reply to one of your messages.")
+        else:
+            parts.append("In reply to one of their own earlier messages.")
+
+    files = [
+        a
+        for a in att_cache.get(msg.uuid, [])
+        if not (a.is_image or a.is_video or a.is_audio)
+    ]
+    if files:
+        names = ", ".join(sanitize_prompt_line(a.original_name, 60) for a in files)
+        parts.append(f"Attached file(s): {names}.")
+    if msg.edited_at:
+        parts.append("Edited after sending.")
+    return " ".join(parts)
+
+
+def unprompted_run_note(conversation_id, bot_user):
+    """Context sentence for a run nothing in the chat triggered.
+
+    Scheduled messages and goal check-ins send the history exactly as a
+    reply would, so the last turn the model reads is usually its own. Said
+    outright, that stops it answering that turn as if the user had written.
+    """
+    from workspace.chat.models import Message
+
+    now = timezone.now()
+    live = Message.objects.filter(
+        conversation_id=conversation_id, deleted_at__isnull=True
+    )
+    last = live.order_by("-created_at").first()
+    lead = (
+        "You are acting on your own initiative (a scheduled message or a goal "
+        "check-in), not answering a new message."
+    )
+    if last is None:
+        return (
+            f"{lead} The conversation has no messages yet: you are writing "
+            "first, and nobody is waiting for a reply."
+        )
+    ago = _elapsed_phrase(now - last.created_at)
+    if last.author_id != bot_user.id:
+        return f"{lead} The last message in the conversation is the user's, sent {ago} ago."
+    last_user = live.exclude(author=bot_user).order_by("-created_at").first()
+    since_user = (
+        f" The user's last message was {_elapsed_phrase(now - last_user.created_at)} ago."
+        if last_user
+        else " The user has never written in this conversation."
+    )
+    return (
+        f"{lead} The last message in the conversation is yours, sent {ago} ago, "
+        f"and the user has not written since.{since_user}"
+    )
 
 
 def _replay_budget(turn_age):
@@ -243,7 +377,12 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
             conversation_id=conversation_id,
             deleted_at__isnull=True,
         )
-        .select_related("author", "author__bot_profile")
+        .select_related(
+            "author",
+            "author__bot_profile",
+            "reply_to__author",
+            "reply_to__author__bot_profile",
+        )
         .prefetch_related("attachments")
         .order_by("-created_at")[:recent_window]
     )
@@ -276,17 +415,21 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
 
     history = []
     replayed_tool_chars = 0
+    prev_msg = None
     for msg in reversed(msgs_to_use):
         is_bot = hasattr(msg.author, "bot_profile")
         role = "assistant" if is_bot else "user"
         body = msg.body
 
-        # Inject a system message with the timestamp before each message
-        # so the LLM has temporal context without polluting message content.
-        local_dt = msg.created_at.astimezone(_user_tz) if _user_tz else msg.created_at
+        # Timestamp and sender ride on a system line before each message, so
+        # the message content itself stays exactly what was written.
         history.append(
-            {"role": "system", "content": f"[{local_dt.strftime('%Y-%m-%d %H:%M')}]"}
+            {
+                "role": "system",
+                "content": _message_header(msg, is_bot, prev_msg, _user_tz, _att_cache),
+            }
         )
+        prev_msg = msg
 
         media_parts, video_descriptions, caption_notes = [], [], []
         if vision:

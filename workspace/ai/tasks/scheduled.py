@@ -6,7 +6,10 @@ from celery import shared_task
 from django.utils import timezone
 
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
-from workspace.ai.services.conversation_history import build_conversation_history
+from workspace.ai.services.conversation_history import (
+    build_conversation_history,
+    unprompted_run_note,
+)
 from workspace.ai.services.llm import (
     clean_llm_content,
     sanitize_messages_for_storage,
@@ -152,6 +155,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         user=human_user,
         bot=bot_user,
         summary=summary_text,
+        situation=unprompted_run_note(str(conversation.pk), bot_user),
     )
 
     ai_task = AITask.objects.create(

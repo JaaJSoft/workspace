@@ -24,7 +24,7 @@
           <span class="label-text">Name</span>
           <input
             type="text"
-            class="input input-bordered w-full"
+            class="input input-bordered input-sm w-full"
             autocomplete="off"
             spellcheck="false"
             x-model="draft.name"
@@ -36,7 +36,7 @@
             <span class="label-text" x-text="field.label"></span>
             <input
               :type="field.secret ? 'password' : 'text'"
-              class="input input-bordered w-full"
+              class="input input-bordered input-sm w-full"
               :class="field.secret ? 'font-mono' : ''"
               autocomplete="off"
               spellcheck="false"
@@ -103,7 +103,7 @@
               <input
                 id="entry-totp-input"
                 type="password"
-                class="input input-bordered w-full font-mono"
+                class="input input-bordered input-sm w-full font-mono"
                 autocomplete="off"
                 spellcheck="false"
                 placeholder="Key or otpauth:// address"
@@ -122,7 +122,10 @@
 
         <label class="form-control">
           <span class="label-text">Folder</span>
-          <select class="select select-bordered w-full" x-model="draft.folder">
+          <select
+            class="select select-bordered select-sm w-full"
+            x-model="draft.folder"
+          >
             <option :value="null">No folder</option>
             <template x-for="folder in folders" :key="folder.uuid">
               <option :value="folder.uuid" x-text="folder.name"></option>
@@ -152,10 +155,16 @@
         </label>
 
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost" @click="closeEntryDialog()">Cancel</button>
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost"
+            @click="closeEntryDialog()"
+          >
+            Cancel
+          </button>
           <button
             type="submit"
-            class="btn btn-primary"
+            class="btn btn-sm btn-primary"
             :disabled="busy || !draft.name.trim()"
           >
             Save
@@ -179,17 +188,23 @@
       <form @submit.prevent="saveFolder()">
         <input
           type="text"
-          class="input input-bordered w-full mt-4"
+          class="input input-bordered input-sm w-full mt-4"
           autocomplete="off"
           spellcheck="false"
           placeholder="Folder name"
           x-model="folderDraft.name"
         />
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost" @click="closeFolderDialog()">Cancel</button>
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost"
+            @click="closeFolderDialog()"
+          >
+            Cancel
+          </button>
           <button
             type="submit"
-            class="btn btn-primary"
+            class="btn btn-sm btn-primary"
             :disabled="busy || !folderDraft.name.trim()"
             x-text="folderDraft.existing ? 'Rename' : 'Create'"
           ></button>

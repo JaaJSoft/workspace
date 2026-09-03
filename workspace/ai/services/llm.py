@@ -20,9 +20,13 @@ _THINK_RE = re.compile(
     re.IGNORECASE,
 )
 _RAW_TOOL_CALL_RE = re.compile(r"</?tool_call>", re.IGNORECASE)
-# Matches timestamp prefixes leaked by the LLM, with or without brackets:
-# "[2026-04-10 20:07] ..." or "2026-04-10 20:07 ..."
-_TIMESTAMP_PREFIX_RE = re.compile(r"^\[?\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]?\s*")
+# Matches the history header leaked by the LLM: the bracketed line
+# conversation_history puts before each message ("[2026-04-10 20:07 | Your
+# reply.] ..."), or a bare timestamp with or without brackets.
+_TIMESTAMP_PREFIX_RE = re.compile(
+    r"^(?:\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}[^\]\n]*\]"
+    r"|\[?\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]?)\s*"
+)
 # Image stand-ins injected by conversation_history; the model imitates them.
 # Stripped anywhere (never legitimate output); the leading newline run is put back
 # so a standalone marker leaves no blank line, and the `!` lookbehind spares a

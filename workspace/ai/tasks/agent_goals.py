@@ -206,27 +206,18 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
     human_user = User.objects.filter(pk=goal.created_by_id).first()
     user_tz = get_user_timezone(human_user or goal.created_by)
 
-    # One snapshot for the history and the run note below: assembling the
-    # history can take minutes, and a message posted meanwhile must not
-    # show up in the note alone.
-    snapshot = timezone.now()
-    history, summary_text = build_conversation_history(
-        str(conversation.pk),
-        bot_profile,
-        human_user,
-        as_of=snapshot,
-    )
+    history = build_conversation_history(str(conversation.pk), bot_profile, human_user)
 
     bot_name = bot_user.get_full_name() or bot_user.username
 
     messages = build_chat_messages(
         bot_profile.system_prompt + _build_goal_instruction(goal, user_tz),
-        history,
+        history.messages,
         bot_name=bot_name,
         user=human_user,
         bot=bot_user,
-        summary=summary_text,
-        situation=unprompted_run_note(str(conversation.pk), bot_user, as_of=snapshot),
+        summary=history.summary,
+        situation=unprompted_run_note(history.window, bot_user.id),
     )
 
     ai_task = AITask.objects.create(
@@ -314,7 +305,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             tool_data=tool_data,
         )
 
-        maybe_dispatch_summary_update(str(conversation.pk), summary_text)
+        maybe_dispatch_summary_update(str(conversation.pk), history.summary)
 
         AI_AGENT_CHECKINS.labels(outcome="message").inc()
         logger.info(

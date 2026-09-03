@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
 from workspace.ai.models import AITask, BotProfile
+from workspace.ai.services.conversation_history import ConversationHistory
 from workspace.ai.tools import EditImageParams, GenerateImageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.mail.models import MailAccount, MailFolder, MailLabel, MailMessage
@@ -306,7 +307,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
                 task_type=AITask.TaskType.CHAT,
                 status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
             ).exists()
-            return [], ""
+            return ConversationHistory([], "", [])
 
         mock_history.side_effect = record_whether_the_task_is_visible
         mock_call_llm.return_value = {
@@ -1453,6 +1454,20 @@ class CleanLlmContentTests(TestCase):
     def test_strips_every_assistant_images_marker(self):
         marker = "[Images sent by the assistant in the message above]"
         self.assertEqual(self.clean(f"{marker}\nA\n{marker}\nB"), "A\nB")
+
+    def test_strips_a_leaked_history_header(self):
+        """The header the model reads is one bracketed block; an imitation of it
+        must go with the timestamp, not leave its prose in the reply."""
+        self.assertEqual(
+            self.clean("[2026-04-10 20:07 | Your reply.] Hello!"), "Hello!"
+        )
+        self.assertEqual(
+            self.clean(
+                "[2026-04-10 20:07 | Message from the user, Hana (@hana). "
+                'In reply to your message: "Tea?".]Hi'
+            ),
+            "Hi",
+        )
 
     def test_strips_image_caption_marker_mid_sentence(self):
         self.assertEqual(

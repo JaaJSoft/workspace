@@ -422,6 +422,18 @@ class GuestSignalTests(TestCase):
         resp = self._signal(token, user_key(self.owner.id))
         self.assertEqual(resp.status_code, 400)
 
+    def test_signal_burst_is_not_throttled_by_the_shared_public_scope(self):
+        # I-4: offer/answer + ICE trickle bursts well past the shared
+        # 30/min budget within the first seconds of a join - it needs its
+        # own scope, same reasoning as the heartbeat throttle.
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        guest, token = self._admit()
+        self._post_join(token)
+
+        for _ in range(40):
+            resp = self._signal(token, user_key(self.owner.id))
+            self.assertEqual(resp.status_code, 200)
+
     def _post_join(self, token, meeting=None):
         meeting = meeting or self.meeting
         return self.client.post(

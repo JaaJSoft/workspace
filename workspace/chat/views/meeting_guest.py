@@ -56,7 +56,11 @@ from ..services.participant_keys import (
 from ..services.posting import deliver_message
 from ..services.rendering import render_message_body
 from ..services.threads import resolve_thread_root
-from ..throttling import MeetingGuestHeartbeatThrottle, MeetingPublicIpThrottle
+from ..throttling import (
+    MeetingGuestHeartbeatThrottle,
+    MeetingGuestSignalThrottle,
+    MeetingPublicIpThrottle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -263,7 +267,10 @@ class MeetingGuestHeartbeatView(APIView):
 class MeetingGuestSignalView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [MeetingPublicIpThrottle]
+    # Its own scope, not MeetingPublicIpThrottle's: see
+    # MeetingGuestSignalThrottle's docstring for why the shared 30/min budget
+    # does not fit the offer/answer + ICE trickle burst a call join produces.
+    throttle_classes = [MeetingGuestSignalThrottle]
 
     @extend_schema(summary="Relay a WebRTC signal to a peer in the guest's call")
     def post(self, request, slug):

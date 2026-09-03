@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ..models import CallParticipant
 from ..services import calls
 from ..services.call_signaling import (
     DIAGNOSTIC_LANES,
@@ -18,7 +19,12 @@ from ..services.conversations import (
     is_active_member,
     is_bot_conversation,
 )
-from ..services.participant_keys import user_id_from_key, user_key
+from ..services.participant_keys import (
+    guest_key,
+    guest_uuid_from_key,
+    user_id_from_key,
+    user_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,29 +99,41 @@ class CallSignalView(APIView):
                 {"detail": "to_participant (string) and signal (object) are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # Members are the only participants until meetings land, so the target
-        # must resolve to a user id and that user must be an active member of
-        # this same conversation.
-        target_user_id = user_id_from_key(to_participant)
-        if target_user_id is None or not is_active_member(
-            target_user_id, conversation_id
-        ):
-            return Response(
-                {"detail": "Target is not a member."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         # Signals are scoped to the active call session, so the envelope must
         # carry the session id (not the conversation id) for client-side
-        # session filtering. No active call means there is nothing to signal.
+        # session filtering. No active call means there is nothing to signal -
+        # and a guest target can only be resolved against a session anyway,
+        # so this check has to run before target resolution now.
         session = calls.get_active_call(conversation_id)
         if session is None:
             return Response(
                 {"detail": "No active call."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        send_signal(
-            session.uuid, user_key(target_user_id), user_key(request.user.id), signal
-        )
+        # A member may reach another active member of this conversation, or a
+        # meeting guest who is themselves an active participant of this SAME
+        # session - mirrors MeetingGuestSignalView's guest-target branch
+        # exactly, so a member can complete a handshake with a guest.
+        target_user_id = user_id_from_key(to_participant)
+        target_guest_uuid = guest_uuid_from_key(to_participant)
+        if target_user_id is not None:
+            target_key = user_key(target_user_id)
+            target_ok = is_active_member(target_user_id, conversation_id)
+        elif target_guest_uuid is not None:
+            target_key = guest_key(target_guest_uuid)
+            target_ok = CallParticipant.objects.filter(
+                session=session, guest_id=target_guest_uuid, left_at__isnull=True
+            ).exists()
+        else:
+            target_key = None
+            target_ok = False
+
+        if not target_ok:
+            return Response(
+                {"detail": "Target is not a member."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        send_signal(session.uuid, target_key, user_key(request.user.id), signal)
         return Response({"status": "ok"})
 
 

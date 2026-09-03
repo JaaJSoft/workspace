@@ -55,6 +55,11 @@ REST_FRAMEWORK = {
         # NAT, so it needs its own, more generous v1 starting value than the
         # scope above - retune on telemetry, same as it.
         "chat.meeting.guest.heartbeat.ip": "120/min",
+        # Guest WebRTC signalling: bursts with the offer/answer exchange and
+        # ICE trickle for every peer already in the call, not a steady
+        # cadence like the heartbeat above - see
+        # MeetingGuestSignalThrottle's docstring for the arithmetic.
+        "chat.meeting.guest.signal.ip": "150/min",
     },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",

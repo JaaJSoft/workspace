@@ -1,11 +1,21 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
-from workspace.chat.models import Conversation, ConversationMember
+from workspace.calendar.models import Calendar, Event
+from workspace.chat.models import Conversation, ConversationMember, MeetingGuest
 from workspace.chat.services import call_signaling as sig
 from workspace.chat.services import calls
+from workspace.chat.services.meeting_guests import issue_token
+from workspace.chat.services.meeting_occurrences import current_occurrence
+from workspace.chat.services.meetings import create_meeting
+from workspace.chat.services.participant_keys import guest_key
+
+User = get_user_model()
 
 
 class CallViewTests(TestCase):
@@ -250,3 +260,98 @@ class CallViewTests(TestCase):
             if e["event"] == "call_participant_updated"
         ]
         self.assertEqual(updates, [])
+
+
+def make_event(owner, start=None, end=None):
+    cal = Calendar.objects.create(name="Cal", owner=owner)
+    return Event.objects.create(
+        calendar=cal,
+        owner=owner,
+        title="Standup",
+        start=start or timezone.now(),
+        end=end,
+    )
+
+
+class CallSignalToGuestTests(TestCase):
+    """I3: a member must be able to signal an admitted meeting guest in the
+    same call - without this, a guest's offer/ICE candidates have no route
+    back and the handshake can never complete."""
+
+    def setUp(self):
+        cache.clear()
+        self.owner = User.objects.create_user(username="host", password="x")
+        now = timezone.now()
+        self.event = make_event(
+            self.owner,
+            start=now - timedelta(minutes=5),
+            end=now + timedelta(minutes=25),
+        )
+        self.meeting = create_meeting(self.event, self.owner)
+        self.occurrence_start = current_occurrence(self.meeting, now=now)[0]
+        self.client = APIClient()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _admit_and_join(self, meeting, session, display_name="Ada"):
+        _token, token_hash = issue_token()
+        guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name=display_name,
+            state=MeetingGuest.State.ADMITTED,
+            occurrence_start=current_occurrence(meeting)[0],
+            token_hash=token_hash,
+        )
+        calls.join_call_as_guest(guest)
+        return guest
+
+    def _url(self):
+        return f"/api/v1/chat/conversations/{self.meeting.conversation_id}/call/signal"
+
+    def test_member_can_signal_an_admitted_guest_in_the_same_call(self):
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        guest = self._admit_and_join(self.meeting, session)
+        sig.drain_events(guest_key(guest.uuid))  # clear lifecycle noise
+
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            self._url(),
+            {"to_participant": guest_key(guest.uuid), "signal": {"type": "offer"}},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        delivered = [
+            e
+            for e in sig.drain_events(guest_key(guest.uuid))
+            if e["event"] == "call_signal"
+        ]
+        self.assertEqual(len(delivered), 1)
+        self.assertEqual(delivered[0]["data"]["from_participant"], f"u:{self.owner.id}")
+
+    def test_member_signal_to_guest_in_a_different_call_is_refused(self):
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+
+        other_owner = User.objects.create_user(username="other-host", password="x")
+        other_event = make_event(other_owner)
+        other_meeting = create_meeting(other_event, other_owner)
+        other_session, _, _ = calls.start_or_join_call(
+            other_owner, other_meeting.conversation_id
+        )
+        other_guest = self._admit_and_join(
+            other_meeting, other_session, display_name="Bea"
+        )
+
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            self._url(),
+            {
+                "to_participant": guest_key(other_guest.uuid),
+                "signal": {"type": "offer"},
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)

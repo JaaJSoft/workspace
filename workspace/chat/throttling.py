@@ -49,3 +49,21 @@ class MeetingGuestHeartbeatThrottle(MeetingPublicIpThrottle):
     """
 
     scope = "chat.meeting.guest.heartbeat.ip"
+
+
+class MeetingGuestSignalThrottle(MeetingPublicIpThrottle):
+    """Same IP-scoped throttle as above, under its own, more generous scope.
+
+    Signalling trickles one POST per ICE candidate per peer connection, on
+    top of the offer/answer exchange itself - a browser's own gathering
+    typically emits somewhere around 5-15 candidates per peer. A guest
+    joining a call with the other CHAT_CALL_MAX_PARTICIPANTS - 1 participants
+    already present (5, at the default cap of 6) can burst through most of
+    that exchange with every one of them in the first few seconds after
+    joining - call it 5 peers x ~15 candidates, plus the offer/answer
+    messages themselves, comfortably past the shared 30/min budget above on
+    its own. Several guests behind one NAT/IP compound it further, same as
+    the heartbeat scope. v1 starting value; retune on telemetry, same as it.
+    """
+
+    scope = "chat.meeting.guest.signal.ip"

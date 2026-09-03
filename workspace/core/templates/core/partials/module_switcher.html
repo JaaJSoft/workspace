@@ -11,6 +11,11 @@ Params:
                  the panel opens from it over the page, which needs the
                  drawer-side to leave overflow visible (the asides scroll
                  their own lists)
+- collapsed_initial, mobile_rail: the server-known collapsed state and
+                 whether the drawer is the icon rail below `lg`, as for
+                 ui/partials/drawer_item.html - they hide the name and the
+                 chevron in the HTML itself so the rail never paints them
+                 before Alpine binds
 {% endcomment %}
 {% with ce=collapse_expr|default:"collapsed" %}
   <div
@@ -40,13 +45,20 @@ Params:
       <span
         x-show="!{{ ce }}"
         x-transition
-        class="whitespace-nowrap text-xl font-semibold text-base-content"
+        class="whitespace-nowrap text-xl font-semibold text-base-content{% if collapsed_initial %} hidden{% elif mobile_rail %} max-lg:hidden{% endif %}"
+        :class="{ hidden: {{ ce }} }"
       >{{ module.name }}</span>
-      <i
-        data-lucide="chevron-down"
-        class="w-3.5 h-3.5 text-base-content/60"
+      {% comment %}
+        The x-show rides a span, never the <i>: Lucide replaces the <i> with
+        a fresh <svg> at boot and a binding left on the <i> goes with it.
+      {% endcomment %}
+      <span
+        class="inline-flex{% if collapsed_initial %} hidden{% elif mobile_rail %} max-lg:hidden{% endif %}"
         x-show="!{{ ce }}"
-      ></i>
+        :class="{ hidden: {{ ce }} }"
+      >
+        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-base-content/60"></i>
+      </span>
     </label>
     <div
       tabindex="0"

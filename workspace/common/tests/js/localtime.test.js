@@ -2,7 +2,7 @@
 
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('./loader');
+const { loadScripts } = require('./loader');
 
 function docStub(tzAttr) {
   return {
@@ -19,7 +19,7 @@ class ObserverStub {
 }
 
 function load(tzAttr) {
-  return loadScript('workspace/common/static/ui/js/localtime.js', {
+  return loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/localtime.js'], {
     document: docStub(tzAttr),
     MutationObserver: ObserverStub,
   });
@@ -93,7 +93,7 @@ function dateEls(count) {
 
 test('date labels build one day-key formatter per zone, not one per element', () => {
   let zone = 'Asia/Tokyo';
-  const ctx = loadScript('workspace/common/static/ui/js/localtime.js', {
+  const ctx = loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/localtime.js'], {
     document: { ...docStub(null), documentElement: { getAttribute: (n) => (n === 'data-timezone' ? zone : null) } },
     MutationObserver: ObserverStub,
   });

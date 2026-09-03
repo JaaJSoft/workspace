@@ -14,7 +14,7 @@ const ctx = loadScripts(
     'workspace/common/static/ui/js/attachment_input.js',
     'workspace/projects/ui/static/projects/ui/js/board.js',
   ],
-  { ...CUSTOM_ELEMENT_STUBS, URL }
+  { ...CUSTOM_ELEMENT_STUBS, URL, sidebarPreference: { initial: () => false, save: () => {} } }
 );
 
 function fakeList(uuids) {
@@ -40,7 +40,7 @@ test('listOrder returns an empty order for an empty column', () => {
 
 function panelDeleteBoard(calls) {
   ctx.getCSRFToken = () => 'token';
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = { href: 'http://x.test/projects/p/board?task=u1' };
   ctx.history = {
     pushState: () => {},
@@ -97,7 +97,7 @@ test('deletePanelTask deletes, closes the panel, and refreshes', async () => {
 
 test('_closeDrawerOnMobile unchecks drawer when on mobile', () => {
   ctx.getCSRFToken = () => 'token';
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   const checkboxState = { checked: true };
   ctx.document = {
     getElementById: (id) => {
@@ -113,7 +113,7 @@ test('_closeDrawerOnMobile unchecks drawer when on mobile', () => {
 
 test('_closeDrawerOnMobile does nothing when not on mobile', () => {
   ctx.getCSRFToken = () => 'token';
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   const checkboxState = { checked: true };
   ctx.document = {
     getElementById: (id) => {
@@ -636,7 +636,7 @@ test('projectBoard form assignee helpers add, dedupe and remove', () => {
 
 test('openTask pushes the task URL and swaps the panel', async () => {
   ctx.getCSRFToken = () => 'token';
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   const calls = [];
   ctx.location = { href: 'http://x.test/projects/p/board' };
   ctx.history = {
@@ -659,7 +659,7 @@ test('openTask pushes the task URL and swaps the panel', async () => {
 
 test('closePanel clears state and strips the param', () => {
   ctx.getCSRFToken = () => 'token';
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   const calls = [];
   ctx.location = { href: 'http://x.test/projects/p/board?task=u1' };
   ctx.history = {
@@ -679,7 +679,7 @@ test('closePanel clears state and strips the param', () => {
 
 function panelBoard() {
   ctx.getCSRFToken = () => 'token';
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = {
     origin: 'http://x.test',
     href: 'http://x.test/projects/p/board?task=u1',
@@ -1070,7 +1070,7 @@ test('panel addLabel is gated on the set_labels action', () => {
 });
 
 test('refresh targets the all-tasks partial when viewing tasks', () => {
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = {
     origin: 'http://x.test',
     href: 'http://x.test/projects/p/tasks',
@@ -1088,7 +1088,7 @@ test('refresh targets the all-tasks partial when viewing tasks', () => {
 });
 
 test('onPopState recognizes the tasks view', () => {
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = {
     pathname: '/projects/p/tasks',
     href: 'http://x.test/projects/p/tasks',
@@ -1103,7 +1103,7 @@ test('onPopState recognizes the tasks view', () => {
 });
 
 test('refresh targets the analytics partial when viewing analytics', () => {
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = {
     origin: 'http://x.test',
     href: 'http://x.test/projects/p/analytics',
@@ -1121,7 +1121,7 @@ test('refresh targets the analytics partial when viewing analytics', () => {
 });
 
 test('onPopState recognizes the analytics view', () => {
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = {
     pathname: '/projects/p/analytics',
     href: 'http://x.test/projects/p/analytics',
@@ -1136,7 +1136,7 @@ test('onPopState recognizes the analytics view', () => {
 });
 
 function keydownBoard() {
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   return ctx.projectBoard({
     apiBase: '/api',
     projectBase: '/projects/p',
@@ -1296,7 +1296,7 @@ test('the epic field commits through the set_epic action gate', () => {
 
 function sprintBoard(calls, islandData) {
   ctx.getCSRFToken = () => 'token';
-  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = { href: 'http://x.test/projects/p/board?sprint=s1' };
   ctx.history = {
     pushState: () => {},

@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from rest_framework import status
@@ -267,14 +269,64 @@ class BulkDownloadAPITests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_bulk_download_rejects_over_200(self):
-        too_many = [str(self.file_a.uuid)] * 201
+    def _create_files(self, count):
+        files = [
+            File(
+                owner=self.user,
+                name=f"f{i:03}.txt",
+                node_type=File.NodeType.FILE,
+                mime_type="text/plain",
+            )
+            for i in range(count)
+        ]
+        for f in files:
+            f.content = ContentFile(b"x", name=f.name)
+            f.size = 1
+            f.save()
+        return files
+
+    def _download_all(self, files):
+        return self.client.post(
+            "/api/v1/files/bulk-download",
+            {"uuids": [str(f.uuid) for f in files]},
+            format="json",
+        )
+
+    def test_bulk_download_accepts_a_selection_above_200(self):
+        """One selection is one archive whatever its size: nothing about the
+        count decides whether it downloads."""
+        files = self._create_files(201)
+        resp = self._download_all(files)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        with self._read_zip(resp) as zf:
+            self.assertEqual(sorted(zf.namelist()), sorted(f.name for f in files))
+
+    @patch("workspace.files.viewsets.content._LOOKUP_CHUNK", 2)
+    def test_bulk_download_looks_the_selection_up_per_chunk(self):
+        files = self._create_files(5)
+        resp = self._download_all(files)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        with self._read_zip(resp) as zf:
+            self.assertEqual(sorted(zf.namelist()), sorted(f.name for f in files))
+
+    def test_bulk_download_tolerates_a_repeated_uuid(self):
         resp = self.client.post(
             "/api/v1/files/bulk-download",
-            {"uuids": too_many},
+            {"uuids": [str(self.file_a.uuid), str(self.file_a.uuid)]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        with self._read_zip(resp) as zf:
+            self.assertEqual(zf.namelist(), ["a.txt"])
+
+    def test_bulk_download_rejects_a_malformed_uuid(self):
+        resp = self.client.post(
+            "/api/v1/files/bulk-download",
+            {"uuids": [str(self.file_a.uuid), "not-a-uuid"]},
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.json()["detail"], "uuids must be a list of UUIDs.")
 
     def test_bulk_download_unknown_uuid_returns_404(self):
         resp = self.client.post(

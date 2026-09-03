@@ -10,20 +10,9 @@
   }
 
   // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
-  // Building the formatter costs far more than formatting with it, and a
-  // date label needs three keys per <time> - a folder listing asks for
-  // thousands - so there is one formatter per configured zone. Without a
-  // configured zone the formatter binds the browser zone at construction,
-  // which can change while the page is open, so that case is not cached.
-  const _dayKeyFormatters = new Map();
+  const _dayKeyFormatter = window.zonedFormatter('en-CA');
   function _dayKey(d, tz) {
-    if (!tz) return new Intl.DateTimeFormat('en-CA').format(d);
-    let formatter = _dayKeyFormatters.get(tz);
-    if (!formatter) {
-      formatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz });
-      _dayKeyFormatters.set(tz, formatter);
-    }
-    return formatter.format(d);
+    return _dayKeyFormatter(tz).format(d);
   }
 
   function userTzDayKey(d) {
@@ -71,13 +60,13 @@
     }
   }
 
+  const _tzPartsFormatter = window.zonedFormatter('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  });
   function _tzParts(d, tz) {
-    const dtf = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-    });
     const parts = {};
-    for (const p of dtf.formatToParts(d)) parts[p.type] = p.value;
+    for (const p of _tzPartsFormatter(tz).formatToParts(d)) parts[p.type] = p.value;
     return parts;
   }
 

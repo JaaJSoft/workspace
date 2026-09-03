@@ -126,6 +126,7 @@
         notePrefs.compactList ? 'px-3 py-1' : 'p-3',
         selectedNote?.uuid === note.uuid ? 'bg-success/5 border-l-2 border-l-success' : ''
       ]"
+      :data-note-uuid="note.uuid"
       @click="selectNote(note)"
       @contextmenu="openCtxMenu($event, 'note', { uuid: note.uuid, name: note.name, is_favorite: note.is_favorite, parent: note.parent })"
     >

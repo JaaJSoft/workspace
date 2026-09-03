@@ -19,6 +19,32 @@
  *   }
  */
 window.fileActions = {
+    // ── Available actions ────────────────────────────────
+
+    // POST /api/v1/files/actions answers a catalogue of actions plus, per
+    // file, the catalogue keys that apply. Callers get { uuid: [action] }
+    // back, so the wire format stays a detail of this helper.
+    expandActions: function(payload) {
+        const catalogue = payload.actions || {};
+        const expanded = {};
+        for (const [uuid, keys] of Object.entries(payload.files || {})) {
+            expanded[uuid] = keys.map(function(key) { return catalogue[key]; }).filter(Boolean);
+        }
+        return expanded;
+    },
+
+    // Resolves to { uuid: [action, ...] }, or null when the server refused.
+    fetchActions: function(uuids) {
+        return fetch('/api/v1/files/actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ uuids: uuids }),
+        }).then(function(resp) {
+            if (!resp.ok) return null;
+            return resp.json().then(function(payload) { return window.fileActions.expandActions(payload); });
+        });
+    },
+
     // ── Dialog helpers ───────────────────────────────────
 
     showCreateFolderDialog: function() {

@@ -27,18 +27,24 @@
     <label for="mail-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     <!-- Sidebar -->
+    {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
     <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14"
-      :class="collapsed ? 'w-16' : 'w-72'"
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
     >
       <!-- Sidebar header -->
       <div class="lg:border-b border-base-300 py-4 px-3 relative">
         <div
-          class="flex items-center"
-          :class="collapsed ? 'justify-center' : 'justify-between'"
+          class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
+          :class="{ 'justify-center': sidebarCollapsed(), 'justify-between': !sidebarCollapsed() }"
         >
-          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" %}
-          <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          <div
+            class="flex items-center gap-0.5{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+            :class="{ hidden: sidebarCollapsed() }"
+            x-show="!sidebarCollapsed()"
+            x-transition
+          >
             {% include "ui/partials/preferences_popover.html" with component="mailPreferences()" content="mail/ui/partials/_preferences_content.html" accent="text-warning" button_class="hover:text-warning" %}
             <button
               class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning"
@@ -55,26 +61,30 @@
       <div class="flex-1 overflow-y-auto py-2 px-3">{% include "mail/ui/partials/folder_list.html" %}</div>
 
       <!-- Compose button (collapsed) -->
-      <div class="px-3 pb-2" x-show="collapsed" x-cloak>
+      <div
+        class="px-3 pb-2{% if not workspace_sidebar_collapsed %} hidden{% endif %}"
+        :class="{ hidden: !sidebarCollapsed() }"
+        x-show="sidebarCollapsed()"
+      >
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="warning" onclick="showCompose()" tooltip="Compose" %}
+          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="warning" onclick="showCompose()" tooltip="Compose" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip="Help (?)" %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="warning" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="warning" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
         </ul>
         <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="warning" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="warning" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
     </aside>

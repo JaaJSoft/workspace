@@ -1,0 +1,38 @@
+{% comment %}
+One placeholder row of _conversation_list_skeleton.html. Same box as the
+button in _conversation_item.html: a centred 40px square on the rail, the
+`sm` avatar with two text lines when expanded, the `xs` avatar with one line
+in compact mode. `collapsed` is the stored desktop preference; below `lg`
+the sidebar is the rail whatever it says, hence the `lg:` variants.
+{% endcomment %}
+<li class="list-none">
+  {% if collapsed %}
+    <div class="flex items-center justify-center w-10 h-10 mx-auto">
+      <div class="w-8 h-8 rounded-full bg-base-300 flex-shrink-0"></div>
+    </div>
+  {% elif compact %}
+    <div
+      class="flex items-center justify-center w-10 h-10 mx-auto lg:w-auto lg:h-auto lg:mx-0 lg:justify-start lg:gap-1.5 lg:py-0.5 lg:px-2"
+    >
+      <div class="w-8 h-8 lg:w-6 lg:h-6 rounded-full bg-base-300 flex-shrink-0"></div>
+      <div class="hidden lg:flex flex-1 min-w-0 h-5 items-center">
+        <div class="h-3.5 w-2/3 bg-base-300 rounded"></div>
+      </div>
+    </div>
+  {% else %}
+    <div
+      class="flex items-center justify-center w-10 h-10 mx-auto lg:w-auto lg:h-auto lg:mx-0 lg:justify-start lg:gap-3 lg:p-2"
+    >
+      <div class="w-8 h-8 rounded-full bg-base-300 flex-shrink-0"></div>
+      <div class="hidden lg:block flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-1 h-5">
+          <div class="h-3.5 w-2/3 bg-base-300 rounded"></div>
+          <div class="h-3 w-8 bg-base-300 rounded flex-shrink-0"></div>
+        </div>
+        <div class="flex items-center h-4 mt-0.5">
+          <div class="h-3 w-5/6 bg-base-300 rounded"></div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</li>

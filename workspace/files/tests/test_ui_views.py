@@ -127,6 +127,20 @@ class SharedLinkPageTests(TestCase):
         resp = self.client.get(f"/files/shared/{self.link.token}")
         self.assertEqual(resp.status_code, 404)
 
+    def test_a_file_link_records_a_view(self):
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.link.refresh_from_db()
+        self.assertEqual(self.link.view_count, 1)
+        self.assertIsNotNone(self.link.last_accessed_at)
+
+    def test_a_file_link_has_no_breadcrumb(self):
+        """The target IS the link's own root - there is nowhere to browse
+        from, so the page renders no breadcrumb trail at all."""
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertIsNone(resp.context["breadcrumbs"])
+        self.assertNotIn(b"<nav", resp.content)
+
     def test_a_read_mode_folder_link_renders_the_browse_page(self):
         folder = File.objects.create(
             owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
@@ -136,7 +150,8 @@ class SharedLinkPageTests(TestCase):
         )
         resp = self.client.get(f"/files/shared/{link.token}")
         self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, "files/ui/shared_folder.html")
+        self.assertTemplateUsed(resp, "files/ui/shared_page.html")
+        self.assertTemplateUsed(resp, "files/ui/partials/shared_listing.html")
         self.assertContains(resp, self.owner.username)
 
     def test_a_both_mode_folder_link_renders_the_browse_page_with_a_dropzone(self):
@@ -148,7 +163,7 @@ class SharedLinkPageTests(TestCase):
         )
         resp = self.client.get(f"/files/shared/{link.token}")
         self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, "files/ui/shared_folder.html")
+        self.assertTemplateUsed(resp, "files/ui/partials/shared_listing.html")
         self.assertTemplateUsed(resp, "files/ui/partials/shared_dropzone.html")
         self.assertContains(resp, self.owner.username)
 
@@ -161,13 +176,36 @@ class SharedLinkPageTests(TestCase):
         )
         resp = self.client.get(f"/files/shared/{link.token}")
         self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, "files/ui/shared_drop.html")
         self.assertTemplateUsed(resp, "files/ui/partials/shared_dropzone.html")
-        # The write-only guarantee expressed at the template layer: the
-        # folder-browse template (breadcrumbs, entry list) never renders.
-        self.assertTemplateNotUsed(resp, "files/ui/shared_folder.html")
+        # The write-only guarantee expressed at the template layer: no
+        # listing partial, no viewer partial, no breadcrumb.
+        self.assertTemplateNotUsed(resp, "files/ui/partials/shared_listing.html")
+        self.assertTemplateNotUsed(resp, "files/ui/partials/shared_viewer.html")
+        self.assertIsNone(resp.context["breadcrumbs"])
+        self.assertNotContains(resp, 'id="shared-listing"')
         # A visitor must know who they're sending files to.
         self.assertContains(resp, self.owner.username)
+
+    def test_a_drop_mode_folder_link_never_resolves_node(self):
+        """?node= must be a no-op on a drop link, not a 404 or a leak."""
+        folder = File.objects.create(
+            owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        hidden = File.objects.create(
+            owner=self.owner,
+            name="hidden.txt",
+            node_type=File.NodeType.FILE,
+            parent=folder,
+        )
+        link = FileShareLink.objects.create(
+            file=folder, created_by=self.owner, mode=FileShareLink.Mode.DROP
+        )
+        resp = self.client.get(
+            f"/files/shared/{link.token}", {"node": str(hidden.uuid)}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "hidden.txt")
+        self.assertTemplateUsed(resp, "files/ui/partials/shared_dropzone.html")
 
     def test_a_password_protected_drop_link_page_hides_the_owner_until_verified(self):
         """The rendered page withholds the owner's name pre-verification.
@@ -241,23 +279,58 @@ class SharedFolderListingTests(TestCase):
         self.assertContains(resp, "Sub")
         self.assertNotContains(resp, "out.txt")
 
-    def test_folder_param_renders_the_subfolder(self):
+    def test_a_fragment_request_for_an_open_link_returns_only_the_content_partial(self):
+        """The alpine-ajax swap target must not carry a second copy of the
+        page shell - only the shared-content region."""
         resp = self.client.get(
-            f"/files/shared/{self.read_link.token}", {"folder": str(self.sub.uuid)}
+            f"/files/shared/{self.read_link.token}",
+            {"node": str(self.sub.uuid)},
+            HTTP_X_ALPINE_REQUEST="true",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="shared-content"')
+        self.assertNotContains(resp, "<!DOCTYPE")
+
+    def test_node_param_renders_the_subfolder(self):
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"node": str(self.sub.uuid)}
         )
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "in.txt")
 
-    def test_folder_param_outside_the_subtree_is_a_404(self):
+    def test_node_param_of_a_file_renders_the_viewer_with_a_breadcrumb(self):
+        """A file inside a shared folder behaves like a file shared on its
+        own: viewer box, download link, and a breadcrumb back to its
+        folder."""
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"node": str(self.doc.uuid)}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "files/ui/partials/shared_viewer.html")
+        self.assertTemplateNotUsed(resp, "files/ui/partials/shared_listing.html")
+        self.assertIsNotNone(resp.context["breadcrumbs"])
+        self.assertContains(resp, "Sub")
+        self.assertContains(
+            resp,
+            f"/api/v1/files/shared/{self.read_link.token}/download?file={self.doc.uuid}",
+        )
+
+    def test_a_listing_entry_links_to_its_node(self):
+        """Rows navigate through ?node=, whether they name a folder or a
+        file - both dead-end at the same page."""
+        resp = self.client.get(f"/files/shared/{self.read_link.token}")
+        self.assertContains(resp, f"?node={self.sub.uuid}")
+
+    def test_node_param_outside_the_subtree_is_a_404(self):
         stranger = File.objects.create(
             owner=self.owner, name="Elsewhere", node_type=File.NodeType.FOLDER
         )
         resp = self.client.get(
-            f"/files/shared/{self.read_link.token}", {"folder": str(stranger.uuid)}
+            f"/files/shared/{self.read_link.token}", {"node": str(stranger.uuid)}
         )
         self.assertEqual(resp.status_code, 404)
 
-    def test_folder_param_of_another_users_colliding_path_is_a_404(self):
+    def test_node_param_of_another_users_colliding_path_is_a_404(self):
         """`path` text is not globally unique - mirrors ResolveWithinTests."""
         their_root = File.objects.create(
             owner=self.other, name="Shared", node_type=File.NodeType.FOLDER
@@ -269,14 +342,14 @@ class SharedFolderListingTests(TestCase):
             parent=their_root,
         )
         resp = self.client.get(
-            f"/files/shared/{self.read_link.token}", {"folder": str(their_file.uuid)}
+            f"/files/shared/{self.read_link.token}", {"node": str(their_file.uuid)}
         )
         self.assertEqual(resp.status_code, 404)
 
     def test_a_trashed_descendant_is_a_404(self):
         self.sub.soft_delete()
         resp = self.client.get(
-            f"/files/shared/{self.read_link.token}", {"folder": str(self.sub.uuid)}
+            f"/files/shared/{self.read_link.token}", {"node": str(self.sub.uuid)}
         )
         self.assertEqual(resp.status_code, 404)
 
@@ -287,7 +360,7 @@ class SharedFolderListingTests(TestCase):
         self.root.parent = parent
         self.root.save(update_fields=["parent"])
         resp = self.client.get(
-            f"/files/shared/{self.read_link.token}", {"folder": str(self.sub.uuid)}
+            f"/files/shared/{self.read_link.token}", {"node": str(self.sub.uuid)}
         )
         self.assertNotContains(resp, "TopSecretParent")
 
@@ -305,7 +378,7 @@ class SharedFolderListingTests(TestCase):
     def test_a_drop_link_gets_no_listing(self):
         resp = self.client.get(f"/files/shared/{self.drop_link.token}")
         self.assertEqual(resp.status_code, 200)
-        self.assertNotContains(resp, 'id="folder-listing"')
+        self.assertNotContains(resp, 'id="shared-listing"')
 
     def test_more_children_than_the_page_size_are_truncated(self):
         bulk_root = File.objects.create(
@@ -343,5 +416,35 @@ class SharedFolderListingTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, "Sub")
-        self.assertNotContains(resp, 'id="folder-listing"')
+        self.assertNotContains(resp, 'id="shared-listing"')
         self.assertContains(resp, "Enter the password")
+
+    def test_password_protected_fragment_request_of_a_file_has_no_viewer(self):
+        """A ?node= naming a file must not be resolved while locked either -
+        the lock is checked before the node is even looked up, so the target
+        stays the (folder) root and nothing about the file leaks."""
+        self.read_link.password = make_password("secret")
+        self.read_link.save(update_fields=["password"])
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}",
+            {"node": str(self.doc.uuid)},
+            HTTP_X_ALPINE_REQUEST="true",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "in.txt")
+        self.assertNotContains(resp, 'id="shared-viewer"')
+        self.assertContains(resp, "Enter the password")
+
+    def test_a_listing_records_a_view(self):
+        resp = self.client.get(f"/files/shared/{self.read_link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.read_link.refresh_from_db()
+        self.assertEqual(self.read_link.view_count, 1)
+
+    def test_viewing_a_descendant_file_records_a_view(self):
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"node": str(self.doc.uuid)}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.read_link.refresh_from_db()
+        self.assertEqual(self.read_link.view_count, 1)

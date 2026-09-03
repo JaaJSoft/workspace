@@ -913,43 +913,51 @@ def _shared_action_url(token, suffix, access_token, **params):
     return f"/api/v1/files/shared/{token}{suffix}" + (f"?{qs}" if qs else "")
 
 
-def _shared_breadcrumbs(root, folder, path, access_token):
-    """Trail from the link's own root down to *folder* - never above it."""
+def _shared_breadcrumbs(root, node, path, access_token):
+    """Trail from the link's own root down to *node* - never above it."""
     trail = []
-    node = folder
-    while node is not None and node.pk != root.pk:
-        trail.append(node)
-        node = node.parent
+    current = node
+    while current is not None and current.pk != root.pk:
+        trail.append(current)
+        current = current.parent
     trail.append(root)
     trail.reverse()
 
     crumbs = [
-        {"label": n.name, "url": _shared_page_url(path, access_token, folder=n.uuid)}
+        {"label": n.name, "url": _shared_page_url(path, access_token, node=n.uuid)}
         for n in trail[:-1]
     ]
     crumbs.append({"label": trail[-1].name})
     return crumbs
 
 
-def _resolve_shared_folder(link, request):
-    """The folder to list for *link*: its own root, or the ``?folder=``
-    descendant. Raises Http404 for anything outside the link's subtree or
-    that is not a folder."""
-    folder_param = request.GET.get("folder")
-    if not folder_param:
+def _resolve_shared_target(link, request):
+    """The node ``?node=<uuid>`` names, or *link*'s own root when absent.
+
+    Callers must only reach this once the read and password gates are open -
+    resolving earlier would let a request probe the subtree before either
+    gate ran. ``resolve_within`` answers 404 uniformly for "outside the
+    subtree", "does not exist" and "trashed", for a file or a folder alike.
+    """
+    node_param = request.GET.get("node")
+    if not node_param:
         return link.file
 
     from workspace.files.services.public_links import resolve_within
 
-    node = resolve_within(link, folder_param)
-    if node is None or node.node_type != File.NodeType.FOLDER:
+    node = resolve_within(link, node_param)
+    if node is None:
         raise Http404
     return node
 
 
 def _shared_folder_listing_context(link, current, request, access_token):
-    """Children of *current*, capped at ``SHARED_FOLDER_PAGE_SIZE``, plus
-    breadcrumbs - the context the ``folder-listing`` fragment renders."""
+    """Children of *current*, capped at ``SHARED_FOLDER_PAGE_SIZE``.
+
+    Every entry's ``url`` reopens the share page at that node through
+    ``?node=`` - a folder to browse into or a file to view, both handled by
+    the same parameter the page itself reads.
+    """
     token = link.token
     children = list(
         File.objects.filter(parent=current, deleted_at__isnull=True).name_ordered(
@@ -968,11 +976,7 @@ def _shared_folder_listing_context(link, current, request, access_token):
                 "name": node.name,
                 "is_folder": is_dir,
                 "has_thumbnail": node.has_thumbnail,
-                "folder_url": (
-                    _shared_page_url(request.path, access_token, folder=node.uuid)
-                    if is_dir
-                    else None
-                ),
+                "url": _shared_page_url(request.path, access_token, node=node.uuid),
                 "download_url": (
                     None
                     if is_dir
@@ -991,18 +995,23 @@ def _shared_folder_listing_context(link, current, request, access_token):
         )
 
     return {
-        "current_folder": current,
         "entries": entries,
         "has_more": has_more,
-        "breadcrumbs": _shared_breadcrumbs(
-            link.file, current, request.path, access_token
-        ),
     }
 
 
 @ensure_csrf_cookie
 def shared_file_view(request, token):
-    """Public standalone page for viewing a shared file."""
+    """Public page for a share link: a folder listing, a file viewer, or a
+    drop zone, depending on the link's mode and the resolved ``?node=``
+    target.
+
+    A file reached inside a shared folder goes through the exact same
+    ``resolve_within`` gate as the link's own root, so the viewer, the
+    quarantine card and the download link all key off the *resolved* target
+    - never off ``link.file`` - and a file inside a shared folder renders
+    exactly like a file shared on its own.
+    """
     link = (
         FileShareLink.objects.select_related("file", "created_by")
         .filter(token=token, file__deleted_at__isnull=True)
@@ -1014,11 +1023,8 @@ def shared_file_view(request, token):
     if link.is_expired:
         return render(
             request,
-            "files/ui/shared_file.html",
-            {
-                "expired": True,
-                "share_token": token,
-            },
+            "files/ui/shared_page.html",
+            {"expired": True, "share_token": token},
         )
 
     # Password check via query param
@@ -1036,8 +1042,17 @@ def shared_file_view(request, token):
             # False so the password prompt is rendered again.
             pass
 
-    is_folder = link.file.node_type == File.NodeType.FOLDER
     unlocked = not link.has_password or password_verified
+    effective_access_token = access_token if password_verified else ""
+
+    # Every gate the full page enforces (read allowed, password satisfied)
+    # must hold before ?node= is even looked at: mode drop never resolves
+    # it, and a locked link leaves the target at the link's own root.
+    target = link.file
+    if link.allows_read and unlocked:
+        target = _resolve_shared_target(link, request)
+
+    is_folder = target.node_type == File.NodeType.FOLDER
 
     # The viewers inline the blob into the page (TextViewer and MarkdownViewer
     # emit the decoded bytes straight into the template), so the policy has to
@@ -1045,85 +1060,83 @@ def shared_file_view(request, token):
     # A folder is not a scannable blob, so the policy simply does not apply.
     from workspace.files.services.scanning.policy import blocked_reason
 
-    quarantine_reason = None if is_folder else blocked_reason(link.file)
+    quarantine_reason = None if is_folder else blocked_reason(target)
+
+    show_content = link.allows_read and unlocked
+    show_listing = show_content and is_folder
+    show_viewer = show_content and not is_folder
+    show_dropzone = is_folder and link.allows_upload
 
     # Render viewer HTML if accessible. ViewerRegistry has nothing to render
     # for a folder, so skip it entirely rather than looking up a viewer class
     # that will never match.
     viewer_html = ""
-    if unlocked and not is_folder and quarantine_reason is None:
-        from workspace.files.ui.viewers import ViewerRegistry
-
-        ViewerClass = get_viewer_by_slug(link.file.viewer) or (
-            ViewerRegistry.get_viewer(link.file.type, link.file.name)
-            if link.file.type
-            else None
+    if show_viewer and quarantine_reason is None:
+        ViewerClass = get_viewer_by_slug(target.viewer) or (
+            ViewerRegistry.get_viewer(target.type, target.name) if target.type else None
         )
         if ViewerClass:
-            viewer = ViewerClass(link.file)
+            viewer = ViewerClass(target)
             viewer._user_can_edit = False
-            content_url = f"/api/v1/files/shared/{token}/content"
-            if access_token and password_verified:
-                content_url += f"?access_token={access_token}"
-            viewer._content_url = content_url
+            viewer._content_url = _shared_action_url(
+                token, "/content", effective_access_token, file=target.uuid
+            )
             viewer_html = viewer.render(request)
-
-    if is_folder:
-        template = (
-            "files/ui/shared_folder.html"
-            if link.allows_read
-            else "files/ui/shared_drop.html"
-        )
-    else:
-        template = "files/ui/shared_file.html"
 
     # No download link for a quarantined file: the endpoint refuses it anyway,
     # and offering the button would only produce a 403 the visitor cannot act on.
     download_url = None
-    if quarantine_reason is None:
-        download_url = f"/api/v1/files/shared/{token}/download" + (
-            f"?access_token={access_token}"
-            if access_token and password_verified
-            else ""
+    if show_viewer and quarantine_reason is None:
+        download_url = _shared_action_url(
+            token, "/download", effective_access_token, file=target.uuid
         )
 
-    effective_access_token = access_token if password_verified else ""
+    # A file-only link has nothing to navigate from - the target IS the
+    # root - so it gets no breadcrumb, matching the standalone file page it
+    # used to be. Any other case (a folder root, or a node reached through
+    # ?node=) shows the trail down from the root.
+    breadcrumbs = None
+    if show_content and not (target.pk == link.file.pk and not is_folder):
+        breadcrumbs = _shared_breadcrumbs(
+            link.file, target, request.path, effective_access_token
+        )
 
     context = {
         "share_token": token,
-        "file": link.file,
         "link": link,
+        "target": target,
+        "is_folder": is_folder,
         "access_token": effective_access_token,
+        "breadcrumbs": breadcrumbs,
+        "show_listing": show_listing,
+        "show_viewer": show_viewer,
+        "show_dropzone": show_dropzone,
         "viewer_html": viewer_html,
         "quarantine_reason": quarantine_reason,
         "needs_password": link.has_password and not password_verified,
         "expired": False,
         "download_url": download_url,
     }
-    if is_folder and link.allows_upload:
+    if show_dropzone:
         ceiling = settings.FILES_DROP_MAX_FILE_BYTES
         context["max_file_bytes"] = min(link.max_file_bytes or ceiling, ceiling)
 
-    # Every gate the full page enforces (link exists, not expired, read
-    # allowed, password satisfied) must hold before a listing - including the
-    # fragment - is served: an X-Alpine-Request is just a header an attacker
-    # can send directly, not proof any of the above already happened.
-    show_listing = is_folder and link.allows_read and unlocked
     if show_listing:
-        current = _resolve_shared_folder(link, request)
         context.update(
             _shared_folder_listing_context(
-                link, current, request, effective_access_token
+                link, target, request, effective_access_token
             )
         )
 
+    # Mirrors the content/download endpoints' own order (quarantine check
+    # before _record_access): a blocked preview must not count as a served
+    # view, but a folder listing always can.
+    if show_listing or (show_viewer and quarantine_reason is None):
         from workspace.files.views.share_links import _record_access
 
         _record_access(link)
 
-        if request.headers.get("X-Alpine-Request"):
-            return render(
-                request, "files/ui/shared_folder.html#folder-listing", context
-            )
+    if show_content and request.headers.get("X-Alpine-Request"):
+        return render(request, "files/ui/shared_page.html#shared-content", context)
 
-    return render(request, template, context)
+    return render(request, "files/ui/shared_page.html", context)

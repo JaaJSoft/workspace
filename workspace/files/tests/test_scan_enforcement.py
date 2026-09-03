@@ -277,6 +277,37 @@ class ShareLinkEnforcementTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn(self.MARKER, resp.content)
 
+    @override_settings(**BLOCKING)
+    def test_a_quarantined_descendant_reached_via_node_shows_the_card_not_download(
+        self,
+    ):
+        """The quarantine check must key off the resolved ?node= target, not
+        off the share link's own root - a quarantined file inside a shared
+        folder must not slip through with its viewer and download link
+        intact just because the folder itself is clean."""
+        from workspace.files.models import FileShareLink
+
+        folder = File.objects.create(
+            owner=self.user, name="Folder", node_type=File.NodeType.FOLDER
+        )
+        self.file.parent = folder
+        self.file.save(update_fields=["parent"])
+        folder_link = FileShareLink.objects.create(
+            file=folder, created_by=self.user, mode=FileShareLink.Mode.READ
+        )
+
+        resp = self.client.get(
+            f"/files/shared/{folder_link.token}", {"node": str(self.file.uuid)}
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertNotIn(self.MARKER, resp.content)
+        self.assertIn(b"quarantined", resp.content.lower())
+        self.assertNotIn(
+            f"/api/v1/files/shared/{folder_link.token}/download".encode(),
+            resp.content,
+        )
+
 
 class WopiEnforcementTests(APITestCase):
     def setUp(self):

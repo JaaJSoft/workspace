@@ -1,0 +1,57 @@
+{% comment %}
+  The folder-listing box inside the shared page's swappable content region.
+  Needs entries and has_more in context. Each entry's url carries ?node=,
+  whether it points at a subfolder or a file - both reopen this same page.
+{% endcomment %}
+<div id="shared-listing" class="bg-base-200 min-h-48">
+  {% if not entries %}
+    <div class="p-12 text-center text-base-content/50">This folder is empty.</div>
+  {% else %}
+    <ul class="divide-y divide-base-300">
+      {% for entry in entries %}
+        <li
+          class="flex items-center gap-3 px-6 py-3 hover:bg-base-100 transition-colors"
+        >
+          {% if entry.has_thumbnail %}
+            <img
+              src="{{ entry.thumbnail_url }}"
+              class="w-10 h-10 rounded object-cover flex-shrink-0"
+              alt=""
+            />
+          {% else %}
+            <i
+              data-lucide="{% if entry.is_folder %}folder{% else %}file{% endif %}"
+              class="w-8 h-8 flex-shrink-0 text-base-content/40"
+            ></i>
+          {% endif %}
+
+          <a
+            href="{{ entry.url }}"
+            x-target.push="shared-content"
+            class="flex-1 min-w-0 text-left cursor-pointer"
+          >
+            <span class="block truncate">{{ entry.name }}</span>
+          </a>
+
+          {% if entry.download_url %}
+            <a
+              href="{{ entry.download_url }}"
+              class="btn btn-ghost btn-sm btn-square"
+              title="Download"
+            >
+              <i data-lucide="download" class="w-4 h-4"></i>
+            </a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if has_more %}
+    <div
+      class="px-6 py-3 text-sm text-base-content/50 text-center border-t border-base-300"
+    >
+      Only the first {{ entries|length }} entries are shown.
+    </div>
+  {% endif %}
+</div>

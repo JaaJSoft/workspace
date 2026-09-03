@@ -1,0 +1,35 @@
+{% comment %}
+  The viewer box inside the shared page's swappable content region: the
+  resolved file's preview, the quarantine card, or a "no preview" fallback
+  with a download link. Needs quarantine_reason, viewer_html and
+  download_url in context.
+{% endcomment %}
+<div id="shared-viewer" class="bg-base-200">
+  {% if quarantine_reason %}
+    <div class="p-12 text-center">
+      <i data-lucide="shield-alert" class="w-12 h-12 text-error mx-auto mb-4"></i>
+      <h2 class="text-lg font-bold mb-2">File quarantined</h2>
+      <p class="text-base-content/60">
+        The malware scanner flagged this file, so it can be neither previewed nor
+        downloaded.
+      </p>
+      <p class="text-base-content/40 text-sm mt-2">{{ quarantine_reason }}</p>
+    </div>
+  {% elif viewer_html %}
+    {{ viewer_html|safe }}
+  {% else %}
+    <div class="p-12 text-center">
+      <i
+        data-lucide="eye-off"
+        class="w-12 h-12 text-base-content/30 mx-auto mb-4"
+      ></i>
+      <p class="text-base-content/60 mb-4">Preview not available for this file type</p>
+      {% if download_url %}
+        <a href="{{ download_url }}" class="btn btn-primary btn-sm gap-1">
+          <i data-lucide="download" class="w-4 h-4"></i>
+          Download file
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>

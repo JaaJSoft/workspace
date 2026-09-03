@@ -1,0 +1,70 @@
+{% extends "files/ui/shared_base.html" %}
+{% load static %}
+{% block title %}{{ target.name }} - Workspace{% endblock %}
+{% block head_extra %}
+  <script src="{% static 'ui/js/inline_alert.js' %}"></script>
+  {% if is_folder %}
+    <script src="{% static 'files/ui/js/shared_dropzone.js' %}"></script>
+  {% endif %}
+{% endblock %}
+{% block content %}
+  {% partialdef shared-content inline %}
+    <div id="shared-content" class="space-y-4">
+      <div class="card bg-base-100 shadow-lg overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm"
+            >
+              <i
+                data-lucide="{% if link.mode == 'drop' %}upload-cloud{% elif is_folder %}folder{% else %}file{% endif %}"
+                class="w-5 h-5 text-white"
+              ></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h1 class="text-xl font-bold text-white truncate">{{ target.name }}</h1>
+              <p class="text-white/70 text-sm">
+                {% if link.mode == 'drop' %}
+                  Send files to {{ link.created_by.get_full_name|default:link.created_by.username }}
+                {% elif is_folder %}
+                  Shared folder from {{ link.created_by.get_full_name|default:link.created_by.username }}
+                {% else %}
+                  {{ target.type|default:"unknown" }} - {{ target.size|filesizeformat }}
+                  - shared by {{ link.created_by.get_full_name|default:link.created_by.username }}
+                {% endif %}
+              </p>
+            </div>
+            {% if download_url %}
+              <a
+                href="{{ download_url }}"
+                class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
+              >
+                <i data-lucide="download" class="w-4 h-4"></i>
+                Download
+              </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if breadcrumbs %}
+          <div
+            class="px-6 py-3 border-b border-base-300 bg-base-100 overflow-x-auto"
+          >
+            {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="shared-content" x_target_history="push" %}
+          </div>
+        {% endif %}
+
+        {% if show_listing %}
+          {% include "files/ui/partials/shared_listing.html" %}
+        {% elif show_viewer %}
+          {% include "files/ui/partials/shared_viewer.html" %}
+        {% endif %}
+      </div>
+
+      {% if show_dropzone %}
+        {% include "files/ui/partials/shared_dropzone.html" %}
+      {% endif %}
+    </div>
+  {% endpartialdef %}
+{% endblock %}

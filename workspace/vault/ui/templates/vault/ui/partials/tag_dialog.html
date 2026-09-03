@@ -9,11 +9,14 @@
 <template x-if="tagDraft">
   <div class="modal modal-open">
     <div class="modal-box max-w-sm">
-      <h2 class="font-semibold text-lg">New tag</h2>
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i data-lucide="tag" class="w-5 h-5 text-error"></i>
+        New tag
+      </h3>
       <form @submit.prevent="saveTag()">
         <input
           type="text"
-          class="input input-bordered w-full mt-4 mb-4"
+          class="input input-bordered input-sm w-full mt-4 mb-4"
           autocomplete="off"
           spellcheck="false"
           placeholder="Tag name"
@@ -28,10 +31,10 @@
         </div>
 
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost" @click="closeTagDialog()">Cancel</button>
+          <button type="button" class="btn btn-sm btn-ghost" @click="closeTagDialog()">Cancel</button>
           <button
             type="submit"
-            class="btn btn-primary"
+            class="btn btn-sm btn-primary"
             :disabled="busy || !tagDraft.name.trim()"
           >
             Create

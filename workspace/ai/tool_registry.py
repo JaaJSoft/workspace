@@ -179,10 +179,10 @@ class ToolRegistry:
     # -- execution ----------------------------------------------------------
 
     def execute(self, tool_call, user, bot, conversation_id=None, context=None) -> str:
-        """Execute a tool call and return the result string."""
-        name = tool_call.function.name
+        """Execute a :class:`~workspace.ai.harness.model.ToolCall`, returning the result string."""
+        name = tool_call.name
         try:
-            raw_args = json.loads(tool_call.function.arguments)
+            raw_args = json.loads(tool_call.arguments)
         except json.JSONDecodeError:
             return "Error: invalid JSON arguments"
         info = self._tools.get(name)

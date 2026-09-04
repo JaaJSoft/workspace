@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
+from workspace.ai.harness.model import ModelResponse
 from workspace.ai.models import VOICE_REF_MAX_BYTES, AITask, BotProfile
 from workspace.ai.services.responses import post_bot_message, produced_media
 from workspace.ai.services.speech import SpeechSynthesisError, VoiceReference
@@ -247,12 +248,9 @@ class PostBotMessageVoiceTests(TestCase):
         return post_bot_message(
             conversation=self.conv,
             bot_user=self.bot,
-            result={
-                "content": content,
-                "model": "test",
-                "prompt_tokens": 1,
-                "completion_tokens": 1,
-            },
+            response=ModelResponse(
+                content=content, model="test", prompt_tokens=1, completion_tokens=1
+            ),
             tool_context={"voices": voices},
             ai_task=self.ai_task,
         )

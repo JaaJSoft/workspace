@@ -9,6 +9,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.ai.harness.model import ModelResponse
+from workspace.ai.harness.runner import RunResult, StopReason
 from workspace.ai.models import AgentGoal, AITask, BotProfile
 from workspace.ai.tools import (
     CompleteAgentGoalParams,
@@ -213,6 +215,19 @@ class RunAgentGoalCheckTests(TestCase):
         }
 
     @staticmethod
+    def _run_result(context):
+        """What a faked runner hands back: an empty final reply, discarded."""
+        return RunResult(
+            response=ModelResponse(
+                model="gpt-4o-mini", prompt_tokens=10, completion_tokens=5
+            ),
+            context=context,
+            rounds=[],
+            tool_data=None,
+            stop=StopReason.ANSWERED,
+        )
+
+    @staticmethod
     def _send_message_tool_call(message):
         import json
         from types import SimpleNamespace
@@ -241,7 +256,7 @@ class RunAgentGoalCheckTests(TestCase):
             "completion_tokens": 5,
         }
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_message_sent_via_tool_is_posted(self, mock_llm):
         # End-to-end through the real tool registry: the model calls
         # send_user_message, then produces a final summary that must be
@@ -275,7 +290,7 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertEqual(task.task_type, AITask.TaskType.AGENT)
         self.assertEqual(task.status, AITask.Status.COMPLETED)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_final_text_without_tool_call_is_discarded(self, mock_llm):
         # Silence is the default: plain text at the end of a check-in never
         # reaches the user, even when the model wrote a chatty update.
@@ -301,7 +316,7 @@ class RunAgentGoalCheckTests(TestCase):
         goal.refresh_from_db()
         self.assertEqual(goal.check_count, 1)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_skips_non_active_goal(self, mock_llm):
         goal = self._goal(status=AgentGoal.Status.PAUSED)
 
@@ -313,7 +328,7 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertEqual(result["reason"], "not_active")
         mock_llm.assert_not_called()
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_goal_not_found(self, mock_llm):
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
@@ -322,7 +337,7 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertEqual(result["status"], "error")
         mock_llm.assert_not_called()
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_duplicate_delivery_skipped_by_cas(self, mock_llm):
         mock_llm.return_value = self._llm_result("Hello")
         goal = self._goal()
@@ -336,7 +351,7 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertEqual(result["reason"], "already_claimed")
         mock_llm.assert_not_called()
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_empty_response_stays_silent(self, mock_llm):
         # No retry in agent context: an empty response is just a silent
         # check-in, not a failure to compensate for.
@@ -356,26 +371,19 @@ class RunAgentGoalCheckTests(TestCase):
             ).exists()
         )
 
-    @patch("workspace.ai.tasks.agent_goals.run_tool_loop")
-    def test_user_pausing_goal_mid_run_suppresses_message(self, mock_loop):
+    @patch("workspace.ai.tasks.agent_goals.build_bot_runner")
+    def test_user_pausing_goal_mid_run_suppresses_message(self, mock_build):
         goal = self._goal()
 
-        def pause_then_reply(*call_args, **call_kwargs):
+        def pause_then_reply(messages):
             # Simulates the user pausing the goal from the UI while the LLM
             # run (which queued a message) was in flight.
             AgentGoal.objects.filter(pk=goal.pk).update(status=AgentGoal.Status.PAUSED)
-            result = {
-                "content": "",
-                "tool_calls": None,
-                "model": "gpt-4o-mini",
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-            }
-            context = call_kwargs.get("context") or {}
+            context = mock_build.call_args.kwargs["context"]
             context["agent_messages"] = ["You should really see this update!"]
-            return result, context, [], None
+            return self._run_result(context)
 
-        mock_loop.side_effect = pause_then_reply
+        mock_build.return_value.run.side_effect = pause_then_reply
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
@@ -391,30 +399,23 @@ class RunAgentGoalCheckTests(TestCase):
         task = AITask.objects.get(owner=self.bot_user)
         self.assertEqual(task.result, "[SUPPRESSED]")
 
-    @patch("workspace.ai.tasks.agent_goals.run_tool_loop")
-    def test_agent_closing_goal_itself_still_posts_message(self, mock_loop):
+    @patch("workspace.ai.tasks.agent_goals.build_bot_runner")
+    def test_agent_closing_goal_itself_still_posts_message(self, mock_build):
         goal = self._goal()
 
-        def close_and_reply(*call_args, **call_kwargs):
+        def close_and_reply(messages):
             # Simulates the agent calling complete_agent_goal and
             # send_user_message during its own run: the tools close the goal,
             # flag the context and queue the wrap-up.
             AgentGoal.objects.filter(pk=goal.pk).update(
                 status=AgentGoal.Status.COMPLETED, outcome="Done."
             )
-            result = {
-                "content": "",
-                "tool_calls": None,
-                "model": "gpt-4o-mini",
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-            }
-            context = call_kwargs.get("context") or {}
+            context = mock_build.call_args.kwargs["context"]
             context["agent_goal_changed"] = True
             context["agent_messages"] = ["Mission accomplished — here is the wrap-up."]
-            return result, context, [], None
+            return self._run_result(context)
 
-        mock_loop.side_effect = close_and_reply
+        mock_build.return_value.run.side_effect = close_and_reply
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
@@ -427,11 +428,11 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertIsNotNone(bot_msg)
         self.assertIn("Mission accomplished", bot_msg.body)
 
-    @patch("workspace.ai.tasks.agent_goals.run_tool_loop")
-    def test_failed_checkin_posts_no_error_message(self, mock_loop):
+    @patch("workspace.ai.tasks.agent_goals.build_bot_runner")
+    def test_failed_checkin_posts_no_error_message(self, mock_build):
         # The silent-default contract holds on failure too: the user never
         # asked for this run, so a crash must not surface as a chat message.
-        mock_loop.side_effect = RuntimeError("LLM unavailable")
+        mock_build.return_value.run.side_effect = RuntimeError("LLM unavailable")
         goal = self._goal()
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
@@ -448,7 +449,7 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertEqual(task.status, AITask.Status.FAILED)
         self.assertIn("LLM unavailable", task.error)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_goal_instruction_injected_in_system_prompt(self, mock_llm):
         mock_llm.return_value = self._llm_result("[SILENT]")
         goal = self._goal(notes="Previous findings: nothing yet.")
@@ -464,7 +465,7 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertIn("Research a topic over time.", system_content)
         self.assertIn("Previous findings: nothing yet.", system_content)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_checkin_tells_the_model_nobody_wrote_to_it(self, mock_llm):
         mock_llm.return_value = self._llm_result("[SILENT]")
         goal = self._goal()

@@ -12,6 +12,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient, APITestCase
 
+from workspace.ai.harness.model import ModelResponse
 from workspace.ai.models import AITask, BotProfile
 from workspace.ai.services.responses import post_bot_message
 from workspace.chat.models import (
@@ -174,12 +175,9 @@ class BotReplyTests(MessagePostingMixin, TestCase):
             return post_bot_message(
                 conversation=self.conv,
                 bot_user=self.bot,
-                result={
-                    "content": content,
-                    "model": "test",
-                    "prompt_tokens": 1,
-                    "completion_tokens": 1,
-                },
+                response=ModelResponse(
+                    content=content, model="test", prompt_tokens=1, completion_tokens=1
+                ),
                 tool_context={},
                 ai_task=self.ai_task,
             )

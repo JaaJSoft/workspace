@@ -5,13 +5,14 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from importlib import import_module
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import connection
 from django.test import TestCase, override_settings
 
+from workspace.ai.harness.model import ToolCall
 from workspace.ai.models import BotProfile, UserMemory
 from workspace.ai.tool_registry import ToolProvider, ToolRegistry, tool, tool_registry
 from workspace.ai.tools import GenerateImageParams, ImageToolProvider
@@ -156,10 +157,11 @@ class ExecuteToolCallTests(TestCase):
         BotProfile.objects.create(user=self.bot_user)
 
     def test_save_memory_creates(self):
-        tool_call = MagicMock()
-        tool_call.id = "call_1"
-        tool_call.function.name = "save_memory"
-        tool_call.function.arguments = json.dumps({"key": "name", "content": "Pierre"})
+        tool_call = ToolCall(
+            id="call_1",
+            name="save_memory",
+            arguments=json.dumps({"key": "name", "content": "Pierre"}),
+        )
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
@@ -172,10 +174,11 @@ class ExecuteToolCallTests(TestCase):
             user=self.user, bot=self.bot_user, key="name", content="Pierre"
         )
 
-        tool_call = MagicMock()
-        tool_call.id = "call_2"
-        tool_call.function.name = "save_memory"
-        tool_call.function.arguments = json.dumps({"key": "name", "content": "Paul"})
+        tool_call = ToolCall(
+            id="call_2",
+            name="save_memory",
+            arguments=json.dumps({"key": "name", "content": "Paul"}),
+        )
 
         tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
@@ -187,10 +190,9 @@ class ExecuteToolCallTests(TestCase):
             user=self.user, bot=self.bot_user, key="name", content="Pierre"
         )
 
-        tool_call = MagicMock()
-        tool_call.id = "call_3"
-        tool_call.function.name = "delete_memory"
-        tool_call.function.arguments = json.dumps({"key": "name"})
+        tool_call = ToolCall(
+            id="call_3", name="delete_memory", arguments=json.dumps({"key": "name"})
+        )
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
@@ -202,20 +204,18 @@ class ExecuteToolCallTests(TestCase):
         )
 
     def test_delete_memory_not_found(self):
-        tool_call = MagicMock()
-        tool_call.id = "call_4"
-        tool_call.function.name = "delete_memory"
-        tool_call.function.arguments = json.dumps({"key": "nonexistent"})
+        tool_call = ToolCall(
+            id="call_4",
+            name="delete_memory",
+            arguments=json.dumps({"key": "nonexistent"}),
+        )
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn("not found", result.lower())
 
     def test_unknown_tool(self):
-        tool_call = MagicMock()
-        tool_call.id = "call_5"
-        tool_call.function.name = "unknown_tool"
-        tool_call.function.arguments = "{}"
+        tool_call = ToolCall(id="call_5", name="unknown_tool", arguments="{}")
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
@@ -230,10 +230,11 @@ class ExecuteToolCallTests(TestCase):
         )
         Message.objects.create(conversation=conv, author=self.user, body="Nothing here")
 
-        tool_call = MagicMock()
-        tool_call.id = "call_6"
-        tool_call.function.name = "search_messages"
-        tool_call.function.arguments = json.dumps({"query": "world"})
+        tool_call = ToolCall(
+            id="call_6",
+            name="search_messages",
+            arguments=json.dumps({"query": "world"}),
+        )
 
         result = tool_registry.execute(
             tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk)
@@ -255,10 +256,11 @@ class ExecuteToolCallTests(TestCase):
         )
         Message.objects.create(conversation=conv, author=self.user, body="duckling")
 
-        tool_call = MagicMock()
-        tool_call.id = "call_6b"
-        tool_call.function.name = "search_messages"
-        tool_call.function.arguments = json.dumps({"query": "duckling"})
+        tool_call = ToolCall(
+            id="call_6b",
+            name="search_messages",
+            arguments=json.dumps({"query": "duckling"}),
+        )
 
         result = tool_registry.execute(
             tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk)
@@ -270,10 +272,11 @@ class ExecuteToolCallTests(TestCase):
     def test_search_messages_no_results(self):
         conv = Conversation.objects.create(created_by=self.user)
 
-        tool_call = MagicMock()
-        tool_call.id = "call_7"
-        tool_call.function.name = "search_messages"
-        tool_call.function.arguments = json.dumps({"query": "nonexistent"})
+        tool_call = ToolCall(
+            id="call_7",
+            name="search_messages",
+            arguments=json.dumps({"query": "nonexistent"}),
+        )
 
         result = tool_registry.execute(
             tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk)
@@ -289,10 +292,11 @@ class ExecuteToolCallTests(TestCase):
             "conditions": "Overcast",
         }
 
-        tool_call = MagicMock()
-        tool_call.id = "call_w1"
-        tool_call.function.name = "get_weather"
-        tool_call.function.arguments = json.dumps({"location": "Paris"})
+        tool_call = ToolCall(
+            id="call_w1",
+            name="get_weather",
+            arguments=json.dumps({"location": "Paris"}),
+        )
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
@@ -305,20 +309,20 @@ class ExecuteToolCallTests(TestCase):
     def test_get_weather_not_found(self, mock_weather):
         mock_weather.return_value = None
 
-        tool_call = MagicMock()
-        tool_call.id = "call_w2"
-        tool_call.function.name = "get_weather"
-        tool_call.function.arguments = json.dumps({"location": "Nowhereville"})
+        tool_call = ToolCall(
+            id="call_w2",
+            name="get_weather",
+            arguments=json.dumps({"location": "Nowhereville"}),
+        )
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn("Could not find weather", result)
 
     def test_get_weather_missing_location(self):
-        tool_call = MagicMock()
-        tool_call.id = "call_w3"
-        tool_call.function.name = "get_weather"
-        tool_call.function.arguments = json.dumps({"location": "  "})
+        tool_call = ToolCall(
+            id="call_w3", name="get_weather", arguments=json.dumps({"location": "  "})
+        )
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
@@ -330,10 +334,7 @@ class ExecuteToolCallTests(TestCase):
         self.user.email = "pierre@example.com"
         self.user.save()
 
-        tool_call = MagicMock()
-        tool_call.id = "call_8"
-        tool_call.function.name = "get_current_user_info"
-        tool_call.function.arguments = "{}"
+        tool_call = ToolCall(id="call_8", name="get_current_user_info", arguments="{}")
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 

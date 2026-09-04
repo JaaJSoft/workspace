@@ -288,7 +288,7 @@ class GenerateScheduledResponseTests(TestCase):
             conversation=self.conversation, user=self.bot_user
         )
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_generates_message_and_deactivates_once(self, mock_llm):
         mock_llm.return_value = {
             "content": "Hello!",
@@ -327,7 +327,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertFalse(schedule.is_active)
         self.assertIsNotNone(schedule.last_run_at)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_recurring_stays_active(self, mock_llm):
         mock_llm.return_value = {
             "content": "Check-in time!",
@@ -364,7 +364,7 @@ class GenerateScheduledResponseTests(TestCase):
         # next_run_at should have advanced (at least 1 hour in the future from last_run_at)
         self.assertGreater(schedule.next_run_at, schedule.last_run_at)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_skips_inactive_schedule(self, mock_llm):
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
@@ -383,7 +383,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertEqual(result["status"], "skipped")
         mock_llm.assert_not_called()
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_empty_response_skips_message(self, mock_llm):
         """Scheduled messages with empty AI responses should not post empty messages."""
         mock_llm.return_value = {
@@ -422,7 +422,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertEqual(mock_llm.call_count, 2)
 
     @patch("workspace.ai.tool_registry.tool_registry.execute")
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_empty_response_retry_does_not_replay_tools(
         self,
         mock_llm,
@@ -505,7 +505,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("not found", result["error"])
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_duplicate_delivery_does_not_double_send_recurring(self, mock_llm):
         # Celery can redeliver a task after the first worker has already
         # committed (lost ack, worker death, etc.). Without keying the CAS
@@ -570,7 +570,7 @@ class GenerateScheduledResponseTests(TestCase):
         )
         self.assertEqual(bot_msgs.count(), 1)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_concurrent_worker_does_not_double_send(self, mock_llm):
         # Simulate the worker race: two workers loaded the row at the same
         # next_run_at, the other one already advanced it in the DB before
@@ -1002,7 +1002,7 @@ class ScheduledRunContextTests(TestCase):
             conversation=self.conversation, author=self.bot_user, body="hello"
         )
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_run_tells_the_model_nobody_wrote_to_it(self, mock_llm):
         mock_llm.return_value = {
             "content": "Still there?",

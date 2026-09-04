@@ -136,16 +136,23 @@ def set_locked(meeting, locked, now=None):
     Wrapped in one transaction so a failure on the second write cannot leave
     the durable value committed while the live one stays stale. Not
     guest-reachable (this is behind the host membership gate), so the
-    get_active_call self-heal is fine here.
+    get_active_call self-heal is fine here - it just has to settle before
+    either write, see below.
     """
     from .calls import get_active_call
 
     locked = bool(locked)
+    # Read the call BEFORE writing anything: get_active_call self-heals, and
+    # on a phantom ACTIVE session (every heartbeat lapsed) that self-heal
+    # ends the call through _end_call, which releases the durable lock. Run
+    # after the write, it lands on top of the value just committed and leaves
+    # the meeting unlocked while this call reports success.
+    session = get_active_call(meeting.conversation_id)
+
     occurrence = current_occurrence(meeting, now=now) if locked else None
     meeting.locked_occurrence_start = occurrence[0] if occurrence is not None else None
     meeting.save(update_fields=["locked_occurrence_start"])
 
-    session = get_active_call(meeting.conversation_id)
     if session is not None:
         session.locked = locked
         session.save(update_fields=["locked"])

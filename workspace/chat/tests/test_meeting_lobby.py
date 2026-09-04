@@ -285,6 +285,23 @@ class MeetingHostViewTests(TestCase):
             calls.is_call_locked(self.meeting.conversation_id, self.occurrence_start)
         )
 
+    def test_lock_survives_the_self_heal_of_a_phantom_call(self):
+        # I-2 regression: set_locked saved the meeting first and read the call
+        # after, so get_active_call's self-heal - which ends a phantom session
+        # through _end_call, and _end_call releases the durable lock - landed
+        # on top of the write just made. The committed meeting came out
+        # unlocked while the endpoint answered {"locked": true}.
+        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        cache.clear()
+
+        set_locked(self.meeting, True)
+
+        self.meeting.refresh_from_db()
+        self.assertEqual(self.meeting.locked_occurrence_start, self.occurrence_start)
+        self.assertTrue(
+            calls.is_call_locked(self.meeting.conversation_id, self.occurrence_start)
+        )
+
     def test_a_lock_nobody_ever_ended_does_not_reach_the_next_occurrence(self):
         # I-1, the elapsed half: a host pre-locks an empty room, no call is
         # ever started and nobody presses End, so no lifecycle path runs to

@@ -37,6 +37,12 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'delete_forever',
 ];
 
+// POST /api/v1/vault/actions refuses more than this many UUIDs in one call
+// (MAX_BATCH in vault/views/actions.py). The cap is deliberate - the answer
+// costs linear Python and linear payload per UUID - so a large vault asks in
+// slices rather than asking the server to lift it.
+window.VAULT_ACTIONS_BATCH_SIZE = 200;
+
 // The swatches the vault offers. Not ICON_PICKER_COLORS: that list is written
 // in full CSS classes, two of which the vault's colour column refuses, and the
 // signed metadata holds a bare daisyUI role rather than a class.
@@ -441,18 +447,29 @@ window.vaultBrowser = (function () {
           this.entryActions = {};
           return;
         }
-        let answer;
-        try {
-          answer = await window.vaultApi.fetchEntryActions(uuids);
-        } catch (err) {
-          // The names are open and the listing is usable. Blanking a working
-          // page over a lost menu would cost the user more than the menu.
-          if (generation === this.actionsGeneration) this.entryActions = {};
-          return;
+        const slices = [];
+        for (let i = 0; i < uuids.length; i += window.VAULT_ACTIONS_BATCH_SIZE) {
+          slices.push(uuids.slice(i, i + window.VAULT_ACTIONS_BATCH_SIZE));
         }
+        // The answers accumulate here and the reactive field takes a fresh
+        // copy each time. Merging into this.entryActions instead would spread
+        // a snapshot read before the await, and the last slice would land
+        // alone over the ones that answered first.
+        const merged = {};
+        // allSettled, not all: a slice lost to the network must not cost the
+        // slices that answered their menus. Each answer is published as it
+        // lands, so the first entries are usable while the rest is in flight.
+        await Promise.allSettled(slices.map(async (slice) => {
+          const part = await window.vaultApi.fetchEntryActions(slice);
+          // Both guards belong inside the slice: with several requests in
+          // flight there are several places a stale answer comes back through.
+          if (generation !== this.actionsGeneration) return;
+          if (!window.vaultSession.isUnlocked()) return;
+          Object.assign(merged, part);
+          this.entryActions = Object.assign({}, merged);
+        }));
         if (generation !== this.actionsGeneration) return;
         if (!window.vaultSession.isUnlocked()) return;
-        this.entryActions = answer;
         // The rows reach the screen a round trip before this answer does, and
         // startTotp is gated on it: a row opened in between was refused by a
         // map that had no entry for it yet, and no other pass would ask again.

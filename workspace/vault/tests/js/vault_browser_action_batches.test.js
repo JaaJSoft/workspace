@@ -63,9 +63,73 @@ function answerFor(uuids) {
   return Object.fromEntries(uuids.map((uuid) => [uuid, [{ id: 'edit' }]]));
 }
 
-test('the client slices at the cap the endpoint enforces', () => {
+// The value itself is held against the server's MAX_BATCH by
+// vault/tests/test_entry_actions.py; asserting the number here would only
+// compare a literal to a literal.
+test('the browser declares the batch size it slices at', () => {
   const { ctx } = browser({ fetchEntryActions: async () => ({}) });
-  assert.equal(ctx.VAULT_ACTIONS_BATCH_SIZE, 200);
+  assert.equal(typeof ctx.VAULT_ACTIONS_BATCH_SIZE, 'number');
+  assert.ok(ctx.VAULT_ACTIONS_BATCH_SIZE > 0);
+});
+
+test('a slice landing does not strip rows another answer already filled', async () => {
+  // A reload runs on every mutating action - favourite, trash, a folder or
+  // tag save - and rebuilds the listing with the same rows. Publishing only
+  // what this pass has answered so far would take the actions away from every
+  // row past the first slice until its own slice lands, and an open panel on
+  // one of those rows would lose its copy buttons mid-refresh: the very
+  // symptom this file exists to prevent.
+  const resolvers = [];
+  const { component } = browser({
+    count: 450,
+    fetchEntryActions: (uuids) =>
+      new Promise((resolve) => {
+        resolvers.push(() => resolve(answerFor(uuids)));
+      }),
+  });
+  // What the previous pass left behind, plus a row an opened menu filled in
+  // on its own while the slices were in flight.
+  component.entryActions = { 'e-400': [{ id: 'edit' }] };
+
+  const done = component.loadEntryActions();
+  resolvers[0]();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.ok(component.entryActions['e-0'], 'the slice that landed is published');
+  assert.ok(
+    component.entryActions['e-400'],
+    'and a row already answered for keeps its actions',
+  );
+
+  resolvers[1]();
+  resolvers[2]();
+  await done;
+  assert.equal(Object.keys(component.entryActions).length, 450);
+});
+
+test('a lock mid-flight is not undone by an answer that lands after re-unlock', async () => {
+  // onLocked empties the map, and the session is unlocked again by the time
+  // the pre-lock answer comes back - so isUnlocked() cannot catch it. Only a
+  // generation bump can, which is why onLocked owes one.
+  let unlocked = true;
+  const resolvers = [];
+  const { component } = browser({
+    count: 250,
+    isUnlocked: () => unlocked,
+    fetchEntryActions: (uuids) =>
+      new Promise((resolve) => {
+        resolvers.push(() => resolve(answerFor(uuids)));
+      }),
+  });
+
+  const inflight = component.loadEntryActions();
+  unlocked = false;
+  component.onLocked();
+  unlocked = true;
+  resolvers.forEach((resolve) => resolve());
+  await inflight;
+
+  assert.equal(Object.keys(component.entryActions).length, 0);
 });
 
 test('loadEntryActions asks in slices of 200 and merges the answers', async () => {

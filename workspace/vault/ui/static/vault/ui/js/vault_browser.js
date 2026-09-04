@@ -249,6 +249,11 @@ window.vaultBrowser = (function () {
         this.openVault = null;
         this.error = '';
         this.entryActions = {};
+        // Emptying the map is not enough: a request that left before the lock
+        // lands after it, and by then the user may have unlocked again - so
+        // isUnlocked() says yes and the pre-lock answer republishes itself.
+        // The generation is the only guard that can see the cycle.
+        this.actionsGeneration += 1;
         this.resetPanel();
         this.closeMenu();
         this.pendingNewEntry = false;
@@ -451,22 +456,26 @@ window.vaultBrowser = (function () {
         for (let i = 0; i < uuids.length; i += window.VAULT_ACTIONS_BATCH_SIZE) {
           slices.push(uuids.slice(i, i + window.VAULT_ACTIONS_BATCH_SIZE));
         }
-        // The answers accumulate here and the reactive field takes a fresh
-        // copy each time. Merging into this.entryActions instead would spread
-        // a snapshot read before the await, and the last slice would land
-        // alone over the ones that answered first.
-        const merged = {};
         // allSettled, not all: a slice lost to the network must not cost the
         // slices that answered their menus. Each answer is published as it
         // lands, so the first entries are usable while the rest is in flight.
         await Promise.allSettled(slices.map(async (slice) => {
           const part = await window.vaultApi.fetchEntryActions(slice);
+          // An empty answer would republish an identical map, and Alpine
+          // re-renders the listing on the assignment rather than on a change.
+          if (!part) return;
           // Both guards belong inside the slice: with several requests in
           // flight there are several places a stale answer comes back through.
           if (generation !== this.actionsGeneration) return;
           if (!window.vaultSession.isUnlocked()) return;
-          Object.assign(merged, part);
-          this.entryActions = Object.assign({}, merged);
+          // The live map, read after the await - never an accumulator holding
+          // this pass alone. A reload runs on every mutating action and asks
+          // again for rows that already have answers; publishing only what
+          // has come back so far would strip every row past the first slice
+          // until its own slice lands, and a panel open on one of them would
+          // lose its buttons mid-refresh. It also keeps the single row an
+          // opened menu filled in for itself.
+          this.entryActions = Object.assign({}, this.entryActions, part);
         }));
         if (generation !== this.actionsGeneration) return;
         if (!window.vaultSession.isUnlocked()) return;

@@ -132,6 +132,34 @@ class ChatRoomViewTests(TestCase):
             resp.content.decode(),
         )
 
+    def test_host_control_markup_ships_regardless_of_a_meeting_existing(self):
+        """host_controls=True is unconditional in room.html; call_stage.html's
+        lobby/lock/end block is only gated client-side, by <template x-if="meeting">
+        - Django never branches on whether the conversation has a meeting. This
+        pins that admitGuest( (and the rest of the host bindings) reaches a
+        plain room's HTML exactly as it reaches a meeting room's: Alpine, not
+        the server, is what keeps the block from mounting when there is no
+        meeting. It is harmless (the block simply never renders in the DOM),
+        but a future attempt to gate it server-side (e.g. wrapping it in
+        {% if meeting %}) would flip this assertion - which is the point of
+        pinning it here.
+        """
+        self.client.force_login(self.member)
+        resp_without_meeting = self.client.get(self._url())
+        self.assertIn("admitGuest(", resp_without_meeting.content.decode())
+
+        from django.utils import timezone
+
+        from workspace.chat.services.meetings import create_meeting
+        from workspace.chat.tests.meeting_fixtures import make_event
+
+        event = make_event(
+            self.member, start=timezone.now() + timezone.timedelta(minutes=5)
+        )
+        meeting = create_meeting(event, self.member)
+        resp_with_meeting = self.client.get(f"/chat/room/{meeting.conversation_id}")
+        self.assertIn("admitGuest(", resp_with_meeting.content.decode())
+
 
 class RoomTitleMatchesTheSidebarTests(TestCase):
     """The room heading and the sidebar row must name a conversation alike.

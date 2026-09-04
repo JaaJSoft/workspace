@@ -46,3 +46,42 @@ test('capacity label and guest tile detection', () => {
   assert.equal(m.isGuestTile({ participant_key: 'g:9' }), true);
   assert.equal(m.isGuestTile({ participant_key: 'u:1' }), false);
 });
+
+function hostWithAlerts(fetchImpl) {
+  const warnings = [];
+  const errors = [];
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/meeting_host.js', {
+    fetch: fetchImpl,
+    getCSRFToken: () => 'csrf',
+    AppAlert: {
+      error(msg) { errors.push(msg); },
+      success() {},
+      warning(msg) { warnings.push(msg); },
+    },
+  });
+  const m = ctx.chatMeetingHostMixin();
+  m.meeting = { uuid: 'm1', slug: 's', locked: false, join_url: 'http://x/meet/s' };
+  m._csrf = () => 'csrf';
+  return { m, warnings, errors };
+}
+
+test('a 409 from end (nothing to end) warns and does not leave the room', async () => {
+  const { m, warnings, errors } = hostWithAlerts(async () => ({
+    ok: false, status: 409, json: async () => ({ detail: 'nothing to end' }),
+  }));
+  let left = false;
+  m.leaveRoom = () => { left = true; };
+  await m.endMeeting();
+  assert.equal(left, false);
+  assert.deepStrictEqual(warnings, ['There is no meeting in progress to end.']);
+  assert.deepStrictEqual(errors, []);
+});
+
+test('a 200 from end leaves the room', async () => {
+  const { m, warnings } = hostWithAlerts(async () => ({ ok: true, json: async () => ({ status: 'ok' }) }));
+  let left = false;
+  m.leaveRoom = () => { left = true; };
+  await m.endMeeting();
+  assert.equal(left, true);
+  assert.deepStrictEqual(warnings, []);
+});

@@ -69,17 +69,17 @@
               data-lucide="mic-off"
               class="absolute top-1 right-1 w-4 h-4 text-error"
             ></i>
-{% if host_controls %}
-            <button
-              type="button"
-              class="btn btn-xs btn-circle btn-error absolute top-1 left-1"
-              x-show="isGuestTile(p)"
-              @click.stop="removeGuest(p.participant_key)"
-              title="Remove guest"
-            >
-              <i data-lucide="user-x" class="w-3 h-3"></i>
-            </button>
-{% endif %}
+            {% if host_controls %}
+              <button
+                type="button"
+                class="btn btn-xs btn-circle btn-error absolute top-1 left-1"
+                x-show="isGuestTile(p)"
+                @click.stop="removeGuest(p.participant_key)"
+                title="Remove guest"
+              >
+                <i data-lucide="user-x" class="w-3 h-3"></i>
+              </button>
+            {% endif %}
           </div>
         </template>
       </div>
@@ -148,17 +148,17 @@
                 class="absolute bottom-0.5 left-1 text-[10px] bg-black/50 text-white rounded px-1 truncate max-w-[6rem]"
                 x-text="p.display_name"
               ></span>
-{% if host_controls %}
-              <button
-                type="button"
-                class="btn btn-xs btn-circle btn-error absolute top-1 left-1"
-                x-show="isGuestTile(p)"
-                @click.stop="removeGuest(p.participant_key)"
-                title="Remove guest"
-              >
-                <i data-lucide="user-x" class="w-3 h-3"></i>
-              </button>
-{% endif %}
+              {% if host_controls %}
+                <button
+                  type="button"
+                  class="btn btn-xs btn-circle btn-error absolute top-1 left-1"
+                  x-show="isGuestTile(p)"
+                  @click.stop="removeGuest(p.participant_key)"
+                  title="Remove guest"
+                >
+                  <i data-lucide="user-x" class="w-3 h-3"></i>
+                </button>
+              {% endif %}
             </div>
           </template>
         </div>
@@ -241,14 +241,35 @@
         </button>
         <template x-if="meeting">
           <div class="contents">
-            <button class="btn btn-circle border-0" :class="lobbyOpen ? 'btn-primary' : 'btn-neutral'" @click="lobbyOpen = !lobbyOpen; if (lobbyOpen) loadLobby()" title="Lobby">
+            <button
+              class="btn btn-circle border-0"
+              :class="lobbyOpen ? 'btn-primary' : 'btn-neutral'"
+              @click="lobbyOpen = !lobbyOpen; if (lobbyOpen) loadLobby()"
+              title="Lobby"
+            >
               <i data-lucide="door-open" class="w-5 h-5"></i>
-              <span class="badge badge-xs badge-warning absolute -top-1 -right-1" x-show="lobby.length" x-text="lobby.length"></span>
+              <span
+                class="badge badge-xs badge-warning absolute -top-1 -right-1"
+                x-show="lobby.length"
+                x-text="lobby.length"
+              ></span>
             </button>
-            <button class="btn btn-circle border-0" :class="meeting && meeting.locked ? 'btn-warning' : 'btn-neutral'" @click="toggleLock()" :title="meeting && meeting.locked ? 'Unlock meeting' : 'Lock meeting'">
-              <i :data-lucide="meeting && meeting.locked ? 'lock' : 'lock-open'" class="w-5 h-5"></i>
+            <button
+              class="btn btn-circle border-0"
+              :class="meeting && meeting.locked ? 'btn-warning' : 'btn-neutral'"
+              @click="toggleLock()"
+              :title="meeting && meeting.locked ? 'Unlock meeting' : 'Lock meeting'"
+            >
+              <i
+                :data-lucide="meeting && meeting.locked ? 'lock' : 'lock-open'"
+                class="w-5 h-5"
+              ></i>
             </button>
-            <button class="btn btn-neutral btn-circle border-0" @click="endMeeting()" title="End meeting for everyone">
+            <button
+              class="btn btn-neutral btn-circle border-0"
+              @click="endMeeting()"
+              title="End meeting for everyone"
+            >
               <i data-lucide="square" class="w-5 h-5"></i>
             </button>
           </div>
@@ -266,11 +287,19 @@
 
   {% if host_controls %}
     <template x-if="meeting">
-      <div class="absolute bottom-24 right-4 w-72 z-20 card bg-base-100 shadow-xl border border-base-300" x-show="lobbyOpen" x-transition x-cloak>
+      <div
+        class="absolute bottom-24 right-4 w-72 z-20 card bg-base-100 shadow-xl border border-base-300"
+        x-show="lobbyOpen"
+        x-transition
+        x-cloak
+      >
         <div class="card-body p-3 gap-2">
           <div class="flex items-center justify-between">
             <span class="font-medium text-sm">Lobby</span>
-            <span class="text-xs text-base-content/60" x-text="meeting && meeting.locked ? 'Locked' : 'Open'"></span>
+            <span
+              class="text-xs text-base-content/60"
+              x-text="meeting && meeting.locked ? 'Locked' : 'Open'"
+            ></span>
           </div>
           <p class="text-xs text-base-content/60" x-show="!lobby.length">Nobody is waiting.</p>
           <template x-for="g in lobby" :key="g.uuid">
@@ -282,8 +311,17 @@
             </div>
           </template>
           <div class="flex items-center gap-1 pt-1 border-t border-base-200">
-            <input class="input input-xs input-bordered flex-1 font-mono" readonly :value="meeting ? meeting.join_url : ''" />
-            <button class="btn btn-xs" @click="navigator.clipboard.writeText(meeting.join_url).then(() => AppAlert.success('Join link copied', { duration: 2000 }))">Copy</button>
+            <input
+              class="input input-xs input-bordered flex-1 font-mono"
+              readonly
+              :value="meeting ? meeting.join_url : ''"
+            />
+            <button
+              class="btn btn-xs"
+              @click="navigator.clipboard.writeText(meeting.join_url).then(() => AppAlert.success('Join link copied', { duration: 2000 }))"
+            >
+              Copy
+            </button>
           </div>
         </div>
       </div>

@@ -10,11 +10,18 @@ window.chatMeetingHostMixin = function chatMeetingHostMixin() {
     _hostHeaders() {
       return { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() };
     },
-    async _hostPost(path, body) {
+    async _hostPost(path, body, { on409 } = {}) {
       const resp = await fetch(`/api/v1/chat/meetings/${this.meeting.uuid}${path}`, {
         method: 'POST', headers: this._hostHeaders(), body: body ? JSON.stringify(body) : undefined,
       });
-      if (!resp.ok) { window.AppAlert?.error('That did not work. Please try again.'); return null; }
+      if (!resp.ok) {
+        if (resp.status === 409 && on409) {
+          window.AppAlert?.warning(on409);
+        } else {
+          window.AppAlert?.error('That did not work. Please try again.');
+        }
+        return null;
+      }
       return resp.json();
     },
 
@@ -43,7 +50,10 @@ window.chatMeetingHostMixin = function chatMeetingHostMixin() {
       if (data) this.meeting.locked = !!data.locked;
     },
     async endMeeting() {
-      if (await this._hostPost('/end')) this.leaveRoom?.();
+      const data = await this._hostPost('/end', undefined, {
+        on409: 'There is no meeting in progress to end.',
+      });
+      if (data) this.leaveRoom?.();
     },
     isGuestTile(p) {
       return !!(p && typeof p.participant_key === 'string' && p.participant_key.startsWith('g:'));

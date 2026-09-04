@@ -89,6 +89,15 @@ class ChatRoomViewTests(TestCase):
         usernames = {mbr["user"]["username"] for mbr in members}
         self.assertIn("other_member", usernames)
 
+    def test_room_renders_the_call_stage(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('data-testid="participants-grid"', html)
+        self.assertIn('@click="leaveRoom()"', html)
+        self.assertIn('x-for="p in remoteParticipants()"', html)
+
     def test_room_page_loads_the_message_shell(self):
         """Regression: the room reuses conversation_pane.html, whose messages are
         server-rendered as <chat-message-group> shells with slotted children. The

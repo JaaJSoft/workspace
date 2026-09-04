@@ -8,8 +8,9 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .call_signaling import enqueue_event, notify_participant
+from .calls import active_member_ids
 from .meeting_occurrences import current_occurrence
-from .participant_keys import guest_key
+from .participant_keys import guest_key, user_key
 
 
 @transaction.atomic
@@ -85,6 +86,15 @@ def _notify_guest(guest, event_name, data=None):
     key = guest_key(guest.uuid)
     enqueue_event(key, event_name, data or {})
     notify_participant(key)
+
+
+def notify_hosts(meeting, event_name, data):
+    """Fan a meeting event out to every active member of the meeting's
+    conversation - the hosts - through their own mailboxes."""
+    for user_id in active_member_ids(meeting.conversation_id):
+        key = user_key(user_id)
+        enqueue_event(key, event_name, data)
+        notify_participant(key)
 
 
 def admit_guest(guest, by_user):

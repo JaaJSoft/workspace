@@ -14,11 +14,13 @@ from workspace.common.rate_limit import increment_counter
 from workspace.common.request_ip import client_ip
 from workspace.common.uuids import parse_uuid_or_none
 
+from ..services import calls
 from ..services import meetings as meeting_service
 from ..services.calls import is_call_locked
 from ..services.conversations import get_active_membership
 from ..services.meeting_guests import issue_token
 from ..services.meeting_occurrences import current_occurrence
+from ..services.participant_keys import guest_key
 from ..throttling import MeetingPublicIpThrottle
 
 logger = logging.getLogger(__name__)
@@ -112,11 +114,21 @@ class MeetingSummaryView(APIView):
             meeting.conversation_id,
             occurrence[0] if occurrence is not None else None,
         )
+
+        # Plain read only: this view is AllowAny, so calls.get_active_call's
+        # self-heal (select_for_update, can end a stale session and
+        # broadcast) must never run off an anonymous GET.
+        session = calls.active_call_session(meeting.conversation_id)
+        participant_count = (
+            len(calls.list_active_participants(session)) if session is not None else 0
+        )
         return Response(
             {
                 "title": meeting.event.title,
                 "start": start,
                 "locked": locked,
+                "max_participants": calls.max_participants(),
+                "participant_count": participant_count,
             }
         )
 
@@ -205,11 +217,21 @@ class MeetingKnockView(APIView):
             scrub(str(meeting.uuid)),
             scrub(ip)[:64],
         )
+        meeting_service.notify_hosts(
+            meeting,
+            "meeting_guest_waiting",
+            {
+                "meeting_id": str(meeting.uuid),
+                "guest_uuid": str(guest.uuid),
+                "display_name": guest.display_name,
+            },
+        )
         return Response(
             {
                 "token": token,
                 "state": guest.state,
                 "display_name": guest.display_name,
+                "participant_key": guest_key(guest.uuid),
             },
             status=status.HTTP_201_CREATED,
         )

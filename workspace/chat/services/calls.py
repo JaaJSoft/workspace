@@ -92,6 +92,24 @@ def get_active_call(conversation_id):
     return session
 
 
+def active_call_session(conversation_id):
+    """Plain (non-locking, non-self-healing) read of *conversation_id*'s
+    active call session, or None.
+
+    Sibling of ``active_call_session_for_guest``, for the host-reachable but
+    still-anonymous-adjacent read in ``MeetingSummaryView``: that view is
+    unauthenticated (``AllowAny``), so it must never reach for
+    ``get_active_call`` - see that function's docstring and
+    ``is_call_locked`` for why a self-healing read must not run off a plain
+    GET.
+    """
+    from ..models import CallSession
+
+    return CallSession.objects.filter(
+        conversation_id=conversation_id, state=CallSession.State.ACTIVE
+    ).first()
+
+
 def is_call_locked(conversation_id, occurrence_start=None):
     """Whether *conversation_id* has a locked call, no self-heal.
 
@@ -215,7 +233,7 @@ def list_active_participants(session):
     )
 
 
-def _active_member_ids(conversation_id):
+def active_member_ids(conversation_id):
     from ..models import ConversationMember
 
     return list(
@@ -254,7 +272,7 @@ def _active_guest_keys(conversation_id):
 def _active_recipient_keys(conversation_id):
     """Every active member key plus every admitted-guest-in-the-call key."""
     return [
-        user_key(uid) for uid in _active_member_ids(conversation_id)
+        user_key(uid) for uid in active_member_ids(conversation_id)
     ] + _active_guest_keys(conversation_id)
 
 
@@ -657,5 +675,6 @@ def serialize_call_state(session):
         "started_at": session.started_at.isoformat(),
         "media_kind": session.media_kind,
         "locked": session.locked,
+        "max_participants": max_participants(),
         "participants": participants,
     }

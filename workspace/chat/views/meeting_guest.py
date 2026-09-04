@@ -152,6 +152,7 @@ class MeetingGuestJoinView(APIView):
             {
                 "state": _guest_call_state(session),
                 "ice_servers": getattr(settings, "CHAT_CALL_ICE_SERVERS", []),
+                "participant_key": guest_key(guest.uuid),
             }
         )
 
@@ -307,12 +308,19 @@ class MeetingGuestStateView(APIView):
         if guest is not None:
             session = calls.active_call_session_for_guest(guest)
             if session is None:
-                return Response({"admitted": True, "active": False})
+                return Response(
+                    {
+                        "admitted": True,
+                        "active": False,
+                        "participant_key": guest_key(guest.uuid),
+                    }
+                )
             return Response(
                 {
                     "admitted": True,
                     **_guest_call_state(session),
                     "ice_servers": getattr(settings, "CHAT_CALL_ICE_SERVERS", []),
+                    "participant_key": guest_key(guest.uuid),
                 }
             )
 

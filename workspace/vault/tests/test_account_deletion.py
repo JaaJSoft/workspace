@@ -1,4 +1,4 @@
-"""What is left of the vault after its owner's account is deleted.
+"""What is left of the vault after an account is deleted.
 
 Nothing, is the answer, and the reason is worth stating: every route from a
 user into this module is a CASCADE foreign key, and the module owns no blob
@@ -6,15 +6,12 @@ storage and registers no delete signal. That makes the guarantee structural
 rather than procedural - there is no purge routine to call and forget, and no
 place for one to rot.
 
-Two shapes are pinned because they are where a cascade fails quietly:
-
-* an entry sitting in a folder. ``VaultEntry.folder`` is RESTRICT, so the
-  database refuses to orphan it - and would refuse the whole deletion if the
-  entry were not collected by the same operation. It is, through its vault,
-  which is exactly the property this file exists to hold. Nothing else in the
-  suite exercises the whole graph at once.
-* a vault already in the trash. ``deleted_at`` is a column, not a state the
-  cascade knows about, so a soft-deleted row is as real as any other.
+The shape worth the whole file is an entry sitting in a folder.
+``VaultEntry.folder`` is RESTRICT, so the database refuses to orphan it - and
+would refuse the whole deletion if the entry were not collected by the same
+operation. It is, through its vault. ``test_models.py`` already pins that hop
+on its own; what is new here is the graph around it - key wraps, tags, fields,
+a second account - and the per-table accounting that says which one leaked.
 
 One consequence is deliberate and not a defect: ``Vault.owner`` is CASCADE, so
 deleting an owner destroys the vault for every member it was shared with.
@@ -22,10 +19,12 @@ Correct while a vault has a single user; a decision to take again, explicitly,
 before sharing ships.
 """
 
+from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.users.models import UserSetting
 from workspace.vault.models import (
     AccountIdentity,
     EntryField,
@@ -35,37 +34,28 @@ from workspace.vault.models import (
     VaultKeyWrap,
     VaultTag,
 )
-from workspace.vault.tests.test_models import SIGNATURE, make_identity
+from workspace.vault.tests.factories import make_account, make_key_wrap, make_vault
 
 User = get_user_model()
 
-# Every model the module owns. A new one has to be listed here, or this test
-# keeps passing while its rows survive every account deletion.
-VAULT_MODELS = (
-    AccountIdentity,
-    Vault,
-    VaultKeyWrap,
-    VaultFolder,
-    VaultTag,
-    VaultEntry,
-    EntryField,
-)
+SIGNATURE = "AXNpZ25hdHVyZQ"
+
+# Asked of the app registry rather than listed by hand: a model added later has
+# to be purged too, and a hand-written list would go stale silently - the test
+# would keep passing while the new table's rows survived every deletion.
+# get_models() already leaves out the proxies, which have no table of their own.
+VAULT_MODELS = tuple(apps.get_app_config("vault").get_models())
 
 
 class AccountDeletionPurgeTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="owner", password="pw")
-        self.bystander = User.objects.create_user(username="other", password="pw")
+        self.user, _, _ = make_account(username="owner")
+        self.bystander, _, _ = make_account(username="other")
 
-    def _populate(self, owner, *, trashed=False):
+    def _populate(self, owner, *, trashed_entries=False):
         """A vault with a folder tree, tags, entries inside folders and fields."""
-        make_identity(owner)
-        vault = Vault.objects.create(
-            owner=owner, encrypted_name="ct", metadata_sig=SIGNATURE
-        )
-        VaultKeyWrap.objects.create(
-            vault=vault, recipient=owner, wrapped_key="ct", hpke_suite={}
-        )
+        vault = make_vault(owner)
+        make_key_wrap(vault, owner)
         parent = VaultFolder.objects.create(
             vault=vault, encrypted_name="ct", metadata_sig=SIGNATURE
         )
@@ -84,7 +74,7 @@ class AccountDeletionPurgeTests(TestCase):
                 folder=folder,
                 encrypted_name="ct",
                 metadata_sig=SIGNATURE,
-                deleted_at=timezone.now() if trashed else None,
+                deleted_at=timezone.now() if trashed_entries else None,
             )
             entry.tags.add(tag)
             EntryField.objects.create(
@@ -93,10 +83,40 @@ class AccountDeletionPurgeTests(TestCase):
         return vault
 
     def _counts(self):
+        """One count per table. An aggregate hides which table leaked."""
         return {model.__name__: model.objects.count() for model in VAULT_MODELS}
+
+    def _owned_by(self, user_pk):
+        """Every row of the module that hangs off one account, per table.
+
+        By primary key, not by instance: ``delete()`` clears the pk on the
+        object it was called with, and a related filter refuses an unsaved
+        instance - so the same helper could not be used on both sides of the
+        deletion it is meant to measure.
+        """
+        return {
+            AccountIdentity.__name__: AccountIdentity.objects.filter(
+                user_id=user_pk
+            ).count(),
+            Vault.__name__: Vault.objects.filter(owner_id=user_pk).count(),
+            VaultKeyWrap.__name__: VaultKeyWrap.objects.filter(
+                recipient_id=user_pk
+            ).count(),
+            VaultFolder.__name__: VaultFolder.objects.filter(
+                vault__owner_id=user_pk
+            ).count(),
+            VaultTag.__name__: VaultTag.objects.filter(vault__owner_id=user_pk).count(),
+            VaultEntry.__name__: VaultEntry.objects.filter(
+                vault__owner_id=user_pk
+            ).count(),
+            EntryField.__name__: EntryField.objects.filter(
+                entry__vault__owner_id=user_pk
+            ).count(),
+        }
 
     def test_nothing_of_the_module_survives_the_account(self):
         self._populate(self.user)
+        self.bystander.delete()
         self.assertTrue(all(self._counts().values()), "the fixture populated nothing")
 
         self.user.delete()
@@ -109,23 +129,32 @@ class AccountDeletionPurgeTests(TestCase):
         No view deletes an account: it happens through the admin's bulk action,
         which calls ``delete()`` on a queryset rather than on an instance. Both
         go through the same collector, but only one of them is what runs in
-        practice - and the whole guarantee here is structural, so it should not
+        practice - and the guarantee here is structural, so it should not
         matter which. This says it does not.
         """
         self._populate(self.user)
+        self.bystander.delete()
 
         User.objects.filter(pk=self.user.pk).delete()
 
         self.assertEqual(self._counts(), {model.__name__: 0 for model in VAULT_MODELS})
 
-    def test_a_trashed_vault_goes_too(self):
-        """deleted_at is a column, not a state the cascade knows about."""
-        self._populate(self.user, trashed=True)
+    def test_trashed_entries_go_with_the_rest(self):
+        """``deleted_at`` is a column on the entry, not a state the cascade
+        knows about, so a soft-deleted row is as real as any other.
+
+        Only entries carry it - a vault has no trash of its own, and deleting
+        one is immediate. The issue's third criterion asks about "a vault in
+        the trash", which is a state this model cannot hold; the entries are
+        what it can mean.
+        """
+        self._populate(self.user, trashed_entries=True)
+        self.bystander.delete()
+        self.assertEqual(VaultEntry.objects.filter(deleted_at__isnull=False).count(), 3)
 
         self.user.delete()
 
-        self.assertEqual(VaultEntry.objects.count(), 0)
-        self.assertEqual(Vault.objects.count(), 0)
+        self.assertEqual(self._counts(), {model.__name__: 0 for model in VAULT_MODELS})
 
     def test_the_entry_tag_links_go_with_the_entries(self):
         """The through table has no cascade of its own to look at."""
@@ -137,30 +166,56 @@ class AccountDeletionPurgeTests(TestCase):
 
         self.assertEqual(through.objects.count(), 0)
 
-    def test_another_account_keeps_everything(self):
-        """The blast radius is one account, which is the other half of the
-        claim: a purge that took a neighbour's vault with it would satisfy
-        every assertion above."""
-        self._populate(self.user)
-        self._populate(self.bystander)
+    def test_the_vault_namespaced_settings_go_too(self):
+        """Per-user state the module owns without holding the table.
+
+        ``reset_vault`` deletes ``module="vault"`` settings explicitly, which is
+        the module's own statement that they are its. They ride
+        ``UserSetting.user``'s cascade - but nothing said so until now.
+        """
+        UserSetting.objects.create(
+            user=self.user, module="vault", key="sidebar_collapsed", value=True
+        )
+        UserSetting.objects.create(
+            user=self.bystander, module="vault", key="sidebar_collapsed", value=True
+        )
 
         self.user.delete()
 
-        self.assertEqual(Vault.objects.filter(owner=self.bystander).count(), 1)
-        self.assertEqual(AccountIdentity.objects.count(), 1)
-        self.assertEqual(VaultEntry.objects.count(), 3)
+        self.assertEqual(UserSetting.objects.filter(module="vault").count(), 1)
+        self.assertFalse(UserSetting.objects.filter(user_id=self.user.pk).exists())
 
-    def test_a_member_leaving_does_not_take_the_vault(self):
-        """Deleting a recipient removes their wrap and nothing else - the
-        mirror of the owner case, and the reason the owner case is worth
-        writing down."""
+    def test_another_account_keeps_everything(self):
+        """The blast radius is one account, which is the other half of the
+        claim: a purge that took a neighbour's rows with it would satisfy every
+        assertion above. Counted per table for the same reason they are."""
+        self._populate(self.user)
+        self._populate(self.bystander)
+        owner_pk, bystander_pk = self.user.pk, self.bystander.pk
+        before = self._owned_by(bystander_pk)
+        self.assertTrue(all(before.values()), "the neighbour has nothing to lose")
+
+        self.user.delete()
+
+        self.assertEqual(self._owned_by(bystander_pk), before)
+        self.assertEqual(self._owned_by(owner_pk), dict.fromkeys(before, 0))
+
+    def test_a_member_leaving_takes_only_their_wrap(self):
+        """The mirror of the owner case, and the reason the owner case is worth
+        writing down: a member's departure must not reach the vault."""
         vault = self._populate(self.user)
-        VaultKeyWrap.objects.create(
-            vault=vault, recipient=self.bystander, wrapped_key="ct", hpke_suite={}
-        )
+        make_key_wrap(vault, self.bystander)
+        owner_pk, member_pk = self.user.pk, self.bystander.pk
 
         self.bystander.delete()
 
         self.assertEqual(Vault.objects.filter(pk=vault.pk).count(), 1)
-        self.assertEqual(VaultKeyWrap.objects.filter(vault=vault).count(), 1)
-        self.assertEqual(VaultEntry.objects.count(), 3)
+        # Which wrap survived, not how many: an inverted cascade that destroyed
+        # the owner's and kept the member's would pass a count.
+        self.assertTrue(
+            VaultKeyWrap.objects.filter(vault=vault, recipient_id=owner_pk).exists()
+        )
+        self.assertFalse(
+            VaultKeyWrap.objects.filter(vault=vault, recipient_id=member_pk).exists()
+        )
+        self.assertEqual(VaultEntry.objects.filter(vault=vault).count(), 3)

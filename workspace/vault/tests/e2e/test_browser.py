@@ -410,6 +410,20 @@ class VaultBrowserTests(PlaywrightTestCase):
         list_view.wait_for(timeout=10000)
         self.assertEqual(mosaic.count(), 0)
         self.assertEqual(list_view.locator("text=GitHub").count(), 1)
+        # The same claim on the way back, and the one that matters more: the
+        # list is the default view, and a table is not the flat grid the
+        # mosaic is - a container choice in the observer that worked for one
+        # could miss the other.
+        self.page.wait_for_selector(
+            "[data-testid='entry-list'] svg[data-lucide]",
+            state="attached",
+            timeout=10000,
+        )
+        self.assertEqual(
+            self.page.locator("[data-testid='entry-list'] i[data-lucide]").count(),
+            0,
+            "a placeholder was left undrawn in the rebuilt table",
+        )
 
     def test_a_second_vault_is_created_and_switched_to_without_unlocking_again(self):
         """Switching is the gesture the listing used to own, and the one that

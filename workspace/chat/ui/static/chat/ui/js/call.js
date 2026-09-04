@@ -94,6 +94,20 @@ window.chatCallMixin = function chatCallMixin() {
         : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
     },
 
+    // Transport seam. The member room talks to the conversation call
+    // endpoints with a CSRF cookie; the guest page overrides both methods to
+    // talk to /api/v1/chat/meet/<slug>/... with a token header. Every fetch
+    // in this mixin goes through them so the two pages cannot drift.
+    _callEndpoint(action, conversationId) {
+      const base = `/api/v1/chat/conversations/${conversationId}/call`;
+      return action ? `${base}/${action}` : base;
+    },
+    _callHeaders({ json = false } = {}) {
+      const headers = { 'X-CSRFToken': this._csrf() };
+      if (json) headers['Content-Type'] = 'application/json';
+      return headers;
+    },
+
     _loadIceServers() {
       if (this._iceServers.length) return this._iceServers;
       const el = document.getElementById('call-ice-servers-data');
@@ -151,9 +165,9 @@ window.chatCallMixin = function chatCallMixin() {
       }
       let resp;
       try {
-        resp = await fetch(`/api/v1/chat/conversations/${convId}/call/join`, {
+        resp = await fetch(this._callEndpoint('join', convId), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: this._callHeaders({ json: true }),
         });
       } catch (e) {
         this._teardownLocal();
@@ -217,9 +231,9 @@ window.chatCallMixin = function chatCallMixin() {
       }
       if (convId) {
         try {
-          await fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
+          await fetch(this._callEndpoint('leave', convId), {
             method: 'POST',
-            headers: { 'X-CSRFToken': this._csrf() },
+            headers: this._callHeaders(),
             keepalive: true,
           });
         } catch (e) { /* best effort */ }
@@ -261,9 +275,9 @@ window.chatCallMixin = function chatCallMixin() {
       const convId = this.callSession && this.callSession.conversation_id;
       if (!convId) return;
       try {
-        fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
+        fetch(this._callEndpoint('leave', convId), {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: this._callHeaders(),
           keepalive: true,
         });
       } catch (e) { /* page is going away */ }
@@ -394,9 +408,9 @@ window.chatCallMixin = function chatCallMixin() {
       const convId = this.callSession && this.callSession.conversation_id;
       if (!this.inCall || !convId) return;
       try {
-        await fetch(`/api/v1/chat/conversations/${convId}/call/heartbeat`, {
+        await fetch(this._callEndpoint('heartbeat', convId), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: this._callHeaders({ json: true }),
           body: JSON.stringify({ media_state: this._mediaState() }),
         });
       } catch (e) { /* transient */ }
@@ -525,9 +539,9 @@ window.chatCallMixin = function chatCallMixin() {
     async _sendSignal(toKey, signal) {
       if (!this.activeConversation) return;
       try {
-        await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call/signal`, {
+        await fetch(this._callEndpoint('signal', this.activeConversation.uuid), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: this._callHeaders({ json: true }),
           body: JSON.stringify({ to_participant: toKey, signal }),
         });
       } catch (e) { /* transient */ }
@@ -625,7 +639,7 @@ window.chatCallMixin = function chatCallMixin() {
     async _refreshCallState() {
       if (!this.activeConversation) return;
       try {
-        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call`);
+        const resp = await fetch(this._callEndpoint('', this.activeConversation.uuid));
         const data = await resp.json();
         this.callSession = data.active ? data : null;
         this.callParticipants = data.active ? (data.participants || []) : [];

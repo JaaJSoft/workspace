@@ -1,0 +1,153 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meeting - Workspace</title>
+    <link href="{% static 'css/app.css' %}" rel="stylesheet" />
+    <link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}" />
+    <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
+    <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
+    <script src="{% static 'ui/js/lucide.js' %}"></script>
+    <script src="{% static 'users/ui/js/user_avatar.js' %}"></script>
+    <script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
+    <script src="{% static 'chat/ui/js/call.js' %}"></script>
+    <script src="{% static 'chat/ui/js/call_room.js' %}"></script>
+    <script src="{% static 'chat/ui/js/meet.js' %}"></script>
+  </head>
+  <body class="min-h-screen bg-base-200">
+    {{ ice_servers|json_script:"call-ice-servers-data" }}
+    <div
+      class="h-screen flex flex-col"
+      x-data="chatMeetApp('{{ slug }}')"
+      @chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
+      @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
+      @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
+      @chat-call_ended.window="onCallEnded($event.detail)"
+      @chat-call_signal.window="onCallSignal($event.detail)"
+    >
+
+      <template x-if="phase === 'name'">
+        <div class="flex-1 flex items-center justify-center p-4">
+          <form
+            class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-4"
+            @submit.prevent="knock()"
+          >
+            <h1
+              class="text-xl font-bold"
+              x-text="summary ? summary.title : 'Meeting'"
+            ></h1>
+            <p
+              class="text-sm text-base-content/70"
+              x-show="summary"
+              x-text="summaryLine()"
+            ></p>
+            <template x-if="summary && summary.locked">
+              <inline-alert type="warning" message="This meeting is locked. The host is not admitting new participants."></inline-alert>
+            </template>
+            <template x-if="isFull()">
+              <inline-alert type="warning" message="This meeting is full."></inline-alert>
+            </template>
+            <div class="form-control w-full">
+              <label class="label py-1" for="meet-display-name">
+                <span class="label-text">Your name</span>
+              </label>
+              <input
+                id="meet-display-name"
+                class="input input-bordered w-full"
+                x-model="displayName"
+                maxlength="80"
+                required
+                autofocus
+              />
+            </div>
+            <template x-if="error">
+              <inline-alert type="error">
+              <span x-text="error"></span>
+              </inline-alert>
+            </template>
+            <button
+              class="btn btn-primary"
+              :disabled="knocking || (summary && summary.locked)"
+            >
+              Ask to join
+            </button>
+          </form>
+        </div>
+      </template>
+
+      <template x-if="phase === 'lobby'">
+        <div class="flex-1 flex items-center justify-center p-4">
+          <div
+            class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-3 items-center text-center"
+          >
+            <span class="loading loading-dots loading-lg text-primary"></span>
+            <h1 class="text-lg font-semibold">Waiting for the host</h1>
+            <p class="text-sm text-base-content/70">
+              You will join as <strong x-text="displayName"></strong> once a host lets you in.
+            </p>
+            <p class="text-xs text-base-content/50" x-show="isFull()">The meeting is currently full.</p>
+            <button class="btn btn-ghost btn-sm" @click="leaveLobby()">Cancel</button>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="phase === 'room'">
+        <div class="flex flex-1 min-h-0">
+          {% include "chat/ui/partials/call_stage.html" with host_controls=False %}
+          <aside
+            class="w-96 max-w-[40%] border-l border-base-300 flex flex-col min-w-0 bg-base-100"
+          >
+            <div class="px-3 py-2 border-b border-base-300 text-sm font-medium">Meeting chat</div>
+            <div class="flex-1 overflow-y-auto p-3 space-y-2" x-ref="messageList">
+              <template x-for="m in messages" :key="m.uuid">
+                <div class="chat" :class="isOwnMessage(m) ? 'chat-end' : 'chat-start'">
+                  <div class="chat-header flex items-center gap-1 text-xs">
+                    <span x-text="m.author.display_name"></span>
+                    <span class="badge badge-xs badge-outline" x-show="m.author.is_guest">Guest</span>
+                    <time class="opacity-50" x-text="formatTime(m.created_at)"></time>
+                  </div>
+                  <div
+                    class="chat-bubble chat-bubble-sm whitespace-pre-wrap break-words"
+                    x-text="m.body"
+                  ></div>
+                </div>
+              </template>
+            </div>
+            <form
+              class="p-2 border-t border-base-300 flex gap-2"
+              @submit.prevent="sendMessage()"
+            >
+              <input
+                class="input input-bordered input-sm flex-1"
+                x-model="draft"
+                placeholder="Message"
+                maxlength="4000"
+              />
+              <button class="btn btn-primary btn-sm" :disabled="!draft.trim() || sending">Send</button>
+            </form>
+          </aside>
+        </div>
+      </template>
+
+      <template x-if="phase === 'over'">
+        <div class="flex-1 flex items-center justify-center p-4">
+          <div
+            class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-3 items-center text-center"
+          >
+            <i data-lucide="phone-off" class="w-8 h-8 opacity-60"></i>
+            <h1 class="text-lg font-semibold" x-text="overTitle()"></h1>
+            <p class="text-sm text-base-content/70" x-text="overDetail()"></p>
+            <button class="btn btn-sm" @click="reset()" x-show="canReturn()">Back</button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    {% include 'ui/partials/toasts.html' %}
+    <script src="{% static 'ui/js/lucide_boot.js' %}"></script>
+    <script src="{% static 'ui/js/inline_alert.js' %}"></script>
+    <script src="{% static 'ui/js/toast.js' %}"></script>
+  </body>
+</html>

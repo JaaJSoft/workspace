@@ -12,6 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
+    Meeting,
     Message,
     MessageAttachment,
     PinnedConversation,
@@ -247,6 +248,24 @@ def chat_room_view(request, conversation_uuid):
             "chat_groups": _user_chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
+    )
+
+
+def meet_view(request, slug):
+    """The public meeting page, reached from a bare /meet/<slug> link.
+
+    Anonymous by construction, and the only view in this file that is: the
+    page carries the slug and the ICE configuration, nothing else. Everything
+    it shows is fetched at runtime with the token the visitor obtains by
+    knocking, so a stranger loading this URL learns only that the slug exists
+    - and the summary endpoint discloses that much anyway.
+    """
+    if not Meeting.objects.filter(slug=slug).exists():
+        raise Http404
+    return render(
+        request,
+        "chat/ui/meet.html",
+        {"slug": slug, "ice_servers": settings.CHAT_CALL_ICE_SERVERS},
     )
 
 

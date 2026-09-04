@@ -2,25 +2,6 @@
 // panels, bot, call) but is locked to a single conversation and owns the call.
 // No sidebar, no conversation list: the room is one conversation, full screen.
 
-/**
- * Format a duration in milliseconds as mm:ss, or h:mm:ss when >= 1 hour.
- * Negative values are clamped to 0. Pure function - no side effects.
- * @param {number} ms
- * @returns {string}
- */
-function chatRoomFormatDuration(ms) {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const s = total % 60;
-  const m = Math.floor(total / 60) % 60;
-  const h = Math.floor(total / 3600);
-  const pad = (n) => String(n).padStart(2, '0');
-  if (h > 0) {
-    return `${h}:${pad(m)}:${pad(s)}`;
-  }
-  return `${pad(m)}:${pad(s)}`;
-}
-window.chatRoomFormatDuration = chatRoomFormatDuration;
-
 function chatRoomApp(currentUserId, conversationId) {
   return {
     currentUserId: currentUserId,

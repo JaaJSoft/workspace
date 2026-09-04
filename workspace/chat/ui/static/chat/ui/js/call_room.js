@@ -1,6 +1,24 @@
-// Voice room: pure helpers shared by the room page and the main-tab observer.
-// The Alpine room factory lives in room.js; speaking-meter wiring that touches
-// AudioContext is validated in a real browser, not here.
+// Voice room: pure helpers shared by the room page, the main-tab observer and
+// the public guest page. The Alpine room factory lives in room.js; speaking-meter
+// wiring that touches AudioContext is validated in a real browser, not here.
+
+/**
+ * Format a duration in milliseconds as mm:ss, or h:mm:ss when >= 1 hour.
+ * Negative values are clamped to 0. Pure function - no side effects.
+ * @param {number} ms
+ * @returns {string}
+ */
+function chatRoomFormatDuration(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const s = total % 60;
+  const m = Math.floor(total / 60) % 60;
+  const h = Math.floor(total / 3600);
+  const pad = (n) => String(n).padStart(2, '0');
+  if (h > 0) {
+    return `${h}:${pad(m)}:${pad(s)}`;
+  }
+  return `${pad(m)}:${pad(s)}`;
+}
 
 function chatCallRoomUrl(conversationId) {
   return `/chat/room/${conversationId}`;
@@ -56,6 +74,7 @@ function chatCallSpotlightTarget(participants, pinnedKey, pinnedManually) {
   return chatCallAutoPinTarget(list, pinnedManually);
 }
 
+window.chatRoomFormatDuration = chatRoomFormatDuration;
 window.chatCallRoomUrl = chatCallRoomUrl;
 window.chatCallRoomTabName = chatCallRoomTabName;
 window.chatCallBannerAction = chatCallBannerAction;

@@ -210,14 +210,17 @@
       >
         <i data-lucide="screen-share" class="w-5 h-5"></i>
       </button>
-      <button
-        class="btn btn-neutral btn-circle border-0"
-        @click="openDiagnostic()"
-        :disabled="diagRunning"
-        title="Connection diagnostic"
-      >
-        <i data-lucide="activity" class="w-5 h-5"></i>
-      </button>
+      {% if host_controls %}
+        {# The diagnostic panel is a member-room feature: it names the conversation and its members. #}
+        <button
+          class="btn btn-neutral btn-circle border-0"
+          @click="openDiagnostic()"
+          :disabled="diagRunning"
+          title="Connection diagnostic"
+        >
+          <i data-lucide="activity" class="w-5 h-5"></i>
+        </button>
+      {% endif %}
       <button
         class="btn btn-error btn-circle border-0"
         @click="leaveRoom()"

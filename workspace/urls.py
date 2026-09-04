@@ -73,6 +73,7 @@ ui_urlpatterns = [
     path("notes", include("workspace.notes.ui.urls")),
     path("users", include("workspace.users.ui.urls")),
     path("chat", include("workspace.chat.ui.urls")),
+    path("meet", include("workspace.chat.ui.meet_urls")),
     path("calendar", include("workspace.calendar.ui.urls")),
     path("mail", include("workspace.mail.ui.urls")),
     path("projects", include("workspace.projects.ui.urls")),

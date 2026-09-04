@@ -129,9 +129,9 @@ def notify_tool_step(recipient_ids, conversation_id, tool_call):
 
         from workspace.ai.tool_registry import tool_registry
 
-        name = tool_call.function.name
+        name = tool_call.name
         badge = tool_registry.get_badge(name)
-        raw_args = tool_call.function.arguments or ""
+        raw_args = tool_call.arguments or ""
         try:
             parsed = json.loads(raw_args) if raw_args else {}
         except json.JSONDecodeError, TypeError:

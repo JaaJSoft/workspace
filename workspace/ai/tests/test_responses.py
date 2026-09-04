@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from PIL import Image
 
+from workspace.ai.harness.model import ModelResponse
 from workspace.ai.models import AITask, BotProfile
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.chat.models import (
@@ -41,12 +42,9 @@ class PostBotMessageInteractionTests(TestCase):
             owner=self.user,
             task_type=AITask.TaskType.CHAT,
         )
-        self.result = {
-            "content": "Quel ton ?",
-            "model": "test",
-            "prompt_tokens": 1,
-            "completion_tokens": 1,
-        }
+        self.response = ModelResponse(
+            content="Quel ton ?", model="test", prompt_tokens=1, completion_tokens=1
+        )
 
     def test_creates_interaction_when_context_has_question(self):
         tool_context = {
@@ -58,7 +56,7 @@ class PostBotMessageInteractionTests(TestCase):
         body, msg = post_bot_message(
             conversation=self.conv,
             bot_user=self.bot,
-            result=self.result,
+            response=self.response,
             tool_context=tool_context,
             ai_task=self.ai_task,
         )
@@ -72,7 +70,7 @@ class PostBotMessageInteractionTests(TestCase):
         body, msg = post_bot_message(
             conversation=self.conv,
             bot_user=self.bot,
-            result=self.result,
+            response=self.response,
             tool_context={},
             ai_task=self.ai_task,
         )
@@ -103,12 +101,12 @@ class PostBotMessageNotificationTests(TestCase):
             owner=self.user,
             task_type=AITask.TaskType.CHAT,
         )
-        self.result = {
-            "content": "Voici la réponse.",
-            "model": "test",
-            "prompt_tokens": 1,
-            "completion_tokens": 1,
-        }
+        self.response = ModelResponse(
+            content="Voici la réponse.",
+            model="test",
+            prompt_tokens=1,
+            completion_tokens=1,
+        )
 
     def tearDown(self):
         cache.clear()
@@ -120,7 +118,7 @@ class PostBotMessageNotificationTests(TestCase):
             post_bot_message(
                 conversation=self.conv,
                 bot_user=self.bot,
-                result=self.result,
+                response=self.response,
                 tool_context={},
                 ai_task=self.ai_task,
             )
@@ -138,7 +136,7 @@ class PostBotMessageNotificationTests(TestCase):
             post_bot_message(
                 conversation=self.conv,
                 bot_user=self.bot,
-                result=self.result,
+                response=self.response,
                 tool_context={},
                 ai_task=self.ai_task,
             )
@@ -186,18 +184,15 @@ class PostBotMessageImageTypingTests(TestCase):
             owner=self.user,
             task_type=AITask.TaskType.CHAT,
         )
-        self.result = {
-            "content": "Voilà l'image",
-            "model": "test",
-            "prompt_tokens": 1,
-            "completion_tokens": 1,
-        }
+        self.response = ModelResponse(
+            content="Voilà l'image", model="test", prompt_tokens=1, completion_tokens=1
+        )
 
     def _post(self, images):
         return post_bot_message(
             conversation=self.conv,
             bot_user=self.bot,
-            result=self.result,
+            response=self.response,
             tool_context={"images": images},
             ai_task=self.ai_task,
         )
@@ -282,20 +277,20 @@ class PostBotMessageThinkingTests(TestCase):
             owner=self.user, task_type=AITask.TaskType.CHAT
         )
 
-    def _result(self, thinking=""):
-        return {
-            "content": "Hello",
-            "thinking": thinking,
-            "model": "test",
-            "prompt_tokens": 1,
-            "completion_tokens": 1,
-        }
+    def _response(self, thinking=""):
+        return ModelResponse(
+            content="Hello",
+            thinking=thinking,
+            model="test",
+            prompt_tokens=1,
+            completion_tokens=1,
+        )
 
-    def _post(self, result, tool_data=None):
+    def _post(self, response, tool_data=None):
         _, msg = post_bot_message(
             conversation=self.conv,
             bot_user=self.bot,
-            result=result,
+            response=response,
             tool_context={},
             ai_task=self.ai_task,
             tool_data=tool_data,
@@ -317,7 +312,7 @@ class PostBotMessageThinkingTests(TestCase):
         }
 
     def test_final_thinking_creates_tool_data_when_none(self):
-        msg = self._post(self._result(thinking="final reasoning"))
+        msg = self._post(self._response(thinking="final reasoning"))
         self.assertEqual(
             msg.tool_data,
             [{"thinking": "final reasoning", "tool_calls": [], "results": []}],
@@ -325,7 +320,7 @@ class PostBotMessageThinkingTests(TestCase):
 
     def test_final_thinking_appends_to_existing_rounds(self):
         msg = self._post(
-            self._result(thinking="final reasoning"),
+            self._response(thinking="final reasoning"),
             tool_data=[self._round("round thinking")],
         )
         self.assertEqual(len(msg.tool_data), 2)
@@ -333,14 +328,14 @@ class PostBotMessageThinkingTests(TestCase):
         self.assertEqual(msg.tool_data[-1]["tool_calls"], [])
 
     def test_no_thinking_leaves_tool_data_untouched(self):
-        msg = self._post(self._result(thinking=""))
+        msg = self._post(self._response(thinking=""))
         self.assertIsNone(msg.tool_data)
 
     def test_duplicate_of_last_round_thinking_is_not_appended(self):
         # stop_after_round case: the posted result IS the last tool round,
         # whose thinking is already persisted in tool_data.
         msg = self._post(
-            self._result(thinking="same thought"),
+            self._response(thinking="same thought"),
             tool_data=[self._round("same thought")],
         )
         self.assertEqual(len(msg.tool_data), 1)
@@ -365,18 +360,18 @@ class PostBotMessageCaptionEnqueueTests(TestCase):
 
     @override_settings(AI_API_KEY="k")
     def test_generated_images_enqueue_captions(self):
-        result = {
-            "content": "here is your image",
-            "model": "m",
-            "prompt_tokens": 1,
-            "completion_tokens": 1,
-        }
+        response = ModelResponse(
+            content="here is your image",
+            model="m",
+            prompt_tokens=1,
+            completion_tokens=1,
+        )
         tool_context = {"images": [{"data": b"\x89PNGfake", "prompt": "a cat"}]}
         with patch(
             "workspace.ai.tasks.captions.generate_attachment_caption.delay"
         ) as mock_delay:
             with self.captureOnCommitCallbacks(execute=True):
                 post_bot_message(
-                    self.conv, self.bot_user, result, tool_context, self.ai_task
+                    self.conv, self.bot_user, response, tool_context, self.ai_task
                 )
         mock_delay.assert_called_once()

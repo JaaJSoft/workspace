@@ -3,16 +3,20 @@
 Targets the call sites where the LLM/image SDK is invoked:
 - workspace.ai.services.llm.call_llm  → ai_request_duration_seconds, ai_tokens_total
 - workspace.ai.tools.GenerateImageTool → ai_image_requests_total
-- workspace.ai.services.tool_loop.run_tool_loop → ai_tool_calls_total,
+- workspace.ai.harness.observers.MetricsObserver → ai_tool_calls_total,
   ai_tool_rounds, ai_tool_loop_stops_total
 """
 
 import itertools
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 from prometheus_client import REGISTRY
+
+from workspace.ai.harness.observers import MetricsObserver
+from workspace.ai.harness.runner import StopReason
+
+from .harness import ScriptedModel, StubToolset, build_runner, call, reply, tool_reply
 
 
 def _sample(name, labels=None):
@@ -227,137 +231,76 @@ class ImageRequestMetricsTests(TestCase):
         self.assertEqual(_sample("ai_image_requests_total", labels) - before, 3)
 
 
-def _tool_call(call_id, name="search", arguments="{}"):
-    return SimpleNamespace(
-        id=call_id,
-        type="function",
-        function=SimpleNamespace(name=name, arguments=arguments),
-    )
-
-
-def _definitions(*names):
-    return [
-        {"type": "function", "function": {"name": n, "parameters": {}}} for n in names
-    ]
-
-
-def _llm_result(tool_calls, content=""):
-    return {
-        "tool_calls": tool_calls,
-        "content": content,
-        "message": SimpleNamespace(
-            role="assistant", content=content, tool_calls=tool_calls
-        ),
-        "model": "x",
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-    }
-
-
-@override_settings(AI_MAX_TOOL_ROUNDS=10, AI_MAX_IDENTICAL_TOOL_CALLS=3)
-@patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
 class ToolLoopMetricsTests(TestCase):
-    """Instrumentation of the tool loop: per-call outcomes, rounds, early stops."""
+    """Instrumentation of the harness: per-call outcomes, rounds, early stops."""
 
-    def setUp(self):
-        from django.contrib.auth import get_user_model
-
-        User = get_user_model()
-        self.user = User.objects.create_user(
-            username="metrics-user", email="mu@test.com", password="pw"
+    def _run(self, script, handler=None, definitions=("search",), **limits):
+        toolset = StubToolset(handler=handler, definitions=definitions)
+        model = ScriptedModel(script, repeat=True)
+        runner = build_runner(
+            model,
+            toolset,
+            observers=[MetricsObserver(toolset, "metrics-model")],
+            **limits,
         )
-        self.bot = User.objects.create_user(
-            username="metrics-bot", email="mb@test.com", password="pw"
-        )
+        return runner.run([{"role": "user", "content": "go"}])
 
-    def _run(self, execute=None, definitions=("search",), model="metrics-model"):
-        from workspace.ai.services.tool_loop import run_tool_loop
-
-        with patch("workspace.ai.tool_registry.tool_registry") as reg:
-            reg.get_definitions.return_value = _definitions(*definitions)
-            if isinstance(execute, Exception):
-                reg.execute.side_effect = execute
-            else:
-                reg.execute.return_value = execute
-            return run_tool_loop(
-                messages=[{"role": "user", "content": "go"}],
-                model=model,
-                human_user=self.user,
-                bot_user=self.bot,
-                conversation_id=None,
-            )
-
-    @patch("workspace.ai.services.tool_loop.call_llm")
-    def test_successful_call_counts_as_ok_for_its_tool(self, mock_call_llm, _build):
-        mock_call_llm.side_effect = [
-            _llm_result([_tool_call("c1")]),
-            _llm_result(None, content="done"),
-        ]
+    def test_successful_call_counts_as_ok_for_its_tool(self):
         labels = {"tool": "search", "status": "ok"}
         before = _sample("ai_tool_calls_total", labels)
 
-        self._run(execute="3 results")
+        self._run(
+            [tool_reply(call("c1")), reply("done")], handler=lambda tc, ctx: "3 results"
+        )
 
         self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
-    def test_error_result_string_counts_as_error(self, mock_call_llm, _build):
+    def test_error_result_string_counts_as_error(self):
         # Tools report failure to the model as an "Error: ..." string, never
         # as an exception, so that prefix is what the counter reads.
-        mock_call_llm.side_effect = [
-            _llm_result([_tool_call("c1")]),
-            _llm_result(None, content="done"),
-        ]
         labels = {"tool": "search", "status": "error"}
         before = _sample("ai_tool_calls_total", labels)
 
-        self._run(execute="Error: query is required")
+        self._run(
+            [tool_reply(call("c1")), reply("done")],
+            handler=lambda tc, ctx: "Error: query is required",
+        )
 
         self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
-    def test_raising_tool_counts_as_error_and_still_propagates(
-        self, mock_call_llm, _build
-    ):
-        mock_call_llm.side_effect = [
-            _llm_result([_tool_call("c1")]),
-            _llm_result(None, content="done"),
-        ]
+    def test_raising_tool_counts_as_error_and_still_propagates(self):
+        def boom(tool_call, context):
+            raise RuntimeError("boom")
+
         labels = {"tool": "search", "status": "error"}
         before = _sample("ai_tool_calls_total", labels)
 
         with self.assertRaises(RuntimeError):
-            self._run(execute=RuntimeError("boom"))
+            self._run([tool_reply(call("c1")), reply("done")], handler=boom)
 
         self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
-    def test_unregistered_tool_name_folds_into_one_series(self, mock_call_llm, _build):
-        mock_call_llm.side_effect = [
-            _llm_result([_tool_call("c1", name="teleport_user")]),
-            _llm_result(None, content="done"),
-        ]
+    def test_unregistered_tool_name_folds_into_one_series(self):
         invented = {"tool": "teleport_user", "status": "error"}
         folded = {"tool": "unknown", "status": "error"}
         before = _sample("ai_tool_calls_total", folded)
 
-        self._run(execute="Unknown tool: teleport_user")
+        self._run(
+            [tool_reply(call("c1", name="teleport_user")), reply("done")],
+            handler=lambda tc, ctx: "Unknown tool: teleport_user",
+        )
 
         self.assertEqual(_sample("ai_tool_calls_total", folded) - before, 1)
         self.assertEqual(_sample("ai_tool_calls_total", invented), 0)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
-    def test_refused_duplicate_counts_as_repeat_and_stops_the_loop(
-        self, mock_call_llm, _build
-    ):
-        mock_call_llm.return_value = _llm_result([_tool_call("c1")])
+    def test_refused_duplicate_counts_as_repeat_and_stops_the_loop(self):
         repeat = {"tool": "search", "status": "repeat"}
         before_repeat = _sample("ai_tool_calls_total", repeat)
         before_stop = _sample("ai_tool_loop_stops_total", {"reason": "repeat_loop"})
 
-        _, ctx, _, _ = self._run(execute="ok")
+        run = self._run([tool_reply(call("c1"))], handler=lambda tc, ctx: "ok")
 
-        self.assertTrue(ctx["repeat_loop_stopped"])
+        self.assertIs(run.stop, StopReason.REPEAT_LOOP)
         self.assertEqual(_sample("ai_tool_calls_total", repeat) - before_repeat, 1)
         self.assertEqual(
             _sample("ai_tool_loop_stops_total", {"reason": "repeat_loop"})
@@ -365,76 +308,62 @@ class ToolLoopMetricsTests(TestCase):
             1,
         )
 
-    @override_settings(AI_MAX_TOOL_ROUNDS=2)
-    @patch("workspace.ai.services.tool_loop.call_llm")
-    def test_round_cap_is_counted_as_an_early_stop(self, mock_call_llm, _build):
-        mock_call_llm.return_value = _llm_result([_tool_call("c1")])
+    def test_round_cap_is_counted_as_an_early_stop(self):
         labels = {"reason": "round_cap"}
         before = _sample("ai_tool_loop_stops_total", labels)
 
         # Distinct arguments each round, so the repeat guard never fires and
         # the run dies on the round cap instead.
         args = itertools.count()
-        mock_call_llm.side_effect = lambda *a, **kw: _llm_result(
-            [_tool_call("c1", arguments=f'{{"q":{next(args)}}}')]
+        run = self._run(
+            lambda messages, tools: tool_reply(
+                call("c1", arguments=f'{{"q":{next(args)}}}')
+            ),
+            handler=lambda tc, ctx: "ok",
+            max_rounds=2,
         )
 
-        _, ctx, _, _ = self._run(execute="ok")
-
-        self.assertTrue(ctx["round_cap_reached"])
+        self.assertIs(run.stop, StopReason.ROUND_CAP)
         self.assertEqual(_sample("ai_tool_loop_stops_total", labels) - before, 1)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
-    def test_rounds_histogram_records_one_sample_per_reply(self, mock_call_llm, _build):
-        mock_call_llm.side_effect = [
-            _llm_result([_tool_call("c1", arguments='{"q":"a"}')]),
-            _llm_result([_tool_call("c2", arguments='{"q":"b"}')]),
-            _llm_result(None, content="done"),
-        ]
+    def test_rounds_histogram_records_one_sample_per_reply(self):
         labels = {"model": "metrics-model"}
         before_count = _sample("ai_tool_rounds_count", labels)
         before_sum = _sample("ai_tool_rounds_sum", labels)
 
-        self._run(execute="ok")
+        self._run(
+            [
+                tool_reply(call("c1", arguments='{"q":"a"}')),
+                tool_reply(call("c2", arguments='{"q":"b"}')),
+                reply("done"),
+            ],
+            handler=lambda tc, ctx: "ok",
+        )
 
         self.assertEqual(_sample("ai_tool_rounds_count", labels) - before_count, 1)
         self.assertEqual(_sample("ai_tool_rounds_sum", labels) - before_sum, 2)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
-    def test_reply_without_tools_records_a_zero_round_sample(
-        self, mock_call_llm, _build
-    ):
-        mock_call_llm.return_value = _llm_result(None, content="hello")
+    def test_reply_without_tools_records_a_zero_round_sample(self):
         labels = {"model": "metrics-model"}
         before_count = _sample("ai_tool_rounds_count", labels)
         before_zero = _sample("ai_tool_rounds_bucket", {**labels, "le": "0.0"})
 
-        self._run()
+        self._run([reply("hello")])
 
         self.assertEqual(_sample("ai_tool_rounds_count", labels) - before_count, 1)
         self.assertEqual(
             _sample("ai_tool_rounds_bucket", {**labels, "le": "0.0"}) - before_zero, 1
         )
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
-    def test_cancelled_run_is_left_out_of_the_distribution(self, mock_call_llm, _build):
-        from workspace.ai.services.tool_loop import run_tool_loop
-
-        mock_call_llm.return_value = _llm_result([_tool_call("c1")])
+    def test_cancelled_run_is_left_out_of_the_distribution(self):
         labels = {"model": "metrics-model"}
         before = _sample("ai_tool_rounds_count", labels)
 
-        with patch("workspace.ai.tool_registry.tool_registry") as reg:
-            reg.get_definitions.return_value = _definitions("search")
-            reg.execute.return_value = "ok"
-            _, ctx, _, _ = run_tool_loop(
-                messages=[{"role": "user", "content": "go"}],
-                model="metrics-model",
-                human_user=self.user,
-                bot_user=self.bot,
-                conversation_id=None,
-                is_cancelled=lambda: True,
-            )
+        run = self._run(
+            [tool_reply(call("c1"))],
+            handler=lambda tc, ctx: "ok",
+            is_cancelled=lambda: True,
+        )
 
-        self.assertTrue(ctx["cancelled"])
+        self.assertIs(run.stop, StopReason.CANCELLED)
         self.assertEqual(_sample("ai_tool_rounds_count", labels), before)

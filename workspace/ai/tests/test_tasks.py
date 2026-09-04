@@ -289,7 +289,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         # Two API calls were made
         self.assertEqual(mock_client.chat.completions.create.call_count, 2)
 
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     @patch("workspace.ai.tasks.chat.build_conversation_history")
     def test_the_task_row_exists_before_the_history_is_assembled(
         self, mock_history, mock_call_llm
@@ -332,7 +332,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         self.assertTrue(seen["in_flight"])
 
     @patch("workspace.ai.tool_registry.tool_registry.execute")
-    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.harness.model.call_llm")
     def test_cancelling_stops_the_run_instead_of_only_dropping_its_answer(
         self, mock_call_llm, mock_execute
     ):

@@ -52,7 +52,7 @@ def produced_media(tool_context) -> bool:
 def post_bot_message(
     conversation,
     bot_user,
-    result,
+    response,
     tool_context,
     ai_task,
     raw_messages=None,
@@ -60,7 +60,8 @@ def post_bot_message(
 ):
     """Create the bot message, attach its media, update unread counts, notify, and complete AITask.
 
-    Returns (body, bot_message).
+    *response* is the :class:`~workspace.ai.harness.model.ModelResponse` the
+    run ended on. Returns (body, bot_message).
     """
     from django.core.files.base import ContentFile
 
@@ -72,15 +73,15 @@ def post_bot_message(
     from workspace.chat.services.posting import deliver_message
     from workspace.chat.services.rendering import render_message_body
 
-    body = clean_llm_content(result["content"])
+    body = clean_llm_content(response.content)
     body_html = render_message_body(body)
 
-    # Reasoning of the final completion is not captured by run_tool_loop,
-    # which only records rounds that executed tools. Append it as a tool-less
+    # Reasoning of the final completion is not captured in tool_data, which
+    # only records rounds that executed tools. Append it as a tool-less
     # round so the UI timeline can show it. Skip when it duplicates the last
-    # round's thinking: on the stop_after_round path the posted result IS the
-    # last tool round.
-    thinking = (result.get("thinking") or "").strip()
+    # round's thinking: on the stop_after_round path the posted response IS
+    # the last tool round.
+    thinking = response.thinking.strip()
     if thinking and not (tool_data and tool_data[-1].get("thinking") == thinking):
         tool_data = [
             *(tool_data or []),
@@ -170,9 +171,9 @@ def post_bot_message(
     ai_task.status = ai_task.Status.COMPLETED
     ai_task.result = body
     ai_task.chat_message = bot_message
-    ai_task.model_used = result["model"]
-    ai_task.prompt_tokens = result["prompt_tokens"]
-    ai_task.completion_tokens = result["completion_tokens"]
+    ai_task.model_used = response.model
+    ai_task.prompt_tokens = response.prompt_tokens
+    ai_task.completion_tokens = response.completion_tokens
     ai_task.raw_messages = raw_messages
     ai_task.completed_at = timezone.now()
     ai_task.save()

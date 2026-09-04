@@ -370,6 +370,61 @@ class VaultBrowserTests(PlaywrightTestCase):
             self.page.locator("input[autocomplete='current-password']").count(), 0
         )
 
+    def test_only_the_active_view_is_in_the_dom(self):
+        """Both views used to be built on every load, one hidden with CSS, so
+        every entry was bound twice. The switch has to instantiate rather than
+        reveal - and the rebuilt view has to come back whole, icons included,
+        which is the half only a real browser can say: the icons are drawn by
+        a MutationObserver watching the document, not by a call in this
+        module."""
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+
+        list_view = self.page.locator("[data-testid='entry-list']")
+        mosaic = self.page.locator("[data-testid='entry-mosaic']")
+
+        list_view.wait_for(timeout=30000)
+        self.assertEqual(mosaic.count(), 0, "the mosaic was built behind the list")
+
+        self.page.get_by_role("button", name="Mosaic view").click()
+        mosaic.wait_for(timeout=10000)
+        self.assertEqual(list_view.count(), 0, "the list stayed behind the mosaic")
+        self.assertEqual(mosaic.locator("text=GitHub").count(), 1)
+        # Lucide copies data-lucide onto the svg it creates, so this says the
+        # placeholders were hydrated without naming which icon a login type
+        # happens to draw. state="attached": the first icon in DOM order is
+        # the favourite star, which x-show hides on an entry that is not one -
+        # the default visibility wait would sit on it until it timed out.
+        self.page.wait_for_selector(
+            "[data-testid='entry-mosaic'] svg[data-lucide]",
+            state="attached",
+            timeout=10000,
+        )
+        self.assertEqual(
+            self.page.locator("[data-testid='entry-mosaic'] i[data-lucide]").count(),
+            0,
+            "a placeholder was left undrawn in the subtree x-if created",
+        )
+
+        self.page.get_by_role("button", name="List view").click()
+        list_view.wait_for(timeout=10000)
+        self.assertEqual(mosaic.count(), 0)
+        self.assertEqual(list_view.locator("text=GitHub").count(), 1)
+        # The same claim on the way back, and the one that matters more: the
+        # list is the default view, and a table is not the flat grid the
+        # mosaic is - a container choice in the observer that worked for one
+        # could miss the other.
+        self.page.wait_for_selector(
+            "[data-testid='entry-list'] svg[data-lucide]",
+            state="attached",
+            timeout=10000,
+        )
+        self.assertEqual(
+            self.page.locator("[data-testid='entry-list'] i[data-lucide]").count(),
+            0,
+            "a placeholder was left undrawn in the rebuilt table",
+        )
+
     def test_a_second_vault_is_created_and_switched_to_without_unlocking_again(self):
         """Switching is the gesture the listing used to own, and the one that
         had to stop being a navigation."""

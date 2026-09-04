@@ -9,121 +9,128 @@
   the selection is a batch of entries - the bulk actions come from the entry
   registry, which has nothing to say about a folder.
 {% endcomment %}
-<div
-  class="grid p-2"
-  x-show="viewMode === 'mosaic' && !isEmpty()"
-  x-cloak
-  :style="{ gridTemplateColumns: 'repeat(auto-fill, minmax(' + tileMinWidth() + 'px, 1fr))',
+{% comment %}
+  x-if, not x-show: see the note above the table in browser_content.html. The
+  :style stays in its object form - the element no longer shares the attribute
+  with x-show, but the string form is a trap this module has already paid for
+  once, and the object form is never the wrong answer.
+{% endcomment %}
+<template x-if="viewMode === 'mosaic' && !isEmpty()">
+  <div
+    data-testid="entry-mosaic"
+    class="grid p-2"
+    :style="{ gridTemplateColumns: 'repeat(auto-fill, minmax(' + tileMinWidth() + 'px, 1fr))',
             gap: tileGap() + 'px' }"
->
-  <template x-for="folder in visibleFolders()" :key="folder.uuid">
-    <div
-      class="bg-base-100 border border-base-300 rounded-lg hover:border-warning hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
-      @click="openFolderFromRow(folder)"
-      @contextmenu.stop="openFolderMenu($event, folder)"
-    >
-      <div class="absolute top-2 right-2 z-10" @click.stop>
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
-          :aria-label="'Actions for ' + folder.name"
-          @click="openFolderMenu($event, folder)"
-        >
-          <i data-lucide="more-horizontal" class="w-4 h-4"></i>
-        </button>
-      </div>
-
-      <div class="relative w-full pb-[100%]">
-        <div
-          class="absolute inset-0 flex items-center justify-center bg-warning/5"
-        >
-          <div
-            :style="{ width: tileIconSize() + 'px', height: tileIconSize() + 'px' }"
+  >
+    <template x-for="folder in visibleFolders()" :key="folder.uuid">
+      <div
+        class="bg-base-100 border border-base-300 rounded-lg hover:border-warning hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
+        @click="openFolderFromRow(folder)"
+        @contextmenu.stop="openFolderMenu($event, folder)"
+      >
+        <div class="absolute top-2 right-2 z-10" @click.stop>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
+            :aria-label="'Actions for ' + folder.name"
+            @click="openFolderMenu($event, folder)"
           >
-            <i data-lucide="folder" class="w-full h-full text-warning"></i>
+            <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="relative w-full pb-[100%]">
+          <div
+            class="absolute inset-0 flex items-center justify-center bg-warning/5"
+          >
+            <div
+              :style="{ width: tileIconSize() + 'px', height: tileIconSize() + 'px' }"
+            >
+              <i data-lucide="folder" class="w-full h-full text-warning"></i>
+            </div>
           </div>
         </div>
-      </div>
 
+        <div
+          class="border-t border-base-300 flex-1"
+          :class="tileSize <= 2 ? 'px-2 py-1.5' : 'p-3'"
+        >
+          <h3
+            class="font-medium truncate"
+            :class="tileSize <= 2 ? 'text-xs' : 'text-sm'"
+            :title="folder.name"
+            x-text="folder.name"
+          ></h3>
+        </div>
+      </div>
+    </template>
+
+    <template x-for="entry in visibleEntries()" :key="entry.uuid">
       <div
-        class="border-t border-base-300 flex-1"
-        :class="tileSize <= 2 ? 'px-2 py-1.5' : 'p-3'"
-      >
-        <h3
-          class="font-medium truncate"
-          :class="tileSize <= 2 ? 'text-xs' : 'text-sm'"
-          :title="folder.name"
-          x-text="folder.name"
-        ></h3>
-      </div>
-    </div>
-  </template>
-
-  <template x-for="entry in visibleEntries()" :key="entry.uuid">
-    <div
-      class="bg-base-100 border rounded-lg hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
-      :class="[
+        class="bg-base-100 border rounded-lg hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
+        :class="[
         panelEntry === entry ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-error',
         isSelected(entry.uuid) ? 'ring-2 ring-primary border-primary' : ''
       ]"
-      @click="openEntryFromRow(entry)"
-      @contextmenu.stop="openMenu($event, entry)"
-    >
-      <div class="absolute top-2 left-2 z-10" @click.stop>
-        <input
-          type="checkbox"
-          class="checkbox checkbox-sm bg-base-100/80 backdrop-blur-sm"
-          :class="isSelected(entry.uuid) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
-          :checked="isSelected(entry.uuid)"
-          :aria-label="'Select ' + entry.name"
-          @click="toggleSelection(entry.uuid)"
-        />
-      </div>
+        @click="openEntryFromRow(entry)"
+        @contextmenu.stop="openMenu($event, entry)"
+      >
+        <div class="absolute top-2 left-2 z-10" @click.stop>
+          <input
+            type="checkbox"
+            class="checkbox checkbox-sm bg-base-100/80 backdrop-blur-sm"
+            :class="isSelected(entry.uuid) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+            :checked="isSelected(entry.uuid)"
+            :aria-label="'Select ' + entry.name"
+            @click="toggleSelection(entry.uuid)"
+          />
+        </div>
 
-      <div class="absolute top-2 right-2 z-10 flex gap-1" @click.stop>
-        <span
-          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm pointer-events-none"
-          x-show="entry.favorite"
-          x-cloak
-        >
-          <i data-lucide="star" class="w-3.5 h-3.5 fill-current text-warning"></i>
-        </span>
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
-          :aria-label="'Actions for ' + entry.name"
-          @click="openMenu($event, entry)"
-        >
-          <i data-lucide="more-horizontal" class="w-4 h-4"></i>
-        </button>
-      </div>
-
-      <div class="relative w-full pb-[100%]">
-        <div class="absolute inset-0 flex items-center justify-center bg-error/5">
-          <div
-            :style="{ width: tileIconSize() + 'px', height: tileIconSize() + 'px' }"
+        <div class="absolute top-2 right-2 z-10 flex gap-1" @click.stop>
+          <span
+            class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm pointer-events-none"
+            x-show="entry.favorite"
+            x-cloak
           >
-            <i :data-lucide="typeIcon(entry.type)" class="w-full h-full text-error"></i>
+            <i data-lucide="star" class="w-3.5 h-3.5 fill-current text-warning"></i>
+          </span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
+            :aria-label="'Actions for ' + entry.name"
+            @click="openMenu($event, entry)"
+          >
+            <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="relative w-full pb-[100%]">
+          <div class="absolute inset-0 flex items-center justify-center bg-error/5">
+            <div
+              :style="{ width: tileIconSize() + 'px', height: tileIconSize() + 'px' }"
+            >
+              <i :data-lucide="typeIcon(entry.type)" class="w-full h-full text-error"></i>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div
-        class="border-t border-base-300 flex-1"
-        :class="tileSize <= 2 ? 'px-2 py-1.5' : 'p-3'"
-      >
-        <h3
-          class="font-medium truncate"
-          :class="tileSize <= 2 ? 'text-xs' : 'text-sm'"
-          :title="entry.name"
-          x-text="entry.name"
-        ></h3>
-        <p
-          class="text-xs text-base-content/60 truncate"
-          :class="tileSize <= 1 || !entry.username ? 'hidden' : 'mt-0.5'"
-          x-text="entry.username"
-        ></p>
+        <div
+          class="border-t border-base-300 flex-1"
+          :class="tileSize <= 2 ? 'px-2 py-1.5' : 'p-3'"
+        >
+          <h3
+            class="font-medium truncate"
+            :class="tileSize <= 2 ? 'text-xs' : 'text-sm'"
+            :title="entry.name"
+            x-text="entry.name"
+          ></h3>
+          <p
+            class="text-xs text-base-content/60 truncate"
+            :class="tileSize <= 1 || !entry.username ? 'hidden' : 'mt-0.5'"
+            x-text="entry.username"
+          ></p>
+        </div>
       </div>
-    </div>
-  </template>
-</div>
+    </template>
+  </div>
+</template>

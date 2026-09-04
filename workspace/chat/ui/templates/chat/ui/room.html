@@ -35,6 +35,7 @@ be defined before the parser reaches the markup using it, or server-rendered
     @chat-call_signal.window="onCallSignal($event.detail)"
     @chat-call_diagnostic_signal.window="onCallDiagnosticSignal($event.detail)"
     @chat-run-diagnostic.window="openDiagnostic()"
+    @chat-meeting_guest_waiting.window="onGuestWaiting($event.detail)"
   >
     <div class="flex flex-1 min-h-0">
       {% include "chat/ui/partials/call_stage.html" with host_controls=True %}
@@ -48,6 +49,7 @@ be defined before the parser reaches the markup using it, or server-rendered
   </div>
 
   {{ conversation|json_script:"room-conversation-data" }}
+  {{ meeting|json_script:"room-meeting-data" }}
 {% endblock %}
 
 {% block extra_scripts %}
@@ -74,5 +76,6 @@ be defined before the parser reaches the markup using it, or server-rendered
   <script src="{% static 'chat/ui/js/ui_helpers.js' %}"></script>
   <script src="{% static 'chat/ui/js/audio.js' %}"></script>
   <script src="{% static 'chat/ui/js/recorder.js' %}"></script>
+  <script src="{% static 'chat/ui/js/meeting_host.js' %}"></script>
   <script src="{% static 'chat/ui/js/room.js' %}"></script>
 {% endblock %}

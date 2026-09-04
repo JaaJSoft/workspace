@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import OuterRef, Prefetch, Subquery, prefetch_related_objects
 from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
@@ -20,6 +21,7 @@ from workspace.chat.models import (
 )
 from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services.avatar import avatar_initial_for
+from workspace.chat.services.calls import is_call_locked
 from workspace.chat.services.conversations import (
     active_members_queryset,
     display_name_for,
@@ -29,6 +31,7 @@ from workspace.chat.services.conversations import (
     user_conversation_ids,
 )
 from workspace.chat.services.identities import display_name_for_identity
+from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
 from workspace.common.dates import time_ago
@@ -231,6 +234,22 @@ def chat_room_view(request, conversation_uuid):
     )
     title = display_name_for(conversation.kind, conversation.title, partner)
 
+    try:
+        meeting = conversation.meeting
+    except ObjectDoesNotExist:
+        meeting = None
+    meeting_data = None
+    if meeting is not None:
+        occurrence = current_occurrence(meeting)
+        meeting_data = {
+            "uuid": str(meeting.uuid),
+            "slug": meeting.slug,
+            "locked": is_call_locked(
+                conversation.uuid, occurrence[0] if occurrence is not None else None
+            ),
+            "join_url": request.build_absolute_uri(meeting.join_path),
+        }
+
     return render(
         request,
         "chat/ui/room.html",
@@ -238,6 +257,7 @@ def chat_room_view(request, conversation_uuid):
             "conversation_uuid": str(conversation_uuid),
             "conversation_title": title,
             "conversation": conversation_data,
+            "meeting": meeting_data,
             "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
             "call_sounds_enabled": get_setting(
                 request.user, "chat", "call_sounds", default=True

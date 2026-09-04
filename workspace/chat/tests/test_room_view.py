@@ -108,6 +108,30 @@ class ChatRoomViewTests(TestCase):
         resp = self.client.get(self._url())
         self.assertIn("chat/ui/js/message_shell.js", resp.content.decode())
 
+    def test_room_embeds_the_meeting_when_the_conversation_has_one(self):
+        from django.utils import timezone
+
+        from workspace.chat.services.meetings import create_meeting
+        from workspace.chat.tests.meeting_fixtures import make_event
+
+        event = make_event(
+            self.member, start=timezone.now() + timezone.timedelta(minutes=5)
+        )
+        meeting = create_meeting(event, self.member)
+        self.client.force_login(self.member)
+        resp = self.client.get(f"/chat/room/{meeting.conversation_id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('id="room-meeting-data"', resp.content.decode())
+        self.assertIn(meeting.slug, resp.content.decode())
+
+    def test_room_without_a_meeting_embeds_null(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(self._url())
+        self.assertIn(
+            '<script id="room-meeting-data" type="application/json">null</script>',
+            resp.content.decode(),
+        )
+
 
 class RoomTitleMatchesTheSidebarTests(TestCase):
     """The room heading and the sidebar row must name a conversation alike.

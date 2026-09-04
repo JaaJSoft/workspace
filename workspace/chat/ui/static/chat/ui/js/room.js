@@ -27,6 +27,7 @@ function chatRoomApp(currentUserId, conversationId) {
     ...chatThreadsMixin(),
     ...chatBotMixin(),
     ...chatCallMixin(),
+    ...chatMeetingHostMixin(),
     ...chatCallDiagnosticMixin(),
     ...chatRecorderMixin(),
 
@@ -50,6 +51,12 @@ function chatRoomApp(currentUserId, conversationId) {
         try { conv = JSON.parse(convEl.textContent); } catch (e) { conv = null; }
       }
       this.activeConversation = conv || { uuid: this.roomConversationId };
+
+      const meetingEl = document.getElementById('room-meeting-data');
+      if (meetingEl) {
+        try { this.meeting = JSON.parse(meetingEl.textContent); } catch (e) { this.meeting = null; }
+      }
+      if (this.meeting) await this.loadLobby();
 
       // Announce room presence so the main tab flips Join <-> Return instantly,
       // without waiting on the heartbeat/SSE round-trip.

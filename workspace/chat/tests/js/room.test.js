@@ -17,6 +17,7 @@ const stubs = {
   chatThreadsMixin: () => ({ _threads: true }),
   chatBotMixin: () => ({ _bot: true }),
   chatCallMixin: () => ({ startOrJoinCall: async () => {}, _start: true }),
+  chatMeetingHostMixin: () => ({ loadLobby: async () => {} }),
   chatCallDiagnosticMixin: () => ({ _diag: true }),
   chatRecorderMixin: () => ({ initRecorder: () => {} }),
   chatCallShouldOwnMedia: (r) => r !== 'observer',
@@ -39,6 +40,7 @@ const nonCallStubs = {
   chatPanelsMixin: () => ({ _panels: true }),
   chatThreadsMixin: () => ({ _threads: true }),
   chatBotMixin: () => ({ _bot: true }),
+  chatMeetingHostMixin: () => ({ loadLobby: async () => {} }),
   chatCallDiagnosticMixin: () => ({ _diag: true }),
   chatRecorderMixin: () => ({ initRecorder: () => {} }),
 };

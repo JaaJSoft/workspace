@@ -525,6 +525,11 @@ class MeetingGuestMessagesView(APIView):
         mention_map, _has_everyone = build_mention_map(
             body, users=active_member_users(conversation_id)
         )
+        # The @everyone badge is the promise that everyone was pinged, and
+        # nobody is on this path (see mention_everyone below) - dropping the
+        # key is what keeps the rendered message honest. Members' @everyone
+        # is untouched; only build_mention_map's output is trimmed here.
+        mention_map.pop("everyone", None)
         mentioned_user_ids = {uid for uid in mention_map.values() if uid}
         body_html = render_message_body(body, mention_map=mention_map or None)
 

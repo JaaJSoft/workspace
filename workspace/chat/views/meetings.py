@@ -373,8 +373,11 @@ class MeetingLockView(APIView):
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        locked = is_truthy(request.data.get("locked"))
-        meeting_service.set_locked(meeting, locked)
+        requested = is_truthy(request.data.get("locked"))
+        # The committed state, not the request: locking a meeting with no
+        # reachable occurrence and no active call stores nothing, and saying
+        # otherwise would contradict the summary endpoint immediately.
+        locked = meeting_service.set_locked(meeting, requested)
         return Response({"locked": locked})
 
 

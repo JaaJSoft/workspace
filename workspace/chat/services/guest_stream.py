@@ -199,16 +199,17 @@ def stream_guest_events(
         # dropped here rather than forwarded to an audience it was never
         # meant for.
 
-        stop = False
         just_admitted = False
         for envelope in lifecycle_events:
             yield format_sse(envelope["event"], envelope["data"])
             if envelope["event"] in _TERMINAL_LIFECYCLE_EVENTS:
-                stop = True
+                # The rest of the batch is dropped, not merely followed by a
+                # close: a stale lobby panel can enqueue meeting_admitted
+                # behind the meeting_ended the End sweep sent, and yielding
+                # both leaves the client on the wrong last frame.
+                return
             if envelope["event"] == "meeting_admitted":
                 just_admitted = True
-        if stop:
-            return
 
         # drain_events is destructive and runs every 1s cycle; admitted only
         # flips on a gate tick, up to _GATE_INTERVAL_SECONDS later. Without

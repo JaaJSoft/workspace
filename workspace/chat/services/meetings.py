@@ -121,7 +121,7 @@ def remove_guest(guest):
 
 @transaction.atomic
 def set_locked(meeting, locked, now=None):
-    """Lock or unlock the meeting, durably.
+    """Lock or unlock the meeting, durably. Returns the state committed.
 
     Meeting.locked_occurrence_start is the value that survives with no active
     call - it is written unconditionally, so a host can pre-lock an empty
@@ -157,7 +157,12 @@ def set_locked(meeting, locked, now=None):
     if session is not None:
         session.locked = locked
         session.save(update_fields=["locked"])
-    return True
+        return session.locked
+    # No session to hold the live flag, so the durable value is the whole
+    # answer - and it is False when there was no occurrence for the lock to
+    # name. Returned rather than echoing the requested boolean, or the lock
+    # endpoint would report a lock the very next summary read contradicts.
+    return meeting.locked_occurrence_start is not None
 
 
 @transaction.atomic

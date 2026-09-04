@@ -183,6 +183,25 @@ class GuestStreamTests(TestCase):
             parsed, [("meeting_admitted", {"meeting_id": str(self.meeting.uuid)})]
         )
 
+    def test_a_terminal_event_stops_the_batch_it_arrived_in(self):
+        # A stale lobby panel admitting a guest the End sweep already refused
+        # enqueues meeting_admitted behind meeting_ended. Yielding both told
+        # the client the meeting ended and then that they were admitted,
+        # before closing - the last frame wins, and it is the wrong one.
+        guest, token = self._waiting()
+        enqueue_event(guest_key(guest.uuid), "meeting_ended", {})
+        enqueue_event(
+            guest_key(guest.uuid),
+            "meeting_admitted",
+            {"meeting_id": str(self.meeting.uuid)},
+        )
+
+        clock = FakeClock(self.now)
+        events, terminated = drive_guest_stream(token, self.meeting.uuid, clock)
+
+        self.assertTrue(terminated)
+        self.assertEqual([parse_sse(e) for e in events], [("meeting_ended", {})])
+
     # --- call signalling ---
 
     def test_admitted_guest_receives_call_event_verbatim(self):

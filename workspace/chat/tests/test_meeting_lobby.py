@@ -258,6 +258,32 @@ class MeetingHostViewTests(TestCase):
         session = calls.get_active_call(self.meeting.conversation_id)
         self.assertFalse(session.locked)
 
+    def test_lock_reports_false_when_there_is_no_occurrence_to_lock(self):
+        # Nothing durable can be stored (a lock names an occurrence and none
+        # is reachable) and there is no session to flip, so the endpoint must
+        # not claim the room is locked - the summary would disagree with it
+        # on the very next request.
+        now = timezone.now()
+        future_event = make_event(
+            self.owner,
+            start=now + timedelta(days=3),
+            end=now + timedelta(days=3, minutes=30),
+        )
+        future_meeting = create_meeting(future_event, self.owner)
+        self.client.force_authenticate(self.owner)
+
+        resp = self.client.post(
+            f"/api/v1/chat/meetings/{future_meeting.uuid}/lock",
+            {"locked": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data["locked"])
+
+        summary = self.client.get(f"/api/v1/chat/meet/{future_meeting.slug}")
+        self.assertEqual(summary.status_code, 200)
+        self.assertFalse(summary.data["locked"])
+
     def test_lock_404_for_non_member(self):
         self.client.force_authenticate(self.outsider)
         resp = self.client.post(

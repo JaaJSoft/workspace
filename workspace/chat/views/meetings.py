@@ -120,7 +120,7 @@ class MeetingSummaryView(APIView):
         # broadcast) must never run off an anonymous GET.
         session = calls.active_call_session(meeting.conversation_id)
         participant_count = (
-            len(calls.list_active_participants(session)) if session is not None else 0
+            calls.active_participant_count(session) if session is not None else 0
         )
         return Response(
             {

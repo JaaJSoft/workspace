@@ -233,6 +233,17 @@ def list_active_participants(session):
     )
 
 
+def active_participant_count(session):
+    """How many participants are in *session*, without hydrating any of them.
+
+    The public meeting summary answers this for a stranger on every page
+    load; it needs the number, never the rows.
+    """
+    from ..models import CallParticipant
+
+    return CallParticipant.objects.filter(session=session, left_at__isnull=True).count()
+
+
 def active_member_ids(conversation_id):
     from ..models import ConversationMember
 
@@ -574,10 +585,17 @@ def leave_call_as_guest(guest):
         return None
 
     key = guest_key(guest.uuid)
-    CallParticipant.objects.filter(
+    closed = CallParticipant.objects.filter(
         session=session, guest=guest, left_at__isnull=True
     ).update(left_at=timezone.now())
     drop_presence(session.uuid, key)
+
+    # Nothing was closed: this guest is on the waiting card, or already left.
+    # Announcing a departure that did not happen is a fan-out to every member
+    # and guest for a key none of them ever held, and it must not be able to
+    # end a call the guest was never in.
+    if not closed:
+        return session
 
     if CallParticipant.objects.filter(session=session, left_at__isnull=True).exists():
         _broadcast(

@@ -3,7 +3,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.chat.models import MeetingGuest
+from workspace.chat.models import ConversationMember, MeetingGuest
 from workspace.chat.services import calls
 from workspace.chat.services.call_signaling import drain_events
 from workspace.chat.services.meeting_occurrences import current_occurrence
@@ -43,6 +43,20 @@ class MeetingUiBackendTests(TestCase):
         self.client.logout()
         resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
         self.assertEqual(resp.json()["participant_count"], 1)
+
+    def test_the_summary_counts_members_and_guests_alike(self):
+        session, _participant, _created = calls.start_or_join_call(
+            self.host, self.meeting.conversation_id
+        )
+        guest, _token = guest_with_token(
+            self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
+        )
+        calls.join_call_as_guest(guest)
+
+        self.assertEqual(calls.active_participant_count(session), 2)
+        self.client.logout()
+        resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
+        self.assertEqual(resp.json()["participant_count"], 2)
 
     def test_knock_returns_the_guests_own_participant_key_and_wakes_the_hosts(self):
         drain_events(user_key(self.host.id))
@@ -170,3 +184,88 @@ class CallStartedReachesTheLobbyTests(TestCase):
         self._start_the_call()
 
         self.assertEqual(drain_events(guest_key(guest.uuid)), [])
+
+
+class KnockFanOutTests(TestCase):
+    """A knock wakes the hosts, and only the hosts: the mailbox is the one
+    thing that puts a waiting guest in front of somebody."""
+
+    def setUp(self):
+        cache.clear()
+        self.host = User.objects.create_user("host", "host@example.com", "pw")
+        self.cohost = User.objects.create_user("cohost", "cohost@example.com", "pw")
+        self.gone = User.objects.create_user("gone", "gone@example.com", "pw")
+        self.event = make_event(
+            self.host, start=timezone.now() + timezone.timedelta(minutes=5)
+        )
+        self.meeting = create_meeting(self.event, self.host)
+        ConversationMember.objects.create(
+            conversation_id=self.meeting.conversation_id, user=self.cohost
+        )
+        ConversationMember.objects.create(
+            conversation_id=self.meeting.conversation_id,
+            user=self.gone,
+            left_at=timezone.now(),
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_knock_wakes_every_active_host_and_not_a_member_who_left(self):
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Visitor"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+
+        for user in (self.host, self.cohost):
+            events = drain_events(user_key(user.id))
+            self.assertEqual(
+                [e["event"] for e in events], ["meeting_guest_waiting"], user.username
+            )
+            self.assertEqual(events[0]["data"]["display_name"], "Visitor")
+        self.assertEqual(drain_events(user_key(self.gone.id)), [])
+
+
+class GuestLeaveFanOutTests(TestCase):
+    """Leaving is only worth announcing when it closed something. A guest
+    still on the waiting card - or leaving twice - holds no participant row,
+    so there is no departure for anyone to render."""
+
+    def setUp(self):
+        cache.clear()
+        self.host = User.objects.create_user("host", "host@example.com", "pw")
+        self.event = make_event(
+            self.host, start=timezone.now() + timezone.timedelta(minutes=5)
+        )
+        self.meeting = create_meeting(self.event, self.host)
+        self.occurrence_start = current_occurrence(self.meeting)[0]
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_leaving_with_no_participant_row_tells_the_host_nothing(self):
+        guest, _token = guest_with_token(
+            self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
+        )
+        calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        drain_events(user_key(self.host.id))
+
+        calls.leave_call_as_guest(guest)
+
+        self.assertEqual(drain_events(user_key(self.host.id)), [])
+
+    def test_leaving_an_actual_seat_still_tells_the_host(self):
+        guest, _token = guest_with_token(
+            self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
+        )
+        calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        calls.join_call_as_guest(guest)
+        drain_events(user_key(self.host.id))
+
+        calls.leave_call_as_guest(guest)
+
+        events = drain_events(user_key(self.host.id))
+        self.assertEqual([e["event"] for e in events], ["call_participant_left"])
+        self.assertEqual(events[0]["data"]["participant_key"], guest_key(guest.uuid))

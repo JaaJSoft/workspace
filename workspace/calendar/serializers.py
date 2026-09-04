@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
 from .models import Calendar, Event, EventMember
@@ -87,6 +88,7 @@ class EventSerializer(serializers.ModelSerializer):
     poll_id = serializers.SerializerMethodField()
     ical_uid = serializers.CharField(read_only=True)
     external_organizer = serializers.EmailField(read_only=True)
+    join_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -100,6 +102,7 @@ class EventSerializer(serializers.ModelSerializer):
             "all_day",
             "timezone",
             "location",
+            "join_url",
             "owner",
             "members",
             "recurrence_frequency",
@@ -117,6 +120,18 @@ class EventSerializer(serializers.ModelSerializer):
     def get_poll_id(self, obj):
         poll_id = getattr(obj, "_poll_id", None)
         return str(poll_id) if poll_id else None
+
+    def get_join_url(self, obj):
+        try:
+            meeting = obj.meeting
+        except ObjectDoesNotExist:
+            return None
+        request = self.context.get("request")
+        return (
+            request.build_absolute_uri(meeting.join_path)
+            if request
+            else meeting.join_path
+        )
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

@@ -115,6 +115,28 @@
           </div>
         </template>
 
+        {# Meeting link #}
+        <template x-if="_panelRaw?.join_url">
+          <div class="flex items-center gap-2.5 text-sm">
+            <i data-lucide="video" class="w-4 h-4 opacity-50 flex-shrink-0"></i>
+            <a
+              class="link link-primary truncate min-w-0"
+              :href="_panelRaw.join_url"
+              target="_blank"
+              rel="noopener"
+              x-text="_panelRaw.join_url"
+            ></a>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              @click="copyJoinUrl()"
+              title="Copy join link"
+            >
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </template>
+
         <!-- Description -->
         <template x-if="form.description">
           <div class="flex items-start gap-2.5 text-sm">
@@ -232,6 +254,15 @@
         <!-- Owner actions -->
         <template x-if="isOwner() && !isExternalEvent()">
           <div class="flex gap-2 pt-2 border-t border-base-200">
+            <button
+              type="button"
+              class="btn btn-sm btn-outline"
+              x-show="!_panelRaw?.join_url"
+              @click="createMeetingLink()"
+              :disabled="creatingMeeting"
+            >
+              <i data-lucide="video" class="w-4 h-4"></i> Meeting link
+            </button>
             <button
               type="button"
               class="btn btn-sm btn-primary flex-1"

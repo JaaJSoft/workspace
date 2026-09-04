@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
 from django.shortcuts import render
 from django.utils.dateparse import parse_datetime
@@ -79,7 +80,7 @@ def event_card(request, event_id):
             uuid=event_id,
             is_cancelled=False,
         )
-        .select_related("calendar", "owner")
+        .select_related("calendar", "owner", "meeting")
         .prefetch_related("members__user")
         .distinct()
         .first()
@@ -107,6 +108,11 @@ def event_card(request, event_id):
     membership = next((m for m in members if m.user_id == request.user.id), None)
     invite_status = membership.status if membership and not is_owner else None
 
+    try:
+        join_url = request.build_absolute_uri(event.meeting.join_path)
+    except ObjectDoesNotExist:
+        join_url = None
+
     return render(
         request,
         "calendar/ui/partials/event_card.html",
@@ -118,6 +124,7 @@ def event_card(request, event_id):
             "invite_status": invite_status,
             "occ_start": occ_start,
             "occ_end": occ_end,
+            "join_url": join_url,
         },
     )
 

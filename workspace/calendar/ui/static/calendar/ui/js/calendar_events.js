@@ -767,6 +767,37 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.deleting = false;
     },
 
+    // --- Meeting link ---
+    async createMeetingLink() {
+      if (!this._panelRaw || this.creatingMeeting) return;
+      this.creatingMeeting = true;
+      try {
+        const resp = await fetch('/api/v1/chat/meetings', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ event_id: this._panelRaw.uuid }),
+        });
+        if (!resp.ok) {
+          if (window.AppAlert) window.AppAlert.error('Could not create the meeting link');
+          return;
+        }
+        const data = await resp.json();
+        this._panelRaw = { ...this._panelRaw, join_url: data.join_url };
+      } finally {
+        this.creatingMeeting = false;
+      }
+    },
+    copyJoinUrl() {
+      const url = this._panelRaw && this._panelRaw.join_url;
+      if (!url) return;
+      navigator.clipboard.writeText(url).then(() => {
+        if (window.AppAlert) window.AppAlert.success('Join link copied', { duration: 2000 });
+      }).catch(() => {
+        if (window.AppAlert) window.AppAlert.error('Failed to copy the link');
+      });
+    },
+
     // --- Respond ---
     async respondToInvitation(newStatus) {
       try {

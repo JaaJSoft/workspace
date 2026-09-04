@@ -24,6 +24,7 @@
       @chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
       @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
       @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
+      @chat-call_started.window="onCallStarted($event.detail)"
       @chat-call_ended.window="onCallEnded($event.detail)"
       @chat-call_signal.window="onCallSignal($event.detail)"
     >
@@ -95,23 +96,65 @@
 
       <template x-if="phase === 'room'">
         <div class="flex flex-1 min-h-0">
-          {% include "chat/ui/partials/call_stage.html" with host_controls=False %}
+          <template x-if="inCall">
+            <div class="flex-1 flex min-w-0">{% include "chat/ui/partials/call_stage.html" with host_controls=False %}</div>
+          </template>
+          <template x-if="!inCall">
+            <section class="flex-1 flex items-center justify-center p-4 bg-base-200">
+              <div
+                class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-3 items-center text-center"
+              >
+                <span
+                  class="loading loading-dots loading-lg text-primary"
+                  x-show="!joinError"
+                ></span>
+                <i data-lucide="phone-off" class="w-8 h-8 opacity-60" x-show="joinError"></i>
+                <h1 class="text-lg font-semibold">Waiting for the host to start the call</h1>
+                <p
+                  class="text-sm text-base-content/70"
+                  x-show="joinError"
+                  x-text="joinError"
+                ></p>
+                <p
+                  class="text-xs text-base-content/50"
+                  x-show="waitingCapacityLine()"
+                  x-text="waitingCapacityLine()"
+                ></p>
+                <button
+                  class="btn btn-sm btn-primary"
+                  x-show="joinError"
+                  @click="joinWhenCallStarts()"
+                >
+                  Try again
+                </button>
+                <p class="text-xs text-base-content/50">You can keep chatting below while you wait.</p>
+              </div>
+            </section>
+          </template>
           <aside
             class="w-96 max-w-[40%] border-l border-base-300 flex flex-col min-w-0 bg-base-100"
           >
             <div class="px-3 py-2 border-b border-base-300 text-sm font-medium">Meeting chat</div>
             <div class="flex-1 overflow-y-auto p-3 space-y-2" x-ref="messageList">
               <template x-for="m in messages" :key="m.uuid">
-                <div class="chat" :class="isOwnMessage(m) ? 'chat-end' : 'chat-start'">
-                  <div class="chat-header flex items-center gap-1 text-xs">
-                    <span x-text="m.author.display_name"></span>
-                    <span class="badge badge-xs badge-outline" x-show="m.author.is_guest">Guest</span>
-                    <time class="opacity-50" x-text="formatTime(m.created_at)"></time>
-                  </div>
-                  <div
-                    class="chat-bubble chat-bubble-sm whitespace-pre-wrap break-words"
-                    x-text="m.body"
-                  ></div>
+                <div>
+                  {# "Call started" and its kin are the room narrating itself, not the host talking. #}
+                  <template x-if="isSystemMessage(m)">
+                    <div class="text-center text-xs text-base-content/50 py-1" x-text="m.body"></div>
+                  </template>
+                  <template x-if="!isSystemMessage(m)">
+                    <div class="chat" :class="isOwnMessage(m) ? 'chat-end' : 'chat-start'">
+                      <div class="chat-header flex items-center gap-1 text-xs">
+                        <span x-text="m.author.display_name"></span>
+                        <span class="badge badge-xs badge-outline" x-show="m.author.is_guest">Guest</span>
+                        <time class="opacity-50" x-text="formatTime(m.created_at)"></time>
+                      </div>
+                      <div
+                        class="chat-bubble chat-bubble-sm whitespace-pre-wrap break-words"
+                        x-text="m.body"
+                      ></div>
+                    </div>
+                  </template>
                 </div>
               </template>
             </div>

@@ -5,6 +5,10 @@
 // The guest token never travels in a URL: it is sent as the X-Meeting-Token
 // header, which is why the event stream below is a fetch() reader rather
 // than an EventSource (which cannot set headers).
+//
+// "over" is a one-way door, and only meeting_ended, a refusal or a removal
+// opens it. A call that ends is not the meeting ending - the host can start
+// another one - so that leaves the guest in the room, waiting.
 
 /**
  * Split a raw SSE buffer into complete frames plus the trailing partial one.
@@ -35,23 +39,29 @@ function chatMeetParseSseChunk(buffer) {
   return { frames, rest };
 }
 
+const CHAT_MEET_BACKOFF_START_MS = 1000;
+const CHAT_MEET_BACKOFF_MAX_MS = 30000;
+
 window.chatMeetSseMixin = function chatMeetSseMixin() {
   return {
     _streamAbort: null,
-    _streamSawFrame: false,
     _lastEventId: null,
-    _streamBackoffMs: 1000,
+    _streamBackoffMs: CHAT_MEET_BACKOFF_START_MS,
 
     _openStream() {
-      if (this._streamAbort) return;
+      if (this._streamAbort) return Promise.resolve();
       const controller = new AbortController();
       this._streamAbort = controller;
       const headers = { 'X-Meeting-Token': this.token };
       if (this._lastEventId) headers['Last-Event-ID'] = this._lastEventId;
-      fetch(`/api/v1/chat/meet/${this.slug}/stream`, { headers, signal: controller.signal })
+      // Per connection, not per page: "the server answered and said nothing"
+      // and "the connection never got there" call for opposite reactions.
+      let answered = false;
+      let sawFrame = false;
+      return fetch(`/api/v1/chat/meet/${this.slug}/stream`, { headers, signal: controller.signal })
         .then(async (resp) => {
           if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
-          this._streamBackoffMs = 1000;
+          answered = true;
           const reader = resp.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
@@ -62,26 +72,27 @@ window.chatMeetSseMixin = function chatMeetSseMixin() {
             const { frames, rest } = chatMeetParseSseChunk(buffer);
             buffer = rest;
             for (const frame of frames) {
-              this._streamSawFrame = true;
+              sawFrame = true;
+              // Delivery is what proves the connection healthy, not the
+              // status line: a stream that 200s and dies every time would
+              // otherwise reconnect forever at the shortest delay.
+              this._streamBackoffMs = CHAT_MEET_BACKOFF_START_MS;
               if (frame.id) this._lastEventId = frame.id;
               await this._dispatchStreamEvent(frame.payload);
             }
           }
         })
-        .catch(() => { /* closed or failed: the reconnect below decides */ })
+        .catch(() => { /* transport failure or non-2xx: answered stays false */ })
         .finally(() => {
           this._streamAbort = null;
+          if (controller.signal.aborted) return;
           if (this.phase !== 'lobby' && this.phase !== 'room') return;
-          // A first stream that closes without a single frame is the server
-          // saying "nothing for you": the guest was refused, removed or the
-          // meeting ended before this connection. Ask /state once instead of
+          // A 2xx that closed without a single frame is the server saying
+          // "nothing for you": the guest was refused, removed or the meeting
+          // ended before this connection. Ask /state once instead of
           // reconnecting into the same empty answer forever.
-          if (!this._streamSawFrame) {
-            this.resume();
-            return;
-          }
-          setTimeout(() => this._openStream(), this._streamBackoffMs);
-          this._streamBackoffMs = Math.min(this._streamBackoffMs * 2, 30000);
+          if (answered && !sawFrame) return this.resume();
+          this._scheduleRetry(() => this._openStream());
         });
     },
 
@@ -90,6 +101,14 @@ window.chatMeetSseMixin = function chatMeetSseMixin() {
         this._streamAbort.abort();
         this._streamAbort = null;
       }
+    },
+
+    // One ladder for both the stream and the state read: whichever of the two
+    // is failing, the page keeps exactly one timer pending and backs off.
+    _scheduleRetry(fn) {
+      if (this.phase !== 'lobby' && this.phase !== 'room') return;
+      setTimeout(fn, this._streamBackoffMs);
+      this._streamBackoffMs = Math.min(this._streamBackoffMs * 2, CHAT_MEET_BACKOFF_MAX_MS);
     },
 
     async _dispatchStreamEvent(payload) {
@@ -141,19 +160,23 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
           this.onIncomingMessage(await resp.json());
           this.draft = '';
         } else {
-          this.error = 'Your message was not sent.';
+          window.AppAlert.error('Your message was not sent.');
         }
+      } catch (e) {
+        window.AppAlert.error('Your message was not sent.');
       } finally {
         this.sending = false;
       }
     },
 
-    // A guest message carries no id of its own author beyond the name the
-    // guest typed, so "mine" is that name matching. Two guests picking the
-    // same name only mis-align a bubble; nothing else reads this.
     isOwnMessage(message) {
       const author = message && message.author;
-      return !!(author && author.is_guest && author.display_name === this.displayName);
+      return !!(author && author.participant_key
+        && author.participant_key === this.currentParticipantKey);
+    },
+
+    isSystemMessage(message) {
+      return !!(message && message.kind === 'system');
     },
 
     formatTime(iso) {
@@ -181,6 +204,7 @@ function chatMeetApp(slug) {
     token: null,
     knocking: false,
     error: '',
+    joinError: '',
     overReason: null,
     callRole: 'room',
     // The call mixin gates several of its methods on "is there a conversation
@@ -194,7 +218,7 @@ function chatMeetApp(slug) {
     callElapsed: '00:00',
     _callStartMs: null,
     _durationTimer: null,
-    _callWatchTimer: null,
+    _reapRejoins: 0,
     // After the spreads: chatCallMixin declares its own null default.
     currentParticipantKey: null,
 
@@ -202,14 +226,19 @@ function chatMeetApp(slug) {
       this._initCallSounds?.();
       await this.loadSummary();
       const stored = sessionStorage.getItem(`meet:${slug}`);
-      if (stored) {
-        try {
-          const saved = JSON.parse(stored);
-          this.token = saved.token;
-          this.displayName = saved.displayName;
-          this.currentParticipantKey = saved.participantKey;
-          await this.resume();
-        } catch (e) { this.reset(); }
+      let saved = null;
+      try {
+        saved = stored ? JSON.parse(stored) : null;
+      } catch (e) {
+        saved = null;
+      }
+      if (saved === null) {
+        if (stored) this.reset();
+      } else {
+        this.token = saved.token;
+        this.displayName = saved.displayName;
+        this.currentParticipantKey = saved.participantKey;
+        await this.resume();
       }
       window.addEventListener('pagehide', () => { if (this.inCall) this._leaveBeacon(); });
     },
@@ -225,8 +254,17 @@ function chatMeetApp(slug) {
       if (json) headers['Content-Type'] = 'application/json';
       return headers;
     },
-    // A guest reaped by the stale sweep (12s without a heartbeat) gets 400
-    // on the next heartbeat instead of silently re-arming presence: re-join.
+    // The slug is what addresses every guest endpoint; a session is what says
+    // there is a call to leave. _callEndpoint discards the value, so this is
+    // read for its truthiness as much as for what it names.
+    _leaveTarget() {
+      return this.callSession ? this.slug : null;
+    },
+    // The member room re-advertises a joinable call in a banner; this page
+    // has none, and leaveCall's tail call would otherwise re-read the state
+    // of a call the guest has just left.
+    _syncCallBanner() {},
+
     async _sendHeartbeat() {
       if (!this.inCall) return;
       let resp;
@@ -237,11 +275,35 @@ function chatMeetApp(slug) {
           body: JSON.stringify({ media_state: this._mediaState() }),
         });
       } catch (e) { return; }
-      if (resp.status === 400 || resp.status === 404) {
-        this.inCall = false;
-        await this.resume();
+      // The call ended under us: nothing to be in any more, but the meeting
+      // is still open and the host may start another one.
+      if (resp.status === 409) {
+        this.callSession = null;
+        await this.leaveCall();
+        await this.waitForCall();
+        return;
       }
+      // Reaped by the stale sweep (12s without a heartbeat), or the token
+      // stopped resolving. Tear the call down before asking for our own state
+      // again: the interval and the microphone capture from this round would
+      // otherwise both survive into the next one.
+      if (resp.status === 400 || resp.status === 404) {
+        this.callSession = null;
+        await this.leaveCall();
+        // The re-join arms a heartbeat that fires at once, so a server that
+        // refuses every heartbeat would re-capture the microphone in a tight
+        // loop. Give up after a couple of tries and let the guest decide.
+        if (this._reapRejoins >= 2) {
+          await this.waitForCall('We lost your place in the call.');
+          return;
+        }
+        this._reapRejoins += 1;
+        await this.resume();
+        return;
+      }
+      if (resp.ok) this._reapRejoins = 0;
     },
+
     async _refreshCallState() {
       const resp = await fetch(this._callEndpoint(''), { headers: this._callHeaders() });
       if (!resp.ok) return;
@@ -251,32 +313,18 @@ function chatMeetApp(slug) {
       this.callSession = data.active ? data : null;
       this.callParticipants = data.active ? (data.participants || []) : [];
     },
-    // The member room re-advertises a joinable call in a banner; this page
-    // has none, and leaveCall's tail call would otherwise re-read the state
-    // of a call the guest has just left.
-    _syncCallBanner() {},
-    // The base beacon is keyed on the call's conversation id, which a guest's
-    // state never carries. Same POST, addressed the guest way.
-    _leaveBeacon() {
-      if (!this.token) return;
-      try {
-        fetch(this._callEndpoint('leave'), {
-          method: 'POST',
-          headers: this._callHeaders(),
-          keepalive: true,
-        });
-      } catch (e) { /* the page is going away */ }
-    },
 
     // -- The meeting itself ----------------------------------
     async loadSummary() {
-      const resp = await fetch(`/api/v1/chat/meet/${this.slug}`);
-      this.summary = resp.ok ? await resp.json() : null;
+      try {
+        const resp = await fetch(`/api/v1/chat/meet/${this.slug}`);
+        this.summary = resp.ok ? await resp.json() : null;
+      } catch (e) { /* the summary is decoration: the state read is the gate */ }
     },
     summaryLine() {
       if (!this.summary || !this.summary.start) return '';
       const d = new Date(this.summary.start);
-      return isNaN(d) ? '' : d.toLocaleString();
+      return isNaN(d) ? '' : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
     },
     isFull() {
       return !!(this.summary && this.summary.max_participants
@@ -285,6 +333,10 @@ function chatMeetApp(slug) {
     capacityLabel() {
       const max = this.callSession && this.callSession.max_participants;
       return max ? `${this.callParticipants.length} / ${max}` : String(this.callParticipants.length);
+    },
+    waitingCapacityLine() {
+      if (!this.summary || !this.summary.max_participants) return '';
+      return `${this.summary.participant_count} / ${this.summary.max_participants} in the call`;
     },
 
     async knock() {
@@ -300,6 +352,9 @@ function chatMeetApp(slug) {
         });
         if (resp.status === 423) { this.error = 'This meeting is locked.'; return; }
         if (resp.status === 429) { this.error = 'Too many attempts. Please wait a moment.'; return; }
+        // The server strips control characters before validating, so a name
+        // made only of those comes back rejected even though it looked typed.
+        if (resp.status === 400) { this.error = 'Please enter a name.'; return; }
         if (!resp.ok) { this.error = 'This meeting cannot be joined right now.'; return; }
         const data = await resp.json();
         this.token = data.token;
@@ -323,9 +378,15 @@ function chatMeetApp(slug) {
       let resp;
       try {
         resp = await fetch(this._callEndpoint(''), { headers: this._callHeaders() });
-      } catch (e) { return; }
+      } catch (e) {
+        this._scheduleRetry(() => this.resume());
+        return;
+      }
+      // The token names nobody here: nothing to resume, back to the name form.
       if (resp.status === 404) { this.reset(); return; }
-      if (!resp.ok) return;
+      // Throttled, or the server is having a moment. Retrying is what keeps a
+      // lobby from sitting there with no stream and no timer pending.
+      if (!resp.ok) { this._scheduleRetry(() => this.resume()); return; }
       const data = await resp.json();
       if (data.admitted) {
         this.phase = 'room';
@@ -340,32 +401,39 @@ function chatMeetApp(slug) {
       }
     },
 
-    // A guest admitted before anyone starts the call cannot be told when one
-    // starts: call_started only fans out to the session's own participants,
-    // and this guest is not one yet. So the room phase re-reads its own state
-    // until there is a call to join, then joins it once.
+    // Joining is attempted exactly twice: when the room opens, and when
+    // call_started says there is now something to join. Nothing polls.
     async joinWhenCallStarts() {
       if (this.inCall || this.joiningCall) return;
+      this.joinError = '';
       await this._refreshCallState();
-      if (this.callSession) {
-        this._disarmCallWatch();
-        await this.startOrJoinCall();
-        if (this.inCall) this._startDurationTimer();
+      if (!this.callSession) {
+        await this.loadSummary();
         return;
       }
-      this._armCallWatch();
+      await this.startOrJoinCall();
+      if (this.inCall) {
+        // Deliberately not resetting _reapRejoins here: a join the server
+        // accepts proves nothing about presence, and resetting on it is what
+        // would turn "reaped, re-join, reaped again" into an endless loop.
+        // Only a heartbeat the server accepts clears the count.
+        this._startDurationTimer();
+        return;
+      }
+      // startOrJoinCall reports the specific cause as a toast (a denied
+      // microphone, a full call) and returns; the room says so too, so the
+      // guest is not left staring at an empty stage.
+      await this.waitForCall('You were not connected. Check that your microphone is allowed, then try again.');
     },
 
-    _armCallWatch() {
-      if (this._callWatchTimer) return;
-      this._callWatchTimer = setInterval(() => {
-        if (this.phase !== 'room' || this.inCall) { this._disarmCallWatch(); return; }
-        this.joinWhenCallStarts();
-      }, 8000);
-    },
-
-    _disarmCallWatch() {
-      if (this._callWatchTimer) { clearInterval(this._callWatchTimer); this._callWatchTimer = null; }
+    // In the room, with no call to be in. Not a terminal state: the stream
+    // stays open, and call_started is what ends the wait.
+    async waitForCall(reason = '') {
+      this.joinError = reason;
+      this.phase = 'room';
+      this._stopDurationTimer();
+      this.callElapsed = '00:00';
+      await this.loadSummary();
     },
 
     async onMeetingEvent(payload) {
@@ -382,8 +450,21 @@ function chatMeetApp(slug) {
       }
     },
 
-    onCallEnded() {
-      return this.leaveCall().finally(() => this.finish('ended'));
+    // The base compares detail.conversation_id against activeConversation.uuid;
+    // a guest's copy of call_started carries no conversation id at all, so the
+    // base would drop the one event a waiting guest is here for.
+    onCallStarted() {
+      return this.joinWhenCallStarts();
+    },
+
+    async onCallEnded(detail) {
+      if (this.callSession && detail && detail.session_id !== this.callSession.session_id) return;
+      // Cleared first, so leaveCall tears the local call down without posting
+      // a leave for a session the server has already closed.
+      this.callSession = null;
+      this.callParticipants = [];
+      await this.leaveCall();
+      await this.waitForCall();
     },
 
     // Copied from the member room: a departing peer that held the manual pin
@@ -405,16 +486,17 @@ function chatMeetApp(slug) {
     },
 
     leaveRoom() {
-      return this.leaveCall().finally(() => {
-        this._leaveBeacon();
-        this.finish('left');
-      });
+      return this.leaveCall().finally(() => this.finish('left'));
     },
 
     finish(reason) {
       this._closeStream();
-      this._disarmCallWatch();
       this._stopDurationTimer();
+      // The token dies with the page. Without this, a reload would restore it,
+      // /state would still answer "admitted" (leaving only stamps left_at) and
+      // the guest would be put back in the call, microphone live, having
+      // touched nothing.
+      this._forgetToken();
       this.overReason = reason;
       this.phase = 'over';
     },
@@ -436,15 +518,19 @@ function chatMeetApp(slug) {
       return this.overReason !== 'refused' && this.overReason !== 'removed';
     },
 
-    reset() {
-      this._closeStream();
-      this._disarmCallWatch();
-      this._stopDurationTimer();
+    _forgetToken() {
       sessionStorage.removeItem(`meet:${this.slug}`);
       this.token = null;
       this.currentParticipantKey = null;
+    },
+
+    reset() {
+      this._closeStream();
+      this._stopDurationTimer();
+      this._forgetToken();
       this.overReason = null;
       this.error = '';
+      this.joinError = '';
       this.messages = [];
       this.phase = 'name';
     },

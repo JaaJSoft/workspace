@@ -107,6 +107,14 @@ window.chatCallMixin = function chatCallMixin() {
       if (json) headers['Content-Type'] = 'application/json';
       return headers;
     },
+    // What the leave POST is addressed to, and - being null or not - whether
+    // there is anything to leave at all. Always the call's own conversation,
+    // never the one being viewed: you stay in a call while browsing
+    // elsewhere. The guest page overrides it, because a guest's call state
+    // carries no conversation id to answer with.
+    _leaveTarget() {
+      return this.callSession && this.callSession.conversation_id;
+    },
 
     _loadIceServers() {
       if (this._iceServers.length) return this._iceServers;
@@ -210,9 +218,10 @@ window.chatCallMixin = function chatCallMixin() {
       // through leaveCall.
       this._stopSpeakingMeter?.();
       this._stopDurationTimer?.();
-      // Leave the call's own conversation, captured before we clear the session
-      // (you may be viewing a different conversation while in the call).
+      // Both captured before we clear the session: convId names the room tab
+      // the observer has to be told about, leaveTarget addresses the POST.
       const convId = this.callSession && this.callSession.conversation_id;
+      const leaveTarget = this._leaveTarget();
       this._playCallCue('leave');
       this._stopHeartbeat();
       for (const id of Object.keys(this._peers)) this._closePeer(id);
@@ -229,9 +238,9 @@ window.chatCallMixin = function chatCallMixin() {
           this._roomChannel.postMessage({ type: 'room-closed', conversationId: convId });
         } catch (e) { /* best effort */ }
       }
-      if (convId) {
+      if (leaveTarget) {
         try {
-          await fetch(this._callEndpoint('leave', convId), {
+          await fetch(this._callEndpoint('leave', leaveTarget), {
             method: 'POST',
             headers: this._callHeaders(),
             keepalive: true,
@@ -272,10 +281,10 @@ window.chatCallMixin = function chatCallMixin() {
     // module, reload, tab close). keepalive lets the POST outlive the page and,
     // unlike sendBeacon, carries the CSRF header the endpoint requires.
     _leaveBeacon() {
-      const convId = this.callSession && this.callSession.conversation_id;
-      if (!convId) return;
+      const leaveTarget = this._leaveTarget();
+      if (!leaveTarget) return;
       try {
-        fetch(this._callEndpoint('leave', convId), {
+        fetch(this._callEndpoint('leave', leaveTarget), {
           method: 'POST',
           headers: this._callHeaders(),
           keepalive: true,

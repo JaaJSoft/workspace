@@ -184,9 +184,21 @@ def end_meeting(meeting, now=None):
     # reclaims the lobby slot it was holding rather than leaving it WAITING
     # forever (the slug is stable for the whole series, and nothing else
     # ever purges these rows).
-    MeetingGuest.objects.filter(
-        meeting=meeting, occurrence_start=start, state=MeetingGuest.State.WAITING
-    ).update(state=MeetingGuest.State.REFUSED)
+    #
+    # Resolved before the update, so each swept guest can be told: without
+    # the event their stream has nothing to yield and closes on a zero-byte
+    # 200, which reads as a broken connection rather than a meeting that
+    # ended. meeting_ended, not meeting_refused - nobody turned them away.
+    swept = list(
+        MeetingGuest.objects.filter(
+            meeting=meeting, occurrence_start=start, state=MeetingGuest.State.WAITING
+        ).only("uuid")
+    )
+    MeetingGuest.objects.filter(pk__in=[g.pk for g in swept]).update(
+        state=MeetingGuest.State.REFUSED
+    )
+    for guest in swept:
+        _notify_guest(guest, "meeting_ended")
 
     session = get_active_call(meeting.conversation_id)
     if session is not None:

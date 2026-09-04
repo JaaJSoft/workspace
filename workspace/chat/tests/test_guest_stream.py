@@ -93,7 +93,25 @@ class GuestStreamTests(TestCase):
 
         self.assertTrue(terminated)
         parsed = [parse_sse(e) for e in events]
+        # Exactly once: an ADMITTED row survives its occurrence closing, so
+        # it is the synthesized meeting_ended that fires here - never that
+        # one plus the enqueued one the WAITING sweep sends.
+        self.assertEqual([name for name, _data in parsed].count("meeting_ended"), 1)
         self.assertIn(("meeting_ended", {}), parsed)
+
+    def test_ending_the_meeting_tells_a_waiting_guest_once(self):
+        # I-3 regression: end_meeting swept WAITING rows to REFUSED without a
+        # word, and the stream then returned before its first yield - the
+        # swept guest got a zero-byte 200 and no explanation at all.
+        _guest, token = self._waiting()
+        end_meeting(self.meeting, now=self.now)
+
+        clock = FakeClock(self.now)
+        events, terminated = drive_guest_stream(token, self.meeting.uuid, clock)
+
+        self.assertTrue(terminated)
+        parsed = [parse_sse(e) for e in events]
+        self.assertEqual(parsed, [("meeting_ended", {})])
 
     def test_closes_when_guest_removed(self):
         guest, token = self._admit()

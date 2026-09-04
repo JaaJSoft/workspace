@@ -48,8 +48,8 @@ not ``resolve_guest``, and why gating this generator's own mailbox drain on
 ``resolve_guest`` would reintroduce the same dead letter one layer down. This
 stream drains the mailbox through ``guest_for_token`` (the WAITING-tolerant
 lookup) BEFORE the gate check every cycle, emits any of the four
-``meeting_*`` lifecycle events found there, and stops on the two terminal
-ones (refused, removed) - option (a) from the brief, chosen over dropping
+``meeting_*`` lifecycle events found there, and stops on the three terminal
+ones (refused, removed, ended) - option (a) from the brief, chosen over dropping
 the enqueues because a stream is exactly the transport those two events were
 always meant for: a removed or refused guest learns why, instead of a
 channel that silently goes quiet. The same mailbox-before-gate ordering is
@@ -59,11 +59,16 @@ other kind of content - a WAITING guest's ``call_*``/``message`` mailbox
 contents are never forwarded, only a cycle where ``resolve_guest`` itself
 resolves the guest as ADMITTED forwards those (see ``admitted`` below).
 
-``meeting_ended`` is never enqueued anywhere (ending a meeting sweeps only
-WAITING rows, see ``end_meeting``); it is synthesized here, mirroring
-``MeetingGuestStateView``'s own ``reported_state == "ended"`` case: an
-ADMITTED guest whose gate check nonetheless fails (closed occurrence, or the
-window elapsed) is reported as ended, then the stream stops.
+``meeting_ended`` reaches a guest two ways, and never both in one stream.
+``end_meeting`` enqueues it to each WAITING row it sweeps, because that
+sweep is the only thing that would otherwise happen to them silently - the
+gate rejects the swept row on the next cycle and the loop returns before any
+yield, closing on a zero-byte 200. An ADMITTED row is never swept, so it
+never carries the enqueued event; for it the same name is synthesized below,
+mirroring ``MeetingGuestStateView``'s own ``reported_state == "ended"``
+case: an ADMITTED guest whose gate check nonetheless fails (closed
+occurrence, or the window elapsed) is reported as ended, then the stream
+stops. Both spellings are terminal.
 
 Resume across a reconnect: the 600s budget forces one on schedule, and
 ``core.views.sse`` handles it by reading ``Last-Event-Id`` - this stream does
@@ -101,8 +106,17 @@ _POLL_INTERVAL_SECONDS = 1
 _GATE_INTERVAL_SECONDS = 2
 _MESSAGE_BATCH_LIMIT = 50
 
-_LIFECYCLE_EVENTS = {"meeting_admitted", "meeting_refused", "meeting_removed"}
-_TERMINAL_LIFECYCLE_EVENTS = {"meeting_refused", "meeting_removed"}
+_LIFECYCLE_EVENTS = {
+    "meeting_admitted",
+    "meeting_refused",
+    "meeting_removed",
+    "meeting_ended",
+}
+_TERMINAL_LIFECYCLE_EVENTS = {
+    "meeting_refused",
+    "meeting_removed",
+    "meeting_ended",
+}
 
 
 def _resolve_since(last_event_id, guest, fallback):

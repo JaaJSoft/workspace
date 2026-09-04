@@ -45,6 +45,7 @@ from ..models import CallParticipant, Conversation, Message
 from ..serializers import GuestMessageSerializer, MessageCreateSerializer
 from ..services import calls
 from ..services.call_signaling import send_signal
+from ..services.conversations import active_member_users
 from ..services.guest_messages import message_queryset
 from ..services.guest_stream import stream_guest_events
 from ..services.meeting_guests import guest_for_token, resolve_guest
@@ -492,7 +493,15 @@ class MeetingGuestMessagesView(APIView):
         # ever naming a conversation to write into.
         conversation_id = guest.meeting.conversation_id
 
-        mention_map, has_everyone = build_mention_map(body)
+        # Narrowed to the conversation's own active members: an unnarrowed
+        # pool resolves any username in the workspace, and the rendered badge
+        # carries that user's id - a username-existence oracle and a
+        # username -> id map for anyone holding a guest token. The narrowing
+        # also bounds mentioned_user_ids, which deliver_message turns into
+        # ThreadParticipant rows.
+        mention_map, _has_everyone = build_mention_map(
+            body, users=active_member_users(conversation_id)
+        )
         mentioned_user_ids = {uid for uid in mention_map.values() if uid}
         body_html = render_message_body(body, mention_map=mention_map or None)
 
@@ -546,7 +555,9 @@ class MeetingGuestMessagesView(APIView):
                 conversation,
                 message,
                 mentioned_user_ids=mentioned_user_ids,
-                mention_everyone=has_everyone,
+                # Never the body's own @everyone: an unauthenticated party
+                # must not fire a high-priority push at every member.
+                mention_everyone=False,
             )
 
         # Deliberately no AI bot trigger here, unlike MessageListView.post:

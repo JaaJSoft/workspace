@@ -184,19 +184,31 @@ class GuestContainmentFixture(TestCase):
             str(self.control_event.uuid),
             str(self.control_guest.uuid),
             str(self.control_message.uuid),
+            # A mention badge naming a user outside this meeting: the guest
+            # message path resolves @mentions against the meeting's own
+            # members only, so this pairing can never legitimately render.
+            f'data-user-id="{self.foreign_user.id}"',
         ]
 
     # --- the audit itself ---
 
-    def assert_contained(self, label, text):
+    def assert_contained(self, label, text, echo=()):
         """Fail if *text* carries anything from outside the guest's meeting.
 
         Case-insensitive: a uuid re-spelled in upper case is the same
         disclosure. Emails and foreign conversation ids are re-read from the
         database on every call rather than snapshotted in setUp, so a row a
         test creates on its own is covered too.
+
+        *echo* is text the caller submitted in that same request: a route
+        that repeats a guest's own input back cannot disclose anything by
+        doing so, and it is stripped from the haystack first. What the
+        server *adds* around it stays in - a mention badge's
+        ``data-user-id`` is its own sentinel.
         """
         haystack = text.lower()
+        for submitted in echo:
+            haystack = haystack.replace(submitted.lower(), "")
 
         for sentinel in self.sentinels:
             self.assertNotIn(
@@ -305,10 +317,11 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
                 201,
                 self.client.post(
                     self.url("messages"),
-                    {"body": "hello from the guest"},
+                    {"body": f"hello from the guest @{FOREIGN_USERNAME}"},
                     format="json",
                     **header,
                 ),
+                (f"@{FOREIGN_USERNAME}",),
             ),
             ("GET state", 200, self.client.get(self.url("state"), **header)),
             (
@@ -325,13 +338,16 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
                 "GET messages",
                 200,
                 self.client.get(f"{self.url('messages')}?limit=50", **header),
+                (f"@{FOREIGN_USERNAME}",),
             ),
         ]
 
-        for label, expected_status, response in walk:
+        for entry in walk:
+            label, expected_status, response = entry[:3]
+            echo = entry[3] if len(entry) > 3 else ()
             with self.subTest(route=label):
                 self.assertEqual(response.status_code, expected_status, label)
-                self.assert_contained(label, self.body_text(response))
+                self.assert_contained(label, self.body_text(response), echo=echo)
 
         stream_response, frames = self.drain_stream(self.token)
         self.assertEqual(stream_response.status_code, 200)

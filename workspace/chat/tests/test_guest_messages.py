@@ -24,6 +24,7 @@ from workspace.chat.models import (
 from workspace.chat.services.meeting_guests import issue_token
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import create_meeting
+from workspace.notifications.models import Notification
 
 from .meeting_fixtures import guest_with_token, make_event
 
@@ -346,4 +347,45 @@ class GuestMessagesTests(TestCase):
         self.assertEqual(bodies, ["during"])
         self.assertEqual(
             {m["uuid"] for m in resp.data["messages"]}, {str(in_window.pk)}
+        )
+
+    # --- C1: a guest's mentions resolve against the meeting's members only ---
+
+    def test_guest_mention_of_a_non_member_stays_literal(self):
+        outsider = User.objects.create_user(username="zz_outsider", password="x")
+        guest, token = self._admit()
+
+        resp = self._post(token, {"body": "hi @zz_outsider"})
+        self.assertEqual(resp.status_code, 201)
+        self.assertNotIn(f'data-user-id="{outsider.id}"', resp.data["body_html"])
+        self.assertNotIn("mention-badge", resp.data["body_html"])
+
+        listing = self._get(token)
+        posted = next(
+            m for m in listing.data["messages"] if m["uuid"] == resp.data["uuid"]
+        )
+        self.assertNotIn(f'data-user-id="{outsider.id}"', posted["body_html"])
+
+    def test_guest_mention_of_a_member_resolves(self):
+        guest, token = self._admit()
+        resp = self._post(token, {"body": "hi @host"})
+        self.assertEqual(resp.status_code, 201)
+        self.assertIn(f'data-user-id="{self.owner.id}"', resp.data["body_html"])
+
+    def test_guest_everyone_does_not_notify_a_mentions_only_member(self):
+        quiet = User.objects.create_user(username="quiet", password="x")
+        ConversationMember.objects.create(
+            conversation=self.meeting.conversation,
+            user=quiet,
+            notification_level=ConversationMember.NotificationLevel.MENTIONS,
+        )
+        guest, token = self._admit()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self._post(token, {"body": "@everyone stand up"})
+        self.assertEqual(resp.status_code, 201)
+
+        self.assertFalse(
+            Notification.objects.filter(recipient=quiet).exists(),
+            "a guest's @everyone fired a notification at a mentions-only member",
         )

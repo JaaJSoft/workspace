@@ -288,6 +288,7 @@
   {% if host_controls %}
     <template x-if="meeting">
       <div
+        data-testid="lobby-panel"
         class="absolute bottom-24 right-4 w-72 z-20 card bg-base-100 shadow-xl border border-base-300"
         x-show="lobbyOpen"
         x-transition

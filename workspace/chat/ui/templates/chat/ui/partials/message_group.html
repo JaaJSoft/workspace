@@ -19,7 +19,8 @@
   attributes; omitting them (the hide_quote_for suppression) omits the quote.
 {% endcomment %}
 {% with author=group.author is_own=group.is_own is_bot=group.is_bot messages=group.messages first_msg=group.messages.0 prefix=id_prefix|default:"msg" %}
-  <chat-message-group {% if is_own %}own{% endif %} author-id="{{ author.id }}" author-username="{{ author.username }}" author-name="{{ author.get_full_name|default:author.username }}" id-prefix="{{ prefix }}">
+  {# A guest group has no user row: author.id is None, and author-id="None" would send the avatar element after /api/v1/users/None/avatar. #}
+  <chat-message-group {% if is_own %}own{% endif %} {% if author.id %}author-id="{{ author.id }}"{% endif %} author-username="{{ author.username }}" author-name="{{ author.get_full_name|default:author.username }}" id-prefix="{{ prefix }}">
 
   {% for msg in messages %}
     {% if msg.deleted_at %}

@@ -193,6 +193,20 @@ class GuestRuntimeTests(TestCase):
         resp = self._post("heartbeat", token)
         self.assertEqual(resp.status_code, 409)
 
+    def test_heartbeat_before_joining_the_call_is_refused(self):
+        # A heartbeat writes presence and fans out call_participant_updated,
+        # at 120/min, for a participant table this guest is not in.
+        # MeetingGuestSignalView already requires the row; so must this.
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        guest, token = self._admit()
+
+        resp = self._post("heartbeat", token)
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertNotIn(guest_key(guest.uuid), calls.get_presence(session.uuid))
+
     def test_heartbeat_drops_unknown_media_state_keys(self):
         # I-3: request.data is anonymous input merged verbatim into the
         # shared per-session presence cache and rebroadcast to every peer -
@@ -245,6 +259,22 @@ class GuestRuntimeTests(TestCase):
         keys = set(resp.data.keys())
         for forbidden in ("title", "conversation_id", "conversation", "participants"):
             self.assertNotIn(forbidden, keys)
+
+    def test_state_for_a_waiting_guest_of_a_past_occurrence_is_ended(self):
+        # The stream 404s this same token (its WAITING gate checks the
+        # occurrence), so /state reporting "waiting" forever told the guest
+        # to keep waiting for a lobby nobody is watching any more.
+        token, token_hash = issue_token()
+        MeetingGuest.objects.create(
+            meeting=self.meeting,
+            display_name="Ada",
+            state=MeetingGuest.State.WAITING,
+            occurrence_start=self.occurrence_start - timedelta(weeks=1),
+            token_hash=token_hash,
+        )
+        resp = self._get("state", token)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {"admitted": False, "state": "ended"})
 
     def test_state_for_admitted_guest_with_no_active_call(self):
         guest, token = self._admit()

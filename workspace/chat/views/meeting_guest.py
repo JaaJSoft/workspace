@@ -196,9 +196,21 @@ class MeetingGuestHeartbeatView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        media_state = _sanitize_media_state(request.data.get("media_state"))
-
         key = guest_key(guest.uuid)
+        # Same requirement MeetingGuestSignalView enforces, same refusal: a
+        # heartbeat writes into the session's shared presence value and fans
+        # call_participant_updated out at up to 120/min, for a participant
+        # table this guest is not in.
+        is_own_active_participant = CallParticipant.objects.filter(
+            session=session, guest=guest, left_at__isnull=True
+        ).exists()
+        if not is_own_active_participant:
+            return Response(
+                {"detail": "Join the call before sending a heartbeat."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        media_state = _sanitize_media_state(request.data.get("media_state"))
         changed = calls.touch_presence(session.uuid, key, media_state)
         if changed:
             calls._broadcast(
@@ -318,15 +330,23 @@ class MeetingGuestStateView(APIView):
         if lobby_guest is None or lobby_guest.meeting.slug != slug:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        reported_state = lobby_guest.state
         if lobby_guest.state == MeetingGuest.State.ADMITTED:
-            # end_meeting only sweeps WAITING rows to REFUSED (see its
-            # docstring) - an ADMITTED row survives its own occurrence
-            # closing verbatim, and resolve_guest above already rejected it
-            # on the occurrence check. Report the meeting as ended rather
-            # than parroting a DB status that stopped being true.
+            # end_meeting only sweeps the WAITING rows of the occurrence it
+            # closes - an ADMITTED row survives its own occurrence closing
+            # verbatim, and resolve_guest above already rejected it on the
+            # occurrence check. Report the meeting as ended rather than
+            # parroting a DB status that stopped being true.
             reported_state = "ended"
-        else:
-            reported_state = lobby_guest.state
+        elif lobby_guest.state == MeetingGuest.State.WAITING:
+            # Same reasoning one occurrence over: a WAITING row nothing ever
+            # swept (the host never ended that occurrence, it simply
+            # elapsed) is a lobby nobody is watching any more, and the stream
+            # already 404s this same token. Reporting "waiting" would tell
+            # the guest to keep waiting for an admission that cannot come.
+            occurrence = current_occurrence(lobby_guest.meeting)
+            if occurrence is None or occurrence[0] != lobby_guest.occurrence_start:
+                reported_state = "ended"
         return Response({"admitted": False, "state": reported_state})
 
 

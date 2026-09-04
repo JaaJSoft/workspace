@@ -522,14 +522,20 @@ def leave_call_as_guest(guest):
     return _end_call(session)
 
 
-def _end_call(session):
-    """Mark a session ended, finalize its system message, broadcast call_ended."""
+def _end_call(session, recipients=None):
+    """Mark a session ended, finalize its system message, broadcast call_ended.
+
+    *recipients* is for a caller that has already closed participations
+    before getting here - the stale sweep does, and _active_guest_keys only
+    matches a still-joined guest, so resolving them below would find nobody.
+    """
     from ..models import CallSession, Meeting
 
     # Resolve who is in the call before flipping state to ENDED:
     # _active_guest_keys only matches an ACTIVE session, so computing this
     # after the save below would silently drop every guest from call_ended.
-    recipients = _active_recipient_keys(session.conversation_id)
+    if recipients is None:
+        recipients = _active_recipient_keys(session.conversation_id)
 
     session.state = CallSession.State.ENDED
     session.ended_at = timezone.now()
@@ -592,6 +598,10 @@ def cleanup_stale_participants(session):
         return False
 
     fresh = set(get_presence(session.uuid))
+    # Before anyone is marked left: _active_guest_keys matches only a guest
+    # still joined to an ACTIVE session, so resolving this after the update
+    # below would drop every guest from the call_ended fan-out.
+    recipients = _active_recipient_keys(session.conversation_id)
     # Bounded by CHAT_CALL_MAX_PARTICIPANTS, and the session row lock above
     # serializes this against concurrent joins - safe to materialize.
     active = list(CallParticipant.objects.filter(session=session, left_at__isnull=True))
@@ -614,7 +624,7 @@ def cleanup_stale_participants(session):
         session=session, left_at__isnull=True
     ).exists():
         # State is guaranteed ACTIVE here (locked + filtered above).
-        _end_call(session)
+        _end_call(session, recipients=recipients)
         return True
     return False
 

@@ -9,9 +9,9 @@ shave the poll interval off delivery latency while doubling the delivery
 paths to keep in sync; do not add one.
 
 Formatting, the periodic-reconnect budget and the keepalive cadence are
-``core.views.sse``'s, not a second dialect: ``_format_sse`` is imported
-verbatim, and ``_MAX_CONNECTION_SECONDS``/keepalive below are the same
-values that module uses. Two poll cadences, not one, mirroring the split
+``core.views.sse``'s, not a second dialect: both streams frame through
+``common.sse.format_sse``, and ``_MAX_CONNECTION_SECONDS``/keepalive below
+are the same values that module uses. Two poll cadences, not one, mirroring the split
 core itself has between its Pub/Sub timeout tick and its cache dirty-check
 throttle: the mailbox (``drain_events``, and so every ``meeting_*``/``call_*``
 event) is drained every ``_POLL_INTERVAL_SECONDS`` (1s) so call signalling
@@ -87,8 +87,8 @@ import time
 
 from django.utils import timezone
 
+from workspace.common.sse import format_sse
 from workspace.common.uuids import parse_uuid_or_none
-from workspace.core.views.sse import _format_sse
 
 from ..models import MeetingGuest, Message
 from ..serializers import GuestMessageSerializer
@@ -202,7 +202,7 @@ def stream_guest_events(
         stop = False
         just_admitted = False
         for envelope in lifecycle_events:
-            yield _format_sse(envelope["event"], envelope["data"])
+            yield format_sse(envelope["event"], envelope["data"])
             if envelope["event"] in _TERMINAL_LIFECYCLE_EVENTS:
                 stop = True
             if envelope["event"] == "meeting_admitted":
@@ -253,7 +253,7 @@ def stream_guest_events(
                     serialized = GuestMessageSerializer(
                         msg, context={"floor": guest.occurrence_start}
                     ).data
-                    yield _format_sse(
+                    yield format_sse(
                         "message",
                         {"type": "message", "message": serialized},
                         str(msg.uuid),
@@ -267,7 +267,7 @@ def stream_guest_events(
                 # ADMITTED per the DB row, yet resolve_guest just rejected
                 # it: the occurrence closed or its window elapsed - report it
                 # the way MeetingGuestStateView does, then stop.
-                yield _format_sse("meeting_ended", {})
+                yield format_sse("meeting_ended", {})
                 return
             elif lobby_guest.state != MeetingGuest.State.WAITING:
                 # REFUSED/REMOVED with nothing left to drain (already
@@ -278,7 +278,7 @@ def stream_guest_events(
 
         if admitted:
             for envelope in call_events:
-                yield _format_sse(envelope["event"], envelope["data"])
+                yield format_sse(envelope["event"], envelope["data"])
 
         if (current - last_keepalive).total_seconds() >= _KEEPALIVE_SECONDS:
             yield ":keepalive\n\n"

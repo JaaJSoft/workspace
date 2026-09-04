@@ -110,7 +110,7 @@ def drive_guest_stream(token, meeting_uuid, clock, last_event_id=None):
 
 
 def parse_sse(sse_text):
-    """Decode one _format_sse() chunk back into (event_name, data)."""
+    """Decode one format_sse() chunk back into (event_name, data)."""
     match = re.search(r"^data: (.+)$", sse_text, re.MULTILINE)
     payload = orjson.loads(match.group(1))
     return payload["event"], payload["data"]

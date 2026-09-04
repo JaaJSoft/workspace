@@ -231,6 +231,22 @@ class BroadcastGuestTests(TestCase):
         calls._broadcast(self.conv.uuid, "x", {})
         self.assertEqual(sig.drain_events(guest_key(self.guest.uuid)), [])
 
+    def test_stale_sweep_still_reaches_the_guest_with_call_ended(self):
+        # The sweep marks every stale row left_at BEFORE ending the call, and
+        # _active_guest_keys only matches an ACTIVE, still-joined guest - so
+        # _end_call's own recipient lookup found nobody and the guest never
+        # learned the call was over.
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        CallParticipant.objects.create(session=session, guest=self.guest)
+        key = guest_key(self.guest.uuid)
+        sig.drain_events(key)
+        cache.clear()
+
+        self.assertTrue(calls.cleanup_stale_participants(session))
+
+        events = [e["event"] for e in sig.drain_events(key)]
+        self.assertIn("call_ended", events)
+
     def test_broadcast_ignores_a_departed_guest(self):
         session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
         p = CallParticipant.objects.create(session=session, guest=self.guest)

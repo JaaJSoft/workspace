@@ -513,6 +513,13 @@ function chatMeetApp(slug) {
     // stays open, and call_started is what ends the wait.
     async waitForCall(reason = '') {
       if (this.phase === 'over') return;
+      // Every failed attempt ends here, and it is the last thing an attempt
+      // does - joinWhenCallStarts returns straight after - so clearing the
+      // one-retry budget cannot reopen the loop within this attempt, and the
+      // next one gets its retry back whichever way it starts: call_started,
+      // Try again, or a fresh admission. Clearing on call_started alone would
+      // leave the button without one.
+      this._refusedOnce = false;
       this.joinError = reason;
       this.phase = 'room';
       this._stopDurationTimer();

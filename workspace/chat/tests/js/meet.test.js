@@ -666,3 +666,74 @@ test('messages that arrive with the chat panel closed are counted, and reading c
   a.onIncomingMessage({ uuid: 'm5', author: { participant_key: 'u:2' } });
   assert.equal(a.unreadMessages, 1);
 });
+
+// A server whose /join refuses with a bodyless 404 while its /state keeps
+// answering "admitted, and there is a call" is inconsistent - the two share
+// one gate, so it cannot happen in production. The client must not spin on it
+// anyway: each round costs a microphone capture. The stub relents after
+// RELENT_AFTER refusals so a lost bound fails an assertion instead of hanging
+// the runner.
+const RELENT_AFTER = 6;
+
+function stubbornlyRefusingApp(extra = {}) {
+  const seen = { joins: 0, captures: 0, stopped: 0 };
+  const a = app(async (url) => {
+    if (url.endsWith('/join')) {
+      seen.joins += 1;
+      if (seen.joins <= RELENT_AFTER) {
+        return { ok: false, status: 404, json: async () => { throw new SyntaxError('no body'); } };
+      }
+      return { ok: true, status: 200, json: async () => ({ state: { active: true, session_id: 's1', participants: [] }, participant_key: 'g:1' }) };
+    }
+    if (url.endsWith('/state')) return { ok: true, status: 200, json: async () => ({ admitted: true, active: true, session_id: 's1', participants: [], participant_key: 'g:1' }) };
+    if (url.endsWith('/messages')) return { ok: true, status: 200, json: async () => ({ messages: [], has_more: false }) };
+    return { ok: true, status: 200, json: async () => ({ title: 'T', participant_count: 0, max_participants: 8 }) };
+  }, {
+    navigator: {
+      mediaDevices: {
+        getUserMedia: async () => {
+          seen.captures += 1;
+          return { getTracks: () => [{ stop() { seen.stopped += 1; }, enabled: true }] };
+        },
+      },
+    },
+    ...extra,
+  });
+  a._openStream = () => {};
+  a.token = 'tok';
+  a.phase = 'room';
+  return { a, seen };
+}
+
+test('a join that keeps answering 404 is retried once, then parked', async () => {
+  const timers = timerRecorder();
+  const { a, seen } = stubbornlyRefusingApp(timers);
+
+  await a.joinWhenCallStarts();
+  await settle();
+
+  assert.equal(seen.joins, 2, 'one attempt, one automatic retry, then it stops asking');
+  assert.equal(seen.captures, 2, 'a microphone capture per attempt, and no more');
+  assert.equal(seen.stopped, 2, 'both captures released');
+  assert.equal(a.inCall, false);
+  assert.equal(a.phase, 'room', 'parked in the room with a Try again, not thrown out');
+  assert.ok(a.joinError, 'and told why');
+  assert.deepStrictEqual(timers.delays, [], 'nothing pending to wake it back into the loop');
+  assert.equal(a._retryTimer, null);
+});
+
+test('a later call_started gets its automatic retry back', async () => {
+  const { a, seen } = stubbornlyRefusingApp();
+
+  await a.joinWhenCallStarts();
+  await settle();
+  assert.equal(seen.joins, 2);
+
+  // The host starts another call: a fresh attempt, with a fresh budget - one
+  // transient refusal must not cost the automatic retry for the whole session.
+  await a.onCallStarted({ session_id: 's2' });
+  await settle();
+
+  assert.equal(seen.joins, 4, 'the second attempt also gets one automatic retry');
+  assert.equal(a.phase, 'room');
+});

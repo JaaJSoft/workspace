@@ -553,16 +553,104 @@ def _calls_to(tree, name):
     ]
 
 
+def _is_empty_list(value):
+    """``[]`` and ``list()`` are the same emptiness to DRF, so they are the
+    same emptiness here."""
+    if isinstance(value, ast.List):
+        return not value.elts
+    return (
+        isinstance(value, ast.Call)
+        and _called_name(value.func) == "list"
+        and not value.args
+        and not value.keywords
+    )
+
+
 def _has_empty_authentication_classes(class_node):
+    """True when *class_node* empties ``authentication_classes``, however it
+    spells it.
+
+    An annotated assignment (``authentication_classes: list = []``) is an
+    ``AnnAssign``, not an ``Assign``, and a checker that reads only the latter
+    would let a view spelled that way answer strangers while never appearing
+    in the enumerated set below - the one failure mode this whole check
+    exists to prevent.
+    """
     for statement in class_node.body:
-        if not isinstance(statement, ast.Assign):
+        if isinstance(statement, ast.AnnAssign):
+            targets, value = [statement.target], statement.value
+        elif isinstance(statement, ast.Assign):
+            targets, value = statement.targets, statement.value
+        else:
             continue
-        if not isinstance(statement.value, ast.List) or statement.value.elts:
+        if value is None or not _is_empty_list(value):
             continue
-        for target in statement.targets:
-            if isinstance(target, ast.Name) and target.id == "authentication_classes":
-                return True
+        if any(
+            isinstance(target, ast.Name) and target.id == "authentication_classes"
+            for target in targets
+        ):
+            return True
     return False
+
+
+# workspace.chat.views, named either absolutely or from inside the chat package.
+_VIEW_PACKAGES = ("workspace.chat.views", "chat.views")
+_CHAT_PACKAGES = ("workspace.chat", "chat")
+
+
+def _imports_a_view(node):
+    """True when *node* pulls anything out of ``workspace.chat.views``.
+
+    Four spellings, not one. The module can be named outright
+    (``from workspace.chat.views import x``, ``from ..views import x``), or the
+    package can be hopped to and ``views`` imported as a plain name
+    (``from .. import views``, ``from workspace.chat import views``). The
+    second pair leaves ``node.module`` naming the *package*, so a check that
+    reads only ``module`` waves it through - and a later ``views.meetings.x()``
+    is exactly the backwards layering this is here to catch.
+    """
+    if isinstance(node, ast.Import):
+        return any(
+            alias.name == package or alias.name.startswith(f"{package}.")
+            for alias in node.names
+            for package in _VIEW_PACKAGES
+        )
+    if not isinstance(node, ast.ImportFrom):
+        return False
+
+    module = node.module or ""
+    if node.level == 0:
+        if any(
+            module == package or module.startswith(f"{package}.")
+            for package in _VIEW_PACKAGES
+        ):
+            return True
+    elif module == "views" or module.startswith("views."):
+        return True
+
+    hops_to_chat_package = (node.level >= 2 and not node.module) or (
+        module in _CHAT_PACKAGES
+    )
+    return hops_to_chat_package and any(alias.name == "views" for alias in node.names)
+
+
+def _imports_of(tree, name):
+    """Every ``from ... import`` in *tree* that binds *name*, alias or not."""
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and any(alias.name == name for alias in node.names)
+    ]
+
+
+def _aliased_imports_of(tree, name):
+    """Only the ones that rebind *name* to something else."""
+    return [
+        node
+        for node in _imports_of(tree, name)
+        if any(alias.name == name and alias.asname for alias in node.names)
+    ]
 
 
 class GuestSurfaceSourceTests(SimpleTestCase):
@@ -609,21 +697,11 @@ class GuestSurfaceSourceTests(SimpleTestCase):
         permission-checked layer into paths that have neither."""
         offenders = []
         for path in sorted(SERVICES_DIR.rglob("*.py")):
-            for node in ast.walk(_parse_module(path)):
-                if isinstance(node, ast.ImportFrom):
-                    module = node.module or ""
-                    absolute = node.level == 0 and module.startswith(
-                        "workspace.chat.views"
-                    )
-                    relative = node.level >= 1 and (
-                        module == "views" or module.startswith("views.")
-                    )
-                    if absolute or relative:
-                        offenders.append(f"{path.name}:{node.lineno}")
-                elif isinstance(node, ast.Import):
-                    for alias in node.names:
-                        if alias.name.startswith("workspace.chat.views"):
-                            offenders.append(f"{path.name}:{node.lineno}")
+            offenders.extend(
+                f"{path.name}:{node.lineno}"
+                for node in ast.walk(_parse_module(path))
+                if _imports_a_view(node)
+            )
 
         self.assertEqual(offenders, [])
 
@@ -634,8 +712,15 @@ class GuestSurfaceSourceTests(SimpleTestCase):
         ``is_call_locked`` / ``active_call_session_for_guest`` instead."""
         guest_views = _parse_module(VIEWS_DIR / "meeting_guest.py")
         self.assertEqual(_calls_to(guest_views, "get_active_call"), [])
+        # Nothing in this file may even reach the name: matching call sites by
+        # name alone is blind to ``import get_active_call as gac``, and every
+        # class here is anonymous, so there is no legitimate importer.
+        self.assertEqual(_imports_of(guest_views, "get_active_call"), [])
 
         meetings = _parse_module(VIEWS_DIR / "meetings.py")
+        # The host views in this file may read the call; only the rename is
+        # refused, since it is what would hide a call from the check below.
+        self.assertEqual(_aliased_imports_of(meetings, "get_active_call"), [])
         public_classes = [
             node
             for node in ast.walk(meetings)

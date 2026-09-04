@@ -475,6 +475,11 @@ window.vaultBrowser = (function () {
           // until its own slice lands, and a panel open on one of them would
           // lose its buttons mid-refresh. It also keeps the single row an
           // opened menu filled in for itself.
+          //
+          // Merging is only safe because the endpoint answers every UUID it
+          // was sent, empty list included: a row whose access was revoked
+          // comes back as [] and overwrites what it had. Were a key allowed
+          // to be missing, a stale list would survive here forever.
           this.entryActions = Object.assign({}, this.entryActions, part);
         }));
         if (generation !== this.actionsGeneration) return;

@@ -11,6 +11,7 @@ from enum import Enum
 from workspace.ai.services.llm import build_tool_content
 
 from .model import ModelResponse
+from .observers import notify
 
 
 class StopReason(Enum):
@@ -135,6 +136,5 @@ class AgentRunner:
             tool_data=self._record.tool_data or None,
             stop=stop,
         )
-        for observer in self._observers:
-            observer.on_stop(run)
+        notify(self._observers, "on_stop", run)
         return run

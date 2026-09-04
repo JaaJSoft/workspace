@@ -105,6 +105,9 @@ class ModelResponseTests(SimpleTestCase):
         self.assertIsNone(ModelResponse(content="hi").as_record()["tool_calls"])
 
 
+_TOOLS = [{"type": "function", "function": {"name": "search", "parameters": {}}}]
+
+
 class LLMModelTests(SimpleTestCase):
     @patch("workspace.ai.harness.model.call_llm")
     def test_passes_the_request_through(self, mock_call_llm):
@@ -128,7 +131,7 @@ class LLMModelTests(SimpleTestCase):
             'Let me look. {"name": "search", "arguments": {"q": "x"}}'
         )
 
-        response = LLMModel("m").complete([], tools=[])
+        response = LLMModel("m").complete([], tools=_TOOLS)
 
         (tool_call,) = response.tool_calls
         self.assertEqual(tool_call.name, "search")
@@ -149,12 +152,23 @@ class LLMModelTests(SimpleTestCase):
         self.assertEqual(response.content, '{"name": "search", "arguments": {}}')
 
     @patch("workspace.ai.harness.model.call_llm")
+    def test_a_request_offering_no_tool_is_not_read_for_calls_either(
+        self, mock_call_llm
+    ):
+        # Nothing was offered, so nothing in the text can be a call to it.
+        mock_call_llm.return_value = _result('{"name": "search", "arguments": {}}')
+
+        response = LLMModel("m").complete([], tools=[])
+
+        self.assertEqual(response.tool_calls, [])
+
+    @patch("workspace.ai.harness.model.call_llm")
     def test_native_calls_are_not_second_guessed(self, mock_call_llm):
         mock_call_llm.return_value = _result(
             '{"name": "other", "arguments": {}}',
             tool_calls=[_sdk_call("c1", "search", "{}")],
         )
 
-        response = LLMModel("m").complete([], tools=[])
+        response = LLMModel("m").complete([], tools=_TOOLS)
 
         self.assertEqual([tc.name for tc in response.tool_calls], ["search"])

@@ -2,8 +2,9 @@
 
 An observer hears of each call starting, returning and being read back,
 and of the run ending. The base class does nothing, so an observer only
-writes the methods it needs. None of them may raise: a lost step or a
-missed counter must never take down the reply it reports on.
+writes the methods it needs. A hook that raises is logged and skipped by
+:func:`notify`, never propagated: a lost step or a missed counter must not
+take down the reply it reports on.
 
 Three moments, on three threads:
 
@@ -15,6 +16,8 @@ Three moments, on three threads:
   back. Refused calls are read back here too.
 """
 
+import logging
+
 from django.conf import settings
 
 from workspace.ai.metrics import AI_TOOL_CALLS, AI_TOOL_LOOP_STOPS, AI_TOOL_ROUNDS
@@ -24,11 +27,20 @@ from workspace.ai.services.stream_steps import (
     step_recipients,
 )
 
-from .runner import StopReason
+logger = logging.getLogger(__name__)
 
 # Tool handlers report a failure to the model as a plain string rather than
 # an exception, so these prefixes are the only signal a call went wrong.
 _FAILED_RESULT_PREFIXES = ("error:", "unknown tool:")
+
+
+def notify(observers, hook, *args):
+    """Call *hook* on every observer, going on past one that fails."""
+    for observer in observers:
+        try:
+            getattr(observer, hook)(*args)
+        except Exception:
+            logger.exception("Observer %s failed on %s", type(observer).__name__, hook)
 
 
 class Observer:
@@ -98,6 +110,10 @@ class MetricsObserver(Observer):
         AI_TOOL_CALLS.labels(tool=tool, status=status).inc()
 
     def on_stop(self, run):
+        # The runner imports this module for notify(), so the enum it ends
+        # a run with is fetched here rather than at import time.
+        from .runner import StopReason
+
         if run.stop in (StopReason.ROUND_CAP, StopReason.REPEAT_LOOP):
             AI_TOOL_LOOP_STOPS.labels(reason=run.stop.value).inc()
         if run.stop is not StopReason.CANCELLED:

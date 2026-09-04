@@ -125,8 +125,9 @@ class LLMModel:
 
     A reply to a request that offered tools is also read for calls written
     out as text, which is how a backend without native function calling
-    still gets to use them. A tool-less request is never read that way: it
-    is the run asking for a final answer, and JSON in it is the answer.
+    still gets to use them. A request that offered none is never read that
+    way: it is the run asking for a final answer, or a run with no tool to
+    call, and JSON in it is the answer.
     """
 
     def __init__(self, name: str | None):
@@ -135,6 +136,6 @@ class LLMModel:
     def complete(self, messages: list[dict], *, tools: list | None = None):
         result = call_llm(messages, model=self.name, tools=tools)
         response = ModelResponse.from_call_llm(result)
-        if tools is not None and not response.tool_calls and response.content:
+        if tools and not response.tool_calls and response.content:
             response = _with_text_tool_calls(response)
         return response

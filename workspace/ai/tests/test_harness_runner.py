@@ -2,6 +2,7 @@ import itertools
 
 from django.test import TestCase
 
+from workspace.ai.harness.observers import Observer
 from workspace.ai.harness.runner import StopReason
 
 from .harness import (
@@ -301,6 +302,21 @@ class ResultTruncationTests(TestCase):
         self.assertIsInstance(messages[2]["content"], list)
         self.assertEqual(run.tool_data[0]["results"][0]["content"], "a cat")
         self.assertNotIn("AAAA", run.rounds[0]["tool_executions"][0]["result"])
+
+
+class ObserverFailureTests(TestCase):
+    def test_a_failing_on_stop_observer_leaves_the_result_alone(self):
+        class Broken(Observer):
+            def on_stop(self, run):
+                raise RuntimeError("stop")
+
+        model = ScriptedModel([reply("hello")])
+
+        with self.assertLogs("workspace.ai.harness.observers", level="ERROR"):
+            run, _ = _run(model, observers=[Broken()])
+
+        self.assertIs(run.stop, StopReason.ANSWERED)
+        self.assertEqual(run.response.content, "hello")
 
 
 class RoundCapMetricsShapeTests(TestCase):

@@ -3,6 +3,7 @@ import threading
 from django.test import TestCase
 
 from workspace.ai.harness.dispatch import Dispatcher
+from workspace.ai.harness.observers import Observer
 from workspace.ai.harness.policies import RepeatGuard
 from workspace.ai.services.call_order import call_position
 
@@ -19,7 +20,9 @@ class ConcurrentToolCallTests(TestCase):
     default turns it into a barrier timeout that names nothing.
     """
 
-    def _dispatcher(self, toolset, *, concurrency=4, is_cancelled=None, context=None):
+    def _dispatcher(
+        self, toolset, *, concurrency=4, is_cancelled=None, context=None, observers=()
+    ):
         return Dispatcher(
             toolset,
             concurrency=concurrency,
@@ -28,6 +31,7 @@ class ConcurrentToolCallTests(TestCase):
             context=context,
             is_cancelled=is_cancelled,
             policies=[RepeatGuard(3)],
+            observers=observers,
         )
 
     def _read(self, call_id, url=None):
@@ -251,3 +255,29 @@ class ConcurrentToolCallTests(TestCase):
 
         self.assertEqual(seen, {"agent_checkin": True})
         self.assertEqual(context["images"], ["x"])
+
+    def test_a_failing_observer_never_fails_the_call(self):
+        # An observer only watches: whichever hook it breaks in, the call it
+        # was watching still counts as having run, with its own result.
+        class Broken(Observer):
+            def on_call_start(self, call):
+                raise RuntimeError("start")
+
+            def on_call_return(self, call):
+                raise RuntimeError("return")
+
+            def on_call_end(self, outcome):
+                raise RuntimeError("end")
+
+        toolset = StubToolset(concurrent={"read_webpage"})
+
+        with self.assertLogs("workspace.ai.harness.observers", level="ERROR") as logs:
+            outcome = self._dispatcher(toolset, observers=[Broken()]).run_round(
+                [self._read("c1", "a"), self._read("c2", "b")]
+            )
+
+        self.assertEqual(
+            [(o.call.id, o.result, o.error) for o in outcome.outcomes],
+            [("c1", "result c1", None), ("c2", "result c2", None)],
+        )
+        self.assertEqual(len(logs.records), 6)

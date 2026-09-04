@@ -15,6 +15,7 @@ from workspace.ai.services.call_order import set_call_position
 from workspace.common.logging import scrub
 
 from .model import ToolCall
+from .observers import notify
 
 logger = logging.getLogger(__name__)
 
@@ -139,12 +140,10 @@ class Dispatcher:
                     # The refusal is what the model reads in place of a result.
                     outcome.refusal = outcome.result = refusal
                     continue
-                for observer in self._observers:
-                    observer.on_call_start(call)
+                notify(self._observers, "on_call_start", call)
             self._run_batch(planned)
             for outcome in planned:
-                for observer in self._observers:
-                    observer.on_call_end(outcome)
+                notify(self._observers, "on_call_end", outcome)
                 if outcome.error is not None:
                     raise outcome.error
             outcomes.extend(planned)
@@ -180,8 +179,7 @@ class Dispatcher:
                 context=self._context,
             )
         finally:
-            for observer in self._observers:
-                observer.on_call_return(outcome.call)
+            notify(self._observers, "on_call_return", outcome.call)
 
     def _execute_off_thread(self, outcome):
         """Run one call in a pool thread and hand its connections back.

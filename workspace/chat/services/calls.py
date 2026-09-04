@@ -269,6 +269,36 @@ def _active_guest_keys(conversation_id):
     ]
 
 
+def _admitted_guest_keys(meeting):
+    """Participant keys for every ADMITTED guest of the occurrence reachable
+    right now, whether or not they are in the call.
+
+    The audience ``_active_guest_keys`` above structurally cannot reach: a
+    guest admitted to a room where nobody has started a call yet is in no
+    session, so every in-call fan-out skips them - and ``call_started`` is
+    the one event they must receive, because it is the only thing that tells
+    them there is now a call to join. Scoped to the current occurrence for
+    the same reason the stream is: an ADMITTED row of a past occurrence is
+    never swept, and its holder must not be woken by next week's call.
+    """
+    from ..models import MeetingGuest
+    from .meeting_occurrences import current_occurrence
+
+    if meeting is None:
+        return []
+    occurrence = current_occurrence(meeting)
+    if occurrence is None:
+        return []
+    return [
+        guest_key(guest_uuid)
+        for guest_uuid in MeetingGuest.objects.filter(
+            meeting=meeting,
+            state=MeetingGuest.State.ADMITTED,
+            occurrence_start=occurrence[0],
+        ).values_list("uuid", flat=True)
+    ]
+
+
 def _active_recipient_keys(conversation_id):
     """Every active member key plus every admitted-guest-in-the-call key."""
     return [
@@ -324,6 +354,7 @@ def _start_or_join_once(user, conversation_id):
 
     session = _active_session_for_update(conversation_id)
     created_session = False
+    meeting = None
     if session is None:
         # Seed from the meeting's durable lock, if this conversation belongs
         # to one: a host locking the room before anyone has joined still
@@ -373,16 +404,35 @@ def _start_or_join_once(user, conversation_id):
 
     display_name = user.get_full_name() or user.username
     if created_session:
+        payload = {
+            "session_id": str(session.uuid),
+            "conversation_id": str(conversation_id),
+            "started_by": user.id,
+            "media_kind": session.media_kind,
+        }
+        # Two fan-outs rather than one, because the recipients are not
+        # allowed to read the same payload: conversation_id is the single
+        # field _guest_call_state strips, and the containment suite cannot
+        # catch it here - it is the guest's own conversation, so no sentinel
+        # of the foreign world would ever appear in it.
+        guest_keys = list(
+            dict.fromkeys(
+                _active_guest_keys(conversation_id) + _admitted_guest_keys(meeting)
+            )
+        )
         _broadcast(
             conversation_id,
             "call_started",
-            {
-                "session_id": str(session.uuid),
-                "conversation_id": str(conversation_id),
-                "started_by": user.id,
-                "media_kind": session.media_kind,
-            },
+            payload,
+            recipients=[user_key(uid) for uid in active_member_ids(conversation_id)],
         )
+        if guest_keys:
+            _broadcast(
+                conversation_id,
+                "call_started",
+                {k: v for k, v in payload.items() if k != "conversation_id"},
+                recipients=guest_keys,
+            )
     else:
         _broadcast(
             conversation_id,

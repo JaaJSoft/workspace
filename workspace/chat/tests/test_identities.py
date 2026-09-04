@@ -8,6 +8,7 @@ from workspace.chat.services.identities import (
     display_name_for_identity,
     identity_payload,
 )
+from workspace.chat.services.participant_keys import guest_key, user_key
 
 
 class IdentityPayloadTests(TestCase):
@@ -45,6 +46,20 @@ class IdentityPayloadTests(TestCase):
         self.assertIsNone(data["id"])
         self.assertEqual(data["display_name"], "Visitor")
         self.assertTrue(data["is_guest"])
+
+    def test_member_payload_carries_the_participant_key(self):
+        # The key is what a call tile and a message are addressed by, so a
+        # reader can tell "this is me" without comparing display names.
+        self.assertEqual(
+            identity_payload(self.user, None)["participant_key"],
+            user_key(self.user.id),
+        )
+
+    def test_guest_payload_carries_the_participant_key(self):
+        self.assertEqual(
+            identity_payload(None, self.guest)["participant_key"],
+            guest_key(self.guest.uuid),
+        )
 
     def test_guest_payload_username_is_the_display_name(self):
         # Templates fall back to username in places; a guest has none, so the

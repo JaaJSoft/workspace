@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
@@ -98,3 +99,74 @@ class MeetingUiBackendTests(TestCase):
         self.assertEqual(resp.json()["admitted"], True)
         self.assertEqual(resp.json()["active"], False)
         self.assertEqual(resp.json()["participant_key"], guest_key(guest.uuid))
+
+
+class CallStartedReachesTheLobbyTests(TestCase):
+    """An admitted guest waiting for the call to start is in no session yet,
+    so the in-call fan-out cannot reach them. call_started is what tells them,
+    and it is the only way they learn: nothing polls on their behalf."""
+
+    def setUp(self):
+        # The mailbox is the process-global LocMemCache, and a user id repeats
+        # across TestCases: without this, another class's fan-out is what the
+        # first drain here returns.
+        cache.clear()
+        self.host = User.objects.create_user("host", "host@example.com", "pw")
+        self.event = make_event(
+            self.host, start=timezone.now() + timezone.timedelta(minutes=5)
+        )
+        self.meeting = create_meeting(self.event, self.host)
+        self.occurrence_start = current_occurrence(self.meeting)[0]
+
+    def tearDown(self):
+        cache.clear()
+
+    def _start_the_call(self):
+        return calls.start_or_join_call(self.host, self.meeting.conversation_id)
+
+    def test_an_admitted_guest_is_told_the_call_started(self):
+        guest, _token = guest_with_token(
+            self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
+        )
+        self._start_the_call()
+
+        events = drain_events(guest_key(guest.uuid))
+        self.assertEqual([e["event"] for e in events], ["call_started"])
+
+    def test_the_guests_copy_carries_no_conversation_id(self):
+        guest, _token = guest_with_token(
+            self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
+        )
+        session, _participant, _created = self._start_the_call()
+
+        payload = drain_events(guest_key(guest.uuid))[0]["data"]
+        self.assertNotIn("conversation_id", payload)
+        self.assertEqual(payload["session_id"], str(session.uuid))
+        self.assertEqual(payload["started_by"], self.host.id)
+
+    def test_the_member_still_receives_the_full_payload(self):
+        guest_with_token(
+            self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
+        )
+        self._start_the_call()
+
+        payload = drain_events(user_key(self.host.id))[0]["data"]
+        self.assertEqual(payload["conversation_id"], str(self.meeting.conversation_id))
+
+    def test_a_waiting_guest_is_told_nothing(self):
+        guest, _token = guest_with_token(
+            self.meeting, self.occurrence_start, state=MeetingGuest.State.WAITING
+        )
+        self._start_the_call()
+
+        self.assertEqual(drain_events(guest_key(guest.uuid)), [])
+
+    def test_a_guest_of_another_occurrence_is_told_nothing(self):
+        guest, _token = guest_with_token(
+            self.meeting,
+            self.occurrence_start - timezone.timedelta(days=7),
+            state=MeetingGuest.State.ADMITTED,
+        )
+        self._start_the_call()
+
+        self.assertEqual(drain_events(guest_key(guest.uuid)), [])

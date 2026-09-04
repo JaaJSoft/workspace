@@ -62,6 +62,7 @@ User = get_user_model()
 CHAT_DIR = Path(workspace.chat.__file__).resolve().parent
 VIEWS_DIR = CHAT_DIR / "views"
 SERVICES_DIR = CHAT_DIR / "services"
+UI_VIEWS = CHAT_DIR / "ui" / "views.py"
 
 # Distinctive spellings, so a leak is identifiable by the value alone rather
 # than by which assertion happened to catch it.
@@ -706,6 +707,33 @@ class GuestSurfaceSourceTests(SimpleTestCase):
 
         self.assertEqual(found, self.ANONYMOUS_VIEWS)
         self.assertEqual(sum(len(names) for names in found.values()), 10)
+
+    # The UI half of the same fence. The API views above are enumerated by
+    # what empties authentication_classes; a page view is enumerated by what
+    # it is missing instead - @login_required - because that decorator is the
+    # only thing standing between a template and a stranger.
+    ANONYMOUS_UI_VIEWS = {"meet_view"}
+
+    def test_the_anonymous_ui_views_are_exactly_the_known_set(self):
+        """A second public page is a decision, not a forgotten decorator."""
+        module = _parse_module(UI_VIEWS)
+        found = set()
+        for node in module.body:
+            # A view is what Django calls with a request; the module's other
+            # top-level functions are helpers that take a user or a message.
+            if not isinstance(node, ast.FunctionDef) or not node.args.args:
+                continue
+            if node.args.args[0].arg != "request":
+                continue
+            names = {
+                decorator.id
+                for decorator in node.decorator_list
+                if isinstance(decorator, ast.Name)
+            }
+            if "login_required" not in names:
+                found.add(node.name)
+
+        self.assertEqual(found, self.ANONYMOUS_UI_VIEWS)
 
     def test_no_service_imports_a_view(self):
         """Services stay callable from a view, a task or a command alike; a

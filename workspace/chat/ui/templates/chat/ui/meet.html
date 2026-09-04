@@ -97,7 +97,9 @@
       <template x-if="phase === 'room'">
         <div class="flex flex-1 min-h-0">
           <template x-if="inCall">
-            <div class="flex-1 flex min-w-0">{% include "chat/ui/partials/call_stage.html" with host_controls=False %}</div>
+            <div class="flex-1 flex min-w-0">
+              {% include "chat/ui/partials/call_stage.html" with host_controls=False chat_toggle=True %}
+            </div>
           </template>
           <template x-if="!inCall">
             <section class="flex-1 flex items-center justify-center p-4 bg-base-200">
@@ -133,10 +135,27 @@
               </div>
             </section>
           </template>
+          {% comment %}One element, two layouts: a column beside the stage at md
+          and above, a full-screen slide-over below it, where a 384px aside
+          would leave the stage too narrow to show its own controls. x-cloak
+          because the visibility classes only arrive once Alpine binds.{% endcomment %}
           <aside
-            class="w-96 max-w-[40%] border-l border-base-300 flex flex-col min-w-0 bg-base-100"
+            class="fixed inset-0 z-30 w-full flex-col min-w-0 bg-base-100 border-base-300 md:static md:z-auto md:w-96 md:max-w-[40%] md:border-l"
+            :class="chatOpen ? 'flex' : 'hidden md:flex'"
+            x-cloak
           >
-            <div class="px-3 py-2 border-b border-base-300 text-sm font-medium">Meeting chat</div>
+            <div
+              class="px-3 py-2 border-b border-base-300 text-sm font-medium flex items-center justify-between"
+            >
+              <span>Meeting chat</span>
+              <button
+                class="btn btn-ghost btn-xs md:hidden"
+                @click="toggleChat()"
+                title="Close"
+              >
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
             <div class="flex-1 overflow-y-auto p-3 space-y-2" x-ref="messageList">
               <template x-for="m in messages" :key="m.uuid">
                 <div>

@@ -202,52 +202,61 @@
 
   <!-- Controls bar: centered dock at bottom -->
   <div class="flex justify-center shrink-0">
+    {% comment %}Scaled down and allowed to wrap below md: six circular
+    buttons at their desktop size overflow a 390px phone, and an overflowing
+    dock clips its last control rather than wrapping it.{% endcomment %}
     <div
-      class="inline-flex items-center gap-3 p-3 rounded-full bg-base-100/90 backdrop-blur border border-base-300 shadow-lg"
+      class="inline-flex flex-wrap justify-center items-center max-w-full gap-2 p-2 md:gap-3 md:p-3 rounded-full bg-base-100/90 backdrop-blur border border-base-300 shadow-lg"
     >
       <button
-        class="btn btn-circle border-0"
+        class="btn btn-sm md:btn-md btn-circle border-0"
         :class="isMuted ? 'btn-error' : 'btn-neutral'"
         @click="toggleMute()"
         :title="isMuted ? 'Unmute' : 'Mute'"
       >
-        <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-5 h-5"></i>
+        <i
+          :data-lucide="isMuted ? 'mic-off' : 'mic'"
+          class="w-4 h-4 md:w-5 md:h-5"
+        ></i>
       </button>
       <button
-        class="btn btn-circle border-0"
+        class="btn btn-sm md:btn-md btn-circle border-0"
         :class="cameraOn ? 'btn-primary' : 'btn-neutral'"
         @click="toggleCamera()"
         :title="cameraOn ? 'Turn camera off' : 'Turn camera on'"
       >
-        <i :data-lucide="cameraOn ? 'video' : 'video-off'" class="w-5 h-5"></i>
+        <i
+          :data-lucide="cameraOn ? 'video' : 'video-off'"
+          class="w-4 h-4 md:w-5 md:h-5"
+        ></i>
       </button>
       <button
-        class="btn btn-circle border-0"
+        class="btn btn-sm md:btn-md btn-circle border-0"
         :class="sharing ? 'btn-primary' : 'btn-neutral'"
         @click="toggleScreenShare()"
         :title="sharing ? 'Stop sharing' : 'Share screen'"
       >
-        <i data-lucide="screen-share" class="w-5 h-5"></i>
+        <i data-lucide="screen-share" class="w-4 h-4 md:w-5 md:h-5"></i>
       </button>
       {% if host_controls %}
         {# The diagnostic panel is a member-room feature: it names the conversation and its members. #}
         <button
-          class="btn btn-neutral btn-circle border-0"
+          class="btn btn-sm md:btn-md btn-neutral btn-circle border-0"
           @click="openDiagnostic()"
           :disabled="diagRunning"
           title="Connection diagnostic"
         >
-          <i data-lucide="activity" class="w-5 h-5"></i>
+          <i data-lucide="activity" class="w-4 h-4 md:w-5 md:h-5"></i>
         </button>
         <template x-if="meeting">
           <div class="contents">
             <button
-              class="btn btn-circle border-0"
+              class="btn btn-sm md:btn-md btn-circle border-0 relative"
               :class="lobbyOpen ? 'btn-primary' : 'btn-neutral'"
               @click="lobbyOpen = !lobbyOpen; if (lobbyOpen) loadLobby()"
               title="Lobby"
             >
-              <i data-lucide="door-open" class="w-5 h-5"></i>
+              <i data-lucide="door-open" class="w-4 h-4 md:w-5 md:h-5"></i>
               <span
                 class="badge badge-xs badge-warning absolute -top-1 -right-1"
                 x-show="lobby.length"
@@ -255,32 +264,48 @@
               ></span>
             </button>
             <button
-              class="btn btn-circle border-0"
+              class="btn btn-sm md:btn-md btn-circle border-0"
               :class="meeting && meeting.locked ? 'btn-warning' : 'btn-neutral'"
               @click="toggleLock()"
               :title="meeting && meeting.locked ? 'Unlock meeting' : 'Lock meeting'"
             >
               <i
                 :data-lucide="meeting && meeting.locked ? 'lock' : 'lock-open'"
-                class="w-5 h-5"
+                class="w-4 h-4 md:w-5 md:h-5"
               ></i>
             </button>
             <button
-              class="btn btn-neutral btn-circle border-0"
+              class="btn btn-sm md:btn-md btn-neutral btn-circle border-0"
               @click="endMeeting()"
               title="End meeting for everyone"
             >
-              <i data-lucide="square" class="w-5 h-5"></i>
+              <i data-lucide="square" class="w-4 h-4 md:w-5 md:h-5"></i>
             </button>
           </div>
         </template>
       {% endif %}
+      {% if chat_toggle %}
+        {# Below md the chat is a slide-over, so it needs a way in from the dock. #}
+        <button
+          class="btn btn-sm md:btn-md btn-circle border-0 relative md:hidden"
+          :class="chatOpen ? 'btn-primary' : 'btn-neutral'"
+          @click="toggleChat()"
+          title="Meeting chat"
+        >
+          <i data-lucide="message-square" class="w-4 h-4 md:w-5 md:h-5"></i>
+          <span
+            class="badge badge-xs badge-warning absolute -top-1 -right-1"
+            x-show="unreadMessages"
+            x-text="unreadMessages"
+          ></span>
+        </button>
+      {% endif %}
       <button
-        class="btn btn-error btn-circle border-0"
+        class="btn btn-sm md:btn-md btn-error btn-circle border-0"
         @click="leaveRoom()"
         title="Leave call"
       >
-        <i data-lucide="phone-off" class="w-5 h-5"></i>
+        <i data-lucide="phone-off" class="w-4 h-4 md:w-5 md:h-5"></i>
       </button>
     </div>
   </div>
@@ -289,7 +314,7 @@
     <template x-if="meeting">
       <div
         data-testid="lobby-panel"
-        class="absolute bottom-24 right-4 w-72 z-20 card bg-base-100 shadow-xl border border-base-300"
+        class="absolute bottom-24 left-4 w-72 z-20 card bg-base-100 shadow-xl border border-base-300"
         x-show="lobbyOpen"
         x-transition
         x-cloak

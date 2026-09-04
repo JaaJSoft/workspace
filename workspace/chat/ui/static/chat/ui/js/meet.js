@@ -145,6 +145,19 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
     messages: [],
     draft: '',
     sending: false,
+    // Below md the chat is a slide-over panel, so a message can arrive with
+    // nobody looking at it. The count is only ever shown there: at md and
+    // above the panel is always on screen and the badge is not rendered.
+    chatOpen: false,
+    unreadMessages: 0,
+
+    toggleChat() {
+      this.chatOpen = !this.chatOpen;
+      if (this.chatOpen) {
+        this.unreadMessages = 0;
+        this._scrollMessages();
+      }
+    },
 
     async loadMessages() {
       const resp = await fetch(`/api/v1/chat/meet/${this.slug}/messages`, {
@@ -159,6 +172,7 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
     onIncomingMessage(message) {
       if (!message || this.messages.some((m) => m.uuid === message.uuid)) return;
       this.messages.push(message);
+      if (!this.chatOpen && !this.isOwnMessage(message)) this.unreadMessages += 1;
       this._scrollMessages();
     },
 

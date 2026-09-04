@@ -642,3 +642,27 @@ test('a keepalive-only connection reconnects instead of asking for the state', a
   assert.equal(resumes, 0, 'bytes arrived: the server is talking, nothing to re-ask');
   assert.deepStrictEqual(timers.delays, [1000], 'and the backoff is back to its first rung');
 });
+
+test('messages that arrive with the chat panel closed are counted, and reading clears it', () => {
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+  a.currentParticipantKey = 'g:1';
+
+  a.onIncomingMessage({ uuid: 'm1', author: { participant_key: 'u:2' } });
+  a.onIncomingMessage({ uuid: 'm2', author: { participant_key: 'u:2' } });
+  assert.equal(a.unreadMessages, 2);
+
+  // My own message is not news to me.
+  a.onIncomingMessage({ uuid: 'm3', author: { participant_key: 'g:1' } });
+  assert.equal(a.unreadMessages, 2);
+
+  a.toggleChat();
+  assert.equal(a.chatOpen, true);
+  assert.equal(a.unreadMessages, 0);
+
+  a.onIncomingMessage({ uuid: 'm4', author: { participant_key: 'u:2' } });
+  assert.equal(a.unreadMessages, 0, 'nothing is unread while the panel is open');
+
+  a.toggleChat();
+  a.onIncomingMessage({ uuid: 'm5', author: { participant_key: 'u:2' } });
+  assert.equal(a.unreadMessages, 1);
+});

@@ -15,6 +15,7 @@ def forwards(apps, schema_editor):
         link_previews=apps.get_model("chat", "MessageLinkPreview"),
         interactions=apps.get_model("chat", "MessageInteraction"),
         pins=apps.get_model("chat", "PinnedMessage"),
+        using=schema_editor.connection.alias,
     )
 
 

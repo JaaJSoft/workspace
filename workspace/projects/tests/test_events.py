@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from workspace.projects.models import TaskEvent
+from workspace.projects.models import TaskEvent, TaskStatus
 from workspace.projects.services.events import (
     events_for_project,
     move_event_type,
@@ -75,12 +75,25 @@ class RecordTaskEventTests(ProjectTestMixin, TestCase):
         self.assertEqual(event.from_status, "To do")
         self.assertEqual(event.to_status, "Done")
 
+    def test_record_snapshots_status_categories(self):
+        event = record_task_event(
+            self.task,
+            type=TaskEvent.Type.COMPLETED,
+            from_status=self.todo,
+            to_status=self.done,
+        )
+        event.refresh_from_db()
+        self.assertEqual(event.from_category, TaskStatus.Category.ACTIVE)
+        self.assertEqual(event.to_category, TaskStatus.Category.DONE)
+
     def test_record_without_statuses_leaves_blank(self):
         event = record_task_event(
             self.task, type=TaskEvent.Type.DELETED, actor=self.admin
         )
         self.assertEqual(event.from_status, "")
         self.assertEqual(event.to_status, "")
+        self.assertEqual(event.from_category, "")
+        self.assertEqual(event.to_category, "")
 
     def test_move_event_type_done_maps_to_completed(self):
         self.assertEqual(move_event_type(self.done), TaskEvent.Type.COMPLETED)
@@ -110,6 +123,20 @@ class CreateTaskEventTests(ProjectTestMixin, TestCase):
         self.assertEqual(event.task_title, "New landing page")
         self.assertEqual(event.to_status, "Backlog")
         self.assertEqual(event.from_status, "")
+
+    def test_create_snapshots_the_estimate_the_task_was_born_with(self):
+        from decimal import Decimal
+
+        task = create_task(
+            self.project, self.admin, title="Sized", estimate=Decimal("3.5")
+        )
+        event = TaskEvent.objects.get(task=task, type=TaskEvent.Type.CREATED)
+        self.assertEqual(event.to_value, "3.5")
+        unsized = create_task(self.project, self.admin, title="Unsized")
+        self.assertEqual(
+            TaskEvent.objects.get(task=unsized, type=TaskEvent.Type.CREATED).to_value,
+            "",
+        )
 
     def test_create_directly_in_done_still_records_created(self):
         done = self.project.statuses.get(name="Done")

@@ -12,6 +12,7 @@ instance issues no additional query anywhere.
 from __future__ import annotations
 
 from django.conf import settings
+from django.db.models import F, Q
 
 from ...models import FileScan
 
@@ -33,6 +34,39 @@ def blocked_statuses():
     return frozenset(statuses)
 
 
+def override_applies(scan, file_obj):
+    """True when an administrator vouched for the bytes *file_obj* holds now.
+
+    The hash comparison is the whole safety property: the override describes
+    one specific content, so replacing it re-blocks the file immediately,
+    without waiting for the new bytes to be scanned. A blank hash on either
+    side reads as "cannot vouch for these bytes" rather than as a match, which
+    two empty strings would otherwise compare as.
+    """
+    return bool(
+        scan.overridden_at
+        and scan.content_hash
+        and scan.content_hash == file_obj.content_hash
+    )
+
+
+def blocked_scans_qs():
+    """The FileScan rows that currently deny access to their file.
+
+    The one definition of "blocked", so the policy, the file querysets and the
+    admin dashboard cannot drift apart on what an override does. Empty when
+    nothing is blocked at all.
+    """
+    blocked = blocked_statuses()
+    if not blocked:
+        return FileScan.objects.none()
+    return FileScan.objects.filter(status__in=blocked).exclude(
+        Q(overridden_at__isnull=False)
+        & ~Q(content_hash="")
+        & Q(content_hash=F("file__content_hash"))
+    )
+
+
 def exclude_blocked(queryset):
     """Drop blocked files from a File queryset.
 
@@ -40,12 +74,9 @@ def exclude_blocked(queryset):
     NULL inside a NOT IN makes the predicate UNKNOWN for every row, which here
     would silently empty every result page.
     """
-    blocked = blocked_statuses()
-    if not blocked:
+    if not blocked_statuses():
         return queryset
-    return queryset.exclude(
-        pk__in=FileScan.objects.filter(status__in=blocked).values("file_id")
-    )
+    return queryset.exclude(pk__in=blocked_scans_qs().values("file_id"))
 
 
 def with_scan(queryset):
@@ -65,9 +96,12 @@ def is_blocked(file_obj):
     if not blocked:
         return False
     try:
-        return file_obj.scan.status in blocked
+        scan = file_obj.scan
     except FileScan.DoesNotExist:
         return False
+    if scan.status not in blocked:
+        return False
+    return not override_applies(scan, file_obj)
 
 
 def blocked_reason(file_obj):

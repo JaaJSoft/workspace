@@ -328,6 +328,39 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
         event = TaskEvent.objects.get(task=task, type=TaskEvent.Type.SPRINT)
         self.assertEqual(event.to_value, "Sprint 1")
 
+    def test_patch_rename_carries_the_event_snapshots_along(self):
+        sprint = self.scrum.sprints.create(name="Renamable")
+        other = self.scrum.sprints.create(name="Neighbour")
+        task = create_task(self.scrum, self.admin, title="a", sprint=sprint)
+        moved = create_task(self.scrum, self.admin, title="b", sprint=sprint)
+        from workspace.projects.services.sprints import assign_tasks_to_sprint
+
+        assign_tasks_to_sprint(self.scrum, other, [moved.uuid], actor=self.admin)
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(
+            f"{self.sprints_url}/{sprint.uuid}", {"name": "Iteration 1"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        events = TaskEvent.objects.filter(type=TaskEvent.Type.SPRINT)
+        self.assertEqual(
+            events.filter(task=task).values_list("to_value", flat=True).get(),
+            "Iteration 1",
+        )
+        self.assertEqual(
+            sorted(events.filter(task=moved).values_list("from_value", "to_value")),
+            [("", "Iteration 1"), ("Iteration 1", "Neighbour")],
+        )
+
+    def test_patch_without_a_rename_leaves_the_snapshots_alone(self):
+        sprint = self.scrum.sprints.create(name="Renamable")
+        create_task(self.scrum, self.admin, title="a", sprint=sprint)
+        self.client.force_authenticate(self.admin)
+        self.client.patch(
+            f"{self.sprints_url}/{sprint.uuid}", {"goal": "Ship"}, format="json"
+        )
+        event = TaskEvent.objects.get(type=TaskEvent.Type.SPRINT)
+        self.assertEqual(event.to_value, "Renamable")
+
     def test_patch_to_closed_sprint_is_400(self):
         closed = self.scrum.sprints.create(name="Sprint 0", state=Sprint.State.CLOSED)
         task = create_task(self.scrum, self.admin, title="t")

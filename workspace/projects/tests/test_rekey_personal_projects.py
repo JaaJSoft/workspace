@@ -4,6 +4,7 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.tests.migrations import schema_editor_stub
 from workspace.projects.models import Project
 from workspace.projects.services.projects import (
     create_project,
@@ -43,7 +44,7 @@ class RekeyPersonalProjectsTests(TestCase):
         second = get_or_create_personal_project(self.jaaj)
         self._simulate_legacy_keys()
 
-        rekey(apps, None)
+        rekey(apps, schema_editor_stub())
 
         first.refresh_from_db()
         second.refresh_from_db()
@@ -54,7 +55,7 @@ class RekeyPersonalProjectsTests(TestCase):
         get_or_create_personal_project(self.pierre)
         self._simulate_legacy_keys()
 
-        rekey(apps, None)
+        rekey(apps, schema_editor_stub())
 
         board.refresh_from_db()
         self.assertEqual(board.key, "WR")
@@ -66,7 +67,7 @@ class RekeyPersonalProjectsTests(TestCase):
         self.assertEqual(Project.objects.get(name="Personal Cabinet").key, "PC")
         Project.objects.filter(name="Personal Cabinet").update(key="PERSPC")
 
-        rekey(apps, None)
+        rekey(apps, schema_editor_stub())
 
         personal.refresh_from_db()
         self.assertEqual(personal.key, "PERSPC2")
@@ -76,7 +77,7 @@ class RekeyPersonalProjectsTests(TestCase):
         self._simulate_legacy_keys()
         Project.objects.filter(pk=personal.pk).update(created_by=None)
 
-        rekey(apps, None)
+        rekey(apps, schema_editor_stub())
 
         personal.refresh_from_db()
         self.assertEqual(personal.key, "PERS")
@@ -86,13 +87,13 @@ class RekeyPersonalProjectsTests(TestCase):
         get_or_create_personal_project(self.jaaj)
         self._simulate_legacy_keys()
 
-        rekey(apps, None)
+        rekey(apps, schema_editor_stub())
         keys_after_first_run = sorted(
             Project.objects.filter(type=Project.Type.PERSONAL).values_list(
                 "key", flat=True
             )
         )
-        rekey(apps, None)
+        rekey(apps, schema_editor_stub())
 
         self.assertEqual(
             sorted(

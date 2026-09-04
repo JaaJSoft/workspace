@@ -10,22 +10,25 @@
 //
 // The vault is in the URL and the folder is not: the server assigns a vault's
 // UUID and it leaks nothing, whereas a folder is named by a ciphertext the
-// server has never read. So switching vault is a navigation, and walking the
-// tree is not - and because the keys live in vaultSession's closure, that
-// navigation drops them. Every page load starts locked, which is why the
-// vault is loaded by afterUnlock and never by init.
+// server has never read. Neither switching vault nor walking the tree is a
+// navigation: the keys live in vaultSession's closure and a page load would
+// take them with it, so the vault is swapped in place and the URL follows
+// through replaceState. What a navigation used to reset for free, loadVault
+// now resets on purpose - see resetNavigation. Every page load starts locked,
+// which is why the vault is loaded by afterUnlock and never by init.
 // Every id runAction can carry out. The registry answers what the caller may
 // do; an id it offers that lands on no branch here would be a menu row that
 // does nothing when clicked - worse than an absent one, and exactly the drift
 // a server-driven menu exists to prevent. So the menu is narrowed to this
 // list, and a test holds the list against the registry.
 //
-// `move`, `set_tags` and `copy_totp` are what the registry offers and this
-// client does not do yet. They are hidden rather than shown dead.
+// `move` and `set_tags` are what the registry offers and this client does
+// not do yet. They are hidden rather than shown dead.
 window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'edit',
   'copy_username',
   'copy_password',
+  'copy_totp',
   'open_uri',
   'favorite',
   'unfavorite',
@@ -34,7 +37,59 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'delete_forever',
 ];
 
+// POST /api/v1/vault/actions refuses more than this many UUIDs in one call
+// (MAX_BATCH in vault/views/actions.py). The cap is deliberate - the answer
+// costs linear Python and linear payload per UUID - so a large vault asks in
+// slices rather than asking the server to lift it.
+window.VAULT_ACTIONS_BATCH_SIZE = 200;
+
+// The swatches the vault offers. Not ICON_PICKER_COLORS: that list is written
+// in full CSS classes, two of which the vault's colour column refuses, and the
+// signed metadata holds a bare daisyUI role rather than a class.
+window.VAULT_COLOR_SWATCHES = [
+  { name: 'Primary', class: 'text-primary' },
+  { name: 'Secondary', class: 'text-secondary' },
+  { name: 'Accent', class: 'text-accent' },
+  { name: 'Info', class: 'text-info' },
+  { name: 'Success', class: 'text-success' },
+  { name: 'Warning', class: 'text-warning' },
+  { name: 'Error', class: 'text-error' },
+  { name: 'Neutral', class: 'text-neutral' },
+];
+
 window.vaultBrowser = (function () {
+  // Which vault to come back to, per device. It never leaves the browser: the
+  // server resolves no vault, and a stored setting would tell it which one is
+  // in use.
+  const LAST_VAULT_KEY = 'vault.lastVault';
+
+  function readPreference(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (err) {
+      // Private browsing and a blocked-storage setting both throw on read. A
+      // page that forgets which vault was last open is a smaller loss than one
+      // that does not mount.
+      return null;
+    }
+  }
+
+  function writePreference(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (err) {
+      /* nothing to do: the choice does not survive the reload */
+    }
+  }
+
+  function removePreference(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (err) {
+      /* the same blocked storage that refused the write */
+    }
+  }
+
   // Its own title and a red button, so an irreversible question does not read
   // like a reversible one.
   const DESTRUCTIVE = {
@@ -72,11 +127,12 @@ window.vaultBrowser = (function () {
     return {
       ...window.vaultUnlockMixin(),
       ...window.vaultPrefsMixin(),
-      ...window.vaultViewPrefsMixin('vault.browser'),
+      ...window.vaultViewPrefsMixin(),
+      ...window.vaultSwitcherMixin(),
       ...store,
 
-      // The vault this page was routed to. Null on /vault, where the listing
-      // renders instead.
+      // The vault this page was routed to. Null on /vault, where the vault to
+      // open is resolved once the account is unlocked.
       vaultUuid: null,
       // Every vault the account can open, for the switcher.
       vaults: [],
@@ -121,6 +177,20 @@ window.vaultBrowser = (function () {
       // The row whose properties are on screen. Distinct from the selection:
       // the checkbox owns that, the row body opens this.
       panelEntry: null,
+      // Slots whose decryption is in flight, so a second click can take the
+      // gesture back before the value ever lands.
+      revealing: {},
+      // Plaintexts the user asked to see, keyed by entry and field so a value
+      // can never be shown under another row. There is no timer: the clipboard
+      // needs one because it is invisible and machine-wide, whereas this is on
+      // screen and one click undoes it. It is dropped when the panel closes,
+      // when another entry is selected, and when the vault locks.
+      revealed: {},
+      // The authenticator key, held as a handle rather than as a secret: the
+      // HMAC key is imported non-extractable, so what sits here is something
+      // javascript cannot read back. `code` is a six-digit derivative that
+      // expires within the period, which is why it may live in state at all.
+      totp: null,
       // The context menu: which row it belongs to and where it was raised.
       menu: { open: false, entry: null, x: 0, y: 0 },
       // The folder menu is its own, and its rows are written rather than
@@ -139,6 +209,8 @@ window.vaultBrowser = (function () {
       init: function () {
         this.vaultUuid = readJson('vault-uuid');
         this.entryTypes = readJson('entry-types') || [];
+        this.icons = window.ICON_PICKER_ICONS || [];
+        this.colors = window.VAULT_COLOR_SWATCHES || [];
         this.restoreViewPrefs();
         this.loadPrefs();
         this.initUnlock();
@@ -147,6 +219,7 @@ window.vaultBrowser = (function () {
         window.vaultClipboard.onChange(function (state) {
           self.clipboard = state;
         });
+        window.vaultSession.onTick(function () { self.refreshTotp(); });
       },
 
       // A palette command is a plain link, so the only thing it can carry is
@@ -176,17 +249,22 @@ window.vaultBrowser = (function () {
         this.openVault = null;
         this.error = '';
         this.entryActions = {};
-        this.panelEntry = null;
+        // Emptying the map is not enough: a request that left before the lock
+        // lands after it, and by then the user may have unlocked again - so
+        // isUnlocked() says yes and the pre-lock answer republishes itself.
+        // The generation is the only guard that can see the cycle.
+        this.actionsGeneration += 1;
+        this.resetPanel();
         this.closeMenu();
         this.pendingNewEntry = false;
         // The drafts hold typed-in plaintext, so they go with the keys.
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;
+        this.onSwitcherLocked();
       },
 
       load: async function () {
-        if (!this.vaultUuid) return;
         this.loading = true;
         this.error = '';
         // Every row is about to be rebuilt, and a menu left open would go on
@@ -194,7 +272,18 @@ window.vaultBrowser = (function () {
         this.closeMenu();
         try {
           await this.loadVault();
-          if (this.openVault) await this.loadContents();
+          if (this.openVault) {
+            await this.loadContents();
+          } else {
+            // Nothing to browse, so nothing the sidebar may go on showing: its
+            // tags and its trash count belong to a vault that is out of reach
+            // or gone, and leaving them there offers a way into neither.
+            this.setData({});
+            this.entryRows = [];
+            this.entryActions = {};
+            this.resetPanel();
+          }
+          await this.loadVaultActions();
           // The palette command reaches the page before there is a vault to
           // write into, so it waits here for one.
           if (this.openVault && this.pendingNewEntry) {
@@ -214,6 +303,7 @@ window.vaultBrowser = (function () {
       },
 
       loadVault: async function () {
+        const leaving = this.openVault ? String(this.openVault.uuid) : null;
         const rows = await window.vaultApi.listVaults();
         const vaults = [];
         for (const row of rows) {
@@ -221,9 +311,79 @@ window.vaultBrowser = (function () {
         }
         if (!window.vaultSession.isUnlocked()) return;
         this.vaults = vaults;
-        const uuid = String(this.vaultUuid);
-        this.openVault = vaults.find((vault) => String(vault.uuid) === uuid) || null;
-        this.missing = this.openVault === null;
+        if (this.vaultUuid) {
+          const uuid = String(this.vaultUuid);
+          this.openVault = vaults.find((vault) => String(vault.uuid) === uuid) || null;
+          // Asked for by UUID and not found: that vault is out of reach, which
+          // is worth saying. Arriving with no UUID at all is not.
+          this.missing = this.openVault === null;
+        } else {
+          this.openVault = this.resolveLandingVault(vaults);
+          this.missing = false;
+        }
+        // A different vault than the one on screen: its folders and the trail
+        // through them belong to the vault being left, and every UUID in them
+        // is meaningless here. A plain refresh keeps them, which is the point
+        // of comparing rather than resetting on every load.
+        const arriving = this.openVault ? String(this.openVault.uuid) : null;
+        if (arriving !== leaving) {
+          this.resetNavigation();
+        }
+        if (this.openVault) {
+          this.rememberVault(this.openVault.uuid);
+        } else if (!this.vaultUuid) {
+          this.forgetVault();
+        }
+      },
+
+      // The first moment the choice can be made: before the unlock every name
+      // is a ciphertext and no key exists, so neither the server nor the page
+      // could have made it earlier.
+      resolveLandingVault: function (vaults) {
+        const openable = vaults.filter(function (vault) {
+          return !(vault.tampered || vault.unopenable || vault.unreadable);
+        });
+        if (!openable.length) return null;
+        const remembered = String(readPreference(LAST_VAULT_KEY) || '');
+        return (
+          openable.find((vault) => String(vault.uuid) === remembered) ||
+          openable.find((vault) => vault.is_favorite) ||
+          openable[0]
+        );
+      },
+
+      // The account has nothing left to open. Naming a deleted vault in the
+      // address bar would hand out a link that opens a banner, and a device
+      // pointing at one costs the next visit a fallback it need not make.
+      forgetVault: function () {
+        removePreference(LAST_VAULT_KEY);
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, '', '/vault');
+        }
+      },
+
+      rememberVault: function (uuid) {
+        this.vaultUuid = uuid;
+        writePreference(LAST_VAULT_KEY, String(uuid));
+        // replaceState, never a navigation: the keys live in a closure that a
+        // page load would take with it, and the master password with them.
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, '', '/vault/' + uuid);
+        }
+      },
+
+      // Told apart from `missing` on purpose: one is an account with nothing in
+      // it, the other is a vault that exists for somebody else.
+      hasNoVault: function () {
+        return !this.loading && !this.openVault && !this.missing && this.vaults.length === 0;
+      },
+
+      // The account holds vaults and not one of them opened: every signature
+      // was refused or no key here unwraps them. Nothing was routed to, so
+      // `missing` says nothing, and the listing is empty for a reason the
+      // empty state would get wrong - hence a state of its own.
+      hasNoOpenableVault: function () {
+        return !this.loading && !this.openVault && !this.missing && this.vaults.length > 0;
       },
 
       rowFor: function (uuid) {
@@ -263,7 +423,24 @@ window.vaultBrowser = (function () {
           // banner speaks about entries.
           tamperedCount: entries.tamperedCount,
         });
-        this.panelEntry = null;
+        // Every row is rebuilt from the fresh listing, so whatever the panel
+        // had decrypted belongs to a row this pass no longer vouches for - a
+        // mutating action elsewhere (favourite, trash, a folder or tag save)
+        // reloads through here just like a manual refresh does.
+        //
+        // The panel itself survives when its row does: a reload runs for a
+        // whole round trip, and a row clicked inside that window must not have
+        // its panel closed under the user when the listing lands.
+        const open = this.panelEntry;
+        this.resetPanel();
+        if (open) {
+          const fresh = this.entries.find(function (entry) {
+            return entry.uuid === open.uuid;
+          });
+          // Gone from the listing - trashed away, deleted elsewhere - is the
+          // one case where the panel has nothing left to describe.
+          if (fresh) this.panelEntry = fresh;
+        }
         await this.loadEntryActions();
       },
 
@@ -275,18 +452,42 @@ window.vaultBrowser = (function () {
           this.entryActions = {};
           return;
         }
-        let answer;
-        try {
-          answer = await window.vaultApi.fetchEntryActions(uuids);
-        } catch (err) {
-          // The names are open and the listing is usable. Blanking a working
-          // page over a lost menu would cost the user more than the menu.
-          if (generation === this.actionsGeneration) this.entryActions = {};
-          return;
+        const slices = [];
+        for (let i = 0; i < uuids.length; i += window.VAULT_ACTIONS_BATCH_SIZE) {
+          slices.push(uuids.slice(i, i + window.VAULT_ACTIONS_BATCH_SIZE));
         }
+        // allSettled, not all: a slice lost to the network must not cost the
+        // slices that answered their menus. Each answer is published as it
+        // lands, so the first entries are usable while the rest is in flight.
+        await Promise.allSettled(slices.map(async (slice) => {
+          const part = await window.vaultApi.fetchEntryActions(slice);
+          // An empty answer would republish an identical map, and Alpine
+          // re-renders the listing on the assignment rather than on a change.
+          if (!part) return;
+          // Both guards belong inside the slice: with several requests in
+          // flight there are several places a stale answer comes back through.
+          if (generation !== this.actionsGeneration) return;
+          if (!window.vaultSession.isUnlocked()) return;
+          // The live map, read after the await - never an accumulator holding
+          // this pass alone. A reload runs on every mutating action and asks
+          // again for rows that already have answers; publishing only what
+          // has come back so far would strip every row past the first slice
+          // until its own slice lands, and a panel open on one of them would
+          // lose its buttons mid-refresh. It also keeps the single row an
+          // opened menu filled in for itself.
+          //
+          // Merging is only safe because the endpoint answers every UUID it
+          // was sent, empty list included: a row whose access was revoked
+          // comes back as [] and overwrites what it had. Were a key allowed
+          // to be missing, a stale list would survive here forever.
+          this.entryActions = Object.assign({}, this.entryActions, part);
+        }));
         if (generation !== this.actionsGeneration) return;
         if (!window.vaultSession.isUnlocked()) return;
-        this.entryActions = answer;
+        // The rows reach the screen a round trip before this answer does, and
+        // startTotp is gated on it: a row opened in between was refused by a
+        // map that had no entry for it yet, and no other pass would ask again.
+        if (this.panelEntry && !this.totp) await this.startTotp(this.panelEntry);
       },
 
       refresh: function () {
@@ -440,6 +641,164 @@ window.vaultBrowser = (function () {
         return Boolean(entry && (entry.fieldIds || []).includes(fieldId));
       },
 
+      isRevealed: function (fieldId) {
+        if (!this.panelEntry) return false;
+        // `in`, not `hasOwnProperty.call`: the latter reads through the
+        // reactive proxy's getOwnPropertyDescriptor trap, which Alpine does
+        // not instrument, so a slot appearing in `revealed` would update
+        // this method's return value without ever re-running the template
+        // that calls it.
+        return (this.panelEntry.uuid + '|' + fieldId) in this.revealed;
+      },
+
+      revealedValue: function (fieldId) {
+        if (!this.panelEntry) return '';
+        return this.revealed[this.panelEntry.uuid + '|' + fieldId] || '';
+      },
+
+      // The stored totp field is a whole otpauth:// uri, and the row showing
+      // it is labelled with what a user retypes into a phone: the key. The
+      // uri's parameters are what the derivation reads, not what a human
+      // copies off a screen, so the reveal shows the secret alone.
+      shownValue: function (fieldId, value) {
+        if (fieldId !== 'totp') return value;
+        return window.vaultCrypto.base32Encode(
+          window.vaultCrypto.parseOtpauth(value).secret
+        );
+      },
+
+      // The one other moment a secret is decrypted, alongside copyField: this
+      // one keeps the plaintext in component state instead of handing it off,
+      // because the point is to show it rather than move it. The panel may
+      // have moved to another entry, or the vault may have locked, while the
+      // decryption was in flight - the entry captured before the await is
+      // checked against panelEntry again after it, so a slow answer can never
+      // land under a different row's name.
+      toggleReveal: async function (fieldId) {
+        const entry = this.panelEntry;
+        if (!entry) return;
+        // The same gate the button is drawn behind, read again here: the map
+        // the template consulted is a round trip old, and a row trashed in
+        // that window must not open its password because the menu had not
+        // caught up when the click landed.
+        if (!this.hasAction(entry, 'copy_' + fieldId)) return;
+        const slot = entry.uuid + '|' + fieldId;
+        if (Object.prototype.hasOwnProperty.call(this.revealed, slot)) {
+          delete this.revealed[slot];
+          return;
+        }
+        // A second click while the first decryption is still in flight is the
+        // gesture taken back, not a second reveal. `revealed` cannot see one
+        // in flight, so without this the value lands after the click meant to
+        // hide it, under a button already reading "hide".
+        if (Object.prototype.hasOwnProperty.call(this.revealing, slot)) {
+          delete this.revealing[slot];
+          return;
+        }
+        this.revealing[slot] = true;
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) {
+          delete this.revealing[slot];
+          return;
+        }
+        try {
+          const value = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, fieldId
+          );
+          if (this.panelEntry !== entry) return;
+          // Taken back while this was in flight: the slot is gone, and so is
+          // the only reason to show what just arrived.
+          if (!Object.prototype.hasOwnProperty.call(this.revealing, slot)) return;
+          delete this.revealing[slot];
+          this.revealed[slot] = this.shownValue(fieldId, value);
+        } catch (err) {
+          delete this.revealing[slot];
+          if (err && err.reason === 'locked') return;
+          if (this.panelEntry !== entry) return;
+          this.error = 'That value could not be revealed.';
+        }
+      },
+
+      // Opens the key once, derives the HMAC handle from it and lets the
+      // base32 bytes go: what stays in state afterward is the non-extractable
+      // key plus the six-digit derivative, never the shared secret itself.
+      startTotp: async function (entry) {
+        this.totp = null;
+        if (!entry || !(entry.fieldIds || []).includes('totp')) return;
+        // The same gate the copy button reads: a trashed row's key is not
+        // decrypted just because the panel opened, only because copy_totp is
+        // still on offer for it.
+        if (!this.hasAction(entry, 'copy_totp')) return;
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        let key;
+        let parsed;
+        try {
+          const uri = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'totp'
+          );
+          parsed = window.vaultCrypto.parseOtpauth(uri);
+          key = await window.vaultCrypto.importTotpKey(parsed);
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          // The panel may have moved to another entry, or closed, while this
+          // was in flight - a slow failure must not land under a row that is
+          // no longer the one on screen.
+          if (this.panelEntry !== entry) return;
+          // Localised like a failed signature: this line says it cannot be
+          // read, and the rest of the entry is shown as usual.
+          this.totp = { entryUuid: entry.uuid, unreadable: true };
+          return;
+        }
+        // Same check on the success path: an identity comparison, not a uuid
+        // one, so a panel closed mid-flight (panelEntry null) is caught too.
+        if (this.panelEntry !== entry) return;
+        this.totp = {
+          entryUuid: entry.uuid,
+          key: key,
+          digits: parsed.digits,
+          period: parsed.period,
+          code: '',
+          secondsLeft: 0,
+          unreadable: false,
+        };
+        await this.refreshTotp();
+      },
+
+      // Driven by the session's own tick, which already beats once a second
+      // for the lock countdown. A second interval could outlive the component;
+      // this one dies with the session. It does not push the lock back either:
+      // only real DOM events call noteActivity.
+      refreshTotp: async function () {
+        const totp = this.totp;
+        if (!totp || totp.unreadable || !totp.key) return;
+        const now = Date.now() / 1000;
+        const code = await window.vaultCrypto.totpCode(totp.key, totp, now);
+        if (this.totp !== totp) return;
+        totp.code = code;
+        totp.secondsLeft = window.vaultCrypto.totpSecondsRemaining(totp, now);
+      },
+
+      // Reached from the row menu as well as from the panel, so it opens and
+      // derives on its own rather than reading panel state. It copies the
+      // derived code: copyField would copy the stored value, which is the key.
+      copyTotp: async function (entry) {
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        try {
+          const uri = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'totp'
+          );
+          const parsed = window.vaultCrypto.parseOtpauth(uri);
+          const key = await window.vaultCrypto.importTotpKey(parsed);
+          const code = await window.vaultCrypto.totpCode(key, parsed, Date.now() / 1000);
+          await window.vaultClipboard.copy('Authenticator code', code, { transient: true });
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That authenticator code could not be copied.';
+        }
+      },
+
       // ---- gestures --------------------------------------------------------
 
       // The gesture of the file browser: the checkbox selects, the row body
@@ -451,10 +810,23 @@ window.vaultBrowser = (function () {
 
       openEntryFromRow: function (entry) {
         this.panelEntry = entry;
+        this.revealed = {};
+        this.revealing = {};
+        return this.startTotp(entry);
+      },
+
+      // The one place that takes the panel and everything it decrypted down
+      // together - a partial reset would leave a revealed value or a totp key
+      // handle attached to a row the screen no longer shows one for.
+      resetPanel: function () {
+        this.panelEntry = null;
+        this.revealed = {};
+        this.revealing = {};
+        this.totp = null;
       },
 
       closePanel: function () {
-        this.panelEntry = null;
+        this.resetPanel();
       },
 
       // Every navigation the store knows about lands here - forward, back,
@@ -462,7 +834,7 @@ window.vaultBrowser = (function () {
       // panel with it. The row it describes has left the screen.
       apply: function (state) {
         store.apply.call(this, state);
-        this.panelEntry = null;
+        this.resetPanel();
         this.closeMenu();
       },
 
@@ -474,6 +846,7 @@ window.vaultBrowser = (function () {
         this.closeMenu();
         if (!entry || !this.hasAction(entry, action.id)) return;
         if (action.id === 'edit') return this.editEntry(entry);
+        if (action.id === 'copy_totp') return this.copyTotp(entry);
         const copies = {
           copy_username: ['Username', 'username', false],
           copy_password: ['Password', 'password', true],
@@ -633,6 +1006,41 @@ window.vaultBrowser = (function () {
         });
       },
 
+      // The authenticator key is not a value to type over. The dialog shows
+      // whether one is set and offers two deliberate gestures; the ciphertext
+      // travels untouched until one of them is used.
+      totpFieldState: function () {
+        if (!this.draft) return 'none';
+        // The same schema formFields() reads. Without it a type that declares
+        // no authenticator key is still offered one, and saveEntry seals a
+        // field the type does not have.
+        const type = this.typeFor(this.draft.type);
+        const declared = (type ? type.fields : []).some(function (field) {
+          return field.kind === 'totp';
+        });
+        if (!declared) return 'unsupported';
+        if (this.draft.totpInput !== null && this.draft.totpInput !== undefined) {
+          return 'editing';
+        }
+        return this.draft.hasTotp && !this.draft.totpRemoved ? 'set' : 'none';
+      },
+
+      // No reset of totpRemoved: `editing` already wins over it while there is
+      // an input, and clearing it here made Cancel fall back to `set` on an
+      // entry whose key had just been removed - bringing the key back.
+      startTotpEntry: function () {
+        this.draft.totpInput = '';
+      },
+
+      cancelTotpEntry: function () {
+        this.draft.totpInput = null;
+      },
+
+      removeTotp: function () {
+        this.draft.totpInput = null;
+        this.draft.totpRemoved = true;
+      },
+
       newEntry: function (typeId) {
         this.closeMenu();
         this.draft = {
@@ -646,6 +1054,11 @@ window.vaultBrowser = (function () {
           name: '',
           notes: '',
           values: {},
+          carriedFields: {},
+          keyVersion: (this.openVault && this.openVault.key_version) || 1,
+          hasTotp: false,
+          totpInput: null,
+          totpRemoved: false,
           entryVersion: 1,
           isNew: true,
         };
@@ -658,7 +1071,13 @@ window.vaultBrowser = (function () {
         const row = this.rowFor(entry.uuid);
         if (!row || !this.openVault) return;
         const values = {};
+        const carriedFields = {};
         const type = this.typeFor(entry.type);
+        const editable = new Set(
+          (type ? type.fields : [])
+            .filter(function (field) { return field.kind !== 'totp'; })
+            .map(function (field) { return field.field_id; }),
+        );
         try {
           for (const field of type ? type.fields : []) {
             if (field.kind === 'totp') continue;
@@ -673,6 +1092,14 @@ window.vaultBrowser = (function () {
           return;
         }
         if (!window.vaultSession.isUnlocked()) return;
+        // Everything the dialog does not edit - the authenticator key, and any
+        // field a future type declares - travels as its ciphertext. Rebuilding
+        // the record from the form alone would delete it.
+        (row.entry_fields || []).forEach(function (field) {
+          if (!editable.has(field.field_id)) {
+            carriedFields[field.field_id] = field.encrypted_value;
+          }
+        });
         this.draft = {
           uuid: entry.uuid,
           type: entry.type,
@@ -686,6 +1113,11 @@ window.vaultBrowser = (function () {
           // an entry whose notes are gone.
           encryptedNotes: row.encrypted_notes || '',
           values: values,
+          carriedFields: carriedFields,
+          keyVersion: row.key_version || 1,
+          hasTotp: (entry.fieldIds || []).includes('totp'),
+          totpInput: null,
+          totpRemoved: false,
           entryVersion: row.entry_version || 1,
           isNew: false,
         };
@@ -709,12 +1141,35 @@ window.vaultBrowser = (function () {
         // The name is the only thing a listing shows: a row without one is a
         // row the user cannot tell from another.
         if (!name) return;
+        // Three outcomes, and only one of them seals: a typed key becomes the
+        // uri that will be stored, a removed one is dropped from both maps so
+        // the write deletes it, and an untouched one stays in carriedFields.
+        const values = Object.assign({}, draft.values);
+        const carriedFields = Object.assign({}, draft.carriedFields);
+        if (draft.totpInput !== null && draft.totpInput !== undefined
+            && String(draft.totpInput).trim()) {
+          try {
+            values.totp = window.vaultCrypto.normalizeTotpInput(
+              draft.totpInput, { label: name }
+            );
+          } catch (err) {
+            this.error = 'That authenticator key could not be read. Paste the key or '
+              + 'the otpauth:// address the service showed you.';
+            return;
+          }
+          delete carriedFields.totp;
+        } else if (draft.totpRemoved) {
+          delete carriedFields.totp;
+          delete values.totp;
+        }
         this.busy = true;
         try {
           const body = await window.buildEntryWriteRequest(
             window.vaultSession,
             this.openVault,
-            Object.assign({}, draft, { name: name }),
+            Object.assign({}, draft, {
+              name: name, values: values, carriedFields: carriedFields,
+            }),
           );
           if (draft.isNew) {
             await window.vaultApi.createEntry(body);

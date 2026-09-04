@@ -125,64 +125,70 @@
   </div>
 
   {# Filter changes swap this wrapper only (see applyFilters in board.js), so the filter bar above - and its open popover - keep their DOM. #}
-  <div id="task-collection">
-    {% if backlog_tasks %}
-      <div
-        class="rounded-box border border-base-300 bg-base-100 overflow-hidden"
-      >
-        {# Column widths must stay in sync with _backlog_row.html. #}
+  <div class="relative">
+    <div
+      id="task-collection"
+      x-init="$nextTick(() => window.dispatchEvent(new CustomEvent('project-fragment-bound')))"
+    >
+      {% if backlog_tasks %}
         <div
-          class="flex items-center gap-3 px-3 py-2 border-b border-base-300 bg-base-200/60 text-xs font-medium uppercase tracking-wide text-base-content/60"
+          class="rounded-box border border-base-300 bg-base-100 overflow-hidden"
         >
-          {% if writable %}
-            <input
-              type="checkbox"
-              class="checkbox checkbox-sm shrink-0"
-              aria-label="Select all tasks"
-              :checked="allVisibleSelected()"
-              @change="toggleSelectAll()"
-            />
-          {% endif %}
-          <span class="flex-1 flex items-center gap-2">
-            Task
-            {% if project.estimate_unit %}
-              <span
-                class="badge badge-ghost badge-sm font-mono normal-case"
-                title="Estimate total · task count"
-              >
-                {{ estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ backlog_tasks|length }}
-              </span>
-            {% endif %}
-          </span>
-          {% if project.estimate_unit %}
-            <span class="w-14 hidden sm:block shrink-0 text-right">Est.</span>
-          {% endif %}
-          <span class="w-24 hidden sm:block shrink-0">Priority</span>
-          <span class="w-24 hidden md:block shrink-0">Due</span>
-          <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>
-          {% if writable %}<span class="w-8 shrink-0"></span>{% endif %}
-        </div>
-        <ul class="divide-y divide-base-200 min-h-8" data-backlog-list>
-          {% for task in backlog_tasks %}
-            {% include "projects/ui/partials/_backlog_row.html" %}
-          {% endfor %}
-        </ul>
-        {% if tasks_truncated %}
-          <p
-            class="px-3 py-2 border-t border-base-300 text-xs text-base-content/60"
+          {# Column widths must stay in sync with _backlog_row.html. #}
+          <div
+            class="flex items-center gap-3 px-3 py-2 border-b border-base-300 bg-base-200/60 text-xs font-medium uppercase tracking-wide text-base-content/60"
           >
-            Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest.
-          </p>
-        {% endif %}
-      </div>
-    {% elif filters_active %}
-      <inline-alert type="info" message="No tasks match the current filters."></inline-alert>
-    {% elif backlog_scope == 'none' %}
-      <inline-alert type="info" message="Every backlog task is planned into a sprint."></inline-alert>
-    {% elif backlog_scope %}
-      <inline-alert type="info" message="No backlog tasks in this sprint."></inline-alert>
-    {% else %}
-      <inline-alert type="info" message="The backlog is empty."></inline-alert>
-    {% endif %}
+            {% if writable %}
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm shrink-0"
+                aria-label="Select all tasks"
+                :checked="allVisibleSelected()"
+                @change="toggleSelectAll()"
+              />
+            {% endif %}
+            <span class="flex-1 flex items-center gap-2">
+              Task
+              {% if project.estimate_unit %}
+                <span
+                  class="badge badge-ghost badge-sm font-mono normal-case"
+                  title="Estimate total · task count"
+                >
+                  {{ estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ backlog_tasks|length }}
+                </span>
+              {% endif %}
+            </span>
+            {% if project.estimate_unit %}
+              <span class="w-14 hidden sm:block shrink-0 text-right">Est.</span>
+            {% endif %}
+            <span class="w-24 hidden sm:block shrink-0">Priority</span>
+            <span class="w-24 hidden md:block shrink-0">Due</span>
+            <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>
+            {% if writable %}<span class="w-8 shrink-0"></span>{% endif %}
+          </div>
+          <ul class="divide-y divide-base-200 min-h-8" data-backlog-list>
+            {% for task in backlog_tasks %}
+              {% include "projects/ui/partials/_backlog_row.html" %}
+            {% endfor %}
+          </ul>
+          {% if tasks_truncated %}
+            <p
+              class="px-3 py-2 border-t border-base-300 text-xs text-base-content/60"
+            >
+              Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest.
+            </p>
+          {% endif %}
+        </div>
+      {% elif filters_active %}
+        <inline-alert type="info" message="No tasks match the current filters."></inline-alert>
+      {% elif backlog_scope == 'none' %}
+        <inline-alert type="info" message="Every backlog task is planned into a sprint."></inline-alert>
+      {% elif backlog_scope %}
+        <inline-alert type="info" message="No backlog tasks in this sprint."></inline-alert>
+      {% else %}
+        <inline-alert type="info" message="The backlog is empty."></inline-alert>
+      {% endif %}
+    </div>
+    {% include "projects/ui/partials/_collection_loading.html" %}
   </div>
 </div>

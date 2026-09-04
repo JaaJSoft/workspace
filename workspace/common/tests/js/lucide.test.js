@@ -37,7 +37,7 @@ function makeContainer() {
   return { nodeType: 1, isConnected: true };
 }
 
-function setup() {
+function setup(extraGlobals = {}) {
   const createIconsCalls = [];
   const frames = [];
   let observerCallback = null;
@@ -46,6 +46,7 @@ function setup() {
 
   const ctx = loadScript('workspace/common/static/ui/js/lucide.js', {
     lucide: { createIcons: (opts) => createIconsCalls.push(opts ?? {}) },
+    ...extraGlobals,
     SVGElement: FakeSVGElement,
     MutationObserver: class {
       constructor(callback) { observerCallback = callback; }
@@ -159,6 +160,59 @@ test('skips containers detached before the render pass runs', () => {
   emit([{ type: 'attributes', target: svg, oldValue: 'circle' }]);
   flushFrames();
   assert.equal(createIconsCalls.length, 0);
+});
+
+test('swaps icons behind Alpine\'s back and re-binds only the svgs it created', () => {
+  // Alpine's MutationObserver compares every removed initialised node with
+  // every added one, which is quadratic on a listing-sized render pass. The
+  // swap must run under mutateDom, with the observer's two duties - release
+  // the outgoing nodes, bind the incoming svgs - done by hand around it.
+  const log = [];
+  const container = makeContainer();
+  const placeholder = new FakeIconPlaceholder({ 'data-lucide': 'inbox' }, container);
+  const staleSvg = new FakeSVGElement({ 'data-lucide': 'bell' }, container);
+  const freshSvgs = [new FakeSVGElement({ 'data-lucide': 'inbox' }), new FakeSVGElement({ 'data-lucide': 'bell' })];
+  let swapped = false;
+  container.querySelectorAll = (selector) => {
+    if (selector === 'svg[data-lucide]') return swapped ? freshSvgs : [];
+    return [placeholder, staleSvg];
+  };
+  const { emit, flushFrames } = setup({
+    lucide: {
+      createIcons: (opts) => {
+        log.push(['createIcons', opts.root]);
+        swapped = true;
+      },
+    },
+    Alpine: {
+      mutateDom: (fn) => {
+        log.push('mutateDom:start');
+        fn();
+        log.push('mutateDom:end');
+      },
+      destroyTree: (el) => log.push(['destroyTree', el]),
+      initTree: (el) => log.push(['initTree', el]),
+    },
+  });
+  emit([{ type: 'childList', addedNodes: [placeholder] }]);
+  flushFrames();
+  assert.deepEqual(log, [
+    ['destroyTree', placeholder],
+    ['destroyTree', staleSvg],
+    'mutateDom:start',
+    ['createIcons', container],
+    'mutateDom:end',
+    ['initTree', freshSvgs[0]],
+    ['initTree', freshSvgs[1]],
+  ]);
+});
+
+test('renders plainly when Alpine is not on the page', () => {
+  const { createIconsCalls, emit, flushFrames } = setup();
+  const container = makeContainer();
+  emit([{ type: 'childList', addedNodes: [new FakeIconPlaceholder({ 'data-lucide': 'inbox' }, container)] }]);
+  flushFrames();
+  assert.deepEqual(createIconsCalls.map((c) => ({ ...c })), [{ root: container }]);
 });
 
 test('returns a disconnect function', () => {

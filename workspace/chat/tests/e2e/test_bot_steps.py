@@ -14,10 +14,10 @@ Skipped unless E2E=1 is set.
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
 
 from playwright.sync_api import expect
 
+from workspace.ai.harness.model import ToolCall
 from workspace.ai.services.stream_steps import (
     notify_tool_step,
     notify_tool_step_done,
@@ -30,11 +30,7 @@ SHOTS = os.environ.get("SHOTS")
 
 
 def _tool_call(call_id, name, arguments="{}"):
-    return SimpleNamespace(
-        id=call_id,
-        type="function",
-        function=SimpleNamespace(name=name, arguments=arguments),
-    )
+    return ToolCall(id=call_id, name=name, arguments=arguments)
 
 
 class BotStepRowTests(PlaywrightTestCase):

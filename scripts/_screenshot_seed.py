@@ -397,6 +397,7 @@ def _seed_ai(alex, now):
 
 def _seed_calendar(alex, sam, jordan, now):
     from workspace.calendar.models import Calendar, Event, EventMember
+    from workspace.calendar.services.recurrence_rule import apply_rule
 
     personal = Calendar.objects.create(name="Personal", color="primary", owner=alex)
     team = Calendar.objects.create(name="Team", color="secondary", owner=alex)
@@ -404,8 +405,8 @@ def _seed_calendar(alex, sam, jordan, now):
     today = now.replace(minute=0, second=0, microsecond=0)
     monday = today.replace(hour=0) - timedelta(days=today.weekday())
 
-    def event(cal, title, start, hours=1, **kwargs):
-        return Event.objects.create(
+    def event(cal, title, start, hours=1, rule="", **kwargs):
+        ev = Event(
             calendar=cal,
             owner=alex,
             title=title,
@@ -413,6 +414,11 @@ def _seed_calendar(alex, sam, jordan, now):
             end=start + timedelta(hours=hours),
             **kwargs,
         )
+        # apply_rule owns is_recurring/recurrence_until; setting them here
+        # (or passing the rule to create()) would leave the row unexpandable.
+        apply_rule(ev, rule)
+        ev.save()
+        return ev
 
     # Keep it later than "now" so the dashboard's upcoming widget shows
     # it, but inside working hours even when the script runs late.
@@ -437,7 +443,7 @@ def _seed_calendar(alex, sam, jordan, now):
         "Yoga",
         monday.replace(hour=18),
         1,
-        recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
+        rule="RRULE:FREQ=WEEKLY",
     )
     release = monday + timedelta(days=4)
     Event.objects.create(

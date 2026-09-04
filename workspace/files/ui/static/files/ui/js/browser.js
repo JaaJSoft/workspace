@@ -15,6 +15,12 @@ window.fileBrowser = function fileBrowser() {
 
     cleaningTrash: false,
 
+    // True from the moment a folder request leaves until the new listing is
+    // bound. The binding of a large folder blocks the page for a while, and
+    // that wait is part of what the user is looking at the overlay for, so
+    // the flag only clears once the new #folder-browser announces itself.
+    folderLoading: false,
+
     // Upload progress state
     uploading: false,
     uploadTotal: 0,
@@ -1102,6 +1108,18 @@ window.fileBrowser = function fileBrowser() {
 
     async bulkDownload(uuids) {
       if (!uuids || uuids.length === 0) return;
+      // Nothing shows until the whole archive has arrived, which takes a
+      // while for a large selection. The notice waits a moment so a small
+      // one does not flash it.
+      let noticeEl = null;
+      const noticeTimer = setTimeout(() => {
+        noticeEl = window.AppAlert.show({
+          message: `Preparing an archive of ${uuids.length} item${uuids.length > 1 ? 's' : ''}...`,
+          type: 'info',
+          duration: 0,
+          dismissible: false,
+        });
+      }, 1000);
       try {
         const csrfToken = getCSRFToken();
         const resp = await fetch('/api/v1/files/bulk-download', {
@@ -1110,7 +1128,8 @@ window.fileBrowser = function fileBrowser() {
           body: JSON.stringify({ uuids }),
         });
         if (!resp.ok) {
-          window.AppAlert.error('Failed to download selected files');
+          const data = await resp.json().catch(() => ({}));
+          window.AppAlert.error(data.detail || 'Failed to download selected files');
           return;
         }
         const blob = await resp.blob();
@@ -1124,6 +1143,9 @@ window.fileBrowser = function fileBrowser() {
         URL.revokeObjectURL(url);
       } catch (e) {
         window.AppAlert.error('Failed to download selected files');
+      } finally {
+        clearTimeout(noticeTimer);
+        if (noticeEl) window.AppAlert.dismiss(noticeEl);
       }
     },
 
@@ -1496,9 +1518,35 @@ window.fileBrowser = function fileBrowser() {
         }
       });
 
+      // alpine-ajax marks every swap target aria-busy for the life of its
+      // request. Listening on the document, that attribute is what tells a
+      // folder navigation (sidebar links live outside this component) apart
+      // from a properties-panel or activity refresh.
+      document.addEventListener('ajax:send', () => {
+        if (document.getElementById('folder-browser')?.getAttribute('aria-busy') === 'true') {
+          this.folderLoading = true;
+        }
+      });
+      // Failures bubble up here for every request, and a properties panel
+      // failing must not take the veil off a folder still loading. On
+      // ajax:missing the event names its target. On ajax:error it does
+      // not, but alpine-ajax releases the target's aria-busy right after
+      // dispatching, so the attribute answers once this handler yields.
+      document.addEventListener('ajax:missing', (e) => {
+        if (e.detail?.target?.id === 'folder-browser') this.folderLoading = false;
+      });
+      document.addEventListener('ajax:error', () => {
+        queueMicrotask(() => {
+          if (document.getElementById('folder-browser')?.getAttribute('aria-busy') !== 'true') {
+            this.folderLoading = false;
+          }
+        });
+      });
+
       // Close properties panel on folder navigation (but not on same-folder refresh)
       this._lastViewUrl = null;
       window.addEventListener('folder-browser-replaced', (e) => {
+        this.folderLoading = false;
         const newUrl = e.detail?.viewUrl;
         if (this._lastViewUrl && newUrl && newUrl !== this._lastViewUrl && this.showPropertiesPanel) {
           this.closePropertiesPanel();

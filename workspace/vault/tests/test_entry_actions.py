@@ -14,6 +14,7 @@ from django.test import SimpleTestCase
 from workspace.vault.actions import VaultActionRegistry
 from workspace.vault.models import EntryType, VaultRole
 from workspace.vault.types import Field, LoginEntry, schema_for
+from workspace.vault.views.actions import MAX_BATCH
 
 
 class _Entry:
@@ -154,7 +155,7 @@ class MenuHonoursTheRegistryTests(SimpleTestCase):
     # Offered by the registry and not built yet. Adding an action to the
     # registry therefore fails this test until someone either implements it or
     # writes it down here.
-    NOT_IMPLEMENTED_YET = {"move", "set_tags", "copy_totp"}
+    NOT_IMPLEMENTED_YET = {"move", "set_tags"}
 
     def _handled(self):
         source = self.SOURCE.read_text(encoding="utf-8")
@@ -171,3 +172,20 @@ class MenuHonoursTheRegistryTests(SimpleTestCase):
     def test_every_registered_action_is_handled_or_written_down_as_pending(self):
         registered = {action.id for action in VaultActionRegistry.all()}
         self.assertEqual(registered - self._handled(), self.NOT_IMPLEMENTED_YET)
+
+    def test_the_browser_slices_at_the_cap_the_endpoint_enforces(self):
+        """The other half of the same contract, and the one that bites hardest.
+
+        The client sends the actions request in slices because the endpoint
+        refuses a larger batch. Nothing links the two numbers at runtime: lower
+        ``MAX_BATCH`` and every vault above the new cap silently loses its
+        actions again - no error on screen, every suite on both sides green.
+        A JS test cannot pin this either; it would compare a literal to a
+        literal.
+        """
+        source = self.SOURCE.read_text(encoding="utf-8")
+        declared = re.search(r"window\.VAULT_ACTIONS_BATCH_SIZE = (\d+);", source)
+        self.assertIsNotNone(
+            declared, "the browser must declare the batch size it slices at"
+        )
+        self.assertEqual(int(declared.group(1)), MAX_BATCH)

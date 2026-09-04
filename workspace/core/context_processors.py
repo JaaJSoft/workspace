@@ -14,9 +14,10 @@ from workspace.core.setting_keys import (
     CHANGELOG_LAST_SEEN_VERSION,
     MODULE,
     ONBOARDING_COMPLETED,
+    SIDEBAR_COLLAPSED,
 )
 from workspace.dashboard.services.modules import switcher_modules_for
-from workspace.users.services.settings import get_module_settings
+from workspace.users.services.settings import get_module_settings, get_setting
 
 
 def workspace_modules(request):
@@ -35,6 +36,14 @@ def workspace_modules(request):
 
     modules = visible_modules(request.user)
     current = current_module(modules, request.path)
+    # Goes into the <aside>'s class attribute: Alpine binds only after the
+    # parse, so the first paint needs the sidebar's final width in the HTML.
+    sidebar_collapsed = False
+    if current and request.user.is_authenticated:
+        sidebar_collapsed = (
+            get_setting(request.user, current.slug, SIDEBAR_COLLAPSED, default=False)
+            is True
+        )
     # Rendered with the page (no fetch on open); lazy so the unread-badge
     # query only runs when a template actually iterates the switcher, never
     # on a fragment render that draws no navbar.
@@ -46,6 +55,7 @@ def workspace_modules(request):
     return {
         "workspace_active_modules": [asdict(m) for m in modules],
         "workspace_current_module": asdict(current) if current else None,
+        "workspace_sidebar_collapsed": sidebar_collapsed,
         "workspace_switcher_modules": switcher_modules,
         "workspace_commands": [
             asdict(c)

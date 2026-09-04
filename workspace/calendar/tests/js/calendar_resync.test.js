@@ -7,12 +7,16 @@
 
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 function makeApp() {
-  const ctx = loadScript('workspace/calendar/ui/static/calendar/ui/js/calendar.js', {
+  const ctx = loadScripts([
+    'workspace/common/static/ui/js/zoned_formatter.js',
+    'workspace/calendar/ui/static/calendar/ui/js/calendar.js',
+  ], {
     document: { getElementById: () => null },
-    localStorage: { getItem: () => null, setItem: () => {} },
+localStorage: { getItem: () => null, setItem: () => {} },
+    sidebarPreference: { initial: () => false, save: () => {} },
     matchMedia: () => ({ matches: false, addEventListener: () => {}, addListener: () => {} }),
     calendarCalendarsMixin: () => ({}),
     calendarEventsMixin: () => ({}),

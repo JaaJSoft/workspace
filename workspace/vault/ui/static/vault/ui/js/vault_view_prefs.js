@@ -1,19 +1,19 @@
-// How a vault screen is being looked at, and where that survives a reload.
+// How the vault is being looked at, and where that survives a reload.
 //
-// The two screens keep the same two settings - list or tiles, and how big a
-// tile is - under their own keys: a vault card and an entry card are not
-// looked at from the same distance, so `vault.list.*` and `vault.browser.*`
-// must not overwrite each other. Hence the prefix rather than one shared key.
+// Two settings - list or tiles, and how big a tile is - kept on this device
+// rather than on the account: they describe a screen, not a preference the
+// server has any business holding.
 //
-// The state itself stays where each screen declares it (the listing on its
-// component, the browser in vaultStore): what is shared is reading it back,
-// writing it, and the geometry the tile size drives.
+// A mixin rather than part of the controller, which is long enough already.
+// The state itself stays where the component declares it (in vaultStore):
+// what lives here is reading it back, writing it, and the geometry the tile
+// size drives.
 //
 // Methods, never getters: object spread copies values, so a `get` here would
 // be evaluated once at composition and frozen.
-window.vaultViewPrefsMixin = function vaultViewPrefsMixin(prefix) {
-  const VIEW_MODE_KEY = prefix + '.viewMode';
-  const TILE_SIZE_KEY = prefix + '.tileSize';
+window.vaultViewPrefsMixin = function vaultViewPrefsMixin() {
+  const VIEW_MODE_KEY = 'vault.browser.viewMode';
+  const TILE_SIZE_KEY = 'vault.browser.tileSize';
 
   function readPreference(key) {
     try {

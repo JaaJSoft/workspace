@@ -48,13 +48,9 @@ def thumbnail_failure_count(request):
 
 
 def quarantined_file_count(request):
-    from workspace.files.models import FileScan
-    from workspace.files.services.scanning.policy import blocked_statuses
+    from workspace.files.services.scanning.policy import blocked_scans_qs
 
-    blocked = blocked_statuses()
-    if not blocked:
-        return 0
-    return FileScan.objects.filter(status__in=blocked).count()
+    return blocked_scans_qs().count()
 
 
 def scanner_error_count(request):

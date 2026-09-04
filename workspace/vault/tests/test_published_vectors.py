@@ -25,7 +25,7 @@ from django.test import SimpleTestCase
 from pyhpke import AEADId, KDFId, KEMId
 from pyhpke.kem_key import KEMKeyPair
 
-from workspace.vault.tests.reference import primitives
+from workspace.vault.tests.reference import primitives, totp
 
 
 class Argon2idPublishedVectorTests(SimpleTestCase):
@@ -253,3 +253,64 @@ class HpkePublishedVectorTests(SimpleTestCase):
             info=self.INFO,
         )
         self.assertEqual(recipient.open(self.CIPHERTEXT, aad=self.AAD), self.PLAINTEXT)
+
+
+class TotpPublishedVectorTests(SimpleTestCase):
+    """RFC 6238 appendix B.
+
+    The three modes use three different seeds: the ASCII string
+    "12345678901234567890" repeated up to the digest length. Feeding one seed
+    to all three reproduces the SHA-1 column and nothing else, which is the
+    usual way this table appears to be wrong.
+    """
+
+    SEED = "12345678901234567890"
+    # T0 = 0, period 30, 8 digits.
+    VECTORS = [
+        (59, "94287082", "46119246", "90693936"),
+        (1111111109, "07081804", "68084774", "25091201"),
+        (1111111111, "14050471", "67062674", "99943326"),
+        (1234567890, "89005924", "91819424", "93441116"),
+        (2000000000, "69279037", "90698825", "38618901"),
+        (20000000000, "65353130", "77737706", "47863826"),
+    ]
+    LENGTHS = {"SHA1": 20, "SHA256": 32, "SHA512": 64}
+
+    def _secret(self, algorithm: str) -> bytes:
+        length = self.LENGTHS[algorithm]
+        repeated = self.SEED * (length // len(self.SEED) + 1)
+        return repeated[:length].encode()
+
+    def test_the_rfc_6238_table_is_reproduced(self):
+        for at, sha1, sha256, sha512 in self.VECTORS:
+            for algorithm, expected in (
+                ("SHA1", sha1),
+                ("SHA256", sha256),
+                ("SHA512", sha512),
+            ):
+                with self.subTest(at=at, algorithm=algorithm):
+                    self.assertEqual(
+                        totp.totp_code(
+                            self._secret(algorithm),
+                            algorithm=algorithm,
+                            digits=8,
+                            period=30,
+                            at=at,
+                        ),
+                        expected,
+                    )
+
+    def test_the_seed_length_is_what_separates_the_three_columns(self):
+        """Guards the guard: with one seed for all three, the SHA-256
+        column could only pass by coincidence."""
+        at, _, sha256, _ = self.VECTORS[0]
+        self.assertNotEqual(
+            totp.totp_code(
+                self._secret("SHA1"), algorithm="SHA256", digits=8, period=30, at=at
+            ),
+            sha256,
+        )
+
+    def test_base32_round_trips_the_rfc_seed(self):
+        secret = self._secret("SHA1")
+        self.assertEqual(totp.base32_decode("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"), secret)

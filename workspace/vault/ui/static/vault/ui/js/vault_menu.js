@@ -1,4 +1,5 @@
-// Where a context menu ends up, for both vault screens.
+// Where a context menu ends up: the entry rows, the folders, the listing's
+// empty space and the switcher all place one this way.
 //
 // The cursor is where the menu starts, not where it has to stay: rows carry
 // their trigger in the last column, against the right edge, and a panel left

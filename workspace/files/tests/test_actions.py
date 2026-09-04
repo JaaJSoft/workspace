@@ -11,7 +11,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.actions.base import ActionCategory
-from workspace.files.models import File, FileShare
+from workspace.files.models import File, FileFavorite, FileShare
 from workspace.files.services import FilePermission
 
 MANAGE = FilePermission.MANAGE
@@ -430,6 +430,11 @@ class BulkFlagSerializationTests(TestCase):
         self.assertFalse(action.serialize(f)["bulk"])
 
 
+def actions_of(payload, uuid):
+    """The action objects the endpoint's catalogue resolves for ``uuid``."""
+    return [payload["actions"][key] for key in payload["files"][uuid]]
+
+
 class FilesActionsEndpointTests(APITestCase):
     """Tests for POST /api/v1/files/actions."""
 
@@ -461,14 +466,62 @@ class FilesActionsEndpointTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()
-        self.assertIsInstance(data, dict)
+        self.assertEqual(set(data), {"actions", "files"})
         # Keyed by UUID
-        self.assertIn(str(f.uuid), data)
-        actions = data[str(f.uuid)]
+        self.assertIn(str(f.uuid), data["files"])
+        actions = actions_of(data, str(f.uuid))
         self.assertIsInstance(actions, list)
         action_ids = [a["id"] for a in actions]
         self.assertIn("download", action_ids)
         self.assertIn("delete", action_ids)
+
+    def test_actions_are_a_catalogue_keyed_per_file(self):
+        """The same action is described once and referenced by key; an action
+        whose serialization follows the file's state gets one key per
+        variant."""
+        self.client.force_authenticate(user=self.owner)
+        plain = File.objects.create(
+            owner=self.owner,
+            name="plain.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"p", name="plain.txt"),
+        )
+        starred = File.objects.create(
+            owner=self.owner,
+            name="starred.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"s", name="starred.txt"),
+        )
+        FileFavorite.objects.create(owner=self.owner, file=starred)
+
+        resp = self.client.post(
+            "/api/v1/files/actions",
+            {"uuids": [str(plain.uuid), str(starred.uuid)]},
+            format="json",
+        )
+        data = resp.json()
+        plain_keys = data["files"][str(plain.uuid)]
+        starred_keys = data["files"][str(starred.uuid)]
+
+        # Shared actions resolve to the very same catalogue entry.
+        self.assertIn("download", plain_keys)
+        self.assertIn("download", starred_keys)
+        # The favourite toggle differs by state, so each file gets its own key.
+        self.assertIn("toggle_favorite", plain_keys)
+        self.assertIn("toggle_favorite#2", starred_keys)
+        self.assertNotIn("toggle_favorite#2", plain_keys)
+        self.assertEqual(
+            data["actions"]["toggle_favorite"]["state"], {"is_favorite": False}
+        )
+        self.assertEqual(
+            data["actions"]["toggle_favorite#2"]["state"], {"is_favorite": True}
+        )
+        self.assertEqual(data["actions"]["toggle_favorite#2"]["id"], "toggle_favorite")
+        # Every key resolves, and the catalogue holds nothing unreferenced.
+        referenced = set(plain_keys) | set(starred_keys)
+        self.assertEqual(set(data["actions"]), referenced)
 
     def test_per_uuid_actions(self):
         """Each UUID gets its own action list."""
@@ -492,8 +545,8 @@ class FilesActionsEndpointTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()
-        file_ids = [a["id"] for a in data[str(f.uuid)]]
-        folder_ids = [a["id"] for a in data[str(folder.uuid)]]
+        file_ids = [a["id"] for a in actions_of(data, str(f.uuid))]
+        folder_ids = [a["id"] for a in actions_of(data, str(folder.uuid))]
         # Share is available on both now that folders can hold a share link;
         # toggle_pin stays folder-only.
         self.assertIn("share", file_ids)
@@ -516,7 +569,7 @@ class FilesActionsEndpointTests(APITestCase):
             format="json",
         )
         data = resp.json()
-        for action in data[str(f.uuid)]:
+        for action in actions_of(data, str(f.uuid)):
             self.assertIn("bulk", action)
 
     def test_empty_uuids(self):
@@ -562,7 +615,7 @@ class FilesActionsEndpointTests(APITestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        action_ids = [a["id"] for a in resp.json()[str(f.uuid)]]
+        action_ids = [a["id"] for a in actions_of(resp.json(), str(f.uuid))]
         self.assertIn("restore", action_ids)
         self.assertIn("purge", action_ids)
         self.assertNotIn("delete", action_ids)
@@ -609,7 +662,7 @@ class FilesActionsEndpointTests(APITestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        action_ids = [a["id"] for a in resp.json()[str(f.uuid)]]
+        action_ids = [a["id"] for a in actions_of(resp.json(), str(f.uuid))]
         # EDIT level: full CRUD, unlike a read-only share
         self.assertIn("delete", action_ids)
         self.assertIn("rename", action_ids)
@@ -636,7 +689,7 @@ class FilesActionsEndpointTests(APITestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        action_ids = [a["id"] for a in resp.json()[str(f.uuid)]]
+        action_ids = [a["id"] for a in actions_of(resp.json(), str(f.uuid))]
         self.assertIn("toggle_favorite", action_ids)
         self.assertIn("download", action_ids)
         self.assertNotIn("cut", action_ids)

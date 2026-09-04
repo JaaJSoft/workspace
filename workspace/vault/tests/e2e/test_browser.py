@@ -17,10 +17,13 @@ through it - which is exactly what makes the database the right place to
 imitate a hostile server.
 """
 
+import time
+
 from django.core.cache import cache
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.vault.models import VaultEntry, VaultTag
+from workspace.vault.tests.reference import totp
 
 GOOD_PASSWORD = "correct-horse-battery-staple-42"
 CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
@@ -28,6 +31,12 @@ CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
 # other <aside> elements, and "the one with a Username label" would match the
 # sidebar the moment a tag is called that.
 PANEL = "aside:has(button[aria-label='Close the panel'])"
+# The drawer the views live in. Scoping to it is not tidiness: Playwright
+# matches an accessible name by substring, so a bare "Trash" also matches the
+# panel's "Move to trash" button, and which one `.first` picks depends on what
+# is on screen. Under load that resolved to the panel's hidden button and the
+# click waited out its timeout.
+SIDEBAR = ".drawer-side"
 
 
 class VaultBrowserTests(PlaywrightTestCase):
@@ -78,16 +87,31 @@ class VaultBrowserTests(PlaywrightTestCase):
         )
 
     def _open_vault(self):
-        """Onboard, open the one vault, and land on the browser screen."""
+        """Onboard, then land in the vault it created.
+
+        One unlock, not two. Choosing a vault from a listing used to sit
+        between them, and crossing to it was a navigation - which took the
+        closure holding the keys with it and asked for the master password
+        again.
+        """
         self._onboard()
         self._unlock()
-        self.page.wait_for_selector('a[href^="/vault/"]', timeout=30000)
-        self.vault_uuid = self.page.get_attribute('a[href^="/vault/"]', "href").rsplit(
-            "/", 1
-        )[1]
-        self.page.goto(f"{self.live_server_url}/vault/{self.vault_uuid}")
-        self._unlock()
         self.page.wait_for_selector("text=All entries", timeout=30000)
+        # Put there by replaceState once the session opened, so the vault is
+        # named in the URL without the page having been loaded twice.
+        self.page.wait_for_url("**/vault/*", timeout=30000)
+        self.vault_uuid = self.page.url.rstrip("/").rsplit("/", 1)[1]
+
+    def _wait_for_switcher_named(self, name):
+        """Wait for the switcher to name the open vault.
+
+        The postcondition worth waiting on: the URL changes first, because
+        replaceState runs before the load it precedes, and "All entries" is on
+        screen throughout since the previous vault had it too.
+        """
+        self.page.get_by_test_id("vault-switcher").get_by_text(
+            name, exact=True
+        ).wait_for(timeout=30000)
 
     def _create_entry(self, name, username, password):
         # get_by_role with exact=True: the navbar carries a "What's new"
@@ -102,6 +126,51 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.fill(".modal-box input[type=password]", password)
         self.page.click(".modal-box button:has-text('Save')")
         self.page.wait_for_selector(f"tbody tr:has-text('{name}')", timeout=30000)
+
+    # The key the RFC 4648 examples use, and the one the browser tests read
+    # back through the reference implementation.
+    TOTP_SECRET = "JBSWY3DPEHPK3PXP"
+
+    def _add_totp_key(self, name):
+        """Open an entry's dialog and put an authenticator key in it.
+
+        Through the control rather than through the API: what this test is for
+        is that a key can be entered at all, which was impossible before this
+        change - the form dropped the field on its way in and on its way out.
+        """
+        self.page.click(f"tbody tr:has-text('{name}')")
+        self.page.locator(PANEL).get_by_role("button", name="Edit").click()
+        self.page.wait_for_selector(".modal-box")
+        self.page.get_by_role("button", name="Add").click()
+        self.page.fill(
+            ".modal-box input[placeholder='Key or otpauth:// address']",
+            self.TOTP_SECRET,
+        )
+        self.page.click(".modal-box button:has-text('Save')")
+        # Scoped to the entry dialog itself: the page carries several other
+        # ``.modal-box`` elements (help, prompts, the file picker) that stay
+        # in the DOM - out of view but not display:none - the whole time, so
+        # a bare ``.modal-box`` never reports hidden.
+        self.page.wait_for_selector(
+            ".modal-box:has-text('Save')", state="hidden", timeout=30000
+        )
+        # The dialog closes on a write that carried no key just as readily as
+        # on one that did - saveEntry only keeps it open when sealing raised.
+        # Without this the panel assertions downstream blame the panel for a
+        # key the form never sent.
+        written = set(
+            VaultEntry.objects.get().fields.values_list("field_id", flat=True)
+        )
+        self.assertIn("totp", written, f"the key was not written, fields are {written}")
+
+    def _wait_for_totp_section(self, panel):
+        """The section, before the code inside it.
+
+        Three faults share one symptom - the row carrying no key, the registry
+        withholding copy_totp, and the derivation failing - and waiting on the
+        section first tells the last one apart from the other two.
+        """
+        panel.get_by_text("Authenticator code", exact=True).wait_for(timeout=15000)
 
     # ---- the walk ---------------------------------------------------------
 
@@ -179,13 +248,13 @@ class VaultBrowserTests(PlaywrightTestCase):
 
         # Not exact: the sidebar entry carries a count badge, so its
         # accessible name grows a number the moment the trash is not empty.
-        self.page.get_by_role("button", name="Trash").first.click()
+        self.page.locator(SIDEBAR).get_by_role("button", name="Trash").click()
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=10000)
         self.page.click("tbody tr:has-text('GitHub')")
         self.page.click(f"{PANEL} button:has-text('Restore')")
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", state="detached")
 
-        self.page.get_by_role("button", name="All entries").first.click()
+        self.page.locator(SIDEBAR).get_by_role("button", name="All entries").click()
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=10000)
 
     def test_a_folder_is_created_renamed_and_deleted_from_its_menu(self):
@@ -249,7 +318,7 @@ class VaultBrowserTests(PlaywrightTestCase):
         )
 
         # The sidebar view is the other half: a favourite is what it lists.
-        self.page.get_by_role("button", name="Favorites").first.click()
+        self.page.locator(SIDEBAR).get_by_role("button", name="Favorites").click()
         self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=10000)
 
         self.page.locator("tbody tr", has_text="GitHub").click(button="right")
@@ -280,3 +349,274 @@ class VaultBrowserTests(PlaywrightTestCase):
         self.page.wait_for_selector(
             "tbody tr:has-text('GitHub') tag-chip", timeout=30000
         )
+
+    def test_vault_lands_in_a_vault_without_choosing_one(self):
+        """The whole point of removing the listing.
+
+        Reaching a password used to cost two Argon2id derivations: one to see
+        the vaults, one to open the one picked from the list. The second bought
+        nothing but the screen it replaced.
+        """
+        self._open_vault()
+        self.page.goto(f"{self.live_server_url}/vault")
+        self._unlock()
+        # Not "All entries", which the sidebar shows as soon as the account
+        # opens - before the vault behind it has been resolved.
+        self._wait_for_switcher_named("Personal")
+        # The vault is named in the address bar although the page was loaded
+        # at /vault: replaceState put it there, which is not a navigation.
+        self.assertRegex(self.page.url, r"/vault/[0-9a-f-]{36}$")
+        self.assertEqual(
+            self.page.locator("input[autocomplete='current-password']").count(), 0
+        )
+
+    def test_only_the_active_view_is_in_the_dom(self):
+        """Both views used to be built on every load, one hidden with CSS, so
+        every entry was bound twice. The switch has to instantiate rather than
+        reveal - and the rebuilt view has to come back whole, icons included,
+        which is the half only a real browser can say: the icons are drawn by
+        a MutationObserver watching the document, not by a call in this
+        module."""
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+
+        list_view = self.page.locator("[data-testid='entry-list']")
+        mosaic = self.page.locator("[data-testid='entry-mosaic']")
+
+        list_view.wait_for(timeout=30000)
+        self.assertEqual(mosaic.count(), 0, "the mosaic was built behind the list")
+
+        self.page.get_by_role("button", name="Mosaic view").click()
+        mosaic.wait_for(timeout=10000)
+        self.assertEqual(list_view.count(), 0, "the list stayed behind the mosaic")
+        self.assertEqual(mosaic.locator("text=GitHub").count(), 1)
+        # Lucide copies data-lucide onto the svg it creates, so this says the
+        # placeholders were hydrated without naming which icon a login type
+        # happens to draw. state="attached": the first icon in DOM order is
+        # the favourite star, which x-show hides on an entry that is not one -
+        # the default visibility wait would sit on it until it timed out.
+        self.page.wait_for_selector(
+            "[data-testid='entry-mosaic'] svg[data-lucide]",
+            state="attached",
+            timeout=10000,
+        )
+        self.assertEqual(
+            self.page.locator("[data-testid='entry-mosaic'] i[data-lucide]").count(),
+            0,
+            "a placeholder was left undrawn in the subtree x-if created",
+        )
+
+        self.page.get_by_role("button", name="List view").click()
+        list_view.wait_for(timeout=10000)
+        self.assertEqual(mosaic.count(), 0)
+        self.assertEqual(list_view.locator("text=GitHub").count(), 1)
+        # The same claim on the way back, and the one that matters more: the
+        # list is the default view, and a table is not the flat grid the
+        # mosaic is - a container choice in the observer that worked for one
+        # could miss the other.
+        self.page.wait_for_selector(
+            "[data-testid='entry-list'] svg[data-lucide]",
+            state="attached",
+            timeout=10000,
+        )
+        self.assertEqual(
+            self.page.locator("[data-testid='entry-list'] i[data-lucide]").count(),
+            0,
+            "a placeholder was left undrawn in the rebuilt table",
+        )
+
+    def test_a_second_vault_is_created_and_switched_to_without_unlocking_again(self):
+        """Switching is the gesture the listing used to own, and the one that
+        had to stop being a navigation."""
+        self._open_vault()
+
+        self.page.click("[data-testid='vault-switcher']")
+        self.page.click("text=New vault")
+        self.page.wait_for_selector(".modal-box input[type=text]")
+        self.page.fill(".modal-box input[type=text] >> nth=0", "Work")
+        self.page.click(".modal-box button:has-text('Create')")
+        # Named on the switcher, not merely named in the URL: replaceState runs
+        # before the reload it precedes, so the address bar changes while the
+        # contents are still in flight.
+        self._wait_for_switcher_named("Work")
+
+        self.page.click("[data-testid='vault-switcher']")
+        self.page.wait_for_selector("[data-testid='vault-row'] >> nth=1", timeout=30000)
+        self.assertEqual(self.page.locator("[data-testid='vault-row']").count(), 2)
+
+        self.page.locator("[data-testid='vault-row']:not(.active)").first.click()
+        self._wait_for_switcher_named("Personal")
+        # No gate came back between the two vaults: the closure holding the
+        # keys survived, because nothing navigated.
+        self.assertEqual(
+            self.page.locator("input[autocomplete='current-password']").count(), 0
+        )
+
+    def test_a_vault_is_switched_to_from_the_keyboard(self):
+        """The switcher is the whole of vault management now, so a row that
+        only answers a pointer takes vault switching away from anyone not
+        using one."""
+        self._open_vault()
+
+        self.page.click("[data-testid='vault-switcher']")
+        self.page.click("text=New vault")
+        self.page.wait_for_selector(".modal-box input[type=text]")
+        self.page.fill(".modal-box input[type=text] >> nth=0", "Work")
+        self.page.click(".modal-box button:has-text('Create')")
+        self._wait_for_switcher_named("Work")
+
+        self.page.click("[data-testid='vault-switcher']")
+        self.page.wait_for_selector("[data-testid='vault-row'] >> nth=1", timeout=30000)
+        row = self.page.locator("[data-testid='vault-row']:not(.active)").first
+        row.focus()
+        self.assertTrue(
+            row.evaluate("el => el === document.activeElement"),
+            "the row never took focus, so no key could reach it",
+        )
+        row.press("Enter")
+        self._wait_for_switcher_named("Personal")
+
+    def test_the_new_entry_command_opens_the_form(self):
+        """Registered on /vault since the module shipped, and dead until now:
+        the listing that answered there had no vault to write into."""
+        self._open_vault()
+        self.page.goto(f"{self.live_server_url}/vault?action=new")
+        self._unlock()
+        self.page.wait_for_selector(".modal.modal-open", timeout=30000)
+
+    def test_no_vault_content_field_is_eligible_for_autofill(self):
+        """The browser's own password manager must not offer to save vault
+        entries, and no field content may reach a remote spell checker.
+
+        Read off the rendered page rather than off the templates: a field a
+        component inserts at runtime is exactly the one a template scan misses.
+        """
+        self._open_vault()
+        self.page.get_by_role("button", name="New", exact=True).click()
+        self.page.get_by_role("button", name="New login").first.click()
+        self.page.wait_for_selector(".modal-box input[type=text]")
+        # The authenticator key input only exists once its control is opened,
+        # so the audit has to open it to see it.
+        self.page.get_by_role("button", name="Add").click()
+        # Scoped to the entry dialog: the shared layout also mounts the help,
+        # prompt and file-picker dialogs on this page, and their fields are
+        # someone else's surface to harden.
+        result = self.page.eval_on_selector_all(
+            ".modal-box:has-text('Save') input, .modal-box:has-text('Save') textarea",
+            """(nodes) => {
+                const identify = (node) => {
+                    const label = node.closest('label');
+                    const labelText = label && label.textContent.trim();
+                    return labelText || node.placeholder || node.name || node.outerHTML.slice(0, 90);
+                };
+                return {
+                    audited: nodes.map(identify),
+                    offenders: nodes
+                        .filter((node) => !['checkbox', 'radio', 'hidden'].includes(node.type))
+                        .filter((node) => node.autocomplete !== 'off' || node.spellcheck !== false)
+                        .map(identify),
+                };
+            }""",
+        )
+        audited, offenders = result["audited"], result["offenders"]
+        # An empty offenders list is also what a selector matching nothing
+        # produces - a relabelled Save button or a restructured dialog must
+        # fail this test, not pass it vacuously. Naming the three fields the
+        # test exists to cover (the name, a secret field, and the
+        # authenticator key control only "Add" reveals) makes that failure
+        # specific rather than a bare "matched zero".
+        self.assertTrue(audited, "the audit selector matched no fields at all")
+        for expected in ("Name", "Password", "Key or otpauth:// address"):
+            self.assertTrue(
+                any(expected in identifier for identifier in audited),
+                f"expected the audit to see the {expected!r} field, saw {audited!r}",
+            )
+        self.assertEqual(offenders, [])
+
+    def test_a_revealed_password_is_hidden_again_when_the_panel_closes(self):
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self.page.click("tbody tr:has-text('GitHub')")
+        panel = self.page.locator(PANEL)
+        panel.wait_for(timeout=10000)
+        self.assertNotIn("hunter2", panel.inner_text())
+
+        self.page.click("button[aria-label='Reveal the password']")
+        self.page.wait_for_selector("button[aria-label='Hide the password']")
+        self.assertIn("hunter2", panel.inner_text())
+
+        self.page.click("button[aria-label='Close the panel']")
+        self.page.click("tbody tr:has-text('GitHub')")
+        panel.wait_for(timeout=10000)
+        # Reopening must not bring the value back: the reveal is per visit.
+        self.assertNotIn("hunter2", panel.inner_text())
+        self.page.wait_for_selector("button[aria-label='Reveal the password']")
+
+    def test_the_one_time_code_matches_the_reference_implementation(self):
+        """The bundle against the Python oracle in a real engine.
+
+        The node:vm parity suite runs the same bundle under another realm, and
+        cbor-x already proved that is not the same thing.
+        """
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self._add_totp_key("GitHub")
+        self.page.click("tbody tr:has-text('GitHub')")
+        panel = self.page.locator(PANEL)
+        panel.wait_for(timeout=10000)
+        # Two gates, one symptom: the section is hidden when the row carries
+        # no key or the registry withholds copy_totp, the code is missing when
+        # the derivation did not land. Waiting on each in turn says which.
+        self._wait_for_totp_section(panel)
+        code = panel.locator("[data-totp-code]")
+        code.wait_for(timeout=15000)
+        shown = code.inner_text().strip()
+
+        secret = totp.base32_decode(self.TOTP_SECRET)
+        now = int(time.time())
+        # The period may roll over between the render and this line, so the
+        # previous window counts as agreement. Widening the product's window
+        # to make a test pass would be the wrong repair.
+        accepted = {
+            totp.totp_code(secret, algorithm="SHA1", digits=6, period=30, at=at)
+            for at in (now, now - 30)
+        }
+        self.assertIn(shown, accepted)
+
+    def test_revealing_the_key_shows_the_key_and_not_the_uri(self):
+        """What the row is labelled is what it shows.
+
+        The field is stored as a whole ``otpauth://`` uri, so a reveal that
+        printed it verbatim would put the parameters on screen and leave the
+        user to pick the secret out of them - which is what they retype into
+        another authenticator.
+        """
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self._add_totp_key("GitHub")
+        self.page.click("tbody tr:has-text('GitHub')")
+        panel = self.page.locator(PANEL)
+        self._wait_for_totp_section(panel)
+        self.assertNotIn(self.TOTP_SECRET, panel.inner_text())
+
+        self.page.click("button[aria-label='Reveal the authenticator key']")
+        self.page.wait_for_selector("button[aria-label='Hide the authenticator key']")
+        shown = panel.inner_text()
+        self.assertIn(self.TOTP_SECRET, shown)
+        self.assertNotIn("otpauth://", shown)
+
+    def test_copying_the_one_time_code_never_copies_the_key(self):
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self._add_totp_key("GitHub")
+        self.page.click("tbody tr:has-text('GitHub')")
+        panel = self.page.locator(PANEL)
+        self._wait_for_totp_section(panel)
+        self.page.wait_for_selector("button[aria-label='Copy the authenticator code']")
+        self.page.click("button[aria-label='Copy the authenticator code']")
+        # The copy opens the field, derives the code and only then writes: the
+        # banner is the postcondition, as it is for the password copy above.
+        self.page.wait_for_selector("text=Authenticator code copied", timeout=10000)
+        copied = self.page.evaluate("() => navigator.clipboard.readText()")
+        self.assertRegex(copied, r"^[0-9]{6}$")
+        self.assertNotIn(self.TOTP_SECRET, copied)

@@ -196,7 +196,7 @@ def _resolve_occurrence(event, scope, raw, user_tz):
     """
     from datetime import timedelta
 
-    from workspace.calendar.recurrence import _build_rrule
+    from workspace.calendar.recurrence import occurrences_in_range
 
     if scope == "all" or not event.is_recurring:
         return None, None
@@ -216,7 +216,7 @@ def _resolve_occurrence(event, scope, raw, user_tz):
     # the user can see.
     window_end = occurrence + timedelta(seconds=1)
     if not any(
-        occ == occurrence for occ in _build_rrule(event, occurrence, window_end)
+        occ == occurrence for occ in occurrences_in_range(event, occurrence, window_end)
     ):
         return None, (
             f"Error: {occurrence.isoformat()} is not an occurrence of this series. "
@@ -339,7 +339,7 @@ Call this when the user asks if they are free, available, or have any events dur
 
         from workspace.calendar.models import Event
         from workspace.calendar.queries import visible_calendar_ids
-        from workspace.calendar.recurrence import _build_rrule
+        from workspace.calendar.recurrence import occurrences_in_range
         from workspace.users.services.settings import get_user_timezone
 
         user_tz = get_user_timezone(user)
@@ -372,7 +372,7 @@ Call this when the user asks if they are free, available, or have any events dur
         non_recurring_qs = (
             Event.objects.filter(
                 calendar_id__in=cal_ids,
-                recurrence_frequency__isnull=True,
+                is_recurring=False,
                 recurrence_parent__isnull=True,
                 is_cancelled=False,
             )
@@ -396,7 +396,7 @@ Call this when the user asks if they are free, available, or have any events dur
         # Recurring masters — expand occurrences in range
         masters_qs = Event.objects.filter(
             calendar_id__in=cal_ids,
-            recurrence_frequency__isnull=False,
+            is_recurring=True,
             recurrence_parent__isnull=True,
             is_cancelled=False,
         ).select_related("calendar")
@@ -434,7 +434,7 @@ Call this when the user asks if they are free, available, or have any events dur
                 )
 
         for master in masters_qs:
-            for occ_start in _build_rrule(master, start, end):
+            for occ_start in occurrences_in_range(master, start, end):
                 key = (str(master.uuid), occ_start.isoformat())
                 if key in exc_cancelled:
                     continue

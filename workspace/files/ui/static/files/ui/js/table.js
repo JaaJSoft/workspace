@@ -1,3 +1,6 @@
+// Upper bound of POST /api/v1/files/actions, mirrored from the endpoint.
+const ACTIONS_BATCH_SIZE = 200;
+
 window.fileTableControls = function fileTableControls() {
   return {
     storageKey: 'fileTableControls:v4',
@@ -77,15 +80,15 @@ window.fileTableControls = function fileTableControls() {
     },
 
     init() {
+      // A listing is rendered in one view mode: rows in a <table> for the
+      // list, cards in a grid for the mosaic. Both carry the same data-*
+      // attributes, so filters, counts and selection read either; only
+      // sorting and column layout are table work.
       this.table = this.$el.querySelector('table');
-      if (!this.table) {
-        return;
-      }
-      this.tbody = this.table.querySelector('tbody');
-      if (!this.tbody) {
-        return;
-      }
-      this.originalRows = Array.from(this.tbody.querySelectorAll('tr'));
+      this.tbody = this.table ? this.table.querySelector('tbody') : null;
+      this.originalRows = this.tbody
+        ? Array.from(this.tbody.querySelectorAll('tr'))
+        : this.cards();
       this.initStorageKey();
       this.loadState();
       this.pruneMissingColumns();
@@ -260,28 +263,9 @@ window.fileTableControls = function fileTableControls() {
       // Shift-click: select range from last selected to current
       if (shiftKey && this.lastSelectedUuid && this.lastSelectedUuid !== uuid) {
         // Get all visible items in current view (filtered rows in list view, or all items in mosaic view)
-        let allUuids = [];
-
-        // Try to get from visible rows (after filtering/sorting)
-        if (this.visibleRows && this.visibleRows.length > 0) {
-          allUuids = this.visibleRows.map(r => r.dataset?.uuid).filter(Boolean);
-        } else {
-          // Fallback: get from DOM
-          // For list view: tbody > tr[data-uuid]
-          // For mosaic view: .grid > div[data-uuid]
-          const tbody = document.querySelector('tbody tr[data-uuid]');
-          const gridContainer = document.querySelector('div.grid div[data-uuid]');
-
-          if (tbody) {
-            // List view
-            const items = Array.from(document.querySelectorAll('tbody tr[data-uuid]'));
-            allUuids = items.map(r => r.dataset.uuid).filter(Boolean);
-          } else if (gridContainer) {
-            // Mosaic view
-            const items = Array.from(document.querySelectorAll('div.grid > div[data-uuid]'));
-            allUuids = items.map(r => r.dataset.uuid).filter(Boolean);
-          }
-        }
+        // The range runs over what is on screen, in its current order: a
+        // filtered-out item is never swept into a selection.
+        const allUuids = this.visibleItemUuids();
 
         const startIdx = allUuids.indexOf(this.lastSelectedUuid);
         const endIdx = allUuids.indexOf(uuid);
@@ -312,9 +296,21 @@ window.fileTableControls = function fileTableControls() {
       this.selectedUuids = new Set(this.selectedUuids);
     },
 
+    cards() {
+      return Array.from(this.$el.querySelectorAll('div.grid > div[data-uuid]'));
+    },
+
+    // UUIDs of the items on screen: the rows the table currently holds, or
+    // the cards no filter has hidden.
+    visibleItemUuids() {
+      const items = this.tbody
+        ? Array.from(this.tbody.querySelectorAll('tr[data-uuid]'))
+        : this.cards().filter((card) => card.style.display !== 'none');
+      return items.map((el) => el.dataset.uuid).filter(Boolean);
+    },
+
     toggleSelectAll() {
-      const visibleRows = Array.from(this.tbody.querySelectorAll('tr[data-uuid]'));
-      const visibleUuids = visibleRows.map(r => r.dataset.uuid).filter(Boolean);
+      const visibleUuids = this.visibleItemUuids();
 
       const allSelected = visibleUuids.every(uuid => this.selectedUuids.has(uuid));
 
@@ -331,9 +327,7 @@ window.fileTableControls = function fileTableControls() {
 
     // Plain method, not an ES getter (see orderedColumns above).
     selectAllState() {
-      if (!this.tbody) return 'none';
-      const visibleRows = Array.from(this.tbody.querySelectorAll('tr[data-uuid]'));
-      const visibleUuids = visibleRows.map(r => r.dataset.uuid).filter(Boolean);
+      const visibleUuids = this.visibleItemUuids();
       if (visibleUuids.length === 0) return 'none';
 
       const selectedCount = visibleUuids.filter(uuid => this.selectedUuids.has(uuid)).length;
@@ -397,24 +391,30 @@ window.fileTableControls = function fileTableControls() {
     // Fetch actions for all visible rows from the API
     async fetchActions() {
       // Get elements with data-uuid from both list view (tr) and mosaic view (div)
-      const rows = this.originalRows.length
-        ? this.originalRows
-        : Array.from((this.tbody || this.$el).querySelectorAll('tr[data-uuid], div[data-uuid]'));
-      const uuids = rows.map(r => r.dataset.uuid).filter(Boolean);
+      const uuids = this.originalRows.map((r) => r.dataset.uuid).filter(Boolean);
       if (uuids.length === 0) return;
 
       this.actionsLoading = true;
       try {
-        const csrfToken = getCSRFToken();
-        const resp = await fetch('/api/v1/files/actions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ uuids }),
-        });
-        if (resp.ok) {
-          this.actionsMap = await resp.json();
-          this._computeBulkActions();
+        // The endpoint answers at most 200 UUIDs per call; a larger listing
+        // asks in slices. Each answer is merged as it lands: a row only
+        // needs its own entry, so the first rows are usable while the rest
+        // of the listing is still being answered.
+        const slices = [];
+        for (let i = 0; i < uuids.length; i += ACTIONS_BATCH_SIZE) {
+          slices.push(uuids.slice(i, i + ACTIONS_BATCH_SIZE));
         }
+        // allSettled: a slice lost to the network must not end the wait for
+        // the ones still in flight, nor drop the loading state early.
+        await Promise.allSettled(slices.map(async (slice) => {
+          const part = await window.fileActions.fetchActions(slice);
+          if (!part) return;
+          // Read the current map only after the await: a spread evaluated
+          // before it would merge into a snapshot another slice has since
+          // replaced.
+          this.actionsMap = { ...this.actionsMap, ...part };
+          this._computeBulkActions();
+        }));
       } catch (e) {
         // silent
       } finally {
@@ -474,7 +474,9 @@ window.fileTableControls = function fileTableControls() {
           break;
         }
         case 'download':
-          this._bulkDownload(uuids);
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'download', uuids }
+          }));
           break;
         case 'cut':
           window.dispatchEvent(new CustomEvent('bulk-action', {
@@ -504,29 +506,6 @@ window.fileTableControls = function fileTableControls() {
       }
     },
 
-    async _bulkDownload(uuids) {
-      try {
-        const csrfToken = getCSRFToken();
-        const resp = await fetch('/api/v1/files/bulk-download', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ uuids }),
-        });
-        if (!resp.ok) return;
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'download.zip';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        // silent
-      }
-    },
-
     bulkPaste() {
       window.dispatchEvent(new CustomEvent('bulk-action', {
         detail: { action: 'paste' }
@@ -552,7 +531,7 @@ window.fileTableControls = function fileTableControls() {
 
     _getRowDataByUuid(uuid) {
       if (!uuid) return null;
-      const row = document.querySelector(`tr[data-uuid="${uuid}"]`);
+      const row = this.$el.querySelector(`[data-uuid="${uuid}"]`);
       if (!row) return null;
       return {
         uuid,
@@ -707,8 +686,14 @@ window.fileTableControls = function fileTableControls() {
       if (key === 'Enter' || key === ' ') {
         e.preventDefault();
         if (this._nodeHasAction(data, 'open')) {
-          const link = document.querySelector(`tr[data-uuid="${data.uuid}"] a[data-folder-link]`);
-          if (link) link.click();
+          // A row carries a folder link; a card navigates through the
+          // hidden nav link, as a click on it does.
+          const link = this.$el.querySelector(`[data-uuid="${data.uuid}"] a[data-folder-link]`)
+            || document.querySelector('#folder-nav-push');
+          if (link) {
+            if (!link.hasAttribute('data-folder-link')) link.href = `/files/${data.uuid}`;
+            link.click();
+          }
         } else if (this._nodeHasAction(data, 'view')) {
           window.dispatchEvent(new CustomEvent('open-file-viewer', {
             detail: { uuid: data.uuid, name: data.name, type: data.fileType }
@@ -748,9 +733,7 @@ window.fileTableControls = function fileTableControls() {
 
     initStorageKey() {
       const baseKey = this.storageKey;
-      const columns = Array.from(this.table.querySelectorAll('thead th[data-col]'))
-        .map((cell) => cell.dataset.col)
-        .filter(Boolean);
+      const columns = this.headerColumnIds();
       if (columns.length) {
         this.storageKey = `${baseKey}:${columns.join('|')}`;
       } else {
@@ -843,10 +826,19 @@ window.fileTableControls = function fileTableControls() {
       }, 500);
     },
 
+    // Column ids the rendered header declares; none without a table.
+    headerColumnIds() {
+      if (!this.table) return [];
+      return Array.from(this.table.querySelectorAll('thead th[data-col]'))
+        .map((cell) => cell.dataset.col)
+        .filter(Boolean);
+    },
+
     pruneMissingColumns() {
-      const present = new Set(
-        Array.from(this.table.querySelectorAll('thead th[data-col]')).map((cell) => cell.dataset.col)
-      );
+      // Without a header there is nothing to compare the saved columns
+      // against, and pruning would wipe the list-view preference.
+      if (!this.table) return;
+      const present = new Set(this.headerColumnIds());
       this.columns = this.columns.filter((col) => present.has(col.id));
       this.columnOrder = this.columnOrder.filter((id) => present.has(id));
 
@@ -969,21 +961,23 @@ window.fileTableControls = function fileTableControls() {
     },
 
     applyRows() {
-      if (!this.ready || !this.tbody) return;
-      const query = (this.searchQuery || '').trim().toLowerCase();
-      const filtered = this.originalRows.filter((row) => this.matchesFilter(row, query));
-      let ordered = filtered;
+      if (!this.ready) return;
+      if (this.tbody) {
+        const query = (this.searchQuery || '').trim().toLowerCase();
+        const filtered = this.originalRows.filter((row) => this.matchesFilter(row, query));
+        let ordered = filtered;
 
-      if (this.sortField !== 'default') {
-        const dir = this.sortDir === 'asc' ? 1 : -1;
-        ordered = filtered.slice().sort((a, b) => this.compareRows(a, b, dir));
+        if (this.sortField !== 'default') {
+          const dir = this.sortDir === 'asc' ? 1 : -1;
+          ordered = filtered.slice().sort((a, b) => this.compareRows(a, b, dir));
+        }
+
+        const fragment = document.createDocumentFragment();
+        ordered.forEach((row) => fragment.appendChild(row));
+        this.tbody.replaceChildren();
+        this.tbody.appendChild(fragment);
+        this.updateEmptyRow(ordered.length);
       }
-
-      const fragment = document.createDocumentFragment();
-      ordered.forEach((row) => fragment.appendChild(row));
-      this.tbody.replaceChildren();
-      this.tbody.appendChild(fragment);
-      this.updateEmptyRow(ordered.length);
       this.applyCards();
       this.saveState();
     },
@@ -992,8 +986,7 @@ window.fileTableControls = function fileTableControls() {
     // binding: the binding evaluated once at mount and never re-ran, so
     // every filter silently applied to the list view only.
     applyCards() {
-      const cards = (this.$el || document).querySelectorAll('div.grid > div[data-uuid]');
-      cards.forEach((card) => {
+      this.cards().forEach((card) => {
         card.style.display = this.shouldShowCard(card) ? '' : 'none';
       });
     },
@@ -1093,9 +1086,7 @@ window.fileTableControls = function fileTableControls() {
     },
 
     getColumnCount() {
-      const headerCells = this.table.querySelectorAll('thead th[data-col]');
-      if (headerCells.length) return headerCells.length;
-      return this.columnOrder.length || 1;
+      return this.headerColumnIds().length || this.columnOrder.length || 1;
     },
 
     updateEmptyRowColspan() {
@@ -1186,10 +1177,19 @@ window.viewToggle = function viewToggle() {
       return { 1: 28, 2: 36, 3: 48, 4: 64, 5: 80 }[this.mosaicTileSize] || 48;
     },
 
-    setViewMode(mode) {
+    // The listing is rendered in the saved view mode, so switching is a
+    // save followed by a re-render; the folder veil covers the round trip.
+    async setViewMode(mode) {
+      const previous = this.viewMode;
       this.viewMode = mode;
       window._filePrefsCache.defaultViewMode = mode;
-      this._saveFilePrefs();
+      if (await this._saveFilePrefs()) {
+        this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+        return;
+      }
+      this.viewMode = previous;
+      window._filePrefsCache.defaultViewMode = previous;
+      window.AppAlert?.error('Could not switch the view');
     },
 
     setMosaicTileSize(size) {
@@ -1201,7 +1201,7 @@ window.viewToggle = function viewToggle() {
       const API_URL = '/api/v1/settings/files/preferences';
       const csrfToken = getCSRFToken();
 
-      fetch(API_URL, {
+      return fetch(API_URL, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1209,7 +1209,7 @@ window.viewToggle = function viewToggle() {
         },
         body: JSON.stringify({ value: { ...window._filePrefsCache } }),
         credentials: 'same-origin',
-      }).catch(() => {});
+      }).then((resp) => resp.ok, () => false);
     },
 
     navigateToFolder(event, url) {

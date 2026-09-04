@@ -11,6 +11,8 @@ import logging
 from celery import shared_task
 from django.conf import settings
 
+from workspace.ai.harness.runner import StopReason
+from workspace.ai.services.bot_runs import build_bot_runner
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import build_conversation_history
 from workspace.ai.services.llm import (
@@ -23,7 +25,6 @@ from workspace.ai.services.responses import (
     post_bot_message,
     produced_media,
 )
-from workspace.ai.services.tool_loop import retry_final_completion, run_tool_loop
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ def generate_chat_response(
 ):
     """Generate a bot response in *conversation_id* triggered by *message_id*.
 
-    Creates an AITask to track progress, runs the tool loop with one
+    Creates an AITask to track progress, runs the harness with one
     auto-retry on empty response, then posts the bot message via
     ``post_bot_message``. Failures route to ``handle_generation_error``.
     """
@@ -76,21 +77,17 @@ def generate_chat_response(
     )
 
     try:
-        history, summary_text = build_conversation_history(
-            conversation_id,
-            bot_profile,
-            human_user,
-        )
+        history = build_conversation_history(conversation_id, bot_profile, human_user)
 
         bot_name = bot_user.get_full_name() or bot_user.username
 
         messages = build_chat_messages(
             bot_profile.system_prompt,
-            history,
+            history.messages,
             bot_name=bot_name,
             user=human_user,
             bot=bot_user,
-            summary=summary_text,
+            summary=history.summary,
         )
 
         initial_messages = sanitize_messages_for_storage(list(messages))
@@ -99,18 +96,18 @@ def generate_chat_response(
             ai_task.refresh_from_db(fields=["status"])
             return ai_task.status == AITask.Status.FAILED
 
-        result, tool_context, rounds, tool_data = run_tool_loop(
-            messages,
-            bot_profile.get_model(),
+        runner = build_bot_runner(
+            bot_profile,
             human_user,
             bot_user,
             conversation_id,
             is_cancelled=cancelled_by_user,
         )
+        run = runner.run(messages)
 
         # Checked before the retry below: a cancelled run must not spend one
         # more model call on an answer nobody will read.
-        if tool_context.get("cancelled") or cancelled_by_user():
+        if run.stop is StopReason.CANCELLED or cancelled_by_user():
             logger.info(
                 "Bot response cancelled: conversation=%s", scrub(conversation_id)
             )
@@ -119,21 +116,18 @@ def generate_chat_response(
         # Auto-retry once if the model returned an empty response.
         # Only the final completion is retried (no tools): rerunning
         # the whole loop would re-execute side-effectful tools and
-        # discard the first pass's tool_context / tool_data.
-        body_preview = clean_llm_content(result.get("content") or "")
-        if not body_preview and not produced_media(tool_context):
+        # discard the first pass's context / tool_data.
+        body_preview = clean_llm_content(run.response.content)
+        if not body_preview and not produced_media(run.context):
             logger.warning(
                 "Empty response, retrying once: conversation=%s", scrub(conversation_id)
             )
-            result, retry_rounds = retry_final_completion(
-                messages, bot_profile.get_model()
-            )
-            rounds.extend(retry_rounds)
-            body_preview = clean_llm_content(result.get("content") or "")
-            if not body_preview and not produced_media(tool_context):
+            run = runner.retry_final(messages, run)
+            body_preview = clean_llm_content(run.response.content)
+            if not body_preview and not produced_media(run.context):
                 raise RuntimeError("Empty response from model")
 
-        raw_messages = {"messages": initial_messages, "rounds": rounds}
+        raw_messages = {"messages": initial_messages, "rounds": run.rounds}
 
         # Re-checked: the retry above can take as long as a model call.
         if cancelled_by_user():
@@ -145,11 +139,11 @@ def generate_chat_response(
         body, bot_message = post_bot_message(
             conversation,
             bot_user,
-            result,
-            tool_context,
+            run.response,
+            run.context,
             ai_task,
             raw_messages,
-            tool_data=tool_data,
+            tool_data=run.tool_data,
         )
 
         # Auto-generate title if the conversation doesn't have one yet.
@@ -160,13 +154,13 @@ def generate_chat_response(
         if not conversation.title and msg_count >= 2:
             generate_conversation_title.delay(str(conversation_id))
 
-        maybe_dispatch_summary_update(conversation_id, summary_text)
+        maybe_dispatch_summary_update(conversation_id, history.summary)
 
         logger.info(
             "Bot response generated: conversation=%s tokens=%s+%s",
             scrub(conversation_id),
-            result["prompt_tokens"],
-            result["completion_tokens"],
+            run.response.prompt_tokens,
+            run.response.completion_tokens,
         )
         return {"status": "ok", "message_id": str(bot_message.uuid)}
 

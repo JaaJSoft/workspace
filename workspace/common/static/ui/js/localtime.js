@@ -10,8 +10,9 @@
   }
 
   // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
+  const _dayKeyFormatter = window.zonedFormatter('en-CA');
   function _dayKey(d, tz) {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+    return _dayKeyFormatter(tz).format(d);
   }
 
   function userTzDayKey(d) {
@@ -59,13 +60,13 @@
     }
   }
 
+  const _tzPartsFormatter = window.zonedFormatter('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  });
   function _tzParts(d, tz) {
-    const dtf = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-    });
     const parts = {};
-    for (const p of dtf.formatToParts(d)) parts[p.type] = p.value;
+    for (const p of _tzPartsFormatter(tz).formatToParts(d)) parts[p.type] = p.value;
     return parts;
   }
 

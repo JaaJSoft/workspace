@@ -4,12 +4,12 @@
 // on the same page match.
 // Registers window.formatTimeAgo(value) and window.formatLastSeenAgo(value).
 (function () {
+  // 'en-US' pins the English month abbreviations the server's %b emits.
+  const _datePartsFormatter = window.zonedFormatter('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
+
   function _dateParts(d, tz) {
     const parts = {};
-    // 'en-US' pins the English month abbreviations the server's %b emits.
-    new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: 'short', day: '2-digit' })
-      .formatToParts(d)
-      .forEach((p) => { parts[p.type] = p.value; });
+    _datePartsFormatter(tz).formatToParts(d).forEach((p) => { parts[p.type] = p.value; });
     return parts;
   }
 

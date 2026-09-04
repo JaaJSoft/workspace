@@ -1,17 +1,23 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.utils import timezone
 from django.utils import timezone as dj_timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.calendar import recurrence
 from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember
 from workspace.calendar.search import search_events
+from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.users.services.settings import set_setting
 
 from .test_calendar import CalendarTestMixin
+
+User = get_user_model()
 
 # ---------- Event CRUD ----------
 
@@ -487,14 +493,17 @@ class AllDayApiContractTests(CalendarTestMixin, APITestCase):
         self.assertEqual(event.start, datetime(2026, 8, 6, tzinfo=UTC))
 
     def test_recurring_all_day_occurrences_are_date_only(self):
-        Event.objects.create(
+        from workspace.calendar.services.recurrence_rule import apply_rule
+
+        event = Event(
             calendar=self.calendar,
             title="Daily standdown",
             start=datetime(2026, 8, 3, tzinfo=UTC),
             all_day=True,
             owner=self.owner,
-            recurrence_frequency="daily",
         )
+        apply_rule(event, "RRULE:FREQ=DAILY")
+        event.save()
         self.client.force_authenticate(self.owner)
         resp = self.client.get(
             self.url,
@@ -603,13 +612,14 @@ class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
         self.client.force_login(self.owner)
 
     def test_editing_legacy_recurring_series_keeps_utc_expansion(self):
-        event = Event.objects.create(
+        event = Event(
             calendar=self.calendar,
             title="Legacy daily",
             start=datetime(2026, 8, 5, 9, 0, tzinfo=UTC),
             owner=self.owner,
-            recurrence_frequency="daily",
         )
+        apply_rule(event, "RRULE:FREQ=DAILY")
+        event.save()
         self._login_paris()
         resp = self.client.put(
             f"{self.url}/{event.uuid}",
@@ -630,10 +640,173 @@ class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
         self._login_paris()
         resp = self.client.put(
             f"{self.url}/{event.uuid}",
-            {"recurrence_frequency": "daily"},
+            {"recurrence_rule": "RRULE:FREQ=DAILY"},
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()
-        self.assertEqual(event.recurrence_frequency, "daily")
+        self.assertTrue(event.is_recurring)
         self.assertEqual(event.timezone, "Europe/Paris")
+
+
+class RecurrenceRuleApiTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pass")
+        self.client.force_authenticate(self.user)
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+
+    def _create(self, rule):
+        return self.client.post(
+            "/api/v1/events",
+            {
+                "calendar_id": str(self.cal.uuid),
+                "title": "E",
+                "start": "2026-01-06T10:00:00Z",
+                "end": "2026-01-06T11:00:00Z",
+                "recurrence_rule": rule,
+            },
+            format="json",
+        )
+
+    def test_complex_rule_survives_a_round_trip_byte_for_byte(self):
+        rule = "RRULE:FREQ=MONTHLY;BYDAY=2TU"
+        response = self._create(rule)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["recurrence_rule"], rule)
+
+    def test_complex_rule_reports_itself_as_not_simple(self):
+        # recurrence_simple is null, which is what puts the web picker into
+        # read-only mode instead of letting it overwrite the rule.
+        response = self._create("RRULE:FREQ=MONTHLY;BYDAY=2TU")
+        self.assertIsNone(response.json()["recurrence_simple"])
+
+    def test_simple_rule_exposes_picker_fields_and_a_summary(self):
+        response = self._create("RRULE:FREQ=DAILY;INTERVAL=3")
+        body = response.json()
+        self.assertEqual(body["recurrence_simple"]["frequency"], "daily")
+        self.assertEqual(body["recurrence_simple"]["interval"], 3)
+        self.assertEqual(body["recurrence_summary"], "Every 3 days")
+
+    def test_recurring_occurrence_from_range_endpoint_exposes_summary_and_simple(self):
+        # The event modal reads a recurring occurrence's recurrence state off
+        # an occurrence dict (make_virtual_occurrence), not an Event through
+        # EventSerializer - both shapes must carry the same derived fields.
+        self._create("RRULE:FREQ=DAILY;INTERVAL=2")
+        resp = self.client.get(
+            "/api/v1/events",
+            {"start": "2026-01-06T00:00:00Z", "end": "2026-01-10T00:00:00Z"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        occurrences = [e for e in resp.json() if e["title"] == "E"]
+        self.assertEqual(len(occurrences), 2)
+        for occ in occurrences:
+            self.assertTrue(occ["is_recurring"])
+            self.assertEqual(occ["recurrence_summary"], "Every 2 days")
+            self.assertEqual(occ["recurrence_simple"]["frequency"], "daily")
+            self.assertEqual(occ["recurrence_simple"]["interval"], 2)
+
+    def _create_exception(self, master, days_after_start):
+        exc_start = master.start + timedelta(days=days_after_start)
+        return Event.objects.create(
+            calendar=self.cal,
+            title="E (moved)",
+            start=exc_start + timedelta(hours=1),
+            end=exc_start + timedelta(hours=2),
+            owner=self.user,
+            recurrence_parent=master,
+            original_start=exc_start,
+        )
+
+    def test_materialized_exception_exposes_master_summary_and_simple(self):
+        # A materialized exception is a *different* Event row than its
+        # master, fetched by a separate query - the derived fields must
+        # still reflect the master's rule, not the exception's own (blank)
+        # recurrence_rule.
+        create_resp = self._create("RRULE:FREQ=DAILY;INTERVAL=2")
+        master = Event.objects.get(uuid=create_resp.json()["uuid"])
+        self._create_exception(master, days_after_start=2)
+
+        resp = self.client.get(
+            "/api/v1/events",
+            {"start": "2026-01-06T00:00:00Z", "end": "2026-01-10T00:00:00Z"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        occ = next(e for e in resp.json() if e["title"] == "E (moved)")
+        self.assertTrue(occ["is_exception"])
+        self.assertEqual(occ["recurrence_summary"], "Every 2 days")
+        self.assertEqual(occ["recurrence_simple"]["frequency"], "daily")
+        self.assertEqual(occ["recurrence_simple"]["interval"], 2)
+
+    def test_recurrence_summary_computed_once_per_master_not_per_occurrence(self):
+        # Pins the per-master cache: expanding a master that yields both a
+        # virtual occurrence and a materialized exception must call
+        # describe() exactly once, not once per occurrence - a regression
+        # here means make_exception_dict stopped reusing the master's cache.
+        create_resp = self._create("RRULE:FREQ=DAILY;INTERVAL=2")
+        master = Event.objects.get(uuid=create_resp.json()["uuid"])
+        self._create_exception(master, days_after_start=2)
+
+        with patch.object(
+            recurrence, "describe", wraps=recurrence.describe
+        ) as mock_describe:
+            resp = self.client.get(
+                "/api/v1/events",
+                {"start": "2026-01-06T00:00:00Z", "end": "2026-01-10T00:00:00Z"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        occurrences = [e for e in resp.json() if e["title"] in ("E", "E (moved)")]
+        self.assertEqual(len(occurrences), 2)
+        self.assertEqual(mock_describe.call_count, 1)
+
+
+class RecurrenceRuleValidationTests(APITestCase):
+    """Unparseable rule text must be refused at the boundary.
+
+    Stored, it becomes a master with no bound: no window query prunes it, so
+    it is loaded, expanded and logged on every calendar read of every window.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="strict", password="pass")
+        self.client.force_authenticate(self.user)
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+
+    def _create(self, rule):
+        return self.client.post(
+            "/api/v1/events",
+            {
+                "calendar_id": str(self.cal.uuid),
+                "title": "E",
+                "start": "2026-01-06T10:00:00Z",
+                "end": "2026-01-06T11:00:00Z",
+                "recurrence_rule": rule,
+            },
+            format="json",
+        )
+
+    def test_create_rejects_an_unparseable_rule(self):
+        resp = self._create("total garbage")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("recurrence_rule", resp.json())
+        self.assertFalse(Event.objects.filter(title="E").exists())
+
+    def test_update_rejects_an_unparseable_rule(self):
+        created = self._create("RRULE:FREQ=DAILY;COUNT=3")
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        resp = self.client.put(
+            f"/api/v1/events/{created.json()['uuid']}",
+            {"recurrence_rule": "RRULE:FREQ=NONSENSE"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_blank_rule_still_clears_the_series(self):
+        created = self._create("RRULE:FREQ=DAILY;COUNT=3")
+        event_uuid = created.json()["uuid"]
+        resp = self.client.put(
+            f"/api/v1/events/{event_uuid}",
+            {"recurrence_rule": "", "scope": "all"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(Event.objects.get(uuid=event_uuid).is_recurring)

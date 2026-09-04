@@ -1,0 +1,78 @@
+{% comment %}
+Line Chart
+==========
+Renders the geometry produced by workspace.common.charts.line_chart as an
+inline SVG, with a legend above it. Filled series (a cumulative flow's
+bands) draw a translucent polygon under their line; dashed series (a
+burndown's ideal) are reference lines, drawn half-transparent and without
+markers.
+
+Parameters:
+-----------
+- chart: the dict returned by line_chart()
+- aria_label: accessible description of what the chart shows
+
+Every coordinate in `chart` is a pre-formatted string and the template does
+no arithmetic on purpose - see the docstring in charts.py.
+
+Colour comes from the series' `css_class` (a stroke-* utility) on the line
+and the legend swatch, and from `fill_class` (a fill-* utility) on the area.
+The polyline itself sets fill="none" as an attribute, which a fill-* class
+would override - hence the two separate classes.
+{% endcomment %}
+
+<div class="w-full">
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2">
+    {% for s in chart.series %}
+      <span class="flex items-center gap-1.5 text-xs text-base-content/70">
+        <svg viewBox="0 0 14 8" class="w-4 h-2" aria-hidden="true">
+          {% if s.fill_class %}
+            <rect width="14" height="8" rx="1.5" class="{{ s.fill_class }}" fill-opacity="0.45" />
+          {% endif %}
+          <line x1="0" y1="4" x2="14" y2="4" class="{{ s.css_class }}" stroke-width="2" {% if s.dashed %}stroke-dasharray="3 2" stroke-opacity="0.5"{% endif %} />
+        </svg>
+        {{ s.name }}
+      </span>
+    {% endfor %}
+  </div>
+  {% comment %}
+    Same scrolling minimum width as the column chart: the SVG scales
+    uniformly, so on a narrow viewport the labels would shrink below
+    legibility.
+  {% endcomment %}
+  <div class="overflow-x-auto">
+    <svg
+      viewBox="0 0 {{ chart.width }} {{ chart.height }}"
+      class="w-full h-auto min-w-[42rem]"
+      role="img"
+      aria-label="{{ aria_label }}"
+    >
+      {% for line in chart.gridlines %}
+        <line x1="{{ chart.plot.x }}" y1="{{ line.y }}" x2="{{ chart.width }}" y2="{{ line.y }}" class="stroke-base-content/10" stroke-width="1" />
+        <text x="{{ chart.plot.x }}" y="{{ line.y }}" dx="-6" dy="3" text-anchor="end" class="fill-base-content/50" font-size="9">{{ line.value }}</text>
+      {% endfor %}
+      {% for s in chart.series %}
+        {% if s.fill_class %}
+          {% for seg in s.segments %}
+            <polygon points="{{ seg.area }}" class="{{ s.fill_class }}" fill-opacity="0.35" stroke="none" />
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
+      {% for s in chart.series %}
+        {% for seg in s.segments %}
+          <polyline points="{{ seg.line }}" fill="none" class="{{ s.css_class }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" {% if s.dashed %}stroke-dasharray="4 4" stroke-opacity="0.5"{% endif %} />
+        {% endfor %}
+        {% if not s.dashed %}
+          {% for m in s.markers %}
+            <circle cx="{{ m.x }}" cy="{{ m.y }}" r="2.5" class="{{ s.css_class }} fill-base-100" stroke-width="1.5">
+            <title>{{ m.tooltip }}</title>
+            </circle>
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
+      {% for cat in chart.categories %}
+        <text x="{{ cat.x }}" y="{{ chart.height }}" dy="-8" text-anchor="middle" class="fill-base-content/50" font-size="9">{{ cat.label }}</text>
+      {% endfor %}
+    </svg>
+  </div>
+</div>

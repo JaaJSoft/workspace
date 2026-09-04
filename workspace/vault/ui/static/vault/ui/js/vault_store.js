@@ -87,6 +87,19 @@ window.vaultStore = function vaultStore() {
 
     // ---- navigation ------------------------------------------------------
 
+    // Every value here names something inside one vault - a folder UUID, the
+    // trail that reached it - so it means nothing in the next one. Switching
+    // used to be a page load, which cleared it for free; it is a fetch now,
+    // and a folder UUID left behind filters the opened vault down to nothing.
+    resetNavigation() {
+      this.view = 'all';
+      this.folderUuid = null;
+      this.tagFilter = null;
+      this.history = [{ view: 'all', folder: null, tag: null }];
+      this.historyIndex = 0;
+      this.selected = [];
+    },
+
     push(state) {
       // Anything ahead of the cursor is dropped: navigating after going back
       // starts a new future, exactly as a browser's own history does.
@@ -198,9 +211,9 @@ window.vaultStore = function vaultStore() {
         name: (a, b) => a.name.localeCompare(b.name),
         favorite: (a, b) => Number(b.favorite) - Number(a.favorite),
         modified: (a, b) => String(a.modified).localeCompare(String(b.modified)),
-        // Offered by the preferences panel, which both screens now show: a
-        // default sort this screen did not know left the listing unsorted and
-        // its select on a value no option carried.
+        // Offered by the preferences panel: a default sort the store did not
+        // know left the listing unsorted, and its select on a value no option
+        // carried.
         created: (a, b) => String(a.created).localeCompare(String(b.created)),
       }[this.sortField];
       if (!compare) return rows;

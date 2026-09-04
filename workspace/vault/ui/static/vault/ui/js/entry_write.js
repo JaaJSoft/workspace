@@ -9,13 +9,17 @@
 // A field's key is derived per entry, so an empty value is a *removed*
 // field rather than an empty ciphertext. Sealing "" would leave a row
 // claiming to carry a password and an action endpoint offering to copy one.
+//
+// A field the form does not edit is carried as its stored ciphertext rather
+// than re-sealed: the AD binds it to this entry and this slot, so it cannot be
+// moved, and re-sealing would need a plaintext this page has no reason to open.
 window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   session,
   vault,
   draft,
 ) {
   const V = window.vaultCrypto;
-  const keyVersion = draft.keyVersion || vault.key_version || 1;
+  const keyVersion = vault.key_version || 1;
   const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, draft.uuid);
   const seal = async (text, fieldId) =>
     V.toBase64Url(
@@ -26,9 +30,37 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
     );
 
   const fields = {};
+  // Ciphertexts the form never opened, carried through rather than re-sealed -
+  // the same treatment encrypted_notes already gets, for the same reason: the
+  // record is signed whole, so a field absent from the payload is a field
+  // deleted.
+  //
+  // Their key version has to match the one being written. `open` takes the key
+  // it is handed and ignores the version in the header, so a ciphertext sealed
+  // under an older vault key would be stored inside a record claiming the new
+  // one and would never open again - silently. Rotation is therefore a full
+  // re-seal, and this refuses to write the record that would prove otherwise.
+  const carried = draft.carriedFields || {};
+  const carriedIds = Object.keys(carried);
+  // Notes carry the same way a field does when the draft has no typed
+  // plaintext for them (see encryptedNotes below), so a mismatched key
+  // version has to refuse the write on their account too - not just when a
+  // field slot is carried.
+  const carriesNotes = !draft.notes && !!draft.encryptedNotes;
+  if ((carriedIds.length || carriesNotes) && (draft.keyVersion || keyVersion) !== keyVersion) {
+    throw new Error(
+      `cannot carry fields sealed under key version ${draft.keyVersion} into ${keyVersion}`,
+    );
+  }
+  for (const fieldId of carriedIds.sort()) {
+    fields[fieldId] = carried[fieldId];
+  }
   for (const fieldId of Object.keys(draft.values || {}).sort()) {
     const value = draft.values[fieldId];
-    if (value === '' || value === null || value === undefined) continue;
+    if (value === '' || value === null || value === undefined) {
+      delete fields[fieldId];
+      continue;
+    }
     fields[fieldId] = await seal(String(value), fieldId);
   }
 

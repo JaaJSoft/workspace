@@ -68,6 +68,139 @@
       {% include "ui/partials/column_chart.html" with chart=flow_chart aria_label="Tasks created and completed per week over the last 12 weeks" %}
     </section>
 
+    <section class="rounded-box bg-base-200 p-4">
+      <h2 class="font-semibold mb-1 flex items-center gap-2">
+        <i data-lucide="timer" class="w-4 h-4 text-accent"></i>
+        Cycle and lead time
+      </h2>
+      <p class="text-xs text-base-content/50 mb-3">
+        Tasks finished in the last 12 weeks. Lead time runs from creation to
+        completion, cycle time from the first move onto the board.
+      </p>
+      {% if duration_stats.count %}
+        <div
+          class="stats stats-vertical sm:stats-horizontal bg-base-100 w-full mb-4"
+        >
+          <div class="stat py-3">
+            <div class="stat-title">Cycle time</div>
+            <div class="stat-value text-2xl">{% if duration_stats.cycle.median is None %}–{% else %}{{ duration_stats.cycle.median }} d{% endif %}</div>
+            <div class="stat-desc">median · 85% within {% if duration_stats.cycle.p85 is None %}–{% else %}{{ duration_stats.cycle.p85 }} d{% endif %}</div>
+          </div>
+          <div class="stat py-3">
+            <div class="stat-title">Lead time</div>
+            <div class="stat-value text-2xl">{{ duration_stats.lead.median }} d</div>
+            <div class="stat-desc">median · 85% within {{ duration_stats.lead.p85 }} d</div>
+          </div>
+          <div class="stat py-3">
+            <div class="stat-title">Finished</div>
+            <div class="stat-value text-2xl">{{ duration_stats.count }}</div>
+            <div class="stat-desc">task{{ duration_stats.count|pluralize }} measured</div>
+          </div>
+        </div>
+        {% include "ui/partials/column_chart.html" with chart=duration_chart aria_label="Number of tasks per lead and cycle time bracket" %}
+      {% else %}
+        <p class="text-sm text-base-content/50 italic">No task finished in the last 12 weeks yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="rounded-box bg-base-200 p-4">
+      <h2 class="font-semibold mb-1 flex items-center gap-2">
+        <i data-lucide="area-chart" class="w-4 h-4 text-accent"></i>
+        Cumulative flow
+      </h2>
+      <p class="text-xs text-base-content/50 mb-3">
+        How many tasks sat in the backlog, on the board and in done at the
+        end of each day. A widening middle band means work piles up faster
+        than it finishes.
+      </p>
+      {% include "ui/partials/line_chart.html" with chart=cumulative_flow_chart aria_label="Tasks per status category per day over the last 12 weeks" %}
+    </section>
+
+    {% if project.type == 'scrum' %}
+      <section class="rounded-box bg-base-200 p-4">
+        <div class="flex flex-wrap items-start justify-between gap-2 mb-1">
+          <h2 class="font-semibold flex items-center gap-2">
+            <i data-lucide="trending-down" class="w-4 h-4 text-accent"></i>
+            Sprint burndown
+          </h2>
+          {% if report_sprints %}
+            {% url 'projects_ui:analytics' project.uuid as analytics_url %}
+            {% include "projects/ui/partials/_sprint_switcher.html" with options=report_sprints selected=report_sprint base_url=analytics_url empty_label="Pick a sprint" %}
+          {% endif %}
+        </div>
+        {% if burndown %}
+          <p class="text-xs text-base-content/50 mb-3">
+            {{ burndown.unit|capfirst }} left at the end of each sprint day
+            against an even pace to zero.
+            {% if burndown.unestimated %}
+              {{ burndown.unestimated }} task{{ burndown.unestimated|pluralize }}
+              without an estimate {{ burndown.unestimated|pluralize:"is,are" }} not counted.
+            {% endif %}
+          </p>
+          <div
+            class="stats stats-vertical sm:stats-horizontal bg-base-100 w-full mb-4"
+          >
+            <div class="stat py-3">
+              <div class="stat-title">Remaining</div>
+              <div class="stat-value text-2xl">{{ burndown.remaining|floatformat:"-1" }}</div>
+              <div class="stat-desc">{{ burndown.unit }} still open</div>
+            </div>
+            <div class="stat py-3">
+              <div class="stat-title">Scope</div>
+              <div class="stat-value text-2xl">{{ burndown.scope|floatformat:"-1" }}</div>
+              <div class="stat-desc">
+                {% if burndown.scope > burndown.initial_scope %}
+                  grew from {{ burndown.initial_scope|floatformat:"-1" }} at the start
+                {% elif burndown.scope < burndown.initial_scope %}
+                  down from {{ burndown.initial_scope|floatformat:"-1" }} at the start
+                {% else %}
+                  {{ burndown.unit }} planned, unchanged
+                {% endif %}
+              </div>
+            </div>
+            <div class="stat py-3">
+              <div class="stat-title">Sprint</div>
+              <div class="stat-value text-2xl truncate">{{ report_sprint.name }}</div>
+              <div class="stat-desc">{{ report_sprint.start_date|date:"M j" }} – {{ report_sprint.end_date|date:"M j"|default:"open" }}</div>
+            </div>
+          </div>
+          {% include "ui/partials/line_chart.html" with chart=burndown_chart aria_label="Remaining effort per sprint day against the ideal pace" %}
+        {% else %}
+          <p class="text-sm text-base-content/50 italic mt-2">Start a sprint to see its burndown here.</p>
+        {% endif %}
+      </section>
+
+      <section class="rounded-box bg-base-200 p-4">
+        <h2 class="font-semibold mb-1 flex items-center gap-2">
+          <i data-lucide="gauge" class="w-4 h-4 text-accent"></i>
+          Velocity
+        </h2>
+        <p class="text-xs text-base-content/50 mb-3">
+          {{ velocity_unit|capfirst }} completed per closed sprint, with the
+          average over the last three.
+        </p>
+        {% if velocity %}
+          <div
+            class="stats stats-vertical sm:stats-horizontal bg-base-100 w-full mb-4"
+          >
+            <div class="stat py-3">
+              <div class="stat-title">Last sprint</div>
+              <div class="stat-value text-2xl">{{ velocity_summary.last|floatformat:"-1" }}</div>
+              <div class="stat-desc">{{ velocity_unit }} completed</div>
+            </div>
+            <div class="stat py-3">
+              <div class="stat-title">Average</div>
+              <div class="stat-value text-2xl">{{ velocity_summary.average|floatformat:"-1" }}</div>
+              <div class="stat-desc">{% if velocity_summary.count >= 3 %}over the last three sprints{% else %}over {{ velocity_summary.count }} sprint{{ velocity_summary.count|pluralize }}{% endif %}</div>
+            </div>
+          </div>
+          {% include "ui/partials/column_chart.html" with chart=velocity_chart aria_label="Effort completed per closed sprint with the rolling three-sprint average" %}
+        {% else %}
+          <p class="text-sm text-base-content/50 italic">Velocity appears once a sprint has been completed.</p>
+        {% endif %}
+      </section>
+    {% endif %}
+
     <div class="grid gap-4 items-start lg:grid-cols-3">
       {% include "projects/ui/partials/_distribution_card.html" with title="Open by column" icon="columns-3" entries=distribution.by_status %}
       {% include "projects/ui/partials/_distribution_card.html" with title="Open by assignee" icon="users" entries=distribution.by_assignee %}

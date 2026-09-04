@@ -27,7 +27,7 @@ function mailApp() {
     expandedAccounts: {},
 
     // UI
-    collapsed: false,
+    collapsed: window.sidebarPreference.initial(),
     loadingMessages: false,
     loadingMoreMessages: false,
     loadingDetail: false,
@@ -447,11 +447,20 @@ function mailApp() {
     },
 
     toggleCollapse() {
+      if (this.isMobile()) return;
       this.collapsed = !this.collapsed;
+      window.sidebarPreference.save('mail', this.collapsed);
     },
 
     isMobile() {
       return window.innerWidth < 1024;
+    },
+
+    // The drawer is off-canvas below `lg`, so an opened one is the full
+    // sidebar whatever the desktop preference says: a 64px icon rail is no
+    // use on a phone.
+    sidebarCollapsed() {
+      return this.isMobile() ? false : this.collapsed;
     },
 
     _closeDrawerOnMobile() {

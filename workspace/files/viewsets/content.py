@@ -1,5 +1,7 @@
 """Content + thumbnail + download actions for FileViewSet."""
 
+from itertools import batched
+
 from django.db.models import Q
 from django.http import Http404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -16,6 +18,7 @@ from workspace.common.http_ranges import (
 from workspace.common.http_ranges import (
     stream_range as _stream_range,
 )
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.metrics import FILES_DOWNLOAD_BYTES
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
@@ -24,6 +27,10 @@ from workspace.files.services.scanning.policy import (
     blocked_statuses,
     exclude_blocked,
 )
+
+# A bulk download names every selected node in one ``uuid__in``; SQLite caps
+# the bound variables of one statement, so the lookups run per chunk.
+_LOOKUP_CHUNK = 500
 
 
 def _chunked_field_file(field_file, block_size=65536):
@@ -360,48 +367,50 @@ class ContentMixin:
         """Download multiple files/folders as a single ZIP archive."""
         from django.http import StreamingHttpResponse
 
-        uuids = request.data.get("uuids", [])
-        if not isinstance(uuids, list) or len(uuids) == 0:
+        raw_uuids = request.data.get("uuids", [])
+        if not isinstance(raw_uuids, list) or len(raw_uuids) == 0:
             return Response(
                 {"detail": "uuids must be a non-empty list."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if len(uuids) > 200:
+        parsed = [parse_uuid_or_none(value) for value in raw_uuids]
+        if None in parsed:
             return Response(
-                {"detail": "Too many UUIDs (max 200)."},
+                {"detail": "uuids must be a list of UUIDs."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        uuids = list(dict.fromkeys(parsed))
 
         # A blocked file is dropped from the archive rather than failing the
         # whole request: the same treatment a missing blob already gets.
         blocked_statuses_now = blocked_statuses()
-        blocked_uuids = (
-            set(
-                FileScan.objects.filter(
-                    file__uuid__in=uuids, status__in=blocked_statuses_now
-                ).values_list("file__uuid", flat=True)
+        blocked_uuids = set()
+        file_objects = []
+        for chunk in batched(uuids, _LOOKUP_CHUNK, strict=False):
+            if blocked_statuses_now:
+                blocked_uuids.update(
+                    FileScan.objects.filter(
+                        file__uuid__in=chunk, status__in=blocked_statuses_now
+                    ).values_list("file__uuid", flat=True)
+                )
+            file_objects.extend(
+                File.objects.filter(
+                    FileService.accessible_files_q(request.user),
+                    uuid__in=chunk,
+                    deleted_at__isnull=True,
+                )
+                .only(
+                    "uuid",
+                    "name",
+                    "path",
+                    "content",
+                    "node_type",
+                    "owner_id",
+                )
+                .distinct()
             )
-            if blocked_statuses_now
-            else set()
-        )
-        file_objects = list(
-            File.objects.filter(
-                FileService.accessible_files_q(request.user),
-                uuid__in=uuids,
-                deleted_at__isnull=True,
-            )
-            .only(
-                "uuid",
-                "name",
-                "path",
-                "content",
-                "node_type",
-                "owner_id",
-            )
-            .distinct()
-        )
 
-        if len(file_objects) != len(set(uuids)):
+        if len(file_objects) != len(uuids):
             return Response(
                 {"detail": "One or more UUIDs not found."},
                 status=status.HTTP_404_NOT_FOUND,

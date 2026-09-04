@@ -39,52 +39,11 @@
       class="flex-1 overflow-y-auto py-2"
       :class="collapsed ? 'px-2' : 'px-3'"
     >
-      <div class="pb-2" x-show="!collapsed" x-transition>
-        <div class="dropdown w-full">
-          <button
-            type="button"
-            tabindex="0"
-            class="btn btn-ghost h-10 min-h-10 w-full justify-between border border-base-300 font-normal text-base"
-          >
-            <span class="flex items-center gap-2 min-w-0">
-              <i
-                :data-lucide="openVault ? (openVault.icon || 'lock') : 'lock'"
-                class="w-5 h-5 text-error shrink-0"
-              ></i>
-              <span class="truncate" x-text="vaultName() || 'Vault'"></span>
-              <span class="badge badge-ghost badge-sm" x-show="isMember(openVault)">member</span>
-            </span>
-            <i data-lucide="chevrons-up-down" class="w-4 h-4 shrink-0 opacity-60"></i>
-          </button>
-          <ul
-            tabindex="0"
-            class="dropdown-content menu z-50 mt-1 w-full bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2 gap-1"
-          >
-            <template x-for="candidate in vaults" :key="candidate.uuid">
-              <li>
-                <a
-                  :href="'/vault/' + candidate.uuid"
-                  :class="candidate.uuid === vaultUuid ? 'active' : ''"
-                >
-                  <i :data-lucide="candidate.icon || 'lock'" class="w-4 h-4 shrink-0"></i>
-                  <span class="truncate flex-1" x-text="candidate.name || 'Unnamed'"></span>
-                  <span class="badge badge-ghost badge-sm" x-show="isMember(candidate)">member</span>
-                </a>
-              </li>
-            </template>
-            <li class="border-t border-base-300 pt-1">
-              <a href="{% url 'vault_ui:index' %}">
-                <i data-lucide="layout-grid" class="w-4 h-4"></i>
-                All vaults
-              </a>
-            </li>
-          </ul>
-        </div>
-      </div>
+      {% include "vault/ui/partials/vault_switcher.html" %}
 
       {% comment %}
         Collapsed, the switcher is the vault's own icon, and clicking it opens
-        the sidebar back up - the dropdown has nowhere to go in a 4rem rail.
+        the sidebar back up - its panel has nowhere to go in a 4rem rail.
       {% endcomment %}
       <div class="pb-2 flex justify-center" x-show="collapsed">
         <button

@@ -11,11 +11,12 @@ from django.utils import timezone
 from workspace.calendar.models import Event, EventMember
 from workspace.calendar.queries import visible_events_q
 from workspace.calendar.recurrence import (
-    _build_rrule,
     _member_dict,
     make_virtual_occurrence,
     next_occurrences_after,
+    occurrences_in_range,
 )
+from workspace.calendar.services.recurrence_rule import describe, to_simple_json
 
 
 class VirtualOccurrence:
@@ -73,7 +74,7 @@ def get_upcoming_for_user(user, now, end_of_today):
             relevance_q,
             start__lte=end_of_today,
             is_cancelled=False,
-            recurrence_frequency__isnull=True,
+            is_recurring=False,
         )
         .exclude(declined_q)
         .select_related("calendar")
@@ -84,13 +85,13 @@ def get_upcoming_for_user(user, now, end_of_today):
     masters = list(
         Event.objects.filter(
             user_q,
-            recurrence_frequency__isnull=False,
+            is_recurring=True,
             recurrence_parent__isnull=True,
             start__lte=end_of_today,
             is_cancelled=False,
         )
         .exclude(declined_q)
-        .filter(Q(recurrence_end__isnull=True) | Q(recurrence_end__gte=now))
+        .filter(Q(recurrence_until__isnull=True) | Q(recurrence_until__gte=now))
         .select_related("calendar")
         .distinct()
     )
@@ -112,7 +113,7 @@ def get_upcoming_for_user(user, now, end_of_today):
     # Expand virtual occurrences
     virtual = []
     for master in masters:
-        for occ_start in _build_rrule(master, now, end_of_today):
+        for occ_start in occurrences_in_range(master, now, end_of_today):
             key = (str(master.uuid), occ_start.isoformat())
             if key not in exception_keys:
                 virtual.append(VirtualOccurrence(master, occ_start))
@@ -139,7 +140,7 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
             user_q,
             start__gte=after,
             is_cancelled=False,
-            recurrence_frequency__isnull=True,
+            is_recurring=False,
         )
         .select_related("owner", "calendar", "recurrence_parent")
         .prefetch_related("members__user")
@@ -158,12 +159,12 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
     masters_qs = (
         Event.objects.filter(
             user_q,
-            recurrence_frequency__isnull=False,
+            is_recurring=True,
             recurrence_parent__isnull=True,
             is_cancelled=False,
         )
         # Master can still produce occurrences at or after `after`
-        .filter(Q(recurrence_end__isnull=True) | Q(recurrence_end__gte=after))
+        .filter(Q(recurrence_until__isnull=True) | Q(recurrence_until__gte=after))
         .select_related("owner", "calendar")
         .prefetch_related("members__user")
         .distinct()
@@ -188,10 +189,14 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
 
     recurring_data = []
     for master in masters:
-        # Pre-build member dicts once per master, then `make_virtual_occurrence`
-        # reuses them via `getattr(master, '_cached_member_dicts', ...)`. Same
-        # pattern as `expand_recurring_events`.
+        # Pre-build the per-master values once, then `make_virtual_occurrence`
+        # reuses them via `getattr(master, '_cached_...', ...)`. Same pattern as
+        # `expand_recurring_events`: members, plus the two derived recurrence
+        # fields, which are pure functions of the rule text and would otherwise
+        # be recomputed for every occurrence on the page.
         master._cached_member_dicts = [_member_dict(m) for m in master.members.all()]
+        master._cached_recurrence_summary = describe(master.recurrence_rule)
+        master._cached_recurrence_simple = to_simple_json(master.recurrence_rule)
 
         # Iterate the rrule stream unbounded and collect up to `limit + 1`
         # NON-excepted occurrences. We can't just request `limit + 1` from

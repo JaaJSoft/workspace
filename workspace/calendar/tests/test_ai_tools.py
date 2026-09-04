@@ -21,6 +21,7 @@ from workspace.calendar.ai_tools import (
 )
 from workspace.calendar.models import Calendar, Event, EventMember, Poll, PollVote
 from workspace.calendar.models_external import ExternalCalendar
+from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
 User = get_user_model()
@@ -74,15 +75,15 @@ class CalendarAiToolsTests(TestCase):
         one_off = Event.objects.create(
             calendar=cal, owner=self.user, title="Solo", start=now + timedelta(days=1)
         )
-        master = Event.objects.create(
+        master = Event(
             calendar=cal,
             owner=self.user,
             title="Weekly",
             start=now + timedelta(days=2),
             end=now + timedelta(days=2, hours=1),
-            recurrence_frequency="weekly",
-            recurrence_interval=1,
         )
+        apply_rule(master, "RRULE:FREQ=WEEKLY")
+        master.save()
 
         args = ListUpcomingEventsParams(days_ahead=7, limit=20)
         entries = json.loads(
@@ -312,15 +313,16 @@ class CalendarWriteToolsTests(TestCase):
         start = (timezone.now() + timedelta(days=1)).replace(
             minute=0, second=0, microsecond=0
         )
-        return Event.objects.create(
+        event = Event(
             calendar=self.calendar,
             owner=self.user,
             title="Weekly sync",
             start=start,
             end=start + timedelta(hours=1),
-            recurrence_frequency="weekly",
-            recurrence_interval=1,
         )
+        apply_rule(event, "RRULE:FREQ=WEEKLY")
+        event.save()
+        return event
 
     def _update(self, context=None, **kwargs):
         args = UpdateEventParams(**kwargs)

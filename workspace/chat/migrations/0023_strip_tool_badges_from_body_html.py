@@ -22,7 +22,8 @@ def strip_tool_badges(apps, schema_editor):
     since there is no other record of the tools used.
     """
     Message = apps.get_model("chat", "Message")
-    qs = Message.objects.filter(
+    db = schema_editor.connection.alias
+    qs = Message.objects.using(db).filter(
         tool_data__isnull=False, body_html__contains=BADGE_MARKER
     ).only("uuid", "body_html", "tool_data")
     batch = []
@@ -32,10 +33,10 @@ def strip_tool_badges(apps, schema_editor):
         msg.body_html = _strip_badge_block(msg.body_html)
         batch.append(msg)
         if len(batch) >= BATCH_SIZE:
-            Message.objects.bulk_update(batch, ["body_html"])
+            Message.objects.using(db).bulk_update(batch, ["body_html"])
             batch = []
     if batch:
-        Message.objects.bulk_update(batch, ["body_html"])
+        Message.objects.using(db).bulk_update(batch, ["body_html"])
 
 
 class Migration(migrations.Migration):

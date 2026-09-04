@@ -46,6 +46,33 @@ class FilesIndexSettingsTests(TestCase):
         self.assertEqual(response.context["file_prefs"], {"breadcrumbCollapse": 2})
         self.assertEqual(response.context["viewer_prefs"], {"theme": "dark"})
 
+    def test_index_renders_only_the_saved_view_mode(self):
+        """A large folder costs the browser as much to bind as it has markup,
+        so the listing carries one view, the saved one."""
+        from workspace.files.models import File
+
+        File.objects.create(
+            owner=self.user, name="notes.txt", node_type=File.NodeType.FILE
+        )
+
+        response = self.client.get(reverse("files_ui:index"))
+        self.assertEqual(response.context["view_mode"], "list")
+        self.assertContains(response, 'data-view-mode="list"')
+        self.assertContains(response, 'data-col="name"')
+        self.assertNotContains(response, 'class="grid"')
+
+        set_setting(self.user, "files", "preferences", {"defaultViewMode": "mosaic"})
+        response = self.client.get(reverse("files_ui:index"))
+        self.assertEqual(response.context["view_mode"], "mosaic")
+        self.assertContains(response, 'data-view-mode="mosaic"')
+        self.assertContains(response, 'class="grid"')
+        self.assertNotContains(response, 'data-col="name"')
+
+        for junk in ("carousel", ["mosaic"], {"mode": "mosaic"}, 3):
+            set_setting(self.user, "files", "preferences", {"defaultViewMode": junk})
+            response = self.client.get(reverse("files_ui:index"))
+            self.assertEqual(response.context["view_mode"], "list")
+
     def test_index_defaults_when_settings_absent(self):
         """Missing settings fall back to the documented defaults."""
         response = self.client.get(reverse("files_ui:index"))

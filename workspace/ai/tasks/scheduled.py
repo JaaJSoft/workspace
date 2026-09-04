@@ -5,8 +5,12 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from workspace.ai.services.bot_runs import build_bot_runner
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
-from workspace.ai.services.conversation_history import build_conversation_history
+from workspace.ai.services.conversation_history import (
+    build_conversation_history,
+    unprompted_run_note,
+)
 from workspace.ai.services.llm import (
     clean_llm_content,
     sanitize_messages_for_storage,
@@ -16,7 +20,6 @@ from workspace.ai.services.responses import (
     post_bot_message,
     produced_media,
 )
-from workspace.ai.services.tool_loop import retry_final_completion, run_tool_loop
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
 
@@ -125,11 +128,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
 
     human_user = User.objects.filter(pk=schedule.created_by_id).first()
 
-    history, summary_text = build_conversation_history(
-        str(conversation.pk),
-        bot_profile,
-        human_user,
-    )
+    history = build_conversation_history(str(conversation.pk), bot_profile, human_user)
 
     bot_name = bot_user.get_full_name() or bot_user.username
 
@@ -147,11 +146,12 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
 
     messages = build_chat_messages(
         bot_profile.system_prompt + scheduled_instruction,
-        history,
+        history.messages,
         bot_name=bot_name,
         user=human_user,
         bot=bot_user,
-        summary=summary_text,
+        summary=history.summary,
+        situation=unprompted_run_note(history.window, bot_user.id),
     )
 
     ai_task = AITask.objects.create(
@@ -167,35 +167,29 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
     try:
         initial_messages = sanitize_messages_for_storage(list(messages))
 
-        result, tool_context, rounds, tool_data = run_tool_loop(
-            messages,
-            bot_profile.get_model(),
-            human_user,
-            bot_user,
-            str(conversation.pk),
+        runner = build_bot_runner(
+            bot_profile, human_user, bot_user, str(conversation.pk)
         )
+        run = runner.run(messages)
 
         # Auto-retry once if the model returned an empty response.
         # Only the final completion is retried (no tools): rerunning
         # the whole loop would re-execute side-effectful tools and
-        # discard the first pass's tool_context / tool_data.
-        body_preview = clean_llm_content(result.get("content") or "")
-        if not body_preview and not produced_media(tool_context):
+        # discard the first pass's context / tool_data.
+        body_preview = clean_llm_content(run.response.content)
+        if not body_preview and not produced_media(run.context):
             logger.warning(
                 "Empty scheduled response, retrying once: schedule=%s",
                 scrub(schedule_id),
             )
-            result, retry_rounds = retry_final_completion(
-                messages, bot_profile.get_model()
-            )
-            rounds.extend(retry_rounds)
-            body_preview = clean_llm_content(result.get("content") or "")
-            if not body_preview and not produced_media(tool_context):
+            run = runner.retry_final(messages, run)
+            body_preview = clean_llm_content(run.response.content)
+            if not body_preview and not produced_media(run.context):
                 ai_task.status = ai_task.Status.COMPLETED
                 ai_task.result = "[EMPTY]"
-                ai_task.model_used = result.get("model", "")
-                ai_task.prompt_tokens = result.get("prompt_tokens")
-                ai_task.completion_tokens = result.get("completion_tokens")
+                ai_task.model_used = run.response.model
+                ai_task.prompt_tokens = run.response.prompt_tokens
+                ai_task.completion_tokens = run.response.completion_tokens
                 ai_task.completed_at = timezone.now()
                 ai_task.save()
                 logger.warning(
@@ -204,16 +198,16 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
                 )
                 return {"status": "skipped", "reason": "empty_response"}
 
-        raw_messages = {"messages": initial_messages, "rounds": rounds}
+        raw_messages = {"messages": initial_messages, "rounds": run.rounds}
 
         # Let the bot skip if it judges the message is no longer relevant.
-        body = clean_llm_content(result["content"])
+        body = clean_llm_content(run.response.content)
         if body == "[SKIP]":
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SKIP]"
-            ai_task.model_used = result["model"]
-            ai_task.prompt_tokens = result["prompt_tokens"]
-            ai_task.completion_tokens = result["completion_tokens"]
+            ai_task.model_used = run.response.model
+            ai_task.prompt_tokens = run.response.prompt_tokens
+            ai_task.completion_tokens = run.response.completion_tokens
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()
@@ -226,21 +220,21 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         body, bot_message = post_bot_message(
             conversation,
             bot_user,
-            result,
-            tool_context,
+            run.response,
+            run.context,
             ai_task,
             raw_messages,
-            tool_data=tool_data,
+            tool_data=run.tool_data,
         )
 
-        maybe_dispatch_summary_update(str(conversation.pk), summary_text)
+        maybe_dispatch_summary_update(str(conversation.pk), history.summary)
 
         logger.info(
             "Scheduled response generated: schedule=%s conversation=%s tokens=%s+%s",
             scrub(schedule_id),
             scrub(conversation.pk),
-            result["prompt_tokens"],
-            result["completion_tokens"],
+            run.response.prompt_tokens,
+            run.response.completion_tokens,
         )
         return {"status": "ok", "message_id": str(bot_message.uuid)}
 

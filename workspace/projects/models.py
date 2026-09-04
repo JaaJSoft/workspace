@@ -281,6 +281,11 @@ class Sprint(models.Model):
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     state = models.CharField(max_length=7, choices=State.choices, default=State.PLANNED)
+    # The instant the sprint was completed. end_date is the planned end and
+    # may sit days away from the actual close, so velocity is read at this
+    # boundary. Null for sprints closed before the stamp existed: those are
+    # read as they stand today.
+    closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -635,11 +640,31 @@ class TaskEvent(models.Model):
     # deletable, a FK would rewrite history.
     from_status = models.CharField(max_length=100, blank=True, default="")
     to_status = models.CharField(max_length=100, blank=True, default="")
-    # Old/new snapshots for scalar field changes (estimate and epic name
-    # today), as display strings; empty when the side was unset. Same
-    # survive-the-task rationale as the status name snapshots above.
+    # The categories of those statuses, snapshotted for the same reason: the
+    # flow reports (cycle time, cumulative flow, burndown) need to know
+    # whether a move entered or left the board, and a column can be renamed
+    # or recategorized after the fact. Empty on events that carry no status
+    # and on history written before the snapshot existed.
+    from_category = models.CharField(
+        max_length=8, choices=TaskStatus.Category.choices, blank=True, default=""
+    )
+    to_category = models.CharField(
+        max_length=8, choices=TaskStatus.Category.choices, blank=True, default=""
+    )
+    # Old/new snapshots for scalar field changes (estimate, epic name and
+    # sprint name today), as display strings; empty when the side was
+    # unset. Same survive-the-task rationale as the status name snapshots
+    # above. A CREATED event carries the estimate the task was born with in
+    # to_value: no other event records it, and the burndown needs it once
+    # the task row is gone.
     from_value = models.CharField(max_length=100, blank=True, default="")
     to_value = models.CharField(max_length=100, blank=True, default="")
+    # Identity of the entity named in from_value/to_value (a sprint today).
+    # Names are for display; a report matching on them would mistake a
+    # renamed or reused name for another sprint. Null when the side names
+    # nothing and on history written before the field existed.
+    from_ref = models.UUIDField(null=True, blank=True)
+    to_ref = models.UUIDField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

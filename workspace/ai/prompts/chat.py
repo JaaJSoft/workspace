@@ -65,6 +65,7 @@ def build_chat_messages(
     user=None,
     bot=None,
     summary: str = "",
+    situation: str = "",
 ) -> list[dict]:
     """Build the messages list for the OpenAI API from conversation history.
 
@@ -75,6 +76,9 @@ def build_chat_messages(
         user: The user interacting with the bot (for memory lookup).
         bot: The bot's user instance (for memory lookup).
         summary: Rolling summary of older conversation messages.
+        situation: What prompted this run, when it was not a user message
+            (see ``conversation_history.unprompted_run_note``). Rides in the
+            trailing context block, next to the current time.
     """
     base_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
 
@@ -99,10 +103,19 @@ def build_chat_messages(
     # --- Behavioral rules ---
 
     timestamp_instructions = (
-        "\n\n## Message timestamps\n"
-        "Messages include timestamps like [2026-04-01 14:32] for temporal context. "
-        "Use these to reason about time (e.g. how long ago something was said). "
-        "These are internal metadata — never include them in your replies."
+        "\n\n## Conversation metadata\n"
+        "Every message in the history is preceded by a bracketed system line "
+        "like [2026-04-01 14:32 | Your reply.] saying when it was sent and by "
+        "whom: a message from the user, your reply, or a message you sent on "
+        "your own initiative (a scheduled message or a goal check-in). The line "
+        "also notes what a message replies to, attached files, edits, and long "
+        "gaps since the previous message.\n"
+        "Use these lines to reason about time (how long ago something was said, "
+        "how long the user has been away) and about who said what: a message "
+        "you sent on your own initiative is yours, not the user's, even when it "
+        "asks a question.\n"
+        "These lines are internal metadata - never include or imitate them in "
+        "your replies."
     )
 
     language_instructions = (
@@ -403,10 +416,8 @@ def build_chat_messages(
     )
     messages = [{"role": "system", "content": system_content}]
     messages.extend(history)
-    messages.append(
-        {
-            "role": "system",
-            "content": f"<context>\n{build_context_block(user=user)}\n</context>",
-        }
-    )
+    context = build_context_block(user=user)
+    if situation:
+        context += f"\n{situation}"
+    messages.append({"role": "system", "content": f"<context>\n{context}\n</context>"})
     return messages

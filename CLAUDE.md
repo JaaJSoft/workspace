@@ -257,6 +257,36 @@ class MyModel(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
 ```
 
+### Data migrations - always query the connection being migrated
+
+A `RunPython` callable receives a `schema_editor`, but the ORM never reads it. A bare `Model.objects` goes to the **default** database, which is the right one only while there is a single database. `migrate_to_postgres` migrates a PostgreSQL target while SQLite stays the default, and there an unrouted migration silently reads and writes the source instead of the target.
+
+Take the alias from the schema editor and pass it to every manager:
+
+```python
+def forwards(apps, schema_editor):
+    Event = apps.get_model("calendar", "Event")
+    db = schema_editor.connection.alias
+    for event in Event.objects.using(db).filter(...).iterator():
+        ...
+    Event.objects.using(db).bulk_update(batch, ["field"])
+```
+
+**When the work lives in a helper, give the helper a `using` parameter** rather than letting it default. Several migrations hand historical models to a service function (`chat.services.threads.backfill_threads`, `chat.services.deletion.purge_deleted_message_backlog`); the connection is the same kind of argument as the models, and a default keeps existing callers working:
+
+```python
+def backfill_threads(message_model, participant_model, member_model, using=DEFAULT_DB_ALIAS):
+    message_model.objects.using(using).filter(...)
+```
+
+**Rules:**
+
+- Route **every** manager access, including a queryset built only to be wrapped in `Subquery()` or `Exists()`. Routing a correlated subquery is a no-op (it compiles against the outer query's connection), but one uniform rule beats reasoning case by case about which accesses matter.
+- Never name a database with a literal. `.using("default")` routes every manager and still points at whichever database the migration was not asked to touch.
+- Instance `save()` and `delete()` need nothing extra: they inherit `_state.db` from the queryset that loaded the object, so they follow automatically once that queryset is routed.
+- A migration is a historical record. Do not import live application code that could change meaning under it - inline the logic instead. The exceptions above pass their models in precisely so the function keeps working against historical model classes.
+- `core/tests/test_migration_db_alias.py` enforces all of this mechanically. It exists because the mistake is invisible to the rest of the suite: under a single database `.using(default)` **is** the default, so correct and incorrect code behave identically and no test can tell them apart. Only the SQLite-to-PostgreSQL path in the Docker workflow exercises the difference.
+
 ### Services
 
 Business logic that doesn't belong in views, models, or tasks lives in **services**. Services are reusable across views, REST endpoints, Celery tasks, and management commands.
@@ -735,6 +765,31 @@ The failure mode is silent and easy to misread: no console error, and sibling bi
 - A getter is fine **only** on the component's own root object literal - the one that isn't spread into anything. `filteredHiddenFolders` in `mail/ui/static/mail/ui/js/mail.js` is declared there for exactly this reason; keep the comment that says why.
 - Reviewing a mixin: `grep -n "get [a-zA-Z_]*()" workspace/*/ui/static/*/ui/js/*.js` and check each hit is on a root literal.
 - Getters on Alpine **stores** (`Alpine.store(...)`) are safe - stores are registered as objects, not spread.
+
+### The module sidebar's width is server-rendered - never leave it to `:class` alone
+
+Alpine is loaded with `defer`, so it binds `:class` only after the whole document is parsed - after the first paint on any page of real size. A sidebar `<aside>` whose width lives only in that binding paints content-sized (or as the mobile rail) and snaps to its real width a few frames later, shifting the entire page. No `x-cloak` fixes this: cloaking hides content, it does not size the box.
+
+The collapsed preference is therefore a per-module user setting (`<module>` / `sidebar_collapsed`, key `SIDEBAR_COLLAPSED` in `core/setting_keys.py`), not `localStorage`. The core context processor exposes it as `workspace_sidebar_collapsed` for the current module, the template puts the final width class in the static `class` attribute, and the binding uses the **object form** so Alpine removes the static class when the state changes - the string form never removes a class that was in the HTML.
+
+```html
+<!-- ✅ drawer hidden on mobile (lg:drawer-open): swap the two widths -->
+<aside class="... {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+       :class="{ 'w-16': collapsed, 'w-72': !collapsed }">
+
+<!-- ✅ drawer open on mobile too (drawer-open): the rail is always there, desktop opens it -->
+<aside class="... w-16{% if not workspace_sidebar_collapsed %} lg:w-72{% endif %}"
+       :class="{ 'lg:w-72': !collapsed }">
+
+<!-- ❌ no static width, string form: first paint is content-sized, then jumps -->
+<aside class="..." :class="collapsed ? 'w-16' : 'w-72'">
+```
+
+The preference is a desktop one. A drawer that is off-canvas on mobile (`lg:drawer-open`) opens as the full sidebar whatever the preference says: the templates bind on a `sidebarCollapsed()` method that returns `false` below `lg`, and `toggleCollapse()` is a no-op there - a 64px icon rail is no use on a phone. Every `collapse_expr` in those templates is `"sidebarCollapsed()"`, never the bare `collapsed`.
+
+The same goes for what the aside contains. `ui/partials/drawer_item.html`, `core/partials/module_switcher.html` and `ui/partials/preferences_popover.html` (with `show_expr`) take `collapsed_initial=workspace_sidebar_collapsed` and `mobile_rail=True|False` next to `collapse_expr`: they put the collapsed classes (`hidden` on the label, the 40px square on the item) in the static `class` attribute, with `max-lg:` variants when the drawer is the rail below `lg`, and bind them in the object form so Alpine drops them on mount. A label hidden with `x-show` alone paints in full on the 64px rail until Alpine runs. Module-specific blocks that come and go with the rail (a header button row, a "New" item shown only when collapsed) follow the same recipe by hand: `class="...{% if workspace_sidebar_collapsed %} hidden{% endif %}" :class="{ hidden: sidebarCollapsed() }"`. `core/tests/e2e/test_sidebar_rail_first_paint.py` measures every visible descendant of the aside on each parser step before Alpine appears and fails on anything painted past the rail's edge.
+
+On the JS side the component seeds `collapsed` from `window.sidebarPreference.initial()` (the value the shell embeds in `#sidebar-collapsed-data`, the same one the server sized the aside with) and writes toggles back with `window.sidebarPreference.save('<module>', collapsed)` - both in `core/static/core/js/sidebar_preference.js`. A drawer that is open on mobile seeds `collapsed` with `matchMedia('(max-width: 1023px)').matches || ...` so the first bind never opens the rail below `lg`. `core/tests/e2e/test_sidebar_first_paint.py` records the class list and every painted width of each module's aside from the first frame and fails on any change.
 
 ### `:style` takes an object, never a string, on anything `x-show` also touches
 

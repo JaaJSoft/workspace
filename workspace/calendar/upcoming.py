@@ -143,7 +143,13 @@ def get_upcoming_page(
             is_cancelled=False,
             recurrence_frequency__isnull=True,
         )
-        .select_related("owner", "calendar", "recurrence_parent", "meeting")
+        .select_related(
+            "owner",
+            "calendar",
+            "recurrence_parent",
+            "meeting",
+            "recurrence_parent__meeting",
+        )
         .prefetch_related("members__user")
         .distinct()
     )

@@ -122,7 +122,12 @@ class EventSerializer(serializers.ModelSerializer):
         return str(poll_id) if poll_id else None
 
     def get_join_url(self, obj):
-        return meeting_join_url(obj, self.context.get("request"))
+        # A materialized exception never legitimately owns a Meeting - see
+        # meeting_join_url's docstring - so its own row never carries the
+        # join link; read it through the series master.
+        return meeting_join_url(
+            obj.recurrence_parent or obj, self.context.get("request")
+        )
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

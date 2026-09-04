@@ -41,18 +41,21 @@ test('createMeetingLink posts the series master uuid for a recurring occurrence'
   assert.equal(app._panelRaw.join_url, 'http://x/meet/s');
 });
 
-test('createMeetingLink posts the panel uuid when it is not a recurring occurrence', async () => {
+test('createMeetingLink posts form.uuid, not _panelRaw.uuid, when it is not a recurring occurrence', async () => {
   const calls = [];
   const app = makeApp(async (url, opts) => {
     calls.push({ url, body: JSON.parse(opts.body) });
     return jsonResponse({ join_url: 'http://x/meet/s' });
   });
-  app._panelRaw = { uuid: 'evt-1', join_url: null };
-  app.form = { uuid: 'evt-1' };
+  // Deliberately different from form.uuid: every sibling action in this
+  // file falls back to form.uuid, never _panelRaw.uuid directly, and this
+  // is the one test that would catch swapping the two.
+  app._panelRaw = { uuid: 'panel-raw-uuid', join_url: null };
+  app.form = { uuid: 'form-uuid' };
   app.creatingMeeting = false;
 
   await app.createMeetingLink();
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].body.event_id, 'evt-1');
+  assert.equal(calls[0].body.event_id, 'form-uuid');
 });

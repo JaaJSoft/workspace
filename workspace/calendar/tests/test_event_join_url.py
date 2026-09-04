@@ -1,3 +1,5 @@
+import json
+
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase
@@ -124,7 +126,7 @@ class EventJoinUrlTests(TestCase):
         if with_meeting:
             create_meeting(master, self.user)
         occ_start = master.start + timezone.timedelta(days=1)
-        Event.objects.create(
+        exception = Event.objects.create(
             calendar=self.calendar,
             owner=self.user,
             title=f"{title} (moved)",
@@ -133,7 +135,7 @@ class EventJoinUrlTests(TestCase):
             recurrence_parent=master,
             original_start=occ_start,
         )
-        return master
+        return master, exception
 
     def test_recurring_listing_does_not_query_per_occurrence_for_the_meeting(self):
         self._create_recurring_series_with_exception("Standup", with_meeting=True)
@@ -196,3 +198,66 @@ class EventJoinUrlTests(TestCase):
         with self.assertNumQueries(baseline):
             resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
+
+    def test_join_url_for_an_exception_detail_reads_the_series_master(self):
+        # The detail GET is fetched by whatever uuid the calendar grid
+        # handed it, which for a materialized exception is the exception's
+        # own row - but the Meeting lives on the series master.
+        master, exception = self._create_recurring_series_with_exception(
+            "Standup", with_meeting=True
+        )
+        from workspace.chat.models import Meeting
+
+        meeting = Meeting.objects.get(event=master)
+        resp = self.client.get(f"/api/v1/events/{exception.uuid}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json()["join_url"], f"http://testserver/meet/{meeting.slug}"
+        )
+
+    def test_upcoming_listing_carries_the_absolute_join_url_on_an_exception(self):
+        # upcoming.py's cursor mode deliberately includes materialized
+        # exceptions as one-off events (they are real, addressable rows).
+        master, exception = self._create_recurring_series_with_exception(
+            "Standup", with_meeting=True
+        )
+        from workspace.chat.models import Meeting
+
+        meeting = Meeting.objects.get(event=master)
+        after = timezone.now().isoformat()
+        resp = self.client.get(f"/api/v1/events?after={after}&limit=20")
+        events = resp.json()["events"]
+        matching = [e for e in events if e["uuid"] == str(exception.uuid)]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(
+            matching[0]["join_url"], f"http://testserver/meet/{meeting.slug}"
+        )
+
+    def test_put_scope_this_returns_the_series_join_url(self):
+        # calendar_events.js's saveEvent() copies the PUT response straight
+        # into _panelRaw (line ~680), so a missing join_url here means the
+        # open panel loses its link the moment a "this occurrence" edit
+        # lands, until a reload re-fetches it correctly.
+        from workspace.chat.services.meetings import create_meeting
+
+        master = Event.objects.create(
+            calendar=self.calendar,
+            owner=self.user,
+            title="Standup",
+            start=timezone.now() + timezone.timedelta(hours=1),
+            end=timezone.now() + timezone.timedelta(hours=2),
+            recurrence_frequency="weekly",
+        )
+        meeting = create_meeting(master, self.user)
+        occ_start = (master.start + timezone.timedelta(weeks=1)).isoformat()
+        resp = self.client.put(
+            f"/api/v1/events/{master.uuid}",
+            data=json.dumps(
+                {"scope": "this", "original_start": occ_start, "title": "Modified"}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json()["join_url"], f"http://testserver/meet/{meeting.slug}"
+        )

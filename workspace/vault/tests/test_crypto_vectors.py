@@ -1,6 +1,8 @@
 import json
 import pathlib
+import re
 
+from django.conf import settings
 from django.test import SimpleTestCase
 
 from workspace.vault.tests.reference import ad, primitives
@@ -34,6 +36,57 @@ class VectorFileTests(SimpleTestCase):
             "public_keys",
         ):
             self.assertTrue(VECTORS[section], f"section {section} is empty")
+
+
+class AccountWrapHeaderTests(SimpleTestCase):
+    """The header the onboarding writes, held against the frozen vector.
+
+    ``account-kex-priv-wrap`` is the format's word on how the two ciphertexts
+    that gate every vault an account owns are labelled. Nothing at runtime
+    reads those bytes - ``open`` takes the iv and the ciphertext and ignores
+    the rest - so a writer that disagrees with the vector breaks nothing today
+    and everything the day an agility step, a second AEAD or an independent
+    re-implementation starts trusting them.
+
+    It has to be checked from here rather than from JavaScript: a test on the
+    onboarding alone could only compare one literal to another, which is
+    precisely how the two spent months disagreeing in silence.
+    """
+
+    ONBOARDING = (
+        pathlib.Path(settings.BASE_DIR)
+        / "workspace/vault/ui/static/vault/ui/js/onboarding.js"
+    )
+    WIRE = pathlib.Path(settings.BASE_DIR) / "scripts/frontend/src/vault/wire.js"
+
+    def _sealed_literal(self):
+        source = self.ONBOARDING.read_text(encoding="utf-8")
+        block = re.search(
+            r"const sealed = \{\s*keyVersion:\s*(\d+),\s*kdfId:\s*V\.(\w+),?\s*\};",
+            source,
+        )
+        self.assertIsNotNone(
+            block, "the onboarding must seal the account wraps from one literal"
+        )
+        return int(block.group(1)), block.group(2)
+
+    def _wire_constant(self, name):
+        source = self.WIRE.read_text(encoding="utf-8")
+        declared = re.search(rf"export const {name} = (0x[0-9a-fA-F]+);", source)
+        self.assertIsNotNone(declared, f"{name} is not exported by the wire module")
+        return int(declared.group(1), 16)
+
+    def _vector(self):
+        for entry in VECTORS["aead"]:
+            if entry["id"] == "account-kex-priv-wrap":
+                return entry
+        self.fail("the account wrap vector is gone")
+
+    def test_the_onboarding_seals_the_wraps_as_the_vector_labels_them(self):
+        key_version, kdf_name = self._sealed_literal()
+        vector = self._vector()
+        self.assertEqual(key_version, vector["key_version"])
+        self.assertEqual(self._wire_constant(kdf_name), vector["kdf_id"])
 
 
 class VectorReplayTests(SimpleTestCase):

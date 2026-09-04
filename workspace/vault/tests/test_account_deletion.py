@@ -43,8 +43,16 @@ SIGNATURE = "AXNpZ25hdHVyZQ"
 # Asked of the app registry rather than listed by hand: a model added later has
 # to be purged too, and a hand-written list would go stale silently - the test
 # would keep passing while the new table's rows survived every deletion.
-# get_models() already leaves out the proxies, which have no table of their own.
-VAULT_MODELS = tuple(apps.get_app_config("vault").get_models())
+#
+# The proxies are dropped on the way out. get_models() returns them, and they
+# have no table of their own - counting LoginEntry is counting VaultEntry a
+# second time under another name, which would read like extra coverage and be
+# none.
+VAULT_MODELS = tuple(
+    model
+    for model in apps.get_app_config("vault").get_models()
+    if not model._meta.proxy
+)
 
 
 class AccountDeletionPurgeTests(TestCase):

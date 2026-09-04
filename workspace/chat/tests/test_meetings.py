@@ -26,7 +26,7 @@ from workspace.chat.services.meetings import (
     refuse_guest,
     remove_guest,
 )
-from workspace.chat.services.participant_keys import guest_key
+from workspace.chat.services.participant_keys import guest_key, user_key
 
 
 def make_event(owner, start=None):
@@ -228,6 +228,34 @@ class MeetingLifecycleTests(TestCase):
         participant.refresh_from_db()
         self.assertIsNotNone(participant.left_at)
         self.assertNotIn(guest_key(self.guest.uuid), calls.get_presence(session.uuid))
+
+    def test_remove_broadcasts_call_participant_left(self):
+        # I-4 regression: every other leave path fans call_participant_left
+        # out. Without it the removed guest's tile and RTCPeerConnection stay
+        # up for everyone else until their heartbeat lapses on its own.
+        admit_guest(self.guest, self.owner)
+        session, _, _ = calls.start_or_join_call(
+            self.owner, self.meeting.conversation_id
+        )
+        CallParticipant.objects.create(session=session, guest=self.guest)
+        calls.touch_presence(session.uuid, guest_key(self.guest.uuid), {"audio": True})
+        sig.drain_events(user_key(self.owner.id))
+
+        remove_guest(self.guest)
+
+        left = [
+            e
+            for e in sig.drain_events(user_key(self.owner.id))
+            if e["event"] == "call_participant_left"
+        ]
+        self.assertEqual(len(left), 1)
+        self.assertEqual(
+            left[0]["data"],
+            {
+                "session_id": str(session.uuid),
+                "participant_key": guest_key(self.guest.uuid),
+            },
+        )
 
     def test_end_records_the_current_occurrence(self):
         self.assertTrue(end_meeting(self.meeting))

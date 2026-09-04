@@ -181,12 +181,28 @@ def close_guest_participation(guest):
     """
     from ..models import CallParticipant, CallSession
 
-    participants = CallParticipant.objects.filter(
-        guest=guest, left_at__isnull=True, session__state=CallSession.State.ACTIVE
+    key = guest_key(guest.uuid)
+    participants = list(
+        CallParticipant.objects.select_related("session").filter(
+            guest=guest, left_at__isnull=True, session__state=CallSession.State.ACTIVE
+        )
     )
     for participant in participants:
-        drop_presence(participant.session_id, guest_key(guest.uuid))
-    participants.update(left_at=timezone.now())
+        drop_presence(participant.session_id, key)
+    CallParticipant.objects.filter(pk__in=[p.pk for p in participants]).update(
+        left_at=timezone.now()
+    )
+
+    # Same fan-out every other leave path performs (leave_call,
+    # leave_call_as_guest, cleanup_stale_participants); without it the removed
+    # guest's tile and RTCPeerConnection stay up for everyone else. After the
+    # rows are closed, so the recipient lookup no longer includes them.
+    for participant in participants:
+        _broadcast(
+            participant.session.conversation_id,
+            "call_participant_left",
+            {"session_id": str(participant.session_id), "participant_key": key},
+        )
 
 
 def list_active_participants(session):

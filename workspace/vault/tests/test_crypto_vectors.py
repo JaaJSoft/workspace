@@ -1,9 +1,11 @@
 import json
 import pathlib
+import re
 
+from django.conf import settings
 from django.test import SimpleTestCase
 
-from workspace.vault.tests.reference import ad, primitives
+from workspace.vault.tests.reference import ad, primitives, wire
 from workspace.vault.tests.reference.encoding import from_base64url, to_base64url
 from workspace.vault.tests.reference.generate_fuzz_corpus import (
     CORPUS_PATH,
@@ -34,6 +36,122 @@ class VectorFileTests(SimpleTestCase):
             "public_keys",
         ):
             self.assertTrue(VECTORS[section], f"section {section} is empty")
+
+
+class AccountWrapHeaderTests(SimpleTestCase):
+    """Every writer of the two account wraps, held against the frozen vector.
+
+    ``account-kex-priv-wrap`` is the format's word on how the two ciphertexts
+    that gate every vault an account owns are labelled. Nothing at runtime
+    reads those bytes - ``open`` takes the iv and the ciphertext and ignores
+    the rest - so a writer that disagrees with the vector breaks nothing today
+    and everything the day an agility step, a second AEAD or an independent
+    re-implementation starts trusting them.
+
+    It has to be checked from here rather than from JavaScript: a test on the
+    onboarding alone could only compare one literal to another, which is
+    precisely how the two spent months disagreeing in silence. And it has to
+    cover *both* writers - the browser and the demo seeder - because a reader
+    looking for "what does a real envelope carry" is at least as likely to
+    sample a seeded one.
+    """
+
+    BASE = pathlib.Path(settings.BASE_DIR)
+    ONBOARDING = BASE / "workspace/vault/ui/static/vault/ui/js/onboarding.js"
+    SEEDER = BASE / "scripts/seed_vault.py"
+    WIRE_SOURCE = BASE / "scripts/frontend/src/vault/wire.js"
+    # What the browser actually runs. The source above is only what the next
+    # build will produce, and it sits under scripts/frontend/, which this
+    # workflow's path filter excludes - so an edit there starts no CI run at
+    # all. The built artifact is the copy that ships and the one CI sees.
+    WIRE_BUNDLE = BASE / "workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js"
+
+    # A number in either spelling: esbuild writes 0x00 as 0, and a hand-edited
+    # source may use either. Accepting one and reporting "not exported" for the
+    # other would send the next reader hunting for a missing declaration.
+    NUMBER = r"(0x[0-9a-fA-F]+|\d+)"
+
+    @staticmethod
+    def _as_int(text):
+        return int(text, 16) if text.lower().startswith("0x") else int(text)
+
+    def _sealed_literal(self):
+        source = self.ONBOARDING.read_text(encoding="utf-8")
+        block = re.search(
+            rf"const sealed = \{{\s*keyVersion:\s*{self.NUMBER},"
+            r"\s*kdfId:\s*V\.(\w+),?\s*\};",
+            source,
+        )
+        self.assertIsNotNone(
+            block, "the onboarding must seal the account wraps from one literal"
+        )
+        return self._as_int(block.group(1)), block.group(2)
+
+    def _source_constant(self, name):
+        source = self.WIRE_SOURCE.read_text(encoding="utf-8")
+        declared = re.search(rf"export const {name} = {self.NUMBER};", source)
+        self.assertIsNotNone(declared, f"{name} is not exported by the wire module")
+        return self._as_int(declared.group(1))
+
+    def _bundled_constant(self, name):
+        # The published object is a literal, so the key survives minification.
+        bundle = self.WIRE_BUNDLE.read_text(encoding="utf-8")
+        declared = re.search(rf"{name}:\s*{self.NUMBER}\b", bundle)
+        self.assertIsNotNone(declared, f"{name} is not published by the built bundle")
+        return self._as_int(declared.group(1))
+
+    def _seeder_wraps(self):
+        source = self.SEEDER.read_text(encoding="utf-8")
+        wraps = re.findall(
+            r"wrapped_(?:kex|sig)_priv=self\.seal\((?:[^()]|\([^()]*\))*?"
+            rf"kdf_id=wire\.(\w+),\s*key_version={self.NUMBER},",
+            source,
+        )
+        self.assertEqual(
+            len(wraps), 2, "the seeder must seal both account wraps explicitly"
+        )
+        return wraps
+
+    def _vector(self):
+        # Counted rather than searched: two vectors under one id would have the
+        # loop silently take the first, and which one that is depends on the
+        # generator's ordering.
+        found = [e for e in VECTORS["aead"] if e["id"] == "account-kex-priv-wrap"]
+        self.assertEqual(len(found), 1, "the account wrap vector is gone or doubled")
+        return found[0]
+
+    def test_the_onboarding_seals_the_wraps_as_the_vector_labels_them(self):
+        key_version, kdf_name = self._sealed_literal()
+        vector = self._vector()
+        self.assertEqual(key_version, vector["key_version"])
+        # Against the bundle, not the source: the byte the browser writes comes
+        # from the artifact it loads.
+        self.assertEqual(self._bundled_constant(kdf_name), vector["kdf_id"])
+
+    def test_the_built_bundle_carries_the_constant_its_source_declares(self):
+        """A forgotten ``npm run build:vault`` is invisible otherwise.
+
+        The chain above would stay green while the browser kept writing
+        whatever the last build baked in - the same "writer disagrees with the
+        format" state this class exists to prevent, one level down.
+        """
+        _, kdf_name = self._sealed_literal()
+        self.assertEqual(
+            self._bundled_constant(kdf_name), self._source_constant(kdf_name)
+        )
+
+    def test_the_seeder_labels_the_wraps_the_same_way(self):
+        """The demo seeder is the second writer of these two ciphertexts.
+
+        Its ``wire`` is the Python reference module, not the browser's - so the
+        constant is resolved there. A seeded envelope is the copy a developer
+        is most likely to open when asking what a real one carries.
+        """
+        vector = self._vector()
+        for kdf_name, key_version in self._seeder_wraps():
+            with self.subTest(kdf_name):
+                self.assertEqual(self._as_int(key_version), vector["key_version"])
+                self.assertEqual(getattr(wire, kdf_name), vector["kdf_id"])
 
 
 class VectorReplayTests(SimpleTestCase):

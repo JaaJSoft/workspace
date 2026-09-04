@@ -364,9 +364,15 @@ window.vaultOnboarding = function vaultOnboarding() {
           )
         );
 
+        // The unwrap key seals these two as it is - there is no per-ciphertext
+        // derivation between them and it - and a password change re-seals them
+        // rather than bumping a version. So the header says direct, version
+        // zero. The frozen vector account-kex-priv-wrap is what these two
+        // numbers answer to, and a test holds them against it: nothing at
+        // runtime reads the bytes, so nothing else would notice them drift.
         const sealed = {
-          keyVersion: 1,
-          kdfId: V.KDF_HKDF_SHA256,
+          keyVersion: 0,
+          kdfId: V.KDF_DIRECT,
         };
         const body = {
           kdf_algo: 'argon2id',

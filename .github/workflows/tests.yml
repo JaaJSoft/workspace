@@ -22,6 +22,13 @@ on:
       - '!.dockerignore'
       - '!.gitignore'
       - '!scripts/frontend/**'
+      # ...except the bundle sources, which are the vault's crypto: an edit
+      # there changes what the browser will do after the next build, so the
+      # vector replays and the browser suites are exactly what should run. It
+      # is also the commit shape AccountWrapHeaderTests targets - a constant
+      # edited without a rebuild - and a guard that never fires on the commit
+      # it exists for is decoration.
+      - 'scripts/frontend/src/**'
   pull_request:
     branches: [ main ]
     paths:
@@ -37,6 +44,13 @@ on:
       - '!.dockerignore'
       - '!.gitignore'
       - '!scripts/frontend/**'
+      # ...except the bundle sources, which are the vault's crypto: an edit
+      # there changes what the browser will do after the next build, so the
+      # vector replays and the browser suites are exactly what should run. It
+      # is also the commit shape AccountWrapHeaderTests targets - a constant
+      # edited without a rebuild - and a guard that never fires on the commit
+      # it exists for is decoration.
+      - 'scripts/frontend/src/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

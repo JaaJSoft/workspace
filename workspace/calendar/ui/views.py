@@ -1,5 +1,4 @@
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
 from django.shortcuts import render
 from django.utils.dateparse import parse_datetime
@@ -14,6 +13,7 @@ from workspace.calendar.models import (
     PollVote,
 )
 from workspace.calendar.queries import visible_calendars, visible_events_q
+from workspace.calendar.recurrence import meeting_join_url
 from workspace.calendar.serializers import CalendarSerializer
 from workspace.users.services.settings import get_setting
 
@@ -108,10 +108,7 @@ def event_card(request, event_id):
     membership = next((m for m in members if m.user_id == request.user.id), None)
     invite_status = membership.status if membership and not is_owner else None
 
-    try:
-        join_url = request.build_absolute_uri(event.meeting.join_path)
-    except ObjectDoesNotExist:
-        join_url = None
+    join_url = meeting_join_url(event, request)
 
     return render(
         request,

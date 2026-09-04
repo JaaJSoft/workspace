@@ -163,13 +163,14 @@ def _event_dt_str(dt, all_day):
     return dt.isoformat()
 
 
-def _join_url(event, request=None):
-    """Absolute join URL for the meeting attached to *event*'s series, or None.
+def meeting_join_url(event, request=None):
+    """Absolute join URL for the meeting attached to *event*, or None.
 
-    The meeting is one row per series, attached to the master event - see
-    ``Meeting`` in ``workspace.chat.models`` - so this reads ``event.meeting``
-    on whatever row holds it (the master itself, or an exception's
-    ``recurrence_parent``).
+    Shared by the event serializer, the server-rendered event card, and the
+    recurring-occurrence dict builders below - a recurring series' meeting
+    is one row per series, attached to the master event (see ``Meeting`` in
+    ``workspace.chat.models``), so callers pass whichever row holds it: the
+    event itself, or an exception's ``recurrence_parent``.
     """
     try:
         meeting = event.meeting
@@ -194,7 +195,7 @@ def make_virtual_occurrence(master, occ_start, request=None):
         "end": _event_dt_str(occ_end, master.all_day),
         "all_day": master.all_day,
         "location": master.location,
-        "join_url": _join_url(master, request),
+        "join_url": meeting_join_url(master, request),
         "owner": _user_dict(master.owner),
         "members": getattr(master, "_cached_member_dicts", None)
         or [_member_dict(m) for m in master.members.all()],
@@ -223,7 +224,7 @@ def make_exception_dict(exc, request=None):
         "end": _event_dt_str(exc.end, exc.all_day),
         "all_day": exc.all_day,
         "location": exc.location,
-        "join_url": _join_url(exc.recurrence_parent, request)
+        "join_url": meeting_join_url(exc.recurrence_parent, request)
         if exc.recurrence_parent
         else None,
         "owner": _user_dict(exc.owner),

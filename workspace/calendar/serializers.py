@@ -1,9 +1,9 @@
 from datetime import UTC, datetime
 
-from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
 from .models import Calendar, Event, EventMember
+from .recurrence import meeting_join_url
 from .services.timezones import normalize_all_day
 
 
@@ -122,16 +122,7 @@ class EventSerializer(serializers.ModelSerializer):
         return str(poll_id) if poll_id else None
 
     def get_join_url(self, obj):
-        try:
-            meeting = obj.meeting
-        except ObjectDoesNotExist:
-            return None
-        request = self.context.get("request")
-        return (
-            request.build_absolute_uri(meeting.join_path)
-            if request
-            else meeting.join_path
-        )
+        return meeting_join_url(obj, self.context.get("request"))
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

@@ -20,7 +20,7 @@
 {% endcomment %}
 {% with author=group.author is_own=group.is_own is_bot=group.is_bot messages=group.messages first_msg=group.messages.0 prefix=id_prefix|default:"msg" %}
   {# A guest group has no user row: author.id is None, and author-id="None" would send the avatar element after /api/v1/users/None/avatar. #}
-  <chat-message-group {% if is_own %}own{% endif %} {% if author.id %}author-id="{{ author.id }}"{% endif %} author-username="{{ author.username }}" author-name="{{ author.get_full_name|default:author.username }}" id-prefix="{{ prefix }}">
+  <chat-message-group {% if is_own %}own{% endif %} {% if author.is_guest|default:False %}guest{% endif %} {% if author.id %}author-id="{{ author.id }}"{% endif %} author-username="{{ author.username }}" author-name="{{ author.get_full_name|default:author.username }}" id-prefix="{{ prefix }}">
 
   {% for msg in messages %}
     {% if msg.deleted_at %}
@@ -185,7 +185,8 @@
                 <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </button>
             {% endif %}
-            {% if is_own or is_bot %}
+            {# A guest-authored message has no author to defer to, so any active member (the viewer, per the membership gate on the delete endpoint) can remove it - but never edit it under the guest's name. #}
+            {% if is_own or is_bot or author.is_guest|default:False %}
               <button
                 class="btn btn-ghost btn-xs btn-square text-error"
                 @click="deleteMessage('{{ msg.uuid }}')"

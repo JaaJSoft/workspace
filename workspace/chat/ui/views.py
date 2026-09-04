@@ -306,11 +306,12 @@ def conversation_items_view(request):
 def _group_author(msg):
     """The value the message-group template reads as `author`.
 
-    A real author is passed through unchanged. A guest has no user row, so
-    it gets a stand-in exposing exactly the surface the (out-of-scope this
-    round) templates already read off it - `.id`, `.username`,
-    `.get_full_name()` - computed through the same resolver as everywhere
-    else, rather than a second guest-formatting rule growing here.
+    A real author is passed through unchanged - a `User` has no `is_guest`,
+    so templates read it as `author.is_guest|default:False`. A guest has no
+    user row, so it gets a stand-in exposing exactly the surface the
+    templates read off it - `.id`, `.username`, `.get_full_name()`,
+    `.is_guest` - computed through the same resolver as everywhere else,
+    rather than a second guest-formatting rule growing here.
     """
     if msg.author is not None:
         return msg.author
@@ -319,6 +320,7 @@ def _group_author(msg):
         id=None,
         username=display_name,
         get_full_name=lambda: display_name,
+        is_guest=True,
     )
 
 

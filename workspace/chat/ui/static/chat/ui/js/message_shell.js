@@ -102,6 +102,7 @@
     }
 
     get _own() { return this.hasAttribute('own'); }
+    get _guest() { return this.hasAttribute('guest'); }
     get _pending() { return this.hasAttribute('pending'); }
     get _prefix() { return this.getAttribute('id-prefix') || 'msg'; }
 
@@ -165,6 +166,11 @@
         badge.setAttribute('x-show', `isBotMessage({author: {id: ${authorId}}})`);
         badge.setAttribute('x-cloak', '');
         badge.textContent = 'AI';
+        row.appendChild(badge);
+      }
+      if (this._guest) {
+        const badge = el('span', 'badge badge-xs badge-outline gap-0.5');
+        badge.textContent = 'Guest';
         row.appendChild(badge);
       }
       return row;

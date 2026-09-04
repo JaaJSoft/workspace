@@ -81,9 +81,19 @@ async function settle(rounds = 30) {
   for (let i = 0; i < rounds; i += 1) await new Promise((r) => setImmediate(r));
 }
 
+// Records what was scheduled and what was cancelled, and keeps the callbacks
+// so a test can fire a pending timer by hand.
 function timerRecorder() {
   const delays = [];
-  return { delays, setTimeout: (fn, ms) => { delays.push(ms); return delays.length; } };
+  const fns = [];
+  const cleared = [];
+  return {
+    delays,
+    fns,
+    cleared,
+    setTimeout: (fn, ms) => { delays.push(ms); fns.push(fn); return fns.length; },
+    clearTimeout: (id) => { cleared.push(id); },
+  };
 }
 
 test('parseSseChunk splits complete frames and keeps the remainder', () => {
@@ -451,6 +461,91 @@ test('a call_ended for another session is ignored', async () => {
 
   assert.equal(a.inCall, true);
   assert.deepStrictEqual({ ...a.callSession }, { session_id: 's1' });
+});
+
+test('a guest waiting for a call can still leave the meeting', async () => {
+  const calls = [];
+  const store = newStorage();
+  const a = app(async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || 'GET' });
+    return { ok: true, status: 200, json: async () => ({}) };
+  }, { sessionStorage: store });
+  a.token = 'tok';
+  a.phase = 'room';
+  a.inCall = false;
+  a.callSession = null;
+  store.setItem('meet:abc123', '{}');
+
+  await a.leaveRoom();
+
+  assert.equal(a.phase, 'over');
+  assert.equal(a.overReason, 'left');
+  assert.equal(store.getItem('meet:abc123'), null);
+  // The endpoint answers 200 for an admitted guest with no participant row,
+  // so telling it is free and keeps the two paths identical.
+  assert.deepStrictEqual(
+    calls.map((c) => c.url),
+    ['/api/v1/chat/meet/abc123/leave'],
+  );
+});
+
+test('the leave beacon fires for a guest holding a token but no call', () => {
+  const calls = [];
+  const a = app(async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || 'GET' });
+    return { ok: true, status: 200, json: async () => ({}) };
+  });
+  a.token = 'tok';
+  a.callSession = null;
+
+  a._leaveBeacon();
+
+  assert.deepStrictEqual(calls.map((c) => c.url), ['/api/v1/chat/meet/abc123/leave']);
+});
+
+test('a pending retry cannot reopen a page the guest has closed', async () => {
+  const timers = timerRecorder();
+  let fetches = 0;
+  const a = app(async () => { fetches += 1; return { ok: false, status: 500, json: async () => ({}) }; }, timers);
+  a.token = 'tok';
+  a.phase = 'lobby';
+
+  await a.resume();
+  assert.equal(timers.fns.length, 1, 'a retry is pending');
+  const fetchesBefore = fetches;
+
+  a.finish('left');
+  await timers.fns[0]();
+  await settle(3);
+
+  assert.equal(a.phase, 'over', 'the closed page stays closed');
+  assert.equal(a.overReason, 'left');
+  assert.equal(fetches, fetchesBefore, 'the timer that fired asked the server nothing');
+  assert.ok(timers.cleared.length >= 1, 'finish() cancelled the pending retry');
+});
+
+test('waitForCall cannot reopen a page the guest has closed', async () => {
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+  a.token = 'tok';
+  a.finish('ended');
+
+  await a.waitForCall('anything');
+
+  assert.equal(a.phase, 'over');
+  assert.equal(a.overReason, 'ended');
+});
+
+test('only one retry is ever pending, so one backoff governs one timer', async () => {
+  const timers = timerRecorder();
+  const a = app(async () => ({ ok: false, status: 500, json: async () => ({}) }), timers);
+  a.token = 'tok';
+  a.phase = 'lobby';
+
+  await a.resume();
+  await a.resume();
+
+  assert.equal(timers.fns.length, 2, 'both attempts scheduled');
+  assert.deepStrictEqual(timers.cleared, [1], 'the first handle was cancelled before the second');
 });
 
 test('call_started is what makes a waiting guest join, with no polling', async () => {

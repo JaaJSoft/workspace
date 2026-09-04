@@ -47,6 +47,7 @@ window.chatMeetSseMixin = function chatMeetSseMixin() {
     _streamAbort: null,
     _lastEventId: null,
     _streamBackoffMs: CHAT_MEET_BACKOFF_START_MS,
+    _retryTimer: null,
 
     _openStream() {
       if (this._streamAbort) return Promise.resolve();
@@ -104,11 +105,22 @@ window.chatMeetSseMixin = function chatMeetSseMixin() {
     },
 
     // One ladder for both the stream and the state read: whichever of the two
-    // is failing, the page keeps exactly one timer pending and backs off.
+    // is failing, the page keeps exactly one timer pending and backs off. One
+    // handle is what makes that true - a state read failing while a stream
+    // retry is already pending would otherwise leave two timers climbing the
+    // same ladder, at half the delay each rung claims.
     _scheduleRetry(fn) {
       if (this.phase !== 'lobby' && this.phase !== 'room') return;
-      setTimeout(fn, this._streamBackoffMs);
+      this._cancelRetry();
+      this._retryTimer = setTimeout(fn, this._streamBackoffMs);
       this._streamBackoffMs = Math.min(this._streamBackoffMs * 2, CHAT_MEET_BACKOFF_MAX_MS);
+    },
+
+    _cancelRetry() {
+      if (this._retryTimer !== null) {
+        clearTimeout(this._retryTimer);
+        this._retryTimer = null;
+      }
     },
 
     async _dispatchStreamEvent(payload) {
@@ -240,7 +252,10 @@ function chatMeetApp(slug) {
         this.currentParticipantKey = saved.participantKey;
         await this.resume();
       }
-      window.addEventListener('pagehide', () => { if (this.inCall) this._leaveBeacon(); });
+      // Whenever a token is held, not only mid-call: a guest who closes the
+      // tab from the lobby or the waiting card is leaving just as much as one
+      // who closes it from the stage.
+      window.addEventListener('pagehide', () => this._leaveBeacon());
     },
 
     // -- Transport seam --------------------------------------
@@ -254,11 +269,15 @@ function chatMeetApp(slug) {
       if (json) headers['Content-Type'] = 'application/json';
       return headers;
     },
-    // The slug is what addresses every guest endpoint; a session is what says
-    // there is a call to leave. _callEndpoint discards the value, so this is
-    // read for its truthiness as much as for what it names.
+    // The slug is what addresses every guest endpoint, and holding a token is
+    // what makes there be anything to say goodbye with - not being in a call.
+    // The leave endpoint answers 200 for an admitted guest with no participant
+    // row (leave_call_as_guest is a no-op then), so the waiting card and the
+    // pagehide beacon can both go through this one seam. _callEndpoint
+    // discards the value, so this is read for its truthiness as much as for
+    // what it names.
     _leaveTarget() {
-      return this.callSession ? this.slug : null;
+      return this.token ? this.slug : null;
     },
     // The member room re-advertises a joinable call in a banner; this page
     // has none, and leaveCall's tail call would otherwise re-read the state
@@ -367,6 +386,7 @@ function chatMeetApp(slug) {
         }));
         this.phase = 'lobby';
         this._openStream();
+        await this.loadSummary();
       } catch (e) {
         this.error = 'This meeting cannot be joined right now.';
       } finally {
@@ -375,6 +395,9 @@ function chatMeetApp(slug) {
     },
 
     async resume() {
+      // "over" is a one-way door, and this is one of the three ways back
+      // through it: a retry scheduled before the guest left, firing after.
+      if (this.phase === 'over') return;
       let resp;
       try {
         resp = await fetch(this._callEndpoint(''), { headers: this._callHeaders() });
@@ -396,6 +419,9 @@ function chatMeetApp(slug) {
       } else if (data.state === 'waiting') {
         this.phase = 'lobby';
         this._openStream();
+        // Not the value the page opened with: a lock or a full call can have
+        // happened while this guest was away, and isFull() is read here.
+        await this.loadSummary();
       } else {
         this.finish(data.state === 'refused' || data.state === 'removed' ? data.state : 'ended');
       }
@@ -404,7 +430,7 @@ function chatMeetApp(slug) {
     // Joining is attempted exactly twice: when the room opens, and when
     // call_started says there is now something to join. Nothing polls.
     async joinWhenCallStarts() {
-      if (this.inCall || this.joiningCall) return;
+      if (this.phase === 'over' || this.inCall || this.joiningCall) return;
       this.joinError = '';
       await this._refreshCallState();
       if (!this.callSession) {
@@ -429,6 +455,7 @@ function chatMeetApp(slug) {
     // In the room, with no call to be in. Not a terminal state: the stream
     // stays open, and call_started is what ends the wait.
     async waitForCall(reason = '') {
+      if (this.phase === 'over') return;
       this.joinError = reason;
       this.phase = 'room';
       this._stopDurationTimer();
@@ -491,6 +518,7 @@ function chatMeetApp(slug) {
 
     finish(reason) {
       this._closeStream();
+      this._cancelRetry();
       this._stopDurationTimer();
       // The token dies with the page. Without this, a reload would restore it,
       // /state would still answer "admitted" (leaving only stamps left_at) and
@@ -526,6 +554,7 @@ function chatMeetApp(slug) {
 
     reset() {
       this._closeStream();
+      this._cancelRetry();
       this._stopDurationTimer();
       this._forgetToken();
       this.overReason = null;

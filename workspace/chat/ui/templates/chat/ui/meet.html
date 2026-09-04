@@ -128,6 +128,8 @@
                   Try again
                 </button>
                 <p class="text-xs text-base-content/50">You can keep chatting below while you wait.</p>
+                {# The stage's red button is the only other way out, and it is not rendered here. #}
+                <button class="btn btn-ghost btn-sm" @click="leaveRoom()">Leave the meeting</button>
               </div>
             </section>
           </template>

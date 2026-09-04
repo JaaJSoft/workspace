@@ -525,11 +525,17 @@ def leave_call_as_guest(guest):
 def _end_call(session, recipients=None):
     """Mark a session ended, finalize its system message, broadcast call_ended.
 
+    Deliberately leaves Meeting.locked_occurrence_start alone: a call
+    emptying out is not the host unlocking the room, and the durable value
+    already stops answering once its occurrence is no longer the current one.
+    Clearing it here would reopen, mid-occurrence, a room the host shut.
+    end_meeting clears it, because End is the host asking.
+
     *recipients* is for a caller that has already closed participations
     before getting here - the stale sweep does, and _active_guest_keys only
     matches a still-joined guest, so resolving them below would find nobody.
     """
-    from ..models import CallSession, Meeting
+    from ..models import CallSession
 
     # Resolve who is in the call before flipping state to ENDED:
     # _active_guest_keys only matches an ACTIVE session, so computing this
@@ -540,20 +546,6 @@ def _end_call(session, recipients=None):
     session.state = CallSession.State.ENDED
     session.ended_at = timezone.now()
     session.save(update_fields=["state", "ended_at"])
-
-    # Every path that ends a call - the last leaver (leave_call,
-    # leave_call_as_guest), the stale-participant sweep, and the host's
-    # explicit End (end_meeting) - converges here, so this is the one place
-    # that reliably releases the durable lock no matter which path fired.
-    # end_meeting also clears it directly, for the case where it ends the
-    # occurrence with no active session at all (this function never runs
-    # then) - the two sites are not redundant, both are needed.
-    # Plain filter on conversation_id, never session.conversation.meeting:
-    # most conversations are not meetings, and that reverse accessor raises
-    # RelatedObjectDoesNotExist for every one of them.
-    Meeting.objects.filter(conversation_id=session.conversation_id).update(
-        locked_occurrence_start=None
-    )
 
     duration = session.duration_seconds or 0
     label = format_duration(duration)

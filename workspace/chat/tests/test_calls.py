@@ -18,7 +18,8 @@ from workspace.chat.models import (
 )
 from workspace.chat.services import call_signaling as sig
 from workspace.chat.services import calls
-from workspace.chat.services.meetings import set_locked
+from workspace.chat.services.meeting_occurrences import current_occurrence
+from workspace.chat.services.meetings import end_meeting, set_locked
 from workspace.chat.services.participant_keys import guest_key, user_key
 
 
@@ -289,12 +290,11 @@ class StaleReconciliationTests(TestCase):
         self.assertEqual(session.state, CallSession.State.ENDED)
 
 
-class LockClearedOnCallEndTests(TestCase):
-    """I-1 remainder: the lock must not survive whichever path ends the
-    call, not only the host's explicit End button (end_meeting).
-    _end_call is the single choke point leave_call, leave_call_as_guest and
-    cleanup_stale_participants all converge on, so it is the one place that
-    can release the durable lock for all three at once."""
+class LockOutlivesTheCallTests(TestCase):
+    """A durable lock lives until the host unlocks, presses End, or the
+    occurrence it names stops being the current one. A call emptying out is
+    none of those three: the room stays shut for the rest of the occurrence
+    the host locked, which is what locking an occurrence means."""
 
     def setUp(self):
         cache.clear()
@@ -311,11 +311,12 @@ class LockClearedOnCallEndTests(TestCase):
         self.meeting = Meeting.objects.create(
             event=event, conversation=self.conv, created_by=self.a
         )
+        self.occurrence_start = current_occurrence(self.meeting)[0]
 
     def tearDown(self):
         cache.clear()
 
-    def test_lock_does_not_survive_a_call_that_empties_out(self):
+    def test_lock_survives_a_call_that_empties_out(self):
         calls.start_or_join_call(self.a, self.conv.uuid)
         set_locked(self.meeting, True)
 
@@ -323,9 +324,10 @@ class LockClearedOnCallEndTests(TestCase):
         self.assertEqual(ended.state, CallSession.State.ENDED)
 
         self.meeting.refresh_from_db()
-        self.assertIsNone(self.meeting.locked_occurrence_start)
+        self.assertEqual(self.meeting.locked_occurrence_start, self.occurrence_start)
+        self.assertTrue(calls.is_call_locked(self.conv.uuid, self.occurrence_start))
 
-    def test_lock_does_not_survive_the_stale_sweep(self):
+    def test_lock_survives_the_stale_sweep(self):
         session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
         set_locked(self.meeting, True)
 
@@ -333,7 +335,18 @@ class LockClearedOnCallEndTests(TestCase):
         self.assertTrue(calls.cleanup_stale_participants(session))
 
         self.meeting.refresh_from_db()
+        self.assertEqual(self.meeting.locked_occurrence_start, self.occurrence_start)
+        self.assertTrue(calls.is_call_locked(self.conv.uuid, self.occurrence_start))
+
+    def test_end_meeting_still_releases_the_lock(self):
+        calls.start_or_join_call(self.a, self.conv.uuid)
+        set_locked(self.meeting, True)
+
+        self.assertTrue(end_meeting(self.meeting))
+
+        self.meeting.refresh_from_db()
         self.assertIsNone(self.meeting.locked_occurrence_start)
+        self.assertFalse(calls.is_call_locked(self.conv.uuid, self.occurrence_start))
 
 
 class FirstJoinRaceTests(TestCase):

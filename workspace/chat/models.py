@@ -499,10 +499,10 @@ class CallSession(models.Model):
     # Meeting.locked_occurrence_start is the durable one - it seeds this
     # field at creation (see start_or_join_call) and is written alongside it
     # on every set_locked call, so a host can lock an empty room and still
-    # find it locked once someone joins. Neither outlives its occurrence:
-    # this one goes away with the session (a session already ends when its
-    # last participant leaves), and the durable one names the occurrence it
-    # was set during, so it can never answer for the next one.
+    # find it locked once someone joins. This one dies with the session,
+    # which ends as soon as its last participant leaves; the durable one
+    # outlives that on purpose and keeps the room shut for the rest of the
+    # occurrence it names.
     locked = models.BooleanField(default=False)
 
     class Meta:
@@ -613,16 +613,19 @@ class Meeting(models.Model):
     # The start of the occurrence the host most recently ended. A later
     # occurrence has a different start, so the same URL opens again next week.
     closed_occurrence_start = models.DateTimeField(null=True, blank=True)
-    # Durable lock: survives even with no CallSession, so a host can pre-lock
-    # an empty room before anyone joins. Seeds CallSession.locked when a
-    # session is created; set_locked writes both while a session is active.
-    # It stores the start of the occurrence the lock was set during (from
-    # current_occurrence, never event.start) rather than a boolean, so a lock
-    # that no lifecycle path ever cleared - the host pre-locked an empty room,
-    # no call ever started, nobody pressed End, the occurrence simply
-    # elapsed - stops answering the moment the occurrence rolls over. The
-    # explicit clears in calls._end_call and end_meeting remain: they release
-    # the lock inside its own occurrence.
+    # Durable lock: the start of the occurrence it was set during (always
+    # current_occurrence()'s output, never event.start), so the value carries
+    # its own scope instead of being a bare boolean. It survives with no
+    # CallSession at all, which is what lets a host pre-lock an empty room,
+    # and it seeds CallSession.locked when a session is created.
+    #
+    # The invariant: a lock lives until the host unlocks, the host presses
+    # End, or the occurrence it names stops being the current one. It
+    # therefore survives a call that empties out and the stale-participant
+    # sweep - neither is the host reopening the room. A non-null value naming
+    # an elapsed occurrence is inert, not "locked": nothing purges it, and
+    # nothing needs to, because every reader compares it against the
+    # occurrence reachable right now (see calls.is_call_locked).
     locked_occurrence_start = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

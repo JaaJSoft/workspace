@@ -144,9 +144,10 @@ def set_locked(meeting, locked, now=None):
     locked = bool(locked)
     # Read the call BEFORE writing anything: get_active_call self-heals, and
     # on a phantom ACTIVE session (every heartbeat lapsed) that self-heal
-    # ends the call through _end_call, which releases the durable lock. Run
-    # after the write, it lands on top of the value just committed and leaves
-    # the meeting unlocked while this call reports success.
+    # ends the session under us. Reading it afterwards would either write the
+    # live flag onto a row that is already ENDED, or - back when _end_call
+    # also cleared the durable value - land that clear on top of the write
+    # just made and report success over an unlocked meeting.
     session = get_active_call(meeting.conversation_id)
 
     occurrence = current_occurrence(meeting, now=now) if locked else None
@@ -170,12 +171,10 @@ def end_meeting(meeting, now=None):
         return False
     start, _end = occurrence
     meeting.closed_occurrence_start = start
-    # The lock is scoped to the occurrence it was set during, and needs
-    # clearing here as well as in calls._end_call: this branch also runs
-    # with no active session (nothing to route through _end_call), which is
-    # the ordinary case for a host ending a meeting nobody joined - a lock
-    # set on an empty room must not survive that either. The two sites are
-    # not redundant, both are needed for different starting states.
+    # The one place a lock is released other than the host unlocking: End is
+    # the host asking, so the occurrence they locked is over for good. Ending
+    # the call does not do this (see calls._end_call) - a room emptying out
+    # is not a host reopening it.
     meeting.locked_occurrence_start = None
     meeting.save(update_fields=["closed_occurrence_start", "locked_occurrence_start"])
 

@@ -157,15 +157,21 @@ class ConversationMediaViewTests(APITestCase):
             category="image",
             size=1,
         )
+        self._attach("member.png", "image/png", "image")
 
         resp = self.client.get(self.url(type="images"))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        author = resp.json()["results"][0]["author"]
+        results = resp.json()["results"]
+        guest_result = next(r for r in results if r["original_name"] == "pic.png")
+        member_result = next(r for r in results if r["original_name"] == "member.png")
+        author = guest_result["author"]
         self.assertIsNone(author["id"])
         self.assertEqual(author["username"], "Visitor")
         self.assertEqual(author["first_name"], "")
         self.assertEqual(author["last_name"], "")
+        self.assertTrue(author["is_guest"])
+        self.assertFalse(member_result["author"]["is_guest"])
 
     def test_pagination_total_and_slice(self):
         for i in range(5):

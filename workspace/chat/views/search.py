@@ -259,6 +259,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
                         "username": identity["username"],
                         "first_name": author.first_name if author else "",
                         "last_name": author.last_name if author else "",
+                        "is_guest": identity["is_guest"],
                     },
                 }
             )

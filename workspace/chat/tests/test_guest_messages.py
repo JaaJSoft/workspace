@@ -14,7 +14,6 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from workspace.calendar.models import Calendar, Event
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
@@ -26,18 +25,9 @@ from workspace.chat.services.meeting_guests import issue_token
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import create_meeting
 
+from .meeting_fixtures import guest_with_token, make_event
+
 User = get_user_model()
-
-
-def make_event(owner, start=None, end=None):
-    cal = Calendar.objects.create(name="Cal", owner=owner)
-    return Event.objects.create(
-        calendar=cal,
-        owner=owner,
-        title="Standup",
-        start=start or timezone.now(),
-        end=end,
-    )
 
 
 class GuestMessagesTests(TestCase):
@@ -58,16 +48,11 @@ class GuestMessagesTests(TestCase):
         cache.clear()
 
     def _admit(self, meeting=None, occurrence_start=None, display_name="Ada"):
-        meeting = meeting or self.meeting
-        token, token_hash = issue_token()
-        guest = MeetingGuest.objects.create(
-            meeting=meeting,
+        return guest_with_token(
+            meeting or self.meeting,
+            occurrence_start or self.occurrence_start,
             display_name=display_name,
-            state=MeetingGuest.State.ADMITTED,
-            occurrence_start=occurrence_start or self.occurrence_start,
-            token_hash=token_hash,
         )
-        return guest, token
 
     def _url(self, meeting=None):
         return f"/api/v1/chat/meet/{(meeting or self.meeting).slug}/messages"

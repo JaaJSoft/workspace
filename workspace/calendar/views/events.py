@@ -184,6 +184,7 @@ class EventListView(CacheControlMixin, APIView):
             limit=limit,
             calendar_ids=calendar_ids,
             show_declined=show_declined,
+            request=request,
         )
         _mark_displayed_events_read(request.user, [e.get("uuid") for e in events])
         return Response({"events": events, "next_after": next_after})
@@ -246,7 +247,9 @@ class EventListView(CacheControlMixin, APIView):
         )
         masters = _prefetch_event(masters)
 
-        recurring_data = expand_recurring_events(masters, range_start, range_end)
+        recurring_data = expand_recurring_events(
+            masters, range_start, range_end, request=request
+        )
 
         # Merge and sort as instants: values mix date-only all-day labels
         # with ISO datetimes whose offsets can differ, so a plain string
@@ -365,7 +368,7 @@ class EventDetailView(APIView):
                         EventSerializer(exc, context={"request": request}).data
                     )
                 # Build virtual occurrence
-                occ = make_virtual_occurrence(event, original_start)
+                occ = make_virtual_occurrence(event, original_start, request=request)
                 return Response(occ)
 
         return Response(EventSerializer(event, context={"request": request}).data)

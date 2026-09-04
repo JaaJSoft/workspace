@@ -384,7 +384,11 @@
         const content = this.originalContent;
         const language = this.language;
         const self = this;
-        _lock = window.fileLock(this.fileUuid, getCSRFToken);
+        // The public share pages do not extend base.html, so file_lock.js
+        // is absent there. Nothing on those pages can edit, so there is
+        // nothing to lock; without this guard the throw kills initEditor
+        // and the viewer renders empty.
+        _lock = window.fileLock ? window.fileLock(this.fileUuid, getCSRFToken) : null;
 
         fetch(PREFS_URL, {
             credentials: 'same-origin'
@@ -452,7 +456,7 @@
 
           // Acquire lock (or listen for release) after editor is ready
           if (self.canEdit) {
-            _lock.acquire(self, {
+            if (_lock) _lock.acquire(self, {
               onLocked: function() {
                 if (_editor) _editor.updateOptions({
                   readOnly: true
@@ -473,6 +477,7 @@
 
       forceUnlock() {
         const self = this;
+        if (!_lock) return;
         _lock.forceUnlock(self, {
           onAcquired: function() {
             if (_editor) {

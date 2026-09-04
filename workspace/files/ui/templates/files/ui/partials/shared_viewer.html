@@ -16,7 +16,14 @@
       <p class="text-base-content/40 text-sm mt-2">{{ quarantine_reason }}</p>
     </div>
   {% elif viewer_html %}
-    {{ viewer_html|safe }}
+    {% comment %}
+      The viewers size themselves with h-full over a flex chain, which resolves
+      to nothing here: the authenticated browser hangs them in a panel that
+      already has a height, while this page is a card that grows with its
+      content. Without a concrete height Monaco and Milkdown mount into a
+      zero-height box and the preview renders blank.
+    {% endcomment %}
+    <div class="h-[70vh]">{{ viewer_html|safe }}</div>
   {% else %}
     <div class="p-12 text-center">
       <i

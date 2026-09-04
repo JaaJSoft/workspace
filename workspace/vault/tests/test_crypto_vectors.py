@@ -113,10 +113,12 @@ class AccountWrapHeaderTests(SimpleTestCase):
         return wraps
 
     def _vector(self):
-        for entry in VECTORS["aead"]:
-            if entry["id"] == "account-kex-priv-wrap":
-                return entry
-        self.fail("the account wrap vector is gone")
+        # Counted rather than searched: two vectors under one id would have the
+        # loop silently take the first, and which one that is depends on the
+        # generator's ordering.
+        found = [e for e in VECTORS["aead"] if e["id"] == "account-kex-priv-wrap"]
+        self.assertEqual(len(found), 1, "the account wrap vector is gone or doubled")
+        return found[0]
 
     def test_the_onboarding_seals_the_wraps_as_the_vector_labels_them(self):
         key_version, kdf_name = self._sealed_literal()

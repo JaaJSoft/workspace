@@ -105,7 +105,13 @@ class MeetingSummaryView(APIView):
         occurrence = current_occurrence(meeting)
         start = occurrence[0] if occurrence is not None else meeting.event.start
 
-        locked = is_call_locked(meeting.conversation_id)
+        # Only ever the resolved occurrence, never the event.start fallback:
+        # a durable lock names an occurrence, and there is none to name when
+        # nothing is reachable.
+        locked = is_call_locked(
+            meeting.conversation_id,
+            occurrence[0] if occurrence is not None else None,
+        )
         return Response(
             {
                 "title": meeting.event.title,
@@ -152,7 +158,7 @@ class MeetingKnockView(APIView):
         if meeting.closed_occurrence_start == occurrence_start:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        if is_call_locked(meeting.conversation_id):
+        if is_call_locked(meeting.conversation_id, occurrence_start):
             return Response(status=status.HTTP_423_LOCKED)
 
         # Rate limit: max 10 knocks per IP per hour, mirroring

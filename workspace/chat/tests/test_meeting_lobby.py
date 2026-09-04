@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -217,7 +218,7 @@ class MeetingHostViewTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.meeting.refresh_from_db()
-        self.assertTrue(self.meeting.locked)
+        self.assertEqual(self.meeting.locked_occurrence_start, self.occurrence_start)
 
     def test_pre_lock_carries_over_to_the_session_created_on_join(self):
         self.client.force_authenticate(self.owner)
@@ -267,18 +268,53 @@ class MeetingHostViewTests(TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_lock_does_not_carry_into_the_next_occurrence(self):
-        # I-1 regression: Meeting.locked must be scoped to the occurrence it
-        # was set during. Locking this week's standup must not 423 next
+        # I-1 regression: the durable lock must be scoped to the occurrence
+        # it was set during. Locking this week's standup must not 423 next
         # week's guests once the host has ended this occurrence.
         calls.start_or_join_call(self.owner, self.meeting.conversation_id)
         set_locked(self.meeting, True)
-        self.assertTrue(calls.is_call_locked(self.meeting.conversation_id))
+        self.assertTrue(
+            calls.is_call_locked(self.meeting.conversation_id, self.occurrence_start)
+        )
 
         end_meeting(self.meeting)
 
         self.meeting.refresh_from_db()
-        self.assertFalse(self.meeting.locked)
-        self.assertFalse(calls.is_call_locked(self.meeting.conversation_id))
+        self.assertIsNone(self.meeting.locked_occurrence_start)
+        self.assertFalse(
+            calls.is_call_locked(self.meeting.conversation_id, self.occurrence_start)
+        )
+
+    def test_a_lock_nobody_ever_ended_does_not_reach_the_next_occurrence(self):
+        # I-1, the elapsed half: a host pre-locks an empty room, no call is
+        # ever started and nobody presses End, so no lifecycle path runs to
+        # clear the flag - the occurrence simply elapses. Next week's guests
+        # must still get in.
+        now = timezone.now()
+        recurring_event = Event.objects.create(
+            calendar=Calendar.objects.create(name="Weekly", owner=self.owner),
+            owner=self.owner,
+            title="Standup",
+            start=now - timedelta(weeks=3, minutes=5),
+            end=now - timedelta(weeks=3) + timedelta(minutes=25),
+            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
+            recurrence_interval=1,
+        )
+        meeting = create_meeting(recurring_event, self.owner)
+        set_locked(meeting, True)
+
+        knock_url = f"/api/v1/chat/meet/{meeting.slug}/knock"
+        this_week = self.client.post(knock_url, {"display_name": "Ada"}, format="json")
+        self.assertEqual(this_week.status_code, 423)
+
+        with patch(
+            "workspace.chat.services.meeting_occurrences.timezone.now",
+            return_value=now + timedelta(weeks=1),
+        ):
+            next_week = self.client.post(
+                knock_url, {"display_name": "Bo"}, format="json"
+            )
+        self.assertEqual(next_week.status_code, 201)
 
     # --- end ---
 
@@ -504,11 +540,10 @@ class MeetingPublicViewTests(TestCase):
 
     def test_knock_returns_423_when_meeting_locked_before_any_session(self):
         # Pre-locking (MeetingLockView, before anyone has joined) writes only
-        # Meeting.locked - there is no CallSession yet. is_call_locked must
-        # still surface that as a 423 on the knock, not treat "no session" as
-        # "not locked".
-        self.meeting.locked = True
-        self.meeting.save(update_fields=["locked"])
+        # the meeting's durable lock - there is no CallSession yet.
+        # is_call_locked must still surface that as a 423 on the knock, not
+        # treat "no session" as "not locked".
+        set_locked(self.meeting, True)
         resp = self.client.post(
             f"/api/v1/chat/meet/{self.meeting.slug}/knock",
             {"display_name": "Ada"},

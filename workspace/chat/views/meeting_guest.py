@@ -122,7 +122,10 @@ class MeetingGuestJoinView(APIView):
         if guest is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        if calls.is_call_locked(guest.meeting.conversation_id):
+        # guest.occurrence_start is the occurrence resolve_guest just
+        # validated as the reachable one, so it is the occurrence the durable
+        # lock has to be asked about - no second recurrence expansion here.
+        if calls.is_call_locked(guest.meeting.conversation_id, guest.occurrence_start):
             return Response(status=status.HTTP_423_LOCKED)
 
         try:

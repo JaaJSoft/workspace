@@ -18,6 +18,7 @@ from workspace.chat.models import (
 )
 from workspace.chat.services import call_signaling as sig
 from workspace.chat.services import calls
+from workspace.chat.services.meetings import set_locked
 from workspace.chat.services.participant_keys import guest_key, user_key
 
 
@@ -277,7 +278,7 @@ class LockClearedOnCallEndTests(TestCase):
     call, not only the host's explicit End button (end_meeting).
     _end_call is the single choke point leave_call, leave_call_as_guest and
     cleanup_stale_participants all converge on, so it is the one place that
-    can clear Meeting.locked for all three at once."""
+    can release the durable lock for all three at once."""
 
     def setUp(self):
         cache.clear()
@@ -300,25 +301,23 @@ class LockClearedOnCallEndTests(TestCase):
 
     def test_lock_does_not_survive_a_call_that_empties_out(self):
         calls.start_or_join_call(self.a, self.conv.uuid)
-        self.meeting.locked = True
-        self.meeting.save(update_fields=["locked"])
+        set_locked(self.meeting, True)
 
         ended = calls.leave_call(self.a, self.conv.uuid)
         self.assertEqual(ended.state, CallSession.State.ENDED)
 
         self.meeting.refresh_from_db()
-        self.assertFalse(self.meeting.locked)
+        self.assertIsNone(self.meeting.locked_occurrence_start)
 
     def test_lock_does_not_survive_the_stale_sweep(self):
         session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
-        self.meeting.locked = True
-        self.meeting.save(update_fields=["locked"])
+        set_locked(self.meeting, True)
 
         calls.drop_presence(session.uuid, user_key(self.a.id))
         self.assertTrue(calls.cleanup_stale_participants(session))
 
         self.meeting.refresh_from_db()
-        self.assertFalse(self.meeting.locked)
+        self.assertIsNone(self.meeting.locked_occurrence_start)
 
 
 class FirstJoinRaceTests(TestCase):

@@ -495,14 +495,14 @@ class CallSession(models.Model):
     )
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
-    # The live value while this session is active. Meeting.locked is the
-    # durable one - it seeds this field at creation (see start_or_join_call)
-    # and is written alongside it on every set_locked call, so a host can
-    # lock an empty room and still find it locked once someone joins. Neither
-    # flag outlives its occurrence: this one goes away with the session (a
-    # session already ends when its last participant leaves), and
-    # Meeting.locked is explicitly cleared by end_meeting, so a lock never
-    # carries over into the next occurrence of a recurring meeting.
+    # The live value while this session is active.
+    # Meeting.locked_occurrence_start is the durable one - it seeds this
+    # field at creation (see start_or_join_call) and is written alongside it
+    # on every set_locked call, so a host can lock an empty room and still
+    # find it locked once someone joins. Neither outlives its occurrence:
+    # this one goes away with the session (a session already ends when its
+    # last participant leaves), and the durable one names the occurrence it
+    # was set during, so it can never answer for the next one.
     locked = models.BooleanField(default=False)
 
     class Meta:
@@ -616,12 +616,14 @@ class Meeting(models.Model):
     # Durable lock: survives even with no CallSession, so a host can pre-lock
     # an empty room before anyone joins. Seeds CallSession.locked when a
     # session is created; set_locked writes both while a session is active.
-    # Scoped to the occurrence it was set during - cleared whichever way that
-    # occurrence's call ends (calls._end_call, reached by the last leaver and
-    # the stale sweep alike) or, when no call was ever active, by end_meeting
-    # directly - so next week's guests are never locked out by last week's
-    # lock, however this one closed.
-    locked = models.BooleanField(default=False)
+    # It stores the start of the occurrence the lock was set during (from
+    # current_occurrence, never event.start) rather than a boolean, so a lock
+    # that no lifecycle path ever cleared - the host pre-locked an empty room,
+    # no call ever started, nobody pressed End, the occurrence simply
+    # elapsed - stops answering the moment the occurrence rolls over. The
+    # explicit clears in calls._end_call and end_meeting remain: they release
+    # the lock inside its own occurrence.
+    locked_occurrence_start = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

@@ -92,7 +92,7 @@ def get_active_call(conversation_id):
     return session
 
 
-def is_call_locked(conversation_id):
+def is_call_locked(conversation_id, occurrence_start=None):
     """Whether *conversation_id* has a locked call, no self-heal.
 
     Unlike ``get_active_call``, this never takes the cleanup write-lock or
@@ -101,8 +101,13 @@ def is_call_locked(conversation_id):
     able to drive a DB write and an SSE broadcast off a plain GET/POST.
 
     Prefers the session's flag (the live value) while a call is active, and
-    falls back to the meeting's flag (the durable value) when there is no
-    session yet - a host can pre-lock an empty room, see set_locked.
+    falls back to the meeting's durable lock when there is no session yet -
+    a host can pre-lock an empty room, see set_locked. That fallback answers
+    only for the occurrence the lock was set during, which is why
+    *occurrence_start* is the caller's: every caller has already resolved
+    the occurrence it is asking about, and re-deriving it here would both
+    repeat that work and let the two answers disagree. None means "no
+    occurrence is reachable right now", which no durable lock can match.
     """
     from ..models import CallSession, Meeting
 
@@ -115,10 +120,27 @@ def is_call_locked(conversation_id):
     )
     if session is not None:
         return session.locked
-    meeting = (
-        Meeting.objects.filter(conversation_id=conversation_id).only("locked").first()
-    )
-    return meeting.locked if meeting is not None else False
+    if occurrence_start is None:
+        return False
+    return Meeting.objects.filter(
+        conversation_id=conversation_id, locked_occurrence_start=occurrence_start
+    ).exists()
+
+
+def _durable_lock_holds(meeting):
+    """Whether *meeting*'s durable lock names the occurrence reachable now.
+
+    Only for the paths that hold a Meeting instance and no occurrence of
+    their own (the session seed in ``_start_or_join_once``); everywhere else
+    the caller already resolved the occurrence and passes it to
+    ``is_call_locked``.
+    """
+    from .meeting_occurrences import current_occurrence
+
+    if meeting is None or meeting.locked_occurrence_start is None:
+        return False
+    occurrence = current_occurrence(meeting)
+    return occurrence is not None and meeting.locked_occurrence_start == occurrence[0]
 
 
 def active_call_session_for_guest(guest):
@@ -274,14 +296,14 @@ def _start_or_join_once(user, conversation_id):
         # finds it locked on the session created here. Plain (non-meeting)
         # conversations have no Meeting row, so this is a no-op for them.
         meeting = (
-            Meeting.objects.filter(conversation_id=conversation_id)
-            .only("locked")
+            Meeting.objects.select_related("event")
+            .filter(conversation_id=conversation_id)
             .first()
         )
         session = CallSession.objects.create(
             conversation_id=conversation_id,
             started_by=user,
-            locked=meeting.locked if meeting is not None else False,
+            locked=_durable_lock_holds(meeting),
         )
         msg = Message.objects.create(
             conversation_id=conversation_id,
@@ -500,14 +522,16 @@ def _end_call(session):
     # Every path that ends a call - the last leaver (leave_call,
     # leave_call_as_guest), the stale-participant sweep, and the host's
     # explicit End (end_meeting) - converges here, so this is the one place
-    # that reliably clears Meeting.locked no matter which path fired.
+    # that reliably releases the durable lock no matter which path fired.
     # end_meeting also clears it directly, for the case where it ends the
     # occurrence with no active session at all (this function never runs
     # then) - the two sites are not redundant, both are needed.
     # Plain filter on conversation_id, never session.conversation.meeting:
     # most conversations are not meetings, and that reverse accessor raises
     # RelatedObjectDoesNotExist for every one of them.
-    Meeting.objects.filter(conversation_id=session.conversation_id).update(locked=False)
+    Meeting.objects.filter(conversation_id=session.conversation_id).update(
+        locked_occurrence_start=None
+    )
 
     duration = session.duration_seconds or 0
     label = format_duration(duration)

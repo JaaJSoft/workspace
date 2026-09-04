@@ -120,23 +120,30 @@ def remove_guest(guest):
 
 
 @transaction.atomic
-def set_locked(meeting, locked):
+def set_locked(meeting, locked, now=None):
     """Lock or unlock the meeting, durably.
 
-    Meeting.locked is the value that survives with no active call - it is
-    written unconditionally, so a host can pre-lock an empty room. When a
-    call is already active, its session's live flag is written to match in
-    the same call, so participants already in the room see the change too.
+    Meeting.locked_occurrence_start is the value that survives with no active
+    call - it is written unconditionally, so a host can pre-lock an empty
+    room. It names the occurrence the lock was set during (from
+    current_occurrence, never event.start), which is what stops a lock nobody
+    ever released from following the series into next week. Locking outside
+    any reachable occurrence therefore leaves nothing durable behind: there is
+    no occurrence for the lock to belong to. When a call is already active,
+    its session's live flag is written to match in the same call, so
+    participants already in the room see the change too.
+
     Wrapped in one transaction so a failure on the second write cannot leave
-    the durable flag committed while the live one stays stale. Not
+    the durable value committed while the live one stays stale. Not
     guest-reachable (this is behind the host membership gate), so the
     get_active_call self-heal is fine here.
     """
     from .calls import get_active_call
 
     locked = bool(locked)
-    meeting.locked = locked
-    meeting.save(update_fields=["locked"])
+    occurrence = current_occurrence(meeting, now=now) if locked else None
+    meeting.locked_occurrence_start = occurrence[0] if occurrence is not None else None
+    meeting.save(update_fields=["locked_occurrence_start"])
 
     session = get_active_call(meeting.conversation_id)
     if session is not None:
@@ -162,8 +169,8 @@ def end_meeting(meeting, now=None):
     # the ordinary case for a host ending a meeting nobody joined - a lock
     # set on an empty room must not survive that either. The two sites are
     # not redundant, both are needed for different starting states.
-    meeting.locked = False
-    meeting.save(update_fields=["closed_occurrence_start", "locked"])
+    meeting.locked_occurrence_start = None
+    meeting.save(update_fields=["closed_occurrence_start", "locked_occurrence_start"])
 
     # A swept row can never become admittable again - resolve_guest denies
     # any occurrence_start matching closed_occurrence_start - so this also

@@ -22,12 +22,13 @@
 // a server-driven menu exists to prevent. So the menu is narrowed to this
 // list, and a test holds the list against the registry.
 //
-// `move`, `set_tags` and `copy_totp` are what the registry offers and this
-// client does not do yet. They are hidden rather than shown dead.
+// `move` and `set_tags` are what the registry offers and this client does
+// not do yet. They are hidden rather than shown dead.
 window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'edit',
   'copy_username',
   'copy_password',
+  'copy_totp',
   'open_uri',
   'favorite',
   'unfavorite',
@@ -170,6 +171,20 @@ window.vaultBrowser = (function () {
       // The row whose properties are on screen. Distinct from the selection:
       // the checkbox owns that, the row body opens this.
       panelEntry: null,
+      // Slots whose decryption is in flight, so a second click can take the
+      // gesture back before the value ever lands.
+      revealing: {},
+      // Plaintexts the user asked to see, keyed by entry and field so a value
+      // can never be shown under another row. There is no timer: the clipboard
+      // needs one because it is invisible and machine-wide, whereas this is on
+      // screen and one click undoes it. It is dropped when the panel closes,
+      // when another entry is selected, and when the vault locks.
+      revealed: {},
+      // The authenticator key, held as a handle rather than as a secret: the
+      // HMAC key is imported non-extractable, so what sits here is something
+      // javascript cannot read back. `code` is a six-digit derivative that
+      // expires within the period, which is why it may live in state at all.
+      totp: null,
       // The context menu: which row it belongs to and where it was raised.
       menu: { open: false, entry: null, x: 0, y: 0 },
       // The folder menu is its own, and its rows are written rather than
@@ -198,6 +213,7 @@ window.vaultBrowser = (function () {
         window.vaultClipboard.onChange(function (state) {
           self.clipboard = state;
         });
+        window.vaultSession.onTick(function () { self.refreshTotp(); });
       },
 
       // A palette command is a plain link, so the only thing it can carry is
@@ -227,7 +243,7 @@ window.vaultBrowser = (function () {
         this.openVault = null;
         this.error = '';
         this.entryActions = {};
-        this.panelEntry = null;
+        this.resetPanel();
         this.closeMenu();
         this.pendingNewEntry = false;
         // The drafts hold typed-in plaintext, so they go with the keys.
@@ -254,7 +270,7 @@ window.vaultBrowser = (function () {
             this.setData({});
             this.entryRows = [];
             this.entryActions = {};
-            this.panelEntry = null;
+            this.resetPanel();
           }
           await this.loadVaultActions();
           // The palette command reaches the page before there is a vault to
@@ -396,7 +412,24 @@ window.vaultBrowser = (function () {
           // banner speaks about entries.
           tamperedCount: entries.tamperedCount,
         });
-        this.panelEntry = null;
+        // Every row is rebuilt from the fresh listing, so whatever the panel
+        // had decrypted belongs to a row this pass no longer vouches for - a
+        // mutating action elsewhere (favourite, trash, a folder or tag save)
+        // reloads through here just like a manual refresh does.
+        //
+        // The panel itself survives when its row does: a reload runs for a
+        // whole round trip, and a row clicked inside that window must not have
+        // its panel closed under the user when the listing lands.
+        const open = this.panelEntry;
+        this.resetPanel();
+        if (open) {
+          const fresh = this.entries.find(function (entry) {
+            return entry.uuid === open.uuid;
+          });
+          // Gone from the listing - trashed away, deleted elsewhere - is the
+          // one case where the panel has nothing left to describe.
+          if (fresh) this.panelEntry = fresh;
+        }
         await this.loadEntryActions();
       },
 
@@ -420,6 +453,10 @@ window.vaultBrowser = (function () {
         if (generation !== this.actionsGeneration) return;
         if (!window.vaultSession.isUnlocked()) return;
         this.entryActions = answer;
+        // The rows reach the screen a round trip before this answer does, and
+        // startTotp is gated on it: a row opened in between was refused by a
+        // map that had no entry for it yet, and no other pass would ask again.
+        if (this.panelEntry && !this.totp) await this.startTotp(this.panelEntry);
       },
 
       refresh: function () {
@@ -573,6 +610,164 @@ window.vaultBrowser = (function () {
         return Boolean(entry && (entry.fieldIds || []).includes(fieldId));
       },
 
+      isRevealed: function (fieldId) {
+        if (!this.panelEntry) return false;
+        // `in`, not `hasOwnProperty.call`: the latter reads through the
+        // reactive proxy's getOwnPropertyDescriptor trap, which Alpine does
+        // not instrument, so a slot appearing in `revealed` would update
+        // this method's return value without ever re-running the template
+        // that calls it.
+        return (this.panelEntry.uuid + '|' + fieldId) in this.revealed;
+      },
+
+      revealedValue: function (fieldId) {
+        if (!this.panelEntry) return '';
+        return this.revealed[this.panelEntry.uuid + '|' + fieldId] || '';
+      },
+
+      // The stored totp field is a whole otpauth:// uri, and the row showing
+      // it is labelled with what a user retypes into a phone: the key. The
+      // uri's parameters are what the derivation reads, not what a human
+      // copies off a screen, so the reveal shows the secret alone.
+      shownValue: function (fieldId, value) {
+        if (fieldId !== 'totp') return value;
+        return window.vaultCrypto.base32Encode(
+          window.vaultCrypto.parseOtpauth(value).secret
+        );
+      },
+
+      // The one other moment a secret is decrypted, alongside copyField: this
+      // one keeps the plaintext in component state instead of handing it off,
+      // because the point is to show it rather than move it. The panel may
+      // have moved to another entry, or the vault may have locked, while the
+      // decryption was in flight - the entry captured before the await is
+      // checked against panelEntry again after it, so a slow answer can never
+      // land under a different row's name.
+      toggleReveal: async function (fieldId) {
+        const entry = this.panelEntry;
+        if (!entry) return;
+        // The same gate the button is drawn behind, read again here: the map
+        // the template consulted is a round trip old, and a row trashed in
+        // that window must not open its password because the menu had not
+        // caught up when the click landed.
+        if (!this.hasAction(entry, 'copy_' + fieldId)) return;
+        const slot = entry.uuid + '|' + fieldId;
+        if (Object.prototype.hasOwnProperty.call(this.revealed, slot)) {
+          delete this.revealed[slot];
+          return;
+        }
+        // A second click while the first decryption is still in flight is the
+        // gesture taken back, not a second reveal. `revealed` cannot see one
+        // in flight, so without this the value lands after the click meant to
+        // hide it, under a button already reading "hide".
+        if (Object.prototype.hasOwnProperty.call(this.revealing, slot)) {
+          delete this.revealing[slot];
+          return;
+        }
+        this.revealing[slot] = true;
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) {
+          delete this.revealing[slot];
+          return;
+        }
+        try {
+          const value = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, fieldId
+          );
+          if (this.panelEntry !== entry) return;
+          // Taken back while this was in flight: the slot is gone, and so is
+          // the only reason to show what just arrived.
+          if (!Object.prototype.hasOwnProperty.call(this.revealing, slot)) return;
+          delete this.revealing[slot];
+          this.revealed[slot] = this.shownValue(fieldId, value);
+        } catch (err) {
+          delete this.revealing[slot];
+          if (err && err.reason === 'locked') return;
+          if (this.panelEntry !== entry) return;
+          this.error = 'That value could not be revealed.';
+        }
+      },
+
+      // Opens the key once, derives the HMAC handle from it and lets the
+      // base32 bytes go: what stays in state afterward is the non-extractable
+      // key plus the six-digit derivative, never the shared secret itself.
+      startTotp: async function (entry) {
+        this.totp = null;
+        if (!entry || !(entry.fieldIds || []).includes('totp')) return;
+        // The same gate the copy button reads: a trashed row's key is not
+        // decrypted just because the panel opened, only because copy_totp is
+        // still on offer for it.
+        if (!this.hasAction(entry, 'copy_totp')) return;
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        let key;
+        let parsed;
+        try {
+          const uri = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'totp'
+          );
+          parsed = window.vaultCrypto.parseOtpauth(uri);
+          key = await window.vaultCrypto.importTotpKey(parsed);
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          // The panel may have moved to another entry, or closed, while this
+          // was in flight - a slow failure must not land under a row that is
+          // no longer the one on screen.
+          if (this.panelEntry !== entry) return;
+          // Localised like a failed signature: this line says it cannot be
+          // read, and the rest of the entry is shown as usual.
+          this.totp = { entryUuid: entry.uuid, unreadable: true };
+          return;
+        }
+        // Same check on the success path: an identity comparison, not a uuid
+        // one, so a panel closed mid-flight (panelEntry null) is caught too.
+        if (this.panelEntry !== entry) return;
+        this.totp = {
+          entryUuid: entry.uuid,
+          key: key,
+          digits: parsed.digits,
+          period: parsed.period,
+          code: '',
+          secondsLeft: 0,
+          unreadable: false,
+        };
+        await this.refreshTotp();
+      },
+
+      // Driven by the session's own tick, which already beats once a second
+      // for the lock countdown. A second interval could outlive the component;
+      // this one dies with the session. It does not push the lock back either:
+      // only real DOM events call noteActivity.
+      refreshTotp: async function () {
+        const totp = this.totp;
+        if (!totp || totp.unreadable || !totp.key) return;
+        const now = Date.now() / 1000;
+        const code = await window.vaultCrypto.totpCode(totp.key, totp, now);
+        if (this.totp !== totp) return;
+        totp.code = code;
+        totp.secondsLeft = window.vaultCrypto.totpSecondsRemaining(totp, now);
+      },
+
+      // Reached from the row menu as well as from the panel, so it opens and
+      // derives on its own rather than reading panel state. It copies the
+      // derived code: copyField would copy the stored value, which is the key.
+      copyTotp: async function (entry) {
+        const row = this.rowFor(entry.uuid);
+        if (!row || !this.openVault) return;
+        try {
+          const uri = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'totp'
+          );
+          const parsed = window.vaultCrypto.parseOtpauth(uri);
+          const key = await window.vaultCrypto.importTotpKey(parsed);
+          const code = await window.vaultCrypto.totpCode(key, parsed, Date.now() / 1000);
+          await window.vaultClipboard.copy('Authenticator code', code, { transient: true });
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That authenticator code could not be copied.';
+        }
+      },
+
       // ---- gestures --------------------------------------------------------
 
       // The gesture of the file browser: the checkbox selects, the row body
@@ -584,10 +779,23 @@ window.vaultBrowser = (function () {
 
       openEntryFromRow: function (entry) {
         this.panelEntry = entry;
+        this.revealed = {};
+        this.revealing = {};
+        return this.startTotp(entry);
+      },
+
+      // The one place that takes the panel and everything it decrypted down
+      // together - a partial reset would leave a revealed value or a totp key
+      // handle attached to a row the screen no longer shows one for.
+      resetPanel: function () {
+        this.panelEntry = null;
+        this.revealed = {};
+        this.revealing = {};
+        this.totp = null;
       },
 
       closePanel: function () {
-        this.panelEntry = null;
+        this.resetPanel();
       },
 
       // Every navigation the store knows about lands here - forward, back,
@@ -595,7 +803,7 @@ window.vaultBrowser = (function () {
       // panel with it. The row it describes has left the screen.
       apply: function (state) {
         store.apply.call(this, state);
-        this.panelEntry = null;
+        this.resetPanel();
         this.closeMenu();
       },
 
@@ -607,6 +815,7 @@ window.vaultBrowser = (function () {
         this.closeMenu();
         if (!entry || !this.hasAction(entry, action.id)) return;
         if (action.id === 'edit') return this.editEntry(entry);
+        if (action.id === 'copy_totp') return this.copyTotp(entry);
         const copies = {
           copy_username: ['Username', 'username', false],
           copy_password: ['Password', 'password', true],
@@ -766,6 +975,41 @@ window.vaultBrowser = (function () {
         });
       },
 
+      // The authenticator key is not a value to type over. The dialog shows
+      // whether one is set and offers two deliberate gestures; the ciphertext
+      // travels untouched until one of them is used.
+      totpFieldState: function () {
+        if (!this.draft) return 'none';
+        // The same schema formFields() reads. Without it a type that declares
+        // no authenticator key is still offered one, and saveEntry seals a
+        // field the type does not have.
+        const type = this.typeFor(this.draft.type);
+        const declared = (type ? type.fields : []).some(function (field) {
+          return field.kind === 'totp';
+        });
+        if (!declared) return 'unsupported';
+        if (this.draft.totpInput !== null && this.draft.totpInput !== undefined) {
+          return 'editing';
+        }
+        return this.draft.hasTotp && !this.draft.totpRemoved ? 'set' : 'none';
+      },
+
+      // No reset of totpRemoved: `editing` already wins over it while there is
+      // an input, and clearing it here made Cancel fall back to `set` on an
+      // entry whose key had just been removed - bringing the key back.
+      startTotpEntry: function () {
+        this.draft.totpInput = '';
+      },
+
+      cancelTotpEntry: function () {
+        this.draft.totpInput = null;
+      },
+
+      removeTotp: function () {
+        this.draft.totpInput = null;
+        this.draft.totpRemoved = true;
+      },
+
       newEntry: function (typeId) {
         this.closeMenu();
         this.draft = {
@@ -779,6 +1023,11 @@ window.vaultBrowser = (function () {
           name: '',
           notes: '',
           values: {},
+          carriedFields: {},
+          keyVersion: (this.openVault && this.openVault.key_version) || 1,
+          hasTotp: false,
+          totpInput: null,
+          totpRemoved: false,
           entryVersion: 1,
           isNew: true,
         };
@@ -791,7 +1040,13 @@ window.vaultBrowser = (function () {
         const row = this.rowFor(entry.uuid);
         if (!row || !this.openVault) return;
         const values = {};
+        const carriedFields = {};
         const type = this.typeFor(entry.type);
+        const editable = new Set(
+          (type ? type.fields : [])
+            .filter(function (field) { return field.kind !== 'totp'; })
+            .map(function (field) { return field.field_id; }),
+        );
         try {
           for (const field of type ? type.fields : []) {
             if (field.kind === 'totp') continue;
@@ -806,6 +1061,14 @@ window.vaultBrowser = (function () {
           return;
         }
         if (!window.vaultSession.isUnlocked()) return;
+        // Everything the dialog does not edit - the authenticator key, and any
+        // field a future type declares - travels as its ciphertext. Rebuilding
+        // the record from the form alone would delete it.
+        (row.entry_fields || []).forEach(function (field) {
+          if (!editable.has(field.field_id)) {
+            carriedFields[field.field_id] = field.encrypted_value;
+          }
+        });
         this.draft = {
           uuid: entry.uuid,
           type: entry.type,
@@ -819,6 +1082,11 @@ window.vaultBrowser = (function () {
           // an entry whose notes are gone.
           encryptedNotes: row.encrypted_notes || '',
           values: values,
+          carriedFields: carriedFields,
+          keyVersion: row.key_version || 1,
+          hasTotp: (entry.fieldIds || []).includes('totp'),
+          totpInput: null,
+          totpRemoved: false,
           entryVersion: row.entry_version || 1,
           isNew: false,
         };
@@ -842,12 +1110,35 @@ window.vaultBrowser = (function () {
         // The name is the only thing a listing shows: a row without one is a
         // row the user cannot tell from another.
         if (!name) return;
+        // Three outcomes, and only one of them seals: a typed key becomes the
+        // uri that will be stored, a removed one is dropped from both maps so
+        // the write deletes it, and an untouched one stays in carriedFields.
+        const values = Object.assign({}, draft.values);
+        const carriedFields = Object.assign({}, draft.carriedFields);
+        if (draft.totpInput !== null && draft.totpInput !== undefined
+            && String(draft.totpInput).trim()) {
+          try {
+            values.totp = window.vaultCrypto.normalizeTotpInput(
+              draft.totpInput, { label: name }
+            );
+          } catch (err) {
+            this.error = 'That authenticator key could not be read. Paste the key or '
+              + 'the otpauth:// address the service showed you.';
+            return;
+          }
+          delete carriedFields.totp;
+        } else if (draft.totpRemoved) {
+          delete carriedFields.totp;
+          delete values.totp;
+        }
         this.busy = true;
         try {
           const body = await window.buildEntryWriteRequest(
             window.vaultSession,
             this.openVault,
-            Object.assign({}, draft, { name: name }),
+            Object.assign({}, draft, {
+              name: name, values: values, carriedFields: carriedFields,
+            }),
           );
           if (draft.isNew) {
             await window.vaultApi.createEntry(body);

@@ -15,7 +15,7 @@ import pathlib
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from . import ad, metadata, primitives
+from . import ad, metadata, primitives, totp
 from .encoding import to_base64url
 
 VECTORS_PATH = pathlib.Path(__file__).resolve().parent.parent / "crypto_vectors.json"
@@ -35,6 +35,37 @@ AEAD_IV = bytes(range(12))
 SENDER_SK = bytes([0x11]) * 32
 RECIPIENT_SK = bytes([0x22]) * 32
 SIG_SK = bytes([0x33]) * 32
+
+_TOTP_SEED = "12345678901234567890"
+
+
+def _totp_vectors():
+    """Cross-language vectors: fixed secret, fixed instant, no draw anywhere."""
+    cases = [
+        ("totp-sha1-6", "SHA1", 20, 6, 30, 1234567890),
+        ("totp-sha1-8", "SHA1", 20, 8, 30, 59),
+        ("totp-sha256-8", "SHA256", 32, 8, 30, 1111111109),
+        ("totp-sha512-8", "SHA512", 64, 8, 30, 20000000000),
+        ("totp-sha1-period-60", "SHA1", 20, 6, 60, 1234567890),
+    ]
+    out = []
+    for name, algorithm, length, digits, period, at in cases:
+        repeated = _TOTP_SEED * (length // len(_TOTP_SEED) + 1)
+        secret = repeated[:length].encode()
+        out.append(
+            {
+                "id": name,
+                "secret_b64": to_base64url(secret),
+                "algorithm": algorithm,
+                "digits": digits,
+                "period": period,
+                "at": at,
+                "expected": totp.totp_code(
+                    secret, algorithm=algorithm, digits=digits, period=period, at=at
+                ),
+            }
+        )
+    return out
 
 
 def build_vectors() -> dict:
@@ -375,6 +406,7 @@ def build_vectors() -> dict:
                 ),
             },
         ],
+        "totp": _totp_vectors(),
     }
 
 

@@ -12,17 +12,19 @@
 <template x-if="draft">
   <div class="modal modal-open">
     <div class="modal-box max-w-lg">
-      <h2
-        class="font-semibold text-lg"
-        x-text="draft.isNew ? 'New ' + typeLabel(draft.type).toLowerCase() : 'Edit entry'"
-      ></h2>
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i :data-lucide="typeIcon(draft.type)" class="w-5 h-5 text-error"></i>
+        <span
+          x-text="draft.isNew ? 'New ' + typeLabel(draft.type).toLowerCase() : 'Edit entry'"
+        ></span>
+      </h3>
 
       <form @submit.prevent="saveEntry()" class="mt-4 space-y-3">
         <label class="form-control">
           <span class="label-text">Name</span>
           <input
             type="text"
-            class="input input-bordered w-full"
+            class="input input-bordered input-sm w-full"
             autocomplete="off"
             spellcheck="false"
             x-model="draft.name"
@@ -34,7 +36,7 @@
             <span class="label-text" x-text="field.label"></span>
             <input
               :type="field.secret ? 'password' : 'text'"
-              class="input input-bordered w-full"
+              class="input input-bordered input-sm w-full"
               :class="field.secret ? 'font-mono' : ''"
               autocomplete="off"
               spellcheck="false"
@@ -43,9 +45,88 @@
           </label>
         </template>
 
+        {% comment %}
+          The authenticator key gets its own control rather than a slot in the
+          loop above: it is a shared key, and a text input holding it would
+          offer to overwrite it with whatever was typed. Three states, one
+          visible at a time - none, set, being entered.
+        {% endcomment %}
+        <div class="form-control" x-show="totpFieldState() !== 'unsupported'">
+          {# for, not a wrapping label: the control's other two states are buttons, and a label around a button steals its click. #}
+          <label class="label-text" for="entry-totp-input">Authenticator key</label>
+
+          <div
+            class="flex items-center gap-2 mt-1"
+            x-show="totpFieldState() === 'none'"
+          >
+            <span class="text-sm opacity-60 flex-1">No authenticator key</span>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost gap-1"
+              @click="startTotpEntry()"
+            >
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              Add
+            </button>
+          </div>
+
+          <div
+            class="flex items-center gap-2 mt-1"
+            x-show="totpFieldState() === 'set'"
+          >
+            <span class="text-sm opacity-60 flex-1">An authenticator key is set</span>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost gap-1"
+              @click="startTotpEntry()"
+            >
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+              Replace
+            </button>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost text-error gap-1"
+              @click="removeTotp()"
+            >
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              Remove
+            </button>
+          </div>
+
+          {% comment %}
+            x-if, not x-show: x-show leaves the input in the DOM, and a second
+            password field there makes `.modal-box input[type=password]`
+            ambiguous for anything selecting the entry password.
+          {% endcomment %}
+          <template x-if="totpFieldState() === 'editing'">
+            <div class="flex items-center gap-2 mt-1">
+              <input
+                id="entry-totp-input"
+                type="password"
+                class="input input-bordered input-sm flex-1 font-mono"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Key or otpauth:// address"
+                x-model="draft.totpInput"
+              />
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost gap-1"
+                @click="cancelTotpEntry()"
+              >
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                Cancel
+              </button>
+            </div>
+          </template>
+        </div>
+
         <label class="form-control">
           <span class="label-text">Folder</span>
-          <select class="select select-bordered w-full" x-model="draft.folder">
+          <select
+            class="select select-bordered select-sm w-full"
+            x-model="draft.folder"
+          >
             <option :value="null">No folder</option>
             <template x-for="folder in folders" :key="folder.uuid">
               <option :value="folder.uuid" x-text="folder.name"></option>
@@ -75,10 +156,16 @@
         </label>
 
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost" @click="closeEntryDialog()">Cancel</button>
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost"
+            @click="closeEntryDialog()"
+          >
+            Cancel
+          </button>
           <button
             type="submit"
-            class="btn btn-primary"
+            class="btn btn-sm btn-primary"
             :disabled="busy || !draft.name.trim()"
           >
             Save
@@ -92,24 +179,33 @@
 <template x-if="folderDraft">
   <div class="modal modal-open">
     <div class="modal-box max-w-sm">
-      <h2
-        class="font-semibold text-lg"
-        x-text="folderDraft.existing ? 'Rename folder' : 'New folder'"
-      ></h2>
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i
+          :data-lucide="folderDraft.existing ? 'folder-pen' : 'folder-plus'"
+          class="w-5 h-5 text-error"
+        ></i>
+        <span x-text="folderDraft.existing ? 'Rename folder' : 'New folder'"></span>
+      </h3>
       <form @submit.prevent="saveFolder()">
         <input
           type="text"
-          class="input input-bordered w-full mt-4"
+          class="input input-bordered input-sm w-full mt-4"
           autocomplete="off"
           spellcheck="false"
           placeholder="Folder name"
           x-model="folderDraft.name"
         />
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost" @click="closeFolderDialog()">Cancel</button>
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost"
+            @click="closeFolderDialog()"
+          >
+            Cancel
+          </button>
           <button
             type="submit"
-            class="btn btn-primary"
+            class="btn btn-sm btn-primary"
             :disabled="busy || !folderDraft.name.trim()"
             x-text="folderDraft.existing ? 'Rename' : 'Create'"
           ></button>

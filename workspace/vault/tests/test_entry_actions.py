@@ -154,7 +154,7 @@ class MenuHonoursTheRegistryTests(SimpleTestCase):
     # Offered by the registry and not built yet. Adding an action to the
     # registry therefore fails this test until someone either implements it or
     # writes it down here.
-    NOT_IMPLEMENTED_YET = {"move", "set_tags", "copy_totp"}
+    NOT_IMPLEMENTED_YET = {"move", "set_tags"}
 
     def _handled(self):
         source = self.SOURCE.read_text(encoding="utf-8")

@@ -85,3 +85,53 @@ test('a 200 from end leaves the room', async () => {
   assert.equal(left, true);
   assert.deepStrictEqual(warnings, []);
 });
+
+// The knock fan-out rides the host's own mailbox and any of their tabs can
+// drain it, so this room may simply never see the event. These pin the
+// mitigation: a schedule, and a re-read whenever the global stream reconnects.
+function hostWithTimers(meeting) {
+  const state = { intervals: new Set(), listeners: [], loads: 0, next: 0 };
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/meeting_host.js', {
+    fetch: async () => ({ ok: true, json: async () => [] }),
+    getCSRFToken: () => 'csrf',
+    AppAlert: { error() {}, success() {}, warning() {} },
+    setInterval: (fn, ms) => { state.next += 1; state.intervals.add(state.next); state.fns = fn; state.ms = ms; return state.next; },
+    clearInterval: (id) => { state.intervals.delete(id); },
+    addEventListener: (name, fn) => { state.listeners.push(name); state.handler = fn; },
+    removeEventListener: (name) => { state.listeners = state.listeners.filter((n) => n !== name); },
+  });
+  const m = ctx.chatMeetingHostMixin();
+  m.meeting = meeting;
+  m.loadLobby = async () => { state.loads += 1; };
+  return { m, state };
+}
+
+test('a room with no meeting arms no lobby refresh', () => {
+  const { m, state } = hostWithTimers(null);
+  m._startLobbyRefresh();
+  assert.equal(state.intervals.size, 0);
+  assert.deepStrictEqual(state.listeners, []);
+});
+
+test('a meeting room re-reads the lobby on a schedule and on a stream reconnect', async () => {
+  const { m, state } = hostWithTimers({ uuid: 'm1' });
+  m._startLobbyRefresh();
+  assert.equal(state.intervals.size, 1);
+  assert.equal(state.ms, 30000);
+  assert.deepStrictEqual(state.listeners, ['sse:reconnect']);
+
+  await state.fns();
+  await state.handler();
+  assert.equal(state.loads, 2);
+});
+
+test('arming twice keeps one timer, and stopping releases both hooks', () => {
+  const { m, state } = hostWithTimers({ uuid: 'm1' });
+  m._startLobbyRefresh();
+  m._startLobbyRefresh();
+  assert.equal(state.intervals.size, 1);
+
+  m._stopLobbyRefresh();
+  assert.equal(state.intervals.size, 0);
+  assert.deepStrictEqual(state.listeners, []);
+});

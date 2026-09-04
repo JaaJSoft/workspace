@@ -565,3 +565,80 @@ test('call_started is what makes a waiting guest join, with no polling', async (
   assert.ok(urls.includes('/api/v1/chat/meet/abc123/join'));
   assert.equal(typeof a._armCallWatch, 'undefined', 'the 8s poll is gone');
 });
+
+test('a locked meeting refuses the join and parks the guest with a retry', async () => {
+  const a = app(async (url) => {
+    if (url.endsWith('/state')) return { ok: true, status: 200, json: async () => ({ admitted: true, active: true, session_id: 's1', participants: [], participant_key: 'g:1' }) };
+    // The guest join answers 423 with no body at all.
+    if (url.endsWith('/join')) return { ok: false, status: 423, json: async () => { throw new SyntaxError('Unexpected end of JSON input'); } };
+    return { ok: true, status: 200, json: async () => ({ title: 'T', participant_count: 0, max_participants: 8 }) };
+  });
+  a._openStream = () => {};
+  a.token = 'tok';
+  a.phase = 'room';
+
+  await a.joinWhenCallStarts();
+
+  assert.equal(a.inCall, false);
+  assert.equal(a.joiningCall, false, 'the join is released, so Try again can work');
+  assert.equal(a.phase, 'room', 'parked in the room, not thrown out');
+  assert.match(a.joinError, /locked/i);
+  assert.equal(a._streamAbort, null, 'no half-open stream left behind');
+});
+
+test('a join refused 404 re-reads the state instead of guessing', async () => {
+  const urls = [];
+  let states = 0;
+  const a = app(async (url) => {
+    urls.push(url);
+    if (url.endsWith('/join')) return { ok: false, status: 404, json: async () => { throw new SyntaxError('no body'); } };
+    if (url.endsWith('/state')) {
+      states += 1;
+      // The gate join failed is the gate state answers on, so a token join
+      // refuses is a token state stops knowing.
+      if (states === 1) return { ok: true, status: 200, json: async () => ({ admitted: true, active: true, session_id: 's1', participants: [], participant_key: 'g:1' }) };
+      return { ok: false, status: 404, json: async () => ({}) };
+    }
+    return { ok: true, status: 200, json: async () => ({ messages: [], has_more: false }) };
+  });
+  a._openStream = () => {};
+  a.token = 'tok';
+  a.phase = 'room';
+
+  await a.joinWhenCallStarts();
+  await settle(3);
+
+  assert.ok(urls.filter((u) => u.endsWith('/state')).length >= 2, 'it asked the server again');
+  assert.equal(a.phase, 'name', 'a token nobody knows sends the guest back to the door');
+});
+
+test('a 409 refusal shows what the server said, not a made-up reason', async () => {
+  const a = app(async (url) => {
+    if (url.endsWith('/state')) return { ok: true, status: 200, json: async () => ({ admitted: true, active: true, session_id: 's1', participants: [], participant_key: 'g:1' }) };
+    if (url.endsWith('/join')) return { ok: false, status: 409, json: async () => ({ detail: 'Call is full.' }) };
+    return { ok: true, status: 200, json: async () => ({ title: 'T', participant_count: 8, max_participants: 8 }) };
+  });
+  a._openStream = () => {};
+  a.token = 'tok';
+  a.phase = 'room';
+
+  await a.joinWhenCallStarts();
+
+  assert.equal(a.joinError, 'Call is full.');
+});
+
+test('a keepalive-only connection reconnects instead of asking for the state', async () => {
+  const timers = timerRecorder();
+  const encoder = new TextEncoder();
+  let resumes = 0;
+  const a = app(async () => ({ ok: true, status: 200, body: bodyOf([encoder.encode(':keepalive' + NL + NL)]) }), timers);
+  a.token = 'tok';
+  a.phase = 'lobby';
+  a.resume = async () => { resumes += 1; };
+  a._streamBackoffMs = 8000;
+
+  await a._openStream();
+
+  assert.equal(resumes, 0, 'bytes arrived: the server is talking, nothing to re-ask');
+  assert.deepStrictEqual(timers.delays, [1000], 'and the backoff is back to its first rung');
+});

@@ -182,10 +182,19 @@ window.chatCallMixin = function chatCallMixin() {
         this.joiningCall = false;
         return;
       }
-      if (resp.status === 409) {
+      // Branch on the status BEFORE parsing: the guest endpoints answer 423
+      // and 404 with no body at all, and a parse that throws here would skip
+      // every release below - leaving joiningCall latched and the microphone
+      // captured, with no way back but a reload.
+      if (!resp.ok) {
         this._teardownLocal();
         this.joiningCall = false;
-        window.AppAlert.warning('This call is full.');
+        let detail = '';
+        try {
+          const body = await resp.json();
+          detail = (body && body.detail) || '';
+        } catch (e) { /* no body, or not JSON: the status is the whole story */ }
+        this._onJoinRefused(resp.status, detail);
         return;
       }
       const data = await resp.json();
@@ -209,6 +218,20 @@ window.chatCallMixin = function chatCallMixin() {
       if (typeof this._refreshMessagesPreservingScroll === 'function' && this.activeConversation) {
         this._refreshMessagesPreservingScroll();
       }
+    },
+
+    // What a refused join means to the user. The member room has nowhere to
+    // fall back to, so it says so and stops; the guest page overrides this to
+    // park in its own room instead.
+    _onJoinRefused(status, detail) {
+      // 409 is two different refusals - the call is full, and there is no
+      // call to join yet - and only the body tells them apart. Announcing
+      // "full" for the second one sends the user away from a meeting they
+      // could have joined a minute later.
+      const full = status === 409 && /full/i.test(detail);
+      window.AppAlert.warning(
+        full ? 'This call is full.' : (detail || 'This call cannot be joined right now.'),
+      );
     },
 
     async leaveCall() {

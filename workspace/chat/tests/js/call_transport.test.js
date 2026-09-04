@@ -97,3 +97,72 @@ test('startOrJoinCall POSTs the join request to the viewed conversation', async 
   assert.equal(calls[0].headers['X-CSRFToken'], 'csrf-token');
   assert.equal(calls[0].headers['Content-Type'], 'application/json');
 });
+
+// A refused join: the guest endpoints answer 423 (locked) and 404 (unknown
+// token) with NO body at all, so anything that parses before it branches
+// throws inside startOrJoinCall - leaving joiningCall latched true and the
+// microphone captured. These pin the release, not the message.
+function refusingApp(status, body) {
+  const captured = { alerts: [], torndown: 0 };
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/call.js', {
+    fetch: async () => ({
+      ok: false,
+      status,
+      json: async () => {
+        if (body === undefined) throw new SyntaxError('Unexpected end of JSON input');
+        return body;
+      },
+    }),
+    getCSRFToken: () => 'csrf-token',
+    navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [] }) } },
+    document: { getElementById: () => null, addEventListener() {} },
+    AppAlert: {
+      error(msg) { captured.alerts.push(msg); },
+      warning(msg) { captured.alerts.push(msg); },
+    },
+    chatCallShouldOwnMedia: () => true,
+  });
+  const app = ctx.chatCallMixin();
+  app.activeConversation = { uuid: VIEWED_CONV_ID };
+  app._peers = {};
+  app._playCallCue = () => {};
+  app._startHeartbeat = () => {};
+  app._teardownLocal = () => { captured.torndown += 1; app._localStream = null; };
+  return { app, captured };
+}
+
+test('a bodyless 423 releases the join instead of throwing on the parse', async () => {
+  const { app, captured } = refusingApp(423, undefined);
+  await app.startOrJoinCall();
+  assert.equal(app.joiningCall, false, 'the join is released, so a retry is possible');
+  assert.equal(app.inCall, false);
+  assert.equal(captured.torndown, 1, 'the microphone capture is released');
+});
+
+test('a bodyless 404 releases the join too', async () => {
+  const { app, captured } = refusingApp(404, undefined);
+  await app.startOrJoinCall();
+  assert.equal(app.joiningCall, false);
+  assert.equal(captured.torndown, 1);
+});
+
+test('a 409 says the call is full only when that is what the server said', async () => {
+  const full = refusingApp(409, { detail: 'Call is full.' });
+  await full.app.startOrJoinCall();
+  assert.deepStrictEqual(Array.from(full.captured.alerts), ['This call is full.']);
+
+  const notStarted = refusingApp(409, { detail: 'No call has been started in this meeting yet.' });
+  await notStarted.app.startOrJoinCall();
+  assert.deepStrictEqual(
+    Array.from(notStarted.captured.alerts),
+    ['No call has been started in this meeting yet.'],
+  );
+});
+
+test('a refused join routes through the overridable hook', async () => {
+  const { app } = refusingApp(423, undefined);
+  const seen = [];
+  app._onJoinRefused = (status, detail) => seen.push([status, detail]);
+  await app.startOrJoinCall();
+  assert.deepStrictEqual(Array.from(seen[0]), [423, '']);
+});

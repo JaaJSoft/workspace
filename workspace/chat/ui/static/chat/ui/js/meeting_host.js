@@ -5,7 +5,8 @@ window.chatMeetingHostMixin = function chatMeetingHostMixin() {
     meeting: null,
     lobby: [],
     lobbyOpen: false,
-    hostBusy: false,
+    _lobbyRefreshTimer: null,
+    _onSseReconnect: null,
 
     _hostHeaders() {
       return { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() };
@@ -29,6 +30,35 @@ window.chatMeetingHostMixin = function chatMeetingHostMixin() {
       if (!this.meeting) return;
       const resp = await fetch(`/api/v1/chat/meetings/${this.meeting.uuid}/lobby`);
       this.lobby = resp.ok ? await resp.json() : [];
+    },
+
+    // meeting_guest_waiting is delivered through the host's own u:<id>
+    // mailbox, and a mailbox drain is destructive while every one of that
+    // host's tabs polls it - there is no leader election. So the tab showing
+    // this room is not the one that receives the knock roughly half the time,
+    // and a guest can sit in the lobby unannounced.
+    //
+    // FOLLOW-UP: the real fix is fanning meeting_guest_waiting out per tab (or
+    // per room) rather than per user, so the room that can act on it is the
+    // one that gets it. Until then the panel re-reads on a schedule, and
+    // whenever the global stream reconnects - the moment a drain was most
+    // likely missed.
+    _startLobbyRefresh() {
+      if (!this.meeting || this._lobbyRefreshTimer) return;
+      this._lobbyRefreshTimer = setInterval(() => this.loadLobby(), 30000);
+      this._onSseReconnect = () => this.loadLobby();
+      window.addEventListener('sse:reconnect', this._onSseReconnect);
+    },
+
+    _stopLobbyRefresh() {
+      if (this._lobbyRefreshTimer) {
+        clearInterval(this._lobbyRefreshTimer);
+        this._lobbyRefreshTimer = null;
+      }
+      if (this._onSseReconnect) {
+        window.removeEventListener('sse:reconnect', this._onSseReconnect);
+        this._onSseReconnect = null;
+      }
     },
     async onGuestWaiting(detail) {
       if (!this.meeting || !detail || detail.meeting_id !== this.meeting.uuid) return;

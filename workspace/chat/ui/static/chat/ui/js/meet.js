@@ -55,10 +55,12 @@ window.chatMeetSseMixin = function chatMeetSseMixin() {
       this._streamAbort = controller;
       const headers = { 'X-Meeting-Token': this.token };
       if (this._lastEventId) headers['Last-Event-ID'] = this._lastEventId;
-      // Per connection, not per page: "the server answered and said nothing"
-      // and "the connection never got there" call for opposite reactions.
+      // Per connection, not per page, and three different things: whether
+      // the server answered at all, and whether it then sent any bytes. A
+      // 600s budget spent on keepalive comments alone carries no frame but is
+      // a perfectly healthy connection, so "no frame" cannot be the test.
       let answered = false;
-      let sawFrame = false;
+      let receivedBytes = false;
       return fetch(`/api/v1/chat/meet/${this.slug}/stream`, { headers, signal: controller.signal })
         .then(async (resp) => {
           if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
@@ -69,15 +71,17 @@ window.chatMeetSseMixin = function chatMeetSseMixin() {
           for (;;) {
             const { value, done } = await reader.read();
             if (done) break;
+            if (value && value.length) {
+              receivedBytes = true;
+              // Bytes are what prove the connection healthy, not the status
+              // line: a stream that 200s and dies every time would otherwise
+              // reconnect forever at the shortest delay.
+              this._streamBackoffMs = CHAT_MEET_BACKOFF_START_MS;
+            }
             buffer += decoder.decode(value, { stream: true });
             const { frames, rest } = chatMeetParseSseChunk(buffer);
             buffer = rest;
             for (const frame of frames) {
-              sawFrame = true;
-              // Delivery is what proves the connection healthy, not the
-              // status line: a stream that 200s and dies every time would
-              // otherwise reconnect forever at the shortest delay.
-              this._streamBackoffMs = CHAT_MEET_BACKOFF_START_MS;
               if (frame.id) this._lastEventId = frame.id;
               await this._dispatchStreamEvent(frame.payload);
             }
@@ -88,11 +92,11 @@ window.chatMeetSseMixin = function chatMeetSseMixin() {
           this._streamAbort = null;
           if (controller.signal.aborted) return;
           if (this.phase !== 'lobby' && this.phase !== 'room') return;
-          // A 2xx that closed without a single frame is the server saying
+          // A 2xx that closed without a single byte is the server saying
           // "nothing for you": the guest was refused, removed or the meeting
           // ended before this connection. Ask /state once instead of
           // reconnecting into the same empty answer forever.
-          if (answered && !sawFrame) return this.resume();
+          if (answered && !receivedBytes) return this.resume();
           this._scheduleRetry(() => this._openStream());
         });
     },
@@ -231,6 +235,8 @@ function chatMeetApp(slug) {
     _callStartMs: null,
     _durationTimer: null,
     _reapRejoins: 0,
+    _joinRefusal: null,
+    _refusedOnce: false,
     // After the spreads: chatCallMixin declares its own null default.
     currentParticipantKey: null,
 
@@ -283,6 +289,27 @@ function chatMeetApp(slug) {
     // has none, and leaveCall's tail call would otherwise re-read the state
     // of a call the guest has just left.
     _syncCallBanner() {},
+
+    // A refused join is not the end of the meeting: the host locking the room
+    // between the admission and the join is ordinary, and it must leave the
+    // guest in the room with something to press. Recorded rather than acted
+    // on, so joinWhenCallStarts owns every transition out of the attempt and
+    // cannot overwrite this reason with its generic one.
+    _onJoinRefused(status, detail) {
+      if (status === 404) {
+        // The token stopped naming an admitted guest of this occurrence: ask
+        // for our own status rather than inventing one.
+        this._joinRefusal = { resume: true };
+        return;
+      }
+      if (status === 423) {
+        this._joinRefusal = { reason: 'The host has locked the meeting.' };
+        return;
+      }
+      this._joinRefusal = {
+        reason: detail || 'You could not be connected to the call.',
+      };
+    },
 
     async _sendHeartbeat() {
       if (!this.inCall) return;
@@ -437,8 +464,24 @@ function chatMeetApp(slug) {
         await this.loadSummary();
         return;
       }
+      this._joinRefusal = null;
       await this.startOrJoinCall();
+      if (this._joinRefusal) {
+        const refusal = this._joinRefusal;
+        this._joinRefusal = null;
+        if (refusal.resume && !this._refusedOnce) {
+          // Once, not in a loop: a server whose state read keeps saying
+          // "admitted" while its join keeps answering 404 would otherwise be
+          // asked forever, a microphone capture per round.
+          this._refusedOnce = true;
+          await this.resume();
+          return;
+        }
+        await this.waitForCall(refusal.reason || 'You could not be connected to the call.');
+        return;
+      }
       if (this.inCall) {
+        this._refusedOnce = false;
         // Deliberately not resetting _reapRejoins here: a join the server
         // accepts proves nothing about presence, and resetting on it is what
         // would turn "reaped, re-join, reaped again" into an endless loop.

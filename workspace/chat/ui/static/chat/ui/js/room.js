@@ -3,6 +3,9 @@
 // No sidebar, no conversation list: the room is one conversation, full screen.
 
 function chatRoomApp(currentUserId, conversationId) {
+  // Held so destroy() below can reach this mixin's own teardown by name.
+  const threads = chatThreadsMixin();
+
   return {
     currentUserId: currentUserId,
     roomConversationId: conversationId,
@@ -24,7 +27,7 @@ function chatRoomApp(currentUserId, conversationId) {
     ...chatSseMixin(),
     ...chatMembersMixin(),
     ...chatPanelsMixin(),
-    ...chatThreadsMixin(),
+    ...threads,
     ...chatBotMixin(),
     ...chatCallMixin(),
     ...chatMeetingHostMixin(),
@@ -56,7 +59,10 @@ function chatRoomApp(currentUserId, conversationId) {
       if (meetingEl) {
         try { this.meeting = JSON.parse(meetingEl.textContent); } catch (e) { this.meeting = null; }
       }
-      if (this.meeting) await this.loadLobby();
+      if (this.meeting) {
+        await this.loadLobby();
+        this._startLobbyRefresh();
+      }
 
       // Announce room presence so the main tab flips Join <-> Return instantly,
       // without waiting on the heartbeat/SSE round-trip.
@@ -78,6 +84,15 @@ function chatRoomApp(currentUserId, conversationId) {
         this._startSpeakingMeter();
         this._startDurationTimer();
       }
+    },
+
+    // Alpine calls exactly one destroy(), and object spread would let the last
+    // mixin that declares one win in silence. The room's teardown is listed
+    // here, after the spreads, so adding a mixin with its own destroy cannot
+    // quietly drop another's.
+    destroy() {
+      this._stopLobbyRefresh?.();
+      threads.destroy?.call(this);
     },
 
     // Lightweight speaking meter: sample local + remote streams ~10/s and flag

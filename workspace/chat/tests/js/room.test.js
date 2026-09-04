@@ -106,3 +106,20 @@ test('pinTile toggles on a participant key', () => {
   app.pinTile('g:abc');
   assert.equal(app.pinnedKey, null);
 });
+
+test('the room teardown stops the lobby refresh and still tears down the panel', () => {
+  const stopped = [];
+  const ctx2 = loadScript('workspace/chat/ui/static/chat/ui/js/room.js', {
+    ...stubs,
+    // Two mixins with a teardown: object spread would let the later one win
+    // silently, which is the whole reason destroy() is declared on the room.
+    chatThreadsMixin: () => ({ destroy() { stopped.push('threads'); } }),
+    chatMeetingHostMixin: () => ({
+      loadLobby: async () => {},
+      _stopLobbyRefresh() { stopped.push('lobby'); },
+    }),
+  });
+  const app = ctx2.chatRoomApp(7, 'conv-1');
+  app.destroy();
+  assert.deepStrictEqual(Array.from(stopped).sort(), ['lobby', 'threads']);
+});

@@ -374,11 +374,15 @@ class GuestMessagesTests(TestCase):
 
     def test_guest_everyone_renders_no_badge(self):
         # The badge is the promise that everyone was pinged, and on this path
-        # nobody is - a guest must not be able to make it.
+        # nobody is - a guest must not be able to make it. Named alongside a
+        # member on purpose: the renderer re-adds "everyone" to any non-empty
+        # mention map, so a body that resolves nothing else is the one shape
+        # dropping the key from the map already covered.
         guest, token = self._admit()
-        resp = self._post(token, {"body": "@everyone hi"})
+        resp = self._post(token, {"body": "@everyone hi @host"})
         self.assertEqual(resp.status_code, 201)
         self.assertNotIn("mention-everyone", resp.data["body_html"])
+        self.assertIn(f'data-user-id="{self.owner.id}"', resp.data["body_html"])
 
     def test_guest_everyone_does_not_notify_a_mentions_only_member(self):
         quiet = User.objects.create_user(username="quiet", password="x")

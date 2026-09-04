@@ -66,8 +66,20 @@ def create_meeting(event, created_by):
     ``one_active_call_per_conversation``: retry a bounded number of times,
     identifying the race by the meeting now existing rather than masking an
     unrelated IntegrityError.
+
+    A materialized exception never legitimately owns a Meeting - the join
+    link is one row per series, stable across occurrences (see ``Meeting``
+    in ``..models``) - so a caller passing an exception row is redirected to
+    its series master here. An exception's owner is always copied from the
+    master at creation time (see
+    ``workspace.calendar.services.event_scope``), so a caller that already
+    checked ownership on the exception row checked it on the row the
+    meeting actually lands on too.
     """
     from ..models import Meeting
+
+    if event.recurrence_parent_id:
+        event = event.recurrence_parent
 
     max_attempts = 4
     for attempt in range(max_attempts):

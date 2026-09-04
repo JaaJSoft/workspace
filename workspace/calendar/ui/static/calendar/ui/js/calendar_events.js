@@ -772,11 +772,12 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       if (!this._panelRaw || this.creatingMeeting) return;
       this.creatingMeeting = true;
       try {
+        const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
         const resp = await fetch('/api/v1/chat/meetings', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ event_id: this._panelRaw.uuid }),
+          body: JSON.stringify({ event_id: targetUuid }),
         });
         if (!resp.ok) {
           if (window.AppAlert) window.AppAlert.error('Could not create the meeting link');

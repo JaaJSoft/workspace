@@ -80,7 +80,7 @@ def event_card(request, event_id):
             uuid=event_id,
             is_cancelled=False,
         )
-        .select_related("calendar", "owner", "meeting")
+        .select_related("calendar", "owner", "meeting", "recurrence_parent__meeting")
         .prefetch_related("members__user")
         .distinct()
         .first()
@@ -108,7 +108,7 @@ def event_card(request, event_id):
     membership = next((m for m in members if m.user_id == request.user.id), None)
     invite_status = membership.status if membership and not is_owner else None
 
-    join_url = meeting_join_url(event, request)
+    join_url = meeting_join_url(event.recurrence_parent or event, request)
 
     return render(
         request,

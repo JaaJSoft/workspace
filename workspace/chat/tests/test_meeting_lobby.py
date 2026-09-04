@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from workspace.calendar.models import Calendar, Event
-from workspace.chat.models import CallSession, MeetingGuest
+from workspace.chat.models import CallSession, Meeting, MeetingGuest
 from workspace.chat.services import calls
 from workspace.chat.services.meeting_guests import resolve_guest
 from workspace.chat.services.meeting_occurrences import current_occurrence
@@ -103,6 +103,67 @@ class MeetingHostViewTests(TestCase):
         self.client.force_authenticate(self.owner)
         resp = self.client.post(
             "/api/v1/chat/meetings", {"event_id": "not-a-uuid"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def _make_recurring_series_with_exception(self, title):
+        master = Event.objects.create(
+            calendar=self.event.calendar,
+            owner=self.owner,
+            title=title,
+            start=timezone.now() + timedelta(hours=1),
+            end=timezone.now() + timedelta(hours=2),
+            recurrence_frequency="daily",
+        )
+        occ_start = master.start + timedelta(days=1)
+        exception = Event.objects.create(
+            calendar=self.event.calendar,
+            owner=self.owner,
+            title=f"{title} (moved)",
+            start=occ_start + timedelta(minutes=30),
+            end=occ_start + timedelta(minutes=90),
+            recurrence_parent=master,
+            original_start=occ_start,
+        )
+        return master, exception
+
+    def test_creating_from_an_exception_attaches_to_the_series_master(self):
+        # The UI's "Meeting link" button always sends master_event_id when
+        # the panel is showing an occurrence (calendar_events.js), but the
+        # server must not trust that alone: an exception's own uuid is a
+        # row that never legitimately owns a Meeting.
+        master, exception = self._make_recurring_series_with_exception("Standup Series")
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            "/api/v1/chat/meetings", {"event_id": str(exception.uuid)}, format="json"
+        )
+        self.assertEqual(resp.status_code, 201)
+        meeting = Meeting.objects.get(uuid=resp.data["uuid"])
+        self.assertEqual(meeting.event_id, master.uuid)
+
+        start = timezone.now().isoformat()
+        end = (timezone.now() + timedelta(days=3)).isoformat()
+        listing = self.client.get(f"/api/v1/events?start={start}&end={end}")
+        occurrences = [
+            e for e in listing.data if e["title"].startswith("Standup Series")
+        ]
+        self.assertGreaterEqual(len(occurrences), 3)
+        for occ in occurrences:
+            self.assertEqual(occ["join_url"], resp.data["join_url"])
+
+    def test_creating_from_the_synthetic_occurrence_id_is_400(self):
+        # The client must resolve the synthetic "<master>:<start>" virtual
+        # occurrence id to the master before posting - the server does not
+        # parse it. Pinned so a future "helpful" server-side parse is a
+        # deliberate decision, not an accident.
+        master, _exception = self._make_recurring_series_with_exception(
+            "Standup Series"
+        )
+        occ_start = master.start + timedelta(days=2)
+        synthetic_id = f"{master.uuid}:{occ_start.isoformat()}"
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            "/api/v1/chat/meetings", {"event_id": synthetic_id}, format="json"
         )
         self.assertEqual(resp.status_code, 400)
 

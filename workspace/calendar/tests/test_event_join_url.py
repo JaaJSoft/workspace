@@ -24,7 +24,11 @@ class EventJoinUrlTests(TestCase):
 
     def _query_count(self, url):
         with CaptureQueriesContext(connection) as ctx:
-            self.client.get(url)
+            resp = self.client.get(url)
+        # A guard measuring queries on a failed request (a 400/500 short
+        # circuit before the listing even runs) would report a bogus low
+        # count and pass for the wrong reason.
+        self.assertEqual(resp.status_code, 200)
         return len(ctx.captured_queries)
 
     def test_join_url_is_null_without_a_meeting(self):
@@ -66,7 +70,8 @@ class EventJoinUrlTests(TestCase):
                 create_meeting(extra, self.user)
 
         with self.assertNumQueries(baseline):
-            self.client.get(url)
+            resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
 
     def test_recurring_occurrences_carry_the_absolute_join_url(self):
         from workspace.chat.services.meetings import create_meeting
@@ -150,7 +155,8 @@ class EventJoinUrlTests(TestCase):
             )
 
         with self.assertNumQueries(baseline):
-            self.client.get(url)
+            resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
 
     def test_upcoming_listing_carries_the_absolute_join_url(self):
         from workspace.chat.services.meetings import create_meeting
@@ -188,4 +194,5 @@ class EventJoinUrlTests(TestCase):
                 create_meeting(extra, self.user)
 
         with self.assertNumQueries(baseline):
-            self.client.get(url)
+            resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)

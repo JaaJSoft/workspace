@@ -490,7 +490,14 @@ class MessageDetailView(APIView):
 
         is_author = message.author_id == request.user.id
         is_bot_message = hasattr(message.author, "bot_profile")
-        if not is_author and not is_bot_message:
+        # A guest has no user row, so author_id is None and the author test
+        # can never pass - which left a guest's message undeletable by
+        # anyone. Every active member of a meeting's conversation is a host,
+        # and the membership gate above already established this requester is
+        # one. Editing stays refused: a guest's words are not a member's to
+        # rewrite under the guest's own name.
+        is_guest_message = message.author_id is None and message.guest_id is not None
+        if not is_author and not is_bot_message and not is_guest_message:
             return Response(
                 {"detail": "Only the author can delete this message."},
                 status=status.HTTP_403_FORBIDDEN,

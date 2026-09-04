@@ -389,3 +389,50 @@ class GuestMessagesTests(TestCase):
             Notification.objects.filter(recipient=quiet).exists(),
             "a guest's @everyone fired a notification at a mentions-only member",
         )
+
+    # --- I5: a guest's message is a host's to delete, nobody's to edit ---
+
+    def _detail_url(self, message):
+        return (
+            f"/api/v1/chat/conversations/{self.meeting.conversation_id}"
+            f"/messages/{message.pk}"
+        )
+
+    def _guest_message(self):
+        _guest, token = self._admit()
+        posted = self._post(token, {"body": "guest speaking"})
+        self.assertEqual(posted.status_code, 201)
+        return Message.objects.get(pk=posted.data["uuid"])
+
+    def test_member_can_delete_a_guest_message(self):
+        message = self._guest_message()
+
+        self.client.force_authenticate(self.owner)
+        resp = self.client.delete(self._detail_url(message))
+
+        self.assertEqual(resp.status_code, 204)
+        message.refresh_from_db()
+        self.assertIsNotNone(message.deleted_at)
+
+    def test_member_cannot_edit_a_guest_message(self):
+        message = self._guest_message()
+
+        self.client.force_authenticate(self.owner)
+        resp = self.client.patch(
+            self._detail_url(message), {"body": "rewritten"}, format="json"
+        )
+
+        self.assertEqual(resp.status_code, 403)
+        message.refresh_from_db()
+        self.assertEqual(message.body, "guest speaking")
+
+    def test_non_member_cannot_delete_a_guest_message(self):
+        message = self._guest_message()
+        outsider = User.objects.create_user(username="outsider", password="x")
+
+        self.client.force_authenticate(outsider)
+        resp = self.client.delete(self._detail_url(message))
+
+        self.assertEqual(resp.status_code, 403)
+        message.refresh_from_db()
+        self.assertIsNone(message.deleted_at)

@@ -99,7 +99,9 @@ class AnsweredTests(TestCase):
     def test_the_conversation_carries_each_round(self):
         model = ScriptedModel(
             [
-                tool_reply(call("c1", arguments='{"q": 1}'), content="looking"),
+                tool_reply(
+                    call("c1", arguments='{"q": 1}'), content="looking", thinking="hmm"
+                ),
                 reply("done"),
             ]
         )
@@ -121,7 +123,9 @@ class AnsweredTests(TestCase):
             },
         )
         self.assertEqual(tool_messages(messages), [("c1", "ok")])
+        # What the round said, without its reasoning: that is kept apart.
         self.assertEqual(run.tool_data[0]["assistant_content"], "looking")
+        self.assertEqual(run.tool_data[0]["thinking"], "hmm")
         self.assertEqual(
             run.tool_data[0]["results"], [{"tool_call_id": "c1", "content": "ok"}]
         )

@@ -24,7 +24,6 @@ def reply(content="", *, thinking="", model="x"):
     """A reply that asks for nothing."""
     return ModelResponse(
         content=content,
-        raw_content=content,
         thinking=thinking,
         model=model,
         prompt_tokens=0,
@@ -36,7 +35,6 @@ def tool_reply(*calls, content="", thinking="", model="x"):
     """A reply that asks for *calls*."""
     return ModelResponse(
         content=content,
-        raw_content=content,
         thinking=thinking,
         tool_calls=list(calls),
         model=model,

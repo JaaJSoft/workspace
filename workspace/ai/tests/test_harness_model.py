@@ -41,30 +41,21 @@ class ModelResponseTests(SimpleTestCase):
         self.assertEqual(response.model, "m")
         self.assertEqual((response.prompt_tokens, response.completion_tokens), (3, 4))
 
-    def test_raw_content_is_what_the_backend_wrote(self):
-        # The cleaned text is for readers; the assistant turn echoes the
-        # backend's own text, reasoning tags included, as it always has.
+    def test_inline_reasoning_is_not_echoed_back_to_the_model(self):
+        # call_llm has already split the reasoning out of the text; the
+        # backend's own message, tags and all, is not what the next round
+        # reads, any more than a reasoning field would be.
         response = ModelResponse.from_call_llm(
-            _result("hi", message_content="<think>why</think>hi")
+            _result("hi", message_content="<think>why</think>hi", thinking="why")
         )
 
-        self.assertEqual(response.content, "hi")
-        self.assertEqual(response.raw_content, "<think>why</think>hi")
+        self.assertEqual(response.thinking, "why")
         self.assertEqual(
-            response.as_assistant_message(),
-            {"role": "assistant", "content": "<think>why</think>hi"},
+            response.as_assistant_message(), {"role": "assistant", "content": "hi"}
         )
-
-    def test_a_result_without_a_message_falls_back_to_its_content(self):
-        response = ModelResponse.from_call_llm({"content": "plain"})
-
-        self.assertEqual(response.raw_content, "plain")
-        self.assertEqual(response.tool_calls, [])
 
     def test_assistant_message_carries_the_calls_in_wire_shape(self):
-        response = ModelResponse(
-            raw_content="", tool_calls=[ToolCall("c1", "search", "{}")]
-        )
+        response = ModelResponse(tool_calls=[ToolCall("c1", "search", "{}")])
 
         self.assertEqual(
             response.as_assistant_message(),
@@ -137,9 +128,8 @@ class LLMModelTests(SimpleTestCase):
         self.assertEqual(tool_call.name, "search")
         self.assertEqual(tool_call.arguments, '{"q": "x"}')
         self.assertTrue(tool_call.id.startswith("call_"))
-        # The text the call was cut from is what remains, on both faces.
+        # The text the call was cut from is what remains.
         self.assertEqual(response.content, "Let me look.")
-        self.assertEqual(response.raw_content, "Let me look.")
 
     @patch("workspace.ai.harness.model.call_llm")
     def test_a_tool_less_request_is_never_read_for_calls(self, mock_call_llm):

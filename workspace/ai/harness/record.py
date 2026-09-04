@@ -23,7 +23,7 @@ class RunRecord:
         self.rounds.append({"response": response.as_record(), "tool_executions": []})
         self.tool_data.append(
             {
-                "assistant_content": response.raw_content,
+                "assistant_content": response.content,
                 "thinking": response.thinking,
                 "tool_calls": [tc.as_message_part() for tc in response.tool_calls],
                 "results": [],

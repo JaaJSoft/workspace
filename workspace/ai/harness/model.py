@@ -39,10 +39,11 @@ class ToolCall:
 class ModelResponse:
     """One reply from the model, decoded.
 
-    ``content`` is the text a reader should see, reasoning blocks and
-    leaked artifacts stripped. ``raw_content`` is the text exactly as the
-    backend produced it: it is what the assistant turn echoes back to the
-    model on the next round, and what ``Message.tool_data`` keeps.
+    ``content`` is the text with the reasoning and the leaked artifacts
+    stripped out, and ``thinking`` the reasoning on its own. The assistant
+    turn echoes ``content`` back to the model on the next round and
+    ``Message.tool_data`` keeps it: reasoning is never replayed, whether
+    the backend put it in a field or between inline tags.
     """
 
     content: str = ""
@@ -51,20 +52,10 @@ class ModelResponse:
     model: str = ""
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
-    raw_content: str = ""
 
     @classmethod
     def from_call_llm(cls, result: dict) -> ModelResponse:
-        """Read a :func:`call_llm` result dict.
-
-        ``message`` is the SDK object when the reply came from the API;
-        a caller that only has text may leave it out.
-        """
-        message = result.get("message")
-        if message is None:
-            raw_content = result.get("content") or ""
-        else:
-            raw_content = getattr(message, "content", None) or ""
+        """Read a :func:`call_llm` result dict."""
         return cls(
             content=result.get("content") or "",
             thinking=result.get("thinking") or "",
@@ -75,12 +66,11 @@ class ModelResponse:
             model=result.get("model") or "",
             prompt_tokens=result.get("prompt_tokens"),
             completion_tokens=result.get("completion_tokens"),
-            raw_content=raw_content,
         )
 
     def as_assistant_message(self) -> dict:
         """The reply as the assistant turn appended to the conversation."""
-        message = {"role": "assistant", "content": self.raw_content}
+        message = {"role": "assistant", "content": self.content}
         if self.tool_calls:
             message["tool_calls"] = [tc.as_message_part() for tc in self.tool_calls]
         return message
@@ -106,7 +96,7 @@ def _with_text_tool_calls(response: ModelResponse) -> ModelResponse:
     """Read tool calls a model wrote out as JSON instead of calling natively.
 
     The call ids are minted here, since the backend gave none; the text the
-    calls were cut from is what remains of the reply, on both faces.
+    calls were cut from is what remains of the reply.
     """
     raw_calls, remaining = extract_text_tool_calls(response.content)
     if not raw_calls:
@@ -116,7 +106,6 @@ def _with_text_tool_calls(response: ModelResponse) -> ModelResponse:
         for name, args_json in raw_calls
     ]
     response.content = remaining
-    response.raw_content = remaining
     return response
 
 

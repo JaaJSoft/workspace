@@ -175,18 +175,33 @@ test('the panel draws through the byte source it was handed', () => {
   assert.ok(calls > 0, 'the injected source was never used');
 });
 
-test('an emptied separator goes back to the default rather than joining nothing', () => {
-  // Concatenated words leave no boundary, so the same string can come from
-  // more than one draw - and the reported entropy counts draws. The field is
-  // one character wide, so emptying it is a step on the way to changing it,
-  // not a choice; it is restored when focus leaves.
+test('a separator outside the catalogue is replaced, a listed one is kept', () => {
   const { panel } = makePanel();
   panel.init();
   panel.separator = '';
   panel.normaliseSeparator();
   assert.equal(panel.separator, '-');
 
+  panel.separator = '§';
+  panel.normaliseSeparator();
+  assert.equal(panel.separator, '-');
+
   panel.separator = '.';
   panel.normaliseSeparator();
   assert.equal(panel.separator, '.');
+});
+
+test('options saved before the picker was a closed set are repaired on open', () => {
+  // The hole a blur handler alone left: an empty separator persisted by an
+  // older version comes straight back out of storage and is used to draw
+  // before anything the user does could fix it.
+  const shared = fakeStorage();
+  shared.setItem(
+    'passwordGenerator.options',
+    JSON.stringify({ mode: 'passphrase', words: 5, separator: '' })
+  );
+  const { panel } = makePanel({}, shared);
+  panel.init();
+  assert.equal(panel.separator, '-');
+  assert.ok(panel.value.includes('-'), panel.value);
 });

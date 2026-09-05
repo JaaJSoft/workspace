@@ -229,3 +229,15 @@ test('an empty separator never reaches the output', () => {
   const value = G.generatePassphrase({ words: 5, separator: '' });
   assert.equal(value.split('-').length, 5, value);
 });
+
+test('every separator the picker offers actually separates', () => {
+  // The catalogue is what the panel renders, so a bad entry in it - an empty
+  // value, or one the join silently drops - would ship as a menu item that
+  // produces a passphrase with no boundaries.
+  const G = load();
+  assert.ok(G.SEPARATORS.length >= 2);
+  for (const choice of G.SEPARATORS) {
+    const value = G.generatePassphrase({ words: 4, separator: choice.value });
+    assert.equal(value.split(choice.value).length, 4, `${choice.label}: ${value}`);
+  }
+});

@@ -730,7 +730,7 @@ test('sending posts JSON to the meet endpoint with the token, never the CSRF coo
   await a.sendMessage();
 
   const post = calls.find((c) => c.method === 'POST');
-  assert.equal(post.url, '/meet/abc123/messages');
+  assert.equal(post.url, '/api/v1/chat/meet/abc123/messages');
   assert.equal(post.headers['X-Meeting-Token'], 'tok');
   assert.equal(post.headers['Content-Type'], 'application/json');
   assert.equal(post.headers['X-CSRFToken'], undefined);

@@ -167,7 +167,11 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
       return cursor ? `${base}?before=${cursor}` : base;
     },
     _messagesPartialHeaders() { return this._callHeaders(); },
-    _messageEndpoint() { return `/meet/${this.slug}/messages`; },
+    // The partial above is a UI route; posting a message is the guest API,
+    // reached through the same seam every other guest request uses. The two
+    // are different endpoints on purpose: one renders HTML for a browser,
+    // the other takes JSON and has no session to check a CSRF token against.
+    _messageEndpoint() { return this._callEndpoint('messages'); },
     _messageHeaders(options) { return this._callHeaders(options); },
     // A guest's membership is the meeting, not a conversation row: there is
     // no read cursor of its own to move, and no typing channel to speak on.
@@ -214,6 +218,15 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
       setTimeout(() => {
         el.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
       }, 2000);
+    },
+
+    // The pane lives inside <template x-if="phase === 'room'">, so it is not
+    // in the document until Alpine has flushed the phase change. alpine-ajax
+    // resolves a request's targets when the request is issued, so asking any
+    // earlier merges into nothing at all - and nothing retries.
+    async loadRoomMessages() {
+      await this.$nextTick();
+      return this.loadMessages();
     },
 
     // A message frame off the event stream. The list is server-rendered, so
@@ -480,7 +493,7 @@ function chatMeetApp(slug) {
       if (data.admitted) {
         this.phase = 'room';
         this._openStream();
-        await this.loadMessages();
+        await this.loadRoomMessages();
         await this.joinWhenCallStarts();
       } else if (data.state === 'waiting') {
         this.phase = 'lobby';
@@ -556,7 +569,7 @@ function chatMeetApp(slug) {
       switch (payload.event) {
         case 'meeting_admitted':
           this.phase = 'room';
-          await this.loadMessages();
+          await this.loadRoomMessages();
           await this.joinWhenCallStarts();
           break;
         case 'meeting_refused': this.finish('refused'); break;

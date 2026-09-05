@@ -12,9 +12,12 @@
 
   Optional context:
     - thumbnail_url: str - thumbnail URL; falsy falls back to the icon
+    - icon_size_class: str - Tailwind size for the icon, defaulting to the
+      grid-card scale. A caller rendering the tile smaller than that must
+      pass its own, or the icon overflows the tile and gets clipped.
     - icon_size_style_expr: str - raw Alpine `:style` expression for the
       icon's wrapper div (e.g. the mosaic tile's dynamic tileIconSize()
-      binding). Omit for a fixed-size icon (w-12 h-12).
+      binding). Takes precedence over icon_size_class.
 {% endcomment %}
 <div class="relative w-full" style="padding-bottom: 100%">
   {% if thumbnail_url %}
@@ -29,7 +32,7 @@
   {% else %}
     <div class="absolute inset-0 flex items-center justify-center bg-base-200">
       <div
-        class="{% if not icon_size_style_expr %}w-12 h-12{% endif %}"
+        class="{% if not icon_size_style_expr %}{{ icon_size_class|default:'w-12 h-12' }}{% endif %}"
         {% if icon_size_style_expr %}:style="{{ icon_size_style_expr }}"{% endif %}
       >
         <i data-lucide="{{ icon }}" class="w-full h-full {{ icon_color }}"></i>

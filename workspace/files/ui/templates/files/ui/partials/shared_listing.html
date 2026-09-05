@@ -7,36 +7,10 @@
       download_url (None for a folder), thumbnail_url (None without one).
       No path is ever included here - see _shared_folder_listing_context.
     - has_more: bool
-    - view_mode: "list" or "grid"
-    - list_view_url / grid_view_url: links that flip view_mode, carrying the
-      current ?node= and ?access_token= along
+    - view_mode: "list" or "grid" - the toggle that flips it lives in the
+      page's breadcrumb bar, not here
 {% endcomment %}
 <div id="shared-listing" class="bg-base-200 min-h-48">
-  {% if entries %}
-    <div
-      class="flex justify-end gap-1 px-6 py-2 border-b border-base-300 bg-base-100"
-    >
-      <a
-        href="{{ list_view_url }}"
-        x-target.push="shared-content"
-        class="btn btn-ghost btn-sm btn-square {% if view_mode != 'grid' %}bg-primary/10 text-primary{% endif %}"
-        title="List view"
-        aria-label="List view"
-      >
-        <i data-lucide="list" class="w-4 h-4"></i>
-      </a>
-      <a
-        href="{{ grid_view_url }}"
-        x-target.push="shared-content"
-        class="btn btn-ghost btn-sm btn-square {% if view_mode == 'grid' %}bg-primary/10 text-primary{% endif %}"
-        title="Grid view"
-        aria-label="Grid view"
-      >
-        <i data-lucide="grid-2x2" class="w-4 h-4"></i>
-      </a>
-    </div>
-  {% endif %}
-
   {% if not entries %}
     <div class="p-12 text-center text-base-content/50">This folder is empty.</div>
   {% elif view_mode == 'grid' %}
@@ -47,10 +21,10 @@
         <a
           href="{{ entry.url }}"
           x-target.push="shared-content"
-          class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all flex flex-col overflow-hidden"
+          class="bg-base-100 border rounded-lg hover:border-primary hover:shadow-lg transition-all flex flex-col overflow-hidden {% if entry.is_quarantined %}border-error/40 bg-error/10{% else %}border-base-300{% endif %}"
         >
           {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color %}
-          <div class="p-3 min-w-0">
+          <div class="p-3 min-w-0 border-t border-base-300 flex-1">
             {% include "files/ui/partials/node_name.html" with name=entry.name is_quarantined=entry.is_quarantined %}
             <p class="text-xs text-base-content/60 mt-0.5">
               {% if entry.is_folder %}
@@ -67,10 +41,10 @@
     <ul class="divide-y divide-base-300">
       {% for entry in entries %}
         <li
-          class="flex items-center gap-3 px-6 py-3 hover:bg-base-100 transition-colors"
+          class="flex items-center gap-3 px-6 py-3 hover:bg-base-100 transition-colors{% if entry.is_quarantined %} bg-error/10{% endif %}"
         >
           <div class="w-10 flex-shrink-0 rounded overflow-hidden">
-            {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color %}
+            {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color icon_size_class="w-5 h-5" %}
           </div>
 
           <a

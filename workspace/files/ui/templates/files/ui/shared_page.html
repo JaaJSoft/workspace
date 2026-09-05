@@ -86,9 +86,33 @@
 
         {% if breadcrumbs %}
           <div
-            class="px-6 py-3 border-b border-base-300 bg-base-100 overflow-x-auto"
+            class="flex items-center gap-3 px-6 py-2 border-b border-base-300 bg-base-100"
           >
-            {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="shared-content" x_target_history="push" %}
+            <div class="flex-1 min-w-0 overflow-x-auto">
+              {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="shared-content" x_target_history="push" %}
+            </div>
+            {% if show_listing and entries %}
+              <div class="flex flex-shrink-0 gap-1">
+                <a
+                  href="{{ list_view_url }}"
+                  x-target.push="shared-content"
+                  class="btn btn-ghost btn-sm btn-square {% if view_mode != 'grid' %}bg-primary/10 text-primary{% endif %}"
+                  title="List view"
+                  aria-label="List view"
+                >
+                  <i data-lucide="list" class="w-4 h-4"></i>
+                </a>
+                <a
+                  href="{{ grid_view_url }}"
+                  x-target.push="shared-content"
+                  class="btn btn-ghost btn-sm btn-square {% if view_mode == 'grid' %}bg-primary/10 text-primary{% endif %}"
+                  title="Grid view"
+                  aria-label="Grid view"
+                >
+                  <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+                </a>
+              </div>
+            {% endif %}
           </div>
         {% endif %}
 

@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from workspace.calendar.models import Calendar, Event
+from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.chat.models import CallSession, Meeting, MeetingGuest
 from workspace.chat.services import calls
 from workspace.chat.services.meeting_guests import resolve_guest
@@ -107,14 +108,15 @@ class MeetingHostViewTests(TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def _make_recurring_series_with_exception(self, title):
-        master = Event.objects.create(
+        master = Event(
             calendar=self.event.calendar,
             owner=self.owner,
             title=title,
             start=timezone.now() + timedelta(hours=1),
             end=timezone.now() + timedelta(hours=2),
-            recurrence_frequency="daily",
         )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
         occ_start = master.start + timedelta(days=1)
         exception = Event.objects.create(
             calendar=self.event.calendar,
@@ -395,15 +397,15 @@ class MeetingHostViewTests(TestCase):
         # clear the flag - the occurrence simply elapses. Next week's guests
         # must still get in.
         now = timezone.now()
-        recurring_event = Event.objects.create(
+        recurring_event = Event(
             calendar=Calendar.objects.create(name="Weekly", owner=self.owner),
             owner=self.owner,
             title="Standup",
             start=now - timedelta(weeks=3, minutes=5),
             end=now - timedelta(weeks=3) + timedelta(minutes=25),
-            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
-            recurrence_interval=1,
         )
+        apply_rule(recurring_event, "RRULE:FREQ=WEEKLY")
+        recurring_event.save()
         meeting = create_meeting(recurring_event, self.owner)
         set_locked(meeting, True)
 
@@ -544,15 +546,15 @@ class MeetingPublicViewTests(TestCase):
         # reason current_occurrence exists - this endpoint must resolve it
         # the same way the knock endpoint does, not read event.start raw.
         now = timezone.now()
-        recurring_event = Event.objects.create(
+        recurring_event = Event(
             calendar=Calendar.objects.create(name="Weekly", owner=self.owner),
             owner=self.owner,
             title="Standup",
             start=now - timedelta(weeks=3, minutes=5),
             end=now - timedelta(weeks=3) + timedelta(minutes=25),
-            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
-            recurrence_interval=1,
         )
+        apply_rule(recurring_event, "RRULE:FREQ=WEEKLY")
+        recurring_event.save()
         recurring_meeting = create_meeting(recurring_event, self.owner)
         expected_start = current_occurrence(recurring_meeting, now=now)[0]
         self.assertNotEqual(expected_start, recurring_event.start)

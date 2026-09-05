@@ -385,9 +385,20 @@ class UnifiedSearchVisibilityTests(TestCase):
     def test_hidden_module_results_and_commands_filtered(
         self, mock_registry, mock_visibility_registry
     ):
+        mock_registry.refinements.return_value = {}
         mock_registry.search.return_value = [
-            {"module_slug": "files", "name": "doc"},
-            {"module_slug": "lab", "name": "secret"},
+            {
+                "uuid": "u1",
+                "provider_slug": "files",
+                "module_slug": "files",
+                "name": "doc",
+            },
+            {
+                "uuid": "u2",
+                "provider_slug": "lab",
+                "module_slug": "lab",
+                "name": "secret",
+            },
         ]
         from workspace.core.module_registry import CommandInfo
 
@@ -413,3 +424,56 @@ class UnifiedSearchVisibilityTests(TestCase):
         self.assertEqual(result_slugs, {"files"})
         self.assertEqual(body["commands"], [])
         self.assertEqual(body["count"], 1)
+
+
+# ── Cross-provider deduplication ────────────────────────────────
+
+
+class MarkdownNoteDeduplicationTests(TestCase):
+    """A markdown note is a File row, so `files` and `notes` both answer with it."""
+
+    def setUp(self):
+        from workspace.files.models import File
+        from workspace.files.services.search_index import index_file
+
+        self.alice = User.objects.create_user(username="alice", password="pass")
+        self.note = File.objects.create(
+            owner=self.alice,
+            name="meeting-notes.md",
+            node_type=File.NodeType.FILE,
+            mime_type="text/markdown",
+        )
+        self.report = File.objects.create(
+            owner=self.alice,
+            name="meeting-report.pdf",
+            node_type=File.NodeType.FILE,
+            mime_type="application/pdf",
+        )
+        index_file(self.note)
+        index_file(self.report)
+
+    def _hits_for(self, uuid):
+        from workspace.core.services.search import search_modules
+
+        return [h for h in search_modules("meeting", self.alice) if h["uuid"] == uuid]
+
+    def test_a_note_is_returned_once_pointing_at_the_editor(self):
+        hits = self._hits_for(str(self.note.uuid))
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["url"], f"/notes?file={self.note.uuid}")
+
+    def test_a_non_markdown_file_still_points_at_the_file_viewer(self):
+        hits = self._hits_for(str(self.report.uuid))
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["module_slug"], "files")
+
+    @patch("workspace.core.services.search.is_module_slug_visible")
+    def test_a_user_without_the_notes_module_still_gets_the_file_row(
+        self, mock_visible
+    ):
+        mock_visible.side_effect = lambda user, slug: slug != "notes"
+
+        hits = self._hits_for(str(self.note.uuid))
+
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["module_slug"], "files")

@@ -28,3 +28,14 @@ FILES_THUMBNAIL_RESULT = safe_counter(
     "Thumbnail generation outcomes (success/failed/skipped)",
     ["result"],
 )
+
+FILES_MALWARE_SCAN_RESULT = safe_counter(
+    f"{_P}_malware_scan_total",
+    "Malware scan outcomes (clean/infected/skipped/error)",
+    ["result"],
+)
+
+FILES_MALWARE_SCAN_DURATION = safe_histogram(
+    f"{_P}_malware_scan_duration_seconds",
+    "Wall-clock time of one malware scan, excluding files skipped on size",
+)

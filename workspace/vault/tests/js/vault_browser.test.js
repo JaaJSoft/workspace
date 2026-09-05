@@ -24,6 +24,12 @@ function vaultRow(uuid, name) {
   };
 }
 
+// A vault whose signature the account refuses: readVault strips its name and
+// flags it, which is what makes it unfit to land on.
+function forgedVaultRow(uuid) {
+  return Object.assign(vaultRow(uuid, 'Forged'), { metadata_sig: 'forged' });
+}
+
 function entryRow(uuid) {
   return {
     uuid: uuid,
@@ -81,6 +87,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/tag_write.js',
       'workspace/vault/ui/static/vault/ui/js/clipboard.js',
       'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_switcher.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -104,6 +111,10 @@ function browser(options = {}) {
         removeItem(key) { delete this.values[key]; },
       },
       addEventListener() {},
+      history: {
+        replaced: [],
+        replaceState(state, title, url) { this.replaced.push(url); },
+      },
       TAG_CHIP_COLORS: [
         { name: 'None', value: '' },
         { name: 'Red', value: '#ef4444' },
@@ -141,7 +152,8 @@ function browser(options = {}) {
       },
       vaultApi: {
         createTag: async () => ({}),
-        listVaults: async () => [vaultRow(VAULT_UUID, 'Personal')],
+        listVaults: async () =>
+          options.vaults || [vaultRow(VAULT_UUID, 'Personal')],
         listFolders: async () => [],
         listTags: async () => [],
         listEntries: async () => [],
@@ -173,7 +185,7 @@ function browser(options = {}) {
       },
     },
   );
-  return { component: ctx.vaultBrowser(), opened, entryKeys, locks, copied, visited, ctx };
+  return { component: ctx.vaultBrowser(), opened, entryKeys, locks, copied, visited, ctx, options };
 }
 
 test('the browser reads the vault it was routed to from the page', () => {
@@ -303,9 +315,9 @@ test('a lock drops a creation nobody has confirmed', () => {
 });
 
 test('the tile size survives a reload, and belongs to this screen alone', () => {
-  // The collapse is vaultSidebar's business now; what this screen still
-  // stores for itself is how big its tiles are - an entry card and a vault
-  // card are not looked at from the same distance.
+  // The collapse is vaultSidebar's business; what this screen stores for
+  // itself is how big its tiles are, on this device rather than on the
+  // account.
   const { component, ctx } = browser();
   component.init();
   assert.equal(component.tileSize, 3);
@@ -313,10 +325,10 @@ test('the tile size survives a reload, and belongs to this screen alone', () => 
   const second = ctx.vaultBrowser();
   second.init();
   assert.equal(second.tileSize, 5);
-  assert.equal(ctx.localStorage.getItem('vault.list.tileSize'), null);
+  assert.equal(ctx.localStorage.getItem('vault.browser.tileSize'), '5');
 });
 
-test('the view mode survives a reload and stays off the listing key', () => {
+test('the view mode survives a reload', () => {
   const { component, ctx } = browser();
   component.init();
   assert.equal(component.viewMode, 'list');
@@ -324,9 +336,7 @@ test('the view mode survives a reload and stays off the listing key', () => {
   const second = ctx.vaultBrowser();
   second.init();
   assert.equal(second.viewMode, 'mosaic');
-  // The two screens store under their own key on purpose: a vault card and an
-  // entry card are not looked at the same way.
-  assert.equal(ctx.localStorage.getItem('vault.list.viewMode'), null);
+  assert.equal(ctx.localStorage.getItem('vault.browser.viewMode'), 'mosaic');
 });
 
 test('a tile size off the scale is refused rather than drawn', () => {
@@ -417,7 +427,17 @@ const ACTION = {
   favorite: { id: 'favorite', label: 'Add to favourites', icon: 'star', bulk: true, css_class: '' },
   unfavorite: { id: 'unfavorite', label: 'Remove from favourites', icon: 'star-off', bulk: true, css_class: '' },
   copy_password: { id: 'copy_password', label: 'Copy password', icon: 'key-round', bulk: false, css_class: '' },
+  copy_totp: { id: 'copy_totp', label: 'Copy authenticator code', icon: 'timer', bulk: false, css_class: '' },
 };
+
+// Answers every uuid asked about with the same actions. The reveal buttons are
+// drawn from this answer and toggleReveal reads it again, so a test that
+// reveals a field has to be offered the copy action that field is gated on.
+function offering(...actions) {
+  return async (uuids) => Object.fromEntries(
+    Array.from(uuids, (uuid) => [uuid, actions])
+  );
+}
 
 function ids(actions) {
   return Array.from(actions, (action) => action.id);
@@ -748,6 +768,632 @@ test('the panel says which fields a row carries without opening one', async () =
   assert.ok(!('password' in component.panelEntry));
 });
 
+test('revealing a field opens exactly that ciphertext', async () => {
+  const { component, opened } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
+  });
+  component.init();
+  await component.load();
+  const before = opened.length;
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), true);
+  assert.match(component.revealedValue('password'), /password/);
+  assert.equal(opened.length, before + 1, 'one field, one decryption');
+});
+
+test('revealing twice hides again without a second decryption', async () => {
+  const { component, opened } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  const after = opened.length;
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), false);
+  assert.equal(opened.length, after);
+});
+
+test('taking a reveal back while it is still decrypting leaves nothing on screen', async () => {
+  // The first click starts a decryption, the second is the user changing
+  // their mind before it lands. Deciding on `revealed` alone cannot see the
+  // one in flight, so the value used to arrive after the very gesture meant
+  // to hide it - under a button already reading "hide".
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let opens = 0;
+  // Only the reveal is held: the listing opens a username on its way in, and
+  // holding that one would deadlock load() itself.
+  let holding = false;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
+    crypto: {
+      open: async () => {
+        if (holding) {
+          opens += 1;
+          await held;
+        }
+        return new TextEncoder().encode('hunter2');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  holding = true;
+
+  const first = component.toggleReveal('password');
+  const second = component.toggleReveal('password');
+  release();
+  await first;
+  await second;
+  await settle();
+
+  assert.equal(component.isRevealed('password'), false, 'the second click took it back');
+  assert.deepStrictEqual({ ...component.revealed }, {});
+  assert.equal(opens, 1, 'the second click must not start a second decryption');
+});
+
+test('a vault falling out of reach takes the revealed value and the key handle with it', async () => {
+  // The fifth reset site: load()'s no-vault branch cleared panelEntry alone,
+  // so a revoked membership or a deleted vault left a decrypted password in
+  // state and a live key handle deriving a fresh code once a second, for a
+  // vault the page no longer holds open.
+  const { component, options } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp, ACTION.copy_password] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), true);
+  assert.notEqual(component.totp, null, 'the handle was derived on open');
+
+  options.vaults = [];
+  component.vaultUuid = null;
+  await component.load();
+
+  assert.equal(component.panelEntry, null);
+  assert.deepStrictEqual({ ...component.revealed }, {});
+  assert.equal(component.totp, null, 'the handle must not go on deriving');
+});
+
+test('closing the panel takes the revealed value with it', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  component.closePanel();
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
+test('locking the vault takes the revealed value with it', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  component.onLocked();
+  await settle();
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
+test('navigating away takes the revealed value with it', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  component.setView('trash');
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
+test('opening another entry drops the value revealed for the last one', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryRow('e-1'), entryRow('e-2')],
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), true);
+  component.openEntryFromRow(component.entries[1]);
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
+test('a reload triggered by a row action takes the revealed value with it', async () => {
+  // loadContents runs on every reload, and a mutating row action (favourite,
+  // trash, a folder or tag save) ends with one just like a manual refresh
+  // does. Every row is rebuilt, so nothing decrypted against the old ones may
+  // carry over: the revealed password is dropped and the user has to ask
+  // again. The panel itself stays on its row - it is the same entry, and
+  // closing it under a favourite click was never the point - so the code is
+  // derived afresh from the row this pass verified, never from the old handle.
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: offering(ACTION.favorite, ACTION.copy_totp, ACTION.copy_password),
+      updateEntry: async (uuid, body) => body,
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('password');
+  assert.equal(component.isRevealed('password'), true);
+  assert.notEqual(component.totp, null, 'the totp handle was derived on open');
+
+  const derived = component.totp;
+  await component.runAction(ACTION.favorite, component.entries[0]);
+
+  assert.deepStrictEqual(
+    { ...component.revealed }, {}, 'the revealed password did not survive'
+  );
+  assert.equal(component.panelEntry.uuid, 'e-1', 'the panel stayed on its row');
+  assert.notEqual(component.totp, derived, 'the old handle was dropped');
+  assert.notEqual(component.totp, null, 'and a fresh one derived');
+});
+
+test('a decryption that lands after the vault locked is dropped, not shown', async () => {
+  // The same shape as the stale-menu-answer tests above: the promise is held
+  // open by hand so the assertion can land the panel somewhere else before
+  // the decryption resolves. Only the password's own decryption is held open -
+  // the listing's own opens (name, username) must resolve normally or load()
+  // itself never returns.
+  let resolveOpen;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_password),
+    },
+    crypto: {
+      open: (key, ciphertext, ad) => {
+        if (!String(ad).endsWith('|password')) {
+          return Promise.resolve(new TextEncoder().encode('open:' + ad));
+        }
+        return new Promise((resolve) => {
+          resolveOpen = () => resolve(new TextEncoder().encode('open:' + ad));
+        });
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  const reveal = component.toggleReveal('password');
+  // toggleReveal awaits openEntryKey before it ever reaches V.open, so
+  // resolveOpen is not assigned yet on this same tick - give it the queued
+  // microtasks it needs before locking and letting the decryption through.
+  await settle();
+  component.onLocked();
+  resolveOpen();
+  await reveal;
+  await settle();
+  assert.deepStrictEqual({ ...component.revealed }, {});
+});
+
+test('the reveal button is gated on the same action id as the copy button', async () => {
+  const { component, opened } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [] }),
+    },
+  });
+  component.init();
+  await component.load();
+  component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelHasAction('copy_password'), false);
+  // Hiding the button is not the gate: the map the template read is a round
+  // trip old, so the handler asks again rather than trusting the click.
+  const before = opened.length;
+  await component.toggleReveal('password');
+  assert.deepStrictEqual({ ...component.revealed }, {}, 'nothing was revealed');
+  assert.equal(opened.length, before, 'and nothing was decrypted');
+});
+
+// --- the authenticator code, held as a key handle rather than a secret -----
+
+function totpRow(uuid) {
+  const row = entryRow(uuid);
+  row.entry_fields = row.entry_fields.concat([
+    { field_id: 'totp', encrypted_value: 'ct:totp' },
+  ]);
+  return row;
+}
+
+const TOTP_CRYPTO = {
+  parseOtpauth: () => ({ secret: new Uint8Array(20), hash: 'SHA-1', algorithm: 'SHA1', digits: 6, period: 30 }),
+  importTotpKey: async () => ({ opaque: true }),
+  totpCode: async () => '123456',
+  totpSecondsRemaining: () => 17,
+};
+
+test('the key row reveals the key, never the uri it is stored as', async () => {
+  const uri = 'otpauth://totp/Bank?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1&digits=6&period=30';
+  const secret = new Uint8Array([0x48, 0x65, 0x6c, 0x6c, 0x6f]);
+  const parsed = [];
+  const encoded = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_totp),
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      open: async (key, ciphertext, ad) => new TextEncoder().encode(
+        String(ad).endsWith('|totp') ? uri : 'open:' + ad
+      ),
+      parseOtpauth: (text) => {
+        parsed.push(text);
+        return { secret: secret, hash: 'SHA-1', algorithm: 'SHA1', digits: 6, period: 30 };
+      },
+      base32Encode: (bytes) => { encoded.push(bytes); return 'JBSWY3DPEHPK3PXP'; },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('totp');
+  // The row is labelled with what a user retypes into a phone, so what it
+  // shows is the secret alone - the parameters around it are the
+  // derivation's, not the reader's.
+  assert.equal(component.revealedValue('totp'), 'JBSWY3DPEHPK3PXP');
+  assert.equal(parsed[parsed.length - 1], uri, 'the stored uri is what was parsed');
+  assert.equal(encoded[encoded.length - 1], secret, 'and its secret is what was shown');
+});
+
+test('a key that cannot be parsed says so rather than showing the uri', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: offering(ACTION.copy_totp),
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      parseOtpauth: () => { throw new Error('authenticator key is not a uri'); },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.toggleReveal('totp');
+  assert.deepStrictEqual({ ...component.revealed }, {}, 'nothing half-read reaches the row');
+  assert.match(component.error, /could not be revealed/i);
+});
+
+test('opening an entry with a key shows its code and its validity', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.totp.code, '123456');
+  assert.equal(component.totp.secondsLeft, 17);
+});
+
+test('a reload does not close a panel opened while it was in flight', async () => {
+  // saveEntry closes its dialog and only then reloads, so the listing is
+  // still being rebuilt for a whole round trip afterwards. A row clicked in
+  // that window used to open a panel that loadContents then closed under the
+  // user - the failure both authenticator walks hit on CI and neither hit
+  // locally, because only a slow listing makes the window wide enough.
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let live = 0;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => {
+        if (opts && opts.trashed) return [];
+        live += 1;
+        if (live === 2) await held;
+        return [totpRow('e-1')];
+      },
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+
+  const reloading = component.load();
+  await settle();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.notEqual(component.panelEntry, null, 'the click opened a panel');
+
+  release();
+  await reloading;
+  await settle(20);
+
+  assert.notEqual(component.panelEntry, null, 'the reload must not close it');
+  assert.equal(component.panelCarries('totp'), true, 'and it describes the fresh row');
+  assert.notEqual(component.totp, null, 'whose code is derived');
+});
+
+test('a row opened while its action list is still in flight still derives a code', async () => {
+  // The listing lands a round trip before the actions do, so there is a
+  // window where the rows are on screen and the map startTotp reads is still
+  // the one from before. A row opened in it was gated on an answer nobody
+  // had yet, and nothing asked again once the answer arrived - the panel kept
+  // the key line with no code under it until the row was reopened.
+  let reached;
+  const entered = new Promise((resolve) => { reached = resolve; });
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => {
+        reached();
+        await held;
+        return { 'e-1': [ACTION.copy_totp] };
+      },
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  const loading = component.load();
+  await entered;
+
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.totp, null, 'nothing is derived on an unanswered gate');
+
+  release();
+  await loading;
+  await settle();
+  assert.notEqual(component.totp, null, 'the code is derived once the gate answers');
+  assert.equal(component.totp.code, '123456');
+});
+
+test('the panel holds a key handle, never the secret', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      // The default `open` stub echoes the associated data back, which never
+      // contains the words this test looks for - so a plaintext leak into
+      // component state would pass unnoticed. A real otpauth uri closes that
+      // gap.
+      open: async () => new TextEncoder().encode(
+        'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+      ),
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  const held = JSON.stringify(component.totp);
+  assert.ok(!held.includes('otpauth'), 'the uri must not survive in state');
+  assert.ok(!held.includes('secret'), 'nothing secret-shaped survives in state');
+});
+
+test('a key that does not parse is reported without taking the entry down', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      parseOtpauth: () => { throw new Error('unsupported algorithm MD5'); },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.totp.unreadable, true);
+  assert.equal(component.error, '', 'the rest of the entry is unaffected');
+});
+
+test('an entry without a key has no totp state at all', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.totp, null);
+});
+
+test('a trashed row does not decrypt its authenticator key when its panel opens', async () => {
+  // CopyTotpAction is unavailable once trashed (available_when_trashed is
+  // False), so the registry withholds copy_totp for this row - and opening
+  // the panel must not decrypt the key just because the row still carries
+  // the field.
+  const { component, opened } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? [Object.assign(totpRow('e-1'), { deleted_at: '2026-08-28T09:00:00Z' })]
+          : [],
+      fetchEntryActions: async () => ({ 'e-1': [] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  component.setView('trash');
+  const before = opened.length;
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.totp, null, 'no code is derived for a row copy_totp was withheld from');
+  assert.equal(opened.length, before, 'the key was never decrypted');
+});
+
+test('locking the vault drops the key handle', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  component.onLocked();
+  await settle();
+  assert.equal(component.totp, null);
+});
+
+test('copying the code never puts the key on the clipboard', async () => {
+  const { component, copied } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: TOTP_CRYPTO,
+  });
+  component.init();
+  await component.load();
+  await component.runAction({ id: 'copy_totp' }, component.entries[0]);
+  assert.deepStrictEqual(copied, ['123456']);
+});
+
+test('the countdown rides the session tick and never resets the lock deadline', async () => {
+  // A second setInterval could outlive the component, and pushing the
+  // deadline back from a tick would make an open panel with a code counting
+  // down keep the vault unlocked forever. Neither is acceptable, so this
+  // pins both: the callback comes from vaultSession.onTick, and running it
+  // many times never calls noteActivity.
+  const tickCallbacks = [];
+  let noted = 0;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [totpRow('e-1')]),
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: TOTP_CRYPTO,
+    session: {
+      onTick: (callback) => tickCallbacks.push(callback),
+      noteActivity: () => { noted += 1; },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.ok(tickCallbacks.length > 0, 'the refresh must subscribe through onTick');
+  for (let i = 0; i < 50; i += 1) {
+    tickCallbacks.forEach((callback) => callback());
+  }
+  await settle();
+  assert.equal(noted, 0, 'refreshing the code must never touch the lock deadline');
+});
+
+test('closing the panel while a key is still decrypting leaves no code behind', async () => {
+  // The success-path staleness check has to be an identity comparison
+  // (`this.panelEntry !== entry`), not `this.panelEntry && ...uuid !== ...`:
+  // a closed panel sets panelEntry to null, and the `&&` form would short-
+  // circuit past that and resurrect the code under a panel showing nothing.
+  let resolveOpen;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [totpRow('e-1')],
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      open: (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|totp')) {
+          return new Promise((resolve) => {
+            resolveOpen = () => resolve(new TextEncoder().encode('open:' + ad));
+          });
+        }
+        return Promise.resolve(new TextEncoder().encode('open:' + ad));
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  const opening = component.openEntryFromRow(component.entries[0]);
+  await settle();
+  component.closePanel();
+  resolveOpen();
+  await opening;
+  assert.equal(component.totp, null, 'the code must not appear once the panel closed');
+});
+
+test('a key that fails to parse after the panel moved on reports nothing for the entry that left', async () => {
+  // The same race on the catch path: an unreadable-key report landing after
+  // the panel switched to another entry must not overwrite that entry's
+  // state with the previous row's failure.
+  let resolveOpen;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [totpRow('e-1'), entryRow('e-2')],
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.copy_totp] }),
+    },
+    crypto: {
+      ...TOTP_CRYPTO,
+      parseOtpauth: () => { throw new Error('unsupported algorithm MD5'); },
+      open: (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|totp')) {
+          return new Promise((resolve) => {
+            resolveOpen = () => resolve(new TextEncoder().encode('open:' + ad));
+          });
+        }
+        return Promise.resolve(new TextEncoder().encode('open:' + ad));
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  const opening = component.openEntryFromRow(component.entries[0]);
+  await settle();
+  await component.openEntryFromRow(component.entries[1]);
+  resolveOpen();
+  await opening;
+  assert.equal(
+    component.totp, null,
+    'no unreadable state must land under the entry that left the screen',
+  );
+});
+
 // --- the entry form, driven by the type registry ---------------------------
 
 const LOGIN_TYPE = {
@@ -835,6 +1481,197 @@ test('editing carries the notes ciphertext without opening it', async () => {
     !Array.from(opened).some((entry) => String(entry).includes('notes')),
     'the notes were never opened',
   );
+});
+
+test('editing an entry carries the fields the dialog does not edit', async () => {
+  const row = entryWith('e-1', {
+    entry_fields: [
+      { field_id: 'username', encrypted_value: 'ct:username' },
+      { field_id: 'totp', encrypted_value: 'ct:totp' },
+    ],
+  });
+  const { component } = typed({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [row]) },
+  });
+  component.init();
+  await component.load();
+  await component.editEntry(component.entries[0]);
+  assert.deepStrictEqual({ ...component.draft.carriedFields }, { totp: 'ct:totp' });
+  assert.ok(!('totp' in component.draft.values), 'the key is never opened for the form');
+});
+
+test('a pasted authenticator key is normalized before it is sealed', async () => {
+  const written = [];
+  const normalized = [];
+  const { component } = browser({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    crypto: {
+      normalizeTotpInput: (text, options) => {
+        normalized.push({ text: text, label: options.label });
+        return 'otpauth://totp/Bank?secret=JBSWY3DPEHPK3PXP';
+      },
+      // Seals to its own plaintext so the test can read which value was sealed
+      // into which slot without a real cipher.
+      seal: async (key, plaintext) => plaintext,
+      toBase64Url: (value) => new TextDecoder().decode(value),
+    },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {}, carriedFields: {}, keyVersion: 1,
+    hasTotp: false, totpInput: 'JBSWY3DPEHPK3PXP', totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  await component.saveEntry();
+  assert.equal(written.length, 1);
+  // What is sealed is the uri, never the raw thing the user pasted.
+  assert.equal(written[0].fields.totp, 'otpauth://totp/Bank?secret=JBSWY3DPEHPK3PXP');
+  // The label handed to the normalizer is the entry's name, so the uri an
+  // export emits names the account it belongs to.
+  assert.deepStrictEqual(normalized, [{ text: 'JBSWY3DPEHPK3PXP', label: 'Bank' }]);
+});
+
+test('removing the key drops it from the write instead of carrying it', async () => {
+  const written = [];
+  const { component } = browser({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {},
+    carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
+    hasTotp: true, totpInput: null, totpRemoved: true,
+    entryVersion: 1, isNew: false,
+  };
+  await component.saveEntry();
+  assert.ok(!('totp' in written[0].fields), 'a removed key must not be carried');
+});
+
+test('an untouched key is carried through an edit', async () => {
+  const written = [];
+  const { component } = browser({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Renamed', notes: '', values: {},
+    carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
+    hasTotp: true, totpInput: null, totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  await component.saveEntry();
+  assert.equal(written[0].fields.totp, 'ct:totp');
+});
+
+test('a type that declares no authenticator key is not offered one', () => {
+  // formFields() filters on the type's schema; this control did not ask at
+  // all, so any future type would be offered a key its schema never declares
+  // - and the write path would seal it.
+  const { component } = browser();
+  component.init();
+  component.newEntry('login');
+  assert.equal(component.totpFieldState(), 'unsupported');
+});
+
+test('the three states of the key control are exclusive', () => {
+  const { component } = typed();
+  component.init();
+  component.draft = { type: 'login', hasTotp: false, totpInput: null, totpRemoved: false };
+  assert.equal(component.totpFieldState(), 'none');
+  component.draft = { type: 'login', hasTotp: true, totpInput: null, totpRemoved: false };
+  assert.equal(component.totpFieldState(), 'set');
+  component.startTotpEntry();
+  assert.equal(component.totpFieldState(), 'editing');
+  component.cancelTotpEntry();
+  assert.equal(component.totpFieldState(), 'set');
+  component.removeTotp();
+  assert.equal(component.totpFieldState(), 'none');
+});
+
+test('cancelling an add after a remove does not bring the key back', async () => {
+  // Cancel returns to whatever state Add was clicked from. Clearing the
+  // removal on the way in made it return to `set` instead, and the save that
+  // followed carried the ciphertext through as if Remove had never happened.
+  const written = [];
+  const { component } = typed({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {},
+    carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
+    hasTotp: true, totpInput: null, totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  assert.equal(component.totpFieldState(), 'set');
+  component.removeTotp();
+  assert.equal(component.totpFieldState(), 'none');
+  component.startTotpEntry();
+  assert.equal(component.totpFieldState(), 'editing');
+  component.cancelTotpEntry();
+  assert.equal(component.totpFieldState(), 'none', 'the removal survives the cancel');
+  await component.saveEntry();
+  assert.ok(!('totp' in written[0].fields), 'and the write still drops the key');
+});
+
+test('typing a key after a remove seals the new one', async () => {
+  const written = [];
+  const { component } = typed({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    crypto: {
+      normalizeTotpInput: (text) => 'otpauth://totp/Bank?secret=' + text,
+      // Seals to its own plaintext, so the test reads which value was sealed.
+      seal: async (key, plaintext) => plaintext,
+      toBase64Url: (value) => new TextDecoder().decode(value),
+    },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {},
+    carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
+    hasTotp: true, totpInput: null, totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  component.removeTotp();
+  component.startTotpEntry();
+  component.draft.totpInput = 'JBSWY3DPEHPK3PXP';
+  await component.saveEntry();
+  assert.equal(
+    written[0].fields.totp, 'otpauth://totp/Bank?secret=JBSWY3DPEHPK3PXP',
+    'a typed key wins over the removal that preceded it'
+  );
+});
+
+test('a malformed key is refused with a message rather than saved', async () => {
+  const written = [];
+  const { component } = browser({
+    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    crypto: {
+      normalizeTotpInput: () => { throw new Error('illegal base32 character !'); },
+    },
+  });
+  component.init();
+  await component.load();
+  component.draft = {
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
+    name: 'Bank', notes: '', values: {}, carriedFields: {}, keyVersion: 1,
+    hasTotp: false, totpInput: 'nope!', totpRemoved: false,
+    entryVersion: 1, isNew: false,
+  };
+  await component.saveEntry();
+  assert.equal(written.length, 0, 'nothing is written');
+  assert.match(component.error, /authenticator/i);
+  assert.ok(component.draft, 'the dialog stays open on the value the user typed');
 });
 
 test('saving a new entry posts, saving an edit puts', async () => {
@@ -1444,9 +2281,8 @@ test('a new folder is still created rather than updated', async () => {
 });
 
 test('an action the client cannot carry out is never put in the menu', async () => {
-  // The endpoint offers `move`, `set_tags` and `copy_totp`; nothing here can
-  // run them yet. A row that does nothing when clicked is worse than one that
-  // is not there.
+  // The endpoint offers `move` and `set_tags`; nothing here can run them yet.
+  // A row that does nothing when clicked is worse than one that is not there.
   const { component } = browser({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
@@ -1455,7 +2291,6 @@ test('an action the client cannot carry out is never put in the menu', async () 
           { id: 'edit', label: 'Edit', icon: 'pen', category: 'edit' },
           { id: 'move', label: 'Move to folder', icon: 'folder', category: 'organize', bulk: true },
           { id: 'set_tags', label: 'Edit tags', icon: 'tag', category: 'organize', bulk: true },
-          { id: 'copy_totp', label: 'Copy code', icon: 'clock', category: 'clipboard' },
         ],
       }),
     },
@@ -1566,4 +2401,275 @@ test('a nameless tag is never written', async () => {
   await component.saveTag();
   assert.equal(posted.length, 0);
   assert.notEqual(component.tagDraft, null, 'the dialog stays open to be corrected');
+});
+
+// --- landing on /vault, with no uuid in the page ----------------------------
+//
+// The listing used to answer here. Without it the controller has to choose,
+// and it can only choose after the unlock: before that every name is a
+// ciphertext and no key exists.
+
+const FAV_UUID = '01a051b9-0000-7000-8000-0000000000fa';
+
+function favouriteRow() {
+  return Object.assign(vaultRow(FAV_UUID, 'Work'), { is_favorite: true });
+}
+
+test('with no uuid the browser opens the vault last seen on this device', async () => {
+  const { component, ctx } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [favouriteRow(), vaultRow(VAULT_UUID, 'Personal')],
+  });
+  ctx.localStorage.setItem('vault.lastVault', VAULT_UUID);
+  component.init();
+  await component.load();
+  assert.equal(component.openVault && component.openVault.uuid, VAULT_UUID);
+  assert.equal(component.missing, false);
+});
+
+test('a remembered vault that no longer exists falls back to the favourite', async () => {
+  const { component, ctx } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), favouriteRow()],
+  });
+  ctx.localStorage.setItem('vault.lastVault', 'a-vault-deleted-elsewhere');
+  component.init();
+  await component.load();
+  // Nothing is out of reach - the pointer was stale, which is not a failure
+  // worth a banner.
+  assert.equal(component.openVault && component.openVault.uuid, FAV_UUID);
+  assert.equal(component.missing, false);
+});
+
+test('with nothing remembered and no favourite it opens the first vault', async () => {
+  const { component } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [vaultRow('v-9', 'Only'), vaultRow('v-10', 'Second')],
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault && component.openVault.uuid, 'v-9');
+});
+
+test('an account with no vault lands on the empty state, not on an error', async () => {
+  const { component } = browser({ data: { 'vault-uuid': null }, vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault, null);
+  assert.equal(component.missing, false, 'no vault is not the same as one out of reach');
+  assert.equal(component.error, '');
+});
+
+test('a uuid in the page still wins over what the device remembers', async () => {
+  const { component, ctx } = browser({
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), favouriteRow()],
+  });
+  ctx.localStorage.setItem('vault.lastVault', FAV_UUID);
+  component.init();
+  await component.load();
+  assert.equal(component.openVault.uuid, VAULT_UUID);
+});
+
+test('opening a vault records it as the one to come back to', async () => {
+  const { component, ctx } = browser();
+  component.init();
+  await component.load();
+  assert.equal(ctx.localStorage.getItem('vault.lastVault'), VAULT_UUID);
+});
+
+test('the uuid reaches the address bar without a navigation', async () => {
+  // replaceState, never a redirect: a page load would take the closure that
+  // holds the keys with it, and the master password would be asked again.
+  const { component, ctx } = browser({ data: { 'vault-uuid': null } });
+  component.init();
+  await component.load();
+  assert.deepStrictEqual(Array.from(ctx.history.replaced), ['/vault/' + VAULT_UUID]);
+});
+
+test('a vault whose signature is refused is never the one landed on', async () => {
+  const { component } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [forgedVaultRow('v-bad'), vaultRow('v-ok', 'Readable')],
+    session: {
+      verifyVaultMetadata: async (payload, sig) => {
+        if (sig === 'forged') throw new Error('bad signature');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault && component.openVault.uuid, 'v-ok');
+});
+
+test('a uuid that names no reachable vault still reports it as missing', async () => {
+  // The distinction the landing path must not blur: asked for by name and not
+  // found is worth saying; arriving with no name at all is not.
+  const { component } = browser({ vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault, null);
+  assert.equal(component.missing, true);
+});
+
+// --- an account with nothing in it ------------------------------------------
+
+test('with no vault the page offers to create one rather than reporting a failure', async () => {
+  const { component } = browser({ data: { 'vault-uuid': null }, vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoVault(), true);
+});
+
+test('a vault out of reach is not the same as having none', async () => {
+  // Told apart because the sentences differ: one says somebody else holds it,
+  // the other says there is nothing here yet.
+  const { component } = browser({ vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoVault(), false);
+  assert.equal(component.missing, true);
+});
+
+test('an account whose every vault is refused says so rather than showing nothing', async () => {
+  // Landing resolves to none of them, so nothing was routed to and `missing`
+  // stays quiet. Without a state of its own the pane would be blank with no
+  // sentence in it, which reads as a broken page rather than as broken vaults.
+  const { component } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [forgedVaultRow('v-bad'), forgedVaultRow('v-worse')],
+    session: {
+      verifyVaultMetadata: async (payload, sig) => {
+        if (sig === 'forged') throw new Error('bad signature');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.openVault, null);
+  assert.equal(component.missing, false);
+  assert.equal(component.hasNoVault(), false);
+  assert.equal(component.hasNoOpenableVault(), true);
+});
+
+test('one readable vault among refused ones is opened, not reported unopenable', async () => {
+  const { component } = browser({
+    data: { 'vault-uuid': null },
+    vaults: [forgedVaultRow('v-bad'), vaultRow('v-ok', 'Readable')],
+    session: {
+      verifyVaultMetadata: async (payload, sig) => {
+        if (sig === 'forged') throw new Error('bad signature');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoOpenableVault(), false);
+});
+
+test('an empty account is offered a vault, not told none opened', async () => {
+  const { component } = browser({ data: { 'vault-uuid': null }, vaults: [] });
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoOpenableVault(), false);
+  assert.equal(component.hasNoVault(), true);
+});
+
+test('a vault that opens is never mistaken for an empty account', async () => {
+  const { component } = browser();
+  component.init();
+  await component.load();
+  assert.equal(component.hasNoVault(), false);
+});
+
+test('losing the last vault empties the sidebar with the listing', async () => {
+  // Caught by looking at the screen, not by a test: the empty state hid the
+  // table while the sidebar went on offering the tags and the trash count of
+  // the vault that had just been deleted.
+  const { component, options } = browser({
+    api: {
+      listTags: async () => [
+        { uuid: 't-1', vault: VAULT_UUID, name: 'ct:Infra', color: '#ef4444',
+          metadata_sig: 'sig' },
+      ],
+    },
+  });
+  component.init();
+  await component.load();
+  assert.ok(component.tags.length > 0, 'the vault opened with a tag on screen');
+
+  // The vault is deleted elsewhere, and the reload finds nothing left.
+  options.vaults = [];
+  component.vaultUuid = null;
+  await component.load();
+  assert.equal(component.hasNoVault(), true);
+  assert.deepStrictEqual(Array.from(component.tags), []);
+  assert.deepStrictEqual(Array.from(component.folders), []);
+  assert.deepStrictEqual(Array.from(component.entries), []);
+  assert.deepStrictEqual(Array.from(component.entryRows), []);
+});
+
+test('losing the last vault takes its name out of the address bar', async () => {
+  const { component, ctx, options } = browser({ data: { 'vault-uuid': null } });
+  component.init();
+  await component.load();
+  assert.deepStrictEqual(Array.from(ctx.history.replaced), ['/vault/' + VAULT_UUID]);
+
+  options.vaults = [];
+  component.vaultUuid = null;
+  await component.load();
+  assert.equal(ctx.history.replaced[ctx.history.replaced.length - 1], '/vault');
+  // And the device stops pointing at a vault nobody can open.
+  assert.equal(ctx.localStorage.getItem('vault.lastVault'), null);
+});
+
+test('switching vault leaves behind the folder the last one was walked into', async () => {
+  // Switching used to be a page navigation, which reset the tree for free.
+  // It is a load now, so a folder UUID belonging to the vault being left
+  // would go on filtering the vault being opened - and folder UUIDs are per
+  // vault, so nothing matches and a full vault reads as empty.
+  const FOLDER_IN_FIRST = 'folder-1111-7111-8111-111111111111';
+  const { component } = browser({
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), vaultRow(OTHER_UUID, 'Work')],
+    api: {
+      listEntries: async (uuid, options) => {
+        if (options && options.trashed) return [];
+        return uuid === OTHER_UUID
+          ? [Object.assign(entryRow('entry-in-second'), { vault: OTHER_UUID })]
+          : [];
+      },
+    },
+  });
+  component.init();
+  await component.load();
+
+  component.openFolder(FOLDER_IN_FIRST);
+  assert.equal(component.folderUuid, FOLDER_IN_FIRST);
+
+  await component.switchVault({ uuid: OTHER_UUID });
+
+  assert.equal(component.folderUuid, null, 'the folder went with the vault it belonged to');
+  assert.equal(component.view, 'all');
+  assert.equal(component.tagFilter, null);
+  assert.equal(component.canGoBack(), false, 'and so did the trail through it');
+  assert.equal(
+    component.visibleEntries().length,
+    1,
+    'the opened vault shows its root entry instead of reading as empty',
+  );
+});
+
+test('refreshing the vault you are standing in keeps the folder you walked to', async () => {
+  // The counterpart of the reset above: it keys off the vault changing, not
+  // off a load happening. Resetting on every load would send the refresh
+  // button back to the root of the tree.
+  const FOLDER = 'folder-1111-7111-8111-111111111111';
+  const { component } = browser();
+  component.init();
+  await component.load();
+
+  component.openFolder(FOLDER);
+  await component.load();
+
+  assert.equal(component.folderUuid, FOLDER);
+  assert.equal(component.canGoBack(), true);
 });

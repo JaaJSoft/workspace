@@ -171,14 +171,26 @@ class _Signer:
 
     # ---- the account envelope --------------------------------------------
 
-    def seal(self, key, plaintext, associated_data, kdf_id=wire.KDF_HKDF_SHA256):
+    # The header travels with the ciphertext and says how its key was made.
+    # The defaults describe the common case here - a key derived per record by
+    # HKDF, under vault key version 1 - and the two account wraps override both:
+    # they are sealed with the unwrap key as it is, and a password change
+    # re-seals them rather than bumping a version.
+    def seal(
+        self,
+        key,
+        plaintext,
+        associated_data,
+        kdf_id=wire.KDF_HKDF_SHA256,
+        key_version=1,
+    ):
         return to_base64url(
             primitives.aead_seal(
                 key,
                 plaintext,
                 associated_data,
                 iv=secrets.token_bytes(12),
-                key_version=1,
+                key_version=key_version,
                 kdf_id=kdf_id,
             )
         )
@@ -212,12 +224,14 @@ class _Signer:
                 primitives.private_bytes(self.kex_private),
                 ad.kex_priv_ad(account),
                 kdf_id=wire.KDF_DIRECT,
+                key_version=0,
             ),
             wrapped_sig_priv=self.seal(
                 self.unwrap_key,
                 primitives.private_bytes(self.sig_private),
                 ad.sig_priv_ad(account),
                 kdf_id=wire.KDF_DIRECT,
+                key_version=0,
             ),
             # What binds the exchange key to the signing key: without it the
             # server could hand out a key of its own and read every wrap.

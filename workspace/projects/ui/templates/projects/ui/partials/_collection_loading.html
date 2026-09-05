@@ -1,0 +1,36 @@
+{% comment %}
+Loading veil over #task-collection. It sits next to the collection, not
+inside it, so it survives the swap; it shows while collectionLoading is
+set (see the ajax listeners in projectBoard's init) and the fragment that
+lands clears it once Alpine has bound it. The caller wraps both in a
+relative box.
+
+The spinner rotates through a CSS transform, which the compositor keeps
+animating while the main thread is busy binding the new fragment - that
+is the only part of the wait the user would otherwise read as a freeze.
+It is sticky so a long backlog scrolled halfway down still shows it at
+mid-viewport rather than at the centre of a box that is off screen.
+
+The fade-in waits 200 ms so a filter that answers at once never flashes
+a half-drawn veil. The wait is a CSS transition-delay, not a timer: a
+timer set before the request cannot fire while the main thread is busy
+binding the fragment, the compositor runs the delay regardless. The veil
+never takes pointer events, so the page is not silently click-proof
+while the delay runs.
+{% endcomment %}
+<div
+  x-show="collectionLoading"
+  x-cloak
+  x-transition:enter="transition-opacity duration-150 delay-200"
+  x-transition:enter-start="opacity-0"
+  x-transition:enter-end="opacity-100"
+  class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-base-100/60 pointer-events-none"
+  role="status"
+  aria-live="polite"
+  data-testid="task-collection-loading"
+>
+  <span class="sticky top-1/2 inline-flex text-accent animate-spin">
+    <i data-lucide="loader-circle" class="w-8 h-8"></i>
+  </span>
+  <span class="sr-only">Loading tasks…</span>
+</div>

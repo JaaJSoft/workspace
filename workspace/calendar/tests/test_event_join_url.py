@@ -7,6 +7,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event
+from workspace.calendar.services.recurrence_rule import apply_rule
 
 User = get_user_model()
 
@@ -78,14 +79,15 @@ class EventJoinUrlTests(TestCase):
     def test_recurring_occurrences_carry_the_absolute_join_url(self):
         from workspace.chat.services.meetings import create_meeting
 
-        master = Event.objects.create(
+        master = Event(
             calendar=self.calendar,
             owner=self.user,
             title="Standup",
             start=timezone.now() + timezone.timedelta(hours=1),
             end=timezone.now() + timezone.timedelta(hours=2),
-            recurrence_frequency="daily",
         )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
         meeting = create_meeting(master, self.user)
         start = timezone.now().isoformat()
         end = (timezone.now() + timezone.timedelta(days=3)).isoformat()
@@ -96,14 +98,15 @@ class EventJoinUrlTests(TestCase):
             self.assertEqual(occ["join_url"], f"http://testserver/meet/{meeting.slug}")
 
     def test_recurring_occurrences_are_null_without_a_meeting(self):
-        Event.objects.create(
+        master = Event(
             calendar=self.calendar,
             owner=self.user,
             title="Standup",
             start=timezone.now() + timezone.timedelta(hours=1),
             end=timezone.now() + timezone.timedelta(hours=2),
-            recurrence_frequency="daily",
         )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
         start = timezone.now().isoformat()
         end = (timezone.now() + timezone.timedelta(days=3)).isoformat()
         resp = self.client.get(f"/api/v1/events?start={start}&end={end}")
@@ -115,14 +118,15 @@ class EventJoinUrlTests(TestCase):
     def _create_recurring_series_with_exception(self, title, with_meeting):
         from workspace.chat.services.meetings import create_meeting
 
-        master = Event.objects.create(
+        master = Event(
             calendar=self.calendar,
             owner=self.user,
             title=title,
             start=timezone.now() + timezone.timedelta(hours=1),
             end=timezone.now() + timezone.timedelta(hours=2),
-            recurrence_frequency="daily",
         )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
         if with_meeting:
             create_meeting(master, self.user)
         occ_start = master.start + timezone.timedelta(days=1)
@@ -240,14 +244,15 @@ class EventJoinUrlTests(TestCase):
         # lands, until a reload re-fetches it correctly.
         from workspace.chat.services.meetings import create_meeting
 
-        master = Event.objects.create(
+        master = Event(
             calendar=self.calendar,
             owner=self.user,
             title="Standup",
             start=timezone.now() + timezone.timedelta(hours=1),
             end=timezone.now() + timezone.timedelta(hours=2),
-            recurrence_frequency="weekly",
         )
+        apply_rule(master, "RRULE:FREQ=WEEKLY")
+        master.save()
         meeting = create_meeting(master, self.user)
         occ_start = (master.start + timezone.timedelta(weeks=1)).isoformat()
         resp = self.client.put(

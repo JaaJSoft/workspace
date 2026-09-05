@@ -19,6 +19,7 @@ def forwards(apps, schema_editor):
     backfill_group_titles(
         apps.get_model("chat", "Conversation"),
         apps.get_model("chat", "ConversationMember"),
+        schema_editor.connection.alias,
     )
 
 

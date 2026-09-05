@@ -21,11 +21,12 @@ def rekey(apps, schema_editor):
     tripping the unique constraint mid-loop.
     """
     Project = apps.get_model("projects", "Project")
+    db = schema_editor.connection.alias
 
-    taken = set(Project.objects.values_list("key", flat=True))
+    taken = set(Project.objects.using(db).values_list("key", flat=True))
     taken.discard(None)
     personal = (
-        Project.objects.filter(type="personal")
+        Project.objects.using(db).filter(type="personal")
         .select_related("created_by")
         .order_by("created_at", "uuid")
     )

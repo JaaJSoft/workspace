@@ -1,4 +1,6 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -8,80 +10,87 @@ from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, Event, EventMember
 from workspace.calendar.recurrence import (
-    _build_rrule,
     expand_recurring_events,
     make_virtual_occurrence,
     next_occurrences_after,
+    occurrences_in_range,
 )
+from workspace.calendar.services.recurrence_rule import MAX_ITERATIONS, apply_rule
 
 from .test_calendar import CalendarTestMixin
 
 User = get_user_model()
 
 
-class BuildRruleTests(TestCase):
+def _until(dt):
+    """RFC 5545 UNTIL token for an aware datetime, in UTC."""
+    return dt.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+class OccurrencesInRangeTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pass")
         self.cal = Calendar.objects.create(name="Test", owner=self.user)
 
-    def _make_master(self, freq, start, end=None, interval=1, rec_end=None):
-        return Event.objects.create(
+    def _make_master(self, rule, start, end=None):
+        event = Event(
             calendar=self.cal,
             owner=self.user,
             title="Recurring",
             start=start,
             end=end,
-            recurrence_frequency=freq,
-            recurrence_interval=interval,
-            recurrence_end=rec_end,
         )
+        apply_rule(event, rule)
+        event.save()
+        return event
 
     def test_daily_recurrence(self):
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        master = self._make_master("daily", start=now)
+        master = self._make_master("RRULE:FREQ=DAILY", now)
         range_start = now
         range_end = now + timedelta(days=3)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         self.assertEqual(len(occs), 3)
 
     def test_weekly_recurrence(self):
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        master = self._make_master("weekly", start=now)
+        master = self._make_master("RRULE:FREQ=WEEKLY", now)
         range_start = now
         range_end = now + timedelta(weeks=3)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         self.assertEqual(len(occs), 3)
 
     def test_monthly_recurrence(self):
         now = timezone.now().replace(day=1, hour=10, minute=0, second=0, microsecond=0)
-        master = self._make_master("monthly", start=now)
+        master = self._make_master("RRULE:FREQ=MONTHLY", now)
         range_start = now
         range_end = now + timedelta(days=90)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         self.assertGreaterEqual(len(occs), 3)
 
     def test_interval_respected(self):
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        master = self._make_master("daily", start=now, interval=2)
+        master = self._make_master("RRULE:FREQ=DAILY;INTERVAL=2", now)
         range_start = now
         range_end = now + timedelta(days=6)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         self.assertEqual(len(occs), 3)  # day 0, 2, 4
 
     def test_recurrence_end_respected(self):
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         rec_end = now + timedelta(days=2)
-        master = self._make_master("daily", start=now, rec_end=rec_end)
+        master = self._make_master(f"RRULE:FREQ=DAILY;UNTIL={_until(rec_end)}", now)
         range_start = now
         range_end = now + timedelta(days=10)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         self.assertLessEqual(len(occs), 3)
 
-    def test_unknown_frequency_yields_nothing(self):
+    def test_unparseable_rule_yields_nothing(self):
         now = timezone.now()
-        master = self._make_master("daily", start=now)
-        master.recurrence_frequency = "bogus"
-        occs = list(_build_rrule(master, now, now + timedelta(days=5)))
+        master = self._make_master("RRULE:FREQ=DAILY", now)
+        master.recurrence_rule = "bogus"
+        with self.assertLogs("workspace.calendar.services.recurrence_rule", "WARNING"):
+            occs = list(occurrences_in_range(master, now, now + timedelta(days=5)))
         self.assertEqual(occs, [])
 
     def test_event_with_duration_overlaps(self):
@@ -89,20 +98,20 @@ class BuildRruleTests(TestCase):
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         start = now - timedelta(hours=2)
         end = now + timedelta(hours=1)
-        master = self._make_master("daily", start=start, end=end)
+        master = self._make_master("RRULE:FREQ=DAILY", start, end)
         range_start = now
         range_end = now + timedelta(days=1)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         # The first occurrence starts 2h before range_start but ends 1h after
         self.assertGreaterEqual(len(occs), 1)
 
     def test_past_occurrences_excluded(self):
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         start = now - timedelta(days=10)
-        master = self._make_master("daily", start=start)
+        master = self._make_master("RRULE:FREQ=DAILY", start)
         range_start = now
         range_end = now + timedelta(days=2)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         for occ in occs:
             self.assertGreaterEqual(occ, range_start)
 
@@ -111,10 +120,10 @@ class BuildRruleTests(TestCase):
         exactly the in-window occurrences."""
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         start = now - timedelta(days=730)
-        master = self._make_master("daily", start=start)
+        master = self._make_master("RRULE:FREQ=DAILY", start)
         range_start = now
         range_end = now + timedelta(days=3)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         self.assertEqual(occs, [now, now + timedelta(days=1), now + timedelta(days=2)])
 
     def test_old_master_with_interval_keeps_series_phase(self):
@@ -124,10 +133,10 @@ class BuildRruleTests(TestCase):
         # 100 days ago; 100 % 3 == 1, so the next in-phase occurrence
         # after `now` is now + 2 days.
         start = now - timedelta(days=100)
-        master = self._make_master("daily", start=start, interval=3)
+        master = self._make_master("RRULE:FREQ=DAILY;INTERVAL=3", start)
         range_start = now
         range_end = now + timedelta(days=7)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         self.assertEqual(occs, [now + timedelta(days=2), now + timedelta(days=5)])
 
     def test_occurrence_ending_exactly_at_range_start_excluded(self):
@@ -135,10 +144,10 @@ class BuildRruleTests(TestCase):
         does not overlap the window."""
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         start = now - timedelta(hours=2)
-        master = self._make_master("daily", start=start, end=now)
+        master = self._make_master("RRULE:FREQ=DAILY", start, now)
         range_start = now
         range_end = now + timedelta(days=1)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         # Day 0 ends exactly at range_start (excluded); day 1 overlaps.
         self.assertEqual(occs, [start + timedelta(days=1)])
 
@@ -148,10 +157,10 @@ class BuildRruleTests(TestCase):
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         start = now - timedelta(days=365, hours=2)
         end = start + timedelta(hours=3)  # daily 3h event, straddles `now`
-        master = self._make_master("daily", start=start, end=end)
+        master = self._make_master("RRULE:FREQ=DAILY", start, end)
         range_start = now
         range_end = now + timedelta(days=1)
-        occs = list(_build_rrule(master, range_start, range_end))
+        occs = list(occurrences_in_range(master, range_start, range_end))
         # The occurrence that started 2h ago (ends in 1h) plus tomorrow's
         # occurrence starting at now+22h, which is inside the window.
         self.assertEqual(
@@ -162,9 +171,61 @@ class BuildRruleTests(TestCase):
     def test_occurrence_starting_at_range_start_included(self):
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         start = now - timedelta(days=5)
-        master = self._make_master("daily", start=start)
-        occs = list(_build_rrule(master, now, now + timedelta(days=1)))
+        master = self._make_master("RRULE:FREQ=DAILY", start)
+        occs = list(occurrences_in_range(master, now, now + timedelta(days=1)))
         self.assertEqual(occs, [now])
+
+    def test_dense_rule_is_capped_and_returns_promptly(self):
+        """A hostile FREQ=SECONDLY rule with no UNTIL/COUNT must not be
+        walked forever: MAX_ITERATIONS bounds the work regardless of how
+        wide the window is, so a feed-supplied dense rule degrades to a
+        truncated series instead of hanging the request."""
+        now = timezone.now().replace(microsecond=0)
+        master = self._make_master("RRULE:FREQ=SECONDLY", now)
+        with self.assertLogs("workspace.calendar.recurrence", "WARNING"):
+            occs = list(occurrences_in_range(master, now, now + timedelta(days=365)))
+        # Structural rather than timed: the cap firing IS the bound, and a
+        # wall-clock assertion only adds flakiness on a loaded CI runner.
+        self.assertEqual(len(occs), MAX_ITERATIONS)
+
+    def test_count_rule_is_not_reanchored_past_its_true_end(self):
+        """A DAILY;COUNT rule must never be re-anchored: the optimization
+        would walk COUNT occurrences from the moved dtstart, fabricating
+        occurrences past the series' real (much earlier) end."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        # Old enough that the anchor optimization would kick in if the
+        # COUNT rule were (wrongly) treated as simple stepping.
+        start = now - timedelta(days=1000)
+        master = self._make_master("RRULE:FREQ=DAILY;COUNT=5", start)
+        occs = list(occurrences_in_range(master, now, now + timedelta(days=3650)))
+        self.assertEqual(occs, [])
+
+    def test_old_hourly_master_reaches_the_window(self):
+        """Regression: before sub-day anchoring, an HOURLY master older
+        than MAX_ITERATIONS hours spent its whole skip budget walking its
+        own past and never reached the window at all, returning nothing -
+        permanently, since the gap only grows."""
+        now = timezone.now().replace(minute=0, second=0, microsecond=0)
+        start = now - timedelta(hours=MAX_ITERATIONS + 500)
+        master = self._make_master("RRULE:FREQ=HOURLY", start)
+        occs = list(occurrences_in_range(master, now, now + timedelta(hours=3)))
+        self.assertEqual(
+            occs, [now, now + timedelta(hours=1), now + timedelta(hours=2)]
+        )
+
+    def test_old_by_qualified_master_reaches_the_window(self):
+        """A BY-qualified rule cannot be anchored at all, so this exercises
+        the skip budget rather than the anchor: 20 years of MO/WE/FR
+        candidates (~3,100) fit comfortably inside MAX_ITERATIONS, so the
+        real occurrences in the window are still returned."""
+        now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+        start = now - timedelta(days=365 * 20)
+        master = self._make_master("RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR", start)
+        occs = list(occurrences_in_range(master, now, now + timedelta(days=7)))
+        self.assertGreater(len(occs), 0)
+        for occ in occs:
+            self.assertGreaterEqual(occ, now)
+            self.assertIn(occ.weekday(), (0, 2, 4))  # Mon, Wed, Fri
 
 
 class MakeVirtualOccurrenceTests(TestCase):
@@ -172,16 +233,15 @@ class MakeVirtualOccurrenceTests(TestCase):
         self.user = User.objects.create_user(username="alice", password="pass")
         self.cal = Calendar.objects.create(name="Test", owner=self.user)
 
+    def _master(self, **kwargs):
+        event = Event(calendar=self.cal, owner=self.user, **kwargs)
+        apply_rule(event, "RRULE:FREQ=DAILY")
+        event.save()
+        return event
+
     def test_returns_dict_with_expected_keys(self):
         now = timezone.now()
-        master = Event.objects.create(
-            calendar=self.cal,
-            owner=self.user,
-            title="Meeting",
-            start=now,
-            end=now + timedelta(hours=1),
-            recurrence_frequency="daily",
-        )
+        master = self._master(title="Meeting", start=now, end=now + timedelta(hours=1))
         occ = make_virtual_occurrence(master, now)
         self.assertEqual(occ["title"], "Meeting")
         self.assertTrue(occ["is_recurring"])
@@ -190,14 +250,7 @@ class MakeVirtualOccurrenceTests(TestCase):
 
     def test_computes_end_from_duration(self):
         now = timezone.now()
-        master = Event.objects.create(
-            calendar=self.cal,
-            owner=self.user,
-            title="Meeting",
-            start=now,
-            end=now + timedelta(hours=2),
-            recurrence_frequency="daily",
-        )
+        master = self._master(title="Meeting", start=now, end=now + timedelta(hours=2))
         occ_start = now + timedelta(days=1)
         occ = make_virtual_occurrence(master, occ_start)
         expected_end = (occ_start + timedelta(hours=2)).isoformat()
@@ -205,14 +258,7 @@ class MakeVirtualOccurrenceTests(TestCase):
 
     def test_end_is_none_when_no_master_end(self):
         now = timezone.now()
-        master = Event.objects.create(
-            calendar=self.cal,
-            owner=self.user,
-            title="All day",
-            start=now,
-            end=None,
-            recurrence_frequency="daily",
-        )
+        master = self._master(title="All day", start=now, end=None)
         occ = make_virtual_occurrence(master, now)
         self.assertIsNone(occ["end"])
 
@@ -222,22 +268,22 @@ class NextOccurrencesAfterTests(TestCase):
         self.user = User.objects.create_user(username="bob", password="pass")
         self.cal = Calendar.objects.create(name="Test", owner=self.user)
 
-    def _make_master(self, freq, start, end=None, interval=1, rec_end=None):
-        return Event.objects.create(
+    def _make_master(self, rule, start, end=None):
+        event = Event(
             calendar=self.cal,
             owner=self.user,
             title="Recurring",
             start=start,
             end=end,
-            recurrence_frequency=freq,
-            recurrence_interval=interval,
-            recurrence_end=rec_end,
         )
+        apply_rule(event, rule)
+        event.save()
+        return event
 
     def test_future_master_yields_limit_occurrences(self):
         """Weekly master starting tomorrow → first 20 occurrences."""
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        master = self._make_master("weekly", start=now + timedelta(days=1))
+        master = self._make_master("RRULE:FREQ=WEEKLY", now + timedelta(days=1))
         occs = list(next_occurrences_after(master, after=now, limit=20))
         self.assertEqual(len(occs), 20)
         # First is tomorrow, then weekly
@@ -247,7 +293,7 @@ class NextOccurrencesAfterTests(TestCase):
     def test_past_master_skips_past_occurrences(self):
         """Master starting 1 year ago → occurrences are all >= after."""
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        master = self._make_master("weekly", start=now - timedelta(days=365))
+        master = self._make_master("RRULE:FREQ=WEEKLY", now - timedelta(days=365))
         occs = list(next_occurrences_after(master, after=now, limit=20))
         self.assertEqual(len(occs), 20)
         for occ in occs:
@@ -258,7 +304,9 @@ class NextOccurrencesAfterTests(TestCase):
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         # 100 days ago, every 3 days; 100 % 3 == 1, so the next in-phase
         # occurrence at or after `now` is now + 2 days.
-        master = self._make_master("daily", start=now - timedelta(days=100), interval=3)
+        master = self._make_master(
+            "RRULE:FREQ=DAILY;INTERVAL=3", now - timedelta(days=100)
+        )
         occs = list(next_occurrences_after(master, after=now, limit=3))
         self.assertEqual(
             occs,
@@ -272,14 +320,14 @@ class NextOccurrencesAfterTests(TestCase):
     def test_past_master_occurrence_exactly_at_after_included(self):
         """`after` is inclusive: an in-phase occurrence at `after` is yielded."""
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        master = self._make_master("daily", start=now - timedelta(days=30))
+        master = self._make_master("RRULE:FREQ=DAILY", now - timedelta(days=30))
         occs = list(next_occurrences_after(master, after=now, limit=2))
         self.assertEqual(occs, [now, now + timedelta(days=1)])
 
     def test_limit_respected(self):
         """limit=5 → exactly 5 occurrences."""
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        master = self._make_master("daily", start=now)
+        master = self._make_master("RRULE:FREQ=DAILY", now)
         occs = list(next_occurrences_after(master, after=now, limit=5))
         self.assertEqual(len(occs), 5)
 
@@ -288,9 +336,7 @@ class NextOccurrencesAfterTests(TestCase):
         (weeks 0, 1, 2, 3) because dateutil.rrule treats `until` as inclusive."""
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         master = self._make_master(
-            "weekly",
-            start=now,
-            rec_end=now + timedelta(weeks=3),
+            f"RRULE:FREQ=WEEKLY;UNTIL={_until(now + timedelta(weeks=3))}", now
         )
         occs = list(next_occurrences_after(master, after=now, limit=20))
         self.assertEqual(len(occs), 4)  # weeks 0, 1, 2, 3
@@ -298,7 +344,7 @@ class NextOccurrencesAfterTests(TestCase):
     def test_interval_respected(self):
         """Bi-weekly master → 14-day stride."""
         now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        master = self._make_master("weekly", start=now, interval=2)
+        master = self._make_master("RRULE:FREQ=WEEKLY;INTERVAL=2", now)
         occs = list(next_occurrences_after(master, after=now, limit=3))
         self.assertEqual(len(occs), 3)
         self.assertEqual(occs[1] - occs[0], timedelta(days=14))
@@ -332,7 +378,7 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
             "title": "Weekly Standup",
             "start": (timezone.now() + timedelta(days=1)).isoformat(),
             "end": (timezone.now() + timedelta(days=1, hours=1)).isoformat(),
-            "recurrence_frequency": "weekly",
+            "recurrence_rule": "RRULE:FREQ=WEEKLY",
         }
         data.update(overrides)
         return data
@@ -341,8 +387,34 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
         self.client.force_authenticate(self.owner)
         resp = self.client.post(self.url, self._event_data(), format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(resp.data["recurrence_frequency"], "weekly")
         self.assertTrue(resp.data["is_recurring"])
+        event = Event.objects.get(title="Weekly Standup")
+        self.assertEqual(event.recurrence_rule, "RRULE:FREQ=WEEKLY")
+
+    def test_created_recurring_event_expands_to_a_later_occurrence(self):
+        # Asserting on is_recurring alone doesn't exercise the list
+        # endpoint's expansion - only a window landing on a LATER occurrence,
+        # not the row's own start, proves the event was actually filed into
+        # the recurring bucket and expanded from there.
+        self.client.force_authenticate(self.owner)
+        start = timezone.now() + timedelta(days=1)
+        resp = self.client.post(
+            self.url,
+            self._event_data(
+                start=start.isoformat(),
+                end=(start + timedelta(hours=1)).isoformat(),
+            ),
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        params = {
+            "start": (start + timedelta(weeks=2)).isoformat(),
+            "end": (start + timedelta(weeks=3)).isoformat(),
+        }
+        list_resp = self.client.get(self.url, params)
+        titles = [e["title"] for e in list_resp.data if e.get("is_recurring")]
+        self.assertIn("Weekly Standup", titles)
 
     def test_create_non_recurring_unchanged(self):
         self.client.force_authenticate(self.owner)
@@ -354,7 +426,7 @@ class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
         }
         resp = self.client.post(self.url, data, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertIsNone(resp.data["recurrence_frequency"])
+        self.assertEqual(resp.data["recurrence_rule"], "")
         self.assertFalse(resp.data["is_recurring"])
 
 
@@ -374,16 +446,21 @@ class RecurrenceExpansionTests(CalendarTestMixin, APITestCase):
     ):
         base = now if now is not None else timezone.now()
         start = base + timedelta(days=start_offset)
-        return Event.objects.create(
+        event = Event(
             calendar=self.calendar,
             title="Recurring",
             start=start,
             end=start + timedelta(hours=1),
             owner=self.owner,
-            recurrence_frequency=freq,
-            recurrence_interval=interval,
-            recurrence_end=recurrence_end,
         )
+        rule = f"RRULE:FREQ={freq.upper()}"
+        if interval != 1:
+            rule += f";INTERVAL={interval}"
+        if recurrence_end:
+            rule += f";UNTIL={_until(recurrence_end)}"
+        apply_rule(event, rule)
+        event.save()
+        return event
 
     def test_weekly_event_expands(self):
         now = timezone.now()
@@ -448,15 +525,16 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
 
     def _create_weekly(self):
         start = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        return Event.objects.create(
+        event = Event(
             calendar=self.calendar,
             title="Weekly",
             start=start,
             end=start + timedelta(hours=1),
             owner=self.owner,
-            recurrence_frequency="weekly",
-            recurrence_interval=1,
         )
+        apply_rule(event, "RRULE:FREQ=WEEKLY;INTERVAL=1")
+        event.save()
+        return event
 
     def url(self, event_id):
         return f"/api/v1/events/{event_id}"
@@ -481,7 +559,7 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         master.refresh_from_db()
-        self.assertIsNotNone(master.recurrence_end)
+        self.assertIn("UNTIL=", master.recurrence_rule)
 
     def test_delete_all_deletes_everything(self):
         master = self._create_weekly()
@@ -526,9 +604,9 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         master.refresh_from_db()
-        self.assertIsNotNone(master.recurrence_end)
+        self.assertIn("UNTIL=", master.recurrence_rule)
         self.assertEqual(resp.data["title"], "Future Series")
-        self.assertEqual(resp.data["recurrence_frequency"], "weekly")
+        self.assertTrue(resp.data["is_recurring"])
 
     def test_edit_all_updates_master(self):
         master = self._create_weekly()
@@ -589,25 +667,24 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
 class RecurrenceServiceTests(CalendarTestMixin, TestCase):
     """Unit tests for the recurrence expansion service."""
 
-    def _create_weekly(self, **kwargs):
+    def _create_weekly(self):
         start = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
-        defaults = dict(
+        event = Event(
             calendar=self.calendar,
             title="Weekly",
             start=start,
             end=start + timedelta(hours=1),
             owner=self.owner,
-            recurrence_frequency="weekly",
-            recurrence_interval=1,
         )
-        defaults.update(kwargs)
-        return Event.objects.create(**defaults)
+        apply_rule(event, "RRULE:FREQ=WEEKLY")
+        event.save()
+        return event
 
-    def test_build_rrule_weekly(self):
+    def test_occurrences_in_range_weekly(self):
         master = self._create_weekly()
         range_start = master.start
         range_end = master.start + timedelta(days=28)
-        dates = list(_build_rrule(master, range_start, range_end))
+        dates = list(occurrences_in_range(master, range_start, range_end))
         self.assertEqual(len(dates), 4)
 
     def test_expand_with_cancelled_exception(self):
@@ -676,20 +753,28 @@ class WallClockExpansionTests(TestCase):
         self.user = User.objects.create_user(username="wc", password="p")
         self.cal = Calendar.objects.create(name="W", owner=self.user)
 
-    def _master(self, tz="Europe/Paris", freq="daily", start=None, **kwargs):
-        return Event.objects.create(
+    def _master(
+        self, tz="Europe/Paris", freq="daily", start=None, interval=1, **kwargs
+    ):
+        dtstart = start or datetime(2026, 3, 27, 8, 0, tzinfo=UTC)  # 09:00 Paris
+        event = Event(
             calendar=self.cal,
             owner=self.user,
             title="Standup",
-            start=start or datetime(2026, 3, 27, 8, 0, tzinfo=UTC),  # 09:00 Paris
-            end=(start or datetime(2026, 3, 27, 8, 0, tzinfo=UTC)) + timedelta(hours=1),
-            recurrence_frequency=freq,
+            start=dtstart,
+            end=dtstart + timedelta(hours=1),
             timezone=tz,
             **kwargs,
         )
+        rule = f"RRULE:FREQ={freq.upper()}"
+        if interval != 1:
+            rule += f";INTERVAL={interval}"
+        apply_rule(event, rule)
+        event.save()
+        return event
 
     def _expand(self, master, start, end):
-        return list(_build_rrule(master, start, end))
+        return list(occurrences_in_range(master, start, end))
 
     def test_daily_series_keeps_wall_clock_across_dst(self):
         master = self._master()
@@ -748,6 +833,59 @@ class WallClockExpansionTests(TestCase):
             ["2026-03-29T07:00:00+00:00", "2026-03-30T07:00:00+00:00"],
         )
 
+    def test_old_hourly_master_anchor_matches_unanchored_across_dst(self):
+        """HOURLY at INTERVAL == 1 anchoring under a wall-clock zone must
+        reproduce exactly the same stream a fresh (unanchored) series on the
+        same phase produces, including across the spring-forward transition
+        - proving the sub-day anchoring optimization safe for HOURLY at
+        INTERVAL == 1 under a zone. This does not cover any other interval -
+        see test_old_hourly_interval_master_matches_its_own_true_walk for
+        why the anchor is deliberately not attempted at other intervals."""
+        window_start = datetime(2026, 3, 28, 12, 0, tzinfo=UTC)
+        window_end = datetime(2026, 3, 30, 12, 0, tzinfo=UTC)
+
+        # dtstart == window floor: _anchored_dtstart's `dtstart < floor`
+        # guard is false, so this master is never actually anchored - a
+        # genuine unanchored ground truth to compare against.
+        recent = self._master(freq="hourly", start=window_start - timedelta(hours=1))
+        # Old enough to trigger the anchor optimization for real.
+        old = self._master(freq="hourly", start=window_start - timedelta(days=2000))
+
+        recent_occs = self._expand(recent, window_start, window_end)
+        old_occs = self._expand(old, window_start, window_end)
+
+        # 49 hourly ticks over 2 days with one spring-forward hour skipped.
+        self.assertEqual(len(recent_occs), 49)
+        self.assertEqual(recent_occs, old_occs)
+
+    def test_old_hourly_interval_master_matches_its_own_true_walk(self):
+        """Zoned HOURLY with INTERVAL > 1 must not use the absolute-time
+        anchor jump at all - _anchored_dtstart gates it on interval == 1
+        precisely because comparing an anchored dtstart against an
+        unrelated master is not a valid correctness check once INTERVAL > 1
+        (two masters starting at different phases are not expected to
+        agree; that is ordinary modular arithmetic, not a bug). The only
+        valid ground truth is the SAME master's own unmodified walk, so this
+        compares occurrences_in_range's anchored result against a direct
+        parse() call seeded with the master's true (unmodified) start."""
+        from workspace.calendar.services.recurrence_rule import parse
+
+        old = self._master(
+            freq="hourly", interval=7, start=datetime(2019, 6, 1, 6, 0, tzinfo=UTC)
+        )
+        window_start = datetime(2026, 3, 27, 0, 0, tzinfo=UTC)
+        window_end = window_start + timedelta(hours=8)
+
+        true_rule = parse(old.recurrence_rule, old.start, ZoneInfo("Europe/Paris"))
+        expected = []
+        for dt in true_rule:
+            if dt >= window_end:
+                break
+            if dt >= window_start:
+                expected.append(dt.astimezone(UTC))
+
+        self.assertEqual(self._expand(old, window_start, window_end), expected)
+
     def test_weekly_series_keeps_wall_clock_across_dst(self):
         master = self._master(freq="weekly")
         occs = self._expand(
@@ -792,3 +930,119 @@ class WallClockExpansionTests(TestCase):
         self.assertEqual(len(occs), 1)
         self.assertTrue(occs[0]["is_exception"])
         self.assertEqual(occs[0]["title"], "Standup (moved)")
+
+
+class UnwalkableRuleTests(TestCase):
+    """Iteration is where a broken rruleset actually fails.
+
+    ``rrulestr`` builds a set out of parts it never checks are comparable, so
+    the TypeError lands on whichever pair the merge reaches first - which can
+    be well past the first occurrence ``parse`` pulls. Both expansion entry
+    points truncate the series rather than the request.
+    """
+
+    class _Exploding:
+        """An rruleset stand-in that yields once, then cannot compare."""
+
+        def __init__(self, first):
+            self.first = first
+
+        def __iter__(self):
+            yield self.first
+            raise TypeError("can't compare offset-naive and offset-aware datetimes")
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="boom", password="pass")
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+        self.now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        self.master = Event(
+            calendar=self.cal,
+            owner=self.user,
+            title="Recurring",
+            start=self.now,
+        )
+        apply_rule(self.master, "RRULE:FREQ=DAILY")
+        self.master.save()
+
+    def test_occurrences_in_range_truncates_instead_of_raising(self):
+        with patch(
+            "workspace.calendar.recurrence.parse",
+            return_value=self._Exploding(self.now),
+        ):
+            with self.assertLogs("workspace.calendar.recurrence", "WARNING") as logs:
+                occs = list(
+                    occurrences_in_range(
+                        self.master, self.now, self.now + timedelta(days=5)
+                    )
+                )
+        self.assertEqual(occs, [self.now])
+        self.assertIn("unwalkable", logs.output[0])
+
+    def test_next_occurrences_after_truncates_instead_of_raising(self):
+        with patch(
+            "workspace.calendar.recurrence.parse",
+            return_value=self._Exploding(self.now),
+        ):
+            with self.assertLogs("workspace.calendar.recurrence", "WARNING"):
+                occs = list(next_occurrences_after(self.master, self.now, limit=5))
+        self.assertEqual(occs, [self.now])
+
+    def test_floating_rdate_master_expands_instead_of_raising(self):
+        # An unbounded RRULE plus a naive RDATE: the write succeeds because
+        # the unbounded rule short-circuits the bound search, so the row
+        # reaches every window query in the app.
+        master = Event(
+            calendar=self.cal,
+            owner=self.user,
+            title="Floating",
+            start=datetime(2026, 1, 6, 10, tzinfo=UTC),
+        )
+        apply_rule(master, "RRULE:FREQ=WEEKLY\nRDATE:20260501T090000")
+        master.save()
+        self.assertTrue(master.is_recurring)
+        occs = list(
+            occurrences_in_range(
+                master,
+                datetime(2026, 4, 28, tzinfo=UTC),
+                datetime(2026, 5, 5, tzinfo=UTC),
+            )
+        )
+        self.assertIn(datetime(2026, 5, 1, 9, tzinfo=UTC), occs)
+
+
+class NextOccurrencesBudgetTests(TestCase):
+    """``next_occurrences_after`` needs a pre-window budget of its own.
+
+    Delegating the skip to ``rule.xafter`` hides an unbounded walk inside
+    dateutil: a budget that counts yielded items never fires, because a dense
+    old series yields nothing for as long as it takes to reach the window.
+    ``get_upcoming_page`` calls this once per master with no limit, so one
+    such row wedges an agenda request indefinitely.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="dense", password="pass")
+        self.cal = Calendar.objects.create(name="Test", owner=self.user)
+
+    def test_dense_old_zoned_master_stops_at_the_budget(self):
+        master = Event(
+            calendar=self.cal,
+            owner=self.user,
+            title="Every second",
+            start=datetime(2024, 1, 1, 9, tzinfo=UTC),
+            timezone="Europe/Paris",
+        )
+        apply_rule(master, "RRULE:FREQ=SECONDLY")
+        master.save()
+
+        with self.assertLogs("workspace.calendar.recurrence", "WARNING") as logs:
+            occs = list(
+                next_occurrences_after(
+                    master, datetime(2026, 1, 1, tzinfo=UTC), limit=5
+                )
+            )
+        # Structural: the walk stops at the pre-window budget rather than
+        # grinding through two years of seconds. Asserted by the log and the
+        # empty result, not by a wall clock the CI runner does not control.
+        self.assertEqual(occs, [])
+        self.assertIn("skipping to the window", logs.output[0])

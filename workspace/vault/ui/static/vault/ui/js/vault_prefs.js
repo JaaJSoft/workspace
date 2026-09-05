@@ -1,9 +1,9 @@
-// The preferences both vault screens carry, and the device they are set on.
+// The preferences the vault carries on the account, as opposed to the ones
+// vault_view_prefs.js keeps on the device.
 //
 // A mixin rather than a partial's own component: the panel it backs is
 // included in a sidebar whose scope is the page's component, so the state has
-// to be on that component - on both of them, identically, because the listing
-// and the browser show the same panel.
+// to be on that component.
 //
 // Methods, never getters: object spread copies values, so a `get` here would
 // be evaluated once at composition and frozen.

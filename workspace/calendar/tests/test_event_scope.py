@@ -5,6 +5,7 @@ from django.test import TestCase
 
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services.event_scope import cancel_event, update_event
+from workspace.calendar.services.recurrence_rule import apply_rule
 
 User = get_user_model()
 
@@ -27,10 +28,11 @@ class ScopedEditStorageInvariantsTests(TestCase):
             # switch on the last Sunday of the month.
             "start": datetime(2026, 3, 16, 9, 0, tzinfo=UTC),
             "end": datetime(2026, 3, 16, 10, 0, tzinfo=UTC),
-            "recurrence_frequency": "weekly",
-            "recurrence_interval": 1,
         }
-        return Event.objects.create(**{**defaults, **kwargs})
+        event = Event(**{**defaults, **kwargs})
+        apply_rule(event, "RRULE:FREQ=WEEKLY;INTERVAL=1")
+        event.save()
+        return event
 
     def test_future_split_carries_the_series_timezone(self):
         master = self._weekly(timezone=PARIS)
@@ -115,7 +117,7 @@ class ScopedEditStorageInvariantsTests(TestCase):
         cancel_event(master, self.user, scope="this", original_start=second)
 
         master.refresh_from_db()
-        self.assertIsNone(master.recurrence_end)
+        self.assertIsNone(master.recurrence_until)
         self.assertEqual(
             Event.objects.filter(recurrence_parent=master, is_cancelled=True).count(), 1
         )

@@ -1,0 +1,370 @@
+from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from django.test import TestCase, override_settings
+from django.utils import timezone
+
+from workspace.files.models import File, FileScan
+from workspace.files.services.scanning.base import ScanVerdict
+from workspace.files.services.scanning.policy import is_blocked
+from workspace.files.tasks import scan_file
+
+User = get_user_model()
+ENABLED = {"FILES_MALWARE_SCAN_ENABLED": True}
+
+
+class _StubScanner:
+    def __init__(self, verdict):
+        self.verdict = verdict
+        self.calls = []
+
+    def scan(self, stream, *, name=""):
+        self.calls.append(stream.read())
+        return self.verdict
+
+    def health(self):
+        raise AssertionError("not used here")
+
+
+class _RacingScanner:
+    """Replaces the row's content while its own scan is still in flight.
+
+    Stands in for the real ordering: a slow scan of a large infected upload
+    returning after the user has already replaced the file and after the
+    second scan wrote its verdict.
+    """
+
+    def __init__(self, verdict, file_obj, new_hash):
+        self.verdict = verdict
+        self.file_obj = file_obj
+        self.new_hash = new_hash
+
+    def scan(self, stream, *, name=""):
+        stream.read()
+        File.objects.filter(pk=self.file_obj.pk).update(content_hash=self.new_hash)
+        return self.verdict
+
+    def health(self):
+        raise AssertionError("not used here")
+
+
+class ScanTaskTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="task", password="p")
+
+    def _file(self, name="a.txt", body=b"hello", size=None):
+        f = File(owner=self.user, name=name, node_type=File.NodeType.FILE)
+        f.content = ContentFile(body, name=name)
+        f.size = len(body) if size is None else size
+        f.save()
+        return f
+
+    def _run(self, file_obj, verdict):
+        scanner = _StubScanner(verdict)
+        with (
+            override_settings(**ENABLED),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            result = scan_file(str(file_obj.uuid))
+        return result, scanner
+
+    def test_clean_verdict_is_persisted(self):
+        f = self._file()
+        result, scanner = self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        self.assertEqual(result["status"], FileScan.Status.CLEAN)
+        self.assertEqual(f.scan.status, FileScan.Status.CLEAN)
+        self.assertIsNotNone(f.scan.scanned_at)
+        self.assertEqual(scanner.calls, [b"hello"])
+
+    def test_infected_verdict_records_the_signature(self):
+        f = self._file()
+        self._run(
+            f,
+            ScanVerdict(status=FileScan.Status.INFECTED, signature="Unit.Test"),
+        )
+        self.assertEqual(f.scan.status, FileScan.Status.INFECTED)
+        self.assertEqual(f.scan.signature, "Unit.Test")
+
+    def test_rescan_overwrites_the_previous_verdict(self):
+        f = self._file()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+        self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        self.assertEqual(FileScan.objects.filter(file=f).count(), 1)
+        f.refresh_from_db()
+        self.assertEqual(f.scan.status, FileScan.Status.CLEAN)
+
+    def test_oversize_file_is_skipped_without_contacting_the_scanner(self):
+        f = self._file(body=b"x" * 50)
+        scanner = _StubScanner(ScanVerdict(status=FileScan.Status.CLEAN))
+        with (
+            override_settings(**ENABLED, FILES_MALWARE_SCAN_MAX_BYTES=10),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            scan_file(str(f.uuid))
+        self.assertEqual(f.scan.status, FileScan.Status.SKIPPED)
+        self.assertEqual(scanner.calls, [])
+
+    def test_truncated_clean_scan_becomes_skipped(self):
+        """A stale size column let an oversize file through; the reader caught
+        it, so a clean answer about the first N bytes is not a clean file."""
+        f = self._file(body=b"x" * 50, size=5)
+        scanner = _StubScanner(ScanVerdict(status=FileScan.Status.CLEAN))
+        with (
+            override_settings(**ENABLED, FILES_MALWARE_SCAN_MAX_BYTES=10),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            scan_file(str(f.uuid))
+        self.assertEqual(f.scan.status, FileScan.Status.SKIPPED)
+
+    def test_truncated_infected_scan_stays_infected(self):
+        f = self._file(body=b"x" * 50, size=5)
+        scanner = _StubScanner(
+            ScanVerdict(status=FileScan.Status.INFECTED, signature="Unit.Test")
+        )
+        with (
+            override_settings(**ENABLED, FILES_MALWARE_SCAN_MAX_BYTES=10),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            scan_file(str(f.uuid))
+        self.assertEqual(f.scan.status, FileScan.Status.INFECTED)
+
+    def test_folder_is_skipped(self):
+        folder = File.objects.create(
+            owner=self.user, name="d", node_type=File.NodeType.FOLDER
+        )
+        result, scanner = self._run(folder, ScanVerdict(status=FileScan.Status.CLEAN))
+        self.assertEqual(result["status"], "not_applicable")
+        self.assertFalse(FileScan.objects.filter(file=folder).exists())
+
+    def test_missing_blob_is_an_error_verdict(self):
+        f = self._file()
+        f.content.storage.delete(f.content.name)
+        self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        self.assertEqual(f.scan.status, FileScan.Status.ERROR)
+
+    def test_unknown_uuid_is_not_found(self):
+        with override_settings(**ENABLED):
+            self.assertEqual(scan_file("not-a-uuid")["status"], "not_found")
+
+    def test_disabled_scanning_writes_nothing(self):
+        f = self._file()
+        with override_settings(FILES_MALWARE_SCAN_ENABLED=False):
+            result = scan_file(str(f.uuid))
+        self.assertEqual(result["status"], "disabled")
+        self.assertFalse(FileScan.objects.filter(file=f).exists())
+
+    def test_blocking_verdict_drops_the_search_document(self):
+        f = self._file()
+        with patch("workspace.files.services.search_index.unindex_file") as unindex:
+            self._run(
+                f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Unit.Test")
+            )
+        unindex.assert_called_once()
+
+    def test_first_clean_verdict_does_not_reindex(self):
+        """The upload pipeline already indexed the file for the same event, so
+        a second pass would extract the text twice and race that task for the
+        one FTS row."""
+        f = self._file()
+        with patch("workspace.files.services.search_index.index_file") as index:
+            self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        index.assert_not_called()
+
+    def test_a_file_coming_back_clean_is_reindexed(self):
+        f = self._file()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+        with patch("workspace.files.services.search_index.index_file") as index:
+            self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        index.assert_called_once()
+
+    def test_a_file_coming_back_clean_gets_its_thumbnail_back(self):
+        """Quarantining deleted it, so clearing the quarantine owes it back."""
+        f = self._file(name="a.png")
+        File.objects.filter(pk=f.pk).update(type="png")
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+        with patch(
+            "workspace.files.services.thumbnails.generation.generate_thumbnail",
+            return_value=True,
+        ) as generate:
+            self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        generate.assert_called_once()
+        f.refresh_from_db()
+        self.assertTrue(f.has_thumbnail)
+
+    def test_a_clearance_does_not_carry_over_to_replaced_content(self):
+        """An administrator vouched for h1; the verdict about h2 is nobody's.
+
+        The clearance pins itself to FileScan.content_hash, and this task
+        overwrites that field - so leaving the override columns alone would
+        hand the new bytes a clearance nobody granted them.
+        """
+        f = self._file()
+        File.objects.filter(pk=f.pk).update(content_hash="h1")
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+        FileScan.objects.filter(file=f).update(
+            overridden_at=timezone.now(),
+            overridden_by=self.user,
+            override_reason="Confirmed benign",
+        )
+        f.refresh_from_db()
+        with override_settings(**ENABLED):
+            self.assertFalse(is_blocked(f))
+
+        File.objects.filter(pk=f.pk).update(content_hash="h2")
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Real"))
+
+        f.refresh_from_db()
+        with override_settings(**ENABLED):
+            self.assertTrue(is_blocked(f))
+        scan = FileScan.objects.get(file=f)
+        self.assertIsNone(scan.overridden_at)
+        self.assertIsNone(scan.overridden_by)
+        self.assertEqual(scan.override_reason, "")
+
+    def test_a_clearance_survives_a_rescan_of_the_very_same_bytes(self):
+        """Otherwise the next scan_files pass undoes every clearance."""
+        f = self._file()
+        File.objects.filter(pk=f.pk).update(content_hash="h1")
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+        FileScan.objects.filter(file=f).update(
+            overridden_at=timezone.now(), overridden_by=self.user
+        )
+
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.INFECTED, signature="Old"))
+
+        f.refresh_from_db()
+        with override_settings(**ENABLED):
+            self.assertFalse(is_blocked(f))
+        self.assertIsNotNone(FileScan.objects.get(file=f).overridden_at)
+
+    def _run_racing(self, file_obj, verdict, new_hash):
+        scanner = _RacingScanner(verdict, file_obj, new_hash)
+        with (
+            override_settings(**ENABLED),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            return scan_file(str(file_obj.uuid))
+
+    def test_a_verdict_about_replaced_content_is_discarded(self):
+        f = self._file()
+        f.content_hash = "v1"
+        f.save(update_fields=["content_hash"])
+        result = self._run_racing(
+            f,
+            ScanVerdict(status=FileScan.Status.INFECTED, signature="Unit.Test"),
+            "v2",
+        )
+        self.assertEqual(result["status"], "stale")
+        self.assertFalse(FileScan.objects.filter(file=f).exists())
+
+    def test_a_late_verdict_does_not_overwrite_the_newer_one(self):
+        """The scan of v1 outlives the scan of v2 and returns last.
+
+        Without the hash guard it quarantines content it never read, and the
+        quarantine is permanent: max_retries=0, and scan_files skips a file
+        that already has a row unless it is run with --rescan.
+        """
+        f = self._file()
+        f.content_hash = "v1"
+        f.save(update_fields=["content_hash"])
+        FileScan.objects.create(
+            file=f,
+            status=FileScan.Status.CLEAN,
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+        self._run_racing(
+            f,
+            ScanVerdict(status=FileScan.Status.INFECTED, signature="Unit.Test"),
+            "v2",
+        )
+        f.refresh_from_db()
+        self.assertEqual(f.scan.status, FileScan.Status.CLEAN)
+        self.assertEqual(f.scan.signature, "")
+
+
+class ScanVerdictContentHashTests(TestCase):
+    """A verdict records which bytes it describes."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="hashtask", password="p")
+
+    def _file(self, body=b"hello", name="a.txt"):
+        """Built through FileService, which is what computes content_hash.
+
+        A bare File(...).save() leaves the hash empty, so a fixture that
+        skipped the service would silently assert "" == "" and prove nothing.
+        """
+        from workspace.files.services import FileService
+
+        return FileService.create_file(
+            self.user, name, content=ContentFile(body, name=name)
+        )
+
+    def _run(self, file_obj, verdict):
+        scanner = _StubScanner(verdict)
+        with (
+            override_settings(**ENABLED),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            return scan_file(str(file_obj.uuid))
+
+    def test_the_verdict_stores_the_hash_of_the_bytes_it_describes(self):
+        f = self._file()
+        self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        f.refresh_from_db()
+        self.assertEqual(f.scan.content_hash, f.content_hash)
+        self.assertTrue(f.scan.content_hash)
+
+    def test_a_rescan_of_new_bytes_overwrites_the_recorded_hash(self):
+        f = self._file(b"first")
+        self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        first_hash = f.scan.content_hash
+
+        from workspace.files.services import FileService
+
+        FileService.update_content(f, ContentFile(b"second", name="a.txt"))
+        f.refresh_from_db()
+        self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
+        f.refresh_from_db()
+        self.assertNotEqual(f.scan.content_hash, first_hash)
+        self.assertEqual(f.scan.content_hash, f.content_hash)
+
+    def test_an_oversize_skip_still_records_the_hash(self):
+        f = self._file(b"x" * 50, name="big.txt")
+        scanner = _StubScanner(ScanVerdict(status=FileScan.Status.CLEAN))
+        with (
+            override_settings(**ENABLED, FILES_MALWARE_SCAN_MAX_BYTES=10),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            scan_file(str(f.uuid))
+        f.refresh_from_db()
+        self.assertEqual(f.scan.status, FileScan.Status.SKIPPED)
+        self.assertEqual(f.scan.content_hash, f.content_hash)
+        self.assertTrue(f.scan.content_hash)

@@ -15,7 +15,12 @@
   class="flex-1 overflow-auto px-2 pt-2 min-h-0"
   @contextmenu="openBackgroundMenu($event)"
 >
-  <template x-if="isEmpty() && !filtering()">
+  {% comment %}
+    Gated on the open vault as well: with none, the banner above already says
+    why the listing is bare, and "use New to add an entry" would point at a
+    vault there is nothing to write into.
+  {% endcomment %}
+  <template x-if="openVault && isEmpty() && !filtering()">
     <div
       class="flex flex-col items-center justify-center h-full gap-3 text-base-content/40 py-16"
     >
@@ -49,127 +54,137 @@
     pane. Media queries cannot help: they follow the viewport, and it is the
     pane that narrows.
   {% endcomment %}
-  <table
-    class="table table-fixed min-w-[46rem] [&_td]:align-middle [&_th]:align-middle"
-    x-show="viewMode === 'list' && !isEmpty()"
-    x-cloak
-  >
-    <thead class="sticky top-0 z-10">
-      <tr class="bg-base-200">
-        <th class="w-10">
-          <input
-            type="checkbox"
-            class="checkbox checkbox-sm align-middle"
-            aria-label="Select every entry shown"
-            :checked="selectAllState() === 'all'"
-            x-effect="$el.indeterminate = selectAllState() === 'partial'"
-            @click="toggleSelectAll()"
-          />
-        </th>
-        <th class="w-12"><span class="sr-only">Type</span></th>
-        <th>Name</th>
-        <th class="w-10 text-center">Fav</th>
-        <th class="hidden lg:table-cell w-36">Tags</th>
-        <th class="hidden sm:table-cell w-24">Type</th>
-        <th
-          class="hidden md:table-cell w-32"
-          x-text="view === 'trash' ? 'Deleted' : 'Modified'"
-        ></th>
-        <th class="w-14"><span class="sr-only">Actions</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      <template x-for="folder in visibleFolders()" :key="folder.uuid">
-        <tr
-          class="hover cursor-pointer"
-          @click="openFolderFromRow(folder)"
-          @contextmenu.stop="openFolderMenu($event, folder)"
-        >
-          <td></td>
-          <td>
-            <i data-lucide="folder" class="w-5 h-5 text-warning"></i>
-          </td>
-          <td class="font-medium truncate" x-text="folder.name"></td>
-          {% comment %}
-            A folder carries no icon, colour or favourite, so these cells stay
-            empty rather than inventing a value the model cannot hold.
-          {% endcomment %}
-          <td></td>
-          <td class="hidden lg:table-cell"></td>
-          <td class="hidden sm:table-cell opacity-60 text-sm">Folder</td>
-          <td class="hidden md:table-cell opacity-60 text-sm">-</td>
-          <td @click.stop>
-            <button
-              type="button"
-              class="btn btn-ghost btn-xs btn-square"
-              :aria-label="'Actions for ' + folder.name"
-              @click="openFolderMenu($event, folder)"
-            >
-              <i data-lucide="more-horizontal" class="w-4 h-4"></i>
-            </button>
-          </td>
-        </tr>
-      </template>
-
-      <template x-for="entry in visibleEntries()" :key="entry.uuid">
-        <tr
-          class="hover cursor-pointer"
-          :class="[isSelected(entry.uuid) ? 'bg-primary/5' : '', panelEntry === entry ? 'bg-primary/10' : '']"
-          @click="openEntryFromRow(entry)"
-          @contextmenu.stop="openMenu($event, entry)"
-        >
-          <td @click.stop>
+  {% comment %}
+    x-if, not x-show: the mosaic below draws the same rows, and hiding one of
+    the two with CSS still built and bound every entry twice on each load and
+    each filter change. Switching rebuilds the other view, which is a gesture
+    nobody makes in a loop. Nothing inside declares x-data, so there is no
+    init() whose registrations a destroy() would owe; the icons come back
+    because the observer in common/static/ui/js/lucide.js watches the
+    document for the placeholders x-if adds.
+  {% endcomment %}
+  <template x-if="viewMode === 'list' && !isEmpty()">
+    <table
+      data-testid="entry-list"
+      class="table table-fixed min-w-[46rem] [&_td]:align-middle [&_th]:align-middle"
+    >
+      <thead class="sticky top-0 z-10">
+        <tr class="bg-base-200">
+          <th class="w-10">
             <input
               type="checkbox"
               class="checkbox checkbox-sm align-middle"
-              :aria-label="'Select ' + entry.name"
-              :checked="isSelected(entry.uuid)"
-              @click="toggleSelection(entry.uuid)"
+              aria-label="Select every entry shown"
+              :checked="selectAllState() === 'all'"
+              x-effect="$el.indeterminate = selectAllState() === 'partial'"
+              @click="toggleSelectAll()"
             />
-          </td>
-          <td>
-            <i :data-lucide="typeIcon(entry.type)" class="w-5 h-5 text-error"></i>
-          </td>
-          <td class="truncate">
-            <span class="font-medium" x-text="entry.name"></span>
-            <span class="opacity-50 text-sm ml-2" x-text="entry.username"></span>
-          </td>
-          <td class="text-center">
-            <i
-              data-lucide="star"
-              class="w-4 h-4 inline"
-              :class="entry.favorite ? 'fill-current text-warning' : 'opacity-25'"
-            ></i>
-          </td>
-          <td class="hidden lg:table-cell truncate">
-            <template x-for="tagUuid in entry.tags" :key="tagUuid">
-              <template x-if="tagById(tagUuid)">
-                <tag-chip size="sm" :name="tagById(tagUuid).name" :color="tagById(tagUuid).color"></tag-chip>
-              </template>
-            </template>
-          </td>
-          <td
-            class="hidden sm:table-cell opacity-60 text-sm"
-            x-text="typeLabel(entry.type)"
-          ></td>
-          <td
-            class="hidden md:table-cell opacity-60 text-sm"
-            x-text="shortDate(entry.modified)"
-          ></td>
-          <td @click.stop>
-            <button
-              type="button"
-              class="btn btn-ghost btn-xs btn-square"
-              :aria-label="'Actions for ' + entry.name"
-              @click="openMenu($event, entry)"
-            >
-              <i data-lucide="more-horizontal" class="w-4 h-4"></i>
-            </button>
-          </td>
+          </th>
+          <th class="w-12"><span class="sr-only">Type</span></th>
+          <th>Name</th>
+          <th class="w-10 text-center">Fav</th>
+          <th class="hidden lg:table-cell w-36">Tags</th>
+          <th class="hidden sm:table-cell w-24">Type</th>
+          <th
+            class="hidden md:table-cell w-32"
+            x-text="view === 'trash' ? 'Deleted' : 'Modified'"
+          ></th>
+          <th class="w-14"><span class="sr-only">Actions</span></th>
         </tr>
-      </template>
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        <template x-for="folder in visibleFolders()" :key="folder.uuid">
+          <tr
+            class="hover cursor-pointer"
+            @click="openFolderFromRow(folder)"
+            @contextmenu.stop="openFolderMenu($event, folder)"
+          >
+            <td></td>
+            <td>
+              <i data-lucide="folder" class="w-5 h-5 text-warning"></i>
+            </td>
+            <td class="font-medium truncate" x-text="folder.name"></td>
+            {% comment %}
+            A folder carries no icon, colour or favourite, so these cells stay
+            empty rather than inventing a value the model cannot hold.
+            {% endcomment %}
+            <td></td>
+            <td class="hidden lg:table-cell"></td>
+            <td class="hidden sm:table-cell opacity-60 text-sm">Folder</td>
+            <td class="hidden md:table-cell opacity-60 text-sm">-</td>
+            <td @click.stop>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square"
+                :aria-label="'Actions for ' + folder.name"
+                @click="openFolderMenu($event, folder)"
+              >
+                <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+              </button>
+            </td>
+          </tr>
+        </template>
+
+        <template x-for="entry in visibleEntries()" :key="entry.uuid">
+          <tr
+            class="hover cursor-pointer"
+            :class="[isSelected(entry.uuid) ? 'bg-primary/5' : '', panelEntry === entry ? 'bg-primary/10' : '']"
+            @click="openEntryFromRow(entry)"
+            @contextmenu.stop="openMenu($event, entry)"
+          >
+            <td @click.stop>
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm align-middle"
+                :aria-label="'Select ' + entry.name"
+                :checked="isSelected(entry.uuid)"
+                @click="toggleSelection(entry.uuid)"
+              />
+            </td>
+            <td>
+              <i :data-lucide="typeIcon(entry.type)" class="w-5 h-5 text-error"></i>
+            </td>
+            <td class="truncate">
+              <span class="font-medium" x-text="entry.name"></span>
+              <span class="opacity-50 text-sm ml-2" x-text="entry.username"></span>
+            </td>
+            <td class="text-center">
+              <i
+                data-lucide="star"
+                class="w-4 h-4 inline"
+                :class="entry.favorite ? 'fill-current text-warning' : 'opacity-25'"
+              ></i>
+            </td>
+            <td class="hidden lg:table-cell truncate">
+              <template x-for="tagUuid in entry.tags" :key="tagUuid">
+                <template x-if="tagById(tagUuid)">
+                  <tag-chip size="sm" :name="tagById(tagUuid).name" :color="tagById(tagUuid).color"></tag-chip>
+                </template>
+              </template>
+            </td>
+            <td
+              class="hidden sm:table-cell opacity-60 text-sm"
+              x-text="typeLabel(entry.type)"
+            ></td>
+            <td
+              class="hidden md:table-cell opacity-60 text-sm"
+              x-text="shortDate(entry.modified)"
+            ></td>
+            <td @click.stop>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square"
+                :aria-label="'Actions for ' + entry.name"
+                @click="openMenu($event, entry)"
+              >
+                <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+              </button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </template>
 
   {% include "vault/ui/partials/browser_mosaic.html" %}
 </div>

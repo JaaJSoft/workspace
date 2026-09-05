@@ -147,8 +147,14 @@ test('the password and the secret bytes are gone once the kit is shown', () => {
 // the shape of the calls, so the tests can exercise what the component does
 // around them - which is where a lost response turns into a vault nobody can
 // open.
+// What seal was handed, so a test can read the header the component asked
+// for. The bytes themselves are the vector suites' business; what is checked
+// here is the label the component puts on them.
+const SEAL_CALLS = [];
+
 const CRYPTO_STUB = {
   uuidV7: () => 'first-vault-uuid',
+  KDF_DIRECT: 0,
   KDF_HKDF_SHA256: 1,
   ARGON2_PARAMS: {},
   PUBKEY_ALG_X25519: 1,
@@ -168,7 +174,10 @@ const CRYPTO_STUB = {
   toBase64Url: () => 'b64',
   deriveAmk: async () => new Uint8Array(32),
   hkdf: async () => new Uint8Array(32),
-  seal: async () => new Uint8Array(8),
+  seal: async (key, plaintext, ad, options) => {
+    SEAL_CALLS.push({ ad, options });
+    return new Uint8Array(8);
+  },
   signBytes: async () => new Uint8Array(64),
   encodePublicKey: () => new Uint8Array(33),
   importSigner: async () => ({ sign: async () => new Uint8Array(64) }),
@@ -181,6 +190,7 @@ const SUBTLE_STUB = {
 };
 
 function sealing({ responses, ...extra } = {}) {
+  SEAL_CALLS.length = 0;
   const calls = [];
   const app = component({
     vaultCrypto: CRYPTO_STUB,
@@ -218,6 +228,28 @@ test('a sealed account reaches the kit step', async () => {
   // needs a signer and the account's own key-exchange public key.
   assert.ok(app.vaultSigner);
   assert.ok(app.accountKexPublic);
+});
+
+test('the account wraps declare the derivation that actually produced them', async () => {
+  // Both are sealed with the unwrap key as it is, not with a per-ciphertext
+  // HKDF output, and a password change re-seals them rather than bumping a
+  // version - so the header says direct, version zero. Nothing reads these
+  // bytes at runtime, which is exactly why only a test keeps them honest.
+  const { app } = sealing({
+    responses: {
+      '/api/v1/vault/account/init': INIT_OK,
+      '/api/v1/vault/account/finalize': { ok: true, status: 201 },
+    },
+  });
+
+  await app.generateAndSeal();
+
+  const wraps = SEAL_CALLS.filter((call) => call.ad === 'kex' || call.ad === 'sig');
+  assert.equal(wraps.length, 2, 'both account wraps are sealed here');
+  for (const wrap of wraps) {
+    assert.equal(wrap.options.kdfId, CRYPTO_STUB.KDF_DIRECT);
+    assert.equal(wrap.options.keyVersion, 0);
+  }
 });
 
 test('an init the server refuses does not reach the kit step', async () => {

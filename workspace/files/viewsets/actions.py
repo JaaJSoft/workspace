@@ -1,5 +1,6 @@
 """Bulk actions endpoint + shared-with-me + AI edit."""
 
+import json
 import logging
 
 from django.conf import settings
@@ -25,8 +26,11 @@ class ActionsMixin:
         summary="Get available actions for files/folders",
         description=(
             "Return available actions for a list of file/folder UUIDs. "
-            "Returns a map keyed by UUID, each value being the list of "
-            "available actions for that item."
+            "`actions` is a catalogue keyed by action key, `files` maps each "
+            "UUID to the catalogue keys that apply to it. A key is the action "
+            "id, suffixed with `#n` when the same action serializes "
+            "differently for some files (a toggle whose label follows the "
+            "file's state)."
         ),
         request={
             "application/json": {
@@ -44,7 +48,7 @@ class ActionsMixin:
         responses={
             200: OpenApiResponse(
                 response=OpenApiTypes.OBJECT,
-                description="Map of UUID to list of available actions.",
+                description="Catalogue of actions and, per UUID, the keys that apply.",
             ),
             400: OpenApiResponse(description="Invalid request."),
             404: OpenApiResponse(description="One or more UUIDs not found."),
@@ -76,16 +80,20 @@ class ActionsMixin:
             folder_id=OuterRef("pk"),
         )
 
+        from workspace.files.services.scanning.policy import with_scan
+
         file_objects = list(
-            File.objects.filter(
-                FileService.accessible_files_q(request.user),
-                uuid__in=uuids,
+            with_scan(
+                File.objects.filter(
+                    FileService.accessible_files_q(request.user),
+                    uuid__in=uuids,
+                )
+                .annotate(
+                    is_favorite=Exists(favorite_subquery),
+                    is_pinned=Exists(pinned_subquery),
+                )
+                .distinct()
             )
-            .annotate(
-                is_favorite=Exists(favorite_subquery),
-                is_pinned=Exists(pinned_subquery),
-            )
-            .distinct()
         )
 
         if len(file_objects) != len(set(uuids)):
@@ -96,14 +104,34 @@ class ActionsMixin:
 
         permissions = FileService.get_permissions_bulk(request.user, file_objects)
 
-        result = {}
+        # The same dozen actions repeat for every file, so the response is a
+        # catalogue of distinct serialized actions plus, per file, the keys
+        # that apply: a 1,500-entry listing answered 2 MB of repeated
+        # objects before. A key is the action id, suffixed when the same
+        # action serializes differently for some files.
+        catalogue = {}
+        keys_by_payload = {}
+        files = {}
         for file_obj in file_objects:
-            result[str(file_obj.uuid)] = ActionRegistry.get_available_actions(
+            keys = []
+            for data in ActionRegistry.get_available_actions(
                 request.user,
                 file_obj,
                 permission=permissions[file_obj.pk],
-            )
-        return Response(result)
+            ):
+                payload = json.dumps(data, sort_keys=True)
+                key = keys_by_payload.get(payload)
+                if key is None:
+                    key = data["id"]
+                    variant = 1
+                    while key in catalogue:
+                        variant += 1
+                        key = f"{data['id']}#{variant}"
+                    catalogue[key] = data
+                    keys_by_payload[payload] = key
+                keys.append(key)
+            files[str(file_obj.uuid)] = keys
+        return Response({"actions": catalogue, "files": files})
 
     @extend_schema(
         summary="Files shared with me",
@@ -164,6 +192,7 @@ class ActionsMixin:
         responses={
             200: OpenApiResponse(description="Base64-encoded edited image."),
             400: OpenApiResponse(description="Missing prompt."),
+            403: OpenApiResponse(description="File is quarantined."),
             404: OpenApiResponse(description="File not found or AI not configured."),
             502: OpenApiResponse(description="AI backend error."),
         },
@@ -178,6 +207,14 @@ class ActionsMixin:
             raise Http404
 
         file_obj = self.get_object()
+
+        # The stored blob is posted to the configured AI provider, so this is
+        # a read path like any other. _quarantine_response comes from
+        # ContentMixin - both mixins compose into FileViewSet, and the shape
+        # has to stay identical to the content and download endpoints'.
+        blocked = self._quarantine_response(file_obj)
+        if blocked is not None:
+            return blocked
 
         if file_obj.node_type != File.NodeType.FILE or file_obj.category != "image":
             return Response(

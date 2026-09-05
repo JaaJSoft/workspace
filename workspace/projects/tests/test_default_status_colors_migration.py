@@ -3,6 +3,7 @@ from importlib import import_module
 from django.apps import apps
 from django.test import TestCase
 
+from workspace.common.tests.migrations import schema_editor_stub
 from workspace.projects.models import TaskStatus
 
 from .base import ProjectTestMixin
@@ -22,7 +23,7 @@ class DefaultStatusColorsMigrationTests(ProjectTestMixin, TestCase):
     def test_colors_matching_default_columns(self):
         self._simulate_legacy_state()
 
-        colorize(apps, None)
+        colorize(apps, schema_editor_stub())
 
         colors = list(
             self.project.statuses.order_by("position").values_list("color", flat=True)
@@ -38,7 +39,7 @@ class DefaultStatusColorsMigrationTests(ProjectTestMixin, TestCase):
         colored.color = "#ec4899"
         colored.save(update_fields=["color"])
 
-        colorize(apps, None)
+        colorize(apps, schema_editor_stub())
 
         renamed.refresh_from_db()
         colored.refresh_from_db()

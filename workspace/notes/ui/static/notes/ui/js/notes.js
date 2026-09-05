@@ -146,7 +146,7 @@ window.notesApp = function notesApp(config) {
 
     return {
         // Sidebar
-        collapsed: false,
+        collapsed: window.sidebarPreference.initial(),
         activeView: initialView,
         activeId: config.id || null,
         viewTitle: titleMap[initialView] || 'My Notes',
@@ -203,8 +203,6 @@ window.notesApp = function notesApp(config) {
         _actionsFetchGen: 0,
 
         async init() {
-            this.collapsed = localStorage.getItem('notes-sidebar-collapsed') === 'true';
-
             // Load folder data from embedded JSON
             this._loadFolderData();
 
@@ -725,18 +723,9 @@ window.notesApp = function notesApp(config) {
         async _fetchActionsForSelected(uuid) {
             const gen = ++this._actionsFetchGen;
             try {
-                const resp = await fetch('/api/v1/files/actions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCSRFToken(),
-                    },
-                    body: JSON.stringify({ uuids: [uuid] }),
-                });
+                const data = await window.fileActions.fetchActions([uuid]);
                 if (gen !== this._actionsFetchGen) return;
-                if (!resp.ok) return;
-                const data = await resp.json();
-                if (gen !== this._actionsFetchGen) return;
+                if (!data) return;
                 const list = data[uuid] || [];
                 this.selectedNoteActionIds = list.map(function(a) { return a.id; });
             } catch (e) {
@@ -918,25 +907,13 @@ window.notesApp = function notesApp(config) {
 
         async _fetchFolderActions(uuid) {
             try {
-                const resp = await fetch('/api/v1/files/actions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCSRFToken(),
-                    },
-                    body: JSON.stringify({ uuids: [uuid] }),
+                const data = await window.fileActions.fetchActions([uuid]);
+                const allActions = data ? data[uuid] || [] : [];
+                // Filter to relevant folder actions for the notes sidebar
+                const relevant = ['rename', 'delete'];
+                this.ctxMenu.actions = allActions.filter(function(a) {
+                    return relevant.indexOf(a.id) !== -1;
                 });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    const allActions = data[uuid] || [];
-                    // Filter to relevant folder actions for the notes sidebar
-                    const relevant = ['rename', 'delete'];
-                    this.ctxMenu.actions = allActions.filter(function(a) {
-                        return relevant.indexOf(a.id) !== -1;
-                    });
-                } else {
-                    this.ctxMenu.actions = [];
-                }
             } catch (e) {
                 this.ctxMenu.actions = [];
             }
@@ -948,25 +925,13 @@ window.notesApp = function notesApp(config) {
 
         async _fetchNoteActions(uuid) {
             try {
-                const resp = await fetch('/api/v1/files/actions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCSRFToken(),
-                    },
-                    body: JSON.stringify({ uuids: [uuid] }),
+                const data = await window.fileActions.fetchActions([uuid]);
+                const allActions = data ? data[uuid] || [] : [];
+                // Show relevant note actions (favorite, rename, delete)
+                const relevant = ['toggle_favorite', 'rename', 'delete'];
+                this.ctxMenu.actions = allActions.filter(function(a) {
+                    return relevant.indexOf(a.id) !== -1;
                 });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    const allActions = data[uuid] || [];
-                    // Show relevant note actions (favorite, rename, delete)
-                    const relevant = ['toggle_favorite', 'rename', 'delete'];
-                    this.ctxMenu.actions = allActions.filter(function(a) {
-                        return relevant.indexOf(a.id) !== -1;
-                    });
-                } else {
-                    this.ctxMenu.actions = [];
-                }
             } catch (e) {
                 this.ctxMenu.actions = [];
             }
@@ -1494,12 +1459,20 @@ window.notesApp = function notesApp(config) {
         },
 
         toggleCollapse() {
+            if (this.isMobile()) return;
             this.collapsed = !this.collapsed;
-            localStorage.setItem('notes-sidebar-collapsed', this.collapsed);
+            window.sidebarPreference.save('notes', this.collapsed);
         },
 
         isMobile() {
             return window.innerWidth < 1024;
+        },
+
+        // The drawer is off-canvas below `lg`, so an opened one is the full
+        // sidebar whatever the desktop preference says: a 64px icon rail is
+        // no use on a phone.
+        sidebarCollapsed() {
+            return this.isMobile() ? false : this.collapsed;
         },
 
         _closeDrawerOnMobile() {

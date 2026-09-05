@@ -6,6 +6,9 @@ window.calendarApp = function calendarApp() {
     try { calendarsData = JSON.parse(calsEl.textContent); } catch (e) {}
   }
 
+  // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
+  const dayKeyFormatter = window.zonedFormatter('en-CA');
+
   return {
     // ── State ────────────────────────────────────────────────
     calendar: null,
@@ -17,7 +20,7 @@ window.calendarApp = function calendarApp() {
     prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, timeFormat: '24h', defaultAllDay: false, showDeclined: false, notifyPollVotes: true, showTasks: true },
 
     // Sidebar
-    collapsed: localStorage.getItem('calendarSidebarCollapsed') === 'true',
+    collapsed: window.sidebarPreference.initial(),
     ownedCalendars: calendarsData?.owned || [],
     subscribedCalendars: calendarsData?.subscribed || [],
     visibleCalendars: {},  // { uuid: true } for reactive tracking
@@ -52,6 +55,9 @@ window.calendarApp = function calendarApp() {
       recurrence_frequency: null,
       recurrence_interval: 1,
       recurrence_end: '',
+      recurrence_rule: '',
+      recurrence_simple: null,
+      recurrence_summary: '',
     },
     _panelRaw: null,
     eventOwner: null,
@@ -245,7 +251,7 @@ window.calendarApp = function calendarApp() {
     toggleCollapse() {
       if (this.isMobile()) return;
       this.collapsed = !this.collapsed;
-      localStorage.setItem('calendarSidebarCollapsed', this.collapsed);
+      window.sidebarPreference.save('calendar', this.collapsed);
     },
 
     toggleCalendarVisibility(uuid) {
@@ -399,8 +405,7 @@ window.calendarApp = function calendarApp() {
     },
 
     _dayKeyIn(d, tz) {
-      // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
-      return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+      return dayKeyFormatter(tz).format(d);
     },
 
     _dayKey(d) {

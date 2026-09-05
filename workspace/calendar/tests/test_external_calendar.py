@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -7,6 +8,7 @@ from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.models_external import ExternalCalendar
+from workspace.calendar.recurrence import occurrences_in_range
 from workspace.calendar.services.ics_sync import sync_external_calendar
 
 User = get_user_model()
@@ -81,6 +83,20 @@ ICS_RECURRING = (
     "END:VCALENDAR\r\n"
 )
 
+ICS_RECURRING_SIMPLE = (
+    "BEGIN:VCALENDAR\r\n"
+    "VERSION:2.0\r\n"
+    "PRODID:-//Test//Test//EN\r\n"
+    "BEGIN:VEVENT\r\n"
+    "UID:ext-recurring-simple@example.com\r\n"
+    "DTSTART:20260401T090000Z\r\n"
+    "DTEND:20260401T100000Z\r\n"
+    "SUMMARY:Weekly Sync\r\n"
+    "RRULE:FREQ=WEEKLY\r\n"
+    "END:VEVENT\r\n"
+    "END:VCALENDAR\r\n"
+)
+
 ICS_WITH_ORGANIZER = (
     "BEGIN:VCALENDAR\r\n"
     "VERSION:2.0\r\n"
@@ -104,6 +120,21 @@ ICS_NO_ORGANIZER = (
     "DTSTART:20260602T100000Z\r\n"
     "DTEND:20260602T110000Z\r\n"
     "SUMMARY:Anonymous Meeting\r\n"
+    "END:VEVENT\r\n"
+    "END:VCALENDAR\r\n"
+)
+
+
+ICS_WITH_EXDATE = (
+    "BEGIN:VCALENDAR\r\n"
+    "VERSION:2.0\r\n"
+    "BEGIN:VEVENT\r\n"
+    "UID:ext-exdate@example.com\r\n"
+    "DTSTART:20260401T090000Z\r\n"
+    "DTEND:20260401T100000Z\r\n"
+    "RRULE:FREQ=DAILY;COUNT=5\r\n"
+    "EXDATE:20260403T090000Z\r\n"
+    "SUMMARY:Standup\r\n"
     "END:VEVENT\r\n"
     "END:VCALENDAR\r\n"
 )
@@ -265,12 +296,51 @@ class SyncExternalCalendarTests(TestCase):
         sync_external_calendar(self.ext)
 
         event = Event.objects.get(ical_uid="ext-recurring@example.com")
-        self.assertEqual(event.recurrence_frequency, "daily")
-        self.assertEqual(event.recurrence_interval, 1)
-        # COUNT=10 daily from April 1 → last occurrence April 10
-        self.assertIsNotNone(event.recurrence_end)
-        self.assertEqual(event.recurrence_end.day, 10)
-        self.assertEqual(event.recurrence_end.month, 4)
+        self.assertTrue(event.is_recurring)
+        self.assertIn("FREQ=DAILY", event.recurrence_rule)
+        self.assertIn("COUNT=10", event.recurrence_rule)
+        # COUNT=10 daily from April 1 → last occurrence ends April 10
+        self.assertIsNotNone(event.recurrence_until)
+        self.assertEqual(event.recurrence_until.day, 10)
+        self.assertEqual(event.recurrence_until.month, 4)
+
+    @patch("workspace.calendar.services.ics_sync.httpx2")
+    def test_sync_keeps_excluded_dates(self, mock_httpx):
+        """An EXDATE the feed sent must survive the import.
+
+        Dropping it silently resurrects an occurrence the organiser cancelled,
+        which is wrong data rather than merely unfaithful text.
+        """
+        _mock_httpx(mock_httpx, _mock_response(ICS_WITH_EXDATE))
+
+        sync_external_calendar(self.ext)
+
+        event = Event.objects.get(ical_uid="ext-exdate@example.com")
+        self.assertIn("EXDATE", event.recurrence_rule)
+        days = [
+            occ.day
+            for occ in occurrences_in_range(
+                event,
+                datetime(2026, 4, 1, tzinfo=UTC),
+                datetime(2026, 4, 10, tzinfo=UTC),
+            )
+        ]
+        # COUNT bounds the RRULE's own set (Apr 1-5) and EXDATE removes from
+        # it; the excluded day is not made up at the end.
+        self.assertEqual(days, [1, 2, 4, 5])
+
+    @patch("workspace.calendar.services.ics_sync.httpx2")
+    def test_sync_unbounded_recurring_event(self, mock_httpx):
+        # No COUNT or UNTIL on the RRULE: the series is recurring but has no
+        # derivable bound.
+        _mock_httpx(mock_httpx, _mock_response(ICS_RECURRING_SIMPLE))
+
+        sync_external_calendar(self.ext)
+
+        event = Event.objects.get(ical_uid="ext-recurring-simple@example.com")
+        self.assertTrue(event.is_recurring)
+        self.assertIn("FREQ=WEEKLY", event.recurrence_rule)
+        self.assertIsNone(event.recurrence_until)
 
     @patch("workspace.calendar.services.ics_sync.httpx2")
     def test_sync_parses_organizer_email(self, mock_httpx):

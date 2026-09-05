@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event
+from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.chat.models import Conversation, Meeting
 from workspace.chat.services.meeting_occurrences import current_occurrence
 
@@ -16,10 +17,10 @@ class OccurrenceTests(TestCase):
         self.user = User.objects.create_user(username="occ", password="x")
         self.cal = Calendar.objects.create(name="C", owner=self.user)
 
-    def _meeting(self, **event_kwargs):
-        event = Event.objects.create(
-            calendar=self.cal, owner=self.user, title="E", **event_kwargs
-        )
+    def _meeting(self, recurrence_rule="", **event_kwargs):
+        event = Event(calendar=self.cal, owner=self.user, title="E", **event_kwargs)
+        apply_rule(event, recurrence_rule)
+        event.save()
         conv = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, created_by=self.user
         )
@@ -95,8 +96,7 @@ class OccurrenceTests(TestCase):
         m = self._meeting(
             start=now - timedelta(weeks=3, minutes=5),
             end=now - timedelta(weeks=3) + timedelta(minutes=25),
-            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
-            recurrence_interval=1,
+            recurrence_rule="RRULE:FREQ=WEEKLY",
         )
         occ = current_occurrence(m, now=now)
         self.assertIsNotNone(occ)
@@ -110,8 +110,7 @@ class OccurrenceTests(TestCase):
         m = self._meeting(
             start=now - timedelta(days=3, hours=2),
             end=now - timedelta(days=3, hours=1),
-            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
-            recurrence_interval=1,
+            recurrence_rule="RRULE:FREQ=WEEKLY",
         )
         self.assertIsNone(current_occurrence(m, now=now))
 
@@ -120,8 +119,7 @@ class OccurrenceTests(TestCase):
         m = self._meeting(
             start=now - timedelta(weeks=3, minutes=5),
             end=now - timedelta(weeks=3) + timedelta(minutes=25),
-            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
-            recurrence_interval=1,
+            recurrence_rule="RRULE:FREQ=WEEKLY",
         )
         occurrence_start = m.event.start.replace(microsecond=0) + timedelta(weeks=3)
         Event.objects.create(
@@ -141,8 +139,7 @@ class OccurrenceTests(TestCase):
         m = self._meeting(
             start=now - timedelta(weeks=3, minutes=5),
             end=now - timedelta(weeks=3) + timedelta(minutes=25),
-            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
-            recurrence_interval=1,
+            recurrence_rule="RRULE:FREQ=WEEKLY",
         )
         original_start = m.event.start.replace(microsecond=0) + timedelta(weeks=3)
         # Non-zero microseconds on purpose: a materialized exception's start

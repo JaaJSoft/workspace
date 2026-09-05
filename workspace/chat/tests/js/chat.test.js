@@ -4,11 +4,14 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
 
-// chatApp() reads window.matchMedia and localStorage synchronously while
-// building its object literal (the `collapsed` field), before init() ever
-// runs, so both need a stub even for tests that never call init().
+// chatApp() reads window.matchMedia, localStorage and sidebarPreference
+// synchronously while building its object literal (the `collapsed` field),
+// before init() ever runs, so all three need to be present even for tests
+// that never call init(). sidebarPreference is loaded for real below and
+// reads #sidebar-collapsed-data, hence the document stub.
 const matchMediaStub = () => ({ matches: false, addEventListener: () => {} });
 const localStorageStub = { getItem: () => null, setItem: () => {} };
+const documentStub = { getElementById: () => null };
 
 // Integration test against the REAL chatCallMixin (not a double): a stubbed
 // mixin never declares currentParticipantKey, so it cannot catch the key
@@ -18,6 +21,7 @@ const localStorageStub = { getItem: () => null, setItem: () => {} };
 const nonCallStubs = {
   matchMedia: matchMediaStub,
   localStorage: localStorageStub,
+  document: documentStub,
   chatUiHelpersMixin: () => ({}),
   chatConversationsMixin: () => ({ _conversations: true }),
   chatMessagesMixin: () => ({ _msg: true, loadMessages: async () => {} }),
@@ -33,6 +37,7 @@ const nonCallStubs = {
 
 const integrationCtx = loadScripts(
   [
+    'workspace/core/static/core/js/sidebar_preference.js',
     'workspace/chat/ui/static/chat/ui/js/call.js',
     'workspace/chat/ui/static/chat/ui/js/call_room.js',
     'workspace/chat/ui/static/chat/ui/js/chat.js',

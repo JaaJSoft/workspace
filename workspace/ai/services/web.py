@@ -11,11 +11,12 @@ import httpx2
 import trafilatura
 from django.conf import settings
 
+from workspace.common.documents.extraction import ExtractedDocument
 from workspace.common.logging import scrub
 
 from .feeds import Feed, looks_like_feed, parse_feed
 from .paging import check_part, part_count
-from .pdf import MAX_PAGES, PdfDocument, extract_pdf
+from .pdf import MAX_CHARS, extract_pdf
 from .reading import read_for_query
 
 logger = logging.getLogger(__name__)
@@ -372,15 +373,15 @@ def _is_feed(content_type: str, content: bytes) -> bool:
 
 
 def _render_pdf(
-    document: PdfDocument,
+    document: ExtractedDocument,
     final_url: str,
     max_chars: int,
     query: str = "",
     part: int = 1,
 ) -> str:
     pages = f"Pages: {document.page_count}"
-    if document.pages_read < document.page_count:
-        pages += f" (read the first {document.pages_read})"
+    if document.truncated:
+        pages += " (text truncated)"
     header = _header(
         document.title,
         final_url,
@@ -547,7 +548,7 @@ def fetch_and_extract(
         if len(content) > MAX_PDF_BYTES:
             raise ValueError(f"PDF too large (>{MAX_PDF_BYTES // (1024 * 1024)} MB)")
         return _render_pdf(
-            extract_pdf(content, max_pages=MAX_PAGES), final_url, max_chars, query, part
+            extract_pdf(content, max_chars=MAX_CHARS), final_url, max_chars, query, part
         )
 
     if len(content) > MAX_RESPONSE_BYTES:

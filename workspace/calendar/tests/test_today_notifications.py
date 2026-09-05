@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Event, EventMember
+from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.calendar.tasks import notify_today_events
 from workspace.notifications.models import Notification
 
@@ -84,14 +85,15 @@ class NotifyTodayEventsCronTests(TodayEventNotificationMixin, TestCase):
 
     def test_recurring_occurrence_keys_on_the_master_without_url(self):
         start = timezone.now() - timedelta(days=2)
-        master = Event.objects.create(
+        master = Event(
             calendar=self.calendar,
             title="Daily sync",
             start=start,
             end=start + timedelta(hours=1),
             owner=self.owner,
-            recurrence_frequency=Event.RecurrenceFrequency.DAILY,
         )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
 
         notify_today_events()
 
@@ -147,14 +149,15 @@ class DisplayedEventsMarkReadTests(TodayEventNotificationMixin, APITestCase):
 
     def test_range_fetch_resolves_recurring_occurrences_to_the_master(self):
         start = timezone.now() - timedelta(days=2)
-        master = Event.objects.create(
+        master = Event(
             calendar=self.calendar,
             title="Daily sync",
             start=start,
             end=start + timedelta(hours=1),
             owner=self.owner,
-            recurrence_frequency=Event.RecurrenceFrequency.DAILY,
         )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
         notify_today_events()
         self.assertTrue(self._unread(self.owner, master).exists())
 

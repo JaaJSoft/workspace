@@ -504,6 +504,23 @@ test('a key of the wrong length is refused whatever shape it arrives in', async 
   }
 });
 
+test('one-time codes match the reference on the shared vectors', async () => {
+  const V = ctx.vaultCrypto;
+  for (const vector of VECTORS.totp) {
+    // Decoded inside the vm: the bundle is entitled to branch on prototypes,
+    // and a Uint8Array built out here carries the wrong realm's.
+    const secret = vm.runInContext(
+      `vaultCrypto.fromBase64Url(${JSON.stringify(vector.secret_b64)})`, ctx
+    );
+    const hash = { SHA1: 'SHA-1', SHA256: 'SHA-256', SHA512: 'SHA-512' }[vector.algorithm];
+    const key = await V.importTotpKey({ secret: secret, hash: hash });
+    const code = await V.totpCode(
+      key, { digits: vector.digits, period: vector.period }, vector.at
+    );
+    assert.equal(code, vector.expected, vector.id);
+  }
+});
+
 test('a CryptoKey that is not aes-256-gcm is refused rather than mislabelled', async () => {
   // Imported outside importAeadKey, which is the only path that could produce
   // one: sealing under it would write an AES-256-GCM header over AES-128-GCM.

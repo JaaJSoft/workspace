@@ -70,3 +70,130 @@ Setup lives in the deployment examples: [Docker Compose](../deployments/docker-c
 ## API
 
 All endpoints under `/api/v1/files/` - see the [Swagger UI](/schema/swagger-ui/) for full documentation. The WOPI endpoints used by the editor live under `/api/wopi/files/` - their shape is fixed by the [WOPI protocol](https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/) and they authenticate with per-session access tokens, not user sessions.
+
+## Malware scanning
+
+Uploaded file content can be scanned by a [ClamAV](https://www.clamav.net/)
+daemon. The feature is **off by default**: a single-user instance does not need
+it, and the Raspberry Pi deployment target cannot run the daemon.
+
+Scanning runs after the upload response, from the same Celery pipeline that
+builds thumbnails and the search index, so it never slows an upload down. Every
+write path is covered - the REST API, WebDAV, the office editor's save, archive
+extraction and imports all record the file event the scanner subscribes to.
+
+### Enabling it
+
+Point the application at a running `clamd`:
+
+```bash
+FILES_MALWARE_SCAN_ENABLED=1
+# Unix socket (takes precedence when set):
+FILES_CLAMAV_SOCKET=unix:///var/run/clamav/clamd.ctl
+# or TCP:
+FILES_CLAMAV_HOST=127.0.0.1
+FILES_CLAMAV_PORT=3310
+```
+
+### Policy
+
+| Setting | Values | Effect |
+|---|---|---|
+| `FILES_MALWARE_ON_DETECTION` | `block` (default), `flag` | `block` quarantines an infected file: it cannot be downloaded, previewed or found in search, cannot be attached to a message, an email or a task, is not readable by the AI assistant, and its owner sees it marked as quarantined. `flag` records the verdict and leaves the file usable. |
+| `FILES_MALWARE_ON_ERROR` | `open` (default), `closed` | What happens to a file the scanner could not examine - a daemon that is down, a blob that vanished. `open` leaves it usable, `closed` quarantines it. |
+| `FILES_MALWARE_SCAN_MAX_BYTES` | bytes, default 25 MB | Files larger than this are recorded as `skipped` and stay downloadable. Matches clamd's own default; see below before raising it. |
+
+A file whose scan has not run yet stays downloadable. The window is normally a
+few seconds; a persistent backlog shows up as a stalled queue on the admin
+dashboard.
+
+**The daemon has its own cap, and the two defaults match.** `clamd`'s
+`StreamMaxLength` also defaults to 25 MB, so out of the box the application and
+the daemon agree on where scanning stops.
+
+The effective ceiling is always the lower of the two. Raising
+`FILES_MALWARE_SCAN_MAX_BYTES` alone changes nothing: the daemon still refuses at
+its own limit and the file is recorded as `skipped`, exactly as before. To
+actually scan larger files, raise `StreamMaxLength` in `clamd.conf` as well and
+restart the daemon.
+
+**Relaxing the policy does not undo the search exclusion.** Quarantining a file
+drops its full-text search document. Switching `FILES_MALWARE_ON_DETECTION` from
+`block` back to `flag` makes those files readable again, but re-scanning them
+does not put their documents back, so they stay findable by nothing but a
+browse. Run `python manage.py reindex_files_search` after relaxing the policy.
+
+### Monitoring
+
+The admin dashboard carries three cards: quarantined files, scanner errors in
+the last 24 hours, and live daemon reachability. The full verdict history is at
+**Files > Malware scans** in the admin.
+
+Verdicts cannot be deleted there. A file with no verdict reads as never
+scanned, and never scanned is readable, so deleting a row would quietly
+un-quarantine the file.
+
+### Getting a file out of quarantine
+
+Two actions on **Files > Malware scans**, for two different problems.
+
+**Re-scan the selected files** answers a verdict that has gone *stale* - the
+signature database has moved on, or the file was quarantined by a bug since
+fixed. It queues a fresh scan and leaves the row in place until the new verdict
+replaces it.
+
+**Clear the quarantine (false positive)** answers a verdict that is simply
+*wrong*. Re-scanning cannot fix that one: the same bytes fed to the same
+signature database come back infected every time. The action records who
+cleared it, when, and the reason typed into the action bar, and leaves the
+verdict and its signature untouched - the decision is filed next to the
+detection, not in place of it. The file becomes readable again immediately,
+its search document and its thumbnail come back, and its owner sees an
+ordinary file.
+
+The clearance is pinned to the file's content hash, so it vouches for those
+exact bytes and nothing else. Replace the content and the file blocks again at
+once, before the new bytes have even been scanned - and the scan of those new
+bytes drops the clearance rather than inheriting it, so an infected upload
+never lands on a cleared row. A re-scan of the *same* bytes keeps it, which is
+what stops the next `scan_files` pass from undoing every clearance it walks
+over. For the same reason the action refuses a verdict
+that does not describe the file's current content, and says so: re-scan first,
+then clear the verdict that comes back.
+
+Clearing a quarantine needs the dedicated **Can clear a malware quarantine**
+permission (`files.override_filescan`), which is separate from the permission
+to read the verdict list - handing out the audit surface does not hand out the
+ability to release flagged files.
+
+If `FILES_MALWARE_SCANNER` names a backend that does not exist, the application
+refuses to start rather than running unprotected. Should it reach a worker
+anyway, every scan is recorded as an error, so `FILES_MALWARE_ON_ERROR` decides
+what happens and the scanner card says what is wrong.
+
+### Backfilling an existing library
+
+```bash
+python manage.py scan_files              # queue every file that needs a scan
+python manage.py scan_files --rescan     # re-scan everything
+python manage.py scan_files --dry-run    # count without queueing
+```
+
+"Needs a scan" is wider than "never scanned". Each verdict records the hash of
+the bytes it describes, so the default run also picks up a file whose content
+changed after its verdict was written. That normally cannot happen - saving new
+content queues a scan - but the queued scan can be lost if a worker is killed
+or the broker is flushed, and without this the file would keep a verdict about
+bytes it no longer holds until somebody ran `--rescan` over the whole library.
+
+The **Up to date** column on **Files > Malware scans** shows the same
+comparison per row. A verdict written before the hash was recorded reads as out
+of date, so the first default run after upgrading re-scans the library once.
+
+### Verifying a real engine
+
+The test suite drives a fake daemon, so it never needs ClamAV and there is no
+EICAR string in this repository. To check a real deployment, write the
+[EICAR test file](https://www.eicar.org/download-anti-malware-testfile/) into a
+scratch directory outside the checkout, upload it, and confirm it is
+quarantined within a few seconds.

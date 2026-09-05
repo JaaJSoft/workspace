@@ -74,6 +74,7 @@ from faker import Faker  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 from workspace.calendar.models import Calendar, Event, EventMember  # noqa: E402
+from workspace.calendar.services.recurrence_rule import apply_rule  # noqa: E402
 from workspace.chat.models import (  # noqa: E402
     Conversation,
     ConversationMember,
@@ -761,7 +762,12 @@ def _create_event(user, cal, others, history_days):
     title = (
         random.choice(EVENT_TITLES) if random.random() < 0.7 else fake.catch_phrase()
     )
-    event = Event.objects.create(
+    rule = (
+        f"RRULE:FREQ={random.choice(['DAILY', 'WEEKLY', 'MONTHLY'])}"
+        if random.random() < 0.15
+        else ""
+    )
+    event = Event(
         calendar=cal,
         owner=user,
         title=title,
@@ -770,12 +776,9 @@ def _create_event(user, cal, others, history_days):
         start=start,
         end=end,
         all_day=all_day,
-        recurrence_frequency=(
-            random.choice(["daily", "weekly", "monthly"])
-            if random.random() < 0.15
-            else None
-        ),
     )
+    apply_rule(event, rule)
+    event.save()
     # Backdate created_at (auto_now_add) to a plausible "scheduled on" time.
     Event.objects.filter(pk=event.pk).update(created_at=_rand_past(history_days))
 

@@ -14,6 +14,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_viewer_by_slug
 from workspace.files.services.quota import usage_percent
+from workspace.files.services.scanning.policy import with_scan
 from workspace.files.services.storage_analysis import (
     CATEGORY_META,
     QUERY_MAX_LENGTH,
@@ -246,19 +247,21 @@ def _build_context(request, folder=None, is_trash_view=False):
         file_id=OuterRef("pk"),
         shared_with=request.user,
     ).values("permission")[:1]
-    nodes = nodes.annotate(
-        is_favorite=Exists(favorite_subquery),
-        is_pinned=Exists(pinned_subquery),
-        is_shared=Exists(is_shared_subquery),
-        user_share_permission=Subquery(user_share_subquery),
-    ).prefetch_related(
-        # Scoped to the viewer's own tags: the shared-with-me listing shows
-        # other people's files, and their tags must never leak into it.
-        Prefetch(
-            "file_tags",
-            queryset=FileTag.objects.filter(tag__owner=request.user)
-            .select_related("tag")
-            .order_by(Lower("tag__name")),
+    nodes = with_scan(
+        nodes.annotate(
+            is_favorite=Exists(favorite_subquery),
+            is_pinned=Exists(pinned_subquery),
+            is_shared=Exists(is_shared_subquery),
+            user_share_permission=Subquery(user_share_subquery),
+        ).prefetch_related(
+            # Scoped to the viewer's own tags: the shared-with-me listing shows
+            # other people's files, and their tags must never leak into it.
+            Prefetch(
+                "file_tags",
+                queryset=FileTag.objects.filter(tag__owner=request.user)
+                .select_related("tag")
+                .order_by(Lower("tag__name")),
+            )
         )
     )
     if is_recent_view:
@@ -399,6 +402,12 @@ def _build_context(request, folder=None, is_trash_view=False):
     if not isinstance(file_prefs, dict):
         file_prefs = {}
     breadcrumb_collapse = file_prefs.get("breadcrumbCollapse", 4)
+    # The listing is rendered in one view mode only: a large folder costs
+    # the browser as much to bind as it has markup, and the toggle is rare
+    # enough to be a re-render.
+    view_mode = file_prefs.get("defaultViewMode")
+    if not isinstance(view_mode, str) or view_mode not in {"list", "mosaic"}:
+        view_mode = "list"
     viewer_prefs = files_settings.get("viewer") or {}
     if not isinstance(viewer_prefs, dict):
         viewer_prefs = {}
@@ -430,6 +439,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         "sidebar_active": sidebar_active,
         "pinned_folders": pinned_folders_qs,
         "breadcrumb_collapse": breadcrumb_collapse,
+        "view_mode": view_mode,
         "file_prefs": file_prefs,
         "viewer_prefs": viewer_prefs,
         "group_folders": group_folders,
@@ -791,6 +801,20 @@ def view_file(request, uuid):
         raise Http404
     user_can_edit = perm >= FilePermission.WRITE
 
+    from workspace.files.services.scanning.policy import blocked_reason
+
+    reason = blocked_reason(file_obj)
+    if reason is not None:
+        return HttpResponse(
+            render_viewer_panel(
+                '<div data-viewer-blocked="1" hidden></div>'
+                '<inline-alert type="error" title="Quarantined" '
+                'message="The malware scanner flagged this file, so its '
+                'contents cannot be shown."></inline-alert>'
+            ),
+            status=403,
+        )
+
     # Only files can be viewed
     if file_obj.node_type != File.NodeType.FILE:
         return HttpResponse(
@@ -856,13 +880,18 @@ def file_card(request, uuid):
         raise Http404
 
     from workspace.files.services.excerpt import first_content_line
+    from workspace.files.services.scanning.policy import is_blocked
+
+    # An excerpt is a preview: a quarantined file owes the popover nothing.
+    # The template drops the paragraph entirely on an empty string.
+    first_line = "" if is_blocked(file_obj) else first_content_line(file_obj)
 
     return render(
         request,
         "files/ui/partials/file_card.html",
         {
             "file": file_obj,
-            "first_line": first_content_line(file_obj),
+            "first_line": first_line,
         },
     )
 
@@ -903,9 +932,16 @@ def shared_file_view(request, token):
             # False so the password prompt is rendered again.
             pass
 
+    # The viewers inline the blob into the page (TextViewer and MarkdownViewer
+    # emit the decoded bytes straight into the template), so the policy has to
+    # be consulted before rendering rather than only on the content endpoint.
+    from workspace.files.services.scanning.policy import blocked_reason
+
+    quarantine_reason = blocked_reason(link.file)
+
     # Render viewer HTML if accessible
     viewer_html = ""
-    if not link.has_password or password_verified:
+    if quarantine_reason is None and (not link.has_password or password_verified):
         from workspace.files.ui.viewers import ViewerRegistry
 
         ViewerClass = get_viewer_by_slug(link.file.viewer) or (
@@ -922,6 +958,14 @@ def shared_file_view(request, token):
             viewer._content_url = content_url
             viewer_html = viewer.render(request)
 
+    download_url = None
+    if quarantine_reason is None:
+        download_url = f"/api/v1/files/shared/{token}/download" + (
+            f"?access_token={access_token}"
+            if access_token and password_verified
+            else ""
+        )
+
     return render(
         request,
         "files/ui/shared_file.html",
@@ -930,13 +974,9 @@ def shared_file_view(request, token):
             "file": link.file,
             "link": link,
             "viewer_html": viewer_html,
+            "quarantine_reason": quarantine_reason,
             "needs_password": link.has_password and not password_verified,
             "expired": False,
-            "download_url": f"/api/v1/files/shared/{token}/download"
-            + (
-                f"?access_token={access_token}"
-                if access_token and password_verified
-                else ""
-            ),
+            "download_url": download_url,
         },
     )

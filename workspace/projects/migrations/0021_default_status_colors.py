@@ -19,9 +19,10 @@ def colorize(apps, schema_editor):
     colored keeps its state.
     """
     TaskStatus = apps.get_model("projects", "TaskStatus")
+    db = schema_editor.connection.alias
 
     for name, category, color in DEFAULT_STATUS_COLORS:
-        TaskStatus.objects.filter(name=name, category=category, color="").update(
+        TaskStatus.objects.using(db).filter(name=name, category=category, color="").update(
             color=color
         )
 

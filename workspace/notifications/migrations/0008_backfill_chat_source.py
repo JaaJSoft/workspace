@@ -23,9 +23,10 @@ def backfill_chat_conversations(apps, schema_editor):
     """
     Notification = apps.get_model("notifications", "Notification")
     Conversation = apps.get_model("chat", "Conversation")
+    db = schema_editor.connection.alias
 
     qs = (
-        Notification.objects.filter(
+        Notification.objects.using(db).filter(
             origin="chat", read_at__isnull=True, conversation__isnull=True
         )
         .exclude(url="")
@@ -44,13 +45,13 @@ def backfill_chat_conversations(apps, schema_editor):
         if not candidates:
             continue
         live = set(
-            Conversation.objects.filter(
+            Conversation.objects.using(db).filter(
                 uuid__in={n.conversation_id for n in candidates}
             ).values_list("uuid", flat=True)
         )
         to_update = [n for n in candidates if n.conversation_id in live]
         if to_update:
-            Notification.objects.bulk_update(to_update, ["conversation"])
+            Notification.objects.using(db).bulk_update(to_update, ["conversation"])
 
 
 class Migration(migrations.Migration):

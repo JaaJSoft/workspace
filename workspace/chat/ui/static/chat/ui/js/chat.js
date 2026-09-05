@@ -2,19 +2,12 @@ function chatApp(currentUserId) {
   return {
     // ── Identity + persistent UI state ──────────────────────
     currentUserId: currentUserId,
-    // Seed `collapsed` synchronously from the viewport so Alpine's first
-    // binding pass paints the correct width class. Without the mobile
-    // check here, a mobile load after a desktop session left the sidebar
-    // expanded (localStorage = "false") would render w-80 first and snap
-    // to w-16 once init() ran — a visible "expanded → collapsed" flicker.
+    // Seeded synchronously so Alpine's first bind matches the width the
+    // server rendered: the rail below `lg`, the stored preference above.
+    // Without the viewport check, a mobile load with an expanded preference
+    // would bind w-80 first and snap to w-16 once init() ran.
     collapsed: window.matchMedia('(max-width: 1023px)').matches
-      || JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
-    // Gate the sidebar's width transition. Defer-loaded Alpine binds the
-    // `:class` on the aside *after* the first paint, so any width applied
-    // here would animate from the unstyled state. Keep `transition-all`
-    // off until $nextTick has flushed the bind, then enable it for
-    // subsequent toggleCollapse() calls.
-    sidebarMounted: false,
+      || window.sidebarPreference.initial(),
 
     // Reactive copy of chat preferences. The global cache is seeded
     // synchronously from the server-embedded json_script, so the first
@@ -46,11 +39,6 @@ function chatApp(currentUserId) {
 
     // ── Init: orchestrates first paint and global listeners ─
     async init() {
-      // Re-enable the sidebar width transition after Alpine has finished
-      // its initial bind, so toggleCollapse() animates smoothly without
-      // animating the very first paint.
-      this.$nextTick(() => { this.sidebarMounted = true; });
-
       // The main chat tab never owns the microphone; the dedicated room tab
       // does. Force observer so any stray join path opens the room instead.
       this.callRole = 'observer';
@@ -253,7 +241,7 @@ function chatApp(currentUserId) {
     // ── Sidebar collapse ───────────────────────────────────
     toggleCollapse() {
       this.collapsed = !this.collapsed;
-      localStorage.setItem('chatSidebarCollapsed', JSON.stringify(this.collapsed));
+      window.sidebarPreference.save('chat', this.collapsed);
     },
   };
 }

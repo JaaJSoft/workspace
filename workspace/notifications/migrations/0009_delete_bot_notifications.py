@@ -10,9 +10,10 @@ def delete_bot_notifications(apps, schema_editor):
     """
     Notification = apps.get_model("notifications", "Notification")
     BotProfile = apps.get_model("ai", "BotProfile")
+    db = schema_editor.connection.alias
 
-    bot_user_ids = BotProfile.objects.values_list("user_id", flat=True)
-    Notification.objects.filter(recipient_id__in=bot_user_ids).delete()
+    bot_user_ids = BotProfile.objects.using(db).values_list("user_id", flat=True)
+    Notification.objects.using(db).filter(recipient_id__in=bot_user_ids).delete()
 
 
 class Migration(migrations.Migration):

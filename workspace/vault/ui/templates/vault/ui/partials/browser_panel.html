@@ -2,10 +2,13 @@
   What a row is, without opening what it keeps.
 
   The login is already in the clear - the listing opened it - so it is shown.
-  The password is not, and the row of dots is not a mask over a value held
-  here: nothing on this page has decrypted it. That is why the field is drawn
-  from `panelCarries`, which reads the field ids the listing collected, rather
-  than from a value.
+  The password is not: the field is drawn from `panelCarries`, which reads the
+  field ids the listing collected, rather than from a value. The row of dots
+  is a mask over nothing until the user asks to see it with the reveal
+  button, which decrypts on demand through `toggleReveal`. The plaintext it
+  produces leaves component state the moment the panel closes, another entry
+  is opened, or the vault locks - never on a timer, because it is on screen
+  rather than on the clipboard, and one click undoes it.
 
   Every button is gated on `panelHasAction`, which is the endpoint's answer
   for this row and not a rule written here.
@@ -50,7 +53,23 @@
         <div x-show="panelCarries('password')">
           <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Password</div>
           <div class="flex items-center gap-2">
-            <span class="flex-1 font-mono">••••••••••</span>
+            <span
+              class="flex-1 font-mono break-all"
+              x-text="isRevealed('password') ? revealedValue('password') : '••••••••••'"
+            ></span>
+            {# The registry has no id of its own for revealing - a row whose copy_password is hidden (a trashed entry) must not show its password either. #}
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="panelHasAction('copy_password')"
+              @click="toggleReveal('password')"
+              :aria-label="isRevealed('password') ? 'Hide the password' : 'Reveal the password'"
+            >
+              <i
+                :data-lucide="isRevealed('password') ? 'eye-off' : 'eye'"
+                class="w-3.5 h-3.5"
+              ></i>
+            </button>
             <button
               type="button"
               class="btn btn-ghost btn-xs btn-square"
@@ -63,10 +82,62 @@
           </div>
         </div>
 
-        <div x-show="panelCarries('totp')">
+        {% comment %}
+          One field, two readings: the code is derived and expires within its
+          period, the key is the shared secret behind it. A single control that
+          switched between them would be a button whose meaning depends on the
+          state, so they get a line each.
+        {% endcomment %}
+        <div x-show="panelCarries('totp') && panelHasAction('copy_totp')">
           <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Authenticator code</div>
-          <div class="flex items-center gap-2 opacity-40">
-            <span class="flex-1 font-mono">••• •••</span>
+          <div class="flex items-center gap-2">
+            <template x-if="totp && totp.unreadable">
+              <span class="flex-1 text-sm opacity-60">This key cannot be read.</span>
+            </template>
+            <template x-if="totp && !totp.unreadable">
+              <span
+                class="flex-1 font-mono tracking-widest"
+                data-totp-code
+                x-text="totp.code"
+              ></span>
+            </template>
+            <span
+              class="text-xs opacity-50 tabular-nums"
+              x-show="totp && !totp.unreadable"
+              x-text="totp ? totp.secondsLeft + 's' : ''"
+            ></span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="panelHasAction('copy_totp') && totp && !totp.unreadable"
+              @click="copyTotp(panelEntry)"
+              aria-label="Copy the authenticator code"
+            >
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        {# Revealed as the base32 key, not the otpauth:// uri it is stored as: what a user does with this row is retype it into another authenticator. #}
+        <div x-show="panelCarries('totp')">
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Authenticator key</div>
+          <div class="flex items-center gap-2">
+            <span
+              class="flex-1 font-mono break-all text-xs"
+              x-text="isRevealed('totp') ? revealedValue('totp') : '••••••••••'"
+            ></span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              x-show="panelHasAction('copy_totp')"
+              @click="toggleReveal('totp')"
+              :aria-label="isRevealed('totp') ? 'Hide the authenticator key' : 'Reveal the authenticator key'"
+            >
+              <i
+                :data-lucide="isRevealed('totp') ? 'eye-off' : 'eye'"
+                class="w-3.5 h-3.5"
+              ></i>
+            </button>
           </div>
         </div>
 

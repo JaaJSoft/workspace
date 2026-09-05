@@ -9,15 +9,25 @@
 
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
+// calendarEventsMixin() builds a day-key formatter from window.zonedFormatter
+// as it is constructed, so that script loads first here exactly as base.html
+// loads it before the mixin.
 function makeApp(fetchImpl) {
-  const ctx = loadScript('workspace/calendar/ui/static/calendar/ui/js/calendar_events.js', {
-    document: { getElementById: () => null },
-    fetch: fetchImpl,
-    getCSRFToken: () => 'csrf',
-    AppAlert: { error() {}, success() {} },
-  });
+  const ctx = loadScripts(
+    [
+      'workspace/common/static/ui/js/zoned_formatter.js',
+      'workspace/calendar/ui/static/calendar/ui/js/calendar_events.js',
+    ],
+    {
+      document: { getElementById: () => null },
+      fetch: fetchImpl,
+      getCSRFToken: () => 'csrf',
+      AppAlert: { error() {}, success() {} },
+      Intl,
+    },
+  );
   return ctx.calendarEventsMixin();
 }
 

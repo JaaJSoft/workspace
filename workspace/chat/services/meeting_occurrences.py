@@ -96,7 +96,7 @@ def current_occurrence(meeting, now=None):
     event = meeting.event
     duration = _duration(event)
 
-    if event.recurrence_frequency is None:
+    if not event.recurrence_rule:
         start = event.start.replace(microsecond=0)
         end = start + duration
         opens_at, closes_at = _window(start, end)

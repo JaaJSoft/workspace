@@ -4,16 +4,74 @@
   - on_click: handler supplémentaire lors du clic sur un résultat (optionnel)
   - container_class: classes CSS pour le conteneur (optionnel)
   - size: 'lg' pour des éléments plus grands avec des icônes plus grandes (optionnel)
+
+  The minimum-length hint is a sibling of the results container, not a child:
+  showResults() is false below two characters, which is what left it blank.
 {% endcomment %}
+<div x-show="showMinLengthHint()" x-cloak class="px-4 py-6 text-center">
+  <i data-lucide="type" class="w-6 h-6 mx-auto mb-2 opacity-30"></i>
+  <div class="text-sm text-base-content/60">Keep typing to search</div>
+  <div class="text-xs text-base-content/40 mt-1">
+    At least 2 characters, or
+    <kbd class="kbd kbd-xs">&gt;</kbd>
+    for actions
+  </div>
+</div>
+
 <div
   x-show="showResults()"
   class="{{ container_class|default:'overflow-y-auto scroll-smooth' }} {% if size == 'lg' %}max-h-[28rem]{% elif not container_class %}max-h-96{% endif %}"
 >
 
+  {% comment %}
+    Zero-height so the bar overlays rather than pushing the list down, sticky
+    so it survives scrolling through kept results.
+  {% endcomment %}
+  <div x-show="loading" x-cloak class="sticky top-0 z-10 h-0">
+    <progress class="progress progress-primary block h-0.5 w-full rounded-none"></progress>
+  </div>
+
+  {# Only when there is nothing else to show: a refined query keeps its hits. #}
+  <div x-show="showSkeleton()" x-cloak class="p-2" role="status">
+    <div
+      class="{% if size == 'lg' %}px-3{% else %}px-2{% endif %} py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
+    >
+      Searching...
+    </div>
+    <template x-for="i in 3" :key="i">
+      <div
+        class="flex items-center gap-3 {% if size == 'lg' %}p-3{% else %}p-2{% endif %}"
+        aria-hidden="true"
+      >
+        <div
+          class="skeleton flex-shrink-0 rounded-full {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %}"
+        ></div>
+        <div class="flex-1 min-w-0 space-y-1.5">
+          <div
+            class="skeleton h-3 rounded"
+            :class="['w-2/3', 'w-1/2', 'w-3/5'][i - 1]"
+          ></div>
+          <div class="skeleton h-2 w-1/4 rounded"></div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  {% comment %}
+    x-if, not x-show: the palette lives in base.html, so x-show would leave a
+    hidden inline-alert in every page's DOM, ahead of the real ones for any
+    selector that targets the bare tag.
+  {% endcomment %}
+  <template x-if="error">
+    <div class="p-3">
+      <inline-alert type="error" title="Search is unavailable" message="The search service could not be reached. Check your connection, then try again."></inline-alert>
+    </div>
+  </template>
+
   <!-- Commands / Actions -->
   <div x-show="commands.length > 0" class="p-2">
     <div
-      class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
+      class="{% if size == 'lg' %}px-3{% else %}px-2{% endif %} py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
     >
       Actions
     </div>
@@ -23,7 +81,7 @@
         @click="trackCommand(cmd.url){% if on_click %}; {{ on_click }}{% endif %}"
         @mouseenter="activeIndex = index"
         :class="isCommandActive(index) ? 'bg-base-300' : 'bg-transparent'"
-        class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
+        class="flex items-center gap-3 {% if size == 'lg' %}p-3{% else %}p-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
       >
         <div class="flex-shrink-0">
           <div
@@ -55,7 +113,7 @@
   <!-- Search results -->
   <div x-show="results.length > 0" class="p-2">
     <div
-      class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
+      class="{% if size == 'lg' %}px-3{% else %}px-2{% endif %} py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
     >
       <span x-text="`${results.length} Result${results.length > 1 ? 's' : ''}`"></span>
     </div>
@@ -74,7 +132,7 @@
         {% if on_click %}@click="{{ on_click }}"{% endif %}
         @mouseenter="activeIndex = commands.length + index"
         :class="isResultActive(index) ? 'bg-base-300' : 'bg-transparent'"
-        class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
+        class="flex items-center gap-3 {% if size == 'lg' %}p-3{% else %}p-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
       >
         <div class="avatar placeholder flex-shrink-0">
           <div
@@ -126,10 +184,7 @@
   </div>
 
   <!-- No results -->
-  <div
-    x-show="commands.length === 0 && results.length === 0 && !loading"
-    class="px-4 py-8 text-center"
-  >
+  <div x-show="showEmptyState()" class="px-4 py-8 text-center">
     <i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
     <div
       class="text-sm text-base-content/60"

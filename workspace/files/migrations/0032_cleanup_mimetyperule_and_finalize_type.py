@@ -5,7 +5,8 @@ from django.db import migrations, models
 
 def backfill_null_types(apps, schema_editor):
     File = apps.get_model('files', 'File')
-    File.objects.filter(type__isnull=True).update(type='unknown')
+    db = schema_editor.connection.alias
+    File.objects.using(db).filter(type__isnull=True).update(type='unknown')
 
 
 class Migration(migrations.Migration):

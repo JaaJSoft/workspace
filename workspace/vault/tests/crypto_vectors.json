@@ -330,5 +330,52 @@
       "raw_b64": "AwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISI"
     }
   ],
+  "totp": [
+    {
+      "algorithm": "SHA1",
+      "at": 1234567890,
+      "digits": 6,
+      "expected": "005924",
+      "id": "totp-sha1-6",
+      "period": 30,
+      "secret_b64": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA"
+    },
+    {
+      "algorithm": "SHA1",
+      "at": 59,
+      "digits": 8,
+      "expected": "94287082",
+      "id": "totp-sha1-8",
+      "period": 30,
+      "secret_b64": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA"
+    },
+    {
+      "algorithm": "SHA256",
+      "at": 1111111109,
+      "digits": 8,
+      "expected": "68084774",
+      "id": "totp-sha256-8",
+      "period": 30,
+      "secret_b64": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI"
+    },
+    {
+      "algorithm": "SHA512",
+      "at": 20000000000,
+      "digits": 8,
+      "expected": "47863826",
+      "id": "totp-sha512-8",
+      "period": 30,
+      "secret_b64": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNA"
+    },
+    {
+      "algorithm": "SHA1",
+      "at": 1234567890,
+      "digits": 6,
+      "expected": "713351",
+      "id": "totp-sha1-period-60",
+      "period": 60,
+      "secret_b64": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA"
+    }
+  ],
   "version": 1
 }

@@ -31,107 +31,114 @@
   {% endif %}
   {% include "projects/ui/partials/_task_filters.html" %}
   {# Filter changes swap this wrapper only (see applyFilters in board.js), so the filter bar above - and its open popover - keep their DOM. #}
-  <div id="task-collection" class="flex flex-col gap-3 min-h-0">
-    {% if project.type == 'scrum' and not selected_sprint %}
-      <div
-        class="rounded-box border border-base-300 bg-base-100 p-8 flex flex-col items-center gap-3 text-center"
-      >
-        <i data-lucide="timer" class="w-10 h-10 text-base-content/30"></i>
-        <p class="font-medium">No active sprint</p>
-        {% if planned_sprints %}
-          <p class="text-sm text-base-content/60">Start a planned sprint to bring its tasks onto the board.</p>
-          <ul class="w-full max-w-md flex flex-col gap-2 mt-2">
-            {% for s in planned_sprints %}
-              <li class="rounded-box bg-base-200 p-3 flex items-center gap-3 text-left">
-                <span class="font-medium truncate flex-1">{{ s.name }}</span>
-                <span class="badge badge-ghost badge-sm">{{ s.task_count }} task{{ s.task_count|pluralize }}</span>
-                {% if role == 'admin' and writable %}
-                  <button
-                    type="button"
-                    class="btn btn-accent btn-xs"
-                    @click="startSprint('{{ s.uuid }}', '{{ s.name|escapejs }}')"
-                  >
-                    <i data-lucide="play" class="w-3.5 h-3.5"></i>
-                    Start
-                  </button>
-                {% endif %}
-              </li>
-            {% endfor %}
-          </ul>
-        {% elif role == 'admin' %}
-          <p class="text-sm text-base-content/60">Create a sprint, then plan it from the backlog.</p>
-          {% if writable %}
-            <button
-              type="button"
-              class="btn btn-accent btn-sm"
-              @click="openSprints({ add: true })"
-            >
-              <i data-lucide="plus" class="w-4 h-4"></i>
-              New sprint
-            </button>
-          {% endif %}
-        {% else %}
-          <p class="text-sm text-base-content/60">A project admin can create and start sprints.</p>
-        {% endif %}
-      </div>
-    {% else %}
-      {% if tasks_truncated %}
-        <inline-alert type="warning" message="Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest."></inline-alert>
-      {% endif %}
-      <div class="flex gap-3 overflow-x-auto items-start pb-4">
-        {% for column in columns %}
-          <section
-            class="flex-1 min-w-72 rounded-box bg-base-200 p-3"
-            data-status-uuid="{{ column.status.uuid }}"
-            {% if not sprint_read_only %} @dragover.prevent="onDragOver($event)" @drop.prevent="onDrop($event, '{{ column.status.uuid }}')" {% endif %}
-          >
-            <header class="flex items-center justify-between mb-2">
-              <h3 class="text-sm font-medium flex items-center gap-2">
-                {% if column.status.color %}
-                  <span
-                    class="w-2.5 h-2.5 rounded-full shrink-0"
-                    style="background-color: {{ column.status.color }}"
-                  ></span>
-                {% endif %}
-                {{ column.status.name }}
-              </h3>
-              <div class="flex items-center gap-1">
-                {% if project.estimate_unit %}
-                  {# One combined chip: the united number is the estimate total, the bare one the task count. #}
-                  <span
-                    class="badge badge-ghost badge-sm font-mono"
-                    title="Estimate total · task count"
-                  >
-                    {{ column.estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ column.tasks|length }}
-                  </span>
-                {% else %}
-                  <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
-                {% endif %}
-                {% if writable and not sprint_read_only %}
-                  <button
-                    class="btn btn-ghost btn-xs btn-square"
-                    title="New task"
-                    @click="newTask('{{ column.status.uuid }}')"
-                  >
-                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                  </button>
-                {% endif %}
-              </div>
-            </header>
-            <ul class="flex flex-col gap-2 min-h-8" data-column-list>
-              {% for task in column.tasks %}
-                {% include "projects/ui/partials/task_card.html" with card_readonly=sprint_read_only %}
+  <div class="relative flex flex-col min-h-0">
+    <div
+      id="task-collection"
+      class="flex flex-col gap-3 min-h-0"
+      x-init="$nextTick(() => window.dispatchEvent(new CustomEvent('project-fragment-bound')))"
+    >
+      {% if project.type == 'scrum' and not selected_sprint %}
+        <div
+          class="rounded-box border border-base-300 bg-base-100 p-8 flex flex-col items-center gap-3 text-center"
+        >
+          <i data-lucide="timer" class="w-10 h-10 text-base-content/30"></i>
+          <p class="font-medium">No active sprint</p>
+          {% if planned_sprints %}
+            <p class="text-sm text-base-content/60">Start a planned sprint to bring its tasks onto the board.</p>
+            <ul class="w-full max-w-md flex flex-col gap-2 mt-2">
+              {% for s in planned_sprints %}
+                <li class="rounded-box bg-base-200 p-3 flex items-center gap-3 text-left">
+                  <span class="font-medium truncate flex-1">{{ s.name }}</span>
+                  <span class="badge badge-ghost badge-sm">{{ s.task_count }} task{{ s.task_count|pluralize }}</span>
+                  {% if role == 'admin' and writable %}
+                    <button
+                      type="button"
+                      class="btn btn-accent btn-xs"
+                      @click="startSprint('{{ s.uuid }}', '{{ s.name|escapejs }}')"
+                    >
+                      <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                      Start
+                    </button>
+                  {% endif %}
+                </li>
               {% endfor %}
             </ul>
-            {% if column.hidden_count %}
-              <p class="text-xs text-base-content/50 mt-2 flex items-center gap-1.5">
-                <i data-lucide="eye-off" class="w-3 h-3"></i>
-                {{ column.hidden_count }} hidden
-              </p>
+          {% elif role == 'admin' %}
+            <p class="text-sm text-base-content/60">Create a sprint, then plan it from the backlog.</p>
+            {% if writable %}
+              <button
+                type="button"
+                class="btn btn-accent btn-sm"
+                @click="openSprints({ add: true })"
+              >
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                New sprint
+              </button>
             {% endif %}
-          </section>
-        {% endfor %}
-      </div>
-    {% endif %}
+          {% else %}
+            <p class="text-sm text-base-content/60">A project admin can create and start sprints.</p>
+          {% endif %}
+        </div>
+      {% else %}
+        {% if tasks_truncated %}
+          <inline-alert type="warning" message="Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest."></inline-alert>
+        {% endif %}
+        <div class="flex gap-3 overflow-x-auto items-start pb-4">
+          {% for column in columns %}
+            <section
+              class="flex-1 min-w-72 rounded-box bg-base-200 p-3"
+              data-status-uuid="{{ column.status.uuid }}"
+              {% if not sprint_read_only %} @dragover.prevent="onDragOver($event)" @drop.prevent="onDrop($event, '{{ column.status.uuid }}')" {% endif %}
+            >
+              <header class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-medium flex items-center gap-2">
+                  {% if column.status.color %}
+                    <span
+                      class="w-2.5 h-2.5 rounded-full shrink-0"
+                      style="background-color: {{ column.status.color }}"
+                    ></span>
+                  {% endif %}
+                  {{ column.status.name }}
+                </h3>
+                <div class="flex items-center gap-1">
+                  {% if project.estimate_unit %}
+                    {# One combined chip: the united number is the estimate total, the bare one the task count. #}
+                    <span
+                      class="badge badge-ghost badge-sm font-mono"
+                      title="Estimate total · task count"
+                    >
+                      {{ column.estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ column.tasks|length }}
+                    </span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
+                  {% endif %}
+                  {% if writable and not sprint_read_only %}
+                    <button
+                      class="btn btn-ghost btn-xs btn-square"
+                      title="New task"
+                      @click="newTask('{{ column.status.uuid }}')"
+                    >
+                      <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                    </button>
+                  {% endif %}
+                </div>
+              </header>
+              <ul class="flex flex-col gap-2 min-h-8" data-column-list>
+                {% for task in column.tasks %}
+                  {% include "projects/ui/partials/task_card.html" with card_readonly=sprint_read_only %}
+                {% endfor %}
+              </ul>
+              {% if column.hidden_count %}
+                <p class="text-xs text-base-content/50 mt-2 flex items-center gap-1.5">
+                  <i data-lucide="eye-off" class="w-3 h-3"></i>
+                  {{ column.hidden_count }} hidden
+                </p>
+              {% endif %}
+            </section>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+    {% include "projects/ui/partials/_collection_loading.html" %}
   </div>
 </div>

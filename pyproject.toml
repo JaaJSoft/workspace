@@ -23,9 +23,10 @@ dependencies = [
     "pillow>=12.3.0",
     "cairosvg>=2.9.0",
     # mail
-    "cryptography>=50.0.0",
+    "cryptography>=50.0.1",
     "nh3>=0.3.7",
     "myl-discovery>=0.6.4",
+    "python-dateutil>=2.9",
     "icalendar>=7.3.0",
     # vault
     "cbor2>=5.7.0",
@@ -33,7 +34,7 @@ dependencies = [
     "mistune>=3.3.4",
     "pygments>=2.21.0",
     "dj-database-url>=2.3.0",
-    "psycopg[binary,pool]>=3.3.4",
+    "psycopg[binary,pool]>=3.3.5",
     "python-dotenv>=1.2.3",
     # webdav
     "wsgidav>=4.3.5",
@@ -43,19 +44,25 @@ dependencies = [
     "gevent>=26.8.0",
     "django-prometheus>=2.5.0",
     # push notifications
-    "pywebpush>=2.4.0",
+    "pywebpush>=2.5.0",
     # oauth2
-    "authlib>=1.7.2",
+    "authlib>=1.8.0",
     # file type detection
     "magika>=1.0.0",
+    # malware scanning (clamd protocol client; the daemon itself is optional
+    # and the feature is off by default)
+    "clamav-client>=0.7.2",
     # ai
-    "openai>=3.3.1",
+    "openai>=3.6.0",
     "ollama>=0.6.2",
     # web search & scraping
     "httpx2>=2.12.0",
     "trafilatura>=2.2.0",
-    # PDF text extraction for the AI web fetcher (pure Python, no extra deps)
-    "pypdf>=6.16.2",
+    # Apache Tika compiled ahead of time to a native library: text and
+    # metadata out of PDFs, Office and OpenDocument files without a JVM, a
+    # sidecar server, or a parser of our own to keep correct. One wheel per
+    # architecture, no Python dependencies of its own.
+    "iscc-tika>=0.6.0",
     # RSS/Atom parsing; also a trafilatura dependency, declared because the
     # feed parser imports it directly
     "lxml>=6.1.2",
@@ -73,7 +80,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "coverage[toml]>=7.15.4",
+    "coverage[toml]>=7.16.0",
     "django-debug-toolbar==7.1.1",
     # Fake data generation for scripts/seed_demo.py (dev/demo seeding only).
     # End-to-end / UI tests. Playwright is only needed when E2E=1 is set;
@@ -91,9 +98,21 @@ dev = [
     "pyhpke>=0.6.0",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
-    "ruff==0.16.4",
+    "ruff==0.16.5",
     # HTML template linter/formatter (djlint workspace --lint / --reformat).
     "djlint>=1.44.2",
+    # Office authoring libraries, used only to write the fixtures the text
+    # extractors are tested against. A container built by hand encodes the same
+    # assumptions the extractor makes, so the two agree with each other rather
+    # than with Word; these emit the real part layout, namespaces and
+    # scaffolding. Never imported by application code - workspace/common/
+    # documents/office.py reads documents and depends on nothing but lxml.
+    # Only ever writes: the fixtures the extractor is tested against.
+    "pypdf>=6.16.2",
+    "python-docx>=1.2.0",
+    "openpyxl>=3.1.5",
+    "python-pptx>=1.0.2",
+    "odfpy>=1.4.1",
 ]
 
 [tool.djlint]

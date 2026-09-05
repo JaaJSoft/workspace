@@ -1,6 +1,5 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -8,6 +7,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.ai.harness.model import ToolCall
 from workspace.ai.models import AITask
 from workspace.ai.services import stream_steps
 from workspace.ai.sse_provider import AIStreamSSEProvider
@@ -17,11 +17,7 @@ User = get_user_model()
 
 
 def make_tool_call(name="search_web", arguments='{"query": "meteo paris"}'):
-    return SimpleNamespace(
-        id="call_1",
-        type="function",
-        function=SimpleNamespace(name=name, arguments=arguments),
-    )
+    return ToolCall(id="call_1", name=name, arguments=arguments)
 
 
 class MailboxTests(TestCase):
@@ -315,9 +311,10 @@ class NotifyToolStepDoneTests(TestCase):
         enqueue lock two reports racing lose one - and the row it belonged
         to spins until the reply lands.
         """
-        calls = [make_tool_call() for _ in range(8)]
-        for index, tool_call in enumerate(calls):
-            tool_call.id = f"call_{index}"
+        calls = [
+            ToolCall(id=f"call_{index}", name="search_web", arguments="{}")
+            for index in range(8)
+        ]
         start = threading.Barrier(len(calls), timeout=10)
 
         def report(tool_call):

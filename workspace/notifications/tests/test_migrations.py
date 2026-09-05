@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.chat.models import Conversation
+from workspace.common.tests.migrations import schema_editor_stub
 from workspace.notifications.models import Notification
 
 User = get_user_model()
@@ -24,13 +25,13 @@ class BackfillChatSourceTests(TestCase):
 
     def test_unread_chat_row_with_valid_url_gains_fk(self):
         n = self._notif(url=f"/chat/{self.conv.pk}")
-        backfill.backfill_chat_conversations(apps, None)
+        backfill.backfill_chat_conversations(apps, schema_editor_stub())
         n.refresh_from_db()
         self.assertEqual(n.conversation_id, self.conv.pk)
 
     def test_unparseable_url_is_skipped(self):
         n = self._notif(url="/chat/not-a-uuid")
-        backfill.backfill_chat_conversations(apps, None)
+        backfill.backfill_chat_conversations(apps, schema_editor_stub())
         n.refresh_from_db()
         self.assertIsNone(n.conversation_id)
 
@@ -38,7 +39,7 @@ class BackfillChatSourceTests(TestCase):
         import uuid as uuid_mod
 
         n = self._notif(url=f"/chat/{uuid_mod.uuid4()}")
-        backfill.backfill_chat_conversations(apps, None)
+        backfill.backfill_chat_conversations(apps, schema_editor_stub())
         n.refresh_from_db()
         self.assertIsNone(n.conversation_id)
 
@@ -47,7 +48,7 @@ class BackfillChatSourceTests(TestCase):
 
         read = self._notif(url=f"/chat/{self.conv.pk}", read_at=timezone.now())
         other = self._notif(origin="files", url=f"/chat/{self.conv.pk}")
-        backfill.backfill_chat_conversations(apps, None)
+        backfill.backfill_chat_conversations(apps, schema_editor_stub())
         read.refresh_from_db()
         other.refresh_from_db()
         self.assertIsNone(read.conversation_id)

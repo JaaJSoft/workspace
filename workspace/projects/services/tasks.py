@@ -6,6 +6,7 @@ from workspace.notifications.services.notifications import settle_sources
 
 from ..models import Project, Sprint, Task, TaskEvent, TaskStatus
 from .assignments import notify_assigned
+from .estimates import format_estimate
 from .events import move_event_type, record_task_event
 from .references import allocate_task_number
 from .watchers import auto_watch, notify_status_changed
@@ -117,7 +118,11 @@ def create_task(
             task.completed_at = timezone.now()
             task.save(update_fields=["completed_at"])
         record_task_event(
-            task, type=TaskEvent.Type.CREATED, actor=user, to_status=status
+            task,
+            type=TaskEvent.Type.CREATED,
+            actor=user,
+            to_status=status,
+            to_value=format_estimate(task.estimate),
         )
         if sprint is not None:
             # A born-in-sprint task still needs its own SPRINT row: the
@@ -128,6 +133,7 @@ def create_task(
                 type=TaskEvent.Type.SPRINT,
                 actor=user,
                 to_value=sprint.name,
+                to_ref=sprint.pk,
             )
     if assignees:
         auto_watch(task, assignees)
@@ -206,6 +212,7 @@ def apply_status_change(task, *, actor=None, old_status=None):
                 type=TaskEvent.Type.SPRINT,
                 actor=actor,
                 to_value=joined_sprint.name,
+                to_ref=joined_sprint.pk,
             )
     if task.status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task])
@@ -281,6 +288,7 @@ def move_tasks(project, status, task_uuids, *, actor=None):
                 type=TaskEvent.Type.SPRINT,
                 actor=actor,
                 to_value=default_sprint.name,
+                to_ref=default_sprint.pk,
             )
     if moved and status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task for task, _ in moved])
@@ -374,6 +382,7 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
                 type=TaskEvent.Type.SPRINT,
                 actor=actor,
                 to_value=default_sprint.name,
+                to_ref=default_sprint.pk,
             )
     if moved and status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task for task, _ in moved])

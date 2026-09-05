@@ -12,6 +12,7 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import Tag
 
 # Migration module names are not valid identifiers, so import by string.
@@ -29,7 +30,7 @@ class TagColorMigrationTests(TestCase):
         )
 
     def _migrate(self):
-        tokens_to_hex(apps, None)
+        tokens_to_hex(apps, schema_editor_stub())
 
     def test_every_picker_token_maps_to_a_css_color(self):
         tokens = {
@@ -83,7 +84,7 @@ class TagColorMigrationTests(TestCase):
         Tag.objects.create(owner=self.user, name="none", color="ghost")
 
         self._migrate()
-        hex_to_tokens(apps, None)
+        hex_to_tokens(apps, schema_editor_stub())
 
         self.assertEqual(Tag.objects.get(name="red").color, "error")
         self.assertEqual(Tag.objects.get(name="none").color, "ghost")

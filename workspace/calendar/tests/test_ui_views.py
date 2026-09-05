@@ -190,16 +190,18 @@ class EventCardMembersTests(TestCase):
         from django.utils import timezone
 
         from workspace.calendar.models import Event
+        from workspace.calendar.services.recurrence_rule import apply_rule
         from workspace.chat.services.meetings import create_meeting
 
-        master = Event.objects.create(
+        master = Event(
             calendar=self.cal,
             title="Standup Series",
             owner=self.owner,
             start=timezone.now() + timedelta(hours=1),
             end=timezone.now() + timedelta(hours=2),
-            recurrence_frequency="daily",
         )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
         meeting = create_meeting(master, self.owner)
         occ_start = master.start + timedelta(days=1)
         exception = Event.objects.create(

@@ -237,3 +237,147 @@ def index_search_document(self, file_uuid, include_descendants=False):
             skipped += len(page) - written
 
     return {"status": "ok", "indexed": indexed, "failed": skipped}
+
+
+@shared_task(name="files.scan_file", bind=True, max_retries=0)
+def scan_file(self, file_uuid):
+    """Scan one file's content for malware and record the verdict.
+
+    max_retries=0 on purpose: a daemon that is down will be down on the next
+    attempt too, and a permanently unscannable file must never turn into a
+    retry loop. The scan_files management command is the recovery path.
+    """
+    import time
+
+    from django.core.exceptions import ValidationError
+
+    from workspace.files.metrics import (
+        FILES_MALWARE_SCAN_DURATION,
+        FILES_MALWARE_SCAN_RESULT,
+    )
+    from workspace.files.models import File, FileScan
+    from workspace.files.services.scanning.base import ScanVerdict
+    from workspace.files.services.scanning.capped import CappedReader
+    from workspace.files.services.scanning.policy import blocked_statuses
+    from workspace.files.services.scanning.registry import get_scanner
+    from workspace.files.services.search_index import unindex_file
+
+    scanner = get_scanner()
+    if scanner is None:
+        return {"status": "disabled"}
+
+    try:
+        file_obj = File.objects.get(uuid=file_uuid)
+    except File.DoesNotExist, ValidationError, ValueError, TypeError:
+        # Hard-deleted between the event and this task, or a malformed id.
+        return {"status": "not_found"}
+
+    if file_obj.node_type != File.NodeType.FILE or not file_obj.content:
+        return {"status": "not_applicable"}
+
+    # Identifies the bytes this run is about to look at. Re-read just before
+    # the verdict is written, it is what tells a slow scan of the old content
+    # apart from a verdict about what the row holds now.
+    scanned_hash = file_obj.content_hash
+
+    max_bytes = int(getattr(settings, "FILES_MALWARE_SCAN_MAX_BYTES", 25 * 1024 * 1024))
+
+    if (file_obj.size or 0) > max_bytes:
+        verdict = ScanVerdict(
+            status=FileScan.Status.SKIPPED, detail="larger than the scan size cap"
+        )
+    else:
+        started = time.monotonic()
+        try:
+            handle = file_obj.content.open("rb")
+        except (FileNotFoundError, OSError) as exc:
+            logger.warning(
+                "Malware scan cannot read blob for %s: %s",
+                scrub(file_obj.content.name),
+                scrub(str(exc)),
+            )
+            verdict = ScanVerdict(status=FileScan.Status.ERROR, detail=str(exc)[:500])
+        else:
+            try:
+                reader = CappedReader(handle, max_bytes)
+                verdict = scanner.scan(reader, name=file_obj.name)
+                if reader.truncated and verdict.status == FileScan.Status.CLEAN:
+                    # Clean as far as we looked is not the same as clean.
+                    verdict = ScanVerdict(
+                        status=FileScan.Status.SKIPPED,
+                        detail="larger than the scan size cap",
+                    )
+            finally:
+                handle.close()
+            FILES_MALWARE_SCAN_DURATION.observe(time.monotonic() - started)
+
+    # The content may have been replaced while this scan was running: a large
+    # infected upload takes longer to scan than the clean file that replaced
+    # it, so the two verdicts can land out of order. Writing the older one
+    # would quarantine content it never read, and permanently - max_retries=0
+    # and scan_files without --rescan both leave an existing row alone.
+    current_hash = (
+        File.objects.filter(pk=file_obj.pk)
+        .values_list("content_hash", flat=True)
+        .first()
+    )
+    if current_hash is None:
+        # Hard-deleted mid-scan; the FK would fail anyway.
+        return {"status": "not_found"}
+    if current_hash != scanned_hash:
+        logger.info(
+            "Discarding a stale malware verdict for %s: its content changed mid-scan",
+            scrub(file_obj.name),
+        )
+        return {"status": "stale"}
+
+    blocked = blocked_statuses()
+    # Read before the write: only a blocked -> readable transition has a
+    # document to restore. Re-indexing every clean verdict would extract the
+    # same text a second time for the same upload and put this task in a race
+    # with the indexing one over a single FTS row.
+    existing = (
+        FileScan.objects.filter(file=file_obj).values("status", "content_hash").first()
+        or {}
+    )
+    was_blocked = existing.get("status") in blocked
+
+    defaults = {
+        "status": verdict.status,
+        "signature": verdict.signature,
+        "detail": verdict.detail,
+        # The hash captured before the blob was opened, not a fresh read:
+        # it is the one the verdict actually describes, and the staleness
+        # check above has just confirmed the row still holds it.
+        "content_hash": scanned_hash,
+        "scanned_at": timezone.now(),
+    }
+    # An administrator's clearance is pinned to the hash on this row, and the
+    # line above moves that pin. Leaving the columns alone would hand a verdict
+    # about bytes nobody vouched for the clearance granted to the previous
+    # ones. A rescan of the same bytes keeps it, which is the whole point of
+    # the action - scan_files would otherwise undo every clearance it passes.
+    if existing.get("content_hash") != scanned_hash:
+        defaults["overridden_at"] = None
+        defaults["overridden_by"] = None
+        defaults["override_reason"] = ""
+
+    FileScan.objects.update_or_create(file=file_obj, defaults=defaults)
+    FILES_MALWARE_SCAN_RESULT.labels(result=verdict.status).inc()
+
+    if verdict.status in blocked:
+        unindex_file(file_obj)
+        if file_obj.has_thumbnail:
+            from workspace.files.services.thumbnails.generation import (
+                delete_thumbnail,
+            )
+
+            delete_thumbnail(file_obj.uuid)
+            file_obj.has_thumbnail = False
+            file_obj.save(update_fields=["has_thumbnail"])
+    elif was_blocked:
+        from workspace.files.services.scanning.override import restore_after_unblock
+
+        restore_after_unblock(file_obj)
+
+    return {"status": verdict.status, "signature": verdict.signature}

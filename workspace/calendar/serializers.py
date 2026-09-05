@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from .models import Calendar, Event, EventMember
 from .recurrence import meeting_join_url
+from .services import recurrence_rule
 from .services.timezones import normalize_all_day
 
 
@@ -33,6 +34,26 @@ class AllDayNormalizingMixin:
             if attrs.get("end"):
                 attrs["end"] = normalize_all_day(attrs["end"])
         return attrs
+
+
+class RecurrenceRuleValidationMixin:
+    """Rejects recurrence text the expansion engine cannot read.
+
+    Stored text nothing can parse becomes a master with no bound, which no
+    window query prunes: it is loaded and logged on every calendar read, for
+    every window, for every user who can see it. Refusing it at the boundary
+    is cheaper than containing it afterwards.
+    """
+
+    # Parseability is a property of the text, not of when the series starts,
+    # so any aware instant does as the anchor - a fixed one keeps the check
+    # deterministic.
+    _VALIDATION_ANCHOR = datetime(2000, 1, 1, tzinfo=UTC)
+
+    def validate_recurrence_rule(self, value):
+        if value and recurrence_rule.parse(value, self._VALIDATION_ANCHOR) is None:
+            raise serializers.ValidationError("Unrecognized recurrence rule.")
+        return value
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -89,6 +110,8 @@ class EventSerializer(serializers.ModelSerializer):
     ical_uid = serializers.CharField(read_only=True)
     external_organizer = serializers.EmailField(read_only=True)
     join_url = serializers.SerializerMethodField()
+    recurrence_summary = serializers.SerializerMethodField()
+    recurrence_simple = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -105,9 +128,9 @@ class EventSerializer(serializers.ModelSerializer):
             "join_url",
             "owner",
             "members",
-            "recurrence_frequency",
-            "recurrence_interval",
-            "recurrence_end",
+            "recurrence_rule",
+            "recurrence_summary",
+            "recurrence_simple",
             "is_recurring",
             "is_exception",
             "poll_id",
@@ -129,6 +152,17 @@ class EventSerializer(serializers.ModelSerializer):
             obj.recurrence_parent or obj, self.context.get("request")
         )
 
+    def get_recurrence_summary(self, obj):
+        return recurrence_rule.describe(obj.recurrence_rule)
+
+    def get_recurrence_simple(self, obj):
+        """Picker-shaped view, or None when the rule is beyond the picker.
+
+        None is the signal the web modal uses to go read-only; deriving it
+        server-side keeps a second RRULE parser out of the frontend.
+        """
+        return recurrence_rule.to_simple_json(obj.recurrence_rule)
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if data.get("all_day"):
@@ -143,7 +177,9 @@ class EventSerializer(serializers.ModelSerializer):
         return data
 
 
-class EventCreateSerializer(AllDayNormalizingMixin, serializers.Serializer):
+class EventCreateSerializer(
+    RecurrenceRuleValidationMixin, AllDayNormalizingMixin, serializers.Serializer
+):
     calendar_id = serializers.UUIDField()
     title = serializers.CharField(max_length=255)
     description = serializers.CharField(required=False, default="", allow_blank=True)
@@ -158,25 +194,14 @@ class EventCreateSerializer(AllDayNormalizingMixin, serializers.Serializer):
         required=False,
         default=list,
     )
-    recurrence_frequency = serializers.ChoiceField(
-        choices=Event.RecurrenceFrequency.choices,
-        required=False,
-        allow_null=True,
-        default=None,
-    )
-    recurrence_interval = serializers.IntegerField(
-        required=False,
-        default=1,
-        min_value=1,
-    )
-    recurrence_end = serializers.DateTimeField(
-        required=False,
-        allow_null=True,
-        default=None,
+    recurrence_rule = serializers.CharField(
+        required=False, allow_blank=True, default="", trim_whitespace=False
     )
 
 
-class EventUpdateSerializer(AllDayNormalizingMixin, serializers.Serializer):
+class EventUpdateSerializer(
+    RecurrenceRuleValidationMixin, AllDayNormalizingMixin, serializers.Serializer
+):
     calendar_id = serializers.UUIDField(required=False)
     title = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
@@ -188,18 +213,8 @@ class EventUpdateSerializer(AllDayNormalizingMixin, serializers.Serializer):
         child=serializers.IntegerField(),
         required=False,
     )
-    recurrence_frequency = serializers.ChoiceField(
-        choices=Event.RecurrenceFrequency.choices,
-        required=False,
-        allow_null=True,
-    )
-    recurrence_interval = serializers.IntegerField(
-        required=False,
-        min_value=1,
-    )
-    recurrence_end = serializers.DateTimeField(
-        required=False,
-        allow_null=True,
+    recurrence_rule = serializers.CharField(
+        required=False, allow_blank=True, trim_whitespace=False
     )
     scope = serializers.ChoiceField(
         choices=["this", "future", "all"],
@@ -228,9 +243,9 @@ class OccurrenceSerializer(serializers.Serializer):
     is_exception = serializers.BooleanField()
     master_event_id = serializers.CharField()
     original_start = serializers.CharField(allow_null=True)
-    recurrence_frequency = serializers.CharField(allow_null=True)
-    recurrence_interval = serializers.IntegerField()
-    recurrence_end = serializers.CharField(allow_null=True)
+    recurrence_rule = serializers.CharField(allow_blank=True)
+    recurrence_summary = serializers.CharField(allow_blank=True)
+    recurrence_simple = serializers.DictField(allow_null=True)
 
 
 class EventRespondSerializer(serializers.Serializer):

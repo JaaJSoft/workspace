@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event
+from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.chat.models import Conversation, Meeting, MeetingGuest
 from workspace.chat.services.meeting_guests import (
     guest_for_token,
@@ -177,15 +178,15 @@ class ResolveGuestRecurringTests(TestCase):
         self.user = User.objects.create_user(username="rgr", password="x")
         cal = Calendar.objects.create(name="C", owner=self.user)
         self.now = timezone.now()
-        self.event = Event.objects.create(
+        self.event = Event(
             calendar=cal,
             owner=self.user,
             title="Standup",
             start=self.now - timedelta(weeks=3, minutes=5),
             end=self.now - timedelta(weeks=3) + timedelta(minutes=25),
-            recurrence_frequency=Event.RecurrenceFrequency.WEEKLY,
-            recurrence_interval=1,
         )
+        apply_rule(self.event, "RRULE:FREQ=WEEKLY")
+        self.event.save()
         conv = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, created_by=self.user
         )

@@ -8,11 +8,13 @@
 //    name shown "just to help identify it". The count is all that survives,
 //    and the banner is built from it.
 //
-// 2. **Only a name and a login are opened.** A password, an authenticator key
-//    or any other secret field stays sealed until the moment it is copied, so
-//    that a page sitting open holds no secret in component state where the
-//    developer tools would show it. `openField` is that moment, and it hands
-//    the value back without keeping a copy.
+// 2. **Only a name and a login are opened without being asked for.** A
+//    password, an authenticator key or any other secret field stays sealed
+//    until the moment it is copied or the user asks to see it. `openField` is
+//    that moment, and it hands the value back without keeping a copy itself.
+//    A caller that holds on to what it opens - a reveal in the entry panel -
+//    keeps it only until the panel closes, another entry is opened, or the
+//    vault locks: never on a timer, and never past those three points.
 window.vaultReader = (function () {
   const NAME_FIELD = 'name';
   const DESCRIPTION_FIELD = 'description';

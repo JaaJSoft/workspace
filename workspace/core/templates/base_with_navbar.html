@@ -8,9 +8,13 @@
     {% include 'core/partials/navbar.html' %}
   {% endblock %}
 
-  <!-- Drawer below navbar -->
+  {% comment %}Drawer below navbar. `grid-rows-1` (minmax(0,1fr)) is load-bearing:
+  daisyUI leaves the row auto-sized, so a sidebar taller than the viewport grows
+  the track and stretches the content column with it - the page has no scrollbar
+  to compensate, it just loses its bottom. It is outside the overridable block on
+  purpose.{% endcomment %}
   <div
-    class="drawer {% block drawer_class %}{% endblock %} {% block drawer_wrapper_class %}flex-1 min-h-0{% endblock %}"
+    class="drawer grid-rows-1 {% block drawer_class %}{% endblock %} {% block drawer_wrapper_class %}flex-1 min-h-0{% endblock %}"
     {% block drawer_attrs %}
     {% endblock %}
   >
@@ -19,6 +23,17 @@
       type="checkbox"
       class="drawer-toggle"
     />
+
+    {% comment %}
+      The sidebar comes before the content in the DOM on purpose. The browser
+      paints a long document as it parses it, and the content of a large
+      listing is several megabytes: with the sidebar last, the page painted
+      the content at full width for as long as the parse took, then shifted
+      it right when the aside finally arrived. daisyUI places the two by grid
+      column, not by order, and every drawer rule selects the side from the
+      toggle (`.drawer-toggle ~ .drawer-side`), so the swap costs nothing.
+    {% endcomment %}
+    {% block drawer_sidebar %}{% endblock %}
 
     <div
       class="drawer-content flex flex-col {% block drawer_content_class %}h-full overflow-hidden{% endblock %}"
@@ -29,7 +44,5 @@
         {% block content %}{% endblock %}
       </main>
     </div>
-
-    {% block drawer_sidebar %}{% endblock %}
   </div>
 {% endblock %}

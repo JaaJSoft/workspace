@@ -2,11 +2,9 @@ import io
 
 from django.test import TestCase
 from pypdf import PdfWriter
-from pypdf.errors import PdfReadError
 
-from workspace.ai.services.pdf import _page_text, extract_pdf
-
-from .pdf_fixtures import make_pdf
+from workspace.ai.services.pdf import extract_pdf
+from workspace.common.tests.pdf_fixtures import make_pdf
 
 
 def _rewritten(source: bytes, **writer_calls) -> bytes:
@@ -26,14 +24,13 @@ class ExtractPdfTests(TestCase):
         self.assertIn("First page", document.text)
         self.assertIn("Second page", document.text)
         self.assertEqual(document.page_count, 2)
-        self.assertEqual(document.pages_read, 2)
+        self.assertFalse(document.truncated)
 
-    def test_page_cap_stops_extraction_but_still_reports_the_length(self):
-        document = extract_pdf(make_pdf(["One", "Two", "Three"]), max_pages=2)
+    def test_the_ceiling_stops_extraction_but_still_reports_the_length(self):
+        document = extract_pdf(make_pdf(["One", "Two", "Three"]), max_chars=4)
 
-        self.assertIn("One", document.text)
-        self.assertNotIn("Three", document.text)
-        self.assertEqual(document.pages_read, 2)
+        self.assertLessEqual(len(document.text), 4)
+        self.assertTrue(document.truncated)
         self.assertEqual(document.page_count, 3)
 
     def test_pdf_without_a_text_layer_extracts_nothing(self):
@@ -64,17 +61,13 @@ class ExtractPdfTests(TestCase):
             extract_pdf(data)
         self.assertIn("password-protected", str(ctx.exception))
 
+    def test_restricted_printing_still_opens(self):
+        # An empty user password restricts what a reader may do, not access.
+        data = _rewritten(make_pdf(["Readable"]), encrypt="")
+
+        self.assertIn("Readable", extract_pdf(data).text)
+
     def test_garbage_bytes_raise_value_error(self):
         with self.assertRaises(ValueError) as ctx:
             extract_pdf(b"%PDF-1.4 and then nothing usable")
         self.assertIn("Could not read PDF", str(ctx.exception))
-
-
-class PageFailureTests(TestCase):
-    def test_an_unreadable_page_costs_only_itself(self):
-        class _BrokenPage:
-            def extract_text(self):
-                raise PdfReadError("unsupported font")
-
-        with self.assertLogs("workspace.ai.services.pdf", level="WARNING"):
-            self.assertEqual(_page_text(_BrokenPage(), 3), "")

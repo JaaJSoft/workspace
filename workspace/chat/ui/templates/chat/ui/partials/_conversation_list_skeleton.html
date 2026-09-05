@@ -1,0 +1,61 @@
+{% comment %}
+Conversation List Skeleton
+==========================
+Placeholder painted in place of the sidebar's conversation list until Alpine
+boots. The real list is server-rendered but cloaked (its rows carry bindings
+for the collapsed rail, the active row, the density preference) and Alpine is
+deferred, so on any page of real size the sidebar would otherwise stay empty
+for a beat and the rows would pop in afterwards.
+
+Alpine hides this block on mount (x-show="false" runs synchronously during
+the tree walk) in the same task that uncloaks the list, so neither state ever
+paints alone; the absolute positioning makes even a one-frame overlap
+harmless. It is never swapped by alpine-ajax: a search refresh morphs the
+existing rows in place and needs no placeholder.
+
+The geometry mirrors _conversation_item.html so the swap is a fade rather
+than a reflow: one row per conversation (capped), the pinned header and its
+divider, the 64px icon rail below `lg` and whenever the stored preference
+collapses the sidebar, the denser rows when the compact preference is on.
+
+Expects in context:
+  - pinned_conversations, other_conversations (only their lengths are read)
+  - chat_prefs: dict, `compactConversationList` selects the compact rows
+  - workspace_sidebar_collapsed: from the core context processor
+{% endcomment %}
+
+{% with compact=chat_prefs.compactConversationList collapsed=workspace_sidebar_collapsed %}
+  {% if pinned_conversations or other_conversations %}
+    <div
+      class="absolute inset-0 overflow-hidden py-4 px-3 animate-pulse pointer-events-none"
+      aria-hidden="true"
+      data-testid="conversation-list-skeleton"
+      x-show="false"
+    >
+      {% if pinned_conversations %}
+        <div
+          class="h-5 mb-3 items-center {% if collapsed %}hidden{% else %}hidden lg:flex{% endif %}"
+        >
+          <div class="h-3 w-16 bg-base-300 rounded"></div>
+        </div>
+        <ul class="space-y-1">
+          {% for _ in pinned_conversations|slice:":15" %}
+            {% include "chat/ui/partials/_conversation_list_skeleton_row.html" with compact=compact collapsed=collapsed %}
+          {% endfor %}
+        </ul>
+        {% if other_conversations %}
+          <hr
+            class="my-3 border-base-300 {% if collapsed %}opacity-0{% else %}opacity-0 lg:opacity-100{% endif %}"
+          />
+        {% endif %}
+      {% endif %}
+      {% if other_conversations %}
+        <ul class="space-y-1">
+          {% for _ in other_conversations|slice:":15" %}
+            {% include "chat/ui/partials/_conversation_list_skeleton_row.html" with compact=compact collapsed=collapsed %}
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endwith %}

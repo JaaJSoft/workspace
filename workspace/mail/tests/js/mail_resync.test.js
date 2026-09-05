@@ -11,7 +11,8 @@ const { loadScript } = require('../../../common/tests/js/loader');
 
 function makeApp() {
   const ctx = loadScript('workspace/mail/ui/static/mail/ui/js/mail.js', {
-    document: { getElementById: () => null },
+document: { getElementById: () => null },
+    sidebarPreference: { initial: () => false, save: () => {} },
     attachmentInputMixin: () => ({}),
     mailAccountsMixin: () => ({}),
     mailFoldersMixin: () => ({}),

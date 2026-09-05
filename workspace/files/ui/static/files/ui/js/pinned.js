@@ -116,16 +116,8 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
 
       // Load actions for the pinned folder
       try {
-        const csrfToken = getCSRFToken();
-        const resp = await fetch('/api/v1/files/actions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ uuids: [nodeData.uuid] }),
-        });
-        if (resp.ok) {
-          const actionsMap = await resp.json();
-          nodeData.actions = actionsMap[nodeData.uuid] || [];
-        }
+        const actionsMap = await window.fileActions.fetchActions([nodeData.uuid]);
+        nodeData.actions = actionsMap ? actionsMap[nodeData.uuid] || [] : [];
       } catch (e) {
         // Fallback to empty actions
         nodeData.actions = [];

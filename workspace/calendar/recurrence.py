@@ -1,6 +1,8 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
+from django.core.exceptions import ObjectDoesNotExist
+
 from workspace.common.logging import scrub
 
 from .services.recurrence_rule import (
@@ -255,6 +257,24 @@ def _event_dt_str(dt, all_day):
     return dt.isoformat()
 
 
+def meeting_join_url(event, request=None):
+    """Absolute join URL for the meeting attached to *event*, or None.
+
+    Shared by the event serializer, the server-rendered event card, and the
+    recurring-occurrence dict builders below - a recurring series' meeting
+    is one row per series, attached to the master event (see ``Meeting`` in
+    ``workspace.chat.models``), so callers pass whichever row holds it: the
+    event itself, or an exception's ``recurrence_parent``.
+    """
+    try:
+        meeting = event.meeting
+    except ObjectDoesNotExist:
+        return None
+    return (
+        request.build_absolute_uri(meeting.join_path) if request else meeting.join_path
+    )
+
+
 def _recurrence_fields(rule, cache_source=None):
     """(recurrence_summary, recurrence_simple) for *rule*.
 
@@ -274,7 +294,7 @@ def _recurrence_fields(rule, cache_source=None):
     return summary, simple
 
 
-def make_virtual_occurrence(master, occ_start):
+def make_virtual_occurrence(master, occ_start, request=None):
     """Build a dict for a virtual (non-materialized) occurrence."""
     duration = (master.end - master.start) if master.end else None
     occ_end = (occ_start + duration) if duration else None
@@ -290,6 +310,7 @@ def make_virtual_occurrence(master, occ_start):
         "end": _event_dt_str(occ_end, master.all_day),
         "all_day": master.all_day,
         "location": master.location,
+        "join_url": meeting_join_url(master, request),
         "owner": _user_dict(master.owner),
         "members": getattr(master, "_cached_member_dicts", None)
         or [_member_dict(m) for m in master.members.all()],
@@ -305,7 +326,7 @@ def make_virtual_occurrence(master, occ_start):
     }
 
 
-def make_exception_dict(exc, master=None):
+def make_exception_dict(exc, master=None, request=None):
     """Convert a materialized exception Event to the occurrence dict format.
 
     `master` is the row `expand_recurring_events` is already iterating for
@@ -326,6 +347,9 @@ def make_exception_dict(exc, master=None):
         "end": _event_dt_str(exc.end, exc.all_day),
         "all_day": exc.all_day,
         "location": exc.location,
+        "join_url": meeting_join_url(exc.recurrence_parent, request)
+        if exc.recurrence_parent
+        else None,
         "owner": _user_dict(exc.owner),
         "members": [_member_dict(m) for m in exc.members.all()],
         "created_at": exc.created_at.isoformat(),
@@ -342,7 +366,7 @@ def make_exception_dict(exc, master=None):
     }
 
 
-def expand_recurring_events(masters_qs, range_start, range_end):
+def expand_recurring_events(masters_qs, range_start, range_end, request=None):
     """
     Expand recurring master events into occurrence dicts.
     Substitutes materialized exceptions, skips cancelled ones.
@@ -355,10 +379,14 @@ def expand_recurring_events(masters_qs, range_start, range_end):
     if not master_ids:
         return []
 
-    # Fetch all exceptions for these masters, prefetch members
+    # Fetch all exceptions for these masters, prefetch members. The
+    # exception's own join_url reads the master's meeting through
+    # recurrence_parent, so that relation is select_related too.
     exceptions = (
         Event.objects.filter(recurrence_parent_id__in=master_ids)
-        .select_related("owner", "calendar", "recurrence_parent")
+        .select_related(
+            "owner", "calendar", "recurrence_parent", "recurrence_parent__meeting"
+        )
         .prefetch_related(
             Prefetch("members", queryset=EventMember.objects.select_related("user"))
         )
@@ -389,8 +417,8 @@ def expand_recurring_events(masters_qs, range_start, range_end):
             if exc:
                 if exc.is_cancelled:
                     continue  # Skip cancelled occurrences
-                occurrences.append(make_exception_dict(exc, master))
+                occurrences.append(make_exception_dict(exc, master, request))
             else:
-                occurrences.append(make_virtual_occurrence(master, occ_start))
+                occurrences.append(make_virtual_occurrence(master, occ_start, request))
 
     return occurrences

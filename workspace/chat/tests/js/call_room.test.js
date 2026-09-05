@@ -13,19 +13,19 @@ test('chatCallRoomTabName builds a deterministic tab name', () => {
 });
 
 test('chatCallBannerAction returns null when no active call', () => {
-  assert.equal(ctx.chatCallBannerAction(false, [], 1), null);
+  assert.equal(ctx.chatCallBannerAction(false, [], 'u:1'), null);
 });
 
 test('chatCallBannerAction returns join when I am not a participant', () => {
   assert.equal(
-    ctx.chatCallBannerAction(true, [{ user_id: 2 }], 1),
+    ctx.chatCallBannerAction(true, [{ participant_key: 'u:2' }], 'u:1'),
     'join',
   );
 });
 
 test('chatCallBannerAction returns return when I am a participant', () => {
   assert.equal(
-    ctx.chatCallBannerAction(true, [{ user_id: 1 }, { user_id: 2 }], 1),
+    ctx.chatCallBannerAction(true, [{ participant_key: 'u:1' }, { participant_key: 'u:2' }], 'u:1'),
     'return',
   );
 });
@@ -38,7 +38,7 @@ test('chatIsSpeaking compares level against the threshold', () => {
 });
 
 test('chatCallBannerAction returns join when participants is null', () => {
-  assert.equal(ctx.chatCallBannerAction(true, null, 1), 'join');
+  assert.equal(ctx.chatCallBannerAction(true, null, 'u:1'), 'join');
 });
 
 test('chatIsSpeaking returns true at the threshold boundary', () => {
@@ -51,72 +51,73 @@ test('chatCallShouldOwnMedia is false only for observer', () => {
   assert.equal(ctx.chatCallShouldOwnMedia(undefined), true);
 });
 
-test('chatCallSpotlightTarget returns the manually pinned user when still present', () => {
-  const ps = [{ user_id: 1 }, { user_id: 2 }];
-  assert.equal(ctx.chatCallSpotlightTarget(ps, 2, true), 2);
+test('chatCallBannerAction distinguishes a participant from an observer', () => {
+  const ps = [{ participant_key: 'u:1' }, { participant_key: 'u:2' }];
+  assert.equal(ctx.chatCallBannerAction(true, ps, 'u:2'), 'return');
+  assert.equal(ctx.chatCallBannerAction(true, ps, 'u:9'), 'join');
+  assert.equal(ctx.chatCallBannerAction(false, ps, 'u:2'), null);
+});
+
+test('chatCallSpotlightTarget returns the manually pinned participant when still present', () => {
+  const ps = [{ participant_key: 'u:1' }, { participant_key: 'u:2' }];
+  assert.equal(ctx.chatCallSpotlightTarget(ps, 'u:2', true), 'u:2');
 });
 
 test('chatCallSpotlightTarget returns null with no pin and no sharer', () => {
-  assert.equal(ctx.chatCallSpotlightTarget([{ user_id: 1 }], null, false), null);
+  assert.equal(ctx.chatCallSpotlightTarget([{ participant_key: 'u:1' }], null, false), null);
 });
 
-test('chatCallSpotlightTarget returns null when the manually pinned user has left', () => {
-  assert.equal(ctx.chatCallSpotlightTarget([{ user_id: 1 }], 99, true), null);
+test('chatCallSpotlightTarget returns null when the manually pinned participant has left', () => {
+  assert.equal(ctx.chatCallSpotlightTarget([{ participant_key: 'u:1' }], 'u:99', true), null);
 });
 
-test('chatCallSpotlightTarget auto-spotlights an existing sharer for a viewer who has not pinned', () => {
+test('chatCallSpotlightTarget auto-spotlights a sharing guest for a viewer who has not pinned', () => {
   // A viewer joining mid-share derives the spotlight from live state, not from a
   // missed start-of-share event: the sharer is shown large immediately.
   const ps = [
-    { user_id: 1, media_state: { audio: true } },
-    { user_id: 2, media_state: { audio: true, screen: true } },
+    { participant_key: 'u:1', media_state: { screen: false } },
+    { participant_key: 'g:abc', media_state: { screen: true } },
   ];
-  assert.equal(ctx.chatCallSpotlightTarget(ps, null, false), 2);
+  assert.equal(ctx.chatCallSpotlightTarget(ps, null, false), 'g:abc');
 });
 
 test('chatCallSpotlightTarget clears the spotlight when the sharer stops sharing', () => {
-  const sharing = [
-    { user_id: 1, media_state: { audio: true } },
-    { user_id: 2, media_state: { audio: true, screen: true } },
-  ];
-  assert.equal(ctx.chatCallSpotlightTarget(sharing, null, false), 2);
-  // Same viewer state, but participant 2 stopped sharing: spotlight falls back to grid.
-  const stopped = [
-    { user_id: 1, media_state: { audio: true } },
-    { user_id: 2, media_state: { audio: true, screen: false } },
-  ];
+  const sharing = [{ participant_key: 'u:2', media_state: { screen: true } }];
+  const stopped = [{ participant_key: 'u:2', media_state: { screen: false } }];
+  assert.equal(ctx.chatCallSpotlightTarget(sharing, null, false), 'u:2');
+  // Same viewer state, but participant u:2 stopped sharing: spotlight falls back to grid.
   assert.equal(ctx.chatCallSpotlightTarget(stopped, null, false), null);
 });
 
 test('chatCallSpotlightTarget keeps a manual pin even while someone else shares', () => {
   const ps = [
-    { user_id: 1, media_state: { audio: true } },
-    { user_id: 2, media_state: { audio: true, screen: true } },
+    { participant_key: 'u:1', media_state: { audio: true } },
+    { participant_key: 'u:2', media_state: { audio: true, screen: true } },
   ];
-  assert.equal(ctx.chatCallSpotlightTarget(ps, 1, true), 1);
+  assert.equal(ctx.chatCallSpotlightTarget(ps, 'u:1', true), 'u:1');
 });
 
 test('chatCallSpotlightTarget stays on the grid after back-to-grid even if someone shares', () => {
-  // back-to-grid sets pinnedManually=true with pinnedUserId=null; auto-pin yields.
-  const ps = [{ user_id: 2, media_state: { audio: true, screen: true } }];
+  // back-to-grid sets pinnedManually=true with pinnedKey=null; auto-pin yields.
+  const ps = [{ participant_key: 'u:2', media_state: { audio: true, screen: true } }];
   assert.equal(ctx.chatCallSpotlightTarget(ps, null, true), null);
 });
 
 test('chatCallAutoPinTarget picks the first active screen sharer when not manually pinned', () => {
   const ps = [
-    { user_id: 1, media_state: { audio: true } },
-    { user_id: 3, media_state: { audio: true, screen: true } },
+    { participant_key: 'u:1', media_state: { audio: true } },
+    { participant_key: 'u:3', media_state: { audio: true, screen: true } },
   ];
-  assert.equal(ctx.chatCallAutoPinTarget(ps, false), 3);
+  assert.equal(ctx.chatCallAutoPinTarget(ps, false), 'u:3');
 });
 
 test('chatCallAutoPinTarget yields to a manual pin', () => {
-  const ps = [{ user_id: 3, media_state: { screen: true } }];
+  const ps = [{ participant_key: 'u:3', media_state: { screen: true } }];
   assert.equal(ctx.chatCallAutoPinTarget(ps, true), null);
 });
 
 test('chatCallAutoPinTarget returns null when nobody is screen sharing', () => {
-  const ps = [{ user_id: 3, media_state: { audio: true, screen: false } }];
+  const ps = [{ participant_key: 'u:3', media_state: { audio: true, screen: false } }];
   assert.equal(ctx.chatCallAutoPinTarget(ps, false), null);
 });
 

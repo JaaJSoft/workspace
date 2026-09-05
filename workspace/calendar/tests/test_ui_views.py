@@ -179,3 +179,43 @@ class EventCardMembersTests(TestCase):
             2,
             f"expected 2 member queries, got {len(member_queries)}",
         )
+
+    def test_join_url_for_an_exception_reads_the_series_master(self):
+        # The card fetches by whatever uuid the calendar grid handed it,
+        # which for a materialized exception is the exception's own row -
+        # but the Meeting lives on the series master, never on the
+        # exception (create_meeting redirects there too).
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from workspace.calendar.models import Event
+        from workspace.calendar.services.recurrence_rule import apply_rule
+        from workspace.chat.services.meetings import create_meeting
+
+        master = Event(
+            calendar=self.cal,
+            title="Standup Series",
+            owner=self.owner,
+            start=timezone.now() + timedelta(hours=1),
+            end=timezone.now() + timedelta(hours=2),
+        )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
+        meeting = create_meeting(master, self.owner)
+        occ_start = master.start + timedelta(days=1)
+        exception = Event.objects.create(
+            calendar=self.cal,
+            title="Standup Series (moved)",
+            owner=self.owner,
+            start=occ_start + timedelta(minutes=30),
+            end=occ_start + timedelta(minutes=90),
+            recurrence_parent=master,
+            original_start=occ_start,
+        )
+        self.client.login(username="cardowner", password="pass123")
+        resp = self.client.get(f"/calendar/events/{exception.pk}/card")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.context["join_url"], f"http://testserver/meet/{meeting.slug}"
+        )

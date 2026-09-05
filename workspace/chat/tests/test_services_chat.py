@@ -2,8 +2,15 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
-from workspace.chat.models import Conversation, ConversationMember
+from workspace.calendar.models import Calendar, Event
+from workspace.chat.models import (
+    Conversation,
+    ConversationMember,
+    Meeting,
+    MeetingGuest,
+)
 from workspace.chat.services.notifications import (
     notification_title,
     notify_new_message,
@@ -378,6 +385,52 @@ class NotifyNewMessageTests(TestCase):
 
         notif = Notification.objects.get(recipient=self.alice, origin="chat")
         self.assertEqual(notif.title, "author in Team")
+
+
+# ── notify_new_message: guest author ────────────────────────────
+
+
+@patch("workspace.notifications.services.notifications.notify_sse")
+@patch("workspace.notifications.tasks.send_push_notification.delay")
+class NotifyNewMessageGuestTests(TestCase):
+    """A guest has no user row; the notification must resolve their name
+    from the guest identity instead of dereferencing a None author."""
+
+    def setUp(self):
+        self.host = User.objects.create_user(username="host2", password="p")
+        self.alice = User.objects.create_user(username="alice2", password="p")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP,
+            created_by=self.host,
+        )
+        for u in (self.host, self.alice):
+            ConversationMember.objects.create(conversation=self.conv, user=u)
+        cal = Calendar.objects.create(name="C", owner=self.host)
+        event = Event.objects.create(
+            calendar=cal, owner=self.host, title="E", start=timezone.now()
+        )
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.conv, created_by=self.host
+        )
+        self.guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=timezone.now(),
+            token_hash="e" * 64,
+        )
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def test_guest_authored_message_notifies_with_the_guest_display_name(
+        self, mock_push, mock_sse
+    ):
+        notify_new_message(self.conv, None, "hi from a guest", guest=self.guest)
+
+        notif = Notification.objects.get(recipient=self.alice, origin="chat")
+        self.assertEqual(notif.title, "Visitor")
 
 
 # ── notification_title ──────────────────────────────────────────

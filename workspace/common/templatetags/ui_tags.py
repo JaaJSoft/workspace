@@ -66,6 +66,21 @@ class HelpItemsNode(template.Node):
         return ""
 
 
+@register.simple_tag
+def capabilities(**flags):
+    """
+    Bundle keyword flags into a dict, for a partial that takes a capability
+    map. Django templates cannot write a dict literal, so::
+
+        {% capabilities attachments=False voice=False as caps %}
+        {% include "…" with widget_capabilities=caps %}
+
+    An omitted map means "everything", which is why such a partial gates on
+    ``{% if not caps or caps.attachments %}`` rather than on the key alone.
+    """
+    return flags
+
+
 @register.tag("help_items")
 def do_help_items(parser, token):
     bits = token.split_contents()

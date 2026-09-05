@@ -1,0 +1,284 @@
+{% load static ui_tags %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meeting - Workspace</title>
+    <link href="{% static 'css/app.css' %}" rel="stylesheet" />
+    <link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}" />
+    <script
+      type="module"
+      src="{% static 'chat/ui/js/vendor/emoji-picker/emoji-picker.js' %}"
+    ></script>
+    <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
+    <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
+    <script src="{% static 'ui/js/lucide.js' %}"></script>
+    <script src="{% static 'ui/js/html.js' %}"></script>
+    <script src="{% static 'users/ui/js/user_avatar.js' %}"></script>
+    {% comment %}In <head> and not deferred: the two custom elements must be
+    defined before the parser reaches markup using them, or server-rendered
+    content flashes unstyled.{% endcomment %}
+    <script src="{% static 'chat/ui/js/conversation_avatar.js' %}"></script>
+    <script src="{% static 'chat/ui/js/message_shell.js' %}"></script>
+    <script src="{% static 'ui/js/attachment_input.js' %}"></script>
+    <script src="{% static 'chat/ui/js/ui_helpers.js' %}"></script>
+    <script src="{% static 'chat/ui/js/messages.js' %}"></script>
+    <script src="{% static 'chat/ui/js/input.js' %}"></script>
+    <script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
+    <script src="{% static 'chat/ui/js/call.js' %}"></script>
+    <script src="{% static 'chat/ui/js/call_room.js' %}"></script>
+    <script src="{% static 'chat/ui/js/meet.js' %}"></script>
+  </head>
+  <body class="min-h-screen bg-base-200">
+    {{ ice_servers|json_script:"call-ice-servers-data" }}
+    <div
+      class="h-screen flex flex-col"
+      x-data="chatMeetApp('{{ slug }}')"
+      @ajax:missing="_onAjaxMissing($event)"
+      @ajax:error="onMessagesAjaxError($event)"
+      @chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
+      @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
+      @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
+      @chat-call_started.window="onCallStarted($event.detail)"
+      @chat-call_ended.window="onCallEnded($event.detail)"
+      @chat-call_signal.window="onCallSignal($event.detail)"
+    >
+
+      <template x-if="phase === 'name'">
+        <div class="flex-1 flex items-center justify-center p-4">
+          <form
+            class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden"
+            @submit.prevent="knock()"
+          >
+            {% include "chat/ui/partials/meet_card_header.html" with icon="video" title_expr="summary && summary.title ? summary.title : 'Meeting'" subtitle_expr="summaryLine()" %}
+            <div class="p-6 flex flex-col gap-4">
+              <template x-if="summary && summary.locked">
+                <inline-alert type="warning" message="This meeting is locked. The host is not admitting new participants."></inline-alert>
+              </template>
+              <template x-if="isFull()">
+                <inline-alert type="warning" message="This meeting is full."></inline-alert>
+              </template>
+              <div class="form-control w-full">
+                <label class="label py-1 px-0" for="meet-display-name">
+                  <span class="label-text">Your name</span>
+                </label>
+                <input
+                  id="meet-display-name"
+                  class="input input-bordered w-full"
+                  x-model="displayName"
+                  maxlength="80"
+                  required
+                  autofocus
+                />
+              </div>
+              <template x-if="error">
+                <inline-alert type="error">
+                <span x-text="error"></span>
+                </inline-alert>
+              </template>
+              <div class="card-actions justify-end">
+                <button
+                  class="btn btn-primary btn-sm w-full sm:w-auto"
+                  :disabled="knocking || (summary && summary.locked)"
+                >
+                  Ask to join
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </template>
+
+      <template x-if="phase === 'lobby'">
+        <div class="flex-1 flex items-center justify-center p-4">
+          <div class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden">
+            {% include "chat/ui/partials/meet_card_header.html" with icon="hourglass" title_expr="summary && summary.title ? summary.title : 'Meeting'" subtitle_expr="summaryLine()" %}
+            <div class="p-6 flex flex-col gap-3">
+              <div class="flex items-center gap-3">
+                <span class="loading loading-dots loading-sm text-primary"></span>
+                <h2 class="font-semibold">Waiting for the host</h2>
+              </div>
+              <p class="text-sm text-base-content/70">
+                You will join as <strong x-text="displayName"></strong> once a host lets you in.
+              </p>
+              <div x-show="isFull()">
+                <span class="badge badge-ghost">The meeting is currently full</span>
+              </div>
+              <div class="card-actions justify-end">
+                <button class="btn btn-ghost btn-sm" @click="leaveLobby()">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="phase === 'room'">
+        <div class="flex flex-1 min-h-0">
+          <template x-if="inCall">
+            <div class="flex-1 flex min-w-0">
+              {% include "chat/ui/partials/call_stage.html" with host_controls=False chat_toggle=True %}
+            </div>
+          </template>
+          <template x-if="!inCall">
+            <section class="flex-1 flex items-center justify-center p-4 bg-base-200">
+              <div class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden">
+                {% include "chat/ui/partials/meet_card_header.html" with icon="phone" title_expr="summary && summary.title ? summary.title : 'Meeting'" subtitle_expr="summaryLine()" %}
+                <div class="p-6 flex flex-col gap-3">
+                  <div class="flex items-center gap-3">
+                    <span
+                      class="loading loading-dots loading-sm text-primary"
+                      x-show="!joinError"
+                    ></span>
+                    <h2 class="font-semibold">Waiting for the host to start the call</h2>
+                  </div>
+                  <p
+                    class="text-sm text-base-content/70"
+                    x-show="joinError"
+                    x-text="joinError"
+                  ></p>
+                  <p class="text-sm text-base-content/70">You can keep chatting while you wait.</p>
+                  <div x-show="waitingCapacityLine()">
+                    <span class="badge badge-ghost" x-text="waitingCapacityLine()"></span>
+                  </div>
+                  <div class="card-actions justify-end">
+                    {# On a phone the stage carries the chat toggle, and there is no stage until the call starts. #}
+                    <button class="btn btn-sm md:hidden" @click="toggleChat()">
+                      <i data-lucide="message-square" class="w-4 h-4"></i>
+                      Open the chat
+                      <span
+                        class="badge badge-xs badge-error"
+                        x-show="unreadMessages"
+                        x-text="unreadMessages"
+                        x-cloak
+                      ></span>
+                    </button>
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      x-show="joinError"
+                      @click="joinWhenCallStarts()"
+                    >
+                      Try again
+                    </button>
+                    {# The stage's red button is the only other way out, and it is not rendered here. #}
+                    <button class="btn btn-ghost btn-sm" @click="leaveRoom()">Leave the meeting</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </template>
+          {% comment %}One element, two layouts: a column beside the stage at md
+          and above, a full-screen slide-over below it, where a 384px aside
+          would leave the stage too narrow to show its own controls. x-cloak
+          because the visibility classes only arrive once Alpine binds.{% endcomment %}
+          <aside
+            class="fixed inset-0 z-30 w-full flex-col min-w-0 bg-base-100 border-base-300 md:static md:z-auto md:w-96 md:max-w-[40%] md:border-l"
+            :class="chatOpen ? 'flex' : 'hidden md:flex'"
+            x-cloak
+          >
+            {% comment %}The member pane's header, at its measurements: an
+            initials disc, the title, and what the pane is.
+            <conversation-avatar> draws the disc without asking the server
+            for anything as long as has-avatar is absent.{% endcomment %}
+            <div
+              class="px-4 py-2.5 border-b border-base-300 flex items-center gap-3 bg-base-100"
+            >
+              {# chatMeetTitleInitials mirrors the server's group rule, so host and guest letter one meeting the same way. #}
+              <conversation-avatar kind="group" size="md" active :initials="chatMeetTitleInitials(summary && summary.title ? summary.title : 'Meeting')"></conversation-avatar>
+              <div class="flex-1 min-w-0">
+                <h3
+                  class="font-semibold text-sm truncate"
+                  x-text="summary ? summary.title : 'Meeting'"
+                ></h3>
+                <p class="text-xs text-base-content/60 truncate">Meeting chat</p>
+              </div>
+              <button
+                class="btn btn-ghost btn-sm btn-square md:hidden"
+                @click="toggleChat()"
+                title="Close"
+              >
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <div
+              class="flex-1 overflow-y-auto overflow-x-hidden p-4"
+              x-ref="messagesContainer"
+              @scroll="handleScroll()"
+            >
+              <div x-show="hasMoreMessages" x-cloak class="flex justify-center py-2">
+                <button
+                  class="btn btn-ghost btn-xs"
+                  @click="loadMoreMessages()"
+                  :disabled="loadingMoreMessages"
+                >
+                  <span x-show="!loadingMoreMessages">Load older messages</span>
+                  <span
+                    x-show="loadingMoreMessages"
+                    class="loading loading-spinner loading-xs"
+                  ></span>
+                </button>
+              </div>
+
+              <div x-show="loadingMessages" class="flex justify-center py-8">
+                <span class="loading loading-spinner loading-md text-info"></span>
+              </div>
+
+              {% comment %}The merge targets the member pane uses, and the
+              server partial is the same one. The empty #message-list is the
+              placeholder the first $ajax load replaces; @ajax:merge refuses
+              content stamped for anything but this meeting.{% endcomment %}
+              <div
+                id="messages-container"
+                :data-msg-animation="chatPrefs.messageAnimation"
+                @ajax:merge="_vetoStaleMerge($event)"
+              >
+                <div id="message-list"></div>
+              </div>
+            </div>
+
+            {% capabilities attachments=False voice=False mentions=False as guest_composer %}
+            {% include "chat/ui/partials/_composer.html" with composer_capabilities=guest_composer %}
+          </aside>
+        </div>
+      </template>
+
+      <template x-if="phase === 'over'">
+        <div class="flex-1 flex items-center justify-center p-4">
+          <div class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden">
+            {% include "chat/ui/partials/meet_card_header.html" with icon_expr="overReason === 'left' ? 'check' : 'phone-off'" title_expr="summary && summary.title ? summary.title : 'Meeting'" subtitle_expr="summaryLine()" %}
+            <div class="p-6 flex flex-col gap-3">
+              <h2 class="font-semibold" x-text="overTitle()"></h2>
+              <p class="text-sm text-base-content/70" x-text="overDetail()"></p>
+              <div class="card-actions justify-end" x-show="canReturn()">
+                <button class="btn btn-ghost btn-sm" @click="reset()">Back</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      {% comment %}Singleton emoji picker, mounted the way the member pane
+      mounts it. Escape is handled here rather than by the composer's keydown
+      handler, which never sees it while the caret sits in the picker's search
+      field; the event is composed, so it reaches this wrapper from the shadow
+      DOM.{% endcomment %}
+      <div
+        x-show="emojiPickerVisible"
+        x-cloak
+        class="fixed z-[100]"
+        :style="{ left: emojiPickerX + 'px', top: emojiPickerY + 'px' }"
+        @click.outside="closeEmojiPicker()"
+        @keydown.escape.stop="closeEmojiPicker()"
+      >
+        {# The element's built-in default for data-source is a CDN URL. #}
+        <emoji-picker x-ref="emojiPicker" data-source="{% static 'chat/ui/js/vendor/emoji-picker/data.json' %}"></emoji-picker>
+      </div>
+    </div>
+
+    {% include 'ui/partials/toasts.html' %}
+    <script src="{% static 'ui/js/lucide_boot.js' %}"></script>
+    <script src="{% static 'ui/js/inline_alert.js' %}"></script>
+    <script src="{% static 'ui/js/toast.js' %}"></script>
+  </body>
+</html>

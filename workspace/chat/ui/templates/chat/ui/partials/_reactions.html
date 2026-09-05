@@ -1,10 +1,10 @@
 {% if groups %}
-  {# data-part="below": the <chat-message-group> shell places this after the bubble's hover wrapper #}
+  {# data-part="below": the shell places this after the bubble's hover wrapper. Without can_react the chips stay but the toggle does not - the endpoint would refuse the caller. #}
   <div data-part="below" class="flex flex-wrap gap-1 items-center px-1 my-1">
     {% for g in groups %}
       <button
         class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm leading-none cursor-pointer transition-colors border {% if g.has_mine %}bg-info/15 border-info/30 hover:bg-info/25{% else %}bg-base-200 border-base-300 hover:bg-base-300{% endif %}"
-        @click="toggleReaction('{{ message_uuid }}', '{{ g.emoji }}')"
+        {% if can_react %}@click="toggleReaction('{{ message_uuid }}', '{{ g.emoji }}')"{% endif %}
         title="{{ g.users|join:', ' }}"
       >
         <span class="text-base leading-none">{{ g.emoji }}</span>

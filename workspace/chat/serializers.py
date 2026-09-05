@@ -12,6 +12,7 @@ from .models import (
     Reaction,
 )
 from .services.avatar import conversation_avatar_initial
+from .services.identities import identity_payload
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -40,7 +41,7 @@ class ReactionSerializer(serializers.ModelSerializer):
 class PinnedMessageSerializer(serializers.ModelSerializer):
     message_uuid = serializers.UUIDField(source="message.uuid")
     message_body = serializers.SerializerMethodField()
-    message_author = MemberUserSerializer(source="message.author")
+    message_author = serializers.SerializerMethodField()
     message_created_at = serializers.DateTimeField(source="message.created_at")
     pinned_by = MemberUserSerializer()
     pinned_at = serializers.DateTimeField(source="created_at")
@@ -60,6 +61,9 @@ class PinnedMessageSerializer(serializers.ModelSerializer):
     def get_message_body(self, obj):
         body = obj.message.body or ""
         return body[:100] + "\u2026" if len(body) > 100 else body
+
+    def get_message_author(self, obj):
+        return identity_payload(obj.message.author, obj.message.guest)
 
 
 class MessageAttachmentSerializer(serializers.ModelSerializer):
@@ -89,7 +93,7 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
 
 
 class ReplyToSerializer(serializers.ModelSerializer):
-    author = MemberUserSerializer()
+    author = serializers.SerializerMethodField()
     body = serializers.SerializerMethodField()
 
     class Meta:
@@ -100,6 +104,9 @@ class ReplyToSerializer(serializers.ModelSerializer):
     def get_body(self, obj):
         body = obj.body or ""
         return body[:200] + "\u2026" if len(body) > 200 else body
+
+    def get_author(self, obj):
+        return identity_payload(obj.author, obj.guest)
 
 
 class LinkPreviewSerializer(serializers.Serializer):
@@ -127,7 +134,7 @@ class MessageInteractionSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    author = MemberUserSerializer()
+    author = serializers.SerializerMethodField()
     reactions = ReactionSerializer(many=True, read_only=True)
     attachments = MessageAttachmentSerializer(many=True, read_only=True)
     link_previews = LinkPreviewSerializer(many=True, read_only=True)
@@ -161,9 +168,54 @@ class MessageSerializer(serializers.ModelSerializer):
             "interaction",
         ]
 
+    def get_author(self, obj):
+        return identity_payload(obj.author, obj.guest)
+
+
+class GuestMessageSerializer(MessageSerializer):
+    """MessageSerializer, redacted for a guest audience.
+
+    Two things the plain serializer emits are unsafe once a guest is reading
+    it: ``conversation_id`` (the same "must not learn to address the
+    host-side conversation endpoints" invariant guest call state enforces),
+    and a ``reply_to``/``thread_root`` pointing below this guest's occurrence
+    floor. The top-level queryset floors at ``created_at >= occurrence_start``,
+    but an in-window reply can legitimately target a pre-window message -
+    ordinary behaviour in a recurring meeting's conversation - and
+    reply_to/thread_root are hydrated from that target regardless of its own
+    created_at. Left alone, ReplyToSerializer would hand a guest the
+    pre-window body and author, and the bare thread_root UUID would let them
+    name that pre-window message as reply_to_uuid on a POST - a pull
+    primitive around the floor. Redacting post-serialization (rather than
+    re-querying) is cheap: reply_to and thread_root are already
+    select_related, so their created_at is already in memory.
+
+    A subclass instead of touching MessageSerializer itself: the redaction is
+    a guest-only concern with no meaning on the member path, and every other
+    behaviour must resolve through get_author, ReplyToSerializer etc.
+    unmodified.
+
+    Public and imported from both the guest REST views and the guest SSE
+    stream - it must stay the one place this redaction is implemented, or the
+    two paths can silently drift apart on what a guest is allowed to read.
+    """
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data.pop("conversation_id", None)
+        # A missing floor must fail loud (KeyError), never default to None -
+        # a None floor would compare False to every created_at below it and
+        # silently hand a guest pre-window reply_to/thread_root content.
+        floor = self.context["floor"]
+        if instance.reply_to_id and instance.reply_to.created_at < floor:
+            data["reply_to"] = None
+        if instance.thread_root_id and instance.thread_root.created_at < floor:
+            data["thread_root"] = None
+        return data
+
 
 class LastMessageSerializer(serializers.ModelSerializer):
-    author = MemberUserSerializer()
+    author = serializers.SerializerMethodField()
     has_attachments = serializers.SerializerMethodField()
 
     class Meta:
@@ -177,6 +229,9 @@ class LastMessageSerializer(serializers.ModelSerializer):
         ):
             return len(obj._prefetched_objects_cache["attachments"]) > 0
         return obj.attachments.exists()
+
+    def get_author(self, obj):
+        return identity_payload(obj.author, obj.guest)
 
 
 class GroupBriefSerializer(serializers.Serializer):
@@ -254,7 +309,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             msg = (
                 obj.messages.filter(deleted_at__isnull=True)
                 .order_by("-created_at")
-                .select_related("author")
+                .select_related("author", "guest")
                 .first()
             )
         if msg:

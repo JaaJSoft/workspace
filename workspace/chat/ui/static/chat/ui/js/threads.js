@@ -200,6 +200,7 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     // whatever panel now owns the container.
     destroy() {
       this._dead = true;
+      this._cancelMessagesRetry?.();
       this.cancelRecording?.();
     },
   };

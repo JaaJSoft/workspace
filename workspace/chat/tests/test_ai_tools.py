@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from pydantic import ValidationError
 
 from workspace.ai.models import BotProfile, ConversationSummary
+from workspace.calendar.models import Calendar, Event
 from workspace.chat.ai_tools import (
     READ_MAX_BODY_CHARS,
     READ_MAX_CHARS,
@@ -21,6 +22,8 @@ from workspace.chat.ai_tools import (
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
+    Meeting,
+    MeetingGuest,
     Message,
     MessageAttachment,
 )
@@ -167,6 +170,31 @@ class SearchMessagesTimezoneTests(TestCase):
         result = self._search()
         self.assertIn("2026-02-01 00:30", result)
 
+    def test_guest_authored_message_is_labelled_with_display_name(self):
+        cal = Calendar.objects.create(name="C", owner=self.user)
+        event = Event.objects.create(
+            calendar=cal,
+            owner=self.user,
+            title="E",
+            start=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.conv, created_by=self.user
+        )
+        guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=datetime(2026, 1, 1, tzinfo=UTC),
+            token_hash="d" * 64,
+        )
+        Message.objects.create(
+            conversation=self.conv, guest=guest, body="boundary msg from a guest"
+        )
+
+        payload = json.loads(self._search())
+
+        self.assertEqual(payload[0]["author"], "Visitor")
+
 
 BASE_TIME = datetime(2026, 3, 1, 9, 0, tzinfo=UTC)
 
@@ -254,6 +282,29 @@ class ReadConversationToolTests(ConversationToolsTestCase):
         payload = json.loads(self._read())
 
         self.assertEqual(payload["messages"][0]["body"], "[attachment: voice.webm]")
+
+    def test_guest_authored_message_is_labelled_with_display_name(self):
+        cal = Calendar.objects.create(name="C", owner=self.user)
+        event = Event.objects.create(
+            calendar=cal, owner=self.user, title="E", start=BASE_TIME
+        )
+        meeting = Meeting.objects.create(
+            event=event, conversation=self.conv, created_by=self.user
+        )
+        guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Visitor",
+            occurrence_start=BASE_TIME,
+            token_hash="e" * 64,
+        )
+        msg = Message.objects.create(
+            conversation=self.conv, guest=guest, body="hi from a guest"
+        )
+        Message.objects.filter(pk=msg.pk).update(created_at=BASE_TIME)
+
+        payload = json.loads(self._read())
+
+        self.assertEqual(payload["messages"][0]["author"], "Visitor")
 
     def test_deleted_messages_are_skipped(self):
         self._message("kept", 0)

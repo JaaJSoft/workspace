@@ -32,6 +32,17 @@
         <span class="truncate">{{ event.location }}</span>
       </div>
     {% endif %}
+    {% if join_url %}
+      <div class="flex items-center gap-1.5 truncate">
+        <i data-lucide="video" class="w-3 h-3 flex-shrink-0"></i>
+        <a
+          class="truncate link"
+          href="{{ join_url }}"
+          target="_blank"
+          rel="noopener"
+        >{{ join_url }}</a>
+      </div>
+    {% endif %}
     {% if is_external %}
       <div class="flex items-center gap-1.5 truncate">
         <i data-lucide="globe" class="w-3 h-3 flex-shrink-0"></i>

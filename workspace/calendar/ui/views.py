@@ -13,6 +13,7 @@ from workspace.calendar.models import (
     PollVote,
 )
 from workspace.calendar.queries import visible_calendars, visible_events_q
+from workspace.calendar.recurrence import meeting_join_url
 from workspace.calendar.serializers import CalendarSerializer
 from workspace.users.services.settings import get_setting
 
@@ -79,7 +80,7 @@ def event_card(request, event_id):
             uuid=event_id,
             is_cancelled=False,
         )
-        .select_related("calendar", "owner")
+        .select_related("calendar", "owner", "meeting", "recurrence_parent__meeting")
         .prefetch_related("members__user")
         .distinct()
         .first()
@@ -107,6 +108,8 @@ def event_card(request, event_id):
     membership = next((m for m in members if m.user_id == request.user.id), None)
     invite_status = membership.status if membership and not is_owner else None
 
+    join_url = meeting_join_url(event.recurrence_parent or event, request)
+
     return render(
         request,
         "calendar/ui/partials/event_card.html",
@@ -118,6 +121,7 @@ def event_card(request, event_id):
             "invite_status": invite_status,
             "occ_start": occ_start,
             "occ_end": occ_end,
+            "join_url": join_url,
         },
     )
 

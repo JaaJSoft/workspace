@@ -1,3 +1,5 @@
+import secrets
+
 from django.conf import settings
 from django.db import models
 
@@ -101,8 +103,21 @@ class Message(models.Model):
     )
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
         on_delete=models.CASCADE,
         related_name="chat_messages",
+    )
+    # Pairing with conversation (guest.meeting.conversation must equal this
+    # message's conversation) is a service-layer invariant, not a database one.
+    # Removing a guest is a state transition (State.REMOVED + removed_at), never
+    # a row delete: on_delete=CASCADE would take their messages with it.
+    guest = models.ForeignKey(
+        "MeetingGuest",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
     )
     reply_to = models.ForeignKey(
         "self",
@@ -133,6 +148,13 @@ class Message(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(author__isnull=False, guest__isnull=True)
+                | models.Q(author__isnull=True, guest__isnull=False),
+                name="message_one_identity",
+            ),
+        ]
         indexes = [
             # B-tree is bidirectional in PostgreSQL and SQLite: this single index
             # serves both ASC and DESC ordering on (conversation, created_at).
@@ -473,6 +495,15 @@ class CallSession(models.Model):
     )
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
+    # The live value while this session is active.
+    # Meeting.locked_occurrence_start is the durable one - it seeds this
+    # field at creation (see start_or_join_call) and is written alongside it
+    # on every set_locked call, so a host can lock an empty room and still
+    # find it locked once someone joins. This one dies with the session,
+    # which ends as soon as its last participant leaves; the durable one
+    # outlives that on purpose and keeps the room shut for the rest of the
+    # occurrence it names.
+    locked = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -503,15 +534,40 @@ class CallParticipant(models.Model):
         CallSession, on_delete=models.CASCADE, related_name="participants"
     )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
+    )
+    guest = models.ForeignKey(
+        "MeetingGuest",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
     )
     joined_at = models.DateTimeField(auto_now_add=True)
     left_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(user__isnull=False, guest__isnull=True)
+                | models.Q(user__isnull=True, guest__isnull=False),
+                name="call_participant_one_identity",
+            ),
+            # A UniqueConstraint over a nullable column does not constrain NULL
+            # rows, so the old single constraint becomes one per identity.
             models.UniqueConstraint(
-                fields=["session", "user"], name="unique_call_participant"
+                fields=["session", "user"],
+                condition=models.Q(user__isnull=False),
+                name="unique_call_participant_user",
+            ),
+            models.UniqueConstraint(
+                fields=["session", "guest"],
+                condition=models.Q(guest__isnull=False),
+                name="unique_call_participant_guest",
             ),
         ]
         indexes = [
@@ -520,3 +576,105 @@ class CallParticipant(models.Model):
 
     def __str__(self):
         return f"{self.user_id} in call {self.session_id}"
+
+    @property
+    def participant_key(self):
+        """Routing identity for signalling, presence and the peer table."""
+        from workspace.chat.services.participant_keys import guest_key, user_key
+
+        if self.user_id is not None:
+            return user_key(self.user_id)
+        return guest_key(self.guest_id)
+
+
+def _generate_meeting_slug():
+    return secrets.token_urlsafe(16)
+
+
+class Meeting(models.Model):
+    """A joinable meeting attached to a calendar event.
+
+    One row per event, so the join URL is stable across a recurring series;
+    which occurrence is currently open is derived per request rather than
+    stored (see services/meeting_occurrences.py).
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    event = models.OneToOneField(
+        "calendar.Event", on_delete=models.CASCADE, related_name="meeting"
+    )
+    conversation = models.OneToOneField(
+        Conversation, on_delete=models.CASCADE, related_name="meeting"
+    )
+    slug = models.CharField(max_length=32, unique=True, default=_generate_meeting_slug)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    # The start of the occurrence the host most recently ended. A later
+    # occurrence has a different start, so the same URL opens again next week.
+    closed_occurrence_start = models.DateTimeField(null=True, blank=True)
+    # Durable lock: the start of the occurrence it was set during (always
+    # current_occurrence()'s output, never event.start), so the value carries
+    # its own scope instead of being a bare boolean. It survives with no
+    # CallSession at all, which is what lets a host pre-lock an empty room,
+    # and it seeds CallSession.locked when a session is created.
+    #
+    # The invariant: a lock lives until the host unlocks, the host presses
+    # End, or the occurrence it names stops being the current one. It
+    # therefore survives a call that empties out and the stale-participant
+    # sweep - neither is the host reopening the room. A non-null value naming
+    # an elapsed occurrence is inert, not "locked": nothing purges it, and
+    # nothing needs to, because every reader compares it against the
+    # occurrence reachable right now (see calls.is_call_locked).
+    locked_occurrence_start = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Meeting {self.slug} for event {self.event_id}"
+
+    @property
+    def join_path(self):
+        return f"/meet/{self.slug}"
+
+
+class MeetingGuest(models.Model):
+    """Someone joining a meeting from the link, with no user row.
+
+    Deliberately not a user: a guest is scoped to one meeting and one
+    occurrence, and holds no workspace access of any kind.
+    """
+
+    class State(models.TextChoices):
+        WAITING = "waiting", "Waiting"
+        ADMITTED = "admitted", "Admitted"
+        REFUSED = "refused", "Refused"
+        REMOVED = "removed", "Removed"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    meeting = models.ForeignKey(
+        Meeting, on_delete=models.CASCADE, related_name="guests"
+    )
+    display_name = models.CharField(max_length=80)
+    state = models.CharField(max_length=8, choices=State.choices, default=State.WAITING)
+    occurrence_start = models.DateTimeField()
+    # sha256 hex of the bearer token; the token itself is never stored.
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    admitted_at = models.DateTimeField(null=True, blank=True)
+    admitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    removed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["meeting", "state"]),
+            models.Index(fields=["meeting", "occurrence_start"]),
+        ]
+
+    def __str__(self):
+        return f"{self.display_name} ({self.state}) in {self.meeting_id}"

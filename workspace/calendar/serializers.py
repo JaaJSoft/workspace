@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from rest_framework import serializers
 
 from .models import Calendar, Event, EventMember
+from .recurrence import meeting_join_url
 from .services import recurrence_rule
 from .services.timezones import normalize_all_day
 
@@ -108,6 +109,7 @@ class EventSerializer(serializers.ModelSerializer):
     poll_id = serializers.SerializerMethodField()
     ical_uid = serializers.CharField(read_only=True)
     external_organizer = serializers.EmailField(read_only=True)
+    join_url = serializers.SerializerMethodField()
     recurrence_summary = serializers.SerializerMethodField()
     recurrence_simple = serializers.SerializerMethodField()
 
@@ -123,6 +125,7 @@ class EventSerializer(serializers.ModelSerializer):
             "all_day",
             "timezone",
             "location",
+            "join_url",
             "owner",
             "members",
             "recurrence_rule",
@@ -140,6 +143,14 @@ class EventSerializer(serializers.ModelSerializer):
     def get_poll_id(self, obj):
         poll_id = getattr(obj, "_poll_id", None)
         return str(poll_id) if poll_id else None
+
+    def get_join_url(self, obj):
+        # A materialized exception never legitimately owns a Meeting - see
+        # meeting_join_url's docstring - so its own row never carries the
+        # join link; read it through the series master.
+        return meeting_join_url(
+            obj.recurrence_parent or obj, self.context.get("request")
+        )
 
     def get_recurrence_summary(self, obj):
         return recurrence_rule.describe(obj.recurrence_rule)

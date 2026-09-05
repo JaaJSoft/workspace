@@ -29,9 +29,14 @@ REDACTED = "[redacted]"
 # and sig_ as a prefix only, token and encrypted as a suffix only - so
 # `signature_count`, `designation` and the `prompt_tokens` counters stay
 # legible, while access_token, refresh_token and oauth2_data_encrypted do not.
+# `token_hash` is matched by exact name alongside the `token$` suffix: a
+# sha256 digest of a token is not reversible, so this redacts nothing an
+# attacker could turn back into a secret. It is here so a future refactor
+# that starts storing a raw token in a field named `token_hash` doesn't get
+# to hide behind a name that already reads as safe.
 _SENSITIVE_NAME = re.compile(
     r"(password|secret_key|session_key|^wrapped_|^encrypted_|^sig_"
-    r"|token$|encrypted$)",
+    r"|token$|encrypted$|^token_hash$)",
     re.IGNORECASE,
 )
 

@@ -1,0 +1,598 @@
+
+
+<div
+  id="message-list"
+  data-conversation-uuid="<uuid-1>"
+  
+>
+
+  <div
+    id="message-list-state"
+    hidden
+    data-conversation-uuid="<uuid-1>"
+    data-has-more="false"
+    data-first-uuid="<uuid-2>"
+  ></div>
+
+  <div
+    id="message-list-items"
+    x-merge="prepend"
+    data-conversation-uuid="<uuid-1>"
+  >
+    
+      
+        <div class="divider text-xs text-base-content/50 my-3"><time datetime="2026-03-04T09:00:00+00:00" data-localtime="date">09:00</time></div>
+      
+    
+      
+        
+
+
+  
+  <chat-message-group own  author-id="<user-1>" author-username="snaphost" author-name="Hana Host" id-prefix="msg">
+
+  
+    
+      <div slot="message" id="msg-<uuid-2>" data-message-uuid="<uuid-2>" data-body="hello from the host"   >
+
+        
+        
+        
+
+        
+        
+          
+        
+
+        
+        
+          
+        
+
+        
+        
+          <span
+            class="inline-flex items-center gap-0.5 text-[0.65rem] opacity-50 ml-1"
+            title="Pinned"
+          >
+            <i data-lucide="pin" class="w-3 h-3"></i>
+          </span>
+        
+
+        
+        
+
+        
+        <div
+          data-part="after-bubble"
+          class="absolute top-full mt-0 pt-1 right-0 opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity delay-150 group-hover/msg:delay-0 z-50"
+        >
+          <div
+            class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5"
+          >
+            
+            
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-2>', '👍')"
+    
+  >👍</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-2>', '❤️')"
+    
+  >❤️</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-2>', '😂')"
+    
+  >😂</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-2>', '😮')"
+    
+  >😮</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-2>', '😢')"
+    
+  >😢</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-2>', '🎉')"
+    
+  >🎉</button>
+
+
+            <div class="w-px self-stretch my-0.5 bg-base-300"></div>
+            
+            <button
+              class="btn btn-ghost btn-xs btn-square"
+              @click="openEmojiPicker('reaction', $event, '<uuid-2>')"
+              title="More reactions"
+            >
+              <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
+            </button>
+            <button
+              class="btn btn-ghost btn-xs btn-square"
+              @click="startReply('<uuid-2>', 'Hana Host', 'hello from the host')"
+              title="Reply"
+            >
+              <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+            </button>
+            
+              <button
+                class="btn btn-ghost btn-xs btn-square"
+                @click="unpinMessage('<uuid-2>')"
+                title="Unpin"
+              >
+                <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
+              </button>
+            
+            
+              <button
+                class="btn btn-ghost btn-xs btn-square"
+                @click="startEdit('<uuid-2>')"
+                title="Edit"
+              >
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              </button>
+            
+            
+            
+              <button
+                class="btn btn-ghost btn-xs btn-square text-error"
+                @click="deleteMessage('<uuid-2>')"
+                title="Delete"
+              >
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            
+          </div>
+        </div>
+
+        
+        
+
+
+        
+        
+      </div>
+    
+  
+
+  
+  
+    <span slot="footer" class="text-[0.65rem] text-base-content/40"><time datetime="2026-03-04T09:00:00+00:00" data-localtime="time">09:00</time></span>
+    
+      
+  
+  <span
+    slot="footer"
+    class="inline-flex items-center gap-0.5 cursor-pointer relative"
+    x-data="{ open: false, loaded: false, loading: false, above: true }"
+    @click.stop="
+        if (!open) { const rect = $el.getBoundingClientRect(); above = rect.top > 160; }
+        open = !open;
+        if (open && !loaded) {
+          loading = true;
+          $ajax('/chat/<uuid-1>/messages/<uuid-2>/readers', {
+            target: 'readers-popover-<uuid-2>',
+          });
+        }
+      "
+    @click.outside="open = false"
+    @ajax:after="loading = false; loaded = true"
+  >
+    <svg
+      class="w-3.5 h-3.5 text-base-content/30"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M1 12l5 5L17 6" />
+      <path d="M7 12l5 5L23 6" />
+    </svg>
+    
+
+    <div
+      x-show="open"
+      x-cloak
+      x-transition
+      class="absolute right-0 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2 min-w-48 max-w-64"
+      :class="above ? 'bottom-full mb-1' : 'top-full mt-1'"
+      @click.stop
+    >
+      <div id="readers-popover-<uuid-2>">
+        <template x-if="loading">
+          <div class="flex justify-center py-2">
+            <span class="loading loading-spinner loading-xs"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+  </span>
+
+
+    
+  
+  </chat-message-group>
+
+
+      
+    
+      
+        
+
+
+  
+  <chat-message-group  guest  author-username="Ada" author-name="Ada" id-prefix="msg">
+
+  
+    
+      <div slot="message" id="msg-<uuid-3>" data-message-uuid="<uuid-3>" data-body="hello from a guest"   >
+
+        
+        
+        
+
+        
+        
+          
+        
+
+        
+        
+          
+        
+
+        
+        
+
+        
+        
+
+        
+        <div
+          data-part="after-bubble"
+          class="absolute top-full mt-0 pt-1 left-0 opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity delay-150 group-hover/msg:delay-0 z-50"
+        >
+          <div
+            class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5"
+          >
+            
+            
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none bg-info/20 text-info hover:bg-info/30"
+    @click="toggleReaction('<uuid-3>', '👍')"
+    title="You reacted with 👍"
+  >👍</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-3>', '❤️')"
+    
+  >❤️</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-3>', '😂')"
+    
+  >😂</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-3>', '😮')"
+    
+  >😮</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-3>', '😢')"
+    
+  >😢</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-3>', '🎉')"
+    
+  >🎉</button>
+
+
+            <div class="w-px self-stretch my-0.5 bg-base-300"></div>
+            
+            <button
+              class="btn btn-ghost btn-xs btn-square"
+              @click="openEmojiPicker('reaction', $event, '<uuid-3>')"
+              title="More reactions"
+            >
+              <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
+            </button>
+            <button
+              class="btn btn-ghost btn-xs btn-square"
+              @click="startReply('<uuid-3>', 'Ada', 'hello from a guest')"
+              title="Reply"
+            >
+              <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+            </button>
+            
+              <button
+                class="btn btn-ghost btn-xs btn-square"
+                @click="pinMessage('<uuid-3>')"
+                title="Pin"
+              >
+                <i data-lucide="pin" class="w-3.5 h-3.5"></i>
+              </button>
+            
+            
+            
+            
+              <button
+                class="btn btn-ghost btn-xs btn-square text-error"
+                @click="deleteMessage('<uuid-3>')"
+                title="Delete"
+              >
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            
+          </div>
+        </div>
+
+        
+        
+  
+  <div data-part="below" class="flex flex-wrap gap-1 items-center px-1 my-1">
+    
+      <button
+        class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm leading-none cursor-pointer transition-colors border bg-info/15 border-info/30 hover:bg-info/25"
+        @click="toggleReaction('<uuid-3>', '👍')"
+        title="snaphost"
+      >
+        <span class="text-base leading-none">👍</span>
+        
+      </button>
+    
+  </div>
+
+
+
+        
+        
+      </div>
+    
+  
+
+  
+  
+    <span slot="footer" class="text-[0.65rem] text-base-content/40"><time datetime="2026-03-04T09:01:00+00:00" data-localtime="time">09:01</time></span>
+    
+  
+  </chat-message-group>
+
+
+      
+    
+      
+        
+<div class="flex justify-center my-3" id="msg-<uuid-4>">
+  <div
+    class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-base-200 text-xs text-base-content/70"
+  >
+    <i data-lucide="phone" class="w-3.5 h-3.5 text-info"></i>
+    
+      <span>Call started</span>
+    
+  </div>
+</div>
+
+      
+    
+      
+        
+
+
+  
+  <chat-message-group own  author-id="<user-1>" author-username="snaphost" author-name="Hana Host" id-prefix="msg">
+
+  
+    
+      <div slot="message" id="msg-<uuid-5>" data-message-uuid="<uuid-5>" data-body="answering the guest"    data-reply-uuid="<uuid-3>"    data-reply-author="Ada" data-reply-preview="hello from a guest"  >
+
+        
+        
+        
+
+        
+        
+          
+        
+
+        
+        
+          
+        
+
+        
+        
+
+        
+        
+
+        
+        <div
+          data-part="after-bubble"
+          class="absolute top-full mt-0 pt-1 right-0 opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity delay-150 group-hover/msg:delay-0 z-50"
+        >
+          <div
+            class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5"
+          >
+            
+            
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-5>', '👍')"
+    
+  >👍</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-5>', '❤️')"
+    
+  >❤️</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-5>', '😂')"
+    
+  >😂</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-5>', '😮')"
+    
+  >😮</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-5>', '😢')"
+    
+  >😢</button>
+
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none"
+    @click="toggleReaction('<uuid-5>', '🎉')"
+    
+  >🎉</button>
+
+
+            <div class="w-px self-stretch my-0.5 bg-base-300"></div>
+            
+            <button
+              class="btn btn-ghost btn-xs btn-square"
+              @click="openEmojiPicker('reaction', $event, '<uuid-5>')"
+              title="More reactions"
+            >
+              <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
+            </button>
+            <button
+              class="btn btn-ghost btn-xs btn-square"
+              @click="startReply('<uuid-5>', 'Hana Host', 'answering the guest')"
+              title="Reply"
+            >
+              <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+            </button>
+            
+              <button
+                class="btn btn-ghost btn-xs btn-square"
+                @click="pinMessage('<uuid-5>')"
+                title="Pin"
+              >
+                <i data-lucide="pin" class="w-3.5 h-3.5"></i>
+              </button>
+            
+            
+              <button
+                class="btn btn-ghost btn-xs btn-square"
+                @click="startEdit('<uuid-5>')"
+                title="Edit"
+              >
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              </button>
+            
+            
+            
+              <button
+                class="btn btn-ghost btn-xs btn-square text-error"
+                @click="deleteMessage('<uuid-5>')"
+                title="Delete"
+              >
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            
+          </div>
+        </div>
+
+        
+        
+
+
+        
+        
+      </div>
+    
+  
+
+  
+  
+    <span slot="footer" class="text-[0.65rem] text-base-content/40"><time datetime="2026-03-04T09:03:00+00:00" data-localtime="time">09:03</time></span>
+    
+      
+  
+  <span
+    slot="footer"
+    class="inline-flex items-center gap-0.5 cursor-pointer relative"
+    x-data="{ open: false, loaded: false, loading: false, above: true }"
+    @click.stop="
+        if (!open) { const rect = $el.getBoundingClientRect(); above = rect.top > 160; }
+        open = !open;
+        if (open && !loaded) {
+          loading = true;
+          $ajax('/chat/<uuid-1>/messages/<uuid-5>/readers', {
+            target: 'readers-popover-<uuid-5>',
+          });
+        }
+      "
+    @click.outside="open = false"
+    @ajax:after="loading = false; loaded = true"
+  >
+    <svg
+      class="w-3.5 h-3.5 text-base-content/30"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M1 12l5 5L17 6" />
+      <path d="M7 12l5 5L23 6" />
+    </svg>
+    
+
+    <div
+      x-show="open"
+      x-cloak
+      x-transition
+      class="absolute right-0 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2 min-w-48 max-w-64"
+      :class="above ? 'bottom-full mb-1' : 'top-full mt-1'"
+      @click.stop
+    >
+      <div id="readers-popover-<uuid-5>">
+        <template x-if="loading">
+          <div class="flex justify-center py-2">
+            <span class="loading loading-spinner loading-xs"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+  </span>
+
+
+    
+  
+  </chat-message-group>
+
+
+      
+    
+  </div>
+
+</div>

@@ -23,10 +23,10 @@ function chatCallMediaState(isMuted, cameraOn, sharing) {
   return { audio: !isMuted, video: !!cameraOn, screen: !!sharing };
 }
 
-function chatCallOtherParticipantIds(participants, selfId) {
+function chatCallOtherParticipantIds(participants, selfKey) {
   return (participants || [])
-    .map((p) => p.user_id)
-    .filter((id) => id !== selfId);
+    .map((p) => p.participant_key)
+    .filter((key) => key !== selfKey);
 }
 
 function chatCallEventForCurrentSession(detail, callSession) {
@@ -36,13 +36,13 @@ function chatCallEventForCurrentSession(detail, callSession) {
   return !!callSession && !!detail && detail.session_id === callSession.session_id;
 }
 
-function chatCallShouldDriveIceRestart(selfId, peerId) {
+function chatCallShouldDriveIceRestart(selfKey, peerKey) {
   // Glare avoidance for a mid-call ICE restart. At join time the existing
   // participant offers to the newcomer (chatCallShouldOffer), but on failure
   // both peers are existing participants, so that rule can't pick a side. The
-  // lower user_id drives the restart offer; the other side only answers. Exactly
-  // one side ever initiates, so the two never offer at once.
-  return selfId < peerId;
+  // lower participant key drives the restart offer; the other side only
+  // answers. Keys are totally ordered, so exactly one side ever initiates.
+  return selfKey < peerKey;
 }
 
 function chatCallIceRestartDelay(state, attempts) {
@@ -72,16 +72,17 @@ window.chatCallMixin = function chatCallMixin() {
   return {
     // -- Call state ------------------------------------------
     callSession: null,           // serialized state of the active call, or null
-    callParticipants: [],        // [{user_id, display_name, media_state}]
+    currentParticipantKey: null, // set by the host component alongside currentUserId
+    callParticipants: [],        // [{participant_key, user_id, display_name, media_state}]
     inCall: false,               // am I currently joined?
     isMuted: false,
     joiningCall: false,
     callRole: 'owner',          // 'owner' (room tab) | 'observer' (main tab)
-    _peers: {},                  // user_id -> { pc, audioEl, remoteStream, videoSender }
+    _peers: {},                  // participant_key -> { pc, audioEl, remoteStream, videoSender }
     _localStream: null,
     cameraOn: false,
     sharing: false,
-    remoteStreams: {},           // user_id -> MediaStream (audio+video)
+    remoteStreams: {},           // participant_key -> MediaStream (audio+video)
     localVideoStream: null,      // MediaStream wrapping the current outgoing video track
     _localVideoTrack: null,      // the live camera or screen track, or null
     _videoRequestToken: 0,       // bumped per capture request and on teardown to cancel stale awaits
@@ -91,6 +92,28 @@ window.chatCallMixin = function chatCallMixin() {
     _csrf() {
       return (typeof getCSRFToken === 'function') ? getCSRFToken()
         : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+    },
+
+    // Transport seam. The member room talks to the conversation call
+    // endpoints with a CSRF cookie; the guest page overrides both methods to
+    // talk to /api/v1/chat/meet/<slug>/... with a token header. Every fetch
+    // in this mixin goes through them so the two pages cannot drift.
+    _callEndpoint(action, conversationId) {
+      const base = `/api/v1/chat/conversations/${conversationId}/call`;
+      return action ? `${base}/${action}` : base;
+    },
+    _callHeaders({ json = false } = {}) {
+      const headers = { 'X-CSRFToken': this._csrf() };
+      if (json) headers['Content-Type'] = 'application/json';
+      return headers;
+    },
+    // What the leave POST is addressed to, and - being null or not - whether
+    // there is anything to leave at all. Always the call's own conversation,
+    // never the one being viewed: you stay in a call while browsing
+    // elsewhere. The guest page overrides it, because a guest's call state
+    // carries no conversation id to answer with.
+    _leaveTarget() {
+      return this.callSession && this.callSession.conversation_id;
     },
 
     _loadIceServers() {
@@ -150,19 +173,28 @@ window.chatCallMixin = function chatCallMixin() {
       }
       let resp;
       try {
-        resp = await fetch(`/api/v1/chat/conversations/${convId}/call/join`, {
+        resp = await fetch(this._callEndpoint('join', convId), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: this._callHeaders({ json: true }),
         });
       } catch (e) {
         this._teardownLocal();
         this.joiningCall = false;
         return;
       }
-      if (resp.status === 409) {
+      // Branch on the status BEFORE parsing: the guest endpoints answer 423
+      // and 404 with no body at all, and a parse that throws here would skip
+      // every release below - leaving joiningCall latched and the microphone
+      // captured, with no way back but a reload.
+      if (!resp.ok) {
         this._teardownLocal();
         this.joiningCall = false;
-        window.AppAlert.warning('This call is full.');
+        let detail = '';
+        try {
+          const body = await resp.json();
+          detail = (body && body.detail) || '';
+        } catch (e) { /* no body, or not JSON: the status is the whole story */ }
+        this._onJoinRefused(resp.status, detail);
         return;
       }
       const data = await resp.json();
@@ -175,7 +207,7 @@ window.chatCallMixin = function chatCallMixin() {
 
       // As the newcomer, wait for existing participants to offer; just create
       // peer slots for everyone already here.
-      for (const id of window.chatCallOtherParticipantIds(this.callParticipants, this.currentUserId)) {
+      for (const id of window.chatCallOtherParticipantIds(this.callParticipants, this.currentParticipantKey)) {
         this._ensurePeer(id, /* initiateOffer */ false);
       }
       this._startHeartbeat();
@@ -188,6 +220,20 @@ window.chatCallMixin = function chatCallMixin() {
       }
     },
 
+    // What a refused join means to the user. The member room has nowhere to
+    // fall back to, so it says so and stops; the guest page overrides this to
+    // park in its own room instead.
+    _onJoinRefused(status, detail) {
+      // 409 is two different refusals - the call is full, and there is no
+      // call to join yet - and only the body tells them apart. Announcing
+      // "full" for the second one sends the user away from a meeting they
+      // could have joined a minute later.
+      const full = status === 409 && /full/i.test(detail);
+      window.AppAlert.warning(
+        full ? 'This call is full.' : (detail || 'This call cannot be joined right now.'),
+      );
+    },
+
     async leaveCall() {
       // Stop the room's speaking meter and duration timer if present (room tab
       // only; optional chaining makes this a no-op on the main observer tab).
@@ -195,12 +241,13 @@ window.chatCallMixin = function chatCallMixin() {
       // through leaveCall.
       this._stopSpeakingMeter?.();
       this._stopDurationTimer?.();
-      // Leave the call's own conversation, captured before we clear the session
-      // (you may be viewing a different conversation while in the call).
+      // Both captured before we clear the session: convId names the room tab
+      // the observer has to be told about, leaveTarget addresses the POST.
       const convId = this.callSession && this.callSession.conversation_id;
+      const leaveTarget = this._leaveTarget();
       this._playCallCue('leave');
       this._stopHeartbeat();
-      for (const id of Object.keys(this._peers)) this._closePeer(Number(id));
+      for (const id of Object.keys(this._peers)) this._closePeer(id);
       this._teardownLocal();
       this.inCall = false;
       this.isMuted = false;
@@ -214,11 +261,11 @@ window.chatCallMixin = function chatCallMixin() {
           this._roomChannel.postMessage({ type: 'room-closed', conversationId: convId });
         } catch (e) { /* best effort */ }
       }
-      if (convId) {
+      if (leaveTarget) {
         try {
-          await fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
+          await fetch(this._callEndpoint('leave', leaveTarget), {
             method: 'POST',
-            headers: { 'X-CSRFToken': this._csrf() },
+            headers: this._callHeaders(),
             keepalive: true,
           });
         } catch (e) { /* best effort */ }
@@ -249,7 +296,7 @@ window.chatCallMixin = function chatCallMixin() {
       return window.chatCallBannerAction(
         !!this.callSession,
         this.callParticipants,
-        this.currentUserId,
+        this.currentParticipantKey,
       );
     },
 
@@ -257,12 +304,12 @@ window.chatCallMixin = function chatCallMixin() {
     // module, reload, tab close). keepalive lets the POST outlive the page and,
     // unlike sendBeacon, carries the CSRF header the endpoint requires.
     _leaveBeacon() {
-      const convId = this.callSession && this.callSession.conversation_id;
-      if (!convId) return;
+      const leaveTarget = this._leaveTarget();
+      if (!leaveTarget) return;
       try {
-        fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
+        fetch(this._callEndpoint('leave', leaveTarget), {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: this._callHeaders(),
           keepalive: true,
         });
       } catch (e) { /* page is going away */ }
@@ -393,9 +440,9 @@ window.chatCallMixin = function chatCallMixin() {
       const convId = this.callSession && this.callSession.conversation_id;
       if (!this.inCall || !convId) return;
       try {
-        await fetch(`/api/v1/chat/conversations/${convId}/call/heartbeat`, {
+        await fetch(this._callEndpoint('heartbeat', convId), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: this._callHeaders({ json: true }),
           body: JSON.stringify({ media_state: this._mediaState() }),
         });
       } catch (e) { /* transient */ }
@@ -472,9 +519,9 @@ window.chatCallMixin = function chatCallMixin() {
     _scheduleIceRestart(peerId) {
       const peer = this._peers[peerId];
       if (!peer) return;
-      // Only the lower-id side initiates; the other side waits for the incoming
+      // Only the lower-key side initiates; the other side waits for the incoming
       // restart offer and answers it through the existing onCallSignal path.
-      if (!window.chatCallShouldDriveIceRestart(this.currentUserId, peerId)) return;
+      if (!window.chatCallShouldDriveIceRestart(this.currentParticipantKey, peerId)) return;
       if (peer.iceRestartAttempts >= MAX_ICE_RESTARTS) return; // gave up; server reap takes over
       const state = peer.pc.iceConnectionState;
       if (peer.iceRestartTimer) {
@@ -521,13 +568,13 @@ window.chatCallMixin = function chatCallMixin() {
       delete this._peers[peerId];
     },
 
-    async _sendSignal(toUserId, signal) {
+    async _sendSignal(toKey, signal) {
       if (!this.activeConversation) return;
       try {
-        await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call/signal`, {
+        await fetch(this._callEndpoint('signal', this.activeConversation.uuid), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
-          body: JSON.stringify({ to_user_id: toUserId, signal }),
+          headers: this._callHeaders({ json: true }),
+          body: JSON.stringify({ to_participant: toKey, signal }),
         });
       } catch (e) { /* transient */ }
     },
@@ -553,43 +600,48 @@ window.chatCallMixin = function chatCallMixin() {
     onCallParticipantJoined(detail) {
       if (!this.inCall) { this._refreshCallState(); return; }
       if (!window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      const id = detail.user_id;
-      if (id === this.currentUserId) return;
+      const key = detail.participant_key;
+      if (key === this.currentParticipantKey) return;
       this._playCallCue('peer-join');
-      if (!this.callParticipants.find((p) => p.user_id === id)) {
-        this.callParticipants.push({ user_id: id, display_name: detail.display_name, media_state: detail.media_state });
+      if (!this.callParticipants.find((p) => p.participant_key === key)) {
+        this.callParticipants.push({
+          participant_key: key,
+          user_id: detail.user_id,
+          display_name: detail.display_name,
+          media_state: detail.media_state,
+        });
       }
       // Existing participant (me) offers to the newcomer.
-      if (window.chatCallShouldOffer(this.currentUserId, id)) {
-        this._ensurePeer(id, /* initiateOffer */ true);
+      if (window.chatCallShouldOffer(this.currentParticipantKey, key)) {
+        this._ensurePeer(key, /* initiateOffer */ true);
       }
     },
     onCallParticipantLeft(detail) {
       if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      if (this.inCall && detail.user_id !== this.currentUserId) {
+      if (this.inCall && detail.participant_key !== this.currentParticipantKey) {
         this._playCallCue('peer-leave');
       }
-      this.callParticipants = this.callParticipants.filter((p) => p.user_id !== detail.user_id);
-      this._closePeer(detail.user_id);
+      this.callParticipants = this.callParticipants.filter((p) => p.participant_key !== detail.participant_key);
+      this._closePeer(detail.participant_key);
       if (!this.inCall) this._refreshCallState();
     },
     onCallParticipantUpdated(detail) {
       if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      const p = this.callParticipants.find((x) => x.user_id === detail.user_id);
+      const p = this.callParticipants.find((x) => x.participant_key === detail.participant_key);
       if (p) p.media_state = detail.media_state;
     },
     async onCallSignal(detail) {
       if (!this.inCall) return;
-      const fromId = detail.from_user_id;
+      const fromKey = detail.from_participant;
       const signal = detail.signal || {};
-      const peer = this._ensurePeer(fromId, /* initiateOffer */ false);
+      const peer = this._ensurePeer(fromKey, /* initiateOffer */ false);
       const pc = peer.pc;
       try {
         if (signal.type === 'offer') {
           await pc.setRemoteDescription(signal.sdp);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          this._sendSignal(fromId, { type: 'answer', sdp: pc.localDescription });
+          this._sendSignal(fromKey, { type: 'answer', sdp: pc.localDescription });
         } else if (signal.type === 'answer') {
           await pc.setRemoteDescription(signal.sdp);
         } else if (signal.type === 'ice' && signal.candidate) {
@@ -619,7 +671,7 @@ window.chatCallMixin = function chatCallMixin() {
     async _refreshCallState() {
       if (!this.activeConversation) return;
       try {
-        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call`);
+        const resp = await fetch(this._callEndpoint('', this.activeConversation.uuid));
         const data = await resp.json();
         this.callSession = data.active ? data : null;
         this.callParticipants = data.active ? (data.participants || []) : [];

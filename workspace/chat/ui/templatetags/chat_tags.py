@@ -3,6 +3,7 @@ import json
 from django import template
 from django.utils import timezone
 
+from workspace.chat.services.participant_keys import user_key
 from workspace.chat.services.tool_calls import display_args
 
 register = template.Library()
@@ -67,10 +68,15 @@ def shell_attachment_data(message):
 
 
 @register.inclusion_tag("chat/ui/partials/_read_receipt.html")
-def render_read_receipt(message, conversation_kind):
-    """Render read receipt indicator for own messages."""
+def render_read_receipt(message, conversation_kind, viewer):
+    """Render read receipt indicator for own messages.
+
+    A viewer without ``can_see_receipts`` gets nothing: the popover behind it
+    lists the conversation's members and is addressed by conversation uuid,
+    neither of which a meeting guest may reach.
+    """
     read_count = getattr(message, "read_count", None)
-    if read_count is None:
+    if read_count is None or not viewer.can_see_receipts:
         return {"show": False}
 
     return {
@@ -84,10 +90,24 @@ def render_read_receipt(message, conversation_kind):
     }
 
 
+def _reacted_emojis(message, viewer):
+    """The emojis *viewer* already put on *message*.
+
+    Only a member can react - Reaction has a user column and no guest one -
+    so a guest viewer's participant key matches nothing here, which is the
+    answer we want rather than a special case.
+    """
+    return {
+        r.emoji
+        for r in message.reactions.all()
+        if user_key(r.user_id) == viewer.participant_key
+    }
+
+
 @register.inclusion_tag("chat/ui/partials/_reaction_picker.html")
-def render_reaction_picker(message, current_user, quick_emojis):
+def render_reaction_picker(message, viewer, quick_emojis):
     """Quick-reaction emojis for the hover toolbar, each flagged with whether
-    the current user already reacted with it so the picker shows it as selected.
+    the viewer already reacted with it so the picker shows it as selected.
 
     `quick_emojis` is the per-user list computed once per render by the view
     (see workspace.chat.services.reactions.quick_reactions_for); this tag only
@@ -99,7 +119,9 @@ def render_reaction_picker(message, current_user, quick_emojis):
     from `conversation_messages_view`, whose queryset already prefetches
     `reactions__user`.
     """
-    mine = {r.emoji for r in message.reactions.all() if r.user_id == current_user.id}
+    if not viewer.can_react:
+        return {"message_uuid": message.uuid, "quick_reactions": []}
+    mine = _reacted_emojis(message, viewer)
     return {
         "message_uuid": message.uuid,
         "quick_reactions": [{"emoji": e, "has_mine": e in mine} for e in quick_emojis],
@@ -107,18 +129,27 @@ def render_reaction_picker(message, current_user, quick_emojis):
 
 
 @register.inclusion_tag("chat/ui/partials/_reactions.html")
-def render_reactions(message, current_user):
-    """Group reactions by emoji and check if current user reacted.
+def render_reactions(message, viewer):
+    """Group reactions by emoji and check if the viewer reacted.
 
     Callers MUST `prefetch_related('reactions__user')` on the message
     queryset, otherwise iterating reactions hits the DB once per row to
     resolve `r.user.username`. The two main view sites (chat
     `conversation_messages_view` and the SSE provider) already do this.
+
+    A viewer without `can_react` still sees the chips - who reacted with what
+    is part of reading the conversation - but the template leaves out the
+    toggle, since the endpoint behind it would refuse them.
     """
     reactions = list(message.reactions.all())
     if not reactions:
-        return {"groups": [], "message_uuid": message.uuid}
+        return {
+            "groups": [],
+            "message_uuid": message.uuid,
+            "can_react": viewer.can_react,
+        }
 
+    mine = _reacted_emojis(message, viewer)
     emoji_map = {}
     for r in reactions:
         if r.emoji not in emoji_map:
@@ -126,16 +157,15 @@ def render_reactions(message, current_user):
                 "emoji": r.emoji,
                 "count": 0,
                 "users": [],
-                "has_mine": False,
+                "has_mine": r.emoji in mine,
             }
         emoji_map[r.emoji]["count"] += 1
         emoji_map[r.emoji]["users"].append(r.user.username)
-        if r.user_id == current_user.id:
-            emoji_map[r.emoji]["has_mine"] = True
 
     return {
         "groups": list(emoji_map.values()),
         "message_uuid": message.uuid,
+        "can_react": viewer.can_react,
     }
 
 

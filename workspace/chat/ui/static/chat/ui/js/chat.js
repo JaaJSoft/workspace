@@ -33,6 +33,10 @@ function chatApp(currentUserId) {
     ...chatCallDiagnosticMixin(),
     ...chatRecorderMixin(),
 
+    // Placed after the mixin spreads: chatCallMixin() declares its own
+    // currentParticipantKey: null default, which would otherwise win.
+    currentParticipantKey: `u:${currentUserId}`,
+
     // ── Init: orchestrates first paint and global listeners ─
     async init() {
       // The main chat tab never owns the microphone; the dedicated room tab

@@ -91,3 +91,33 @@ test('the byte source handed to the panel is the vault bundle, not the page', ()
   component.generatorDeps().randomBytes(7);
   assert.deepEqual(drawn, [7]);
 });
+
+test('a refused clipboard says so instead of failing silently', () => {
+  // The panel closes on copy, taking the value with it: a rejected write that
+  // nobody catches leaves the user believing they hold a password they never
+  // got. copyField two files over sets the same message for the same reason.
+  const ctx = loadScript(MIXIN, {
+    vaultClipboard: { copy: async () => { throw new Error('denied'); } },
+    vaultCrypto: { randomBytes: (count) => new Uint8Array(count) },
+  });
+  const component = ctx.vaultGeneratorMixin();
+  return component.copyGenerated('drawn').then(() => {
+    assert.match(component.error, /could not be copied/);
+  });
+});
+
+test('a lock cancelling the copy is not reported as a failure', () => {
+  // The vault raises { reason: 'locked' } when the session goes while an
+  // operation is in flight; that is the lock working, not an error to show.
+  const ctx = loadScript(MIXIN, {
+    vaultClipboard: {
+      copy: async () => { const e = new Error('locked'); e.reason = 'locked'; throw e; },
+    },
+    vaultCrypto: { randomBytes: (count) => new Uint8Array(count) },
+  });
+  const component = ctx.vaultGeneratorMixin();
+  component.error = '';
+  return component.copyGenerated('drawn').then(() => {
+    assert.equal(component.error, '');
+  });
+});

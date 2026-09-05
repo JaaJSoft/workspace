@@ -37,8 +37,17 @@ window.vaultGeneratorMixin = function vaultGeneratorMixin() {
       this.generatorField = null;
     },
 
-    copyGenerated(value) {
-      return window.vaultClipboard.copy('Password', value, { transient: true });
+    async copyGenerated(value) {
+      // The panel is dismissed on copy, so a rejected write - a denied
+      // permission, an unfocused document - would leave the user holding
+      // nothing and believing otherwise. Same message as copyField, which
+      // fails the same way for the same reason.
+      try {
+        await window.vaultClipboard.copy('Password', value, { transient: true });
+      } catch (err) {
+        if (err && err.reason === 'locked') return;
+        this.error = 'That value could not be copied.';
+      }
     },
 
     // Takes every generated password back. The panels hold their value in

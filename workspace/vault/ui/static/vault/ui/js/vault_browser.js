@@ -1127,6 +1127,9 @@ window.vaultBrowser = (function () {
       },
 
       closeEntryDialog: function () {
+        // With the draft, or the next dialog opens with a panel already
+        // mounted and draws a password for an entry nobody asked one for.
+        this.generatorField = null;
         this.draft = null;
       },
 
@@ -1179,6 +1182,7 @@ window.vaultBrowser = (function () {
           } else {
             await window.vaultApi.updateEntry(draft.uuid, body);
           }
+          this.generatorField = null;
           this.draft = null;
           await this.load();
         } catch (err) {

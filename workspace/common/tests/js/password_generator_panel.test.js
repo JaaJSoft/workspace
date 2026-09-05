@@ -174,3 +174,19 @@ test('the panel draws through the byte source it was handed', () => {
   panel.init();
   assert.ok(calls > 0, 'the injected source was never used');
 });
+
+test('an emptied separator goes back to the default rather than joining nothing', () => {
+  // Concatenated words leave no boundary, so the same string can come from
+  // more than one draw - and the reported entropy counts draws. The field is
+  // one character wide, so emptying it is a step on the way to changing it,
+  // not a choice; it is restored when focus leaves.
+  const { panel } = makePanel();
+  panel.init();
+  panel.separator = '';
+  panel.normaliseSeparator();
+  assert.equal(panel.separator, '-');
+
+  panel.separator = '.';
+  panel.normaliseSeparator();
+  assert.equal(panel.separator, '.');
+});

@@ -48,7 +48,7 @@ from ..services.call_signaling import send_signal
 from ..services.conversations import active_member_users
 from ..services.guest_messages import message_queryset
 from ..services.guest_stream import stream_guest_events
-from ..services.meeting_guests import guest_for_token, resolve_guest
+from ..services.meeting_guests import guest_for_slug, guest_for_token
 from ..services.meeting_occurrences import current_occurrence
 from ..services.mentions import build_mention_map
 from ..services.participant_keys import (
@@ -78,17 +78,8 @@ _KNOWN_MEDIA_STATE_KEYS = ("audio", "video", "screen")
 
 
 def _guest_for_request(request, slug):
-    """The admitted guest this request authorizes for this meeting, or None.
-
-    The slug check is not redundant: without it, a token issued for meeting A
-    would authorize a request against meeting B's slug, and every scoping
-    decision downstream would silently use the wrong meeting.
-    """
-    token = request.headers.get("X-Meeting-Token", "")
-    guest = resolve_guest(token)
-    if guest is None or guest.meeting.slug != slug:
-        return None
-    return guest
+    """The admitted guest this request authorizes for this meeting, or None."""
+    return guest_for_slug(request.headers.get("X-Meeting-Token", ""), slug)
 
 
 def _guest_call_state(session):

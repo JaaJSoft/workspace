@@ -12,6 +12,7 @@ from workspace.chat.models import (
     MeetingGuest,
     Message,
 )
+from workspace.chat.ui.viewer import for_user
 from workspace.chat.ui.views import group_messages
 
 User = get_user_model()
@@ -37,7 +38,7 @@ class GroupMessagesTimezoneTests(TestCase):
             created_at=datetime(2026, 1, 31, 23, 30, tzinfo=UTC),
         )
         dj_timezone.activate("Europe/Paris")
-        groups = group_messages([m1, m2], user)
+        groups = group_messages([m1, m2], for_user(user))
         dates = [g["date"] for g in groups if g["type"] == "date"]
         self.assertEqual(dates, [date(2026, 1, 31), date(2026, 2, 1)])
 

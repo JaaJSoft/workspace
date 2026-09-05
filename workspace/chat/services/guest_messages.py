@@ -38,3 +38,19 @@ def message_queryset():
         "attachments",
         "link_previews__preview",
     )
+
+
+def hide_quotes_below_floor(messages, floor):
+    """Drop the reply target of any message answering a pre-floor message.
+
+    The HTML half of what ``GuestMessageSerializer`` does to ``reply_to``: the
+    listing is floored at the guest's occurrence, but an in-window reply can
+    legitimately answer a message from before that occurrence opened, and the
+    quote would hand the guest its author and body. Detaching the relation in
+    memory is what the message-group template reads as "no quote"; these rows
+    are never saved.
+    """
+    for message in messages:
+        target = message.reply_to if message.reply_to_id else None
+        if target is not None and target.created_at < floor:
+            message.reply_to = None

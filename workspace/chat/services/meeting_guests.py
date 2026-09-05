@@ -74,6 +74,23 @@ def resolve_guest(token, now=None):
     return guest
 
 
+def guest_for_slug(token, slug):
+    """The admitted guest *token* authorizes for the meeting named by *slug*.
+
+    The slug check is not redundant: without it, a token issued for meeting A
+    would authorize a request against meeting B's slug, and every scoping
+    decision downstream would silently use the wrong meeting.
+
+    The one gate for guest-visible content, shared by the JSON endpoints and
+    the server-rendered message list so the two cannot drift apart on what a
+    valid token is.
+    """
+    guest = resolve_guest(token)
+    if guest is None or guest.meeting.slug != slug:
+        return None
+    return guest
+
+
 def guest_for_token(token):
     """The MeetingGuest this token names, whatever its state, or None.
 

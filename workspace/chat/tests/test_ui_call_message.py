@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.chat.models import Conversation, Message
+from workspace.chat.ui.viewer import for_user
 from workspace.chat.ui.views import group_messages
 
 
@@ -23,7 +24,7 @@ class SystemCallGroupingTests(TestCase):
             tool_data={"type": "call", "state": "active"},
         )
         msgs = list(self.conv.messages.order_by("created_at"))
-        groups = group_messages(msgs, self.user)
+        groups = group_messages(msgs, for_user(self.user))
         types = [g["type"] for g in groups]
         self.assertIn("system", types)
         system_groups = [g for g in groups if g["type"] == "system"]

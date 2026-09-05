@@ -341,6 +341,15 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
                 self.client.get(f"{self.url('messages')}?limit=50", **header),
                 (f"@{FOREIGN_USERNAME}",),
             ),
+            (
+                # The server-rendered half of the same listing: the guest pane
+                # loads the member pane's partial, so the HTML is held to the
+                # same bar as the JSON.
+                "GET meet messages HTML",
+                200,
+                self.client.get(f"/meet/{self.meeting.slug}/messages", **header),
+                (f"@{FOREIGN_USERNAME}",),
+            ),
         ]
 
         for entry in walk:
@@ -407,6 +416,10 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
                 ),
             ),
             ("GET messages", self.client.get(self.url("messages"), **header)),
+            (
+                "GET meet messages HTML",
+                self.client.get(f"/meet/{self.meeting.slug}/messages", **header),
+            ),
             (
                 "POST messages",
                 self.client.post(
@@ -711,8 +724,10 @@ class GuestSurfaceSourceTests(SimpleTestCase):
     # The UI half of the same fence. The API views above are enumerated by
     # what empties authentication_classes; a page view is enumerated by what
     # it is missing instead - @login_required - because that decorator is the
-    # only thing standing between a template and a stranger.
-    ANONYMOUS_UI_VIEWS = {"meet_view"}
+    # only thing standing between a template and a stranger. Both entries are
+    # the meeting page: the document, and the message list it loads with the
+    # token in a header.
+    ANONYMOUS_UI_VIEWS = {"meet_view", "meet_messages_view"}
 
     def test_the_anonymous_ui_views_are_exactly_the_known_set(self):
         """A second public page is a decision, not a forgotten decorator."""

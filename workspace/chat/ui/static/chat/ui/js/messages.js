@@ -29,11 +29,50 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // message, which the server renders outside the paginated list.
     _loadTargets() { return [this._messageListId()]; },
     _messageIdPrefix() { return 'msg'; },
-    _messagesUrl(cursor) {
-      const base = `/chat/${this.activeConversation.uuid}/messages`;
+    _replyTarget() { return this.replyingTo?.uuid || null; },
+
+    // ── Transport seam ───────────────────────────────────────
+    // Four hooks, and everything the mixin sends or fetches goes through
+    // them. The member pane addresses the conversation API with the session
+    // cookie; the public meeting page (meet.js) spreads this same mixin and
+    // re-points all four at /meet/<slug>/..., authenticated by a token
+    // header instead. Nothing else in here names an endpoint.
+    _messageEndpoint(conversationId) {
+      return `/api/v1/chat/conversations/${conversationId}/messages`;
+    },
+    _messageHeaders({ json = false } = {}) {
+      const headers = { 'X-CSRFToken': getCSRFToken() };
+      // Never on a multipart send: the boundary is the browser's to write.
+      if (json) headers['Content-Type'] = 'application/json';
+      return headers;
+    },
+    // The server-rendered list, fetched as HTML and merged by alpine-ajax.
+    _messagesPartialUrl(conversationId, cursor) {
+      const base = `/chat/${conversationId}/messages`;
       return cursor ? `${base}?before=${cursor}` : base;
     },
-    _replyTarget() { return this.replyingTo?.uuid || null; },
+    // Passed as $ajax's `headers` on every load below; alpine-ajax merges
+    // them into the fetch it issues. Empty for a member - the cookie is the
+    // credential.
+    _messagesPartialHeaders() { return {}; },
+    _messagesUrl(cursor) {
+      return this._messagesPartialUrl(this.activeConversation.uuid, cursor);
+    },
+    // Whether the person looking is a guest, which the optimistic bubble
+    // has to say so the shell skips the presence dot and the profile card
+    // the guest cannot reach. The server stamps the same attribute on the
+    // groups it renders.
+    _viewerIsGuest() { return false; },
+    // What a failed send should say. The member pane says nothing: the text
+    // and the attachments are back in the composer, which is the message.
+    _onSendFailed() {},
+    // Whether this surface has a read cursor to move at all. A guest's
+    // membership is the meeting, not a conversation row, so it has none.
+    _canMarkRead() { return true; },
+    // What a merge must be stamped with to belong here. The conversation
+    // uuid for a member; the meeting slug for a guest, who never learns the
+    // conversation the meeting chat lives in.
+    _expectedListKey() { return this.activeConversation?.uuid; },
 
     // Every rendered copy of a message, across surfaces. With the inline
     // preference on and the thread panel open, one message is on screen twice,
@@ -72,7 +111,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // without a stamp is let through.
     _vetoStaleMerge(event) {
       const stamped = event.detail?.content?.getAttribute?.('data-conversation-uuid');
-      if (stamped && stamped !== this.activeConversation?.uuid) {
+      if (stamped && stamped !== this._expectedListKey()) {
         event.preventDefault();
       }
     },
@@ -99,6 +138,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       try {
         const render = await this.$ajax(this._messagesUrl(null), {
           targets: this._loadTargets(),
+          headers: this._messagesPartialHeaders(),
           focus: false,
         });
         // A vetoed or superseded response merges nothing; leave the state
@@ -139,6 +179,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         // request before it can prepend a stale page into fresh content.
         const render = await this.$ajax(this._messagesUrl(cursor), {
           targets: [this._messageListStateId(), this._messageListItemsId()],
+          headers: this._messagesPartialHeaders(),
           focus: false,
         });
         if ((render || []).some(Boolean)) {
@@ -240,10 +281,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
             formData.append('file_uuids', wf.uuid);
           }
           resp = await fetch(
-            `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
+            this._messageEndpoint(this.activeConversation.uuid),
             {
               method: 'POST',
-              headers: { 'X-CSRFToken': getCSRFToken() },
+              headers: this._messageHeaders(),
               credentials: 'same-origin',
               body: formData,
             }
@@ -253,13 +294,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           if (replyToUuid) payload.reply_to_uuid = replyToUuid;
           if (wsFiles.length > 0) payload.file_uuids = wsFiles.map(f => f.uuid);
           resp = await fetch(
-            `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
+            this._messageEndpoint(this.activeConversation.uuid),
             {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken(),
-              },
+              headers: this._messageHeaders({ json: true }),
               credentials: 'same-origin',
               body: JSON.stringify(payload),
             }
@@ -292,6 +330,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this.pendingPickedFiles = wsFiles;
           this.botTyping = false;
           this.clearBotStep?.();
+          this._onSendFailed(resp.status);
         }
       } catch (e) {
         console.error('Failed to send message', e);
@@ -301,6 +340,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         this.pendingPickedFiles = wsFiles;
         this.botTyping = false;
         this.clearBotStep?.();
+        this._onSendFailed(null);
       }
     },
 
@@ -333,10 +373,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${convUuid}/messages`,
+          this._messageEndpoint(convUuid),
           {
             method: 'POST',
-            headers: { 'X-CSRFToken': getCSRFToken() },
+            headers: this._messageHeaders(),
             credentials: 'same-origin',
             body: formData,
           }
@@ -387,10 +427,14 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       group.id = tempId;
       group.setAttribute('own', '');
       group.setAttribute('pending', '');
+      if (this._viewerIsGuest()) group.setAttribute('viewer-guest', '');
       const user = this._getCurrentUser();
       if (user) {
-        group.setAttribute('author-id', user.id);
+        // A guest has no user row, so no id and no avatar to fetch - only a
+        // name and the badge that says where it comes from.
+        if (user.id != null) group.setAttribute('author-id', user.id);
         group.setAttribute('author-username', user.username);
+        if (user.is_guest) group.setAttribute('guest', '');
       }
       group.body = body || '';
       group.replyInfo = replyInfo || null;
@@ -434,6 +478,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       try {
         const render = await this.$ajax(this._messagesUrl(null), {
           targets: this._loadTargets(),
+          headers: this._messagesPartialHeaders(),
           focus: false,
         });
         if ((render || []).some(Boolean)) this._readPaginationState();
@@ -473,13 +518,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${this.editingMessageUuid}`,
+          `${this._messageEndpoint(this.activeConversation.uuid)}/${this.editingMessageUuid}`,
           {
             method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': getCSRFToken(),
-            },
+            headers: this._messageHeaders({ json: true }),
             credentials: 'same-origin',
             body: JSON.stringify({ body }),
           }
@@ -527,10 +569,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${msgUuid}`,
+          `${this._messageEndpoint(this.activeConversation.uuid)}/${msgUuid}`,
           {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': getCSRFToken() },
+            headers: this._messageHeaders(),
             credentials: 'same-origin',
           }
         );
@@ -591,6 +633,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
     // ── Read status ────────────────────────────────────────
     async markAsRead(conversationId) {
+      if (!this._canMarkRead()) return;
       try {
         await fetch(`/api/v1/chat/conversations/${conversationId}/read`, {
           method: 'POST',

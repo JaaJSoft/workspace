@@ -313,8 +313,19 @@ window.chatInputMixin = function chatInputMixin() {
       }
     },
 
+    // The roster this composer can address, self excluded, or null when the
+    // surface has no roster at all - which also takes @everyone away, the
+    // point being "this composer mentions nobody" rather than "everyone is
+    // busy". The meeting page overrides it: a guest is never shown who else
+    // is in the conversation.
+    _mentionCandidates() {
+      if (!this.activeConversation?.members) return null;
+      return this.activeConversation.members.filter((m) => m.user.id !== this.currentUserId);
+    },
+
     filterMentionResults() {
-      if (!this.activeConversation?.members) {
+      const candidates = this._mentionCandidates();
+      if (candidates === null) {
         this.mentionResults = [];
         return;
       }
@@ -328,9 +339,7 @@ window.chatInputMixin = function chatInputMixin() {
         }
       }
 
-      // Filter conversation members (exclude self)
-      for (const m of this.activeConversation.members) {
-        if (m.user.id === this.currentUserId) continue;
+      for (const m of candidates) {
         const u = m.user;
         const searchStr = `${u.username} ${u.first_name || ''} ${u.last_name || ''}`.toLowerCase();
         if (!q || searchStr.includes(q)) {
@@ -375,8 +384,12 @@ window.chatInputMixin = function chatInputMixin() {
     },
 
     // ── Typing indicator ─────────────────────────────────────
+    // Whether this composer has a typing channel to speak on. A guest posts
+    // through the meeting's token endpoints, which expose none.
+    _canSendTyping() { return true; },
+
     sendTypingSignal() {
-      if (!this.activeConversation) return;
+      if (!this.activeConversation || !this._canSendTyping()) return;
       const now = Date.now();
       if (now - this._lastTypingSent < 3000) return;
       this._lastTypingSent = now;

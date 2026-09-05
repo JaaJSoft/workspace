@@ -103,6 +103,10 @@
 
     get _own() { return this.hasAttribute('own'); }
     get _guest() { return this.hasAttribute('guest'); }
+    // Who is LOOKING, not who wrote: a guest holds a meeting token, not a
+    // session, so the presence dot and the profile card behind the avatar
+    // would both ask endpoints it cannot reach.
+    get _viewerGuest() { return this.hasAttribute('viewer-guest'); }
     get _pending() { return this.hasAttribute('pending'); }
     get _prefix() { return this.getAttribute('id-prefix') || 'msg'; }
 
@@ -141,6 +145,7 @@
       wrap.setAttribute(':class', "chatPrefs.compactMessageView ? 'w-6' : 'w-8'");
       const userId = this.getAttribute('author-id') || '';
       const username = this.getAttribute('author-username') || '';
+      const live = !this._viewerGuest;
       // Avatar size follows density; x-if (not x-show) so only one
       // <user-avatar> is live at a time.
       for (const [expr, size] of [
@@ -149,7 +154,7 @@
       ]) {
         const tpl = document.createElement('template');
         tpl.setAttribute('x-if', expr);
-        tpl.innerHTML = window.userAvatarTag(userId, username, { size, presence: true, card: true });
+        tpl.innerHTML = window.userAvatarTag(userId, username, { size, presence: live, card: live });
         wrap.appendChild(tpl);
       }
       return wrap;
@@ -428,7 +433,7 @@
         zone.appendChild(box);
       }
       wrap.appendChild(zone);
-      if (interactive) wrap.appendChild(this._saveButton(item));
+      if (interactive && !this._viewerGuest) wrap.appendChild(this._saveButton(item));
       return wrap;
     }
 
@@ -448,7 +453,7 @@
         } else {
           cell.append(...this._mediaVideo(item, { grid: true }));
         }
-        if (interactive) cell.appendChild(this._saveButton(item, { grid: true }));
+        if (interactive && !this._viewerGuest) cell.appendChild(this._saveButton(item, { grid: true }));
         grid.appendChild(cell);
       });
       return grid;
@@ -478,7 +483,7 @@
       }
       if (interactive) body.appendChild(icon('eye', 'w-3.5 h-3.5 flex-shrink-0 opacity-60'));
       row.appendChild(body);
-      if (interactive) row.appendChild(this._saveButton(item, { chip: true }));
+      if (interactive && !this._viewerGuest) row.appendChild(this._saveButton(item, { chip: true }));
       return row;
     }
   }

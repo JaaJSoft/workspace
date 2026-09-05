@@ -132,7 +132,7 @@ window.chatMeetSseMixin = function chatMeetSseMixin() {
       if (name.startsWith('call_')) {
         window.dispatchEvent(new CustomEvent('chat-' + name, { detail: payload.data }));
       } else if (name === 'message') {
-        this.onIncomingMessage(payload.data && payload.data.message);
+        await this.onMeetingMessage(payload.data && payload.data.message);
       } else if (name.startsWith('meeting_')) {
         await this.onMeetingEvent(payload);
       }
@@ -142,9 +142,6 @@ window.chatMeetSseMixin = function chatMeetSseMixin() {
 
 window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
   return {
-    messages: [],
-    draft: '',
-    sending: false,
     // Below md the chat is a slide-over panel, so a message can arrive with
     // nobody looking at it. The count is only ever shown there: at md and
     // above the panel is always on screen and the badge is not rendered.
@@ -155,48 +152,77 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
       this.chatOpen = !this.chatOpen;
       if (this.chatOpen) {
         this.unreadMessages = 0;
-        this._scrollMessages();
+        this.$nextTick(() => this.scrollToBottom());
       }
     },
 
-    async loadMessages() {
-      const resp = await fetch(`/api/v1/chat/meet/${this.slug}/messages`, {
-        headers: this._callHeaders(),
-      });
-      if (!resp.ok) return;
-      const data = await resp.json();
-      this.messages = data.messages || [];
-      this._scrollMessages();
+    // -- chatMessagesMixin transport seam --------------------
+    // The pane is the member pane: the same mixin, the same server partial,
+    // the same alpine-ajax merge pipeline. Only the addressing changes, and
+    // it changes here. Every guest request carries the meeting token in a
+    // header, so the same four hooks the member pane leaves at their
+    // defaults are the whole of the difference.
+    _messagesPartialUrl(conversationId, cursor) {
+      const base = `/meet/${this.slug}/messages`;
+      return cursor ? `${base}?before=${cursor}` : base;
+    },
+    _messagesPartialHeaders() { return this._callHeaders(); },
+    _messageEndpoint() { return `/meet/${this.slug}/messages`; },
+    _messageHeaders(options) { return this._callHeaders(options); },
+    // A guest's membership is the meeting, not a conversation row: there is
+    // no read cursor of its own to move, and no typing channel to speak on.
+    _canMarkRead() { return false; },
+    _canSendTyping() { return false; },
+    // A guest is never shown who else is in the conversation, so there is
+    // nobody to mention - @everyone included.
+    _mentionCandidates() { return null; },
+    _viewerIsGuest() { return true; },
+    _onSendFailed() { window.AppAlert.error('Your message was not sent.'); },
+    // The server stamps the slug on every mergeable element it renders for
+    // a guest: the conversation the meeting chat lives in is not something
+    // the guest is ever told.
+    _expectedListKey() { return this.slug; },
+
+    // The author of the optimistic bubble. No user row, hence no id and no
+    // avatar to fetch - a name and the Guest badge, which is exactly what
+    // the server-rendered bubble that replaces it will carry.
+    _getCurrentUser() {
+      return { id: null, username: this.displayName, is_guest: true };
     },
 
-    onIncomingMessage(message) {
-      if (!message || this.messages.some((m) => m.uuid === message.uuid)) return;
-      this.messages.push(message);
+    // -- Collaborators the member pane has and a guest has not ----
+    // chatMessagesMixin calls these on the send path (the sidebar row it
+    // bubbles to the top, the draft it clears, the AI badge in a header).
+    // There is no sidebar, no draft store and no bot here.
+    isBotConversation() { return false; },
+    isBotMessage() { return false; },
+    botTyping: false,
+    recorderSupported: false,
+    _clearDraft() {},
+    _updateConversationLastMessage() {},
+    refreshConversationItems() {},
+
+    // A reply quote links to the message it quotes. The member pane can page
+    // the flow back looking for one that has scrolled off; a guest's window
+    // on the conversation starts at its admission, so the copy is either on
+    // screen or it is not.
+    scrollToMessage(uuid) {
+      const el = document.getElementById(`msg-${uuid}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+      setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+      }, 2000);
+    },
+
+    // A message frame off the event stream. The list is server-rendered, so
+    // the frame is a signal to re-render rather than a payload to append -
+    // the member pane answers its own SSE the same way. The frame is still
+    // read for one thing: whether it is news to somebody not looking.
+    onMeetingMessage(message) {
       if (!this.chatOpen && !this.isOwnMessage(message)) this.unreadMessages += 1;
-      this._scrollMessages();
-    },
-
-    async sendMessage() {
-      const body = this.draft.trim();
-      if (!body || this.sending) return;
-      this.sending = true;
-      try {
-        const resp = await fetch(`/api/v1/chat/meet/${this.slug}/messages`, {
-          method: 'POST',
-          headers: this._callHeaders({ json: true }),
-          body: JSON.stringify({ body }),
-        });
-        if (resp.ok) {
-          this.onIncomingMessage(await resp.json());
-          this.draft = '';
-        } else {
-          window.AppAlert.error('Your message was not sent.');
-        }
-      } catch (e) {
-        window.AppAlert.error('Your message was not sent.');
-      } finally {
-        this.sending = false;
-      }
+      return this._refreshCurrentMessages();
     },
 
     isOwnMessage(message) {
@@ -204,25 +230,17 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
       return !!(author && author.participant_key
         && author.participant_key === this.currentParticipantKey);
     },
-
-    isSystemMessage(message) {
-      return !!(message && message.kind === 'system');
-    },
-
-    formatTime(iso) {
-      const d = new Date(iso);
-      return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    },
-
-    _scrollMessages() {
-      const el = this.$refs && this.$refs.messageList;
-      if (el) queueMicrotask(() => { el.scrollTop = el.scrollHeight; });
-    },
   };
 };
 
 function chatMeetApp(slug) {
   return {
+    // The pane's own mixins, spread before the meet ones so the transport
+    // seams below win. None of the four registers anything at construction
+    // or exposes a getter, which is what makes spreading them safe.
+    ...chatUiHelpersMixin(),
+    ...chatMessagesMixin(),
+    ...chatInputMixin(),
     ...chatCallMixin(),
     ...chatMeetSseMixin(),
     ...chatMeetMessagesMixin(),
@@ -237,11 +255,18 @@ function chatMeetApp(slug) {
     joinError: '',
     overReason: null,
     callRole: 'room',
-    // The call mixin gates several of its methods on "is there a conversation
-    // to talk to". A guest never learns one, and never needs to: the
-    // _callEndpoint override below ignores the id it is handed, so this stub
-    // is only the flag those guards read.
-    activeConversation: { uuid: slug },
+    // Two readers, one object. The call mixin gates several of its methods
+    // on "is there a conversation to talk to", and the conversation pane
+    // reads uuid, kind and members. A guest learns none of the three: the
+    // slug stands in for the uuid because it is what addresses the guest
+    // endpoints AND what the server stamps on the partial it renders, so
+    // the stale-merge veto compares like for like. The roster stays empty -
+    // that is the mention list, and a guest is shown no roster.
+    activeConversation: { uuid: slug, kind: 'group', members: [] },
+    // The guest page has no preferences endpoint and no dialog to change
+    // them, so the pane gets the shipped defaults rather than chatPrefs
+    // from chat_preferences.js.
+    chatPrefs: { compactMessageView: false, messageAnimation: 'slide', showThreadRepliesInline: false },
     speakingIds: {},
     pinnedKey: null,
     pinnedManually: false,
@@ -624,7 +649,6 @@ function chatMeetApp(slug) {
       this.overReason = null;
       this.error = '';
       this.joinError = '';
-      this.messages = [];
       this.phase = 'name';
     },
 

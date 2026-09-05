@@ -155,7 +155,9 @@ function entropyBits(opts, deps) {
   if (opts.mode === 'passphrase') {
     const words = (deps && deps.wordlist) || defaultWordlist();
     // The separator is fixed and capitalising is deterministic: neither adds
-    // an output the attacker has to try.
+    // an output the attacker has to try. It does have to be *there*: with the
+    // words run together the boundaries are lost, two draws can spell the
+    // same string and this count becomes an upper bound.
     return (opts.words || 0) * Math.log2(words.length);
   }
   const { classes, all } = alphabetFor(opts);
@@ -290,6 +292,14 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
       this.value = '';
     },
 
+    // The field holds one character, so emptying it is a step on the way to
+    // changing it rather than a choice. Concatenated words leave no boundary,
+    // and the same string can then come from more than one draw - which is
+    // what the reported entropy counts.
+    normaliseSeparator() {
+      if (!this.separator) this.separator = '-';
+    },
+
     entropy() {
       try {
         return entropyBits(this.options(), deps);
@@ -298,9 +308,10 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
       }
     },
 
-    // Rough bands, in bits: below 60 a determined attacker gets there, above
-    // 100 nothing does. The wording stays vague on purpose - a precise claim
-    // would depend on the attacker's hardware, which this page cannot know.
+    // Three rough bands, in bits: under 45 an offline attacker gets there,
+    // 45 to 70 is a real but not comfortable margin, past 70 nothing plausible
+    // reaches it. The wording stays vague on purpose - a precise claim would
+    // depend on the attacker's hardware, which this page cannot know.
     strength() {
       const bits = this.entropy();
       if (bits < 45) return { label: 'Weak', css: 'progress-error' };

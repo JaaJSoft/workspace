@@ -2692,3 +2692,15 @@ test('locking takes back the password the generator drew', async () => {
   assert.equal(component.generatorOpen, false);
   assert.deepStrictEqual(Array.from(ctx.dispatched || []), ['password-generator-clear']);
 });
+
+test('closing the entry dialog forgets which field had its generator open', async () => {
+  // generatorField outlives the dialog otherwise, and the next entry opened -
+  // an edit of an existing one included - mounts the panel unasked, drawing a
+  // plaintext password nobody requested.
+  const { component } = browser();
+  component.init();
+  component.newEntry('login');
+  component.openGenerator('password');
+  component.closeEntryDialog();
+  assert.equal(component.generatorField, null);
+});

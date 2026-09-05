@@ -1,5 +1,6 @@
-from abc import ABC
 from enum import StrEnum
+
+from workspace.common.actions import BaseAction
 
 from ..models import VaultRole
 
@@ -19,7 +20,7 @@ _ROLE_RANK = {
 }
 
 
-class BaseVaultAction(ABC):
+class BaseVaultAction(BaseAction):
     """Declarative action on a vault entry.
 
     ``is_available`` is pure: the resolved role, the trash flag, the type's
@@ -33,9 +34,6 @@ class BaseVaultAction(ABC):
     and skipping it re-opens them.
     """
 
-    id: str
-    label: str
-    icon: str
     category: ActionCategory
 
     # A floor, compared through _ROLE_RANK. An equality against OWNER behaves
@@ -50,9 +48,6 @@ class BaseVaultAction(ABC):
     available_when_trashed: bool = False
     only_when_trashed: bool = False
 
-    supports_bulk: bool = False
-    css_class: str = ""
-
     def is_available(self, user, entry, *, role, trashed, schema, present_fields):
         if role is None:
             return False
@@ -63,16 +58,6 @@ class BaseVaultAction(ABC):
         if self.only_when_trashed and not trashed:
             return False
         return True
-
-    def serialize(self, entry):
-        return {
-            "id": self.id,
-            "label": self.label,
-            "icon": self.icon,
-            "category": self.category.value,
-            "css_class": self.css_class,
-            "bulk": self.supports_bulk,
-        }
 
 
 class RequiresFieldMixin:
@@ -107,7 +92,7 @@ class RequiresFieldMixin:
         )
 
 
-class BaseVaultTargetAction(ABC):
+class BaseVaultTargetAction(BaseAction):
     """Declarative action on a vault itself.
 
     Deliberately not a subclass of :class:`BaseVaultAction`: the state that
@@ -122,26 +107,11 @@ class BaseVaultTargetAction(ABC):
     carried anyway, so sharing adds a role rather than a branch.
     """
 
-    id: str
-    label: str
-    icon: str
     category: ActionCategory
 
     min_role: str = VaultRole.OWNER
-    supports_bulk: bool = False
-    css_class: str = ""
 
     def is_available(self, user, vault, *, role):
         if role is None:
             return False
         return _ROLE_RANK.get(role, 0) >= _ROLE_RANK[self.min_role]
-
-    def serialize(self, vault):
-        return {
-            "id": self.id,
-            "label": self.label,
-            "icon": self.icon,
-            "category": self.category.value,
-            "css_class": self.css_class,
-            "bulk": self.supports_bulk,
-        }

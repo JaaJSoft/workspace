@@ -1,11 +1,11 @@
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseAction
+from .base import ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
-class RenameAction(BaseAction):
+class RenameAction(BaseFileAction):
     id = "rename"
     label = "Rename"
     icon = "pencil"
@@ -29,7 +29,7 @@ class RenameAction(BaseAction):
 
 
 @ActionRegistry.register
-class CutAction(BaseAction):
+class CutAction(BaseFileAction):
     id = "cut"
     label = "Cut"
     icon = "scissors"
@@ -48,7 +48,7 @@ class CutAction(BaseAction):
 
 
 @ActionRegistry.register
-class CopyAction(BaseAction):
+class CopyAction(BaseFileAction):
     id = "copy"
     label = "Copy"
     icon = "copy"
@@ -67,7 +67,7 @@ class CopyAction(BaseAction):
 
 
 @ActionRegistry.register
-class PasteIntoAction(BaseAction):
+class PasteIntoAction(BaseFileAction):
     id = "paste_into"
     label = "Paste here"
     icon = "clipboard-paste"

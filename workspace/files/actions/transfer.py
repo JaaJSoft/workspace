@@ -1,9 +1,9 @@
 from . import ActionRegistry
-from .base import ActionCategory, BaseAction
+from .base import ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
-class DownloadAction(BaseAction):
+class DownloadAction(BaseFileAction):
     id = "download"
     label = "Download"
     icon = "download"
@@ -27,7 +27,7 @@ class DownloadAction(BaseAction):
 
 
 @ActionRegistry.register
-class CopyLinkAction(BaseAction):
+class CopyLinkAction(BaseFileAction):
     id = "copy_link"
     label = "Copy link"
     icon = "link"

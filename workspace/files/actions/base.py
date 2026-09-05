@@ -1,10 +1,10 @@
-from abc import ABC, abstractmethod
-from enum import Enum
+from abc import abstractmethod
+from enum import StrEnum
+
+from workspace.common.actions import BaseAction
 
 
-# Not StrEnum: switching would change str(member) from "ActionCategory.OPEN"
-# to "open", a behavior change out of scope for lint adoption.
-class ActionCategory(str, Enum):  # noqa: UP042
+class ActionCategory(StrEnum):
     OPEN = "open"
     TRANSFER = "transfer"
     ORGANIZE = "organize"
@@ -14,41 +14,19 @@ class ActionCategory(str, Enum):  # noqa: UP042
     TRASH = "trash"
 
 
-class BaseAction(ABC):
-    id: str
-    label: str
-    icon: str
+class BaseFileAction(BaseAction):
     category: ActionCategory
     node_types: tuple[str, ...]  # ('file',), ('folder',), ('file', 'folder')
 
     keyboard_shortcut: str | None = None
-    css_class: str = ""
-    supports_bulk: bool = False
 
     @abstractmethod
     def is_available(self, user, file_obj, *, permission):
         """Return True if this action should appear for the given context.
 
         ``permission`` is a :class:`~workspace.files.services.FilePermission` value.
-        All state is passed via parameters — no DB queries allowed.
+        All state is passed via parameters - no DB queries allowed.
         """
 
-    def get_label(self, file_obj):
-        return self.label
-
-    def get_icon(self, file_obj):
-        return self.icon
-
-    def get_css_class(self, file_obj):
-        return self.css_class
-
     def serialize(self, file_obj):
-        return {
-            "id": self.id,
-            "label": self.get_label(file_obj),
-            "icon": self.get_icon(file_obj),
-            "category": self.category.value,
-            "shortcut": self.keyboard_shortcut,
-            "css_class": self.get_css_class(file_obj),
-            "bulk": self.supports_bulk,
-        }
+        return {**super().serialize(file_obj), "shortcut": self.keyboard_shortcut}

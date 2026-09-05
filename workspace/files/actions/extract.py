@@ -2,11 +2,11 @@ from workspace.files.services import FilePermission
 from workspace.files.services.extract import ZIP_LABELS
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseAction
+from .base import ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
-class ExtractAction(BaseAction):
+class ExtractAction(BaseFileAction):
     id = "extract"
     label = "Extract archive"
     icon = "archive-restore"

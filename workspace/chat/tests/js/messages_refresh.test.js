@@ -250,23 +250,27 @@ test('a plain transport failure is logged, not dressed up as a status', async ()
   assert.deepStrictEqual(alerts, [], 'no status to report and nothing to retry against');
 });
 
-test('a missing target carrying a non-2xx is reported before the removal is cancelled', () => {
-  // The path where our own guard DOES cancel: nothing throws, $ajax resolves
-  // with nothing merged, and this event is the only place the status shows.
-  const { app, alerts, timers } = buildApp();
-  const event = {
+// The event alpine-ajax fires when the response lacks the target. Our guard
+// cancels the removal, so $ajax then RESOLVES - with nothing merged.
+function missingEvent(status, retryAfter = null) {
+  return {
     detail: {
       target: { closest: (sel) => (sel === '#messages-container' ? {} : null) },
       response: {
-        ok: false,
-        status: 429,
+        ok: status >= 200 && status < 300,
+        status,
         url: 'http://localhost/chat/c1/messages',
-        headers: { get: (n) => (n.toLowerCase() === 'retry-after' ? '7' : null) },
+        headers: { get: (n) => (n.toLowerCase() === 'retry-after' ? retryAfter : null) },
       },
     },
     prevented: false,
     preventDefault() { this.prevented = true; },
   };
+}
+
+test('a missing target carrying a non-2xx is reported before the removal is cancelled', () => {
+  const { app, alerts, timers } = buildApp();
+  const event = missingEvent(429, '7');
 
   app._onAjaxMissing(event);
 
@@ -398,10 +402,12 @@ test('a Retry-After the server actually sent wins over the backoff', () => {
 
 test('a list that comes back forgets the backoff', async () => {
   let fail = true;
-  const { app, timers } = buildApp({
+  const { app, timers, nodes } = buildApp({
     ajax: async () => {
       if (fail) throw renderError(429);
-      return [];
+      // A merged element, not an empty result: resolving with nothing is
+      // what a cancelled removal looks like, and that is not a recovery.
+      return [nodes['message-list']];
     },
   });
 
@@ -417,4 +423,49 @@ test('a list that comes back forgets the backoff', async () => {
   await app._refreshCurrentMessages();
   await settle();
   assert.equal(timers[timers.length - 1].ms, 5000, 'a recovery resets the ladder');
+});
+
+test('a throttle reported through the missing-target route climbs the ladder too', async () => {
+  // That route cancels the removal, so nothing throws and $ajax RESOLVES -
+  // with nothing merged. Reading "did not throw" as "recovered" pinned the
+  // ladder at its first rung for every refresh that failed this way.
+  const { app, timers, clock } = buildApp({
+    ajax: async () => {
+      app._onAjaxMissing(missingEvent(429));
+      return [];
+    },
+  });
+
+  await app._refreshCurrentMessages();
+  await settle();
+  assert.equal(timers[0].ms, 5000);
+  assert.equal(app._refreshRetryAttempt, 1, 'the attempt must be recorded, not forgotten');
+
+  for (let round = 1; round < 3; round += 1) {
+    clock.now += 60000;
+    timers[timers.length - 1].fn();
+    await settle();
+  }
+  assert.deepStrictEqual(timers.map((t) => t.ms), [5000, 10000, 20000]);
+});
+
+test('a merge that actually landed is what resets the ladder', async () => {
+  let merged = false;
+  const { app, timers, nodes, clock } = buildApp({
+    ajax: async () => {
+      if (merged) return [nodes['message-list']];
+      app._onAjaxMissing(missingEvent(429));
+      return [];
+    },
+  });
+
+  await app._refreshCurrentMessages();
+  await settle();
+  assert.equal(app._refreshRetryAttempt, 1);
+
+  merged = true;
+  clock.now += 60000;
+  timers[timers.length - 1].fn();
+  await settle();
+  assert.equal(app._refreshRetryAttempt, 0, 'content in the list is the proof of recovery');
 });

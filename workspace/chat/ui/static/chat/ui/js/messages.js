@@ -8,9 +8,12 @@ const CHAT_MESSAGES_RETRY_FALLBACK_SECONDS = 5;
 // SSE traffic fails once per incoming message; the user needs to be told, but
 // once, not a column of times.
 const CHAT_MESSAGES_FAILURE_TOAST_WINDOW_MS = 10000;
-// The retry is itself a request against the bucket it is waiting out, so a
-// flat delay keeps that bucket at zero and the outage never ends. Double
-// each time the server says no again, capped at the length of the window.
+// Doubled each time the server says no again, capped at the length of the
+// window. Not because a flat delay could not recover - DRF's
+// SimpleRateThrottle does not record a rejected request, so the window
+// clears either way - but because it spends fewer round-trips getting
+// there, and because it is the behaviour that stays correct against a
+// throttle that DOES count what it rejects.
 const CHAT_MESSAGES_RETRY_MAX_SECONDS = 60;
 // alpine-ajax throws this when a response lacks the target and nothing
 // cancelled the removal. It is a DOMException: the status is in the message
@@ -146,8 +149,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (!event.detail?.target?.closest?.(`#${this._messagesContainerId()}`)) return;
       // Cancelling is what keeps the list, but it is also what stops the
       // RenderError the catch above reads, so the status has to be taken
-      // here on the way past. This is the one route that carries the real
-      // response, headers included.
+      // here on the way past. This route is belt rather than the live path:
+      // on the SSE-triggered refresh the rejection is what fires, and it
+      // carries no headers - so Retry-After is read here when it is
+      // available, and the backoff ladder is the policy when it is not.
       const response = event.detail.response;
       if (response && response.ok === false && this._isMessagesPartialUrl(response.url)) {
         this._reportMessagesFailure(response.status, this._retryAfterSeconds(response.headers));
@@ -544,9 +549,14 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           headers: this._messagesPartialHeaders(),
           focus: false,
         });
-        if ((render || []).some(Boolean)) this._readPaginationState();
-        // A list that came back means the bucket has room again.
-        this._refreshRetryAttempt = 0;
+        if ((render || []).some(Boolean)) {
+          this._readPaginationState();
+          // Content in the list is the only proof of recovery. $ajax also
+          // RESOLVES when _onAjaxMissing cancels the removal on a failed
+          // response, so resetting on "did not throw" would pin the ladder
+          // at its first rung for every refresh that fails that way.
+          this._refreshRetryAttempt = 0;
+        }
       } catch (e) {
         console.error('Failed to refresh messages', e);
         // The rejection is the only reliable signal: the ajax:error event

@@ -99,13 +99,23 @@
           this JSON payload, replacing the script element in place; the audio
           players below it are server components (chatAudioPlayer) the shell
           slots between the media grid and the file chips.
+
+          A guest gets neither. Everything the payload and the players point
+          at is /api/v1/chat/attachments/<uuid>, which authenticates a
+          session; a meeting token opens nothing there, so drawing them would
+          produce a mosaic of broken images and a player that never loads.
+          One line saying the message carries something is the honest render.
         {% endcomment %}
         {% with media=msg.media_attachments files=msg.file_attachments audios=msg.audio_attachments %}
           {% if media or files or audios %}
-            {{ msg|shell_attachment_data|json_script }}
-            {% for att in audios %}
-              {% include "chat/ui/partials/_audio_player.html" with att=att is_own=is_own %}
-            {% endfor %}
+            {% if viewer.is_guest %}
+              <div class="text-xs italic opacity-60 my-1">Attachment shared with members</div>
+            {% else %}
+              {{ msg|shell_attachment_data|json_script }}
+              {% for att in audios %}
+                {% include "chat/ui/partials/_audio_player.html" with att=att is_own=is_own %}
+              {% endfor %}
+            {% endif %}
           {% endif %}
         {% endwith %}
 

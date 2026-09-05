@@ -139,8 +139,10 @@ class ConversationMessagesGuestAuthorTests(TestCase):
         self.assertIn(f'author-id="{self.user.id}"', html)
 
 
+# .golden.txt, not .html: djlint lints every .html under workspace/, and a
+# captured response is not a template it can format.
 GOLDEN_MEMBER_LIST = (
-    Path(__file__).resolve().parent / "data" / "member_message_list.html"
+    Path(__file__).resolve().parent / "data" / "member_message_list.golden.txt"
 )
 GOLDEN_DAY = datetime(2026, 3, 4, 9, 0, tzinfo=UTC)
 
@@ -281,6 +283,16 @@ CAPABILITY_HANDLERS = (
 RECEIPT_MARKER = "readers-popover-"
 
 _SEPARATOR = '<div class="w-px self-stretch my-0.5 bg-base-300"></div>'
+# Attachments are the one place the two panes render different content rather
+# than the same content minus a control: everything the member payload points
+# at is session-authenticated, so a guest is told an attachment exists. Both
+# spellings collapse to this marker, which keeps their POSITION in the bubble
+# under comparison.
+_ATTACHMENTS = "<attachments>"
+_MEMBER_ATTACHMENTS_RE = re.compile(r'<script type="application/json">.*?</script>')
+_GUEST_ATTACHMENTS = (
+    '<div class="text-xs italic opacity-60 my-1">Attachment shared with members</div>'
+)
 _RECEIPT_RE = re.compile(
     r'<span slot="footer" class="inline-flex.*?</div> </div> </span>'
 )
@@ -311,6 +323,8 @@ def drop_viewer_markers(html):
     )
     html = html.replace("<chat-message-group own ", "<chat-message-group ")
     html = html.replace("<chat-message-group viewer-guest ", "<chat-message-group ")
+    html = _MEMBER_ATTACHMENTS_RE.sub(_ATTACHMENTS, html)
+    html = html.replace(_GUEST_ATTACHMENTS, _ATTACHMENTS)
     return re.sub(r"(pt-1 )(right-0|left-0)( opacity-0)", r"\1<side>\3", html)
 
 
@@ -368,6 +382,17 @@ class MeetingMessageListFixture(TestCase):
         msg.refresh_from_db()
         return msg
 
+    def attach(self, message, name, mime, category, viewer=""):
+        return MessageAttachment.objects.create(
+            message=message,
+            file=SimpleUploadedFile(name, b"x", content_type=mime),
+            original_name=name,
+            mime_type=mime,
+            category=category,
+            viewer=viewer,
+            size=1,
+        )
+
     def guest_html(self, query="", token=None):
         resp = self.client.get(
             self.guest_url + query,
@@ -411,6 +436,7 @@ class GuestMemberParityTests(MeetingMessageListFixture):
             kind=Message.Kind.SYSTEM,
             tool_data={"type": "call", "state": "active"},
         )
+        self.attach(self.member_msg, "shot.png", "image/png", "image")
 
     def test_the_guest_list_is_the_member_list_minus_its_controls(self):
         guest = self.guest_html()
@@ -433,6 +459,13 @@ class GuestMemberParityTests(MeetingMessageListFixture):
             self.assertIn(handler, member, handler)
 
         self.assertEqual(normalise(guest, member=False), normalise(member, member=True))
+
+    def test_the_attachment_block_is_replaced_in_place(self):
+        """The normalisation collapses two different renders to one marker, so
+        this is what proves it is a substitution rather than the member
+        payload simply vanishing."""
+        self.assertIn('type="application/json"', self.member_html())
+        self.assertIn("Attachment shared with members", self.guest_html())
 
     def test_reply_survives_on_both_panes(self):
         """Reply is the one control a guest keeps, so it must NOT be part of
@@ -553,6 +586,26 @@ class GuestMessageListViewTests(MeetingMessageListFixture):
         self.assertIn('data-has-more="false"', older)
         self.assertIn('data-body="m1"', older)
         self.assertNotIn('data-body="m52"', older)
+
+    def test_a_guest_gets_no_attachment_payload_and_no_attachment_urls(self):
+        """A guest holds a meeting token, not a session, so every
+        /api/v1/chat/attachments/<uuid> the shell would build from the payload
+        is a request they cannot make. They are told an attachment exists
+        instead of being shown a mosaic of broken images."""
+        msg = self.message(offset_minutes=1, author=self.host, body="see this")
+        self.attach(msg, "shot.png", "image/png", "image")
+        self.attach(msg, "note.webm", "video/webm", "video", viewer="audio")
+
+        guest = self.guest_html()
+        self.assertNotIn("/api/v1/chat/attachments/", guest)
+        self.assertNotIn('type="application/json"', guest)
+        self.assertIn("Attachment shared with members", guest)
+
+        member = self.member_html()
+        self.assertIn('type="application/json"', member)
+        self.assertIn('"is_image": true', member)
+        self.assertIn("/api/v1/chat/attachments/", member)
+        self.assertNotIn("Attachment shared with members", member)
 
     def test_a_cursor_below_the_floor_is_ignored(self):
         buried = self.message(offset_minutes=-10, author=self.host, body="buried")

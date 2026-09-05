@@ -6,6 +6,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}Shared - Workspace{% endblock %}</title>
     <link href="{% static 'css/app.css' %}" rel="stylesheet" />
+    {% comment %}
+      The Milkdown Crepe theme, loaded for every visitor rather than only for a
+      markdown target. Navigating from the listing onto a file swaps the
+      content fragment, which never re-renders this head, so a stylesheet the
+      viewer needs has to be here before the visitor picks the file. Without
+      it Crepe still mounts, but its toolbar, link tooltip, slash menu and
+      block handle lose their positioning rules and drop into the page as a
+      column of stray edit controls under the text.
+    {% endcomment %}
+    <link
+      href="{% static 'files/ui/css/vendor/milkdown/theme.css' %}"
+      rel="stylesheet"
+    />
+    <link
+      href="{% static 'files/ui/css/milkdown-overrides.css' %}"
+      rel="stylesheet"
+    />
     <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
     <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
     <script src="{% static 'ui/js/lucide.js' %}"></script>

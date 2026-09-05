@@ -426,6 +426,22 @@ class SharedFolderListingTests(TestCase):
             f"/api/v1/files/shared/{self.read_link.token}/download?file={self.doc.uuid}",
         )
 
+    def test_the_public_shell_carries_the_markdown_editor_theme(self):
+        """The shell loads Milkdown's stylesheet whether or not this request
+        renders a markdown file.
+
+        Navigating onto a file swaps the content fragment and never re-renders
+        the head, so gating the link on the current target would leave the
+        editor unstyled for every visitor who arrived through the listing.
+        Unstyled, its toolbar and menus lose their positioning and drop into
+        the page as stray edit controls under the text.
+        """
+        for params in ({}, {"node": str(self.doc.uuid)}):
+            with self.subTest(params=params):
+                resp = self.client.get(f"/files/shared/{self.read_link.token}", params)
+                self.assertContains(resp, "milkdown/theme.css")
+                self.assertContains(resp, "milkdown-overrides.css")
+
     def test_a_listing_entry_links_to_its_node(self):
         """Rows navigate through ?node=, whether they name a folder or a
         file - both dead-end at the same page."""

@@ -92,6 +92,7 @@ function chatRoomApp(currentUserId, conversationId) {
     // quietly drop another's.
     destroy() {
       this._stopLobbyRefresh?.();
+      this._cancelMessagesRetry?.();
       threads.destroy?.call(this);
     },
 

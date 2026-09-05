@@ -390,6 +390,7 @@ function chatMeetApp(slug) {
     // cannot quietly drop another's.
     destroy() {
       this.releasePaneVisibility();
+      this._cancelMessagesRetry();
       for (const mixin of [uiHelpers, messages, input, call, sse, meetMessages]) {
         mixin.destroy?.call(this);
       }

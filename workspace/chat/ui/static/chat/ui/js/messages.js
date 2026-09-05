@@ -4,6 +4,18 @@
 
 // What to wait before retrying a throttled list when the server did not say.
 const CHAT_MESSAGES_RETRY_FALLBACK_SECONDS = 5;
+// How long one "could not refresh" complaint stands for. A 5xx under steady
+// SSE traffic fails once per incoming message; the user needs to be told, but
+// once, not a column of times.
+const CHAT_MESSAGES_FAILURE_TOAST_WINDOW_MS = 10000;
+// The retry is itself a request against the bucket it is waiting out, so a
+// flat delay keeps that bucket at zero and the outage never ends. Double
+// each time the server says no again, capped at the length of the window.
+const CHAT_MESSAGES_RETRY_MAX_SECONDS = 60;
+// alpine-ajax throws this when a response lacks the target and nothing
+// cancelled the removal. It is a DOMException: the status is in the message
+// and there is nothing else on it - no status field, no headers.
+const CHAT_MESSAGES_RENDER_STATUS = /status \[(\d+)\]/;
 
 window.chatMessagesMixin = function chatMessagesMixin() {
   return {
@@ -18,6 +30,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     _refreshInFlight: null,
     _refreshPending: false,
     _refreshRetryTimer: null,
+    _lastFailureToastAt: 0,
+    _refreshRetryAttempt: 0,
 
     // ── Surface hooks ────────────────────────────────────────
     // The mixin is spread into more than one component per page (the
@@ -129,9 +143,16 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // list. Cancelling keeps it, and turns an error response into "nothing
     // merged" instead of a thrown RenderError.
     _onAjaxMissing(event) {
-      if (event.detail?.target?.closest?.(`#${this._messagesContainerId()}`)) {
-        event.preventDefault();
+      if (!event.detail?.target?.closest?.(`#${this._messagesContainerId()}`)) return;
+      // Cancelling is what keeps the list, but it is also what stops the
+      // RenderError the catch above reads, so the status has to be taken
+      // here on the way past. This is the one route that carries the real
+      // response, headers included.
+      const response = event.detail.response;
+      if (response && response.ok === false && this._isMessagesPartialUrl(response.url)) {
+        this._reportMessagesFailure(response.status, this._retryAfterSeconds(response.headers));
       }
+      event.preventDefault();
     },
 
     async loadMessages() {
@@ -498,8 +519,12 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           await this._fetchMessagePartial();
           // Drain rather than stop at one: a message arriving during the
           // second request deserves the same repaint the first one got, and
-          // each turn of the loop is still a single request.
-          while (this._refreshPending) {
+          // each turn of the loop is still a single request. _surfaceGone is
+          // re-read every turn: the component can be torn down WHILE the
+          // first request is in flight, and a queued request issued after
+          // that would merge this panel's thread into whatever panel owns
+          // the ids by now - the race _dead exists for.
+          while (this._refreshPending && !this._surfaceGone()) {
             this._refreshPending = false;
             await this._fetchMessagePartial();
           }
@@ -512,6 +537,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     async _fetchMessagePartial() {
+      if (this._surfaceGone()) return;
       try {
         const render = await this.$ajax(this._messagesUrl(null), {
           targets: this._loadTargets(),
@@ -519,8 +545,17 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           focus: false,
         });
         if ((render || []).some(Boolean)) this._readPaginationState();
+        // A list that came back means the bucket has room again.
+        this._refreshRetryAttempt = 0;
       } catch (e) {
         console.error('Failed to refresh messages', e);
+        // The rejection is the only reliable signal: the ajax:error event
+        // does reach the root when the swap is driven by a click, but it
+        // does not on the SSE-driven refresh - reproduced 3/3 against a
+        // spent bucket. The request we issued is by definition ours, so no
+        // URL check is needed here.
+        const status = this._renderErrorStatus(e);
+        if (status !== null) this._reportMessagesFailure(status, null);
       }
     },
 
@@ -534,15 +569,30 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     onMessagesAjaxError(event) {
       const detail = event?.detail || {};
       if (!this._isMessagesPartialUrl(detail.url)) return;
-      // One complaint per outage: a burst of throttled swaps must not become
-      // a column of toasts. The pending retry IS the "already reported" flag.
+      this._reportMessagesFailure(detail.status, this._retryAfterSeconds(detail.headers));
+    },
+
+    // The one place a failed list swap is turned into something the user can
+    // see, reached from three directions because no single one of them fires
+    // on every path: the rejection $ajax raises, the missing-target event
+    // (the only one carrying headers), and the bubbling ajax:error.
+    _reportMessagesFailure(status, retryAfterSeconds) {
+      // One complaint per outage: the pending retry IS the "already
+      // reported" flag, and it is what makes three routes into one toast.
       if (this._refreshRetryTimer) return;
 
-      if (detail.status === 429) {
-        const advertised = Number.parseInt(detail.headers?.get?.('Retry-After'), 10);
-        const seconds = Number.isFinite(advertised) && advertised > 0
-          ? advertised
-          : CHAT_MESSAGES_RETRY_FALLBACK_SECONDS;
+      if (status === 429) {
+        // The server's own figure when it sent one; otherwise back off,
+        // because the only path that reaches here without a header is the
+        // RenderError, which carries the status and nothing else.
+        const backoff = Math.min(
+          CHAT_MESSAGES_RETRY_FALLBACK_SECONDS * (2 ** this._refreshRetryAttempt),
+          CHAT_MESSAGES_RETRY_MAX_SECONDS,
+        );
+        const seconds = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+          ? retryAfterSeconds
+          : backoff;
+        this._refreshRetryAttempt += 1;
         window.AppAlert?.warning('Messages are paused for a moment.');
         this._refreshRetryTimer = setTimeout(() => {
           this._refreshRetryTimer = null;
@@ -550,7 +600,38 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         }, seconds * 1000);
         return;
       }
+
+      // Nothing to retry against, so there is no pending timer to dedupe on:
+      // a window does that job instead.
+      const now = Date.now();
+      if (now - this._lastFailureToastAt < CHAT_MESSAGES_FAILURE_TOAST_WINDOW_MS) return;
+      this._lastFailureToastAt = now;
       window.AppAlert?.error('Could not refresh the messages.');
+    },
+
+    _retryAfterSeconds(headers) {
+      const advertised = Number.parseInt(headers?.get?.('Retry-After'), 10);
+      return Number.isFinite(advertised) ? advertised : null;
+    },
+
+    _renderErrorStatus(error) {
+      if (!error || error.name !== 'RenderError') return null;
+      const found = CHAT_MESSAGES_RENDER_STATUS.exec(error.message || '');
+      return found ? Number.parseInt(found[1], 10) : null;
+    },
+
+    // Called from each host's own destroy(): a pending retry outliving the
+    // surface would repaint a pane nobody is looking at any more. The thread
+    // panel and the voice room both tear down while the page lives on, so
+    // both call it. chatApp does not: it IS the page, and a root that only
+    // ever dies with the document takes its timers with it - a destroy()
+    // there would exist for this one line and be wrong the moment a mixin
+    // grew one of its own.
+    _cancelMessagesRetry() {
+      if (this._refreshRetryTimer !== null) {
+        clearTimeout(this._refreshRetryTimer);
+        this._refreshRetryTimer = null;
+      }
     },
 
     // The event carries an absolute URL and the surface knows a path. The

@@ -26,9 +26,33 @@ const baseStubs = {
   sessionStorage: newStorage(),
   document: { getElementById: () => null, addEventListener() {}, hidden: false },
   navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [] }) } },
+  matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
   AbortController,
   TextDecoder,
 };
+
+// One media query object for every query string, with the listener list a
+// test needs to flip the viewport under a live component.
+function mediaStub(matches) {
+  const listeners = [];
+  const query = {
+    matches,
+    addEventListener(name, fn) { listeners.push([name, fn]); },
+    removeEventListener(name, fn) {
+      const at = listeners.findIndex(([n, f]) => n === name && f === fn);
+      if (at !== -1) listeners.splice(at, 1);
+    },
+  };
+  return {
+    query,
+    listeners,
+    stubs: { matchMedia: () => query },
+    flip(value) {
+      query.matches = value;
+      for (const [, fn] of listeners.slice()) fn({ matches: value });
+    },
+  };
+}
 
 // The guest page mounts the member conversation pane, so the component is
 // built from the pane's mixins too - the same load order meet.html uses.
@@ -860,4 +884,82 @@ test('a later call_started gets its automatic retry back', async () => {
 
   assert.equal(seen.joins, 4, 'the second attempt also gets one automatic retry');
   assert.equal(a.phase, 'room');
+});
+
+// -- The header disc --------------------------------------------------------
+
+test('the header disc is lettered the way the server letters a group', () => {
+  // chat/services/avatar.py:_name_initials - the first letter of the first
+  // two parts, commas taking precedence over spaces when the name lists
+  // several people. A host showing PC and a guest showing P for the same
+  // meeting is the drift this exists to stop.
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/meet.js', baseStubs);
+  const initials = ctx.chatMeetTitleInitials;
+  assert.equal(initials('Parity Check'), 'PC');
+  assert.equal(initials('Design sync'), 'DS');
+  assert.equal(initials('the new onboarding flow review'), 'TN');
+  assert.equal(initials('Standup'), 'S');
+  assert.equal(initials('Sam Rivera, Jordan Lee'), 'SJ');
+  assert.equal(initials('  Parity   Check  '), 'PC');
+  // Nothing to letter: the element's own group fallback takes over.
+  assert.equal(initials(''), '');
+  assert.equal(initials(null), '');
+});
+
+// -- The unread badge -------------------------------------------------------
+
+test('a message arriving while the pane is on screen is not unread', async () => {
+  // At md and above the aside is always visible (hidden md:flex) and nothing
+  // ever sets chatOpen there, so "not opened" cannot stand for "not seen".
+  const media = mediaStub(true);
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }), media.stubs);
+  a.currentParticipantKey = 'g:1';
+
+  await a.onMeetingMessage({ uuid: 'm1', author: { participant_key: 'u:2' } });
+
+  assert.equal(a.unreadMessages, 0);
+});
+
+test('below md the same message is unread, and opening the panel clears it', async () => {
+  const media = mediaStub(false);
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }), media.stubs);
+  a.currentParticipantKey = 'g:1';
+
+  await a.onMeetingMessage({ uuid: 'm1', author: { participant_key: 'u:2' } });
+  await a.onMeetingMessage({ uuid: 'm2', author: { participant_key: 'u:2' } });
+  assert.equal(a.unreadMessages, 2);
+
+  a.toggleChat();
+  assert.equal(a.unreadMessages, 0);
+
+  // Open, so nothing accumulates behind it.
+  await a.onMeetingMessage({ uuid: 'm3', author: { participant_key: 'u:2' } });
+  assert.equal(a.unreadMessages, 0);
+});
+
+test('widening the window past md clears what the hidden panel had counted', async () => {
+  const media = mediaStub(false);
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }), media.stubs);
+  a.currentParticipantKey = 'g:1';
+  a._watchPaneVisibility();
+
+  await a.onMeetingMessage({ uuid: 'm1', author: { participant_key: 'u:2' } });
+  assert.equal(a.unreadMessages, 1);
+
+  media.flip(true);
+  assert.equal(a.unreadMessages, 0, 'the panel is on screen now, so it has been read');
+
+  media.flip(false);
+  await a.onMeetingMessage({ uuid: 'm2', author: { participant_key: 'u:2' } });
+  assert.equal(a.unreadMessages, 1);
+});
+
+test('the viewport listener is released when the component goes away', () => {
+  const media = mediaStub(false);
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }), media.stubs);
+  a._watchPaneVisibility();
+  assert.equal(media.listeners.length, 1);
+
+  a.destroy();
+  assert.equal(media.listeners.length, 0);
 });

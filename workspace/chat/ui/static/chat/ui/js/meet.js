@@ -39,8 +39,33 @@ function chatMeetParseSseChunk(buffer) {
   return { frames, rest };
 }
 
+/**
+ * The initials a group conversation is drawn with, the way the server draws
+ * them (chat/services/avatar.py, _name_initials): the first letter of the
+ * first two parts, split on commas when the name lists several people and on
+ * whitespace otherwise. Duplicated rather than fetched because the guest page
+ * is handed a title and nothing else, and a header lettering the same meeting
+ * differently from the host's is exactly the drift this pairing avoids.
+ * Returns '' for a nameless meeting, leaving the element's own fallback.
+ * @param {?string} title
+ * @returns {string}
+ */
+function chatMeetTitleInitials(title) {
+  const name = (title || '').trim();
+  if (name === '') return '';
+  const parts = name.includes(',') ? name.split(',') : name.split(/\s+/);
+  return parts
+    .slice(0, 2)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+}
+
 const CHAT_MEET_BACKOFF_START_MS = 1000;
 const CHAT_MEET_BACKOFF_MAX_MS = 30000;
+// Tailwind's md, which is where the aside stops being a slide-over.
+const CHAT_MEET_PANE_ON_SCREEN = '(min-width: 768px)';
 
 window.chatMeetSseMixin = function chatMeetSseMixin() {
   return {
@@ -147,6 +172,35 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
     // above the panel is always on screen and the badge is not rendered.
     chatOpen: false,
     unreadMessages: 0,
+    _paneVisibilityQuery: null,
+    _onPaneVisibility: null,
+
+    // At md and above the aside is always on screen (hidden md:flex) and
+    // nothing ever sets chatOpen there, so "was it opened" cannot stand for
+    // "was it seen": counting on it alone means narrowing the window later
+    // raises a badge for messages the guest had been staring at.
+    _paneHidden() {
+      return !this.chatOpen && !window.matchMedia(CHAT_MEET_PANE_ON_SCREEN).matches;
+    },
+
+    // Widening puts the panel back on screen with nobody having opened it,
+    // which is the same "it is in front of you now" the toggle means.
+    _watchPaneVisibility() {
+      const query = window.matchMedia(CHAT_MEET_PANE_ON_SCREEN);
+      this._onPaneVisibility = (event) => {
+        if (event.matches) this.unreadMessages = 0;
+      };
+      this._paneVisibilityQuery = query;
+      query.addEventListener('change', this._onPaneVisibility);
+    },
+
+    destroy() {
+      if (this._paneVisibilityQuery && this._onPaneVisibility) {
+        this._paneVisibilityQuery.removeEventListener('change', this._onPaneVisibility);
+        this._paneVisibilityQuery = null;
+        this._onPaneVisibility = null;
+      }
+    },
 
     toggleChat() {
       this.chatOpen = !this.chatOpen;
@@ -234,7 +288,7 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
     // the member pane answers its own SSE the same way. The frame is still
     // read for one thing: whether it is news to somebody not looking.
     onMeetingMessage(message) {
-      if (!this.chatOpen && !this.isOwnMessage(message)) this.unreadMessages += 1;
+      if (this._paneHidden() && !this.isOwnMessage(message)) this.unreadMessages += 1;
       return this._refreshCurrentMessages();
     },
 
@@ -294,6 +348,7 @@ function chatMeetApp(slug) {
 
     async init() {
       this._initCallSounds?.();
+      this._watchPaneVisibility();
       await this.loadSummary();
       const stored = sessionStorage.getItem(`meet:${slug}`);
       let saved = null;
@@ -729,4 +784,5 @@ function chatMeetApp(slug) {
 }
 
 window.chatMeetParseSseChunk = chatMeetParseSseChunk;
+window.chatMeetTitleInitials = chatMeetTitleInitials;
 window.chatMeetApp = chatMeetApp;

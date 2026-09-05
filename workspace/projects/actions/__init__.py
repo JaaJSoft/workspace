@@ -44,12 +44,6 @@ class ProjectActionRegistry:
         ):
             importlib.import_module(module_name)
 
-    @classmethod
-    def _reset(cls):
-        """Reset registry state - only for tests."""
-        cls._actions = []
-        cls._loaded = False
-
 
 __all__ = [
     "ActionCategory",

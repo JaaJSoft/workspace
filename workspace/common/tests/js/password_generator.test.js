@@ -220,3 +220,12 @@ test('the generator draws from one place, and that place is the CSPRNG', () => {
     'the CSPRNG should be called from exactly one place'
   );
 });
+
+test('an empty separator never reaches the output', () => {
+  // generatePassphrase is exported, so the panel's picker is not the only way
+  // in. Words run together lose their boundaries, and two draws can then
+  // spell one string while entropyBits still counts draws.
+  const G = load();
+  const value = G.generatePassphrase({ words: 5, separator: '' });
+  assert.equal(value.split('-').length, 5, value);
+});

@@ -498,12 +498,13 @@ class VaultBrowserTests(PlaywrightTestCase):
         # The authenticator key input only exists once its control is opened,
         # so the audit has to open it to see it.
         self.page.get_by_role("button", name="Add").click()
-        # And the generator's own fields, which exist only while its panel is
-        # open - the passphrase separator among them. A component inserting a
-        # text field at runtime is the case this audit is for.
+        # And the generator's own controls, which exist only while its panel
+        # is open. A component inserting fields at runtime is the case this
+        # audit is for; the separator is a <select> and so out of the scan's
+        # reach, but the two range inputs are not.
         self.page.click("button[aria-label='Generate a password']")
         self.page.click(".modal-box button:has-text('Passphrase')")
-        self.page.wait_for_selector(".modal-box input[maxlength='1']")
+        self.page.wait_for_selector(".modal-box select.select-xs")
         # Scoped to the entry dialog: the shared layout also mounts the help,
         # prompt and file-picker dialogs on this page, and their fields are
         # someone else's surface to harden.
@@ -536,11 +537,10 @@ class VaultBrowserTests(PlaywrightTestCase):
         # produces - a relabelled Save button or a restructured dialog must
         # fail this test, not pass it vacuously. Naming the three fields the
         # test exists to cover (the name, a secret field, and the
-        # authenticator key control only "Add" reveals, and the generator's
-        # separator) makes that failure specific rather than a bare
-        # "matched zero".
+        # authenticator key control only "Add" reveals) makes that failure
+        # specific rather than a bare "matched zero".
         self.assertTrue(audited, "the audit selector matched no fields at all")
-        for expected in ("Name", "Password", "Authenticator key", "Separator"):
+        for expected in ("Name", "Password", "Authenticator key"):
             self.assertTrue(
                 any(expected in identifier for identifier in audited),
                 f"expected the audit to see the {expected!r} field, saw {audited!r}",

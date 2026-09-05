@@ -18,6 +18,17 @@ const SYMBOLS = '!@#$%^&*()-_=+[]{};:,.?';
 // printed sheet. Excluding them costs about a tenth of a bit per character.
 const LOOKALIKES = 'lI1O0';
 
+// A closed set rather than a free character. An empty one would run the words
+// together, and two draws can then spell the same string while the reported
+// entropy counts draws - the one place this file would overstate.
+const SEPARATORS = [
+  { value: '-', label: 'Hyphen' },
+  { value: '.', label: 'Period' },
+  { value: '_', label: 'Underscore' },
+  { value: ',', label: 'Comma' },
+  { value: ' ', label: 'Space' },
+];
+
 // A class-presence retry cannot fail forever once the alphabet is valid and
 // long enough, so reaching this means an invariant broke - loudly, rather
 // than as a frozen tab.
@@ -42,26 +53,28 @@ function defaultWordlist() {
   return words;
 }
 
-// Uniform in [0, max). Rejection sampling, never a modulo of a raw byte: 256
-// is not a multiple of most alphabet sizes, so `byte % 62` would hand the
-// first eight characters an extra chance each per cycle.
+// Uniform in [0, max): keep the low bits, redraw anything past the range.
+//
+// Never a modulo. `byte % 62` hands the first eight characters an extra chance
+// each per 256-byte cycle, and even the unbiased form - a modulo of a value
+// already narrowed to a multiple of max - reads as that bug to anything
+// scanning for it. Masking says the same thing without the ambiguity, and
+// never rejects more than half the draws.
 function randomInt(max, randomBytes) {
   const draw = randomBytes || secureRandomBytes;
   if (!Number.isInteger(max) || max < 1) {
     throw new Error(`randomInt needs a positive range, got ${max}`);
   }
   if (max === 1) return 0;
-  let byteCount = 1;
-  while (256 ** byteCount < max) byteCount += 1;
-  const range = 256 ** byteCount;
-  // The largest multiple of max the range holds; everything above it is the
-  // biased tail and gets redrawn.
-  const limit = range - (range % max);
+  let mask = 1;
+  while (mask < max - 1) mask = mask * 2 + 1;
+  const byteCount = Math.ceil(mask.toString(2).length / 8);
   for (;;) {
     const bytes = draw(byteCount);
     let value = 0;
     for (let i = 0; i < byteCount; i += 1) value = value * 256 + bytes[i];
-    if (value < limit) return value % max;
+    value &= mask;
+    if (value < max) return value;
   }
 }
 
@@ -119,7 +132,10 @@ function generatePassphrase(opts, deps) {
   if (!Number.isInteger(count) || count < 1) {
     throw new Error(`a passphrase needs a positive word count, got ${count}`);
   }
-  const separator = opts.separator === undefined ? '-' : opts.separator;
+  // Defended here too, not only in the panel: this is exported, and a caller
+  // passing '' would get words with no boundary under an entropy figure that
+  // assumes there is one.
+  const separator = opts.separator ? opts.separator : '-';
   const drawn = [];
   for (let i = 0; i < count; i += 1) {
     const word = words[randomInt(words.length, draw)];
@@ -193,6 +209,7 @@ window.passwordGenerator = {
   generatePassphrase,
   generate,
   entropyBits,
+  SEPARATORS,
 };
 
 // ---------------------------------------------------------------- the panel
@@ -234,8 +251,11 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
     value: '',
     error: '',
 
+    separators: SEPARATORS,
+
     init() {
       this.restore();
+      this.normaliseSeparator();
       for (const key of OPTION_KEYS) this.$watch(key, () => this.optionsChanged());
       // Bound once and kept, so destroy() can hand back the same reference.
       this.onClearRequest = () => this.clear();
@@ -292,12 +312,12 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
       this.value = '';
     },
 
-    // The field holds one character, so emptying it is a step on the way to
-    // changing it rather than a choice. Concatenated words leave no boundary,
-    // and the same string can then come from more than one draw - which is
-    // what the reported entropy counts.
+    // Options come back from a previous session, where the catalogue may have
+    // been different - or, before the picker was a closed set, empty.
     normaliseSeparator() {
-      if (!this.separator) this.separator = '-';
+      if (!SEPARATORS.some((choice) => choice.value === this.separator)) {
+        this.separator = '-';
+      }
     },
 
     entropy() {

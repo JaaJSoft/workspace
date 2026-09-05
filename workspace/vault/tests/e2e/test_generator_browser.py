@@ -162,22 +162,23 @@ class GeneratorWalkTests(PlaywrightTestCase):
         phrase = self.page.inner_text(PREVIEW)
         self.assertGreaterEqual(len(phrase.split("-")), 6)
 
-    def test_enter_in_the_separator_does_not_save_the_entry(self):
-        # The panel is embedded in the entry form, and a single-line input
-        # inside a form submits it on Enter. Unguarded, choosing a separator
-        # saves the record - without the generated password, which has not
-        # been applied yet - and tears the panel down with the value in it.
+    def test_opening_the_generator_adds_no_field_that_could_submit_the_form(self):
+        # The panel is embedded in the entry form, where a text-like input
+        # submits on Enter: choosing a separator would save the record -
+        # without the generated password, which has not been applied yet - and
+        # tear the panel down with the drawn value still in it.
+        #
+        # The separator is a <select> for that reason, and neither a select nor
+        # a range triggers implicit submission. Counting rather than guarding:
+        # a text field coming back here is what has to fail, and a guard on a
+        # control that cannot submit would be untestable decoration.
         self._open_vault()
         self._open_new_login()
-        self.page.fill(".modal-box input[type=text] >> nth=0", "GitHub")
+        texts = ".modal-box input:not([type=range]):not([type=checkbox])"
+        before = self.page.locator(texts).count()
+
         self.page.click("button[aria-label='Generate a password']")
         self.page.click(".modal-box button:has-text('Passphrase')")
-        self.page.wait_for_selector(".modal-box input[maxlength='1']")
+        self.page.wait_for_selector(".modal-box select.select-xs")
 
-        self.page.click(".modal-box input[maxlength='1']")
-        self.page.keyboard.press("Enter")
-        self.page.wait_for_timeout(1000)
-
-        # Still on the form, and nothing was written.
-        self.assertTrue(self.page.locator(".modal-box:has-text('Save')").is_visible())
-        self.assertEqual(self.page.locator("tbody tr:has-text('GitHub')").count(), 0)
+        self.assertEqual(self.page.locator(texts).count(), before)

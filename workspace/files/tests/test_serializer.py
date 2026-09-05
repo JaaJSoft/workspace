@@ -248,3 +248,53 @@ class FileSerializerCreateTests(APITestCase):
             )
 
         mock_folder.assert_not_called()
+
+
+class FileSerializerTypeDisplayTests(APITestCase):
+    """type_icon / type_color / has_thumbnail let a client render an entry
+    without re-encoding the file type registry."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="displayuser", email="display@example.com", password="pw"
+        )
+
+    def _data(self, **kwargs):
+        from workspace.files.services import FileService
+
+        node = File.objects.create(owner=self.user, **kwargs)
+        qs = FileService.annotate_for_serializer(
+            File.objects.filter(pk=node.pk), self.user
+        )
+        return FileSerializer(qs.get()).data
+
+    def test_file_icon_and_color_come_from_the_registry(self):
+        from workspace.files.services.filetype import get_color, get_icon
+
+        data = self._data(name="q.csv", node_type=File.NodeType.FILE, type="csv")
+
+        self.assertEqual(data["type_icon"], get_icon("csv"))
+        self.assertEqual(data["type_color"], get_color("csv"))
+        # The override the picker's own cascade never knew about.
+        self.assertEqual(data["type_icon"], "file-spreadsheet")
+
+    def test_folder_uses_its_own_icon_and_color(self):
+        data = self._data(
+            name="d", node_type=File.NodeType.FOLDER, icon="star", color="text-info"
+        )
+
+        self.assertEqual(data["type_icon"], "star")
+        self.assertEqual(data["type_color"], "text-info")
+
+    def test_folder_defaults_match_the_browser_row(self):
+        data = self._data(name="d", node_type=File.NodeType.FOLDER)
+
+        self.assertEqual(data["type_icon"], "folder")
+        self.assertEqual(data["type_color"], "text-warning")
+
+    def test_has_thumbnail_is_exposed(self):
+        data = self._data(
+            name="p.png", node_type=File.NodeType.FILE, type="png", has_thumbnail=True
+        )
+
+        self.assertTrue(data["has_thumbnail"])

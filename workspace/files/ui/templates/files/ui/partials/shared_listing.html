@@ -4,7 +4,8 @@
   Required context:
     - entries: list of dicts - uuid, name, is_folder, icon, icon_color,
       size (None for a folder), modified (datetime), is_quarantined, url,
-      download_url (None for a folder), thumbnail_url (None without one).
+      download_url (None for a folder), thumbnail_url (None without one,
+      used by the grid only).
       No path is ever included here - see _shared_folder_listing_context.
     - has_more: bool
     - view_mode: "list" or "grid" - the toggle that flips it lives in the
@@ -43,9 +44,10 @@
         <li
           class="flex items-center gap-3 px-6 py-3 hover:bg-base-100 transition-colors{% if entry.is_quarantined %} bg-error/10{% endif %}"
         >
-          <div class="w-10 flex-shrink-0 rounded overflow-hidden">
-            {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color icon_size_class="w-5 h-5" %}
-          </div>
+          <i
+            data-lucide="{{ entry.icon }}"
+            class="w-5 h-5 flex-shrink-0 {{ entry.icon_color }}"
+          ></i>
 
           <a
             href="{{ entry.url }}"

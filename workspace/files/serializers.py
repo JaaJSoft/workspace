@@ -78,6 +78,12 @@ class FileSerializer(serializers.ModelSerializer):
     is_quarantined = serializers.SerializerMethodField(
         help_text="True when the malware policy currently blocks this file."
     )
+    type_icon = serializers.SerializerMethodField(
+        help_text="Lucide icon for the entry: the folder's own icon, or the one the file type registry resolves."
+    )
+    type_color = serializers.SerializerMethodField(
+        help_text="Tailwind text color class that goes with type_icon."
+    )
     on_conflict = serializers.ChoiceField(
         choices=["error", "rename", "replace"],
         default="error",
@@ -127,8 +133,12 @@ class FileSerializer(serializers.ModelSerializer):
             "scan_status",
             "scan_signature",
             "is_quarantined",
+            "type_icon",
+            "type_color",
+            "has_thumbnail",
         ]
         read_only_fields = [
+            "has_thumbnail",
             "owner",
             "created_at",
             "updated_at",
@@ -190,6 +200,22 @@ class FileSerializer(serializers.ModelSerializer):
         # and the non-FILE guard stay in one place. File.is_viewable() already
         # returns False for folders.
         return obj.is_viewable()
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_type_icon(self, obj):
+        from workspace.files.services.filetype import get_icon
+
+        if obj.node_type == File.NodeType.FOLDER:
+            return obj.icon or "folder"
+        return get_icon(obj.type or "")
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_type_color(self, obj):
+        from workspace.files.services.filetype import get_color
+
+        if obj.node_type == File.NodeType.FOLDER:
+            return obj.color or "text-warning"
+        return get_color(obj.type or "")
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_content_url(self, obj):

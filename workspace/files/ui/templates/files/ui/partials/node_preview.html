@@ -1,10 +1,10 @@
 {% comment %}
   Square preview tile shared by the file/folder grid card and the public
-  listing row and card: a thumbnail image when there is one, otherwise a
-  typed icon. The caller controls the tile's size by sizing its own
-  wrapping element - this partial always fills 100% of that wrapper's width
-  and matches its own height to it (the padding-bottom trick below), so the
-  same markup renders as a small row thumbnail or as a fluid grid card face.
+  listing card: a thumbnail image when there is one, otherwise a typed
+  icon. The caller controls the tile's size by sizing its own wrapping
+  element - this partial always fills 100% of that wrapper's width and
+  matches its own height to it (the padding-bottom trick below). The icon
+  is sized for a grid card; a list row wants a bare icon, not this tile.
 
   Required context:
     - icon: str - lucide icon name shown when there is no thumbnail
@@ -12,12 +12,9 @@
 
   Optional context:
     - thumbnail_url: str - thumbnail URL; falsy falls back to the icon
-    - icon_size_class: str - Tailwind size for the icon, defaulting to the
-      grid-card scale. A caller rendering the tile smaller than that must
-      pass its own, or the icon overflows the tile and gets clipped.
     - icon_size_style_expr: str - raw Alpine `:style` expression for the
       icon's wrapper div (e.g. the mosaic tile's dynamic tileIconSize()
-      binding). Takes precedence over icon_size_class.
+      binding). Omit for a fixed-size icon (w-12 h-12).
 {% endcomment %}
 <div class="relative w-full" style="padding-bottom: 100%">
   {% if thumbnail_url %}
@@ -32,7 +29,7 @@
   {% else %}
     <div class="absolute inset-0 flex items-center justify-center bg-base-200">
       <div
-        class="{% if not icon_size_style_expr %}{{ icon_size_class|default:'w-12 h-12' }}{% endif %}"
+        class="{% if not icon_size_style_expr %}w-12 h-12{% endif %}"
         {% if icon_size_style_expr %}:style="{{ icon_size_style_expr }}"{% endif %}
       >
         <i data-lucide="{{ icon }}" class="w-full h-full {{ icon_color }}"></i>

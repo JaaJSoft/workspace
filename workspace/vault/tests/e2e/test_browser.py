@@ -498,6 +498,12 @@ class VaultBrowserTests(PlaywrightTestCase):
         # The authenticator key input only exists once its control is opened,
         # so the audit has to open it to see it.
         self.page.get_by_role("button", name="Add").click()
+        # And the generator's own fields, which exist only while its panel is
+        # open - the passphrase separator among them. A component inserting a
+        # text field at runtime is the case this audit is for.
+        self.page.click("button[aria-label='Generate a password']")
+        self.page.click(".modal-box button:has-text('Passphrase')")
+        self.page.wait_for_selector(".modal-box input[maxlength='1']")
         # Scoped to the entry dialog: the shared layout also mounts the help,
         # prompt and file-picker dialogs on this page, and their fields are
         # someone else's surface to harden.
@@ -505,7 +511,14 @@ class VaultBrowserTests(PlaywrightTestCase):
             ".modal-box:has-text('Save') input, .modal-box:has-text('Save') textarea",
             """(nodes) => {
                 const identify = (node) => {
-                    const label = node.closest('label');
+                    // Both ways a field carries a label: wrapped in one, or
+                    // named by one through `for`. A control with a button
+                    // beside it has to use the second - a label around a
+                    // button steals its click.
+                    const explicit = node.id && document.querySelector(
+                        `label[for="${CSS.escape(node.id)}"]`
+                    );
+                    const label = explicit || node.closest('label');
                     const labelText = label && label.textContent.trim();
                     return labelText || node.placeholder || node.name || node.outerHTML.slice(0, 90);
                 };
@@ -523,10 +536,11 @@ class VaultBrowserTests(PlaywrightTestCase):
         # produces - a relabelled Save button or a restructured dialog must
         # fail this test, not pass it vacuously. Naming the three fields the
         # test exists to cover (the name, a secret field, and the
-        # authenticator key control only "Add" reveals) makes that failure
-        # specific rather than a bare "matched zero".
+        # authenticator key control only "Add" reveals, and the generator's
+        # separator) makes that failure specific rather than a bare
+        # "matched zero".
         self.assertTrue(audited, "the audit selector matched no fields at all")
-        for expected in ("Name", "Password", "Key or otpauth:// address"):
+        for expected in ("Name", "Password", "Authenticator key", "Separator"):
             self.assertTrue(
                 any(expected in identifier for identifier in audited),
                 f"expected the audit to see the {expected!r} field, saw {audited!r}",

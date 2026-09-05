@@ -86,8 +86,22 @@ class ReferenceIsolationTests(SimpleTestCase):
 
 
 class RandomnessSourceTests(SimpleTestCase):
+    # Both halves of the module's JavaScript, not just the bundled crypto: the
+    # page's own scripts draw randomness too - a generated password is drawn
+    # there - and a Math.random reaching one of them would be as invisible as
+    # one reaching the other. Vendored artifacts are excluded because they are
+    # built from the sources above.
     JS_SOURCES = sorted(
-        (REPO_ROOT / "scripts" / "frontend" / "src" / "vault").glob("*.js")
+        [
+            *(REPO_ROOT / "scripts" / "frontend" / "src" / "vault").glob("*.js"),
+            *(
+                path
+                for path in (
+                    WORKSPACE / "vault" / "ui" / "static" / "vault" / "ui" / "js"
+                ).rglob("*.js")
+                if "vendor" not in path.parts
+            ),
+        ]
     )
     PY_SOURCES = sorted(
         path

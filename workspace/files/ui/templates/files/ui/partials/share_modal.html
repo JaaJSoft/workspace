@@ -98,7 +98,12 @@
 
       <!-- Share Links -->
       <div class="mb-4">
-        <div class="divider my-2 text-xs text-base-content/40" x-show="canShareWithPeople()">Public links</div>
+        <div
+          class="divider my-2 text-xs text-base-content/40"
+          x-show="canShareWithPeople()"
+        >
+          Public links
+        </div>
         <label class="text-sm font-medium mb-2 block" x-show="!canShareWithPeople()">Public links</label>
 
         <!-- Loading -->

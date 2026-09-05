@@ -633,36 +633,11 @@
                   {% endif %}
 
                   <!-- Preview/Icon area (square) -->
-                  <div class="relative w-full" style="padding-bottom: 100%">
-                    {% if node.has_thumbnail %}
-                      <img
-                        src="/api/v1/files/{{ node.uuid }}/thumbnail"
-                        alt=""
-                        class="absolute inset-0 w-full h-full object-cover bg-base-200"
-                        loading="lazy"
-                        decoding="async"
-                        draggable="false"
-                      />
-                    {% else %}
-                      <div class="absolute inset-0 flex items-center justify-center bg-base-200">
-                        <div
-                          :style="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'"
-                        >
-                          {% if node.node_type == 'folder' %}
-                            <i
-                              data-lucide="{{ node.icon|default:'folder' }}"
-                              class="w-full h-full {{ node.color|default:'text-warning' }}"
-                            ></i>
-                          {% else %}
-                            <i
-                              data-lucide="{{ node.type|type_to_icon }}"
-                              class="w-full h-full {{ node.type|type_to_color }}"
-                            ></i>
-                          {% endif %}
-                        </div>
-                      </div>
-                    {% endif %}
-                  </div>
+                  {% if node.node_type == 'folder' %}
+                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.icon|default:'folder' icon_color=node.color|default:'text-warning' icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" %}
+                  {% else %}
+                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.type|type_to_icon icon_color=node.type|type_to_color icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" %}
+                  {% endif %}
 
                   <!-- File info -->
                   <div
@@ -671,22 +646,7 @@
                   >
                     <div class="flex items-start justify-between gap-1">
                       <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-1 min-w-0">
-                          <h3
-                            class="font-medium truncate min-w-0"
-                            :class="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'"
-                            title="{{ node.name }}"
-                          >
-                            {{ node.name }}
-                          </h3>
-                          {% if node.is_quarantined %}
-                            <i
-                              data-lucide="shield-alert"
-                              class="w-3.5 h-3.5 flex-shrink-0 text-error"
-                              title="Quarantined: the malware scanner flagged this file, so it cannot be opened or downloaded."
-                            ></i>
-                          {% endif %}
-                        </div>
+                        {% include "files/ui/partials/node_name.html" with name=node.name is_quarantined=node.is_quarantined name_size_class_expr="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'" %}
                         <p
                           class="text-xs text-base-content/60"
                           :class="mosaicTileSize <= 1 ? 'hidden' : 'mt-0.5'"

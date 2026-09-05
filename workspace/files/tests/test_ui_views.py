@@ -4,12 +4,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
 from django.db import connection
-from django.test import TestCase
+from django.template.defaultfilters import date as date_filter
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from workspace.files.models import File, FileShareLink
+from workspace.files.models import File, FileScan, FileShareLink
 from workspace.files.ui.views import SHARED_FOLDER_PAGE_SIZE
 from workspace.users.services.settings import set_setting
 
@@ -581,3 +582,84 @@ class SharedFolderListingTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.drop_link.refresh_from_db()
         self.assertEqual(self.drop_link.view_count, 0)
+
+    def test_default_view_is_list(self):
+        resp = self.client.get(f"/files/shared/{self.read_link.token}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["view_mode"], "list")
+
+    def test_view_param_grid_is_honoured(self):
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"view": "grid"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["view_mode"], "grid")
+        self.assertContains(resp, "grid-cols-2")
+
+    def test_an_invalid_view_param_falls_back_to_list(self):
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"view": "bogus"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["view_mode"], "list")
+
+    def test_view_param_survives_navigation_into_a_subfolder(self):
+        """Choosing grid and then entering a subfolder must not silently
+        drop back to list - every link the page builds carries ?view=."""
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"view": "grid"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, f"node={self.sub.uuid}&amp;view=grid")
+
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}",
+            {"node": str(self.sub.uuid), "view": "grid"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["view_mode"], "grid")
+        # Breadcrumb back to the root must also carry the current view.
+        root_crumb = resp.context["breadcrumbs"][0]
+        self.assertIn("view=grid", root_crumb["url"])
+
+    def test_size_and_modified_are_rendered_for_a_file_row(self):
+        self.doc.size = 2048
+        self.doc.save(update_fields=["size"])
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"node": str(self.sub.uuid)}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.doc.refresh_from_db()
+        # filesizeformat joins the number and unit with a non-breaking space.
+        self.assertContains(resp, "2.0\xa0KB")
+        self.assertContains(resp, date_filter(self.doc.updated_at, "M j, Y"))
+
+    @override_settings(
+        FILES_MALWARE_SCAN_ENABLED=True, FILES_MALWARE_ON_DETECTION="block"
+    )
+    def test_a_quarantined_file_shows_the_badge_in_the_listing(self):
+        FileScan.objects.create(
+            file=self.doc,
+            status=FileScan.Status.INFECTED,
+            signature="Test.Signature",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"node": str(self.sub.uuid)}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "shield-alert")
+        self.assertContains(resp, "Quarantined")
+
+    def test_listing_never_exposes_an_absolute_path_in_grid_view(self):
+        parent = File.objects.create(
+            owner=self.owner, name="TopSecretParent", node_type=File.NodeType.FOLDER
+        )
+        self.root.parent = parent
+        self.root.save(update_fields=["parent"])
+        resp = self.client.get(
+            f"/files/shared/{self.read_link.token}", {"view": "grid"}
+        )
+        self.root.refresh_from_db()
+        self.assertNotContains(resp, self.root.path)
+        self.assertNotContains(resp, "TopSecretParent")

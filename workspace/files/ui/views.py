@@ -12,7 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
-from workspace.files.services.filetype import get_viewer_by_slug
+from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
 from workspace.files.services.public_links import resolve_within, scope_q
 from workspace.files.services.quota import usage_percent
 from workspace.files.services.scanning.policy import with_scan
@@ -901,13 +901,27 @@ def file_card(request, uuid):
     )
 
 
-def _shared_page_url(path, access_token, **params):
+def _shared_view_mode(request):
+    """The public listing's presentation: 'list' unless ?view=grid asks otherwise.
+
+    Any other value - including missing or malformed input - falls back to
+    'list' rather than erroring, matching the query-parameter parsing rule
+    for a value that only ever toggles a display preference.
+    """
+    return "grid" if request.GET.get("view") == "grid" else "list"
+
+
+def _shared_page_url(path, access_token, view_mode=None, **params):
     """A link back to *path* (the share page itself), preserving *access_token*.
 
-    Used for folder navigation and breadcrumbs so a password-protected link
-    stays unlocked across clicks instead of re-prompting on every navigation.
+    Used for folder navigation, breadcrumbs and the view-mode toggle so a
+    password-protected link stays unlocked across clicks instead of
+    re-prompting on every navigation, and so choosing grid or list survives
+    following any link the page builds.
     """
     query = dict(params)
+    if view_mode:
+        query["view"] = view_mode
     if access_token:
         query["access_token"] = access_token
     return f"{path}?{urlencode(query)}" if query else path
@@ -922,7 +936,7 @@ def _shared_action_url(token, suffix, access_token, **params):
     return f"/api/v1/files/shared/{token}{suffix}" + (f"?{qs}" if qs else "")
 
 
-def _shared_breadcrumbs(root, node, path, access_token):
+def _shared_breadcrumbs(root, node, path, access_token, view_mode):
     """Trail from the link's own root down to *node* - never above it."""
     trail = []
     current = node
@@ -933,7 +947,10 @@ def _shared_breadcrumbs(root, node, path, access_token):
     trail.reverse()
 
     crumbs = [
-        {"label": n.name, "url": _shared_page_url(path, access_token, node=n.uuid)}
+        {
+            "label": n.name,
+            "url": _shared_page_url(path, access_token, view_mode, node=n.uuid),
+        }
         for n in trail[:-1]
     ]
     crumbs.append({"label": trail[-1].name})
@@ -958,20 +975,26 @@ def _resolve_shared_target(link, request):
     return node
 
 
-def _shared_folder_listing_context(link, current, request, access_token):
+def _shared_folder_listing_context(link, current, request, access_token, view_mode):
     """Children of *current*, capped at ``SHARED_FOLDER_PAGE_SIZE``.
 
     Every entry's ``url`` reopens the share page at that node through
     ``?node=`` - a folder to browse into or a file to view, both handled by
-    the same parameter the page itself reads.
+    the same parameter the page itself reads. Never adds ``path``: the
+    public page must not be able to leak an in-tree path, and every field
+    here is a primitive - the row partials shared with the authenticated
+    browser only ever see those, never the File model itself.
     """
     token = link.token
     # Same namespace predicate resolve_within uses, so a row can never be listed
-    # and then 404 when the visitor clicks it.
+    # and then 404 when the visitor clicks it. with_scan avoids a query per
+    # row when is_quarantined() below reads the scan verdict.
     children = list(
-        File.objects.filter(
-            scope_q(link.file), parent=current, deleted_at__isnull=True
-        ).name_ordered("-node_type")[: SHARED_FOLDER_PAGE_SIZE + 1]
+        with_scan(
+            File.objects.filter(
+                scope_q(link.file), parent=current, deleted_at__isnull=True
+            ).name_ordered("-node_type")
+        )[: SHARED_FOLDER_PAGE_SIZE + 1]
     )
     has_more = len(children) > SHARED_FOLDER_PAGE_SIZE
     children = children[:SHARED_FOLDER_PAGE_SIZE]
@@ -979,13 +1002,26 @@ def _shared_folder_listing_context(link, current, request, access_token):
     entries = []
     for node in children:
         is_dir = node.node_type == File.NodeType.FOLDER
+        if is_dir:
+            icon = node.icon or "folder"
+            icon_color = node.color or "text-warning"
+        else:
+            icon = get_icon(node.type or "")
+            icon_color = get_color(node.type or "")
         entries.append(
             {
                 "uuid": node.uuid,
                 "name": node.name,
                 "is_folder": is_dir,
                 "has_thumbnail": node.has_thumbnail,
-                "url": _shared_page_url(request.path, access_token, node=node.uuid),
+                "icon": icon,
+                "icon_color": icon_color,
+                "size": None if is_dir else node.size,
+                "modified": node.updated_at,
+                "is_quarantined": False if is_dir else node.is_quarantined(),
+                "url": _shared_page_url(
+                    request.path, access_token, view_mode, node=node.uuid
+                ),
                 "download_url": (
                     None
                     if is_dir
@@ -1053,6 +1089,7 @@ def shared_file_view(request, token):
 
     unlocked = not link.has_password or password_verified
     effective_access_token = access_token if password_verified else ""
+    view_mode = _shared_view_mode(request)
 
     # Every gate the full page enforces (read allowed, password satisfied)
     # must hold before ?node= is even looked at: mode drop never resolves
@@ -1111,7 +1148,7 @@ def shared_file_view(request, token):
     breadcrumbs = None
     if show_content and not (target.pk == link.file.pk and not is_folder):
         breadcrumbs = _shared_breadcrumbs(
-            link.file, target, request.path, effective_access_token
+            link.file, target, request.path, effective_access_token, view_mode
         )
 
     context = {
@@ -1129,6 +1166,7 @@ def shared_file_view(request, token):
         "needs_password": link.has_password and not password_verified,
         "expired": False,
         "download_url": download_url,
+        "view_mode": view_mode,
     }
     if show_dropzone:
         ceiling = settings.FILES_DROP_MAX_FILE_BYTES
@@ -1137,8 +1175,17 @@ def shared_file_view(request, token):
     if show_listing:
         context.update(
             _shared_folder_listing_context(
-                link, target, request, effective_access_token
+                link, target, request, effective_access_token, view_mode
             )
+        )
+        # Both toggle links stay on the current folder, only flipping the
+        # presentation - the target's own uuid works whether it is the
+        # link's root or a node reached through ?node=.
+        context["list_view_url"] = _shared_page_url(
+            request.path, effective_access_token, "list", node=target.uuid
+        )
+        context["grid_view_url"] = _shared_page_url(
+            request.path, effective_access_token, "grid", node=target.uuid
         )
 
     # A listing is entirely server-rendered here, so this is the only place

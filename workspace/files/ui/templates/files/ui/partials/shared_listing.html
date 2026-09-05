@@ -1,36 +1,88 @@
 {% comment %}
   The folder-listing box inside the shared page's swappable content region.
-  Needs entries and has_more in context. Each entry's url carries ?node=,
-  whether it points at a subfolder or a file - both reopen this same page.
+
+  Required context:
+    - entries: list of dicts - uuid, name, is_folder, icon, icon_color,
+      size (None for a folder), modified (datetime), is_quarantined, url,
+      download_url (None for a folder), thumbnail_url (None without one).
+      No path is ever included here - see _shared_folder_listing_context.
+    - has_more: bool
+    - view_mode: "list" or "grid"
+    - list_view_url / grid_view_url: links that flip view_mode, carrying the
+      current ?node= and ?access_token= along
 {% endcomment %}
 <div id="shared-listing" class="bg-base-200 min-h-48">
+  {% if entries %}
+    <div
+      class="flex justify-end gap-1 px-6 py-2 border-b border-base-300 bg-base-100"
+    >
+      <a
+        href="{{ list_view_url }}"
+        x-target.push="shared-content"
+        class="btn btn-ghost btn-sm btn-square {% if view_mode != 'grid' %}bg-primary/10 text-primary{% endif %}"
+        title="List view"
+        aria-label="List view"
+      >
+        <i data-lucide="list" class="w-4 h-4"></i>
+      </a>
+      <a
+        href="{{ grid_view_url }}"
+        x-target.push="shared-content"
+        class="btn btn-ghost btn-sm btn-square {% if view_mode == 'grid' %}bg-primary/10 text-primary{% endif %}"
+        title="Grid view"
+        aria-label="Grid view"
+      >
+        <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+      </a>
+    </div>
+  {% endif %}
+
   {% if not entries %}
     <div class="p-12 text-center text-base-content/50">This folder is empty.</div>
+  {% elif view_mode == 'grid' %}
+    <div
+      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-6"
+    >
+      {% for entry in entries %}
+        <a
+          href="{{ entry.url }}"
+          x-target.push="shared-content"
+          class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all flex flex-col overflow-hidden"
+        >
+          {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color %}
+          <div class="p-3 min-w-0">
+            {% include "files/ui/partials/node_name.html" with name=entry.name is_quarantined=entry.is_quarantined %}
+            <p class="text-xs text-base-content/60 mt-0.5">
+              {% if entry.is_folder %}
+                Folder
+              {% else %}
+                {{ entry.size|filesizeformat }}
+              {% endif %}
+            </p>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
   {% else %}
     <ul class="divide-y divide-base-300">
       {% for entry in entries %}
         <li
           class="flex items-center gap-3 px-6 py-3 hover:bg-base-100 transition-colors"
         >
-          {% if entry.has_thumbnail %}
-            <img
-              src="{{ entry.thumbnail_url }}"
-              class="w-10 h-10 rounded object-cover flex-shrink-0"
-              alt=""
-            />
-          {% else %}
-            <i
-              data-lucide="{% if entry.is_folder %}folder{% else %}file{% endif %}"
-              class="w-8 h-8 flex-shrink-0 text-base-content/40"
-            ></i>
-          {% endif %}
+          <div class="w-10 flex-shrink-0 rounded overflow-hidden">
+            {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color %}
+          </div>
 
           <a
             href="{{ entry.url }}"
             x-target.push="shared-content"
             class="flex-1 min-w-0 text-left cursor-pointer"
           >
-            <span class="block truncate">{{ entry.name }}</span>
+            {% include "files/ui/partials/node_name.html" with name=entry.name is_quarantined=entry.is_quarantined %}
+            <span class="block text-xs text-base-content/50 mt-0.5">
+              {% if not entry.is_folder %}{{ entry.size|filesizeformat }} ·{% endif %}
+              {{ entry.modified|date:"M j, Y" }}
+            </span>
           </a>
 
           {% if entry.download_url %}

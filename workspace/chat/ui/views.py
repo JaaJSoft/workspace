@@ -283,7 +283,7 @@ def chat_room_view(request, conversation_uuid):
     )
 
 
-@meeting_public_ip_limited
+@meeting_public_ip_limited(template="chat/ui/meet_throttled.html")
 def meet_view(request, slug):
     """The public meeting page, reached from a bare /meet/<slug> link.
 

@@ -31,7 +31,10 @@ from workspace.chat.models import (
 )
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import create_meeting
-from workspace.chat.throttling import MeetingPublicIpThrottle
+from workspace.chat.throttling import (
+    MeetingPublicIpThrottle,
+    MeetingPublicPageThrottle,
+)
 
 from .meeting_fixtures import guest_with_token, make_event
 
@@ -395,6 +398,11 @@ class MeetingMessageListFixture(TestCase):
             size=1,
         )
 
+    def guest_list(self, query=""):
+        """The raw response, for tests that assert on something other than
+        the rendered body."""
+        return self.client.get(self.guest_url + query, HTTP_X_MEETING_TOKEN=self.token)
+
     def guest_html(self, query="", token=None):
         resp = self.client.get(
             self.guest_url + query,
@@ -675,17 +683,40 @@ class GuestMessageListViewTests(MeetingMessageListFixture):
 
 class AnonymousMeetingViewThrottleTests(MeetingMessageListFixture):
     """The two public pages are plain Django views, so no DRF machinery runs
-    a throttle for them; the decorator does, out of the very bucket the guest
-    JSON endpoints already share."""
+    a throttle for them; the decorator does, out of a bucket of their own."""
 
-    def test_the_meeting_page_and_its_message_list_share_one_per_ip_budget(self):
-        limit = MeetingPublicIpThrottle().num_requests
-        page = f"/meet/{self.meeting.slug}"
+    def test_the_two_public_pages_share_one_per_ip_budget(self):
+        limit = MeetingPublicPageThrottle().num_requests
+        self.message(offset_minutes=1, author=self.host, body="hi")
 
         for attempt in range(limit):
-            self.assertEqual(self.client.get(page).status_code, 200, attempt)
-        self.assertEqual(self.client.get(page).status_code, 429)
+            self.assertEqual(self.guest_list().status_code, 200, attempt)
 
-        # Same scope, same identity: the list is spent by the page's traffic.
-        spent = self.client.get(self.guest_url, HTTP_X_MEETING_TOKEN=self.token)
+        spent = self.guest_list()
         self.assertEqual(spent.status_code, 429)
+        # An $ajax target, so plain text - the client swaps nothing on a 429.
+        self.assertEqual(spent["Content-Type"], "text/plain")
+        self.assertGreaterEqual(int(spent["Retry-After"]), 1)
+
+        # Same scope, same identity: the page is spent by the list's traffic.
+        page = self.client.get(f"/meet/{self.meeting.slug}")
+        self.assertEqual(page.status_code, 429)
+        self.assertTrue(page["Content-Type"].startswith("text/html"))
+        self.assertGreaterEqual(int(page["Retry-After"]), 1)
+        body = page.content.decode()
+        self.assertIn("Too many requests", body)
+        self.assertIn(f"Try again in {page['Retry-After']} second", body)
+        # Standalone, and none of the meeting page's scripts.
+        self.assertIn("<!DOCTYPE html>", body)
+        self.assertNotIn("chatMeetApp(", body)
+
+    def test_the_page_budget_is_separate_from_the_public_json_one(self):
+        """Sized for a machine-driven refresh, so it must not be the bucket
+        that knocking and joining spend - nor spend theirs."""
+        summary = f"/api/v1/chat/meet/{self.meeting.slug}"
+        for attempt in range(MeetingPublicIpThrottle().num_requests):
+            self.assertEqual(self.client.get(summary).status_code, 200, attempt)
+        self.assertEqual(self.client.get(summary).status_code, 429)
+
+        self.assertEqual(self.client.get(f"/meet/{self.meeting.slug}").status_code, 200)
+        self.assertEqual(self.guest_list().status_code, 200)

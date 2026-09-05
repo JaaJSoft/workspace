@@ -683,6 +683,13 @@ def _aliased_imports_of(tree, name):
     ]
 
 
+def _decorator_name(node):
+    """The bare name of a decorator, applied with or without arguments."""
+    if isinstance(node, ast.Call):
+        node = node.func
+    return node.id if isinstance(node, ast.Name) else None
+
+
 class GuestSurfaceSourceTests(SimpleTestCase):
     """The structural invariants the runtime rules rest on, read off the
     source so a change to any of them fails here rather than in production."""
@@ -734,17 +741,25 @@ class GuestSurfaceSourceTests(SimpleTestCase):
 
         A view is what Django calls with a request; the module's other
         top-level functions are helpers that take a user or a message.
+
+        ``AsyncFunctionDef`` is not a variant to skip: Django routes an async
+        view exactly like a sync one, so a fence that only walks
+        ``FunctionDef`` would let ``async def meet_something(request)`` ship
+        unseen by both tests below - which is the failure mode they exist to
+        prevent.
         """
         decorators = {}
         for node in _parse_module(UI_VIEWS).body:
-            if not isinstance(node, ast.FunctionDef) or not node.args.args:
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
-            if node.args.args[0].arg != "request":
+            if not node.args.args or node.args.args[0].arg != "request":
                 continue
             decorators[node.name] = {
-                decorator.id
-                for decorator in node.decorator_list
-                if isinstance(decorator, ast.Name)
+                name
+                for name in (
+                    _decorator_name(decorator) for decorator in node.decorator_list
+                )
+                if name is not None
             }
         return decorators
 

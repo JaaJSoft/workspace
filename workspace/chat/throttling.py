@@ -11,14 +11,16 @@ so all three throttles below use it instead.
 
 The public *pages* under /meet are plain Django views, which no DRF
 machinery ever runs a throttle for; ``meeting_public_ip_limited`` at the
-bottom of this file applies the first throttle below to them, so the rate,
-the scope and the identity resolution have one definition for the whole
-anonymous surface rather than two that can drift.
+bottom of this file applies one of the throttles below to them, so the rate,
+the scope and the identity resolution keep one definition each rather than
+being re-derived per view.
 """
 
+import math
 from functools import wraps
 
 from django.http import HttpResponse
+from django.shortcuts import render
 from rest_framework.request import Request
 from rest_framework.throttling import SimpleRateThrottle
 
@@ -79,25 +81,65 @@ class MeetingGuestSignalThrottle(MeetingPublicIpThrottle):
     scope = "chat.meeting.guest.signal.ip"
 
 
-def meeting_public_ip_limited(view_func):
-    """Run ``MeetingPublicIpThrottle`` in front of a plain Django view.
+class MeetingPublicPageThrottle(MeetingPublicIpThrottle):
+    """Same IP-scoped throttle as above, under its own, more generous scope.
 
-    Deliberately the same scope as the JSON endpoints rather than one of its
-    own: a guest loads the page and its message list from the same address
-    that then knocks, joins and posts, so "30 anonymous requests a minute
-    from here" is one budget, not several that each look small.
-
-    The request is wrapped in a DRF ``Request`` so the throttle sees exactly
-    the object it sees on the API path. 429 answers as plain text: the caller
-    is either a script or a browser that has already been served the page.
+    The two public HTML routes - the meeting page and the message list it
+    loads - are not the sparse anonymous action ``chat.meeting.public.ip`` is
+    sized for. The list is re-fetched whenever the guest's SSE stream reports
+    a message, so it follows the conversation's cadence: a lively meeting
+    produces a request per event, and a reconnect re-loads it outright. That
+    is a machine-driven, per-participant pattern, the same shape as the
+    heartbeat scope, and several guests behind one NAT share the bucket the
+    same way - so it gets its own budget rather than eating the one sized for
+    knocking and joining. v1 starting value; retune on telemetry, same as the
+    two above.
     """
 
-    @wraps(view_func)
-    def _limited(request, *args, **kwargs):
-        if not MeetingPublicIpThrottle().allow_request(Request(request), None):
-            return HttpResponse(
-                "Too many requests", status=429, content_type="text/plain"
-            )
-        return view_func(request, *args, **kwargs)
+    scope = "chat.meeting.public.page"
 
-    return _limited
+
+def _throttled_response(throttle, request, template):
+    """The 429 a throttled anonymous page answers with.
+
+    ``Retry-After`` is what DRF's own ``throttled()`` emits, computed the same
+    way from the throttle's ``wait()`` - a client that respects it stops
+    hammering, which is the whole point of answering rather than dropping.
+    """
+    wait = throttle.wait()
+    seconds = math.ceil(wait) if wait is not None else None
+    if template is None:
+        response = HttpResponse(
+            "Too many requests", status=429, content_type="text/plain"
+        )
+    else:
+        response = render(request, template, {"retry_after": seconds}, status=429)
+    if seconds is not None:
+        response["Retry-After"] = str(seconds)
+    return response
+
+
+def meeting_public_ip_limited(
+    view_func=None, *, throttle_class=MeetingPublicPageThrottle, template=None
+):
+    """Run a meeting throttle in front of a plain Django view.
+
+    Usable bare (``@meeting_public_ip_limited``) or with arguments. *template*
+    names a standalone page to answer a throttled browser with; left None the
+    view answers text/plain, which is what an ``$ajax`` target wants.
+
+    The request is wrapped in a DRF ``Request`` so the throttle sees exactly
+    the object it sees on the API path.
+    """
+
+    def _decorate(func):
+        @wraps(func)
+        def _limited(request, *args, **kwargs):
+            throttle = throttle_class()
+            if not throttle.allow_request(Request(request), None):
+                return _throttled_response(throttle, request, template)
+            return func(request, *args, **kwargs)
+
+        return _limited
+
+    return _decorate if view_func is None else _decorate(view_func)

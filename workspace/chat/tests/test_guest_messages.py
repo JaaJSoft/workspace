@@ -21,6 +21,10 @@ from workspace.chat.models import (
     Message,
     ThreadParticipant,
 )
+from workspace.chat.services.guest_messages import (
+    hide_quotes_below_floor,
+    message_queryset,
+)
 from workspace.chat.services.meeting_guests import issue_token
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import create_meeting
@@ -448,3 +452,78 @@ class GuestMessagesTests(TestCase):
         self.assertEqual(resp.status_code, 403)
         message.refresh_from_db()
         self.assertIsNone(message.deleted_at)
+
+
+class HideQuotesBelowFloorTests(TestCase):
+    """The redaction itself, called directly.
+
+    Both halves are otherwise only observable through a template that also
+    gates on the viewer, so a regression in the service would hide behind the
+    gate and surface on some future surface that renders a quote without one.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="floorhost", password="x")
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.owner
+        )
+        self.floor = timezone.now()
+
+    def _message(self, *, offset_minutes, body, **kwargs):
+        msg = Message.objects.create(
+            conversation=self.conversation, author=self.owner, body=body, **kwargs
+        )
+        Message.objects.filter(pk=msg.pk).update(
+            created_at=self.floor + timedelta(minutes=offset_minutes)
+        )
+        msg.refresh_from_db()
+        return msg
+
+    def _hydrated(self, *messages):
+        """Re-read through the guest queryset, so reply_to is the hydrated
+        instance the function mutates rather than the one built here."""
+        uuids = [m.uuid for m in messages]
+        rows = {m.uuid: m for m in message_queryset().filter(uuid__in=uuids)}
+        return [rows[u] for u in uuids]
+
+    def test_a_pre_floor_target_loses_the_whole_quote(self):
+        buried = self._message(offset_minutes=-10, body="buried")
+        reply = self._message(offset_minutes=1, body="answering", reply_to=buried)
+
+        (loaded,) = self._hydrated(reply)
+        hide_quotes_below_floor([loaded], self.floor)
+
+        self.assertIsNone(loaded.reply_to)
+        self.assertIsNone(loaded.reply_to_id)
+
+    def test_a_surviving_quote_loses_a_pre_floor_thread_root(self):
+        """A pre-floor root A, an in-window B in A's thread, an in-window C
+        quoting B: C's quote is legitimate, the root it carries is not."""
+        root = self._message(offset_minutes=-10, body="root A")
+        reply = self._message(
+            offset_minutes=1, body="reply B", reply_to=root, thread_root=root
+        )
+        answer = self._message(offset_minutes=2, body="reply C", reply_to=reply)
+
+        loaded_reply, loaded_answer = self._hydrated(reply, answer)
+        hide_quotes_below_floor([loaded_reply, loaded_answer], self.floor)
+
+        # B answered A directly, so its quote goes entirely.
+        self.assertIsNone(loaded_reply.reply_to)
+        # C keeps the quote of B and loses the root behind it.
+        self.assertIsNotNone(loaded_answer.reply_to)
+        self.assertEqual(loaded_answer.reply_to.uuid, reply.uuid)
+        self.assertIsNone(loaded_answer.reply_to.thread_root_id)
+
+    def test_an_in_window_thread_root_survives(self):
+        """The negative control: the function must redact the floor, not the
+        thread."""
+        root = self._message(offset_minutes=1, body="root")
+        reply = self._message(offset_minutes=2, body="in the thread", thread_root=root)
+        answer = self._message(offset_minutes=3, body="quoting", reply_to=reply)
+
+        (loaded,) = self._hydrated(answer)
+        hide_quotes_below_floor([loaded], self.floor)
+
+        self.assertEqual(loaded.reply_to.uuid, reply.uuid)
+        self.assertEqual(loaded.reply_to.thread_root_id, root.uuid)

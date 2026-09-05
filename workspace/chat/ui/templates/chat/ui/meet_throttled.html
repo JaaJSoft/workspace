@@ -1,0 +1,30 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Too many requests - Workspace</title>
+    {% comment %}
+      The stylesheet meet.html loads, and none of its scripts. A page served
+      because the caller is already sending too much must not answer by
+      pulling a dozen more files, and there is nothing here for them to do -
+      no Alpine component, no custom element, no icons.
+    {% endcomment %}
+    <link href="{% static 'css/app.css' %}" rel="stylesheet" />
+  </head>
+  <body class="min-h-screen bg-base-200">
+    <main class="min-h-screen flex items-center justify-center p-4">
+      <div
+        class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-2 text-center"
+      >
+        <h1 class="text-xl font-bold">Too many requests</h1>
+        {% if retry_after %}
+          <p class="text-sm text-base-content/70">Try again in {{ retry_after }} second{{ retry_after|pluralize }}.</p>
+        {% else %}
+          <p class="text-sm text-base-content/70">Try again in a moment.</p>
+        {% endif %}
+      </div>
+    </main>
+  </body>
+</html>

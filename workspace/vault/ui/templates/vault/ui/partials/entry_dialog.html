@@ -31,18 +31,64 @@
           />
         </label>
 
+        {% comment %}
+          A div with a `for` label rather than a wrapping one: a field the type
+          declares generatable carries a button, and a label around a button
+          steals its click - the same reason the authenticator control below
+          is built this way.
+
+          Which fields offer a generator is the schema's call, never this
+          template's: `generator` is declared next to `secret` in types.py, so
+          a new type that declares one gets the button without a line changing
+          here.
+        {% endcomment %}
         <template x-for="field in formFields()" :key="field.field_id">
-          <label class="form-control">
-            <span class="label-text" x-text="field.label"></span>
-            <input
-              :type="field.secret ? 'password' : 'text'"
-              class="input input-bordered input-sm w-full"
-              :class="field.secret ? 'font-mono' : ''"
-              autocomplete="off"
-              spellcheck="false"
-              x-model="draft.values[field.field_id]"
-            />
-          </label>
+          <div class="form-control">
+            <label
+              class="label-text"
+              :for="'entry-field-' + field.field_id"
+              x-text="field.label"
+            ></label>
+            <div class="flex items-center gap-1.5 mt-1">
+              <input
+                :id="'entry-field-' + field.field_id"
+                :type="field.secret ? 'password' : 'text'"
+                class="input input-bordered input-sm flex-1"
+                :class="field.secret ? 'font-mono' : ''"
+                autocomplete="off"
+                spellcheck="false"
+                x-model="draft.values[field.field_id]"
+              />
+              {# x-if, not x-show: a hidden button is still a button in the DOM, on every field the type declares. #}
+              <template x-if="field.generator">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-square"
+                  :class="generatorField === field.field_id ? 'btn-primary' : 'btn-ghost'"
+                  :title="'Generate a ' + field.label.toLowerCase()"
+                  :aria-label="'Generate a ' + field.label.toLowerCase()"
+                  @click="openGenerator(field.field_id)"
+                >
+                  <i data-lucide="dices" class="w-4 h-4"></i>
+                </button>
+              </template>
+            </div>
+            {% comment %}
+              x-if, not x-show: the panel draws a password as it is
+              constructed, so a mounted-but-hidden one would hold a plaintext
+              for every generatable field of every entry the dialog opens. On
+              close its destroy() drops what it holds.
+            {% endcomment %}
+            <template x-if="field.generator && generatorField === field.field_id">
+              <div
+                class="mt-2"
+                @password-apply="applyGenerated(field.field_id, $event.detail.value)"
+                @password-copy="copyGenerated($event.detail.value)"
+              >
+                {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" show_apply=True %}
+              </div>
+            </template>
+          </div>
         </template>
 
         {% comment %}

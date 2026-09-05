@@ -31,16 +31,17 @@
         data-message-uuid="{{ msg.uuid }}"
       ></div>
     {% else %}
-      <div slot="message" id="{{ prefix }}-{{ msg.uuid }}" data-message-uuid="{{ msg.uuid }}" data-body="{{ msg.body }}" {% if msg.body_html %}data-has-body{% endif %} {% comment %} hide_quote_for is the thread panel's root: a reply that answers the root would otherwise quote a message rendered right above it, on every single reply. A reply answering another reply still quotes, because that target may be far up the thread. {% endcomment %} {% if msg.reply_to and msg.reply_to.uuid != hide_quote_for %} data-reply-uuid="{{ msg.reply_to.uuid }}" {% comment %} The quoted message's thread root rides along (thread_root_id: reply_to is select_related, its FK column costs no query) so a quote pointing into a thread opens the panel instead of paging the main flow back forever looking for a reply that is not there. {% endcomment %} {% if msg.reply_to.thread_root_id %}data-reply-thread-root="{{ msg.reply_to.thread_root_id }}"{% endif %} {% if msg.reply_to.deleted_at %} data-reply-deleted {% else %} data-reply-author="{{ msg.reply_to.quote_author_name }}" data-reply-preview="{{ msg.reply_to.body|truncatechars:100 }}" {% endif %} {% endif %}>
+      <div slot="message" id="{{ prefix }}-{{ msg.uuid }}" data-message-uuid="{{ msg.uuid }}" data-body="{{ msg.body }}" {% if msg.body_html %}data-has-body{% endif %} {% comment %} hide_quote_for is the thread panel's root: a reply that answers the root would otherwise quote a message rendered right above it, on every single reply. A reply answering another reply still quotes, because that target may be far up the thread. {% endcomment %} {% if msg.reply_to and msg.reply_to.uuid != hide_quote_for %} data-reply-uuid="{{ msg.reply_to.uuid }}" {% comment %} The quoted message's thread root rides along (thread_root_id: reply_to is select_related, its FK column costs no query) so a quote pointing into a thread opens the panel instead of paging the main flow back forever looking for a reply that is not there. {% endcomment %} {% if viewer.can_thread and msg.reply_to.thread_root_id %}data-reply-thread-root="{{ msg.reply_to.thread_root_id }}"{% endif %} {% if msg.reply_to.deleted_at %} data-reply-deleted {% else %} data-reply-author="{{ msg.reply_to.quote_author_name }}" data-reply-preview="{{ msg.reply_to.body|truncatechars:100 }}" {% endif %} {% endif %}>
 
         {% if msg.body_html %}
           {# Capped here, not on the bubble: attachments sit in it too #}
           <div class="msg-body prose prose-sm max-w-[36rem] break-words">{{ msg.body_html|safe }}</div>
         {% endif %}
-        {% if msg.tool_data %}
+        {# Both belong to the AI flow a guest is only visiting: the timeline names tools and arguments, and the interaction buttons POST to a member-only endpoint. #}
+        {% if not viewer.is_guest and msg.tool_data %}
           {% render_ai_steps msg %}
         {% endif %}
-        {% if msg.interaction %}
+        {% if not viewer.is_guest and msg.interaction %}
           {% include "chat/ui/partials/_message_interaction.html" with msg=msg %}
         {% endif %}
 

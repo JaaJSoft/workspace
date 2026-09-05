@@ -40,6 +40,7 @@ from workspace.chat.services.meeting_guests import guest_for_slug
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
+from workspace.chat.throttling import meeting_public_ip_limited
 from workspace.common.dates import time_ago
 from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
@@ -282,6 +283,7 @@ def chat_room_view(request, conversation_uuid):
     )
 
 
+@meeting_public_ip_limited
 def meet_view(request, slug):
     """The public meeting page, reached from a bare /meet/<slug> link.
 
@@ -300,6 +302,7 @@ def meet_view(request, slug):
     )
 
 
+@meeting_public_ip_limited
 def meet_messages_view(request, slug):
     """Partial: the meeting's message list, rendered for an admitted guest.
 

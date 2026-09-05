@@ -25,11 +25,13 @@ from workspace.chat.models import (
     MeetingGuest,
     Message,
     MessageAttachment,
+    MessageInteraction,
     PinnedMessage,
     Reaction,
 )
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import create_meeting
+from workspace.chat.throttling import MeetingPublicIpThrottle
 
 from .meeting_fixtures import guest_with_token, make_event
 
@@ -523,6 +525,58 @@ class GuestMessageListViewTests(MeetingMessageListFixture):
         self.assertNotIn("secret history", html)
         self.assertNotIn("data-reply-author", html)
 
+    def test_a_quote_reaching_a_pre_floor_thread_root_names_nothing(self):
+        """The quote survives the floor, its thread root does not.
+
+        A pre-floor root A, an in-window reply B that answers A (so B's
+        thread_root is A), and an in-window C answering B. C's quote of B is
+        legitimate, but the root that rides along with it is A - the uuid a
+        guest could then name as reply_to_uuid on a POST, which is the pull
+        primitive around the floor GuestMessageSerializer exists to close.
+        """
+        root = self.message(offset_minutes=-10, author=self.host, body="root A")
+        reply = self.message(
+            offset_minutes=1,
+            author=self.host,
+            body="reply B",
+            reply_to=root,
+            thread_root=root,
+        )
+        self.message(offset_minutes=2, author=self.host, body="reply C", reply_to=reply)
+
+        guest = self.guest_html()
+        self.assertIn("reply C", guest)
+        self.assertNotIn(str(root.uuid), guest)
+        self.assertNotIn("data-reply-thread-root", guest)
+        # The negative control: the member pane does carry it, so the guest's
+        # not carrying it is a redaction rather than an empty render.
+        self.assertIn(f'data-reply-thread-root="{root.uuid}"', self.member_html())
+
+    def test_a_guest_sees_no_bot_reasoning_and_no_interaction(self):
+        """Both surfaces belong to the AI flow: the steps timeline exposes
+        tool names and arguments from a conversation a guest is only visiting,
+        and the interaction buttons POST to a member-only endpoint."""
+        msg = self.message(
+            offset_minutes=1,
+            author=self.host,
+            body="thinking out loud",
+            tool_data=[{"thinking": "pondering the sentinel"}],
+        )
+        MessageInteraction.objects.create(
+            message=msg,
+            kind=MessageInteraction.Kind.QUESTION,
+            payload={"options": ["Yes", "No"]},
+        )
+
+        guest = self.guest_html()
+        self.assertNotIn("pondering the sentinel", guest)
+        self.assertNotIn("answer(", guest)
+        self.assertNotIn("messageInteraction()", guest)
+
+        member = self.member_html()
+        self.assertIn("pondering the sentinel", member)
+        self.assertIn("answer(", member)
+
     def test_the_scope_attribute_is_the_slug_not_the_conversation(self):
         self.message(offset_minutes=1, author=self.host, body="hi")
         html = self.guest_html()
@@ -617,3 +671,21 @@ class GuestMessageListViewTests(MeetingMessageListFixture):
     def test_a_malformed_cursor_is_ignored(self):
         self.message(offset_minutes=1, author=self.host, body="visible")
         self.assertIn("visible", self.guest_html("?before=not-a-uuid"))
+
+
+class AnonymousMeetingViewThrottleTests(MeetingMessageListFixture):
+    """The two public pages are plain Django views, so no DRF machinery runs
+    a throttle for them; the decorator does, out of the very bucket the guest
+    JSON endpoints already share."""
+
+    def test_the_meeting_page_and_its_message_list_share_one_per_ip_budget(self):
+        limit = MeetingPublicIpThrottle().num_requests
+        page = f"/meet/{self.meeting.slug}"
+
+        for attempt in range(limit):
+            self.assertEqual(self.client.get(page).status_code, 200, attempt)
+        self.assertEqual(self.client.get(page).status_code, 429)
+
+        # Same scope, same identity: the list is spent by the page's traffic.
+        spent = self.client.get(self.guest_url, HTTP_X_MEETING_TOKEN=self.token)
+        self.assertEqual(spent.status_code, 429)

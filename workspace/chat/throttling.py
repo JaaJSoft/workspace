@@ -8,8 +8,18 @@ trusts the whole ``X-Forwarded-For`` header when ``NUM_PROXIES`` is unset
 (the default), letting a caller mint a fresh identity per request and defeat
 the limit. ``workspace.common.request_ip.client_ip`` does not have that gap,
 so all three throttles below use it instead.
+
+The public *pages* under /meet are plain Django views, which no DRF
+machinery ever runs a throttle for; ``meeting_public_ip_limited`` at the
+bottom of this file applies the first throttle below to them, so the rate,
+the scope and the identity resolution have one definition for the whole
+anonymous surface rather than two that can drift.
 """
 
+from functools import wraps
+
+from django.http import HttpResponse
+from rest_framework.request import Request
 from rest_framework.throttling import SimpleRateThrottle
 
 from workspace.common.request_ip import client_ip
@@ -67,3 +77,27 @@ class MeetingGuestSignalThrottle(MeetingPublicIpThrottle):
     """
 
     scope = "chat.meeting.guest.signal.ip"
+
+
+def meeting_public_ip_limited(view_func):
+    """Run ``MeetingPublicIpThrottle`` in front of a plain Django view.
+
+    Deliberately the same scope as the JSON endpoints rather than one of its
+    own: a guest loads the page and its message list from the same address
+    that then knocks, joins and posts, so "30 anonymous requests a minute
+    from here" is one budget, not several that each look small.
+
+    The request is wrapped in a DRF ``Request`` so the throttle sees exactly
+    the object it sees on the API path. 429 answers as plain text: the caller
+    is either a script or a browser that has already been served the page.
+    """
+
+    @wraps(view_func)
+    def _limited(request, *args, **kwargs):
+        if not MeetingPublicIpThrottle().allow_request(Request(request), None):
+            return HttpResponse(
+                "Too many requests", status=429, content_type="text/plain"
+            )
+        return view_func(request, *args, **kwargs)
+
+    return _limited

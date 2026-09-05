@@ -41,16 +41,42 @@ def message_queryset():
 
 
 def hide_quotes_below_floor(messages, floor):
-    """Drop the reply target of any message answering a pre-floor message.
+    """Redact whatever a reply quote reaches below the guest's floor.
 
-    The HTML half of what ``GuestMessageSerializer`` does to ``reply_to``: the
-    listing is floored at the guest's occurrence, but an in-window reply can
-    legitimately answer a message from before that occurrence opened, and the
-    quote would hand the guest its author and body. Detaching the relation in
-    memory is what the message-group template reads as "no quote"; these rows
-    are never saved.
+    The HTML half of what ``GuestMessageSerializer`` does to ``reply_to`` and
+    ``thread_root``, and it has to redact both for the same reason the
+    serializer does. The listing is floored at the guest's occurrence, but an
+    in-window reply can legitimately answer a message from before that
+    occurrence opened, and the quote would hand the guest its author and
+    body. A surviving quote is worse than it looks: its target may itself sit
+    in a thread whose root is pre-floor, and the root rides along on the
+    quote as ``data-reply-thread-root`` - a uuid the guest could then name as
+    ``reply_to_uuid`` on a POST, which is a pull primitive around the floor.
+
+    Detaching the relations in memory is what the message-group template
+    reads as "no quote" and "no root"; these rows are never saved.
     """
+    surviving_quotes = []
     for message in messages:
         target = message.reply_to if message.reply_to_id else None
-        if target is not None and target.created_at < floor:
+        if target is None:
+            continue
+        if target.created_at < floor:
             message.reply_to = None
+        else:
+            surviving_quotes.append(target)
+
+    # One query for the whole page, and only when a surviving quote points
+    # into a thread: reply_to__thread_root is not select_related, so reading
+    # each root through the relation would cost a query per quote.
+    root_ids = {q.thread_root_id for q in surviving_quotes if q.thread_root_id}
+    if not root_ids:
+        return
+    buried = set(
+        Message.objects.filter(uuid__in=root_ids, created_at__lt=floor).values_list(
+            "uuid", flat=True
+        )
+    )
+    for quote in surviving_quotes:
+        if quote.thread_root_id in buried:
+            quote.thread_root = None

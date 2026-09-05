@@ -729,26 +729,48 @@ class GuestSurfaceSourceTests(SimpleTestCase):
     # token in a header.
     ANONYMOUS_UI_VIEWS = {"meet_view", "meet_messages_view"}
 
-    def test_the_anonymous_ui_views_are_exactly_the_known_set(self):
-        """A second public page is a decision, not a forgotten decorator."""
-        module = _parse_module(UI_VIEWS)
-        found = set()
-        for node in module.body:
-            # A view is what Django calls with a request; the module's other
-            # top-level functions are helpers that take a user or a message.
+    def _ui_view_decorators(self):
+        """{view name: decorator names} for every view in chat/ui/views.py.
+
+        A view is what Django calls with a request; the module's other
+        top-level functions are helpers that take a user or a message.
+        """
+        decorators = {}
+        for node in _parse_module(UI_VIEWS).body:
             if not isinstance(node, ast.FunctionDef) or not node.args.args:
                 continue
             if node.args.args[0].arg != "request":
                 continue
-            names = {
+            decorators[node.name] = {
                 decorator.id
                 for decorator in node.decorator_list
                 if isinstance(decorator, ast.Name)
             }
-            if "login_required" not in names:
-                found.add(node.name)
+        return decorators
+
+    def test_the_anonymous_ui_views_are_exactly_the_known_set(self):
+        """A second public page is a decision, not a forgotten decorator."""
+        found = {
+            name
+            for name, decorators in self._ui_view_decorators().items()
+            if "login_required" not in decorators
+        }
 
         self.assertEqual(found, self.ANONYMOUS_UI_VIEWS)
+
+    def test_every_anonymous_ui_view_is_rate_limited(self):
+        """The DRF endpoints beside these pages carry MeetingPublicIpThrottle;
+        a plain Django view has no throttle machinery in front of it and gets
+        one only from this decorator. Enumerated off the source so a third
+        public page cannot ship unthrottled."""
+        unlimited = {
+            name
+            for name, decorators in self._ui_view_decorators().items()
+            if "login_required" not in decorators
+            and "meeting_public_ip_limited" not in decorators
+        }
+
+        self.assertEqual(unlimited, set())
 
     def test_no_service_imports_a_view(self):
         """Services stay callable from a view, a task or a command alike; a

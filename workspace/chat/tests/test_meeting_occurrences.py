@@ -114,6 +114,25 @@ class OccurrenceTests(TestCase):
         )
         self.assertIsNone(current_occurrence(m, now=now))
 
+    def test_unparseable_rule_is_treated_as_a_one_off(self):
+        # apply_rule stores rule text verbatim and derives is_recurring from
+        # whether it parses, so garbage leaves a non-empty rule on an event
+        # the calendar expands as a one-off. Testing the rule text for
+        # emptiness instead of reading is_recurring would send this event
+        # down the series walk, which yields nothing for a rule that does not
+        # parse - and the meeting would never open at all.
+        now = timezone.now()
+        m = self._meeting(
+            start=now - timedelta(minutes=5),
+            end=now + timedelta(minutes=25),
+            recurrence_rule="RRULE:FREQ=NONSENSE;INTERVAL=banana",
+        )
+        self.assertNotEqual(m.event.recurrence_rule, "")
+        self.assertFalse(m.event.is_recurring)
+        occ = current_occurrence(m, now=now)
+        self.assertIsNotNone(occ)
+        self.assertEqual(occ[0], m.event.start.replace(microsecond=0))
+
     def test_cancelled_occurrence_is_not_reachable(self):
         now = timezone.now()
         m = self._meeting(

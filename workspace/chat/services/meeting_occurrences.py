@@ -96,7 +96,10 @@ def current_occurrence(meeting, now=None):
     event = meeting.event
     duration = _duration(event)
 
-    if not event.recurrence_rule:
+    # is_recurring, not the rule text: apply_rule stores unparseable text
+    # verbatim but derives is_recurring False, and the calendar expands such
+    # an event as a one-off. Reading the same column keeps the two agreed.
+    if not event.is_recurring:
         start = event.start.replace(microsecond=0)
         end = start + duration
         opens_at, closes_at = _window(start, end)

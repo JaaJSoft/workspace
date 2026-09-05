@@ -48,64 +48,67 @@
       <template x-if="phase === 'name'">
         <div class="flex-1 flex items-center justify-center p-4">
           <form
-            class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-4"
+            class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden"
             @submit.prevent="knock()"
           >
-            <h1
-              class="text-xl font-bold"
-              x-text="summary ? summary.title : 'Meeting'"
-            ></h1>
-            <p
-              class="text-sm text-base-content/70"
-              x-show="summary"
-              x-text="summaryLine()"
-            ></p>
-            <template x-if="summary && summary.locked">
-              <inline-alert type="warning" message="This meeting is locked. The host is not admitting new participants."></inline-alert>
-            </template>
-            <template x-if="isFull()">
-              <inline-alert type="warning" message="This meeting is full."></inline-alert>
-            </template>
-            <div class="form-control w-full">
-              <label class="label py-1" for="meet-display-name">
-                <span class="label-text">Your name</span>
-              </label>
-              <input
-                id="meet-display-name"
-                class="input input-bordered w-full"
-                x-model="displayName"
-                maxlength="80"
-                required
-                autofocus
-              />
+            {% include "chat/ui/partials/meet_card_header.html" with icon="video" title_expr="summary && summary.title ? summary.title : 'Meeting'" subtitle_expr="summaryLine()" %}
+            <div class="p-6 flex flex-col gap-4">
+              <template x-if="summary && summary.locked">
+                <inline-alert type="warning" message="This meeting is locked. The host is not admitting new participants."></inline-alert>
+              </template>
+              <template x-if="isFull()">
+                <inline-alert type="warning" message="This meeting is full."></inline-alert>
+              </template>
+              <div class="form-control w-full">
+                <label class="label py-1 px-0" for="meet-display-name">
+                  <span class="label-text">Your name</span>
+                </label>
+                <input
+                  id="meet-display-name"
+                  class="input input-bordered w-full"
+                  x-model="displayName"
+                  maxlength="80"
+                  required
+                  autofocus
+                />
+              </div>
+              <template x-if="error">
+                <inline-alert type="error">
+                <span x-text="error"></span>
+                </inline-alert>
+              </template>
+              <div class="card-actions justify-end">
+                <button
+                  class="btn btn-primary w-full sm:w-auto"
+                  :disabled="knocking || (summary && summary.locked)"
+                >
+                  Ask to join
+                </button>
+              </div>
             </div>
-            <template x-if="error">
-              <inline-alert type="error">
-              <span x-text="error"></span>
-              </inline-alert>
-            </template>
-            <button
-              class="btn btn-primary"
-              :disabled="knocking || (summary && summary.locked)"
-            >
-              Ask to join
-            </button>
           </form>
         </div>
       </template>
 
       <template x-if="phase === 'lobby'">
         <div class="flex-1 flex items-center justify-center p-4">
-          <div
-            class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-3 items-center text-center"
-          >
-            <span class="loading loading-dots loading-lg text-primary"></span>
-            <h1 class="text-lg font-semibold">Waiting for the host</h1>
-            <p class="text-sm text-base-content/70">
-              You will join as <strong x-text="displayName"></strong> once a host lets you in.
-            </p>
-            <p class="text-xs text-base-content/50" x-show="isFull()">The meeting is currently full.</p>
-            <button class="btn btn-ghost btn-sm" @click="leaveLobby()">Cancel</button>
+          <div class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden">
+            {% include "chat/ui/partials/meet_card_header.html" with icon="hourglass" title_expr="summary && summary.title ? summary.title : 'Meeting'" subtitle_expr="summaryLine()" %}
+            <div class="p-6 flex flex-col gap-3">
+              <div class="flex items-center gap-3">
+                <span class="loading loading-dots loading-sm text-primary"></span>
+                <h2 class="font-semibold">Waiting for the host</h2>
+              </div>
+              <p class="text-sm text-base-content/70">
+                You will join as <strong x-text="displayName"></strong> once a host lets you in.
+              </p>
+              <div x-show="isFull()">
+                <span class="badge badge-ghost">The meeting is currently full</span>
+              </div>
+              <div class="card-actions justify-end">
+                <button class="btn btn-ghost btn-sm" @click="leaveLobby()">Cancel</button>
+              </div>
+            </div>
           </div>
         </div>
       </template>
@@ -119,46 +122,48 @@
           </template>
           <template x-if="!inCall">
             <section class="flex-1 flex items-center justify-center p-4 bg-base-200">
-              <div
-                class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-3 items-center text-center"
-              >
-                <span
-                  class="loading loading-dots loading-lg text-primary"
-                  x-show="!joinError"
-                ></span>
-                <i data-lucide="phone-off" class="w-8 h-8 opacity-60" x-show="joinError"></i>
-                <h1 class="text-lg font-semibold">Waiting for the host to start the call</h1>
-                <p
-                  class="text-sm text-base-content/70"
-                  x-show="joinError"
-                  x-text="joinError"
-                ></p>
-                <p
-                  class="text-xs text-base-content/50"
-                  x-show="waitingCapacityLine()"
-                  x-text="waitingCapacityLine()"
-                ></p>
-                <button
-                  class="btn btn-sm btn-primary"
-                  x-show="joinError"
-                  @click="joinWhenCallStarts()"
-                >
-                  Try again
-                </button>
-                <p class="text-xs text-base-content/50">You can keep chatting while you wait.</p>
-                {# On a phone the stage carries the chat toggle, and there is no stage until the call starts. #}
-                <button class="btn btn-sm md:hidden" @click="toggleChat()">
-                  <i data-lucide="message-square" class="w-4 h-4"></i>
-                  Open the chat
-                  <span
-                    class="badge badge-xs badge-error"
-                    x-show="unreadMessages"
-                    x-text="unreadMessages"
-                    x-cloak
-                  ></span>
-                </button>
-                {# The stage's red button is the only other way out, and it is not rendered here. #}
-                <button class="btn btn-ghost btn-sm" @click="leaveRoom()">Leave the meeting</button>
+              <div class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden">
+                {% include "chat/ui/partials/meet_card_header.html" with icon="phone" title_expr="summary && summary.title ? summary.title : 'Meeting'" subtitle_expr="summaryLine()" %}
+                <div class="p-6 flex flex-col gap-3">
+                  <div class="flex items-center gap-3">
+                    <span
+                      class="loading loading-dots loading-sm text-primary"
+                      x-show="!joinError"
+                    ></span>
+                    <h2 class="font-semibold">Waiting for the host to start the call</h2>
+                  </div>
+                  <p
+                    class="text-sm text-base-content/70"
+                    x-show="joinError"
+                    x-text="joinError"
+                  ></p>
+                  <p class="text-sm text-base-content/70">You can keep chatting while you wait.</p>
+                  <div x-show="waitingCapacityLine()">
+                    <span class="badge badge-ghost" x-text="waitingCapacityLine()"></span>
+                  </div>
+                  <div class="card-actions justify-end">
+                    {# On a phone the stage carries the chat toggle, and there is no stage until the call starts. #}
+                    <button class="btn btn-sm md:hidden" @click="toggleChat()">
+                      <i data-lucide="message-square" class="w-4 h-4"></i>
+                      Open the chat
+                      <span
+                        class="badge badge-xs badge-error"
+                        x-show="unreadMessages"
+                        x-text="unreadMessages"
+                        x-cloak
+                      ></span>
+                    </button>
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      x-show="joinError"
+                      @click="joinWhenCallStarts()"
+                    >
+                      Try again
+                    </button>
+                    {# The stage's red button is the only other way out, and it is not rendered here. #}
+                    <button class="btn btn-ghost btn-sm" @click="leaveRoom()">Leave the meeting</button>
+                  </div>
+                </div>
               </div>
             </section>
           </template>
@@ -240,13 +245,15 @@
 
       <template x-if="phase === 'over'">
         <div class="flex-1 flex items-center justify-center p-4">
-          <div
-            class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-3 items-center text-center"
-          >
-            <i data-lucide="phone-off" class="w-8 h-8 opacity-60"></i>
-            <h1 class="text-lg font-semibold" x-text="overTitle()"></h1>
-            <p class="text-sm text-base-content/70" x-text="overDetail()"></p>
-            <button class="btn btn-sm" @click="reset()" x-show="canReturn()">Back</button>
+          <div class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden">
+            {% include "chat/ui/partials/meet_card_header.html" with icon_expr="overReason === 'left' ? 'check' : 'phone-off'" title_expr="summary && summary.title ? summary.title : 'Meeting'" subtitle_expr="summaryLine()" %}
+            <div class="p-6 flex flex-col gap-3">
+              <h2 class="font-semibold" x-text="overTitle()"></h2>
+              <p class="text-sm text-base-content/70" x-text="overDetail()"></p>
+              <div class="card-actions justify-end" x-show="canReturn()">
+                <button class="btn btn-ghost btn-sm" @click="reset()">Back</button>
+              </div>
+            </div>
           </div>
         </div>
       </template>

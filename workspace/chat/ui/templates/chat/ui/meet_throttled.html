@@ -9,21 +9,22 @@
       The stylesheet meet.html loads, and none of its scripts. A page served
       because the caller is already sending too much must not answer by
       pulling a dozen more files, and there is nothing here for them to do -
-      no Alpine component, no custom element, no icons.
+      no Alpine component, no custom element. The banner's icon is inline svg
+      for that reason, not a data-lucide placeholder waiting on a runtime.
     {% endcomment %}
     <link href="{% static 'css/app.css' %}" rel="stylesheet" />
   </head>
   <body class="min-h-screen bg-base-200">
     <main class="min-h-screen flex items-center justify-center p-4">
-      <div
-        class="card bg-base-100 shadow-lg w-full max-w-md p-6 gap-2 text-center"
-      >
-        <h1 class="text-xl font-bold">Too many requests</h1>
-        {% if retry_after %}
-          <p class="text-sm text-base-content/70">Try again in {{ retry_after }} second{{ retry_after|pluralize }}.</p>
-        {% else %}
-          <p class="text-sm text-base-content/70">Try again in a moment.</p>
-        {% endif %}
+      <div class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden">
+        {% include "chat/ui/partials/meet_card_header.html" with inline_icon="hourglass" title="Too many requests" subtitle="You are loading this page too often." %}
+        <div class="p-6">
+          {% if retry_after %}
+            <p class="text-sm text-base-content/70">Try again in {{ retry_after }} second{{ retry_after|pluralize }}.</p>
+          {% else %}
+            <p class="text-sm text-base-content/70">Try again in a moment.</p>
+          {% endif %}
+        </div>
       </div>
     </main>
   </body>

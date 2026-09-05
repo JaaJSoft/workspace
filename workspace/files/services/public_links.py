@@ -10,6 +10,8 @@ import logging
 import posixpath
 import re
 
+from django.db.models import Q
+
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import File
@@ -28,25 +30,40 @@ _RENAME_SUFFIX_HEADROOM = len(" (Copy 9999)")
 MAX_UPLOAD_NAME_LENGTH = MAX_NAME_LENGTH - _RENAME_SUFFIX_HEADROOM
 
 
+def scope_q(root):
+    """Rows sharing *root*'s name namespace, as ``_names.sibling_nodes`` defines it.
+
+    A group folder's children each carry their creator as ``owner``, so scoping
+    a group root by owner would hide every file a second member added. Outside a
+    group, the namespace is one user's personal tree.
+
+    Both the resolver and the listing filter on this, so what a visitor can see
+    and what they can open cannot drift apart.
+    """
+    if root.group_id:
+        return Q(group_id=root.group_id)
+    return Q(owner_id=root.owner_id, group__isnull=True)
+
+
 def resolve_within(link, node_uuid):
     """The live node *node_uuid* names, if it is *link*'s root or below it.
 
     ``None`` for anything else, so every caller answers 404 and no response
     distinguishes "outside your subtree" from "does not exist".
 
-    The owner and group are compared before the path prefix because ``path``
-    is not globally unique: two users can both own ``Shared/report.pdf``, and
-    a bare prefix test would hand a visitor the wrong one.
+    The namespace is narrowed before the path prefix because ``path`` is not
+    globally unique: two users can both own ``Shared/report.pdf``, and a bare
+    prefix test would hand a visitor the wrong one.
     """
     root = link.file
     parsed = parse_uuid_or_none(node_uuid)
     if parsed is None:
         return None
 
-    node = File.objects.filter(uuid=parsed, deleted_at__isnull=True).first()
+    node = File.objects.filter(
+        scope_q(root), uuid=parsed, deleted_at__isnull=True
+    ).first()
     if node is None:
-        return None
-    if node.owner_id != root.owner_id or node.group_id != root.group_id:
         return None
     if node.pk == root.pk:
         return node

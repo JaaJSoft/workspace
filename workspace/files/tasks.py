@@ -6,7 +6,7 @@ from datetime import timedelta
 from celery import shared_task
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.utils import timezone
 
 from workspace.common.logging import scrub
@@ -418,3 +418,16 @@ def notify_share_link_uploads(link_uuid):
 
     # Last, so the next upload starts a fresh window.
     cache.delete(upload_notification_cache_key(link_uuid))
+
+    # An upload that landed while this task ran advanced upload_count after the
+    # read above, and the update wrote back the value we read, so its delta
+    # survives. It is only reported if another upload follows and wins a fresh
+    # election - so if it was the last of the burst, elect the follow-up here.
+    from workspace.files.services.public_links import schedule_upload_notification
+
+    if (
+        FileShareLink.objects.filter(pk=link.pk)
+        .exclude(notified_upload_count=F("upload_count"))
+        .exists()
+    ):
+        schedule_upload_notification(link)

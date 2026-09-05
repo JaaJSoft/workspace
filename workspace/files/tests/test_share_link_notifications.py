@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db.models import F
 from django.test import TestCase
 
 from workspace.files.models import File, FileShareLink
@@ -99,6 +100,34 @@ class UploadNotificationTests(TestCase):
             ):
                 notify_share_link_uploads(str(self.link.uuid))
         scheduled.assert_not_called()
+
+    def test_an_upload_during_the_task_still_gets_reported(self):
+        """The last upload of a burst can land inside the task's own window.
+
+        Its delta survives, because the task writes back the count it read - but
+        nothing would elect a follow-up unless another upload arrives, so the
+        task elects one itself.
+        """
+        FileShareLink.objects.filter(pk=self.link.pk).update(upload_count=2)
+
+        def land_an_upload(*args, **kwargs):
+            FileShareLink.objects.filter(pk=self.link.pk).update(
+                upload_count=F("upload_count") + 1
+            )
+
+        with patch(
+            "workspace.notifications.services.notifications.notify",
+            side_effect=land_an_upload,
+        ):
+            with patch(
+                "workspace.files.tasks.notify_share_link_uploads.apply_async"
+            ) as scheduled:
+                notify_share_link_uploads(str(self.link.uuid))
+
+        self.link.refresh_from_db()
+        self.assertEqual(self.link.notified_upload_count, 2)
+        self.assertEqual(self.link.upload_count, 3)
+        scheduled.assert_called_once()
 
     def test_a_broker_failure_does_not_break_the_caller(self):
         """The bytes are stored already: a lost notification beats a lost file."""

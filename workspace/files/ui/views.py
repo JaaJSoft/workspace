@@ -13,7 +13,7 @@ from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_viewer_by_slug
-from workspace.files.services.public_links import resolve_within
+from workspace.files.services.public_links import resolve_within, scope_q
 from workspace.files.services.quota import usage_percent
 from workspace.files.services.scanning.policy import with_scan
 from workspace.files.services.storage_analysis import (
@@ -966,10 +966,12 @@ def _shared_folder_listing_context(link, current, request, access_token):
     the same parameter the page itself reads.
     """
     token = link.token
+    # Same namespace predicate resolve_within uses, so a row can never be listed
+    # and then 404 when the visitor clicks it.
     children = list(
-        File.objects.filter(parent=current, deleted_at__isnull=True).name_ordered(
-            "-node_type"
-        )[: SHARED_FOLDER_PAGE_SIZE + 1]
+        File.objects.filter(
+            scope_q(link.file), parent=current, deleted_at__isnull=True
+        ).name_ordered("-node_type")[: SHARED_FOLDER_PAGE_SIZE + 1]
     )
     has_more = len(children) > SHARED_FOLDER_PAGE_SIZE
     children = children[:SHARED_FOLDER_PAGE_SIZE]

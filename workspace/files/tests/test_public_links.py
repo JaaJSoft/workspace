@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group
 from django.test import TestCase
 
 from workspace.files.models import File, FileShareLink
@@ -97,6 +98,46 @@ class ResolveWithinTests(TestCase):
         )
         self.assertTrue(group_file.path.startswith(f"{self.root.path}/"))
         self.assertIsNone(resolve_within(self.link, str(group_file.uuid)))
+
+
+class ScopeTests(TestCase):
+    """A group folder's children carry their creator as owner, not the root's."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(
+            username="scope_alice", email="a@example.com", password="pass123"
+        )
+        self.bob = User.objects.create_user(
+            username="scope_bob", email="b@example.com", password="pass123"
+        )
+        self.team = Group.objects.create(name="scope_team")
+
+    def test_a_group_member_s_file_resolves_inside_a_group_folder(self):
+        root = File.objects.create(
+            owner=self.alice,
+            name="Team",
+            node_type=File.NodeType.FOLDER,
+            group=self.team,
+        )
+        theirs = File.objects.create(
+            owner=self.bob,
+            name="notes.txt",
+            node_type=File.NodeType.FILE,
+            parent=root,
+            group=self.team,
+        )
+        link = FileShareLink.objects.create(file=root, created_by=self.alice)
+        self.assertEqual(resolve_within(link, str(theirs.uuid)), theirs)
+
+    def test_a_personal_root_still_rejects_another_owner_s_child(self):
+        root = File.objects.create(
+            owner=self.alice, name="Mine", node_type=File.NodeType.FOLDER
+        )
+        theirs = File.objects.create(
+            owner=self.bob, name="odd.txt", node_type=File.NodeType.FILE, parent=root
+        )
+        link = FileShareLink.objects.create(file=root, created_by=self.alice)
+        self.assertIsNone(resolve_within(link, str(theirs.uuid)))
 
 
 class SanitizeUploadNameTests(TestCase):

@@ -30,7 +30,11 @@ STATIC_TAG = re.compile(r"""{%\s*static\s+["']([^"']+)["']\s*%}""")
 EMOJI_PICKER_TAG = re.compile(r"<emoji-picker\b[^>]*>", re.DOTALL)
 
 # The two pages that do not extend base.html and so cannot inherit its assets.
-STANDALONE_PAGES = ("files/ui/shared_file.html", "calendar/ui/polls/shared.html")
+# The public file share page (shared_page.html) extends shared_base.html,
+# which is where the head (and therefore the vendored asset tags) actually
+# lives - list the base, not the child, or this check would need to follow
+# {% extends %} itself.
+STANDALONE_PAGES = ("files/ui/shared_base.html", "calendar/ui/polls/shared.html")
 
 
 def _authored_sources():

@@ -1,0 +1,27 @@
+{% comment %}
+  Truncated name plus the shield-alert quarantine badge, shared by the
+  file/folder grid card and the public listing row and card.
+
+  Required context:
+    - name: str - node display name
+    - is_quarantined: bool
+
+  Optional context:
+    - name_size_class_expr: str - raw Alpine `:class` expression for the
+      name's text size (e.g. the mosaic tile's dynamic tile-size binding).
+      Omit for a fixed `text-sm`.
+{% endcomment %}
+<div class="flex items-center gap-1 min-w-0">
+  <span
+    class="font-medium truncate min-w-0{% if not name_size_class_expr %} text-sm{% endif %}"
+    {% if name_size_class_expr %}:class="{{ name_size_class_expr }}"{% endif %}
+    title="{{ name }}"
+  >{{ name }}</span>
+  {% if is_quarantined %}
+    <i
+      data-lucide="shield-alert"
+      class="w-3.5 h-3.5 flex-shrink-0 text-error"
+      title="Quarantined: the malware scanner flagged this file, so it cannot be opened or downloaded."
+    ></i>
+  {% endif %}
+</div>

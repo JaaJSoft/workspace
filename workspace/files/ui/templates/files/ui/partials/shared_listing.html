@@ -1,0 +1,85 @@
+{% comment %}
+  The folder-listing box inside the shared page's swappable content region.
+
+  Required context:
+    - entries: list of dicts - uuid, name, is_folder, icon, icon_color,
+      size (None for a folder), modified (datetime), is_quarantined, url,
+      download_url (None for a folder), thumbnail_url (None without one,
+      used by the grid only).
+      No path is ever included here - see _shared_folder_listing_context.
+    - has_more: bool
+    - view_mode: "list" or "grid" - the toggle that flips it lives in the
+      page's breadcrumb bar, not here
+{% endcomment %}
+<div id="shared-listing" class="bg-base-200 min-h-48">
+  {% if not entries %}
+    <div class="p-12 text-center text-base-content/50">This folder is empty.</div>
+  {% elif view_mode == 'grid' %}
+    <div
+      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-6"
+    >
+      {% for entry in entries %}
+        <a
+          href="{{ entry.url }}"
+          x-target.push="shared-content"
+          class="bg-base-100 border rounded-lg hover:border-primary hover:shadow-lg transition-all flex flex-col overflow-hidden {% if entry.is_quarantined %}border-error/40 bg-error/10{% else %}border-base-300{% endif %}"
+        >
+          {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color %}
+          <div class="p-3 min-w-0 border-t border-base-300 flex-1">
+            {% include "files/ui/partials/node_name.html" with name=entry.name is_quarantined=entry.is_quarantined %}
+            <p class="text-xs text-base-content/60 mt-0.5">
+              {% if entry.is_folder %}
+                Folder
+              {% else %}
+                {{ entry.size|filesizeformat }}
+              {% endif %}
+            </p>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <ul class="divide-y divide-base-300">
+      {% for entry in entries %}
+        <li
+          class="flex items-center gap-3 px-6 py-3 hover:bg-base-100 transition-colors{% if entry.is_quarantined %} bg-error/10{% endif %}"
+        >
+          <i
+            data-lucide="{{ entry.icon }}"
+            class="w-5 h-5 flex-shrink-0 {{ entry.icon_color }}"
+          ></i>
+
+          <a
+            href="{{ entry.url }}"
+            x-target.push="shared-content"
+            class="flex-1 min-w-0 text-left cursor-pointer"
+          >
+            {% include "files/ui/partials/node_name.html" with name=entry.name is_quarantined=entry.is_quarantined %}
+            <span class="block text-xs text-base-content/50 mt-0.5">
+              {% if not entry.is_folder %}{{ entry.size|filesizeformat }} ·{% endif %}
+              {{ entry.modified|date:"M j, Y" }}
+            </span>
+          </a>
+
+          {% if entry.download_url %}
+            <a
+              href="{{ entry.download_url }}"
+              class="btn btn-ghost btn-sm btn-square"
+              title="Download"
+            >
+              <i data-lucide="download" class="w-4 h-4"></i>
+            </a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if has_more %}
+    <div
+      class="px-6 py-3 text-sm text-base-content/50 text-center border-t border-base-300"
+    >
+      Only the first {{ entries|length }} entries are shown.
+    </div>
+  {% endif %}
+</div>

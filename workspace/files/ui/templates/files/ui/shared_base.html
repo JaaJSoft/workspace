@@ -4,10 +4,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{% if file %}{{ file.name }} — {% endif %}Shared File — Workspace</title>
+    <title>{% block title %}Shared - Workspace{% endblock %}</title>
     <link href="{% static 'css/app.css' %}" rel="stylesheet" />
+    {% comment %}
+      The Milkdown Crepe theme, loaded for every visitor rather than only for a
+      markdown target. Navigating from the listing onto a file swaps the
+      content fragment, which never re-renders this head, so a stylesheet the
+      viewer needs has to be here before the visitor picks the file. Without
+      it Crepe still mounts, but its toolbar, link tooltip, slash menu and
+      block handle lose their positioning rules and drop into the page as a
+      column of stray edit controls under the text.
+    {% endcomment %}
+    <link
+      href="{% static 'files/ui/css/vendor/milkdown/theme.css' %}"
+      rel="stylesheet"
+    />
+    <link
+      href="{% static 'files/ui/css/milkdown-overrides.css' %}"
+      rel="stylesheet"
+    />
     <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
     <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
+    <script src="{% static 'ui/js/lucide.js' %}"></script>
+    {% comment %}
+      This page does not extend base.html, so nothing base.html loads globally
+      is present. Anything a child page needs, including <inline-alert>, is
+      loaded by that page.
+    {% endcomment %}
+    {% block head_extra %}{% endblock %}
   </head>
   <body class="min-h-screen bg-base-200 flex flex-col">
     <div class="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-6">
@@ -26,7 +50,8 @@
         <!-- Password form -->
         <div
           class="card bg-base-100 shadow-xl max-w-sm mx-auto mt-8"
-          x-data="sharedFilePassword('{{ share_token }}')"
+          data-share-token="{{ share_token }}"
+          x-data="sharedFilePassword($el.dataset.shareToken)"
         >
           <div class="card-body items-center text-center pt-10 pb-8 px-8">
             <!-- Lock icon -->
@@ -36,8 +61,8 @@
               <i data-lucide="lock" class="w-7 h-7 text-white"></i>
             </div>
 
-            <h2 class="text-lg font-bold">Protected file</h2>
-            <p class="text-sm text-base-content/50 mb-5">Enter the password to access this file</p>
+            <h2 class="text-lg font-bold">Protected link</h2>
+            <p class="text-sm text-base-content/50 mb-5">Enter the password to continue</p>
 
             <!-- Input with integrated button -->
             <div class="w-full relative">
@@ -101,61 +126,7 @@
         </script>
 
       {% else %}
-        <!-- File viewer -->
-        <div class="card bg-base-100 shadow-lg overflow-hidden">
-          <!-- Header -->
-          <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
-            <div class="flex items-center gap-3">
-              <div
-                class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm"
-              >
-                <i data-lucide="file" class="w-5 h-5 text-white"></i>
-              </div>
-              <div class="flex-1 min-w-0">
-                <h1 class="text-xl font-bold text-white truncate">{{ file.name }}</h1>
-                <p class="text-white/70 text-sm">{{ file.type|default:"unknown" }} - {{ file.size|filesizeformat }}</p>
-              </div>
-              {% if download_url %}
-                <a
-                  href="{{ download_url }}"
-                  class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
-                >
-                  <i data-lucide="download" class="w-4 h-4"></i>
-                  Download
-                </a>
-              {% endif %}
-            </div>
-          </div>
-
-          <!-- Viewer -->
-          <div class="bg-base-200">
-            {% if quarantine_reason %}
-              <div class="p-12 text-center">
-                <i data-lucide="shield-alert" class="w-12 h-12 text-error mx-auto mb-4"></i>
-                <h2 class="text-lg font-bold mb-2">File quarantined</h2>
-                <p class="text-base-content/60">
-                  The malware scanner flagged this file, so it can be neither previewed nor
-                  downloaded.
-                </p>
-                <p class="text-base-content/40 text-sm mt-2">{{ quarantine_reason }}</p>
-              </div>
-            {% elif viewer_html %}
-              {{ viewer_html|safe }}
-            {% else %}
-              <div class="p-12 text-center">
-                <i
-                  data-lucide="eye-off"
-                  class="w-12 h-12 text-base-content/30 mx-auto mb-4"
-                ></i>
-                <p class="text-base-content/60 mb-4">Preview not available for this file type</p>
-                <a href="{{ download_url }}" class="btn btn-primary btn-sm gap-1">
-                  <i data-lucide="download" class="w-4 h-4"></i>
-                  Download file
-                </a>
-              </div>
-            {% endif %}
-          </div>
-        </div>
+        {% block content %}{% endblock %}
       {% endif %}
 
       <!-- Footer -->
@@ -178,7 +149,12 @@
     </div>
 
     <script>
-      document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+      // initLucideIcons() draws the icons present at load; observeLucideIcons()
+      // keeps drawing them as Alpine inserts more (breadcrumbs, entry rows).
+      document.addEventListener('DOMContentLoaded', () => {
+        initLucideIcons();
+        observeLucideIcons();
+      });
     </script>
   </body>
 </html>

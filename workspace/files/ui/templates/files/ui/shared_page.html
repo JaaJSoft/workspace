@@ -1,0 +1,138 @@
+{% extends "files/ui/shared_base.html" %}
+{% load static %}
+{% block title %}{{ target.name }} - Workspace{% endblock %}
+{% block head_extra %}
+  {% comment %}
+    This page does not extend base.html, so nothing base.html loads
+    globally - including inline_alert.js - is present. Loading it
+    unconditionally here is deliberate: it is also emitted by
+    files/ui/templates/files/ui/viewers/office_viewer_unavailable.html,
+    reachable from a plain read-only link at an office document with no
+    upload involved, and an unregistered <inline-alert> renders as an
+    empty, invisible tag (attribute-only content, no fallback CSS on this
+    page) rather than an error - a silent failure a narrower gate already
+    produced once.
+  {% endcomment %}
+  <script src="{% static 'ui/js/inline_alert.js' %}"></script>
+  {% if link.allows_upload %}
+    <script src="{% static 'files/ui/js/shared_dropzone.js' %}"></script>
+  {% endif %}
+{% endblock %}
+{% block content %}
+  {% comment %}
+    A swap answered by a 200 whose body has no #shared-content (the gate
+    closed mid-session: the password token expired, or the link itself
+    expired) makes alpine-ajax silently remove the target with nothing left
+    on screen - no error, no console message. Reloading re-runs the full
+    view and renders the real gate (the expired card or the password
+    prompt) instead of a page that dead-ends. ajax:error covers the same
+    "swap could not complete" family for network-level failures.
+
+    x-data is required, not decorative: Alpine only binds @event listeners
+    on elements inside a component scope, and this wrapper is not a
+    descendant of one (the only x-data on this page is inside the password
+    branch, which never wraps this content). A bare x-data opens an empty
+    scope so the listeners below actually bind. The events are dispatched
+    on the link that triggered the swap and bubble, and that link is a
+    descendant of this wrapper, so listening here (no .window) is enough
+    and is more precise than catching every swap on the page from window.
+  {% endcomment %}
+  <div
+    x-data
+    class="space-y-4"
+    @ajax:missing="window.location.reload()"
+    @ajax:error="window.location.reload()"
+  >
+    {% partialdef shared-content inline %}
+      <div
+        id="shared-content"
+        class="card bg-base-100 shadow-lg overflow-hidden"
+      >
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm"
+            >
+              <i
+                data-lucide="{% if link.mode == 'drop' %}upload-cloud{% elif is_folder %}folder{% else %}file{% endif %}"
+                class="w-5 h-5 text-white"
+              ></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h1 class="text-xl font-bold text-white truncate">{{ target.name }}</h1>
+              <p class="text-white/70 text-sm">
+                {% if link.mode == 'drop' %}
+                  Send files to {{ link.created_by.get_full_name|default:link.created_by.username }}
+                {% elif is_folder %}
+                  Shared folder from {{ link.created_by.get_full_name|default:link.created_by.username }}
+                {% else %}
+                  {{ target.type|default:"unknown" }} - {{ target.size|filesizeformat }}
+                  - shared by {{ link.created_by.get_full_name|default:link.created_by.username }}
+                {% endif %}
+              </p>
+            </div>
+            {% if download_url %}
+              <a
+                href="{{ download_url }}"
+                class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
+              >
+                <i data-lucide="download" class="w-4 h-4"></i>
+                Download
+              </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if breadcrumbs %}
+          <div
+            class="flex items-center gap-3 px-6 py-2 border-b border-base-300 bg-base-100"
+          >
+            <div class="flex-1 min-w-0 overflow-x-auto">
+              {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="shared-content" x_target_history="push" %}
+            </div>
+            {% if show_listing and entries %}
+              <div class="flex flex-shrink-0 gap-1">
+                <a
+                  href="{{ list_view_url }}"
+                  x-target.push="shared-content"
+                  class="btn btn-ghost btn-sm btn-square {% if view_mode != 'grid' %}bg-primary/10 text-primary{% endif %}"
+                  title="List view"
+                  aria-label="List view"
+                >
+                  <i data-lucide="list" class="w-4 h-4"></i>
+                </a>
+                <a
+                  href="{{ grid_view_url }}"
+                  x-target.push="shared-content"
+                  class="btn btn-ghost btn-sm btn-square {% if view_mode == 'grid' %}bg-primary/10 text-primary{% endif %}"
+                  title="Grid view"
+                  aria-label="Grid view"
+                >
+                  <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+                </a>
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if show_listing %}
+          {% include "files/ui/partials/shared_listing.html" %}
+        {% elif show_viewer %}
+          {% include "files/ui/partials/shared_viewer.html" %}
+        {% endif %}
+      </div>
+    {% endpartialdef %}
+
+    {% if show_dropzone %}
+      {% comment %}
+        Deliberately outside the shared-content partial: the dropzone always
+        uploads into the link's own root, never the folder currently being
+        browsed, so it must survive navigation instead of being torn down and
+        rebuilt (which would also drop its in-flight upload queue) every time
+        a visitor clicks into a subfolder.
+      {% endcomment %}
+      {% include "files/ui/partials/shared_dropzone.html" %}
+    {% endif %}
+  </div>
+{% endblock %}

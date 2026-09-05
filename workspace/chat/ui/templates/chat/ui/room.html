@@ -25,6 +25,7 @@ be defined before the parser reaches the markup using it, or server-rendered
     class="h-screen flex flex-col"
     x-data="chatRoomApp({{ current_user_id }}, '{{ conversation_uuid }}')"
     @ajax:missing="_onAjaxMissing($event)"
+    @ajax:error="onMessagesAjaxError($event)"
     @chat-message.window="handleSSEMessage($event.detail)"
     @ai-stream-bot_step.window="handleSSEBotStep($event.detail)"
     @ai-stream-bot_generating.window="handleSSEBotGenerating($event.detail)"

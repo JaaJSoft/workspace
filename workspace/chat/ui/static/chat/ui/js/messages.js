@@ -1,6 +1,10 @@
 // Message lifecycle: load, paginate, send (with optimistic UI), edit,
 // delete, reply, reactions, mark-as-read, scroll, pin / unpin messages,
 // "edit last own message" shortcut.
+
+// What to wait before retrying a throttled list when the server did not say.
+const CHAT_MESSAGES_RETRY_FALLBACK_SECONDS = 5;
+
 window.chatMessagesMixin = function chatMessagesMixin() {
   return {
     // ── State ────────────────────────────────────────────────
@@ -11,6 +15,9 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     editingMessageUuid: null,
     replyingTo: null,
     pinnedMessages: [],
+    _refreshInFlight: null,
+    _refreshPending: false,
+    _refreshRetryTimer: null,
 
     // ── Surface hooks ────────────────────────────────────────
     // The mixin is spread into more than one component per page (the
@@ -470,11 +477,41 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (el) el.remove();
     },
 
+    // Reload the surface in place. Unlike loadMessages this never clears
+    // first: the replace merge swaps old content for new in one step, so
+    // the container cannot flash empty mid-refresh.
+    //
+    // Coalesced, because the list is re-rendered WHOLE: a refresh issued
+    // while another is in flight can only ever produce the answer the one
+    // behind it will produce. A thirty-message burst is one repaint, so it
+    // is one request out and at most one queued - not thirty fetches racing
+    // each other into the same target, which is how a busy conversation
+    // used to walk straight into the rate limiter.
     async _refreshCurrentMessages() {
-      // Reload the surface in place. Unlike loadMessages this never clears
-      // first: the replace merge swaps old content for new in one step, so
-      // the container cannot flash empty mid-refresh.
       if (!this.activeConversation || this._surfaceGone()) return;
+      if (this._refreshInFlight) {
+        this._refreshPending = true;
+        return this._refreshInFlight;
+      }
+      this._refreshInFlight = (async () => {
+        try {
+          await this._fetchMessagePartial();
+          // Drain rather than stop at one: a message arriving during the
+          // second request deserves the same repaint the first one got, and
+          // each turn of the loop is still a single request.
+          while (this._refreshPending) {
+            this._refreshPending = false;
+            await this._fetchMessagePartial();
+          }
+        } finally {
+          this._refreshInFlight = null;
+          this._refreshPending = false;
+        }
+      })();
+      return this._refreshInFlight;
+    },
+
+    async _fetchMessagePartial() {
       try {
         const render = await this.$ajax(this._messagesUrl(null), {
           targets: this._loadTargets(),
@@ -485,6 +522,49 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       } catch (e) {
         console.error('Failed to refresh messages', e);
       }
+    },
+
+    // Bound to @ajax:error on the root that hosts this surface. A non-2xx is
+    // a response like any other to alpine-ajax: it parses the body, does not
+    // find the list in it, and _onAjaxMissing then cancels the removal -
+    // nothing throws, so the catch above never runs and a throttled pane
+    // simply stops updating with no sign of it. The detail is flat
+    // ({ok, status, url, html, raw, headers}), and the event bubbles up from
+    // every $ajax the root issues, so the URL is what tells ours apart.
+    onMessagesAjaxError(event) {
+      const detail = event?.detail || {};
+      if (!this._isMessagesPartialUrl(detail.url)) return;
+      // One complaint per outage: a burst of throttled swaps must not become
+      // a column of toasts. The pending retry IS the "already reported" flag.
+      if (this._refreshRetryTimer) return;
+
+      if (detail.status === 429) {
+        const advertised = Number.parseInt(detail.headers?.get?.('Retry-After'), 10);
+        const seconds = Number.isFinite(advertised) && advertised > 0
+          ? advertised
+          : CHAT_MESSAGES_RETRY_FALLBACK_SECONDS;
+        window.AppAlert?.warning('Messages are paused for a moment.');
+        this._refreshRetryTimer = setTimeout(() => {
+          this._refreshRetryTimer = null;
+          this._refreshCurrentMessages();
+        }, seconds * 1000);
+        return;
+      }
+      window.AppAlert?.error('Could not refresh the messages.');
+    },
+
+    // The event carries an absolute URL and the surface knows a path. The
+    // cursor variant only adds a query string, so one comparison covers a
+    // full reload and a "load older" page alike - and the leading slash is
+    // what stops /chat/xc1/messages from matching /chat/c1/messages.
+    _isMessagesPartialUrl(url) {
+      // No conversation means no list of ours to have failed - and the chat
+      // page binds this on a root that outlives every conversation, so
+      // _messagesUrl would be reading uuid off null.
+      if (typeof url !== 'string' || !this.activeConversation) return false;
+      const path = this._messagesUrl(null);
+      const withoutQuery = url.split('?')[0];
+      return withoutQuery === path || withoutQuery.endsWith(path);
     },
 
     // ── Replying ───────────────────────────────────────────

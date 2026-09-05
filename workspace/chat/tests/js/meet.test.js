@@ -58,7 +58,7 @@ function mediaStub(matches) {
 // built from the pane's mixins too - the same load order meet.html uses.
 // The Alpine surface those mixins reach for ($refs, $nextTick, $ajax) is
 // stubbed here; a test that cares about a swap overrides $ajax.
-function app(fetchImpl, extra = {}) {
+function app(fetchImpl, extra = {}, tweak = null) {
   const ctx = loadScripts(
     [
       'workspace/common/static/ui/js/attachment_input.js',
@@ -71,6 +71,7 @@ function app(fetchImpl, extra = {}) {
     ],
     { ...baseStubs, sessionStorage: newStorage(), fetch: fetchImpl, ...extra },
   );
+  if (tweak) tweak(ctx);
   const instance = ctx.chatMeetApp('abc123');
   instance.$refs = {};
   instance.$nextTick = (fn) => { if (fn) fn(); };
@@ -962,4 +963,27 @@ test('the viewport listener is released when the component goes away', () => {
 
   a.destroy();
   assert.equal(media.listeners.length, 0);
+});
+
+test('a mixin with its own destroy cannot eat another mixin s teardown', () => {
+  // Alpine calls exactly ONE destroy(), and object spread hands it whichever
+  // mixin declared one last. room.js documents the hazard; this page walked
+  // into it by declaring the pane teardown inside a mixin.
+  const media = mediaStub(false);
+  const torn = [];
+  const a = app(
+    async () => ({ ok: true, status: 200, json: async () => ({}) }),
+    media.stubs,
+    (ctx) => {
+      const base = ctx.chatCallMixin;
+      ctx.chatCallMixin = () => ({ ...base(), destroy() { torn.push('call'); } });
+    },
+  );
+  a._watchPaneVisibility();
+  assert.equal(media.listeners.length, 1);
+
+  a.destroy();
+
+  assert.deepStrictEqual(torn, ['call'], 'the mixin that declares one is still torn down');
+  assert.equal(media.listeners.length, 0, 'and so is the pane visibility watcher');
 });

@@ -36,6 +36,7 @@
       class="h-screen flex flex-col"
       x-data="chatMeetApp('{{ slug }}')"
       @ajax:missing="_onAjaxMissing($event)"
+      @ajax:error="onMessagesAjaxError($event)"
       @chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
       @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
       @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"

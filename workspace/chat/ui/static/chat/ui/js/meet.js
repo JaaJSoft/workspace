@@ -194,7 +194,10 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
       query.addEventListener('change', this._onPaneVisibility);
     },
 
-    destroy() {
+    // Named, not destroy(): Alpine calls exactly one destroy() and object
+    // spread hands it to whichever mixin declared one last, so the page's
+    // teardowns are listed on the root literal instead (see below).
+    releasePaneVisibility() {
       if (this._paneVisibilityQuery && this._onPaneVisibility) {
         this._paneVisibilityQuery.removeEventListener('change', this._onPaneVisibility);
         this._paneVisibilityQuery = null;
@@ -301,16 +304,26 @@ window.chatMeetMessagesMixin = function chatMeetMessagesMixin() {
 };
 
 function chatMeetApp(slug) {
+  // Held so destroy() below can reach each mixin's own teardown by name,
+  // the way room.js does: spread copies values, so a destroy() declared in
+  // any of them would otherwise be shadowed by the next one that has one.
+  const uiHelpers = chatUiHelpersMixin();
+  const messages = chatMessagesMixin();
+  const input = chatInputMixin();
+  const call = chatCallMixin();
+  const sse = chatMeetSseMixin();
+  const meetMessages = chatMeetMessagesMixin();
+
   return {
     // The pane's own mixins, spread before the meet ones so the transport
     // seams below win. None of the four registers anything at construction
     // or exposes a getter, which is what makes spreading them safe.
-    ...chatUiHelpersMixin(),
-    ...chatMessagesMixin(),
-    ...chatInputMixin(),
-    ...chatCallMixin(),
-    ...chatMeetSseMixin(),
-    ...chatMeetMessagesMixin(),
+    ...uiHelpers,
+    ...messages,
+    ...input,
+    ...call,
+    ...sse,
+    ...meetMessages,
 
     slug,
     phase: 'name',
@@ -369,6 +382,17 @@ function chatMeetApp(slug) {
       // tab from the lobby or the waiting card is leaving just as much as one
       // who closes it from the stage.
       window.addEventListener('pagehide', () => this._leaveBeacon());
+    },
+
+    // Alpine calls exactly one destroy(), and object spread would let the
+    // last mixin that declares one win in silence. Every teardown the page
+    // owns is listed here, after the spreads, so a mixin growing its own
+    // cannot quietly drop another's.
+    destroy() {
+      this.releasePaneVisibility();
+      for (const mixin of [uiHelpers, messages, input, call, sse, meetMessages]) {
+        mixin.destroy?.call(this);
+      }
     },
 
     // -- Transport seam --------------------------------------

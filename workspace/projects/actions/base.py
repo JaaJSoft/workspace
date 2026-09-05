@@ -1,5 +1,6 @@
-from abc import ABC
 from enum import StrEnum
+
+from workspace.common.actions import BaseAction
 
 
 class ActionCategory(StrEnum):
@@ -9,7 +10,7 @@ class ActionCategory(StrEnum):
     DANGER = "danger"
 
 
-class BaseProjectAction(ABC):
+class BaseProjectAction(BaseAction):
     """Declarative action on a project or task.
 
     ``is_available`` is pure: all state (resolved role, archived flag)
@@ -19,16 +20,11 @@ class BaseProjectAction(ABC):
     ``ProjectMember.Role`` ('member' or 'admin').
     """
 
-    id: str
-    label: str
-    icon: str
     category: ActionCategory
     target_types: tuple[str, ...]  # ('task',), ('project',) or both
 
     min_role: str = "member"
     available_when_archived: bool = False
-    supports_bulk: bool = False
-    css_class: str = ""
 
     def is_available(self, user, obj, *, role, archived):
         if role is None:
@@ -38,16 +34,6 @@ class BaseProjectAction(ABC):
         if archived and not self.available_when_archived:
             return False
         return True
-
-    def serialize(self, obj):
-        return {
-            "id": self.id,
-            "label": self.label,
-            "icon": self.icon,
-            "category": self.category.value,
-            "css_class": self.css_class,
-            "bulk": self.supports_bulk,
-        }
 
 
 class NotOnPersonalProjectMixin:

@@ -64,3 +64,9 @@ class ProjectsConfig(AppConfig):
                 provider_cls=ProjectsActivityProvider,
             )
         )
+
+        # The actions register on import, project actions before task
+        # actions. Imported here rather than lazily so a broken import fails
+        # the boot instead of a worker answering "no actions" forever.
+        from workspace.projects.actions import project as project_actions  # noqa: F401
+        from workspace.projects.actions import task as task_actions  # noqa: F401

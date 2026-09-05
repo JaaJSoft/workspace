@@ -1,11 +1,11 @@
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseAction
+from .base import ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
-class DeleteAction(BaseAction):
+class DeleteAction(BaseFileAction):
     id = "delete"
     label = "Delete"
     icon = "trash-2"

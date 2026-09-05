@@ -1,9 +1,9 @@
 from . import ActionRegistry
-from .base import ActionCategory, BaseAction
+from .base import ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
-class AnalyzeStorageAction(BaseAction):
+class AnalyzeStorageAction(BaseFileAction):
     id = "analyze_storage"
     label = "Analyze storage"
     icon = "chart-pie"
@@ -17,7 +17,7 @@ class AnalyzeStorageAction(BaseAction):
 
 
 @ActionRegistry.register
-class PropertiesAction(BaseAction):
+class PropertiesAction(BaseFileAction):
     id = "properties"
     label = "Properties"
     icon = "info"

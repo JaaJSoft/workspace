@@ -8,8 +8,10 @@ because someone was careful. These tests are what makes them hold tomorrow.
 
 import ast
 import pathlib
+import re
 import unittest.mock
 
+from django.contrib.staticfiles import finders
 from django.test import SimpleTestCase
 
 from workspace.vault.tests.reference import encoding
@@ -85,9 +87,45 @@ class ReferenceIsolationTests(SimpleTestCase):
         )
 
 
+_STATIC_TAG = re.compile(r"""{%\s*static\s+['"]([^'"]+\.js)['"]\s*%}""")
+_COMMENTS = re.compile(r"/\*.*?\*/|^[ \t]*//[^\n]*", re.DOTALL | re.MULTILINE)
+
+
+def _without_comments(source: str) -> str:
+    return _COMMENTS.sub("", source)
+
+
+def _page_scripts(template: pathlib.Path) -> list[pathlib.Path]:
+    """The JavaScript files a template pulls in, resolved to their sources."""
+    found = []
+    for reference in _STATIC_TAG.findall(template.read_text(encoding="utf-8")):
+        located = finders.find(reference)
+        if located is None:
+            raise AssertionError(
+                f"{template.name} loads {reference}, which no finder resolves"
+            )
+        found.append(pathlib.Path(located))
+    return found
+
+
 class RandomnessSourceTests(SimpleTestCase):
+    # Every script the vault page loads, not just the bundled crypto: the
+    # page's own scripts draw randomness too - a password is drawn in the
+    # shared generator, which lives in `common` - and a Math.random reaching
+    # one of them would be as invisible as one reaching the other.
+    #
+    # The list is read off the template's own {% static %} tags rather than
+    # written here, so the next script added to the page is audited by being
+    # included rather than by someone remembering this file. The bundle's
+    # sources are added on top: it is the built artifact that ships, and the
+    # scan would otherwise read minified code.
     JS_SOURCES = sorted(
-        (REPO_ROOT / "scripts" / "frontend" / "src" / "vault").glob("*.js")
+        {
+            *(REPO_ROOT / "scripts" / "frontend" / "src" / "vault").glob("*.js"),
+            *_page_scripts(
+                WORKSPACE / "vault" / "ui" / "templates" / "vault" / "ui" / "index.html"
+            ),
+        }
     )
     PY_SOURCES = sorted(
         path
@@ -99,10 +137,18 @@ class RandomnessSourceTests(SimpleTestCase):
 
     def test_the_browser_sources_never_reach_for_math_random(self):
         self.assertTrue(self.JS_SOURCES, "no JavaScript source found to scan")
+        names = {path.name for path in self.JS_SOURCES}
+        # A scan that silently stopped covering the draw would pass. These two
+        # are where a password's randomness comes from, either side of the
+        # module boundary, so their absence has to fail.
+        for expected in ("password_generator.js", "vault-crypto.js"):
+            self.assertIn(expected, names, f"the scan no longer covers {expected}")
         offenders = [
             path.name
             for path in self.JS_SOURCES
-            if "Math.random" in path.read_text(encoding="utf-8")
+            # Comments are stripped first, so a file stays free to name the
+            # thing it refuses to do - password_generator.js's header does.
+            if "Math.random(" in _without_comments(path.read_text(encoding="utf-8"))
         ]
         self.assertEqual(offenders, [], f"Math.random in {offenders}")
 

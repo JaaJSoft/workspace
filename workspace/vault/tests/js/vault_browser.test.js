@@ -88,6 +88,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/clipboard.js',
       'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
       'workspace/vault/ui/static/vault/ui/js/vault_switcher.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_generator.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -111,6 +112,8 @@ function browser(options = {}) {
         removeItem(key) { delete this.values[key]; },
       },
       addEventListener() {},
+      CustomEvent: class { constructor(name) { this.type = name; } },
+      dispatchEvent(event) { (this.dispatched ||= []).push(event.type); },
       history: {
         replaced: [],
         replaceState(state, title, url) { this.replaced.push(url); },
@@ -2672,4 +2675,31 @@ test('refreshing the vault you are standing in keeps the folder you walked to', 
 
   assert.equal(component.folderUuid, FOLDER);
   assert.equal(component.canGoBack(), true);
+});
+
+test('locking takes back the password the generator drew', async () => {
+  // A generated password is a plaintext held outside any entry - the panel
+  // owns it, and the standalone one is not attached to a draft at all. It has
+  // to go with the keys, like the drafts on the line above it in onLocked.
+  const { component } = browser();
+  component.init();
+  component.openGenerator('password');
+  component.openGeneratorDialog();
+
+  component.onLocked();
+
+  assert.equal(component.generatorField, null);
+  assert.equal(component.generatorOpen, false);
+});
+
+test('closing the entry dialog forgets which field had its generator open', async () => {
+  // generatorField outlives the dialog otherwise, and the next entry opened -
+  // an edit of an existing one included - mounts the panel unasked, drawing a
+  // plaintext password nobody requested.
+  const { component } = browser();
+  component.init();
+  component.newEntry('login');
+  component.openGenerator('password');
+  component.closeEntryDialog();
+  assert.equal(component.generatorField, null);
 });

@@ -129,6 +129,7 @@ window.vaultBrowser = (function () {
       ...window.vaultPrefsMixin(),
       ...window.vaultViewPrefsMixin(),
       ...window.vaultSwitcherMixin(),
+      ...window.vaultGeneratorMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the vault to
@@ -257,7 +258,9 @@ window.vaultBrowser = (function () {
         this.resetPanel();
         this.closeMenu();
         this.pendingNewEntry = false;
-        // The drafts hold typed-in plaintext, so they go with the keys.
+        // The drafts hold typed-in plaintext, so they go with the keys - and
+        // so does the password a generator panel drew, which no draft holds.
+        this.clearGenerators();
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;
@@ -1124,6 +1127,9 @@ window.vaultBrowser = (function () {
       },
 
       closeEntryDialog: function () {
+        // With the draft, or the next dialog opens with a panel already
+        // mounted and draws a password for an entry nobody asked one for.
+        this.generatorField = null;
         this.draft = null;
       },
 
@@ -1176,6 +1182,7 @@ window.vaultBrowser = (function () {
           } else {
             await window.vaultApi.updateEntry(draft.uuid, body);
           }
+          this.generatorField = null;
           this.draft = null;
           await this.load();
         } catch (err) {

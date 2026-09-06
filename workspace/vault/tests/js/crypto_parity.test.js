@@ -546,8 +546,8 @@ test('the same phrase typed on two keyboards derives the same key', async () => 
   // reviewer already misread it once. NFC applies to the KDF input, not
   // only to a length check, or the archive opens on one keyboard and not
   // the other.
-  const composed = await V.deriveArchiveKey({ passphrase: 'café', salt });
-  const decomposed = await V.deriveArchiveKey({ passphrase: 'café', salt });
+  const composed = await V.deriveArchiveKey({ passphrase: 'caf\u00e9', salt });
+  const decomposed = await V.deriveArchiveKey({ passphrase: 'cafe\u0301', salt });
   assert.deepStrictEqual(Array.from(composed), Array.from(decomposed));
 });
 

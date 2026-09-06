@@ -32,6 +32,10 @@
   </head>
   <body class="min-h-screen bg-base-200">
     {{ ice_servers|json_script:"call-ice-servers-data" }}
+    {% comment %}Empty for an anonymous visitor, which is what the component
+    reads as "nobody to prefill". A member never reaches this template: the
+    view redirects them to their room.{% endcomment %}
+    {{ signed_in_as|json_script:"meet-signed-in-data" }}
     <div
       class="h-screen flex flex-col"
       x-data="chatMeetApp('{{ slug }}')"
@@ -71,13 +75,24 @@
                   required
                   autofocus
                 />
+                {% if signed_in_as %}
+                  <p class="text-xs text-base-content/60 mt-1.5">
+                    Signed in as {{ signed_in_as }}. You will join this meeting as a guest.
+                  </p>
+                {% endif %}
               </div>
               <template x-if="error">
                 <inline-alert type="error">
                 <span x-text="error"></span>
                 </inline-alert>
               </template>
-              <div class="card-actions justify-end">
+              <div class="card-actions justify-end items-center">
+                {% if not signed_in_as %}
+                  <a
+                    class="btn btn-link btn-sm px-0 mr-auto"
+                    href="{% url 'login' %}?next={{ request.path|urlencode }}"
+                  >Sign in</a>
+                {% endif %}
                 <button
                   class="btn btn-primary btn-sm w-full sm:w-auto"
                   :disabled="knocking || (summary && summary.locked)"

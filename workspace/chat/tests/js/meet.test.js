@@ -987,3 +987,33 @@ test('a mixin with its own destroy cannot eat another mixin s teardown', () => {
   assert.deepStrictEqual(torn, ['call'], 'the mixin that declares one is still torn down');
   assert.equal(media.listeners.length, 0, 'and so is the pane visibility watcher');
 });
+
+// The signed-in prefill: the server embeds a name, the form opens with it.
+function signedInDocument(payload) {
+  return {
+    getElementById: (id) => (id === 'meet-signed-in-data'
+      ? { textContent: payload }
+      : null),
+    addEventListener() {},
+    hidden: false,
+  };
+}
+
+test('a signed-in visitor opens the name card with their name filled in', () => {
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }), {
+    document: signedInDocument('"Ada Lovelace"'),
+  });
+  assert.equal(a.displayName, 'Ada Lovelace');
+});
+
+test('an anonymous visitor opens the name card empty', () => {
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+  assert.equal(a.displayName, '');
+});
+
+test('a malformed signed-in payload leaves the field empty rather than throwing', () => {
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }), {
+    document: signedInDocument('not json'),
+  });
+  assert.equal(a.displayName, '');
+});

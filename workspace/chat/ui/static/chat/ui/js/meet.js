@@ -62,6 +62,22 @@ function chatMeetTitleInitials(title) {
     .join('');
 }
 
+/**
+ * The display name the server embedded for a signed-in visitor, '' otherwise.
+ * A signed-in stranger still joins as a guest, so this only seeds the form -
+ * the knock endpoint remains the only thing that names them.
+ * @returns {string}
+ */
+function chatMeetSignedInName() {
+  const el = document.getElementById('meet-signed-in-data');
+  if (!el) return '';
+  try {
+    return JSON.parse(el.textContent) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 const CHAT_MEET_BACKOFF_START_MS = 1000;
 const CHAT_MEET_BACKOFF_MAX_MS = 30000;
 // Tailwind's md, which is where the aside stops being a slide-over.
@@ -328,7 +344,10 @@ function chatMeetApp(slug) {
     slug,
     phase: 'name',
     summary: null,
-    displayName: '',
+    // Seeded from the session when there is one; a resumed guest's stored
+    // name wins over it in init(), since that is the name they were admitted
+    // under.
+    displayName: chatMeetSignedInName(),
     token: null,
     knocking: false,
     error: '',

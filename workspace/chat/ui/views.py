@@ -7,7 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import OuterRef, Prefetch, Subquery, prefetch_related_objects
 from django.http import Http404, HttpResponse, HttpResponseForbidden
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -287,18 +288,42 @@ def chat_room_view(request, conversation_uuid):
 def meet_view(request, slug):
     """The public meeting page, reached from a bare /meet/<slug> link.
 
-    Anonymous by construction, and the only view in this file that is: the
-    page carries the slug and the ICE configuration, nothing else. Everything
-    it shows is fetched at runtime with the token the visitor obtains by
-    knocking, so a stranger loading this URL learns only that the slug exists
-    - and the summary endpoint discloses that much anyway.
+    Anonymous-capable by construction, and the only view in this file that is:
+    for a stranger the page carries the slug and the ICE configuration,
+    nothing else. Everything it shows is fetched at runtime with the token the
+    visitor obtains by knocking, so a stranger loading this URL learns only
+    that the slug exists - and the summary endpoint discloses that much
+    anyway.
+
+    A link handed around a room reaches members too, and a member knocking at
+    the guest lobby of their own meeting waits for themselves: an active
+    member is sent to the room instead. Anyone else signed in still joins as a
+    guest - the session says who they are, it does not make them a
+    participant - so the page only borrows the name to prefill the form.
     """
-    if not Meeting.objects.filter(slug=slug).exists():
+    meeting = Meeting.objects.filter(slug=slug).only("conversation_id").first()
+    if meeting is None:
         raise Http404
+
+    signed_in_as = ""
+    if request.user.is_authenticated:
+        if get_active_membership(request.user, meeting.conversation_id):
+            return redirect(
+                reverse(
+                    "chat_ui:room",
+                    kwargs={"conversation_uuid": meeting.conversation_id},
+                )
+            )
+        signed_in_as = display_name_for_identity(request.user, None)
+
     return render(
         request,
         "chat/ui/meet.html",
-        {"slug": slug, "ice_servers": settings.CHAT_CALL_ICE_SERVERS},
+        {
+            "slug": slug,
+            "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
+            "signed_in_as": signed_in_as,
+        },
     )
 
 

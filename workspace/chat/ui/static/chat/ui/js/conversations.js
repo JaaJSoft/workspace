@@ -160,7 +160,15 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       // Bumped before the early returns: selecting a conversation with no
       // meeting still has to invalidate a request already in flight.
       const generation = (this._meetingLoadGeneration += 1);
-      if (!conv || !conv.meeting || 'next_start' in conv.meeting) return;
+      if (!conv || !conv.meeting) return;
+      // A payload the server sent for this row on its own is fresh, and
+      // re-reading it would spend a request for nothing - that is the
+      // deep-link path, which fetches the single-conversation shape before
+      // selecting. One this method merged on an earlier selection is a
+      // different matter: a host can lock the room from the meeting page and
+      // a series rolls to its next occurrence, so re-selecting the row has to
+      // ask again rather than show what was true the first time.
+      if ('next_start' in conv.meeting && !conv.meeting._merged) return;
       const uuid = conv.uuid;
       let data = null;
       try {
@@ -177,7 +185,9 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       // writing it anywhere would put one meeting's schedule on another.
       if (generation !== this._meetingLoadGeneration) return;
       if (!this.activeConversation || this.activeConversation.uuid !== uuid) return;
-      if (data && data.meeting) this.activeConversation.meeting = data.meeting;
+      if (data && data.meeting) {
+        this.activeConversation.meeting = { ...data.meeting, _merged: true };
+      }
     },
 
     // ── Drafts ───────────────────────────────────────────────

@@ -110,3 +110,41 @@ test('a failing request leaves the row exactly as the list sent it', async () =>
 
   assert.deepStrictEqual({ ...row.meeting }, { ...listRow('conv-1', 'Standup').meeting });
 });
+
+test('re-selecting a conversation asks again, so a lock set elsewhere shows', async () => {
+  // The merged payload lives on the sidebar row, so a guard that only looks
+  // for the next_start key would make every later selection a no-op and pin
+  // the badge to whatever the room looked like the first time.
+  let nextStart = '2026-06-25T09:30:00Z';
+  let locked = false;
+  const urls = [];
+  const a = app(async (url) => {
+    urls.push(url);
+    return {
+      ok: true,
+      json: async () => ({
+        meeting: { event_title: 'Standup', join_url: 'https://x', next_start: nextStart, locked },
+      }),
+    };
+  });
+
+  const rowA = listRow('conv-1', 'Standup');
+  const rowB = listRow('conv-2', 'Retro');
+
+  a.activeConversation = rowA;
+  await a._loadMeetingProvenance(rowA);
+  assert.equal(a.activeConversation.meeting.locked, false);
+
+  // The host locks the room from the meeting page, and the series rolls on.
+  locked = true;
+  nextStart = '2026-07-02T09:30:00Z';
+
+  a.activeConversation = rowB;
+  await a._loadMeetingProvenance(rowB);
+  a.activeConversation = rowA;
+  await a._loadMeetingProvenance(rowA);
+
+  assert.equal(a.activeConversation.meeting.locked, true);
+  assert.equal(a.activeConversation.meeting.next_start, '2026-07-02T09:30:00Z');
+  assert.equal(urls.length, 3, 'one request per selection of a meeting row');
+});

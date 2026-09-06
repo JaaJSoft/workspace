@@ -184,11 +184,15 @@
           x-show="activeConversation.meeting?.locked"
           class="badge badge-warning badge-sm flex-shrink-0"
         >Locked</span>
+        {% comment %}The aria-label is for the icon-only variant alone: an
+        accessible name that does not contain the visible label replaces the
+        button's name with words nobody can say out loud (WCAG 2.5.3).
+        {% endcomment %}
         <button
           class="btn btn-ghost btn-xs ml-auto flex-shrink-0"
           @click="copyMeetingJoinUrl(activeConversation)"
           title="Copy the link guests use to join"
-          aria-label="Copy the link guests use to join"
+          {% if narrow_pane %}aria-label="Copy the link guests use to join"{% endif %}
         >
           <i data-lucide="link" class="w-3.5 h-3.5"></i>
           {% comment %}Icon only in the room's ~380px column: the label is

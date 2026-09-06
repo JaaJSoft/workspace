@@ -96,7 +96,13 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
     """
     member_convos = user_conversation_ids(user)
 
-    conversations = Conversation.objects.filter(uuid__in=member_convos)
+    # meeting__event rides along: the serializer's provenance field reads the
+    # meeting's event title off every row, which is a query per conversation
+    # without this. A conversation with no meeting caches the absence, so the
+    # join costs nothing on the common row either.
+    conversations = Conversation.objects.filter(uuid__in=member_convos).select_related(
+        "meeting__event"
+    )
     if conversation_uuids is not None:
         conversations = conversations.filter(uuid__in=conversation_uuids)
     if embed_members:
@@ -234,10 +240,16 @@ def chat_room_view(request, conversation_uuid):
         [conversation],
         Prefetch("members", queryset=active_members_queryset()),
         "groups",
+        # Serves both the serializer's provenance field and the meeting block
+        # below; a conversation with no meeting caches the absence here too.
+        "meeting__event",
     )
 
     conversation_data = ConversationListSerializer(
-        conversation, context={"request": request}
+        conversation,
+        # One conversation, so the occurrence and the lock are affordable -
+        # and the pane's provenance banner is the only place they show.
+        context={"request": request, "include_meeting_occurrence": True},
     ).data
 
     # Reuse the prefetched members so the heading matches the sidebar row.

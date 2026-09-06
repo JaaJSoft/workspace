@@ -145,6 +145,45 @@
         </div>
       </div>
 
+      {% comment %}Provenance banner: this conversation was created for a
+      calendar event, and the link it shows is the one guests are handed. The
+      occurrence and the lock are absent from list payloads on purpose - see
+      meetingOccurrenceLabel in ui_helpers.js.{% endcomment %}
+      <div
+        x-show="activeConversation.meeting"
+        x-cloak
+        class="px-4 py-2 border-b border-base-300 bg-base-200 flex flex-wrap items-center gap-x-3 gap-y-1"
+      >
+        <i
+          data-lucide="calendar-days"
+          class="w-4 h-4 text-primary flex-shrink-0"
+        ></i>
+        <span class="text-sm truncate min-w-0">
+          Meeting for
+          <span
+            class="font-medium"
+            x-text="activeConversation.meeting?.event_title || ''"
+          ></span>
+        </span>
+        <span
+          x-show="meetingOccurrenceLabel(activeConversation)"
+          class="text-xs text-base-content/60 truncate"
+          x-text="meetingOccurrenceLabel(activeConversation)"
+        ></span>
+        <span
+          x-show="activeConversation.meeting?.locked"
+          class="badge badge-warning badge-sm"
+        >Locked</span>
+        <button
+          class="btn btn-ghost btn-xs ml-auto"
+          @click="copyMeetingJoinUrl(activeConversation)"
+          title="Copy the link guests use to join"
+        >
+          <i data-lucide="link" class="w-3.5 h-3.5"></i>
+          Copy join link
+        </button>
+      </div>
+
       {# `relative` anchors the thread panel's mobile overlay to this area #}
       <!-- Content area: messages + optional info panel -->
       <div class="flex-1 flex min-h-0 min-w-0 relative">

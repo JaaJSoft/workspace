@@ -76,6 +76,9 @@ class ConversationListView(CacheControlMixin, APIView):
 
         conversations = (
             Conversation.objects.filter(uuid__in=member_convos)
+            # See _meeting_payload: the provenance field reads the meeting's
+            # event title per row, so it travels with the conversation query.
+            .select_related("meeting__event")
             .prefetch_related(
                 Prefetch("members", queryset=active_members_queryset()),
                 "groups",
@@ -268,6 +271,7 @@ class ConversationDetailView(APIView):
 
         conversation = (
             Conversation.objects.filter(pk=conversation_id)
+            .select_related("meeting__event")
             .prefetch_related(
                 Prefetch("members", queryset=active_members_queryset()),
                 "groups",
@@ -277,7 +281,10 @@ class ConversationDetailView(APIView):
         conversation.notification_level = membership.notification_level
         return Response(
             ConversationDetailSerializer(
-                conversation, context={"request": request}
+                conversation,
+                # One conversation: the occurrence and the lock are worth
+                # their queries here, and the pane's banner needs them.
+                context={"request": request, "include_meeting_occurrence": True},
             ).data
         )
 

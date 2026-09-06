@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
 from workspace.ai.models import AgentGoal, ScheduledMessage
@@ -12,7 +13,9 @@ from .models import (
     Reaction,
 )
 from .services.avatar import conversation_avatar_initial
+from .services.calls import is_call_locked
 from .services.identities import identity_payload
+from .services.meeting_occurrences import current_occurrence
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -239,6 +242,47 @@ class GroupBriefSerializer(serializers.Serializer):
     name = serializers.CharField()
 
 
+def _meeting_payload(conversation, context):
+    """Where *conversation* came from, or None when it is not a meeting's.
+
+    Two shapes, one field, and the caller picks with the
+    ``include_meeting_occurrence`` context flag.
+
+    The default shape carries only what a conversation row already knows once
+    ``meeting__event`` rides along with it: the event's title and the join
+    link. That is what a list payload gets, because the two values it leaves
+    out cost a query each - ``current_occurrence`` expands a recurring event's
+    rule and reads its exceptions, and the lock is read off the live call
+    session - which on a list is a query per conversation.
+
+    The flag adds ``next_start`` and ``locked`` and is set only by the payloads
+    that carry a single conversation (the room page, the detail endpoint).
+    The difference is an absent key, not a null one: absent means "not computed
+    here", null means "no occurrence is open right now", and the banner reading
+    this has to tell those two apart rather than announce an empty schedule it
+    was never handed.
+    """
+    try:
+        meeting = conversation.meeting
+    except ObjectDoesNotExist:
+        return None
+
+    payload = {
+        "event_title": meeting.event.title,
+        "join_url": context["request"].build_absolute_uri(meeting.join_path),
+    }
+    if not context.get("include_meeting_occurrence"):
+        return payload
+
+    occurrence = current_occurrence(meeting)
+    occurrence_start = occurrence[0] if occurrence is not None else None
+    payload["next_start"] = (
+        occurrence_start.isoformat() if occurrence_start is not None else None
+    )
+    payload["locked"] = is_call_locked(conversation.uuid, occurrence_start)
+    return payload
+
+
 class ConversationListSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
     groups = GroupBriefSerializer(many=True, read_only=True)
@@ -249,6 +293,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     pin_position = serializers.IntegerField(read_only=True, default=None)
     is_bot_conversation = serializers.SerializerMethodField()
     avatar_initial = serializers.SerializerMethodField()
+    meeting = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
         default=ConversationMember.NotificationLevel.ALL,
@@ -274,8 +319,12 @@ class ConversationListSerializer(serializers.ModelSerializer):
             "is_pinned",
             "pin_position",
             "is_bot_conversation",
+            "meeting",
             "notification_level",
         ]
+
+    def get_meeting(self, obj):
+        return _meeting_payload(obj, self.context)
 
     def get_member_count(self, obj):
         # Members are prefetched (filtered to active) by the view, so len()
@@ -321,6 +370,7 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
     groups = GroupBriefSerializer(many=True, read_only=True)
     avatar_initial = serializers.SerializerMethodField()
+    meeting = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
         default=ConversationMember.NotificationLevel.ALL,
@@ -340,11 +390,15 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
             "avatar_initial",
             "members",
             "groups",
+            "meeting",
             "notification_level",
         ]
 
     def get_avatar_initial(self, obj) -> str:
         return conversation_avatar_initial(obj, self.context["request"].user)
+
+    def get_meeting(self, obj):
+        return _meeting_payload(obj, self.context)
 
 
 class NotificationLevelSerializer(serializers.Serializer):

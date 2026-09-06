@@ -11,6 +11,7 @@ from workspace.ai.services.llm import (
     call_llm,
     call_llm_structured,
     extract_text_tool_calls,
+    reply_was_truncated,
     serialize_response,
     truncate_middle,
     truncate_tool_result,
@@ -161,9 +162,9 @@ class ExtractThinkingTests(SimpleTestCase):
         self.assertEqual(cleaned, "<think>bad</thought>Answer")
 
 
-def _fake_client(message):
+def _fake_client(message, finish_reason="stop"):
     response = SimpleNamespace(
-        choices=[SimpleNamespace(message=message)],
+        choices=[SimpleNamespace(message=message, finish_reason=finish_reason)],
         model="test-model",
         usage=SimpleNamespace(prompt_tokens=1, completion_tokens=2),
     )
@@ -224,21 +225,50 @@ class CallLlmThinkingTests(SimpleTestCase):
         result = self._call(msg)
         self.assertEqual(result["thinking"], "")
 
+    def test_finish_reason_is_exposed(self):
+        msg = SimpleNamespace(content="Hello", tool_calls=None)
+        with patch(
+            "workspace.ai.client.get_ai_client",
+            return_value=_fake_client(msg, finish_reason="length"),
+        ):
+            result = call_llm([{"role": "user", "content": "hi"}], model="m")
+        self.assertEqual(result["finish_reason"], "length")
+        self.assertEqual(serialize_response(result)["finish_reason"], "length")
+
 
 class _Payload(BaseModel):
     items: list[str]
 
 
 class CallLlmStructuredTests(SimpleTestCase):
-    def _call(self, content):
+    def _call(self, content, finish_reason="stop"):
         msg = SimpleNamespace(content=content, tool_calls=None)
         with patch(
             "workspace.ai.client.get_ai_client",
-            return_value=_fake_client(msg),
+            return_value=_fake_client(msg, finish_reason=finish_reason),
         ):
             return call_llm_structured(
                 [{"role": "user", "content": "hi"}], _Payload, model="m"
             )
+
+    def test_truncated_reply_is_reported_as_such(self):
+        # Reasoning shares the token budget on Ollama-style backends: a model
+        # that thinks past the cap returns an empty content, which must read
+        # as "cut at the cap", not as a backend that ignored the schema.
+        with self.assertLogs("workspace.ai.services.llm", level="WARNING") as logs:
+            parsed, result = self._call("", finish_reason="length")
+        self.assertIsNone(parsed)
+        self.assertTrue(reply_was_truncated(result))
+        self.assertIn("cut at the token cap", logs.output[0])
+        self.assertIn("max_tokens=", logs.output[0])
+
+    def test_validation_failure_logs_the_start_of_the_reply(self):
+        with self.assertLogs("workspace.ai.services.llm", level="WARNING") as logs:
+            parsed, result = self._call('{"items": "nope"}')
+        self.assertIsNone(parsed)
+        self.assertFalse(reply_was_truncated(result))
+        self.assertIn("content starts", logs.output[0])
+        self.assertIn("nope", logs.output[0])
 
     def test_valid_json_returns_validated_instance(self):
         parsed, result = self._call('{"items": ["a", "b"]}')

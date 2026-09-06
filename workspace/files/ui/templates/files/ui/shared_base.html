@@ -60,9 +60,16 @@
           <div class="card-body items-center text-center pt-10 pb-8 px-8">
             <!-- Lock icon -->
             <div
-              class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg"
+              class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg transition-transform duration-300 ease-out"
+              :class="unlocked && 'scale-110'"
             >
-              <i data-lucide="lock" class="w-7 h-7 text-white"></i>
+              <i x-show="!unlocked" data-lucide="lock" class="w-7 h-7 text-white"></i>
+              <i
+                x-show="unlocked"
+                x-cloak
+                data-lucide="lock-open"
+                class="w-7 h-7 text-white"
+              ></i>
             </div>
 
             <h2 class="text-lg font-bold">Protected link</h2>
@@ -81,10 +88,11 @@
               />
               <button
                 class="absolute right-2 top-1/2 -translate-y-1/2 btn btn-primary btn-sm btn-square"
+                :class="verifying && 'pointer-events-none'"
                 @click="verify()"
-                :disabled="!password || verifying"
+                :disabled="!password"
               >
-                <span x-show="verifying" class="loading loading-spinner loading-xs"></span>
+                <span x-show="verifying" class="loading loading-spinner loading-sm"></span>
                 <i x-show="!verifying" data-lucide="arrow-right" class="w-4 h-4"></i>
               </button>
             </div>
@@ -99,8 +107,10 @@
             return {
               password: '',
               verifying: false,
+              unlocked: false,
               error: '',
               async verify() {
+                if (this.verifying) return;
                 this.verifying = true;
                 this.error = '';
                 try {
@@ -116,7 +126,12 @@
                   if (resp.ok) {
                     const data = await resp.json();
                     sessionStorage.setItem('share_access_' + token, data.access_token);
+                    // Let the lock open before the page goes: the reload then
+                    // reads as what the unlock led to, not as a jump.
+                    this.unlocked = true;
+                    await new Promise((resolve) => setTimeout(resolve, 400));
                     window.location.href = '/files/shared/' + token + '?access_token=' + encodeURIComponent(data.access_token);
+                    return;
                   } else {
                     this.error = 'Invalid password';
                   }

@@ -246,7 +246,16 @@ function isStorableOption(key, value) {
   return Number.isInteger(value) && value >= rule.min && value <= rule.max;
 }
 
-window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
+/**
+ * `pinned` is the options a host fixes for its own form. They outrank what the
+ * device remembered - a host pins a key because its dialog needs that value,
+ * not as a suggestion - and they are kept out of what persist() writes, so one
+ * host's choice never becomes every other host's default: the storage key is
+ * shared by all of them.
+ */
+window.passwordGeneratorPanel = function passwordGeneratorPanel(deps, pinned) {
+  const fixed = pinned || {};
+  const fixedKeys = OPTION_KEYS.filter((key) => isStorableOption(key, fixed[key]));
   return {
     mode: 'password',
     length: 20,
@@ -266,6 +275,7 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
 
     init() {
       this.restore();
+      for (const key of fixedKeys) this[key] = fixed[key];
       for (const key of OPTION_KEYS) this.$watch(key, () => this.regenerate());
       // The mode is a pair of buttons, so no change event ever bubbles for it
       // and the root's @change cannot persist it.
@@ -283,22 +293,36 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
       return picked;
     },
 
-    restore() {
-      let stored = null;
+    // Unreadable storage is the same as empty storage: a browser refusing it,
+    // or a value someone hand-edited into nonsense, must not stop the panel.
+    storedOptions() {
       try {
-        stored = JSON.parse(window.localStorage.getItem(OPTIONS_STORAGE_KEY) || 'null');
+        return JSON.parse(window.localStorage.getItem(OPTIONS_STORAGE_KEY) || 'null') || {};
       } catch (error) {
-        stored = null;
+        return {};
       }
-      if (!stored) return;
+    },
+
+    restore() {
+      const stored = this.storedOptions();
       for (const key of OPTION_KEYS) {
         if (isStorableOption(key, stored[key])) this[key] = stored[key];
       }
     },
 
     persist() {
+      const kept = this.options();
+      // A pinned key is written back as whatever the device already
+      // remembered, never as the pinned value and never dropped: the stored
+      // options are shared by every host, so one form's requirement must not
+      // become every form's default, nor erase what another form had stored.
+      const stored = fixedKeys.length ? this.storedOptions() : {};
+      for (const key of fixedKeys) {
+        if (isStorableOption(key, stored[key])) kept[key] = stored[key];
+        else delete kept[key];
+      }
       try {
-        window.localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(this.options()));
+        window.localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(kept));
       } catch (error) {
         // A browser refusing storage is not a reason to refuse a password.
       }

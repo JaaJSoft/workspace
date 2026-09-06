@@ -1,0 +1,171 @@
+{% comment %}
+  The export dialog, mounted under x-if rather than x-show: it holds an export
+  passphrase, and tearing the component down on close is what lets go of it.
+  A JS string cannot be zeroed, so dropping the reference is all there is.
+{% endcomment %}
+<template x-if="exportOpen">
+  <div class="modal modal-open">
+    <div class="modal-box max-w-lg">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i data-lucide="download" class="w-5 h-5 text-error"></i>
+        <span>Export this account</span>
+      </h3>
+
+      <inline-alert type="error" class="mt-4" x-show="exportError" x-cloak>
+      <span x-text="exportError"></span>
+      </inline-alert>
+
+      {% comment %}
+        The dialog stays open when the projection dropped entries, so this is
+        the only place that count is ever read. Slot mode, like the alert
+        above: inline-alert reads its attributes once, when it connects.
+      {% endcomment %}
+      <inline-alert type="warning" class="mt-4" x-show="exportSkipped" x-cloak>
+      <span x-text="skippedMessage()"></span>
+      </inline-alert>
+
+      <div class="mt-4 flex flex-col gap-2">
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input
+            type="radio"
+            class="radio radio-sm mt-1"
+            value="archive"
+            x-model="exportFormat"
+            name="export-format"
+          />
+          <span>
+            <span class="font-medium block">Encrypted archive</span>
+            <span class="text-sm text-base-content/60">Everything this account holds, sealed with a passphrase you choose.</span>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input
+            type="radio"
+            class="radio radio-sm mt-1"
+            value="interchange"
+            x-model="exportFormat"
+            name="export-format"
+          />
+          <span>
+            <span class="font-medium block">Readable by another password manager</span>
+            <span class="text-sm text-base-content/60">
+              Plain text. Every password in the file can be read by anyone who opens it.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <template x-if="exportFormat === 'archive'">
+        <div class="mt-4 flex flex-col gap-3">
+          <inline-alert type="warning">
+          Nothing but this passphrase protects the file. Lose it and the archive is
+          lost with it - keep it with your emergency kit.
+          </inline-alert>
+
+          {% comment %}
+            show_apply is what renders the panel's "Use" button; without it the
+            password-apply event below never fires and the field stays empty.
+
+            Both events, never just one. The panel owns no clipboard: a host
+            that listens to password-apply alone leaves its Copy button doing
+            nothing at all, silently, on the one string that opens the archive.
+            copyGenerated comes from the generator mixin, spread into this same
+            component - one clipboard path, with its clearing policy.
+          {% endcomment %}
+          {% comment %}
+            copyGenerated reports a refused write through the generator mixin's
+            own field, and the backdrop covers the page-level alert - so the
+            panel's host has to render it or a failed copy says nothing.
+          {% endcomment %}
+          <inline-alert type="error" x-show="generatorError" x-cloak>
+          <span x-text="generatorError"></span>
+          </inline-alert>
+
+          <div
+            @password-apply="applyGeneratedPassphrase($event.detail.value)"
+            @password-copy="copyGenerated($event.detail.value)"
+          >
+            {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" pinned_expr="exportGeneratorOptions()" show_apply=True %}
+          </div>
+
+          <div>
+            <label
+              class="text-sm text-base-content/60 block mb-1"
+              for="export-passphrase"
+            >
+              Passphrase
+            </label>
+            {% comment %}
+              @input, not a watcher: the moment a human edits this field the
+              panel's count stops describing what is in it, and we stop
+              claiming to know how strong it is.
+            {% endcomment %}
+            <input
+              id="export-passphrase"
+              data-testid="export-passphrase"
+              type="password"
+              autocomplete="new-password"
+              spellcheck="false"
+              class="input input-bordered input-sm w-full"
+              x-model="exportPassphrase"
+              @input="noteTypedPassphrase()"
+            />
+          </div>
+
+          <template x-if="exportSource === 'typed'">
+            <div class="flex flex-col gap-3">
+              <div>
+                <label class="text-sm text-base-content/60 block mb-1" for="export-confirm">Confirm</label>
+                <input
+                  id="export-confirm"
+                  data-testid="export-confirm"
+                  type="password"
+                  autocomplete="new-password"
+                  spellcheck="false"
+                  class="input input-bordered input-sm w-full"
+                  x-model="exportConfirm"
+                />
+              </div>
+              <label class="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm mt-0.5"
+                  data-testid="export-own-phrase-ack"
+                  x-model="exportOwnPhraseAck"
+                />
+                <span class="text-sm text-base-content/70">
+                  I chose this passphrase myself. Its strength cannot be measured here,
+                  and it is all that stands between this file and whoever finds it.
+                </span>
+              </label>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <p class="mt-4 text-sm text-base-content/60" x-show="exportBusy" x-cloak>
+        <span x-text="exportProgress"></span> entries read...
+      </p>
+
+      <div class="modal-action">
+        <button
+          type="button"
+          class="btn btn-sm btn-ghost"
+          data-testid="export-cancel"
+          @click="closeExportDialog()"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-error"
+          data-testid="export-run"
+          @click="runExport()"
+          :disabled="exportBusy || (exportFormat === 'archive' && !passphraseAccepted())"
+        >
+          Export
+        </button>
+      </div>
+    </div>
+  </div>
+</template>

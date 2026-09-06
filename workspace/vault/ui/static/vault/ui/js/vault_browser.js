@@ -130,6 +130,7 @@ window.vaultBrowser = (function () {
       ...window.vaultViewPrefsMixin(),
       ...window.vaultSwitcherMixin(),
       ...window.vaultGeneratorMixin(),
+      ...window.vaultExportMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the vault to
@@ -261,6 +262,9 @@ window.vaultBrowser = (function () {
         // The drafts hold typed-in plaintext, so they go with the keys - and
         // so does the password a generator panel drew, which no draft holds.
         this.clearGenerators();
+        // Same reason, one step further out: the export dialog holds a
+        // passphrase and, while it runs, a tree of decrypted entries.
+        this.clearExport();
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;

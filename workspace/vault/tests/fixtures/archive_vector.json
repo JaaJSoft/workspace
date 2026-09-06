@@ -1,0 +1,59 @@
+{
+  "passphrase": "correcte cheval batterie agrafe sept huit neuf",
+  "params": {
+    "m": 65536,
+    "t": 3,
+    "p": 2
+  },
+  "tree": {
+    "format": "vault-archive",
+    "version": 1,
+    "exported_at": "2026-09-06T00:00:00Z",
+    "vaults": [
+      {
+        "name": "Perso",
+        "description": "Le coffre personnel",
+        "icon": null,
+        "color": null,
+        "is_favorite": true,
+        "folders": [
+          {
+            "id": 0,
+            "parent": null,
+            "name": "Banque",
+            "position": 0
+          }
+        ],
+        "tags": [
+          {
+            "id": 0,
+            "name": "perso",
+            "color": "red"
+          }
+        ],
+        "entries": [
+          {
+            "type": "login",
+            "name": "Ma banque",
+            "notes": "deux lignes\nde notes",
+            "favorite": true,
+            "trashed": false,
+            "folder": 0,
+            "tags": [
+              0
+            ],
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "last_used_at": null,
+            "fields": {
+              "username": "jc",
+              "password": "s3cret",
+              "uri": "https://b.example"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "archive_hex": "564c544152434801010001000000000003022a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a01010100000c0c0c0c0c0c0c0c0c0c0c0c0c12463df74f70613d64337f8949eb901d76fb56077e3353c71d154c731237e07000a3f2af1c5930ba1613f52bae38d08468fb4e5654b6eb82d8e3e903585dfb70b1649f017bddd2e4b7504e5e575ff09c7ad4ea9e845996103c6c7aeac627533b96a5d26d837a1853002dab59b868d8049b949167ba6a458017cf230e2de180c04e59578c86207118a9cb51e3068b35389df0f73a27846419c2eb6fe18e5947aa7c5bccdf9b47f1bba8f07f20b8be3f5d68186b7d6d005fdcd0bed981550e28f92cfdb3e4b254263dbe77c8085d05b4b72750b31298f57c7cdfa15e26fd48d1eddcfb8274511026d6a166911e9a9e889af003d73a61bab5d517556ebd60e411cfc84539c93eb9716f6e9612a8d15b6670ac5f507855dc91cc23c07bf7c2437ee0b9e1ef5f2fe770296659369eb35764395fdc0d293ea0bdf00f434832e6511450a272c03ada73d9a50bfa8e6fc5e9267f32319b1fea2e6e960fe53dbf1a1dafe3a32ac2bff67f6b277368d574ef2161c34f659de0ac3cf7e28abd4137d91bdc6a81562fb165a17a344eefc7f29df9418d148c22598af0100e1639fa6c4e93cc077ffd1e1d0949225f1a98f4662109f1d6c999ad82b9a83801857aa375a444c4fec2fc7b4b3ce643d171ce038f255fffa7d24994"
+}

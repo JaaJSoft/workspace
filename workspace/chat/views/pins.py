@@ -147,9 +147,9 @@ class MessagePinToggleView(APIView):
 
         notify_conversation_members(message.conversation, exclude_user=request.user)
 
-        pin = PinnedMessage.objects.select_related("message__author", "pinned_by").get(
-            pk=pin.pk
-        )
+        pin = PinnedMessage.objects.select_related(
+            "message__author", "message__guest", "pinned_by"
+        ).get(pk=pin.pk)
         return Response(
             PinnedMessageSerializer(pin).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -202,7 +202,7 @@ class ConversationPinnedMessagesView(APIView):
 
         pins = (
             PinnedMessage.objects.filter(conversation_id=conversation_id)
-            .select_related("message__author", "pinned_by")
+            .select_related("message__author", "message__guest", "pinned_by")
             .order_by("-created_at")
         )
         return Response(PinnedMessageSerializer(pins, many=True).data)

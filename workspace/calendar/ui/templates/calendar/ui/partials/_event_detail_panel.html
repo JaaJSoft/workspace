@@ -115,6 +115,42 @@
           </div>
         </template>
 
+        {# Meeting link #}
+        <template x-if="_panelRaw?.join_url">
+          <div class="flex items-center gap-2.5 text-sm">
+            <i data-lucide="video" class="w-4 h-4 opacity-50 flex-shrink-0"></i>
+            <a
+              class="link link-primary truncate min-w-0"
+              :href="_panelRaw.join_url"
+              target="_blank"
+              rel="noopener"
+              x-text="_panelRaw.join_url"
+            ></a>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              @click="copyJoinUrl()"
+              title="Copy join link"
+            >
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </template>
+
+        {# Member room: the API only fills room_url for a member of the meeting's conversation #}
+        <template x-if="_panelRaw?.room_url">
+          <div>
+            <a
+              class="btn btn-primary btn-sm"
+              :href="_panelRaw.room_url"
+              target="_blank"
+              rel="noopener"
+            >
+              <i data-lucide="video" class="w-4 h-4"></i> Join the meeting
+            </a>
+          </div>
+        </template>
+
         <!-- Description -->
         <template x-if="form.description">
           <div class="flex items-start gap-2.5 text-sm">
@@ -232,6 +268,15 @@
         <!-- Owner actions -->
         <template x-if="isOwner() && !isExternalEvent()">
           <div class="flex gap-2 pt-2 border-t border-base-200">
+            <button
+              type="button"
+              class="btn btn-sm btn-outline"
+              x-show="!_panelRaw?.join_url"
+              @click="createMeetingLink()"
+              :disabled="creatingMeeting"
+            >
+              <i data-lucide="video" class="w-4 h-4"></i> Meeting link
+            </button>
             <button
               type="button"
               class="btn btn-sm btn-primary flex-1"

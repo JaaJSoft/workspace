@@ -4,6 +4,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from workspace.chat.services.call_signaling import drain_events
+from workspace.chat.services.participant_keys import user_key
 
 User = get_user_model()
 
@@ -32,7 +33,7 @@ class CallDiagnosticSignalTests(TestCase):
         self.assertEqual(resp.status_code, 200)
 
         # Echo lands in the sender's own mailbox...
-        events = drain_events(self.user.id)
+        events = drain_events(user_key(self.user.id))
         self.assertEqual(len(events), 1)
         env = events[0]
         self.assertEqual(env["event"], "call_diagnostic_signal")
@@ -41,7 +42,7 @@ class CallDiagnosticSignalTests(TestCase):
         self.assertEqual(env["data"]["run_id"], "run-123")
 
         # ...and never leaks to another user.
-        self.assertEqual(drain_events(self.other.id), [])
+        self.assertEqual(drain_events(user_key(self.other.id)), [])
 
     def test_signal_delivered_through_chat_sse_poll(self):
         # Evidence: the echo enqueued by the endpoint must be re-emitted by the
@@ -73,7 +74,7 @@ class CallDiagnosticSignalTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 400)
-        self.assertEqual(drain_events(self.user.id), [])
+        self.assertEqual(drain_events(user_key(self.user.id)), [])
 
     def test_invalid_signal_type_rejected(self):
         self.client.force_authenticate(self.user)

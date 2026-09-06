@@ -95,3 +95,65 @@ test('formatDate crosses the day boundary in the configured timezone', () => {
 test('formatDateTime crosses the day boundary in the configured timezone', () => {
   assert.match(tzMixin.formatDateTime('2026-01-31T20:00:00Z'), /Feb 1|1 févr/);
 });
+
+// ── Meeting provenance banner ─────────────────────────────────
+
+test('the occurrence label prints nothing when the payload never carried one', () => {
+  const h = ctx.chatUiHelpersMixin();
+  // The list shape: event_title and join_url, and no next_start key at all.
+  const conv = { meeting: { event_title: 'Standup', join_url: 'https://x/meet/a' } };
+  assert.equal(h.meetingOccurrenceLabel(conv), '');
+});
+
+test('the occurrence label says so when the payload carried a null one', () => {
+  const h = ctx.chatUiHelpersMixin();
+  const conv = { meeting: { event_title: 'Standup', next_start: null } };
+  assert.equal(h.meetingOccurrenceLabel(conv), 'No upcoming occurrence');
+});
+
+test('the occurrence label formats the start it was given', () => {
+  const h = ctx.chatUiHelpersMixin();
+  const conv = { meeting: { event_title: 'Standup', next_start: '2026-06-25T09:30:00Z' } };
+  assert.match(h.meetingOccurrenceLabel(conv), /Jun 25|25 juin/);
+});
+
+test('the occurrence label is empty on a conversation with no meeting', () => {
+  const h = ctx.chatUiHelpersMixin();
+  assert.equal(h.meetingOccurrenceLabel({ meeting: null }), '');
+  assert.equal(h.meetingOccurrenceLabel(null), '');
+});
+
+function clipboardCtx(writeText) {
+  const c = loadScript('workspace/chat/ui/static/chat/ui/js/ui_helpers.js', {
+    matchMedia: matchMediaStub,
+    navigator: { clipboard: { writeText } },
+  });
+  const alerts = [];
+  c.AppAlert = {
+    success: (msg) => alerts.push(['success', msg]),
+    error: (msg) => alerts.push(['error', msg]),
+  };
+  return { mixin: c.chatUiHelpersMixin(), alerts };
+}
+
+test('copying the join link writes it to the clipboard and confirms', async () => {
+  const written = [];
+  const { mixin, alerts } = clipboardCtx(async (text) => { written.push(text); });
+  await mixin.copyMeetingJoinUrl({ meeting: { join_url: 'https://x/meet/abc123' } });
+  assert.deepStrictEqual(Array.from(written), ['https://x/meet/abc123']);
+  assert.equal(alerts[0][0], 'success');
+});
+
+test('a refused clipboard write reports the failure instead of lying', async () => {
+  const { mixin, alerts } = clipboardCtx(async () => { throw new Error('denied'); });
+  await mixin.copyMeetingJoinUrl({ meeting: { join_url: 'https://x/meet/abc123' } });
+  assert.equal(alerts[0][0], 'error');
+});
+
+test('copying a conversation with no meeting does nothing at all', async () => {
+  const written = [];
+  const { mixin, alerts } = clipboardCtx(async (text) => { written.push(text); });
+  await mixin.copyMeetingJoinUrl({ meeting: null });
+  assert.equal(written.length, 0);
+  assert.equal(alerts.length, 0);
+});

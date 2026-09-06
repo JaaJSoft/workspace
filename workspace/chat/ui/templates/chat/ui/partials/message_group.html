@@ -19,7 +19,8 @@
   attributes; omitting them (the hide_quote_for suppression) omits the quote.
 {% endcomment %}
 {% with author=group.author is_own=group.is_own is_bot=group.is_bot messages=group.messages first_msg=group.messages.0 prefix=id_prefix|default:"msg" %}
-  <chat-message-group {% if is_own %}own{% endif %} author-id="{{ author.id }}" author-username="{{ author.username }}" author-name="{{ author.get_full_name|default:author.username }}" id-prefix="{{ prefix }}">
+  {# A guest group has no user row: author.id is None, and author-id="None" would send the avatar element after /api/v1/users/None/avatar. #}
+  <chat-message-group {% if is_own %}own{% endif %}{% if viewer.is_guest %} viewer-guest{% endif %} {% if author.is_guest|default:False %}guest{% endif %} {% if author.id %}author-id="{{ author.id }}"{% endif %} author-username="{{ author.username }}" author-name="{{ author.get_full_name|default:author.username }}" id-prefix="{{ prefix }}">
 
   {% for msg in messages %}
     {% if msg.deleted_at %}
@@ -30,16 +31,17 @@
         data-message-uuid="{{ msg.uuid }}"
       ></div>
     {% else %}
-      <div slot="message" id="{{ prefix }}-{{ msg.uuid }}" data-message-uuid="{{ msg.uuid }}" data-body="{{ msg.body }}" {% if msg.body_html %}data-has-body{% endif %} {% comment %} hide_quote_for is the thread panel's root: a reply that answers the root would otherwise quote a message rendered right above it, on every single reply. A reply answering another reply still quotes, because that target may be far up the thread. {% endcomment %} {% if msg.reply_to and msg.reply_to.uuid != hide_quote_for %} data-reply-uuid="{{ msg.reply_to.uuid }}" {% comment %} The quoted message's thread root rides along (thread_root_id: reply_to is select_related, its FK column costs no query) so a quote pointing into a thread opens the panel instead of paging the main flow back forever looking for a reply that is not there. {% endcomment %} {% if msg.reply_to.thread_root_id %}data-reply-thread-root="{{ msg.reply_to.thread_root_id }}"{% endif %} {% if msg.reply_to.deleted_at %} data-reply-deleted {% else %} data-reply-author="{{ msg.reply_to.author.get_full_name|default:msg.reply_to.author.username }}" data-reply-preview="{{ msg.reply_to.body|truncatechars:100 }}" {% endif %} {% endif %}>
+      <div slot="message" id="{{ prefix }}-{{ msg.uuid }}" data-message-uuid="{{ msg.uuid }}" data-body="{{ msg.body }}" {% if msg.body_html %}data-has-body{% endif %} {% comment %} hide_quote_for is the thread panel's root: a reply that answers the root would otherwise quote a message rendered right above it, on every single reply. A reply answering another reply still quotes, because that target may be far up the thread. {% endcomment %} {% if msg.reply_to and msg.reply_to.uuid != hide_quote_for %} data-reply-uuid="{{ msg.reply_to.uuid }}" {% comment %} The quoted message's thread root rides along (thread_root_id: reply_to is select_related, its FK column costs no query) so a quote pointing into a thread opens the panel instead of paging the main flow back forever looking for a reply that is not there. {% endcomment %} {% if viewer.can_thread and msg.reply_to.thread_root_id %}data-reply-thread-root="{{ msg.reply_to.thread_root_id }}"{% endif %} {% if msg.reply_to.deleted_at %} data-reply-deleted {% else %} data-reply-author="{{ msg.reply_to.quote_author_name }}" data-reply-preview="{{ msg.reply_to.body|truncatechars:100 }}" {% endif %} {% endif %}>
 
         {% if msg.body_html %}
           {# Capped here, not on the bubble: attachments sit in it too #}
           <div class="msg-body prose prose-sm max-w-[36rem] break-words">{{ msg.body_html|safe }}</div>
         {% endif %}
-        {% if msg.tool_data %}
+        {# Both belong to the AI flow a guest is only visiting: the timeline names tools and arguments, and the interaction buttons POST to a member-only endpoint. #}
+        {% if not viewer.is_guest and msg.tool_data %}
           {% render_ai_steps msg %}
         {% endif %}
-        {% if msg.interaction %}
+        {% if not viewer.is_guest and msg.interaction %}
           {% include "chat/ui/partials/_message_interaction.html" with msg=msg %}
         {% endif %}
 
@@ -98,13 +100,23 @@
           this JSON payload, replacing the script element in place; the audio
           players below it are server components (chatAudioPlayer) the shell
           slots between the media grid and the file chips.
+
+          A guest gets neither. Everything the payload and the players point
+          at is /api/v1/chat/attachments/<uuid>, which authenticates a
+          session; a meeting token opens nothing there, so drawing them would
+          produce a mosaic of broken images and a player that never loads.
+          One line saying the message carries something is the honest render.
         {% endcomment %}
         {% with media=msg.media_attachments files=msg.file_attachments audios=msg.audio_attachments %}
           {% if media or files or audios %}
-            {{ msg|shell_attachment_data|json_script }}
-            {% for att in audios %}
-              {% include "chat/ui/partials/_audio_player.html" with att=att is_own=is_own %}
-            {% endfor %}
+            {% if viewer.is_guest %}
+              <div class="text-xs italic opacity-60 my-1">Attachment shared with members</div>
+            {% else %}
+              {{ msg|shell_attachment_data|json_script }}
+              {% for att in audios %}
+                {% include "chat/ui/partials/_audio_player.html" with att=att is_own=is_own %}
+              {% endfor %}
+            {% endif %}
           {% endif %}
         {% endwith %}
 
@@ -121,7 +133,7 @@
         {% endif %}
 
         {# Retry button for bot error messages #}
-        {% if not is_own and msg.body|slice:":1" == "⚠" %}
+        {% if not viewer.is_guest and not is_own and msg.body|slice:":1" == "⚠" %}
           <button
             data-part="after-bubble"
             class="btn btn-ghost btn-xs gap-1 text-warning mt-0.5"
@@ -140,42 +152,46 @@
           <div
             class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5"
           >
-            {# Quick reactions - server-rendered so already-applied ones show as selected #}
-            {% render_reaction_picker msg current_user quick_emojis %}
-            <div class="w-px self-stretch my-0.5 bg-base-300"></div>
-            {# Full emoji picker #}
+            {% if viewer.can_react %}
+              {# Quick reactions - server-rendered so already-applied ones show as selected #}
+              {% render_reaction_picker msg viewer quick_emojis %}
+              <div class="w-px self-stretch my-0.5 bg-base-300"></div>
+              {# Full emoji picker #}
+              <button
+                class="btn btn-ghost btn-xs btn-square"
+                @click="openEmojiPicker('reaction', $event, '{{ msg.uuid }}')"
+                title="More reactions"
+              >
+                <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
+              </button>
+            {% endif %}
             <button
               class="btn btn-ghost btn-xs btn-square"
-              @click="openEmojiPicker('reaction', $event, '{{ msg.uuid }}')"
-              title="More reactions"
-            >
-              <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
-            </button>
-            <button
-              class="btn btn-ghost btn-xs btn-square"
-              @click="startReply('{{ msg.uuid }}', '{{ msg.author.get_full_name|default:msg.author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"
+              @click="startReply('{{ msg.uuid }}', '{{ author.get_full_name|default:author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"
               title="Reply"
             >
               <i data-lucide="reply" class="w-3.5 h-3.5"></i>
             </button>
-            {% if msg.uuid in pinned_message_ids %}
-              <button
-                class="btn btn-ghost btn-xs btn-square"
-                @click="unpinMessage('{{ msg.uuid }}')"
-                title="Unpin"
-              >
-                <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
-              </button>
-            {% else %}
-              <button
-                class="btn btn-ghost btn-xs btn-square"
-                @click="pinMessage('{{ msg.uuid }}')"
-                title="Pin"
-              >
-                <i data-lucide="pin" class="w-3.5 h-3.5"></i>
-              </button>
+            {% if viewer.can_pin %}
+              {% if msg.uuid in pinned_message_ids %}
+                <button
+                  class="btn btn-ghost btn-xs btn-square"
+                  @click="unpinMessage('{{ msg.uuid }}')"
+                  title="Unpin"
+                >
+                  <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
+                </button>
+              {% else %}
+                <button
+                  class="btn btn-ghost btn-xs btn-square"
+                  @click="pinMessage('{{ msg.uuid }}')"
+                  title="Pin"
+                >
+                  <i data-lucide="pin" class="w-3.5 h-3.5"></i>
+                </button>
+              {% endif %}
             {% endif %}
-            {% if is_own %}
+            {% if is_own and viewer.can_edit_own %}
               <button
                 class="btn btn-ghost btn-xs btn-square"
                 @click="startEdit('{{ msg.uuid }}')"
@@ -184,20 +200,23 @@
                 <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </button>
             {% endif %}
-            {% if is_own or is_bot %}
-              <button
-                class="btn btn-ghost btn-xs btn-square text-error"
-                @click="deleteMessage('{{ msg.uuid }}')"
-                title="Delete"
-              >
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-              </button>
+            {% if viewer.can_delete_own %}
+              {# A guest-authored message has no author to defer to, so any active member (the viewer, per the membership gate on the delete endpoint) can remove it - but never edit it under the guest's name. #}
+              {% if is_own or is_bot or author.is_guest|default:False %}
+                <button
+                  class="btn btn-ghost btn-xs btn-square text-error"
+                  @click="deleteMessage('{{ msg.uuid }}')"
+                  title="Delete"
+                >
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              {% endif %}
             {% endif %}
           </div>
         </div>
 
         {# Reactions - the partial's root carries data-part="below" #}
-        {% render_reactions msg current_user %}
+        {% render_reactions msg viewer %}
 
         {% comment %}
           A message is either a thread's root (it has replies) or one of its
@@ -208,43 +227,45 @@
           thread is already open, and a "View thread" under every reply would
           be pure noise.
         {% endcomment %}
-        {% if msg.reply_count %}
-          <button
-            type="button"
-            data-part="below"
-            data-testid="thread-footer"
-            class="flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded-full text-xs text-info hover:bg-info/10 transition-colors"
-            @click="openThread('{{ msg.uuid }}')"
-          >
-            <i data-lucide="messages-square" class="w-3 h-3"></i>
-            {% comment %}
+        {% if viewer.can_thread %}
+          {% if msg.reply_count %}
+            <button
+              type="button"
+              data-part="below"
+              data-testid="thread-footer"
+              class="flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded-full text-xs text-info hover:bg-info/10 transition-colors"
+              @click="openThread('{{ msg.uuid }}')"
+            >
+              <i data-lucide="messages-square" class="w-3 h-3"></i>
+              {% comment %}
               Keyed by message, not found by walking siblings: a message group
               holds several messages, so a positional lookup would land on a
               neighbour's counter.
-            {% endcomment %}
-            <span data-thread-count="{{ msg.uuid }}">{{ msg.reply_count }} repl{{ msg.reply_count|pluralize:"y,ies" }}</span>
-            <span
-              x-show="threadUnread('{{ msg.uuid }}') > 0"
-              x-cloak
-              class="w-1.5 h-1.5 rounded-full bg-info"
-            ></span>
-          </button>
-        {% elif msg.thread_root_id and not in_thread %}
-          {% comment %}
+              {% endcomment %}
+              <span data-thread-count="{{ msg.uuid }}">{{ msg.reply_count }} repl{{ msg.reply_count|pluralize:"y,ies" }}</span>
+              <span
+                x-show="threadUnread('{{ msg.uuid }}') > 0"
+                x-cloak
+                class="w-1.5 h-1.5 rounded-full bg-info"
+              ></span>
+            </button>
+          {% elif msg.thread_root_id and not in_thread %}
+            {% comment %}
             thread_root_id, not thread_root.uuid: the flow queryset does not
             select_related the root, so dereferencing it would fire a query per
             reply.
-          {% endcomment %}
-          <button
-            type="button"
-            data-part="below"
-            data-testid="thread-link"
-            class="flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded-full text-xs text-base-content/50 hover:text-info hover:bg-info/10 transition-colors"
-            @click="openThread('{{ msg.thread_root_id }}')"
-          >
-            <i data-lucide="messages-square" class="w-3 h-3"></i>
-            <span>View thread</span>
-          </button>
+            {% endcomment %}
+            <button
+              type="button"
+              data-part="below"
+              data-testid="thread-link"
+              class="flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded-full text-xs text-base-content/50 hover:text-info hover:bg-info/10 transition-colors"
+              @click="openThread('{{ msg.thread_root_id }}')"
+            >
+              <i data-lucide="messages-square" class="w-3 h-3"></i>
+              <span>View thread</span>
+            </button>
+          {% endif %}
         {% endif %}
       </div>
     {% endif %}
@@ -253,8 +274,8 @@
   {# Footer: time + read receipt (the receipt partial's root carries slot="footer") #}
   {% with last_msg=messages|last %}
     <span slot="footer" class="text-[0.65rem] text-base-content/40">{{ last_msg.created_at|localtime_tag }}</span>
-    {% if is_own %}
-      {% render_read_receipt last_msg conversation_kind %}
+    {% if is_own and viewer.can_see_receipts %}
+      {% render_read_receipt last_msg conversation_kind viewer %}
     {% endif %}
   {% endwith %}
   </chat-message-group>

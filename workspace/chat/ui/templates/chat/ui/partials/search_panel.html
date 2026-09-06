@@ -169,6 +169,7 @@
             class="font-medium text-xs"
             x-text="((result.author.first_name || '') + ' ' + (result.author.last_name || '')).trim() || result.author.username"
           ></span>
+          <span class="badge badge-xs badge-outline" x-show="result.author.is_guest">Guest</span>
           <span
             class="text-[0.65rem] text-base-content/40"
             x-text="formatDateTime(result.created_at)"

@@ -1,6 +1,24 @@
-// Voice room: pure helpers shared by the room page and the main-tab observer.
-// The Alpine room factory lives in room.js; speaking-meter wiring that touches
-// AudioContext is validated in a real browser, not here.
+// Voice room: pure helpers shared by the room page, the main-tab observer and
+// the public guest page. The Alpine room factory lives in room.js; speaking-meter
+// wiring that touches AudioContext is validated in a real browser, not here.
+
+/**
+ * Format a duration in milliseconds as mm:ss, or h:mm:ss when >= 1 hour.
+ * Negative values are clamped to 0. Pure function - no side effects.
+ * @param {number} ms
+ * @returns {string}
+ */
+function chatRoomFormatDuration(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const s = total % 60;
+  const m = Math.floor(total / 60) % 60;
+  const h = Math.floor(total / 3600);
+  const pad = (n) => String(n).padStart(2, '0');
+  if (h > 0) {
+    return `${h}:${pad(m)}:${pad(s)}`;
+  }
+  return `${pad(m)}:${pad(s)}`;
+}
 
 function chatCallRoomUrl(conversationId) {
   return `/chat/room/${conversationId}`;
@@ -12,13 +30,13 @@ function chatCallRoomTabName(conversationId) {
   return `chat-room-${conversationId}`;
 }
 
-function chatCallBannerAction(callActive, participants, currentUserId) {
+function chatCallBannerAction(callActive, participants, selfKey) {
   // What the main (observer) tab should offer for an ongoing call:
   //   null     -> no active call, hide the banner
   //   'return' -> I am a participant, reactivate my room tab
   //   'join'   -> a call is running but I am not in it
   if (!callActive) return null;
-  const inIt = (participants || []).some((p) => p.user_id === currentUserId);
+  const inIt = (participants || []).some((p) => p.participant_key === selfKey);
   return inIt ? 'return' : 'join';
 }
 
@@ -40,22 +58,23 @@ function chatCallAutoPinTarget(participants, pinnedManually) {
   const sharer = (participants || []).find(
     (p) => p && p.media_state && p.media_state.screen === true,
   );
-  return sharer ? sharer.user_id : null;
+  return sharer ? sharer.participant_key : null;
 }
 
-function chatCallSpotlightTarget(participants, pinnedUserId, pinnedManually) {
+function chatCallSpotlightTarget(participants, pinnedKey, pinnedManually) {
   // Which participant to show large. A manual pin wins while that participant is
   // still in the call; otherwise the spotlight is derived from live state - the
   // active screen sharer, or the equal grid (null). Deriving instead of latching
   // a one-off event means a sharer is spotlighted even for someone who joined
   // after the share began, and the spotlight clears the moment sharing stops.
   const list = participants || [];
-  if (pinnedManually && pinnedUserId != null) {
-    return list.some((p) => p.user_id === pinnedUserId) ? pinnedUserId : null;
+  if (pinnedManually && pinnedKey != null) {
+    return list.some((p) => p.participant_key === pinnedKey) ? pinnedKey : null;
   }
   return chatCallAutoPinTarget(list, pinnedManually);
 }
 
+window.chatRoomFormatDuration = chatRoomFormatDuration;
 window.chatCallRoomUrl = chatCallRoomUrl;
 window.chatCallRoomTabName = chatCallRoomTabName;
 window.chatCallBannerAction = chatCallBannerAction;

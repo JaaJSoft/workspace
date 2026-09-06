@@ -357,6 +357,10 @@
                 class="p-1 text-white text-[0.6rem] opacity-0 group-hover/media:opacity-100 transition-opacity truncate w-full"
               >
                 <span x-text="item.author.username"></span>
+                <span
+                  class="badge badge-xs badge-outline ml-1"
+                  x-show="item.author.is_guest"
+                >Guest</span>
               </div>
             </div>
           </div>
@@ -386,6 +390,10 @@
                   class="text-[0.6rem] text-base-content/40"
                   x-text="formatFileSize(item.size) + ' · ' + item.author.username"
                 ></p>
+                <span
+                  class="badge badge-xs badge-outline ml-1"
+                  x-show="item.author.is_guest"
+                >Guest</span>
               </div>
             </li>
           </template>
@@ -414,6 +422,10 @@
               class="text-[0.6rem] text-base-content/40"
               x-text="formatFileSize(item.size) + ' · ' + item.author.username"
             ></p>
+            <span
+              class="badge badge-xs badge-outline ml-1"
+              x-show="item.author.is_guest"
+            >Guest</span>
           </div>
         </li>
       </template>

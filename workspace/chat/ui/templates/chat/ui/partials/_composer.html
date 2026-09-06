@@ -5,14 +5,22 @@
   Renderable inside any component that spreads chatInputMixin and
   chatRecorderMixin. It reads only mixin state and calls only mixin methods,
   so it carries no assumption about which surface it sits on.
+
+  composer_capabilities is an optional dict, built with the capabilities tag
+  from ui_tags, narrowing what the composer offers: attachments, voice,
+  mentions (the @everyone row lives inside the mention dropdown, so it goes
+  with it). Omitting the dict means everything, which is why each gate below
+  reads "no map, or the map says yes". The guest meeting page passes a map
+  with all three off and gets text, markdown and emoji only.
+
+  Every gate is glued to the line it opens and to the line it closes, so the
+  render with no map is byte for byte the one this file produced before the
+  parameter existed.
 {% endcomment %}
 <!-- Input area -->
 <div
   class="p-3 bg-base-100 border-t border-base-300"
-  @dragenter.prevent="handleDragEnter($event)"
-  @dragover.prevent="handleDragOver($event)"
-  @dragleave.prevent="handleDragLeave($event)"
-  @drop.prevent="handleDrop($event)"
+  {% if not composer_capabilities or composer_capabilities.attachments %}@dragenter.prevent="handleDragEnter($event)" @dragover.prevent="handleDragOver($event)" @dragleave.prevent="handleDragLeave($event)" @drop.prevent="handleDrop($event)"{% endif %}
 >
 
   <!-- Reply preview banner -->
@@ -56,56 +64,61 @@
   </div>
 
   <!-- Pending files preview -->
-  {% include "ui/partials/attachment_chips.html" with chips_class="mb-2 flex flex-wrap gap-2 px-1" %}
+  {% if not composer_capabilities or composer_capabilities.attachments %}
+    {% include "ui/partials/attachment_chips.html" with chips_class="mb-2 flex flex-wrap gap-2 px-1" %}
+  {% endif %}
 
   <!-- Mention autocomplete dropdown -->
-  <div
-    x-show="mentionActive && mentionResults.length > 0"
-    x-cloak
-    class="bg-base-100 border border-base-300 rounded-lg shadow-lg mb-1 max-h-48 overflow-y-auto z-50"
-  >
-    <template x-for="(user, idx) in mentionResults" :key="user.username">
-      <button
-        class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-base-200 transition-colors text-left"
-        :class="idx === mentionHighlight ? 'bg-base-200' : ''"
-        @mousedown.prevent="insertMention(user)"
-        @mouseenter="mentionHighlight = idx"
-      >
-        <template x-if="user.username === 'everyone'">
-          <div class="avatar placeholder">
-            <div
-              class="bg-warning text-warning-content w-7 h-7 rounded-full flex items-center justify-center"
-            >
-              <i data-lucide="users" class="w-3.5 h-3.5"></i>
+  {% if not composer_capabilities or composer_capabilities.mentions %}
+    <div
+      x-show="mentionActive && mentionResults.length > 0"
+      x-cloak
+      class="bg-base-100 border border-base-300 rounded-lg shadow-lg mb-1 max-h-48 overflow-y-auto z-50"
+    >
+      <template x-for="(user, idx) in mentionResults" :key="user.username">
+        <button
+          class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-base-200 transition-colors text-left"
+          :class="idx === mentionHighlight ? 'bg-base-200' : ''"
+          @mousedown.prevent="insertMention(user)"
+          @mouseenter="mentionHighlight = idx"
+        >
+          <template x-if="user.username === 'everyone'">
+            <div class="avatar placeholder">
+              <div
+                class="bg-warning text-warning-content w-7 h-7 rounded-full flex items-center justify-center"
+              >
+                <i data-lucide="users" class="w-3.5 h-3.5"></i>
+              </div>
             </div>
+          </template>
+          <template x-if="user.username !== 'everyone'">
+            <user-avatar :user-id="user.id" :username="user.username" size="sm"></user-avatar>
+          </template>
+          <div class="flex-1 min-w-0">
+            <span
+              class="font-medium"
+              x-text="user.username === 'everyone' ? '@everyone' : '@' + user.username"
+            ></span>
+            <span
+              x-show="user.username !== 'everyone'"
+              class="text-base-content/50 ml-1 text-xs"
+              x-text="[user.first_name, user.last_name].filter(Boolean).join(' ')"
+            ></span>
           </div>
-        </template>
-        <template x-if="user.username !== 'everyone'">
-          <user-avatar :user-id="user.id" :username="user.username" size="sm"></user-avatar>
-        </template>
-        <div class="flex-1 min-w-0">
-          <span
-            class="font-medium"
-            x-text="user.username === 'everyone' ? '@everyone' : '@' + user.username"
-          ></span>
-          <span
-            x-show="user.username !== 'everyone'"
-            class="text-base-content/50 ml-1 text-xs"
-            x-text="[user.first_name, user.last_name].filter(Boolean).join(' ')"
-          ></span>
-        </div>
-      </button>
-    </template>
-  </div>
+        </button>
+      </template>
+    </div>
+  {% endif %}
 
   <!-- Input container — mobile: compact row; desktop: toolbar + textarea -->
   <!-- Mobile input (< sm) -->
   <div
     class="flex sm:hidden items-end gap-1.5"
-    x-show="recorderState === 'idle'"
-    x-cloak
+    {% if not composer_capabilities or composer_capabilities.voice %}x-show="recorderState === 'idle'" {% endif %}x-cloak
   >
-    {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-top flex-shrink-0" button_class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" icon_class="w-5 h-5" %}
+    {% if not composer_capabilities or composer_capabilities.attachments %}
+      {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-top flex-shrink-0" button_class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" icon_class="w-5 h-5" %}
+    {% endif %}
     <div
       class="flex-1 flex items-center border border-base-300 rounded-btn transition-colors focus-within:border-info/50 min-h-[2.375rem]"
     >
@@ -114,25 +127,23 @@
         x-model="messageBody"
         @keydown="handleInputKeydown($event)"
         @input="autoResize($el); handleMentionInput(); sendTypingSignal()"
-        @paste="handlePaste($event)"
-        style="min-height:36px;
-               line-height:20px;
-               padding-top:8px;
-               padding-bottom:8px"
+        {% if not composer_capabilities or composer_capabilities.attachments %}@paste="handlePaste($event)" {% endif %}style="min-height:36px; line-height:20px; padding-top:8px; padding-bottom:8px"
         class="textarea textarea-ghost w-full max-h-[6rem] resize-none px-3 focus:outline-none text-sm !border-0 !outline-0 !bg-transparent"
         placeholder="Message..."
         rows="1"
       ></textarea>
     </div>
-    <button
-      class="btn btn-ghost btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
-      x-show="recorderSupported && !hasComposerContent()"
-      x-cloak
-      @click="startRecording()"
-      title="Record a voice message"
-    >
-      <i data-lucide="mic" class="w-5 h-5"></i>
-    </button>
+    {% if not composer_capabilities or composer_capabilities.voice %}
+      <button
+        class="btn btn-ghost btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
+        x-show="recorderSupported && !hasComposerContent()"
+        x-cloak
+        @click="startRecording()"
+        title="Record a voice message"
+      >
+        <i data-lucide="mic" class="w-5 h-5"></i>
+      </button>
+    {% endif %}
     <button
       class="btn btn-info btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
       x-show="!recorderSupported || hasComposerContent()"
@@ -145,108 +156,109 @@
     </button>
   </div>
 
-  <!-- Recording banner. Below sm the buttons sit outside the bordered box,
-       sized like the idle row's send button so they line up with it. -->
-  <div
-    x-show="recorderState === 'recording'"
-    x-cloak
-    class="flex items-center gap-1.5 sm:gap-2 sm:py-2 sm:pl-3 sm:pr-2 sm:border sm:border-error/40 sm:rounded-2xl"
-  >
+  {% if not composer_capabilities or composer_capabilities.voice %}
+    <!-- Recording banner. Below sm the buttons sit outside the bordered box,
+         sized like the idle row's send button so they line up with it. -->
     <div
-      class="flex-1 flex items-center gap-2 min-h-[2.375rem] px-3 border border-error/40 rounded-btn sm:min-h-0 sm:px-0 sm:border-0"
-    >
-      <span
-        class="inline-block w-2.5 h-2.5 rounded-full bg-error animate-pulse flex-shrink-0"
-      ></span>
-      <span class="text-sm tabular-nums flex-1" x-text="recordLabel()"></span>
-    </div>
-    <button
-      class="btn btn-ghost btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
-      @click="cancelRecording()"
-      title="Discard"
-    >
-      <i data-lucide="trash-2" class="w-5 h-5 sm:w-4 sm:h-4"></i>
-    </button>
-    <button
-      class="btn btn-error btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
-      @click="stopRecording()"
-      title="Stop"
-    >
-      <i data-lucide="square" class="w-5 h-5 sm:w-4 sm:h-4"></i>
-    </button>
-  </div>
-
-  <!-- Recording preview. x-if, not x-show: chatAudioPlayer bakes the
-             measured duration in at construction, so the component has to be
-             built after the recording finished, not once at composer mount. -->
-  <template x-if="recorderState === 'preview'">
-    <div
-      class="flex items-center gap-1.5 sm:gap-2 sm:py-2 sm:pl-3 sm:pr-2 sm:border sm:border-base-300 sm:rounded-2xl"
+      x-show="recorderState === 'recording'"
+      x-cloak
+      class="flex items-center gap-1.5 sm:gap-2 sm:py-2 sm:pl-3 sm:pr-2 sm:border sm:border-error/40 sm:rounded-2xl"
     >
       <div
-        class="flex-1 min-w-0 flex items-center min-h-[2.375rem] px-3 border border-base-300 rounded-btn sm:min-h-0 sm:px-0 sm:border-0"
-        x-data="chatAudioPlayer('preview', recordedDuration)"
-        x-ref="previewPlayer"
+        class="flex-1 flex items-center gap-2 min-h-[2.375rem] px-3 border border-error/40 rounded-btn sm:min-h-0 sm:px-0 sm:border-0"
       >
-        <audio
-          x-ref="audio"
-          :src="recordedUrl"
-          preload="metadata"
-          @loadedmetadata="onMetadata()"
-          @timeupdate="currentTime = $refs.audio.currentTime"
-          @ended="onEnded()"
-        ></audio>
-        <div class="flex-1 min-w-0 flex items-center gap-1.5">
-          <button
-            class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
-            @click="toggle()"
-          >
-            <i data-lucide="play" class="w-4 h-4" x-show="!playing"></i>
-            <i data-lucide="pause" class="w-4 h-4" x-show="playing" x-cloak></i>
-          </button>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="0.1"
-            class="range range-xs flex-1 min-w-0"
-            :value="progressPercent()"
-            @input="seekToPercent($event.target.value)"
-            aria-label="Seek"
-          />
-          <span
-            class="text-[0.65rem] opacity-70 tabular-nums flex-shrink-0"
-            x-text="elapsedLabel() + ' / ' + durationLabel()"
-          ></span>
-        </div>
+        <span
+          class="inline-block w-2.5 h-2.5 rounded-full bg-error animate-pulse flex-shrink-0"
+        ></span>
+        <span class="text-sm tabular-nums flex-1" x-text="recordLabel()"></span>
       </div>
       <button
         class="btn btn-ghost btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
         @click="cancelRecording()"
-        :disabled="sendingRecording"
         title="Discard"
       >
         <i data-lucide="trash-2" class="w-5 h-5 sm:w-4 sm:h-4"></i>
       </button>
       <button
-        class="btn btn-info btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
-        @click="sendRecording()"
-        :disabled="sendingRecording"
-        title="Send"
+        class="btn btn-error btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
+        @click="stopRecording()"
+        title="Stop"
       >
-        <i
-          data-lucide="send"
-          class="w-[1.125rem] h-[1.125rem] sm:w-3.5 sm:h-3.5"
-        ></i>
+        <i data-lucide="square" class="w-5 h-5 sm:w-4 sm:h-4"></i>
       </button>
     </div>
-  </template>
+
+    <!-- Recording preview. x-if, not x-show: chatAudioPlayer bakes the
+               measured duration in at construction, so the component has to be
+               built after the recording finished, not once at composer mount. -->
+    <template x-if="recorderState === 'preview'">
+      <div
+        class="flex items-center gap-1.5 sm:gap-2 sm:py-2 sm:pl-3 sm:pr-2 sm:border sm:border-base-300 sm:rounded-2xl"
+      >
+        <div
+          class="flex-1 min-w-0 flex items-center min-h-[2.375rem] px-3 border border-base-300 rounded-btn sm:min-h-0 sm:px-0 sm:border-0"
+          x-data="chatAudioPlayer('preview', recordedDuration)"
+          x-ref="previewPlayer"
+        >
+          <audio
+            x-ref="audio"
+            :src="recordedUrl"
+            preload="metadata"
+            @loadedmetadata="onMetadata()"
+            @timeupdate="currentTime = $refs.audio.currentTime"
+            @ended="onEnded()"
+          ></audio>
+          <div class="flex-1 min-w-0 flex items-center gap-1.5">
+            <button
+              class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
+              @click="toggle()"
+            >
+              <i data-lucide="play" class="w-4 h-4" x-show="!playing"></i>
+              <i data-lucide="pause" class="w-4 h-4" x-show="playing" x-cloak></i>
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="0.1"
+              class="range range-xs flex-1 min-w-0"
+              :value="progressPercent()"
+              @input="seekToPercent($event.target.value)"
+              aria-label="Seek"
+            />
+            <span
+              class="text-[0.65rem] opacity-70 tabular-nums flex-shrink-0"
+              x-text="elapsedLabel() + ' / ' + durationLabel()"
+            ></span>
+          </div>
+        </div>
+        <button
+          class="btn btn-ghost btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
+          @click="cancelRecording()"
+          :disabled="sendingRecording"
+          title="Discard"
+        >
+          <i data-lucide="trash-2" class="w-5 h-5 sm:w-4 sm:h-4"></i>
+        </button>
+        <button
+          class="btn btn-info btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
+          @click="sendRecording()"
+          :disabled="sendingRecording"
+          title="Send"
+        >
+          <i
+            data-lucide="send"
+            class="w-[1.125rem] h-[1.125rem] sm:w-3.5 sm:h-3.5"
+          ></i>
+        </button>
+      </div>
+    </template>
+  {% endif %}
 
   <!-- Desktop input (>= sm) -->
   <div
     class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50"
-    x-show="recorderState === 'idle'"
-    x-cloak
+    {% if not composer_capabilities or composer_capabilities.voice %}x-show="recorderState === 'idle'" {% endif %}x-cloak
   >
     <!-- Toolbar + Send -->
     <div class="flex items-center gap-0.5 pl-2 pr-1 py-1">
@@ -335,19 +347,23 @@
       </button>
 
       <!-- Attach file -->
-      {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-top dropdown-end" button_class="btn btn-ghost btn-xs btn-square" icon_class="w-3.5 h-3.5" %}
+      {% if not composer_capabilities or composer_capabilities.attachments %}
+        {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-top dropdown-end" button_class="btn btn-ghost btn-xs btn-square" icon_class="w-3.5 h-3.5" %}
+      {% endif %}
 
       <div class="w-px self-stretch my-1 bg-base-300"></div>
 
-      <button
-        class="btn btn-ghost btn-xs btn-square"
-        x-show="recorderSupported && !hasComposerContent()"
-        x-cloak
-        @click="startRecording()"
-        title="Record a voice message"
-      >
-        <i data-lucide="mic" class="w-3.5 h-3.5"></i>
-      </button>
+      {% if not composer_capabilities or composer_capabilities.voice %}
+        <button
+          class="btn btn-ghost btn-xs btn-square"
+          x-show="recorderSupported && !hasComposerContent()"
+          x-cloak
+          @click="startRecording()"
+          title="Record a voice message"
+        >
+          <i data-lucide="mic" class="w-3.5 h-3.5"></i>
+        </button>
+      {% endif %}
 
       <!-- Send button -->
       <button
@@ -367,8 +383,7 @@
       x-model="messageBody"
       @keydown="handleInputKeydown($event)"
       @input="autoResize($el); handleMentionInput(); sendTypingSignal()"
-      @paste="handlePaste($event)"
-      class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none !bg-transparent"
+      {% if not composer_capabilities or composer_capabilities.attachments %}@paste="handlePaste($event)" {% endif %}class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none !bg-transparent"
       placeholder="Type a message..."
       rows="1"
     ></textarea>

@@ -89,6 +89,15 @@ class ChatRoomViewTests(TestCase):
         usernames = {mbr["user"]["username"] for mbr in members}
         self.assertIn("other_member", usernames)
 
+    def test_room_renders_the_call_stage(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('data-testid="participants-grid"', html)
+        self.assertIn('@click="leaveRoom()"', html)
+        self.assertIn('x-for="p in remoteParticipants()"', html)
+
     def test_room_page_loads_the_message_shell(self):
         """Regression: the room reuses conversation_pane.html, whose messages are
         server-rendered as <chat-message-group> shells with slotted children. The
@@ -98,6 +107,58 @@ class ChatRoomViewTests(TestCase):
         self.client.force_login(self.member)
         resp = self.client.get(self._url())
         self.assertIn("chat/ui/js/message_shell.js", resp.content.decode())
+
+    def test_room_embeds_the_meeting_when_the_conversation_has_one(self):
+        from django.utils import timezone
+
+        from workspace.chat.services.meetings import create_meeting
+        from workspace.chat.tests.meeting_fixtures import make_event
+
+        event = make_event(
+            self.member, start=timezone.now() + timezone.timedelta(minutes=5)
+        )
+        meeting = create_meeting(event, self.member)
+        self.client.force_login(self.member)
+        resp = self.client.get(f"/chat/room/{meeting.conversation_id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('id="room-meeting-data"', resp.content.decode())
+        self.assertIn(meeting.slug, resp.content.decode())
+
+    def test_room_without_a_meeting_embeds_null(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(self._url())
+        self.assertIn(
+            '<script id="room-meeting-data" type="application/json">null</script>',
+            resp.content.decode(),
+        )
+
+    def test_host_control_markup_ships_regardless_of_a_meeting_existing(self):
+        """host_controls=True is unconditional in room.html; call_stage.html's
+        lobby/lock/end block is only gated client-side, by <template x-if="meeting">
+        - Django never branches on whether the conversation has a meeting. This
+        pins that admitGuest( (and the rest of the host bindings) reaches a
+        plain room's HTML exactly as it reaches a meeting room's: Alpine, not
+        the server, is what keeps the block from mounting when there is no
+        meeting. It is harmless (the block simply never renders in the DOM),
+        but a future attempt to gate it server-side (e.g. wrapping it in
+        {% if meeting %}) would flip this assertion - which is the point of
+        pinning it here.
+        """
+        self.client.force_login(self.member)
+        resp_without_meeting = self.client.get(self._url())
+        self.assertIn("admitGuest(", resp_without_meeting.content.decode())
+
+        from django.utils import timezone
+
+        from workspace.chat.services.meetings import create_meeting
+        from workspace.chat.tests.meeting_fixtures import make_event
+
+        event = make_event(
+            self.member, start=timezone.now() + timezone.timedelta(minutes=5)
+        )
+        meeting = create_meeting(event, self.member)
+        resp_with_meeting = self.client.get(f"/chat/room/{meeting.conversation_id}")
+        self.assertIn("admitGuest(", resp_with_meeting.content.decode())
 
 
 class RoomTitleMatchesTheSidebarTests(TestCase):

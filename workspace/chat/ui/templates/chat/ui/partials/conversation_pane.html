@@ -145,6 +145,64 @@
         </div>
       </div>
 
+      {% comment %}Provenance banner: this conversation was created for a
+      calendar event, and the link it shows is the one guests are handed. The
+      occurrence and the lock are absent from list payloads on purpose - see
+      meetingOccurrenceLabel in ui_helpers.js.{% endcomment %}
+      <div
+        x-show="activeConversation.meeting"
+        x-cloak
+        class="px-4 py-2 border-b border-base-300 bg-base-200 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1"
+      >
+        <i
+          data-lucide="calendar-days"
+          class="w-4 h-4 text-primary flex-shrink-0"
+        ></i>
+        {% comment %}One row from sm up, wrapping only on a phone. Flex line
+        breaking measures an item's full text before any shrinking, so
+        `truncate` and `min-w-0` alone do not stop a long title from pushing
+        the button onto a second row - the room's 380px column needs nowrap
+        for that, and then min-w-0 is what lets the two spans ellipsize
+        instead of overflowing.{% endcomment %}
+        <span class="text-sm truncate min-w-0">
+          Meeting for
+          <span
+            class="font-medium"
+            x-text="activeConversation.meeting?.event_title || ''"
+          ></span>
+        </span>
+        {% comment %}The date never gives ground: it is short, it is the one
+        thing here the header above does not already say, and half a date is
+        worse than none. The title absorbs the shrinking instead.
+        {% endcomment %}
+        <span
+          x-show="meetingOccurrenceLabel(activeConversation)"
+          class="text-xs text-base-content/60 flex-shrink-0"
+          x-text="meetingOccurrenceLabel(activeConversation)"
+        ></span>
+        <span
+          x-show="activeConversation.meeting?.locked"
+          class="badge badge-warning badge-sm flex-shrink-0"
+        >Locked</span>
+        {% comment %}The aria-label is for the icon-only variant alone: an
+        accessible name that does not contain the visible label replaces the
+        button's name with words nobody can say out loud (WCAG 2.5.3).
+        {% endcomment %}
+        <button
+          class="btn btn-ghost btn-xs ml-auto flex-shrink-0"
+          @click="copyMeetingJoinUrl(activeConversation)"
+          title="Copy the link guests use to join"
+          {% if narrow_pane %}aria-label="Copy the link guests use to join"{% endif %}
+        >
+          <i data-lucide="link" class="w-3.5 h-3.5"></i>
+          {% comment %}Icon only in the room's ~380px column: the label is
+          what tips the row over into wrapping there, and the viewport is
+          desktop-wide, so no breakpoint can tell the two panes apart.
+          {% endcomment %}
+          {% if not narrow_pane %}Copy join link{% endif %}
+        </button>
+      </div>
+
       {# `relative` anchors the thread panel's mobile overlay to this area #}
       <!-- Content area: messages + optional info panel -->
       <div class="flex-1 flex min-h-0 min-w-0 relative">

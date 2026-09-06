@@ -2,32 +2,16 @@
 // panels, bot, call) but is locked to a single conversation and owns the call.
 // No sidebar, no conversation list: the room is one conversation, full screen.
 
-/**
- * Format a duration in milliseconds as mm:ss, or h:mm:ss when >= 1 hour.
- * Negative values are clamped to 0. Pure function - no side effects.
- * @param {number} ms
- * @returns {string}
- */
-function chatRoomFormatDuration(ms) {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const s = total % 60;
-  const m = Math.floor(total / 60) % 60;
-  const h = Math.floor(total / 3600);
-  const pad = (n) => String(n).padStart(2, '0');
-  if (h > 0) {
-    return `${h}:${pad(m)}:${pad(s)}`;
-  }
-  return `${pad(m)}:${pad(s)}`;
-}
-window.chatRoomFormatDuration = chatRoomFormatDuration;
-
 function chatRoomApp(currentUserId, conversationId) {
+  // Held so destroy() below can reach this mixin's own teardown by name.
+  const threads = chatThreadsMixin();
+
   return {
     currentUserId: currentUserId,
     roomConversationId: conversationId,
     callRole: 'owner',
     speakingIds: {},
-    pinnedUserId: null,
+    pinnedKey: null,
     pinnedManually: false,
     callElapsed: '00:00',
     _callStartMs: null,
@@ -43,11 +27,16 @@ function chatRoomApp(currentUserId, conversationId) {
     ...chatSseMixin(),
     ...chatMembersMixin(),
     ...chatPanelsMixin(),
-    ...chatThreadsMixin(),
+    ...threads,
     ...chatBotMixin(),
     ...chatCallMixin(),
+    ...chatMeetingHostMixin(),
     ...chatCallDiagnosticMixin(),
     ...chatRecorderMixin(),
+
+    // Placed after the mixin spreads: chatCallMixin() declares its own
+    // currentParticipantKey: null default, which would otherwise win.
+    currentParticipantKey: `u:${currentUserId}`,
 
     async init() {
       this._initCallSounds?.();
@@ -65,6 +54,15 @@ function chatRoomApp(currentUserId, conversationId) {
         try { conv = JSON.parse(convEl.textContent); } catch (e) { conv = null; }
       }
       this.activeConversation = conv || { uuid: this.roomConversationId };
+
+      const meetingEl = document.getElementById('room-meeting-data');
+      if (meetingEl) {
+        try { this.meeting = JSON.parse(meetingEl.textContent); } catch (e) { this.meeting = null; }
+      }
+      if (this.meeting) {
+        await this.loadLobby();
+        this._startLobbyRefresh();
+      }
 
       // Announce room presence so the main tab flips Join <-> Return instantly,
       // without waiting on the heartbeat/SSE round-trip.
@@ -88,6 +86,16 @@ function chatRoomApp(currentUserId, conversationId) {
       }
     },
 
+    // Alpine calls exactly one destroy(), and object spread would let the last
+    // mixin that declares one win in silence. The room's teardown is listed
+    // here, after the spreads, so adding a mixin with its own destroy cannot
+    // quietly drop another's.
+    destroy() {
+      this._stopLobbyRefresh?.();
+      this._cancelMessagesRetry?.();
+      threads.destroy?.call(this);
+    },
+
     // Lightweight speaking meter: sample local + remote streams ~10/s and flag
     // tiles whose normalized RMS crosses the threshold. Purely visual.
     _startSpeakingMeter() {
@@ -95,26 +103,26 @@ function chatRoomApp(currentUserId, conversationId) {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       this._audioCtx = new Ctx();
-      const analysers = {}; // user_id -> { analyser, data }
+      const analysers = {}; // participant_key -> { analyser, data }
 
-      const attach = (userId, stream) => {
-        if (!stream || analysers[userId]) return;
+      const attach = (key, stream) => {
+        if (!stream || analysers[key]) return;
         const src = this._audioCtx.createMediaStreamSource(stream);
         const analyser = this._audioCtx.createAnalyser();
         analyser.fftSize = 512;
         src.connect(analyser);
-        analysers[userId] = { analyser, data: new Uint8Array(analyser.frequencyBinCount) };
+        analysers[key] = { analyser, data: new Uint8Array(analyser.frequencyBinCount) };
       };
 
       this._meterTimer = setInterval(() => {
-        if (this._localStream) attach(this.currentUserId, this._localStream);
+        if (this._localStream) attach(this.currentParticipantKey, this._localStream);
         for (const id of Object.keys(this._peers || {})) {
           const el = this._peers[id].audioEl;
-          if (el && el.srcObject) attach(Number(id), el.srcObject);
+          if (el && el.srcObject) attach(id, el.srcObject);
         }
         // Prune analysers for peers that have departed; always keep local user
         const activeIds = new Set(Object.keys(this._peers || {}));
-        activeIds.add(String(this.currentUserId));
+        activeIds.add(this.currentParticipantKey);
         for (const id of Object.keys(analysers)) {
           if (!activeIds.has(id)) delete analysers[id];
         }
@@ -128,7 +136,7 @@ function chatRoomApp(currentUserId, conversationId) {
             sum += v * v;
           }
           const rms = Math.sqrt(sum / data.length);
-          const muted = id === String(this.currentUserId) && this.isMuted;
+          const muted = id === this.currentParticipantKey && this.isMuted;
           next[id] = !muted && window.chatIsSpeaking(rms);
         }
         this.speakingIds = next;
@@ -169,74 +177,74 @@ function chatRoomApp(currentUserId, conversationId) {
       });
     },
 
-    isSpeaking(userId) {
-      return !!this.speakingIds[userId];
+    isSpeaking(participantKey) {
+      return !!this.speakingIds[participantKey];
     },
 
     remoteParticipants() {
-      return this.callParticipants.filter(p => p.user_id !== this.currentUserId);
+      return this.callParticipants.filter((p) => p.participant_key !== this.currentParticipantKey);
     },
 
     selfParticipant() {
-      return this.callParticipants.find(p => p.user_id === this.currentUserId) || null;
+      return this.callParticipants.find((p) => p.participant_key === this.currentParticipantKey) || null;
     },
 
     gridColumns() {
       return Math.max(1, Math.ceil(Math.sqrt(this.remoteParticipants().length || 1)));
     },
 
-    pinTile(userId) {
+    pinTile(participantKey) {
       // Click a tile to spotlight it; click the pinned tile again to return to
       // the grid. Any click marks the choice manual so auto-pin yields to it.
-      this.pinnedUserId = (this.pinnedUserId === userId) ? null : userId;
+      this.pinnedKey = (this.pinnedKey === participantKey) ? null : participantKey;
       this.pinnedManually = true;
     },
 
     backToGrid() {
-      this.pinnedUserId = null;
+      this.pinnedKey = null;
       this.pinnedManually = true;
     },
 
-    spotlightUserId() {
-      return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedUserId, this.pinnedManually);
+    spotlightKey() {
+      return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedKey, this.pinnedManually);
     },
 
     isSpotlight() {
-      return this.spotlightUserId() != null;
+      return this.spotlightKey() != null;
     },
 
     spotlightParticipant() {
-      const id = this.spotlightUserId();
-      return id == null ? null : this.callParticipants.find((p) => p.user_id === id) || null;
+      const key = this.spotlightKey();
+      return key == null ? null : this.callParticipants.find((p) => p.participant_key === key) || null;
     },
 
     stripParticipants() {
       // Everyone except the spotlighted participant, for the thumbnail strip.
-      const id = this.spotlightUserId();
-      return this.callParticipants.filter((p) => p.user_id !== id);
+      const key = this.spotlightKey();
+      return this.callParticipants.filter((p) => p.participant_key !== key);
     },
 
     hasVideo(p) {
-      if (p && p.user_id === this.currentUserId) return !!(this.cameraOn || this.sharing);
+      if (p && p.participant_key === this.currentParticipantKey) return !!(this.cameraOn || this.sharing);
       return !!(p && p.media_state && (p.media_state.video || p.media_state.screen));
     },
 
-    streamFor(userId) {
-      if (userId === this.currentUserId) return this.localVideoStream || null;
-      return this.remoteStreams[userId] || null;
+    streamFor(participantKey) {
+      if (participantKey === this.currentParticipantKey) return this.localVideoStream || null;
+      return this.remoteStreams[participantKey] || null;
     },
 
     // No onCallParticipantUpdated override: the call mixin applies media_state,
-    // and spotlightUserId() derives the auto-pin from that live state, so a
+    // and spotlightKey() derives the auto-pin from that live state, so a
     // sharer is spotlighted (or cleared) reactively without latching an event.
 
     onCallParticipantLeft(detail) {
       if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      if (detail.user_id !== this.currentUserId) this._playCallCue('peer-leave');
-      this.callParticipants = this.callParticipants.filter((p) => p.user_id !== detail.user_id);
-      this._closePeer(detail.user_id);
-      if (this.pinnedUserId === detail.user_id) {
-        this.pinnedUserId = null;
+      if (detail.participant_key !== this.currentParticipantKey) this._playCallCue('peer-leave');
+      this.callParticipants = this.callParticipants.filter((p) => p.participant_key !== detail.participant_key);
+      this._closePeer(detail.participant_key);
+      if (this.pinnedKey === detail.participant_key) {
+        this.pinnedKey = null;
         this.pinnedManually = false;  // pin gone; allow auto-pin again
       }
     },

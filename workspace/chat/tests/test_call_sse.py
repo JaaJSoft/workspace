@@ -21,22 +21,32 @@ class CallSseDeliveryTests(TestCase):
         cache.clear()
 
     def test_poll_emits_queued_call_events(self):
-        sig.enqueue_event(self.user.id, "call_started", {"session_id": "s1"})
+        sig.enqueue_event(f"u:{self.user.id}", "call_started", {"session_id": "s1"})
         provider = ChatSSEProvider(self.user, None)
         events = provider.poll("dirty")
         names = [e[0] for e in events]
         self.assertIn("call_started", names)
 
+    def test_poll_ignores_a_foreign_participant_mailbox(self):
+        # A guest key that stringifies close to a member's must never be drained
+        # by that member's stream.
+        sig.enqueue_event(f"g:{self.user.id}", "call_started", {"session_id": "s1"})
+        provider = ChatSSEProvider(self.user, None)
+        names = [e[0] for e in provider.poll("dirty")]
+        self.assertNotIn("call_started", names)
+
     def test_call_events_emitted_even_when_not_dirty(self):
         # Signaling latency matters: deliver on the None (timeout) poll too.
-        sig.enqueue_event(self.user.id, "call_signal", {"from_user_id": 2})
+        sig.enqueue_event(
+            f"u:{self.user.id}", "call_signal", {"from_participant": "u:2"}
+        )
         provider = ChatSSEProvider(self.user, None)
         events = provider.poll(None)
         names = [e[0] for e in events]
         self.assertIn("call_signal", names)
 
     def test_drained_events_are_not_re_emitted(self):
-        sig.enqueue_event(self.user.id, "call_started", {})
+        sig.enqueue_event(f"u:{self.user.id}", "call_started", {})
         provider = ChatSSEProvider(self.user, None)
         provider.poll(None)
         self.assertEqual(provider.poll(None), [])

@@ -1,5 +1,7 @@
 from workspace.core.sse_registry import notify_sse
 
+from .identities import display_name_for_identity
+
 
 def notify_conversation_members(conversation, exclude_user=None):
     """Update SSE cache keys for all active members of a conversation."""
@@ -33,6 +35,7 @@ def notify_new_message(
     conversation,
     author,
     body,
+    guest=None,
     mentioned_user_ids=None,
     mention_everyone=False,
     thread_recipient_ids=None,
@@ -86,7 +89,7 @@ def notify_new_message(
     if not member_ids:
         return
 
-    author_name = author.get_full_name() or author.username
+    author_name = display_name_for_identity(author, guest)
     preview = (body[:150] + "...") if len(body) > 150 else body
     title = notification_title(conversation, author_name)
 

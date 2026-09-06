@@ -13,6 +13,7 @@ from workspace.common.mixins import CacheControlMixin
 
 from ..models import Message, MessageAttachment, Reaction
 from ..services.conversations import get_active_membership
+from ..services.identities import identity_payload
 from ..services.message_search import search_messages_qs
 
 logger = logging.getLogger(__name__)
@@ -139,15 +140,12 @@ class ConversationMessageSearchView(APIView):
             qs = qs.filter(attachments__mime_type__startswith="image/")
 
         order = ("-search_rank", "-created_at") if query else ("-created_at",)
-        messages = qs.select_related("author").order_by(*order).distinct()[:50]
+        messages = qs.select_related("author", "guest").order_by(*order).distinct()[:50]
 
         results = [
             {
                 "uuid": str(msg.uuid),
-                "author": {
-                    "id": msg.author.id,
-                    "username": msg.author.username,
-                },
+                "author": identity_payload(msg.author, msg.guest),
                 "body": msg.body,
                 "body_html": msg.body_html,
                 # Lets the UI open the thread a hit lives in: a threaded reply
@@ -199,7 +197,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
                 message__conversation_id=conversation_id,
                 message__deleted_at__isnull=True,
             )
-            .select_related("message__author")
+            .select_related("message__author", "message__guest")
             .order_by("-created_at")
         )
 
@@ -242,6 +240,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
         data = []
         for att in items:
             author = att.message.author
+            identity = identity_payload(author, att.message.guest)
             data.append(
                 {
                     "uuid": att.uuid,
@@ -256,10 +255,11 @@ class ConversationMediaView(CacheControlMixin, APIView):
                     "created_at": att.created_at.isoformat(),
                     "message_uuid": att.message_id,
                     "author": {
-                        "id": author.id,
-                        "username": author.username,
-                        "first_name": author.first_name,
-                        "last_name": author.last_name,
+                        "id": identity["id"],
+                        "username": identity["username"],
+                        "first_name": author.first_name if author else "",
+                        "last_name": author.last_name if author else "",
+                        "is_guest": identity["is_guest"],
                     },
                 }
             )

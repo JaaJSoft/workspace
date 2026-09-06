@@ -68,6 +68,7 @@ window.calendarApp = function calendarApp() {
     saving: false,
     deleting: false,
     loadingEvent: false,
+    creatingMeeting: false,
 
     // Scope dialog state
     showScopeDialog: false,

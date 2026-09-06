@@ -1,6 +1,25 @@
 // Message lifecycle: load, paginate, send (with optimistic UI), edit,
 // delete, reply, reactions, mark-as-read, scroll, pin / unpin messages,
 // "edit last own message" shortcut.
+
+// What to wait before retrying a throttled list when the server did not say.
+const CHAT_MESSAGES_RETRY_FALLBACK_SECONDS = 5;
+// How long one "could not refresh" complaint stands for. A 5xx under steady
+// SSE traffic fails once per incoming message; the user needs to be told, but
+// once, not a column of times.
+const CHAT_MESSAGES_FAILURE_TOAST_WINDOW_MS = 10000;
+// Doubled each time the server says no again, capped at the length of the
+// window. Not because a flat delay could not recover - DRF's
+// SimpleRateThrottle does not record a rejected request, so the window
+// clears either way - but because it spends fewer round-trips getting
+// there, and because it is the behaviour that stays correct against a
+// throttle that DOES count what it rejects.
+const CHAT_MESSAGES_RETRY_MAX_SECONDS = 60;
+// alpine-ajax throws this when a response lacks the target and nothing
+// cancelled the removal. It is a DOMException: the status is in the message
+// and there is nothing else on it - no status field, no headers.
+const CHAT_MESSAGES_RENDER_STATUS = /status \[(\d+)\]/;
+
 window.chatMessagesMixin = function chatMessagesMixin() {
   return {
     // ── State ────────────────────────────────────────────────
@@ -11,6 +30,11 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     editingMessageUuid: null,
     replyingTo: null,
     pinnedMessages: [],
+    _refreshInFlight: null,
+    _refreshPending: false,
+    _refreshRetryTimer: null,
+    _lastFailureToastAt: 0,
+    _refreshRetryAttempt: 0,
 
     // ── Surface hooks ────────────────────────────────────────
     // The mixin is spread into more than one component per page (the
@@ -29,11 +53,50 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // message, which the server renders outside the paginated list.
     _loadTargets() { return [this._messageListId()]; },
     _messageIdPrefix() { return 'msg'; },
-    _messagesUrl(cursor) {
-      const base = `/chat/${this.activeConversation.uuid}/messages`;
+    _replyTarget() { return this.replyingTo?.uuid || null; },
+
+    // ── Transport seam ───────────────────────────────────────
+    // Four hooks, and everything the mixin sends or fetches goes through
+    // them. The member pane addresses the conversation API with the session
+    // cookie; the public meeting page (meet.js) spreads this same mixin and
+    // re-points all four at /meet/<slug>/..., authenticated by a token
+    // header instead. Nothing else in here names an endpoint.
+    _messageEndpoint(conversationId) {
+      return `/api/v1/chat/conversations/${conversationId}/messages`;
+    },
+    _messageHeaders({ json = false } = {}) {
+      const headers = { 'X-CSRFToken': getCSRFToken() };
+      // Never on a multipart send: the boundary is the browser's to write.
+      if (json) headers['Content-Type'] = 'application/json';
+      return headers;
+    },
+    // The server-rendered list, fetched as HTML and merged by alpine-ajax.
+    _messagesPartialUrl(conversationId, cursor) {
+      const base = `/chat/${conversationId}/messages`;
       return cursor ? `${base}?before=${cursor}` : base;
     },
-    _replyTarget() { return this.replyingTo?.uuid || null; },
+    // Passed as $ajax's `headers` on every load below; alpine-ajax merges
+    // them into the fetch it issues. Empty for a member - the cookie is the
+    // credential.
+    _messagesPartialHeaders() { return {}; },
+    _messagesUrl(cursor) {
+      return this._messagesPartialUrl(this.activeConversation.uuid, cursor);
+    },
+    // Whether the person looking is a guest, which the optimistic bubble
+    // has to say so the shell skips the presence dot and the profile card
+    // the guest cannot reach. The server stamps the same attribute on the
+    // groups it renders.
+    _viewerIsGuest() { return false; },
+    // What a failed send should say. The member pane says nothing: the text
+    // and the attachments are back in the composer, which is the message.
+    _onSendFailed() {},
+    // Whether this surface has a read cursor to move at all. A guest's
+    // membership is the meeting, not a conversation row, so it has none.
+    _canMarkRead() { return true; },
+    // What a merge must be stamped with to belong here. The conversation
+    // uuid for a member; the meeting slug for a guest, who never learns the
+    // conversation the meeting chat lives in.
+    _expectedListKey() { return this.activeConversation?.uuid; },
 
     // Every rendered copy of a message, across surfaces. With the inline
     // preference on and the thread panel open, one message is on screen twice,
@@ -72,7 +135,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // without a stamp is let through.
     _vetoStaleMerge(event) {
       const stamped = event.detail?.content?.getAttribute?.('data-conversation-uuid');
-      if (stamped && stamped !== this.activeConversation?.uuid) {
+      if (stamped && stamped !== this._expectedListKey()) {
         event.preventDefault();
       }
     },
@@ -83,9 +146,18 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // list. Cancelling keeps it, and turns an error response into "nothing
     // merged" instead of a thrown RenderError.
     _onAjaxMissing(event) {
-      if (event.detail?.target?.closest?.(`#${this._messagesContainerId()}`)) {
-        event.preventDefault();
+      if (!event.detail?.target?.closest?.(`#${this._messagesContainerId()}`)) return;
+      // Cancelling is what keeps the list, but it is also what stops the
+      // RenderError the catch above reads, so the status has to be taken
+      // here on the way past. This route is belt rather than the live path:
+      // on the SSE-triggered refresh the rejection is what fires, and it
+      // carries no headers - so Retry-After is read here when it is
+      // available, and the backoff ladder is the policy when it is not.
+      const response = event.detail.response;
+      if (response && response.ok === false && this._isMessagesPartialUrl(response.url)) {
+        this._reportMessagesFailure(response.status, this._retryAfterSeconds(response.headers));
       }
+      event.preventDefault();
     },
 
     async loadMessages() {
@@ -99,6 +171,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       try {
         const render = await this.$ajax(this._messagesUrl(null), {
           targets: this._loadTargets(),
+          headers: this._messagesPartialHeaders(),
           focus: false,
         });
         // A vetoed or superseded response merges nothing; leave the state
@@ -139,6 +212,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         // request before it can prepend a stale page into fresh content.
         const render = await this.$ajax(this._messagesUrl(cursor), {
           targets: [this._messageListStateId(), this._messageListItemsId()],
+          headers: this._messagesPartialHeaders(),
           focus: false,
         });
         if ((render || []).some(Boolean)) {
@@ -240,10 +314,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
             formData.append('file_uuids', wf.uuid);
           }
           resp = await fetch(
-            `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
+            this._messageEndpoint(this.activeConversation.uuid),
             {
               method: 'POST',
-              headers: { 'X-CSRFToken': getCSRFToken() },
+              headers: this._messageHeaders(),
               credentials: 'same-origin',
               body: formData,
             }
@@ -253,13 +327,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           if (replyToUuid) payload.reply_to_uuid = replyToUuid;
           if (wsFiles.length > 0) payload.file_uuids = wsFiles.map(f => f.uuid);
           resp = await fetch(
-            `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
+            this._messageEndpoint(this.activeConversation.uuid),
             {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken(),
-              },
+              headers: this._messageHeaders({ json: true }),
               credentials: 'same-origin',
               body: JSON.stringify(payload),
             }
@@ -292,6 +363,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this.pendingPickedFiles = wsFiles;
           this.botTyping = false;
           this.clearBotStep?.();
+          this._onSendFailed(resp.status);
         }
       } catch (e) {
         console.error('Failed to send message', e);
@@ -301,6 +373,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         this.pendingPickedFiles = wsFiles;
         this.botTyping = false;
         this.clearBotStep?.();
+        this._onSendFailed(null);
       }
     },
 
@@ -333,10 +406,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${convUuid}/messages`,
+          this._messageEndpoint(convUuid),
           {
             method: 'POST',
-            headers: { 'X-CSRFToken': getCSRFToken() },
+            headers: this._messageHeaders(),
             credentials: 'same-origin',
             body: formData,
           }
@@ -387,10 +460,14 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       group.id = tempId;
       group.setAttribute('own', '');
       group.setAttribute('pending', '');
+      if (this._viewerIsGuest()) group.setAttribute('viewer-guest', '');
       const user = this._getCurrentUser();
       if (user) {
-        group.setAttribute('author-id', user.id);
+        // A guest has no user row, so no id and no avatar to fetch - only a
+        // name and the badge that says where it comes from.
+        if (user.id != null) group.setAttribute('author-id', user.id);
         group.setAttribute('author-username', user.username);
+        if (user.is_guest) group.setAttribute('guest', '');
       }
       group.body = body || '';
       group.replyInfo = replyInfo || null;
@@ -426,20 +503,159 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (el) el.remove();
     },
 
+    // Reload the surface in place. Unlike loadMessages this never clears
+    // first: the replace merge swaps old content for new in one step, so
+    // the container cannot flash empty mid-refresh.
+    //
+    // Coalesced, because the list is re-rendered WHOLE: a refresh issued
+    // while another is in flight can only ever produce the answer the one
+    // behind it will produce. A thirty-message burst is one repaint, so it
+    // is one request out and at most one queued - not thirty fetches racing
+    // each other into the same target, which is how a busy conversation
+    // used to walk straight into the rate limiter.
     async _refreshCurrentMessages() {
-      // Reload the surface in place. Unlike loadMessages this never clears
-      // first: the replace merge swaps old content for new in one step, so
-      // the container cannot flash empty mid-refresh.
       if (!this.activeConversation || this._surfaceGone()) return;
+      if (this._refreshInFlight) {
+        this._refreshPending = true;
+        return this._refreshInFlight;
+      }
+      this._refreshInFlight = (async () => {
+        try {
+          await this._fetchMessagePartial();
+          // Drain rather than stop at one: a message arriving during the
+          // second request deserves the same repaint the first one got, and
+          // each turn of the loop is still a single request. _surfaceGone is
+          // re-read every turn: the component can be torn down WHILE the
+          // first request is in flight, and a queued request issued after
+          // that would merge this panel's thread into whatever panel owns
+          // the ids by now - the race _dead exists for.
+          while (this._refreshPending && !this._surfaceGone()) {
+            this._refreshPending = false;
+            await this._fetchMessagePartial();
+          }
+        } finally {
+          this._refreshInFlight = null;
+          this._refreshPending = false;
+        }
+      })();
+      return this._refreshInFlight;
+    },
+
+    async _fetchMessagePartial() {
+      if (this._surfaceGone()) return;
       try {
         const render = await this.$ajax(this._messagesUrl(null), {
           targets: this._loadTargets(),
+          headers: this._messagesPartialHeaders(),
           focus: false,
         });
-        if ((render || []).some(Boolean)) this._readPaginationState();
+        if ((render || []).some(Boolean)) {
+          this._readPaginationState();
+          // Content in the list is the only proof of recovery. $ajax also
+          // RESOLVES when _onAjaxMissing cancels the removal on a failed
+          // response, so resetting on "did not throw" would pin the ladder
+          // at its first rung for every refresh that fails that way.
+          this._refreshRetryAttempt = 0;
+        }
       } catch (e) {
         console.error('Failed to refresh messages', e);
+        // The rejection is the only reliable signal: the ajax:error event
+        // does reach the root when the swap is driven by a click, but it
+        // does not on the SSE-driven refresh - reproduced 3/3 against a
+        // spent bucket. The request we issued is by definition ours, so no
+        // URL check is needed here.
+        const status = this._renderErrorStatus(e);
+        if (status !== null) this._reportMessagesFailure(status, null);
       }
+    },
+
+    // Bound to @ajax:error on the root that hosts this surface. A non-2xx is
+    // a response like any other to alpine-ajax: it parses the body, does not
+    // find the list in it, and _onAjaxMissing then cancels the removal -
+    // nothing throws, so the catch above never runs and a throttled pane
+    // simply stops updating with no sign of it. The detail is flat
+    // ({ok, status, url, html, raw, headers}), and the event bubbles up from
+    // every $ajax the root issues, so the URL is what tells ours apart.
+    onMessagesAjaxError(event) {
+      const detail = event?.detail || {};
+      if (!this._isMessagesPartialUrl(detail.url)) return;
+      this._reportMessagesFailure(detail.status, this._retryAfterSeconds(detail.headers));
+    },
+
+    // The one place a failed list swap is turned into something the user can
+    // see, reached from three directions because no single one of them fires
+    // on every path: the rejection $ajax raises, the missing-target event
+    // (the only one carrying headers), and the bubbling ajax:error.
+    _reportMessagesFailure(status, retryAfterSeconds) {
+      // One complaint per outage: the pending retry IS the "already
+      // reported" flag, and it is what makes three routes into one toast.
+      if (this._refreshRetryTimer) return;
+
+      if (status === 429) {
+        // The server's own figure when it sent one; otherwise back off,
+        // because the only path that reaches here without a header is the
+        // RenderError, which carries the status and nothing else.
+        const backoff = Math.min(
+          CHAT_MESSAGES_RETRY_FALLBACK_SECONDS * (2 ** this._refreshRetryAttempt),
+          CHAT_MESSAGES_RETRY_MAX_SECONDS,
+        );
+        const seconds = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+          ? retryAfterSeconds
+          : backoff;
+        this._refreshRetryAttempt += 1;
+        window.AppAlert?.warning('Messages are paused for a moment.');
+        this._refreshRetryTimer = setTimeout(() => {
+          this._refreshRetryTimer = null;
+          this._refreshCurrentMessages();
+        }, seconds * 1000);
+        return;
+      }
+
+      // Nothing to retry against, so there is no pending timer to dedupe on:
+      // a window does that job instead.
+      const now = Date.now();
+      if (now - this._lastFailureToastAt < CHAT_MESSAGES_FAILURE_TOAST_WINDOW_MS) return;
+      this._lastFailureToastAt = now;
+      window.AppAlert?.error('Could not refresh the messages.');
+    },
+
+    _retryAfterSeconds(headers) {
+      const advertised = Number.parseInt(headers?.get?.('Retry-After'), 10);
+      return Number.isFinite(advertised) ? advertised : null;
+    },
+
+    _renderErrorStatus(error) {
+      if (!error || error.name !== 'RenderError') return null;
+      const found = CHAT_MESSAGES_RENDER_STATUS.exec(error.message || '');
+      return found ? Number.parseInt(found[1], 10) : null;
+    },
+
+    // Called from each host's own destroy(): a pending retry outliving the
+    // surface would repaint a pane nobody is looking at any more. The thread
+    // panel and the voice room both tear down while the page lives on, so
+    // both call it. chatApp does not: it IS the page, and a root that only
+    // ever dies with the document takes its timers with it - a destroy()
+    // there would exist for this one line and be wrong the moment a mixin
+    // grew one of its own.
+    _cancelMessagesRetry() {
+      if (this._refreshRetryTimer !== null) {
+        clearTimeout(this._refreshRetryTimer);
+        this._refreshRetryTimer = null;
+      }
+    },
+
+    // The event carries an absolute URL and the surface knows a path. The
+    // cursor variant only adds a query string, so one comparison covers a
+    // full reload and a "load older" page alike - and the leading slash is
+    // what stops /chat/xc1/messages from matching /chat/c1/messages.
+    _isMessagesPartialUrl(url) {
+      // No conversation means no list of ours to have failed - and the chat
+      // page binds this on a root that outlives every conversation, so
+      // _messagesUrl would be reading uuid off null.
+      if (typeof url !== 'string' || !this.activeConversation) return false;
+      const path = this._messagesUrl(null);
+      const withoutQuery = url.split('?')[0];
+      return withoutQuery === path || withoutQuery.endsWith(path);
     },
 
     // ── Replying ───────────────────────────────────────────
@@ -481,13 +697,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${this.editingMessageUuid}`,
+          `${this._messageEndpoint(this.activeConversation.uuid)}/${this.editingMessageUuid}`,
           {
             method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': getCSRFToken(),
-            },
+            headers: this._messageHeaders({ json: true }),
             credentials: 'same-origin',
             body: JSON.stringify({ body }),
           }
@@ -535,10 +748,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${msgUuid}`,
+          `${this._messageEndpoint(this.activeConversation.uuid)}/${msgUuid}`,
           {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': getCSRFToken() },
+            headers: this._messageHeaders(),
             credentials: 'same-origin',
           }
         );
@@ -599,6 +812,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
     // ── Read status ────────────────────────────────────────
     async markAsRead(conversationId) {
+      if (!this._canMarkRead()) return;
       try {
         await fetch(`/api/v1/chat/conversations/${conversationId}/read`, {
           method: 'POST',

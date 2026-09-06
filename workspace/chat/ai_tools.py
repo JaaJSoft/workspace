@@ -6,6 +6,7 @@ import uuid as uuid_lib
 from pydantic import BaseModel, Field
 
 from workspace.ai.tool_registry import ToolProvider, tool
+from workspace.chat.services.identities import display_name_for_identity
 
 # Hard caps for the transcript tools. A conversation grows without bound; a
 # tool result cannot. The character budget is the one that matters — a cap on
@@ -72,7 +73,7 @@ class SummarizeConversationParams(BaseModel):
 
 def _format_message(msg, user_tz):
     """Render one message as a transcript entry."""
-    name = msg.author.get_full_name() or msg.author.username
+    name = display_name_for_identity(msg.author, msg.guest)
     author = f"[Bot] {name}" if hasattr(msg.author, "bot_profile") else name
 
     body = msg.body
@@ -103,7 +104,7 @@ def _read_transcript(conversation_id, user_tz, limit):
             conversation_id=conversation_id,
             deleted_at__isnull=True,
         )
-        .select_related("author", "author__bot_profile")
+        .select_related("author", "author__bot_profile", "guest")
         .prefetch_related("attachments")
         .order_by("-created_at")[: limit + 1]
     )
@@ -161,7 +162,7 @@ or references a past discussion."""
             qs = search_messages_qs(user, query, conversation_id=conversation_id)
         else:
             qs = search_messages_qs(user, query)
-        qs = qs.select_related("author", "conversation")
+        qs = qs.select_related("author", "guest", "conversation")
 
         author = args.author.strip()
         if author:
@@ -194,7 +195,7 @@ or references a past discussion."""
 
         results = []
         for msg in matches:
-            author_name = msg.author.get_full_name() or msg.author.username
+            author_name = display_name_for_identity(msg.author, msg.guest)
             conv_name = msg.conversation.title or "DM"
             snippet = msg.body[:200]
             ts = msg.created_at.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")

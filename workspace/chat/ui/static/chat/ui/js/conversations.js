@@ -147,6 +147,49 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       await this.selectConversation(conv, updateUrl);
     },
 
+    // ── Meeting provenance ───────────────────────────────────
+    // A list row carries a meeting's title and join link but not its
+    // occurrence or lock: those cost a query each, so only the
+    // single-conversation payload computes them (see _meeting_payload in
+    // chat/serializers.py). Selecting one reads that payload once and merges
+    // back the meeting key alone - everything else on the row is live state
+    // the pane has already moved on with.
+    _meetingLoadGeneration: 0,
+
+    async _loadMeetingProvenance(conv) {
+      // Bumped before the early returns: selecting a conversation with no
+      // meeting still has to invalidate a request already in flight.
+      const generation = (this._meetingLoadGeneration += 1);
+      if (!conv || !conv.meeting) return;
+      // A payload the server sent for this row on its own is fresh, and
+      // re-reading it would spend a request for nothing - that is the
+      // deep-link path, which fetches the single-conversation shape before
+      // selecting. One this method merged on an earlier selection is a
+      // different matter: a host can lock the room from the meeting page and
+      // a series rolls to its next occurrence, so re-selecting the row has to
+      // ask again rather than show what was true the first time.
+      if ('next_start' in conv.meeting && !conv.meeting._merged) return;
+      const uuid = conv.uuid;
+      let data = null;
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${uuid}`, { credentials: 'same-origin' });
+        if (!resp.ok) return;
+        data = await resp.json();
+      } catch (e) {
+        // The banner keeps the shape the list gave it, which reads as "no
+        // occurrence known" rather than "no occurrence scheduled".
+        return;
+      }
+      // A faster switch has asked for another conversation since: this answer
+      // describes a conversation the user is no longer looking at, and
+      // writing it anywhere would put one meeting's schedule on another.
+      if (generation !== this._meetingLoadGeneration) return;
+      if (!this.activeConversation || this.activeConversation.uuid !== uuid) return;
+      if (data && data.meeting) {
+        this.activeConversation.meeting = { ...data.meeting, _merged: true };
+      }
+    },
+
     // ── Drafts ───────────────────────────────────────────────
     _saveDraft() {
       if (!this.activeConversation) return;
@@ -173,6 +216,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       this._saveDraft();
 
       this.activeConversation = conv;
+      this._loadMeetingProvenance(conv);
       this.hasMoreMessages = false;
       this.editingMessageUuid = null;
       this.replyingTo = null;

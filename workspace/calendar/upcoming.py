@@ -13,6 +13,7 @@ from workspace.calendar.queries import visible_events_q
 from workspace.calendar.recurrence import (
     _member_dict,
     make_virtual_occurrence,
+    meeting_membership,
     next_occurrences_after,
     occurrences_in_range,
 )
@@ -123,7 +124,9 @@ def get_upcoming_for_user(user, now, end_of_today):
     return all_events
 
 
-def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False):
+def get_upcoming_page(
+    user, after, limit, calendar_ids=None, show_declined=False, request=None
+):
     """Cursor-paginated variant of get_upcoming_for_user.
 
     Returns (events_dicts, next_after) where `next_after` is an ISO string or
@@ -133,6 +136,9 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
 
     user_q = visible_events_q(user)
     declined_q = Q(members__user=user, members__status=EventMember.Status.DECLINED)
+    # One membership resolution for the whole page: the serializer below and
+    # every virtual occurrence read the same set.
+    membership = meeting_membership(request)
 
     # ---- One-off events + materialized exceptions ----
     one_off_qs = (
@@ -142,7 +148,13 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
             is_cancelled=False,
             is_recurring=False,
         )
-        .select_related("owner", "calendar", "recurrence_parent")
+        .select_related(
+            "owner",
+            "calendar",
+            "recurrence_parent",
+            "meeting",
+            "recurrence_parent__meeting",
+        )
         .prefetch_related("members__user")
         .distinct()
     )
@@ -153,7 +165,11 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
 
     # +1 sentinel so we can tell if there are more events after this page.
     one_off = list(one_off_qs.order_by("start")[: limit + 1])
-    one_off_data = EventSerializer(one_off, many=True).data
+    one_off_data = EventSerializer(
+        one_off,
+        many=True,
+        context={"request": request, "meeting_membership": membership},
+    ).data
 
     # ---- Recurring masters ----
     masters_qs = (
@@ -165,7 +181,7 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
         )
         # Master can still produce occurrences at or after `after`
         .filter(Q(recurrence_until__isnull=True) | Q(recurrence_until__gte=after))
-        .select_related("owner", "calendar")
+        .select_related("owner", "calendar", "meeting")
         .prefetch_related("members__user")
         .distinct()
     )
@@ -210,7 +226,11 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
             key = (str(master.uuid), occ_start.isoformat())
             if key in exception_keys:
                 continue  # exception or cancellation handled separately
-            recurring_data.append(make_virtual_occurrence(master, occ_start))
+            recurring_data.append(
+                make_virtual_occurrence(
+                    master, occ_start, request=request, membership=membership
+                )
+            )
             collected += 1
 
     # ---- Merge, sort, slice ----

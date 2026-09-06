@@ -1,0 +1,59 @@
+<dialog
+  x-ref="lobbyDialog"
+  data-testid="lobby-panel"
+  class="modal"
+  @keydown.escape="closeLobby()"
+>
+  <div class="modal-box max-w-md p-0 flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 pt-5 pb-2">
+      <div class="flex items-center gap-2">
+        <h3 class="font-bold text-lg">Lobby</h3>
+        <span
+          class="text-xs text-base-content/60"
+          x-text="meeting && meeting.locked ? 'Locked' : 'Open'"
+        ></span>
+      </div>
+      <button class="btn btn-ghost btn-sm btn-square" @click="closeLobby()">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="px-5 pb-5 flex flex-col gap-3">
+      <p class="text-sm text-base-content/60" x-show="!lobby.length">Nobody is waiting.</p>
+      <div class="flex flex-col gap-2" x-show="lobby.length">
+        <template x-for="g in lobby" :key="g.uuid">
+          <div class="flex items-center gap-2">
+            <user-avatar :username="g.display_name" size="sm"></user-avatar>
+            <span class="text-sm truncate flex-1" x-text="g.display_name"></span>
+            <button class="btn btn-success btn-sm" @click="admitGuest(g.uuid)">Admit</button>
+            <button class="btn btn-ghost btn-sm" @click="refuseGuest(g.uuid)">Refuse</button>
+          </div>
+        </template>
+      </div>
+
+      <div class="flex items-center gap-1 pt-2 border-t border-base-200">
+        <input
+          class="input input-sm input-bordered flex-1 font-mono"
+          readonly
+          :value="meeting ? meeting.join_url : ''"
+        />
+        <button
+          class="btn btn-sm"
+          @click="navigator.clipboard.writeText(meeting.join_url).then(() => AppAlert.success('Join link copied', { duration: 2000 }))"
+        >
+          Copy
+        </button>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex justify-end pt-1">
+        <button class="btn btn-ghost btn-sm" @click="closeLobby()">Close</button>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

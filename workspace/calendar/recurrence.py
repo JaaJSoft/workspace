@@ -1,6 +1,9 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
+from django.core.exceptions import ObjectDoesNotExist
+from django.urls import reverse
+
 from workspace.common.logging import scrub
 
 from .services.recurrence_rule import (
@@ -255,6 +258,86 @@ def _event_dt_str(dt, all_day):
     return dt.isoformat()
 
 
+def meeting_join_url(event, request=None):
+    """Absolute join URL for the meeting attached to *event*, or None.
+
+    Shared by the event serializer, the server-rendered event card, and the
+    recurring-occurrence dict builders below - a recurring series' meeting
+    is one row per series, attached to the master event (see ``Meeting`` in
+    ``workspace.chat.models``), so callers pass whichever row holds it: the
+    event itself, or an exception's ``recurrence_parent``.
+    """
+    try:
+        meeting = event.meeting
+    except ObjectDoesNotExist:
+        return None
+    return (
+        request.build_absolute_uri(meeting.join_path) if request else meeting.join_path
+    )
+
+
+class MeetingMembership:
+    """The meeting conversations a viewer may open, resolved once.
+
+    Every event of a listing asks the same question, so the answer is a
+    single query for the whole request however many meeting-bearing events
+    the page carries. Resolution is lazy: a page with no meeting at all
+    never asks, and never queries. Only conversations that back a meeting
+    are loaded - a calendar page has no use for the rest of someone's chat
+    list, however long it is.
+    """
+
+    __slots__ = ("_user", "_ids")
+
+    def __init__(self, user=None):
+        self._user = user
+        self._ids = None
+
+    def __contains__(self, conversation_id):
+        if self._ids is None:
+            self._ids = self._resolve()
+        return conversation_id in self._ids
+
+    def _resolve(self):
+        from workspace.chat.services.conversations import user_conversation_ids
+
+        user = self._user
+        if user is None or not getattr(user, "is_authenticated", False):
+            return frozenset()
+        return frozenset(
+            user_conversation_ids(user).filter(conversation__meeting__isnull=False)
+        )
+
+
+def meeting_membership(request=None):
+    """A ``MeetingMembership`` for the user behind *request*."""
+    return MeetingMembership(getattr(request, "user", None))
+
+
+def meeting_room_url(event, request=None, membership=None):
+    """Absolute URL of the meeting's member room for *event*, or None.
+
+    The counterpart of ``meeting_join_url``: that one is the public guest
+    link and is offered to anyone who can read the event, this one opens the
+    hosts' room and is offered only to someone the room view would let in -
+    an active member of the meeting's conversation. A viewer of a shared
+    calendar gets None, and so does an owner who left the conversation.
+
+    Pass *membership* on any path that builds more than one payload, so the
+    whole listing shares a single resolution.
+    """
+    try:
+        meeting = event.meeting
+    except ObjectDoesNotExist:
+        return None
+    if membership is None:
+        membership = meeting_membership(request)
+    if meeting.conversation_id not in membership:
+        return None
+    path = reverse("chat_ui:room", args=[meeting.conversation_id])
+    return request.build_absolute_uri(path) if request else path
+
+
 def _recurrence_fields(rule, cache_source=None):
     """(recurrence_summary, recurrence_simple) for *rule*.
 
@@ -274,7 +357,7 @@ def _recurrence_fields(rule, cache_source=None):
     return summary, simple
 
 
-def make_virtual_occurrence(master, occ_start):
+def make_virtual_occurrence(master, occ_start, request=None, membership=None):
     """Build a dict for a virtual (non-materialized) occurrence."""
     duration = (master.end - master.start) if master.end else None
     occ_end = (occ_start + duration) if duration else None
@@ -290,6 +373,8 @@ def make_virtual_occurrence(master, occ_start):
         "end": _event_dt_str(occ_end, master.all_day),
         "all_day": master.all_day,
         "location": master.location,
+        "join_url": meeting_join_url(master, request),
+        "room_url": meeting_room_url(master, request, membership),
         "owner": _user_dict(master.owner),
         "members": getattr(master, "_cached_member_dicts", None)
         or [_member_dict(m) for m in master.members.all()],
@@ -305,7 +390,7 @@ def make_virtual_occurrence(master, occ_start):
     }
 
 
-def make_exception_dict(exc, master=None):
+def make_exception_dict(exc, master=None, request=None, membership=None):
     """Convert a materialized exception Event to the occurrence dict format.
 
     `master` is the row `expand_recurring_events` is already iterating for
@@ -326,6 +411,12 @@ def make_exception_dict(exc, master=None):
         "end": _event_dt_str(exc.end, exc.all_day),
         "all_day": exc.all_day,
         "location": exc.location,
+        "join_url": meeting_join_url(exc.recurrence_parent, request)
+        if exc.recurrence_parent
+        else None,
+        "room_url": meeting_room_url(exc.recurrence_parent, request, membership)
+        if exc.recurrence_parent
+        else None,
         "owner": _user_dict(exc.owner),
         "members": [_member_dict(m) for m in exc.members.all()],
         "created_at": exc.created_at.isoformat(),
@@ -342,7 +433,9 @@ def make_exception_dict(exc, master=None):
     }
 
 
-def expand_recurring_events(masters_qs, range_start, range_end):
+def expand_recurring_events(
+    masters_qs, range_start, range_end, request=None, membership=None
+):
     """
     Expand recurring master events into occurrence dicts.
     Substitutes materialized exceptions, skips cancelled ones.
@@ -355,10 +448,17 @@ def expand_recurring_events(masters_qs, range_start, range_end):
     if not master_ids:
         return []
 
-    # Fetch all exceptions for these masters, prefetch members
+    if membership is None:
+        membership = meeting_membership(request)
+
+    # Fetch all exceptions for these masters, prefetch members. The
+    # exception's own join_url reads the master's meeting through
+    # recurrence_parent, so that relation is select_related too.
     exceptions = (
         Event.objects.filter(recurrence_parent_id__in=master_ids)
-        .select_related("owner", "calendar", "recurrence_parent")
+        .select_related(
+            "owner", "calendar", "recurrence_parent", "recurrence_parent__meeting"
+        )
         .prefetch_related(
             Prefetch("members", queryset=EventMember.objects.select_related("user"))
         )
@@ -389,8 +489,12 @@ def expand_recurring_events(masters_qs, range_start, range_end):
             if exc:
                 if exc.is_cancelled:
                     continue  # Skip cancelled occurrences
-                occurrences.append(make_exception_dict(exc, master))
+                occurrences.append(
+                    make_exception_dict(exc, master, request, membership)
+                )
             else:
-                occurrences.append(make_virtual_occurrence(master, occ_start))
+                occurrences.append(
+                    make_virtual_occurrence(master, occ_start, request, membership)
+                )
 
     return occurrences

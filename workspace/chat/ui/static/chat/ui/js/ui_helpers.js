@@ -38,6 +38,30 @@ window.chatUiHelpersMixin = function chatUiHelpersMixin() {
       return full || u.username;
     },
 
+    // -- Meeting provenance banner --------------------------
+    // The conversation payload comes in two shapes (see _meeting_payload in
+    // chat/serializers.py). A list row carries no next_start key at all; a
+    // single-conversation payload carries one and may set it to null. Absent
+    // means "not computed here" and prints nothing, null is a real answer and
+    // says so - announcing an empty schedule the server never looked up would
+    // be a lie the banner cannot take back.
+    meetingOccurrenceLabel(conversation) {
+      const meeting = conversation && conversation.meeting;
+      if (!meeting || !('next_start' in meeting)) return '';
+      if (!meeting.next_start) return 'No upcoming occurrence';
+      return this.formatDateTime(meeting.next_start);
+    },
+
+    copyMeetingJoinUrl(conversation) {
+      const url = conversation && conversation.meeting && conversation.meeting.join_url;
+      if (!url) return Promise.resolve();
+      return navigator.clipboard.writeText(url).then(() => {
+        if (window.AppAlert) window.AppAlert.success('Join link copied', { duration: 2000 });
+      }).catch(() => {
+        if (window.AppAlert) window.AppAlert.error('Failed to copy the link');
+      });
+    },
+
     autoResize(el) {
       el.style.height = 'auto';
       el.style.height = Math.min(el.scrollHeight, 128) + 'px';

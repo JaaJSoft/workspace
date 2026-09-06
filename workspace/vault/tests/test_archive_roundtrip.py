@@ -7,7 +7,9 @@ from django.test import SimpleTestCase
 
 from .reference import archive, primitives
 
-VECTOR = Path(__file__).parent / "fixtures" / "archive_vector.json"
+FIXTURES = Path(__file__).parent / "fixtures"
+VECTOR = FIXTURES / "archive_vector.json"
+LOW_COST_VECTOR = FIXTURES / "archive_vector_low_cost.json"
 
 
 class ArchiveRoundTripTests(SimpleTestCase):
@@ -74,3 +76,37 @@ class ArchiveRoundTripTests(SimpleTestCase):
             with self.subTest(name):
                 with self.assertRaises(InvalidTag):
                     primitives.aead_open(key, parts["payload"], associated_data)
+
+
+class ArchiveCostParameterTests(SimpleTestCase):
+    """The cost parameters travel in the file, and the reader honours them.
+
+    Everything else in this module is written at the defaults, so a reader
+    that never looked at bytes 9-17 and always derived at today's constants
+    would open every one of those archives. This vector is written at other
+    parameters, which is the only way to tell the two readers apart."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.vector = json.loads(LOW_COST_VECTOR.read_text(encoding="utf-8"))
+        cls.blob = bytes.fromhex(cls.vector["archive_hex"])
+
+    def test_the_header_declares_the_parameters_it_was_written_at(self):
+        parts = archive.read_header(self.blob)
+        self.assertEqual(parts["params"], self.vector["params"])
+
+    def test_those_parameters_are_none_of_the_defaults(self):
+        # Without this the test below is worth nothing: the day a default
+        # moves onto one of these values, a reader that ignores the header
+        # starts passing again and nothing says so.
+        for name, value in self.vector["params"].items():
+            with self.subTest(name):
+                self.assertNotEqual(value, primitives.ARGON2_PARAMS[name])
+
+    def test_an_archive_written_at_other_parameters_opens_at_those_parameters(self):
+        # The container's central claim. A reader that bounds-checks the
+        # declared parameters and then derives at the defaults anyway gets a
+        # different key and fails the tag here.
+        opened = archive.open_archive(self.blob, self.vector["passphrase"])
+        self.assertEqual(opened, self.vector["tree"])

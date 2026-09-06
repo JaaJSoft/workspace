@@ -23,15 +23,21 @@ window.vaultArchive = (function () {
     return header;
   }
 
-  async function buildArchive({ tree, passphrase, salt, iv }) {
+  // params is a parameter and not a constant because the header field exists:
+  // a writer that can only ever emit today's cost is a writer whose archives
+  // stop being readable the day the default moves. Whatever is passed here is
+  // what encodeHeader declares AND what the derivation runs - the two must
+  // never come from different places, or the file states a cost it was not
+  // written at.
+  async function buildArchive({ tree, passphrase, salt, iv, params }) {
     const V = window.vaultCrypto;
-    const params = V.ARGON2_PARAMS;
+    const cost = params || V.ARGON2_PARAMS;
     // A fresh salt per export means a fresh key, which means exactly one seal
     // under it: far below the birthday bound the 96-bit nonce relies on. An
     // incremental archive sealing twice under one key would break that.
     const drawnSalt = salt || V.randomBytes(SALT_LENGTH);
-    const header = encodeHeader({ salt: drawnSalt, params });
-    const key = await V.deriveArchiveKey({ passphrase, salt: drawnSalt, params });
+    const header = encodeHeader({ salt: drawnSalt, params: cost });
+    const key = await V.deriveArchiveKey({ passphrase, salt: drawnSalt, params: cost });
     try {
       const payload = await V.seal(key, V.canonicalCbor(tree), header, {
         iv: iv || V.randomBytes(IV_LENGTH),

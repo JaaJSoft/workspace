@@ -4,9 +4,16 @@ window.chatMeetingHostMixin = function chatMeetingHostMixin() {
   return {
     meeting: null,
     lobby: [],
-    lobbyOpen: false,
     _lobbyRefreshTimer: null,
     _onSseReconnect: null,
+
+    openLobby() {
+      this.$refs.lobbyDialog.showModal();
+      this.loadLobby();
+    },
+    closeLobby() {
+      this.$refs.lobbyDialog.close();
+    },
 
     _hostHeaders() {
       return { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() };

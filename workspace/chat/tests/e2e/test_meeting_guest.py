@@ -221,6 +221,16 @@ class MeetingGuestTests(PlaywrightTestCase):
         )
         lobby.get_by_role("button", name="Admit").click()
 
+        # The lobby is a modal dialog: it stays open (there could be another
+        # guest to admit) but blocks the rest of the page until closed. daisyUI
+        # fades a closed `.modal` out with opacity rather than display:none, so
+        # it still counts as "visible" by Playwright's own definition - the
+        # native <dialog>.open property is what actually reflects the state.
+        lobby.locator(".modal-box").get_by_role("button", name="Close").click()
+        self.page.wait_for_function(
+            "() => !document.querySelector('[data-testid=\"lobby-panel\"]').open"
+        )
+
         # The call is already running, so admission alone puts the guest in it.
         guest_grid = guest.locator('[data-testid="participants-grid"]')
         expect(guest_grid).to_be_visible(timeout=CROSS_CONTEXT_TIMEOUT_MS)

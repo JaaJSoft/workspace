@@ -40,6 +40,23 @@ test('admit, refuse, remove, lock and end hit their endpoints with CSRF', async 
   assert.equal(m.meeting.locked, true);
 });
 
+test('opening the lobby shows the dialog and loads it; closing does not reload', async () => {
+  const urls = [];
+  const m = host(async (url) => { urls.push(url); return { ok: true, json: async () => [{ uuid: 'g9', display_name: 'Ana' }] }; });
+  const dialog = { shown: 0, closed: 0, showModal() { this.shown += 1; }, close() { this.closed += 1; } };
+  m.$refs = { lobbyDialog: dialog };
+
+  m.openLobby();
+  assert.equal(dialog.shown, 1);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepStrictEqual(urls, ['/api/v1/chat/meetings/m1/lobby']);
+  assert.equal(m.lobby.length, 1);
+
+  m.closeLobby();
+  assert.equal(dialog.closed, 1);
+  assert.deepStrictEqual(urls, ['/api/v1/chat/meetings/m1/lobby']);
+});
+
 test('capacity label and guest tile detection', () => {
   const m = host(async () => ({ ok: true, json: async () => ({}) }));
   assert.equal(m.capacityLabel(), '2 / 6');

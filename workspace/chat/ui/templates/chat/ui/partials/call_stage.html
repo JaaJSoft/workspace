@@ -250,60 +250,19 @@
         </button>
         <template x-if="meeting">
           <div class="contents">
-            <div class="relative" @click.outside="lobbyOpen = false">
-              <button
-                class="btn btn-sm md:btn-md btn-circle border-0 relative"
-                :class="lobbyOpen ? 'btn-primary' : 'btn-neutral'"
-                @click="lobbyOpen = !lobbyOpen; if (lobbyOpen) loadLobby()"
-                title="Lobby"
-              >
-                <i data-lucide="door-open" class="w-4 h-4 md:w-5 md:h-5"></i>
-                <span
-                  class="badge badge-xs badge-warning absolute -top-1 -right-1"
-                  x-show="lobby.length"
-                  x-text="lobby.length"
-                ></span>
-              </button>
-              <div
-                data-testid="lobby-panel"
-                class="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-72 max-w-[calc(100vw-2rem)] z-30 text-left card bg-base-100 shadow-xl border border-base-300"
-                x-show="lobbyOpen"
-                x-transition
-                x-cloak
-              >
-                <div class="card-body p-3 gap-2">
-                  <div class="flex items-center justify-between">
-                    <span class="font-medium text-sm">Lobby</span>
-                    <span
-                      class="text-xs text-base-content/60"
-                      x-text="meeting && meeting.locked ? 'Locked' : 'Open'"
-                    ></span>
-                  </div>
-                  <p class="text-xs text-base-content/60" x-show="!lobby.length">Nobody is waiting.</p>
-                  <template x-for="g in lobby" :key="g.uuid">
-                    <div class="flex items-center gap-2">
-                      <user-avatar :username="g.display_name" size="xs"></user-avatar>
-                      <span class="text-sm truncate flex-1" x-text="g.display_name"></span>
-                      <button class="btn btn-xs btn-success" @click="admitGuest(g.uuid)">Admit</button>
-                      <button class="btn btn-xs btn-ghost" @click="refuseGuest(g.uuid)">Refuse</button>
-                    </div>
-                  </template>
-                  <div class="flex items-center gap-1 pt-1 border-t border-base-200">
-                    <input
-                      class="input input-xs input-bordered flex-1 font-mono"
-                      readonly
-                      :value="meeting ? meeting.join_url : ''"
-                    />
-                    <button
-                      class="btn btn-xs"
-                      @click="navigator.clipboard.writeText(meeting.join_url).then(() => AppAlert.success('Join link copied', { duration: 2000 }))"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <button
+              class="btn btn-sm md:btn-md btn-circle border-0 relative"
+              @click="openLobby()"
+              title="Lobby"
+            >
+              <i data-lucide="door-open" class="w-4 h-4 md:w-5 md:h-5"></i>
+              <span
+                class="badge badge-xs badge-warning absolute -top-1 -right-1"
+                x-show="lobby.length"
+                x-text="lobby.length"
+              ></span>
+            </button>
+            {% include "chat/ui/partials/lobby_dialog.html" %}
             <button
               class="btn btn-sm md:btn-md btn-circle border-0"
               :class="meeting && meeting.locked ? 'btn-warning' : 'btn-neutral'"

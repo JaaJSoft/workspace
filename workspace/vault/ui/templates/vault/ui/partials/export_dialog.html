@@ -85,7 +85,7 @@
             @password-apply="applyGeneratedPassphrase($event.detail.value)"
             @password-copy="copyGenerated($event.detail.value)"
           >
-            {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" show_apply=True %}
+            {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" pinned_expr="exportGeneratorOptions()" show_apply=True %}
           </div>
 
           <div>

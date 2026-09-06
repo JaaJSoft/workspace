@@ -19,6 +19,8 @@ access by construction. No unit test in this repository can tell them apart.
 A browser can, and does, below.
 """
 
+import re
+
 from .test_browser import VaultBrowserCase
 
 SEEDED_ENTRY_NAME = "GitHub"
@@ -148,6 +150,34 @@ class ExportWalkTests(VaultBrowserCase):
         return download.value
 
     # ---- the walks --------------------------------------------------------
+
+    def test_the_generator_opens_at_a_strength_worth_an_archive(self):
+        """The dialog's opening draw, measured on screen.
+
+        An archive has no secret key behind it: the passphrase is the whole of
+        what protects the file, and the file can be attacked offline for as
+        long as it exists. The panel's own default draw is six words - a good
+        password, not a good archive key - so this dialog pins its own, and
+        the pinning lives in the template. No unit test reaches that: the JS
+        suite can compose the panel with the mixin's options, but only a
+        browser says whether the include actually hands them over.
+        """
+        self._seeded_vault()
+        self._open_export()
+        box = self.page.locator(self.EXPORT_BOX)
+
+        preview = box.locator(".font-mono.break-all")
+        preview.wait_for(timeout=15000)
+        drawn = preview.inner_text()
+        self.assertEqual(
+            len(drawn.split("-")), 8, f"the dialog opened on {drawn!r}, not eight words"
+        )
+
+        reported = box.get_by_text(re.compile(r"^\d+ bits")).inner_text()
+        bits = int(reported.split()[0])
+        self.assertGreaterEqual(
+            bits, 72, f"the dialog opens at {bits} bits, under what an archive needs"
+        )
 
     def test_no_request_carries_a_decrypted_value(self):
         """The one property here worth asserting mechanically: nothing

@@ -16,6 +16,20 @@ window.vaultExportMixin = function vaultExportMixin() {
     exportError: '',
     exportSkipped: 0,
 
+    // What the generator panel opens at inside this dialog, pinned rather than
+    // left to the panel's own defaults or to what the device last remembered.
+    //
+    // An archive is the weakest thing this module produces: unlike an account
+    // it has no secret key behind it, so the passphrase is the whole of its
+    // strength, and the file can be attacked offline for as long as it exists.
+    // Eight words off the 1296-word list is ~82 bits, well past the 70 the
+    // panel calls Strong. It raises the opening draw; it is not a floor - the
+    // sliders still go down, and a typed phrase is measured by nothing at all,
+    // which is what the confirmation and the acknowledgement stand in for.
+    exportGeneratorOptions() {
+      return { mode: 'passphrase', words: 8 };
+    },
+
     openExportDialog() {
       this.exportError = '';
       this.exportProgress = 0;
